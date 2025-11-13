@@ -39,6 +39,7 @@ interface Vehicle {
   daily_rent?: number;
   weekly_rent?: number;
   photo_url?: string | null;
+  description?: string | null;
 }
 interface PricingExtra {
   id: string;
@@ -80,6 +81,7 @@ const MultiStepBookingWidget = () => {
     priceRange: [0, 1000] as [number, number]
   });
   const searchDebounceTimer = useRef<NodeJS.Timeout>();
+  const [expandedDescriptions, setExpandedDescriptions] = useState<Set<string>>(new Set());
   const [formData, setFormData] = useState({
     pickupLocation: "",
     dropoffLocation: "",
@@ -118,9 +120,17 @@ const MultiStepBookingWidget = () => {
       setViewMode(savedViewMode);
     }
 
-    // Clear any stale verification data on mount (fresh start for each booking session)
-    localStorage.removeItem('verificationSessionId');
-    localStorage.removeItem('verificationToken');
+    // Load verification data from localStorage (persist across refreshes)
+    const savedVerificationSessionId = localStorage.getItem('verificationSessionId');
+    const savedVerificationStatus = localStorage.getItem('verificationStatus') as 'init' | 'pending' | 'verified' | 'rejected' | null;
+    const savedVerificationToken = localStorage.getItem('verificationToken');
+
+    if (savedVerificationSessionId && savedVerificationStatus) {
+      setVerificationSessionId(savedVerificationSessionId);
+      setVerificationStatus(savedVerificationStatus);
+      setFormData(prev => ({ ...prev, verificationSessionId: savedVerificationSessionId }));
+      console.log('✅ Loaded verification from localStorage:', savedVerificationSessionId, savedVerificationStatus);
+    }
   }, []);
 
   // Reset verification when customer details change
@@ -133,6 +143,7 @@ const MultiStepBookingWidget = () => {
       setFormData(prev => ({ ...prev, verificationSessionId: "" }));
       localStorage.removeItem('verificationSessionId');
       localStorage.removeItem('verificationToken');
+      localStorage.removeItem('verificationStatus');
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [formData.customerName, formData.customerEmail, formData.customerPhone]);
@@ -248,6 +259,17 @@ const MultiStepBookingWidget = () => {
     }
   };
 
+  // Clear verification data
+  const handleClearVerification = () => {
+    setVerificationSessionId(null);
+    setVerificationStatus('init');
+    setFormData(prev => ({ ...prev, verificationSessionId: "" }));
+    localStorage.removeItem('verificationSessionId');
+    localStorage.removeItem('verificationToken');
+    localStorage.removeItem('verificationStatus');
+    toast.info("Verification cleared. You can verify again.");
+  };
+
   // Handle identity verification
   const handleStartVerification = async () => {
     // Validate customer details first
@@ -286,6 +308,7 @@ const MultiStepBookingWidget = () => {
         // Store verification session in localStorage for later use
         localStorage.setItem('verificationSessionId', data.verificationId);
         localStorage.setItem('verificationToken', data.sessionToken);
+        localStorage.setItem('verificationStatus', 'pending');
 
         // Open Veriff verification in new window
         window.open(data.sessionUrl, '_blank', 'width=800,height=600');
@@ -298,6 +321,7 @@ const MultiStepBookingWidget = () => {
           if (status) {
             if (status.review_result === 'GREEN') {
               setVerificationStatus('verified');
+              localStorage.setItem('verificationStatus', 'verified');
               toast.success("Identity verification successful!");
               clearInterval(pollInterval);
 
@@ -309,6 +333,7 @@ const MultiStepBookingWidget = () => {
               }
             } else if (status.review_result === 'RED') {
               setVerificationStatus('rejected');
+              localStorage.setItem('verificationStatus', 'rejected');
               toast.error("Identity verification failed. Please try again.");
               clearInterval(pollInterval);
 
@@ -545,6 +570,33 @@ const MultiStepBookingWidget = () => {
       };
     }
     return null;
+  };
+
+  // Description helper functions
+  const MAX_DESCRIPTION_LENGTH = 120;
+
+  const toggleDescription = (vehicleId: string) => {
+    setExpandedDescriptions(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(vehicleId)) {
+        newSet.delete(vehicleId);
+      } else {
+        newSet.add(vehicleId);
+      }
+      return newSet;
+    });
+  };
+
+  const getDisplayDescription = (vehicle: Vehicle) => {
+    if (!vehicle.description) return null;
+    const isExpanded = expandedDescriptions.has(vehicle.id);
+    const needsTruncation = vehicle.description.length > MAX_DESCRIPTION_LENGTH;
+
+    if (isExpanded || !needsTruncation) {
+      return vehicle.description;
+    }
+
+    return vehicle.description.substring(0, MAX_DESCRIPTION_LENGTH) + '...';
   };
   const calculateRentalDuration = () => {
     if (!formData.pickupDate || !formData.dropoffDate || !formData.pickupTime || !formData.dropoffTime) {
@@ -969,6 +1021,125 @@ const MultiStepBookingWidget = () => {
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
+
+  // Instant field validation for onChange events
+  const validateField = (fieldName: string, value: string) => {
+    const newErrors: { [key: string]: string } = {};
+
+    switch (fieldName) {
+      case 'pickupLocation':
+        if (!value.trim()) {
+          newErrors.pickupLocation = "Pickup location is required";
+        } else {
+          const pickupText = value.trim();
+          if (pickupText.length < 5) {
+            newErrors.pickupLocation = "Please enter a valid pickup address (minimum 5 characters)";
+          } else if (!/[a-zA-Z]{3,}/.test(pickupText)) {
+            newErrors.pickupLocation = "Please enter a meaningful pickup address with letters";
+          } else if (/^[@#$%^&*()_+=\-\[\]{};:'",.<>?\/\\|`~!]{3,}/.test(pickupText)) {
+            newErrors.pickupLocation = "Please enter a valid pickup address, not symbols";
+          } else if (/^[a-zA-Z]+$/.test(pickupText) && pickupText.length < 15) {
+            newErrors.pickupLocation = "Please enter a complete address (e.g., street name, city, postcode)";
+          } else if (!/[\d]/.test(pickupText) && !/[,]/.test(pickupText) && pickupText.split(' ').length < 2) {
+            newErrors.pickupLocation = "Please enter a complete address with street name or postcode";
+          }
+        }
+        break;
+
+      case 'dropoffLocation':
+        if (!value.trim()) {
+          newErrors.dropoffLocation = "Drop-off location is required";
+        } else {
+          const dropoffText = value.trim();
+          if (dropoffText.length < 5) {
+            newErrors.dropoffLocation = "Please enter a valid drop-off address (minimum 5 characters)";
+          } else if (!/[a-zA-Z]{3,}/.test(dropoffText)) {
+            newErrors.dropoffLocation = "Please enter a meaningful drop-off address with letters";
+          } else if (/^[@#$%^&*()_+=\-\[\]{};:'",.<>?\/\\|`~!]{3,}/.test(dropoffText)) {
+            newErrors.dropoffLocation = "Please enter a valid drop-off address, not symbols";
+          } else if (/^[a-zA-Z]+$/.test(dropoffText) && dropoffText.length < 15) {
+            newErrors.dropoffLocation = "Please enter a complete address (e.g., street name, city, postcode)";
+          } else if (!/[\d]/.test(dropoffText) && !/[,]/.test(dropoffText) && dropoffText.split(' ').length < 2) {
+            newErrors.dropoffLocation = "Please enter a complete address with street name or postcode";
+          }
+        }
+        break;
+
+      case 'customerName':
+        const nameValue = value.trim();
+        if (!nameValue) {
+          newErrors.customerName = "Full name is required";
+        } else if (nameValue.length < 2) {
+          newErrors.customerName = "Full name must be at least 2 characters";
+        } else if (!/^[a-zA-Z\s\-']+$/.test(nameValue)) {
+          newErrors.customerName = "Name must contain only letters, spaces, hyphens, and apostrophes";
+        } else if (!/[a-zA-Z]{2,}/.test(nameValue)) {
+          newErrors.customerName = "Name must contain at least 2 alphabetic characters";
+        } else if (nameValue.replace(/[\s\-']/g, '').length < 2) {
+          newErrors.customerName = "Name must have actual alphabetic content";
+        }
+        break;
+
+      case 'customerEmail':
+        if (!value.trim()) {
+          newErrors.customerEmail = "Email address is required";
+        } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)) {
+          newErrors.customerEmail = "Please enter a valid email address";
+        }
+        break;
+
+      case 'customerPhone':
+        const phoneValue = value.trim();
+        if (!phoneValue) {
+          newErrors.customerPhone = "Phone number is required";
+        } else {
+          const cleaned = phoneValue.replace(/[\s\-()]/g, '');
+          const digitCount = (cleaned.match(/\d/g) || []).length;
+          if (digitCount < 7 || digitCount > 15) {
+            newErrors.customerPhone = "Please enter a valid phone number (7-15 digits)";
+          } else if (cleaned.startsWith('+') && !/^\+\d+$/.test(cleaned)) {
+            newErrors.customerPhone = "Invalid phone number format";
+          } else if (!cleaned.startsWith('+') && !/^\d+$/.test(cleaned.replace(/[\s\-()]/g, ''))) {
+            newErrors.customerPhone = "Phone number should contain only digits";
+          }
+        }
+        break;
+
+      case 'customerType':
+        if (!value || value.trim() === "") {
+          newErrors.customerType = "Please select a customer type";
+        } else if (value !== "Individual" && value !== "Company") {
+          newErrors.customerType = "Invalid customer type selected";
+        }
+        break;
+
+      case 'driverAge':
+        if (!value || value.trim() === "") {
+          newErrors.driverAge = "Please select driver age range.";
+        } else if (!["under_25", "25_70", "over_70"].includes(value)) {
+          newErrors.driverAge = "Please select a valid driver age range.";
+        }
+        break;
+
+      case 'licenseNumber':
+        const licenseValue = value.trim();
+        if (!licenseValue) {
+          newErrors.licenseNumber = "Driver license number is required";
+        } else if (licenseValue.length < 5) {
+          newErrors.licenseNumber = "License number must be at least 5 characters";
+        } else if (!/[a-zA-Z0-9]/.test(licenseValue)) {
+          newErrors.licenseNumber = "License number must contain letters or numbers";
+        }
+        break;
+    }
+
+    // Update errors state - clear error if valid, set error if invalid
+    setErrors(prev => ({
+      ...prev,
+      [fieldName]: newErrors[fieldName] || ""
+    }));
+  };
+
   const handleStep1Continue = () => {
     if (validateStep1()) {
       // Store in localStorage
@@ -1123,12 +1294,8 @@ const MultiStepBookingWidget = () => {
                     pickupLat: lat || null,
                     pickupLon: lon || null
                   });
-                  if (errors.pickupLocation) {
-                    setErrors({
-                      ...errors,
-                      pickupLocation: ""
-                    });
-                  }
+                  // Instant validation
+                  validateField('pickupLocation', value);
                 }} placeholder="Enter pickup address" className="h-12 focus-visible:ring-[#C5A572]" />
                   <p className="text-xs text-muted-foreground">Start typing a Dallas address or landmark</p>
                   {errors.pickupLocation && <p className="text-sm text-destructive">{errors.pickupLocation}</p>}
@@ -1168,12 +1335,8 @@ const MultiStepBookingWidget = () => {
                     dropoffLat: lat || null,
                     dropoffLon: lon || null
                   });
-                  if (errors.dropoffLocation) {
-                    setErrors({
-                      ...errors,
-                      dropoffLocation: ""
-                    });
-                  }
+                  // Instant validation
+                  validateField('dropoffLocation', value);
                 }} placeholder="Enter return address" className="h-12 focus-visible:ring-[#C5A572]" disabled={sameAsPickup} />
                   <p className="text-xs text-muted-foreground">Start typing a Dallas address or landmark</p>
                   {errors.dropoffLocation && <p className="text-sm text-destructive">{errors.dropoffLocation}</p>}
@@ -1306,12 +1469,8 @@ const MultiStepBookingWidget = () => {
                     ...formData,
                     driverAge: value
                   });
-                  if (errors.driverAge) {
-                    setErrors({
-                      ...errors,
-                      driverAge: ""
-                    });
-                  }
+                  // Instant validation
+                  validateField('driverAge', value);
                 }}>
                     <SelectTrigger id="driverAge" className="h-12 focus-visible:ring-[#C5A572]">
                       <SelectValue placeholder="Select age range" />
@@ -1355,12 +1514,8 @@ const MultiStepBookingWidget = () => {
                           ...formData,
                           customerName: value
                         });
-                        if (errors.customerName) {
-                          setErrors({
-                            ...errors,
-                            customerName: ""
-                          });
-                        }
+                        // Instant validation
+                        validateField('customerName', value);
                       }}
                       placeholder="Enter your full name"
                       className="h-12 focus-visible:ring-[#C5A572]"
@@ -1380,12 +1535,8 @@ const MultiStepBookingWidget = () => {
                           ...formData,
                           customerEmail: value
                         });
-                        if (errors.customerEmail) {
-                          setErrors({
-                            ...errors,
-                            customerEmail: ""
-                          });
-                        }
+                        // Instant validation
+                        validateField('customerEmail', value);
                       }}
                       placeholder="your@email.com"
                       className="h-12 focus-visible:ring-[#C5A572]"
@@ -1408,12 +1559,8 @@ const MultiStepBookingWidget = () => {
                           ...formData,
                           customerPhone: value
                         });
-                        if (errors.customerPhone) {
-                          setErrors({
-                            ...errors,
-                            customerPhone: ""
-                          });
-                        }
+                        // Instant validation
+                        validateField('customerPhone', value);
                       }}
                       placeholder="+1 (555) 123-4567"
                       className="h-12 focus-visible:ring-[#C5A572]"
@@ -1428,12 +1575,8 @@ const MultiStepBookingWidget = () => {
                         ...formData,
                         customerType: value
                       });
-                      if (errors.customerType) {
-                        setErrors({
-                          ...errors,
-                          customerType: ""
-                        });
-                      }
+                      // Instant validation
+                      validateField('customerType', value);
                     }}>
                       <SelectTrigger id="customerType" className="h-12 focus-visible:ring-[#C5A572]">
                         <SelectValue placeholder="Select customer type" />
@@ -1507,14 +1650,26 @@ const MultiStepBookingWidget = () => {
 
                   {verificationStatus === 'verified' && (
                     <div className="bg-green-500/10 border border-green-500/20 rounded-lg p-4">
-                      <div className="flex items-start gap-3">
-                        <CheckCircle className="w-5 h-5 text-green-500 mt-0.5 flex-shrink-0" />
-                        <div className="flex-1">
-                          <p className="text-sm font-medium mb-1 text-green-600 dark:text-green-500">Verified</p>
-                          <p className="text-sm text-muted-foreground">
-                            Your identity has been successfully verified. You can proceed with your booking.
-                          </p>
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="flex items-start gap-3 flex-1">
+                          <CheckCircle className="w-5 h-5 text-green-500 mt-0.5 flex-shrink-0" />
+                          <div className="flex-1">
+                            <p className="text-sm font-medium mb-1 text-green-600 dark:text-green-500">Verified</p>
+                            <p className="text-sm text-muted-foreground">
+                              Your identity has been successfully verified. You can proceed with your booking.
+                            </p>
+                          </div>
                         </div>
+                        <Button
+                          onClick={handleClearVerification}
+                          variant="ghost"
+                          size="sm"
+                          className="text-destructive hover:text-destructive hover:bg-destructive/10 flex-shrink-0"
+                          title="Clear verification to verify again"
+                        >
+                          <X className="w-4 h-4 mr-1" />
+                          Clear
+                        </Button>
                       </div>
                     </div>
                   )}
@@ -1819,6 +1974,26 @@ const MultiStepBookingWidget = () => {
                                         <Check className="w-4 h-4 text-black" />
                                       </div>}
                                   </div>
+
+                                  {/* Description */}
+                                  {vehicle.description && (
+                                    <div className="space-y-1">
+                                      <p className="text-sm text-muted-foreground leading-relaxed">
+                                        {getDisplayDescription(vehicle)}
+                                      </p>
+                                      {vehicle.description.length > MAX_DESCRIPTION_LENGTH && (
+                                        <button
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            toggleDescription(vehicle.id);
+                                          }}
+                                          className="text-xs text-[#C5A572] hover:text-[#C5A572]/80 font-medium transition-colors"
+                                        >
+                                          {expandedDescriptions.has(vehicle.id) ? 'Show less' : 'Show more'}
+                                        </button>
+                                      )}
+                                    </div>
+                                  )}
                                 </div>
 
                                 {/* Pricing & CTA */}
@@ -1916,6 +2091,26 @@ const MultiStepBookingWidget = () => {
                               </h4>
                               {vehicle.colour && <p className="text-xs text-muted-foreground">{vehicle.colour}</p>}
                             </div>
+
+                            {/* Description */}
+                            {vehicle.description && (
+                              <div className="space-y-1">
+                                <p className="text-sm text-muted-foreground leading-relaxed">
+                                  {getDisplayDescription(vehicle)}
+                                </p>
+                                {vehicle.description.length > MAX_DESCRIPTION_LENGTH && (
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      toggleDescription(vehicle.id);
+                                    }}
+                                    className="text-xs text-[#C5A572] hover:text-[#C5A572]/80 font-medium transition-colors"
+                                  >
+                                    {expandedDescriptions.has(vehicle.id) ? 'Show less' : 'Show more'}
+                                  </button>
+                                )}
+                              </div>
+                            )}
 
                             {/* Spec Bar */}
                             <div className="flex items-center gap-4 text-xs text-muted-foreground pb-3 border-b border-border/50">

@@ -46,6 +46,7 @@ interface Vehicle {
   status: string;
   photo_url?: string | null;
   created_at?: string;
+  description?: string | null;
 }
 
 interface ServiceInclusion {
@@ -105,6 +106,34 @@ const Pricing = () => {
   const [makeFilter, setMakeFilter] = useState<string>("all");
   const [colourFilter, setColourFilter] = useState<string>("all");
   const [sortBy, setSortBy] = useState<string>("daily_asc");
+  const [expandedDescriptions, setExpandedDescriptions] = useState<Set<string>>(new Set());
+
+  // Description helper functions
+  const MAX_DESCRIPTION_LENGTH = 150;
+
+  const toggleDescription = (vehicleId: string) => {
+    setExpandedDescriptions(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(vehicleId)) {
+        newSet.delete(vehicleId);
+      } else {
+        newSet.add(vehicleId);
+      }
+      return newSet;
+    });
+  };
+
+  const getDisplayDescription = (vehicle: Vehicle) => {
+    if (!vehicle.description) return null;
+    const isExpanded = expandedDescriptions.has(vehicle.id);
+    const needsTruncation = vehicle.description.length > MAX_DESCRIPTION_LENGTH;
+
+    if (isExpanded || !needsTruncation) {
+      return vehicle.description;
+    }
+
+    return vehicle.description.substring(0, MAX_DESCRIPTION_LENGTH) + '...';
+  };
 
   useEffect(() => {
     loadVehicles();
@@ -349,6 +378,26 @@ const Pricing = () => {
                               {vehicle.status}
                             </Badge>
                           </div>
+
+                          {/* Description */}
+                          {vehicle.description && (
+                            <div className="space-y-2 mt-4">
+                              <p className="text-sm text-muted-foreground leading-relaxed">
+                                {getDisplayDescription(vehicle)}
+                              </p>
+                              {vehicle.description.length > MAX_DESCRIPTION_LENGTH && (
+                                <button
+                                  onClick={(e) => {
+                                    e.preventDefault();
+                                    toggleDescription(vehicle.id);
+                                  }}
+                                  className="text-xs text-accent hover:text-accent/80 font-medium transition-colors"
+                                >
+                                  {expandedDescriptions.has(vehicle.id) ? 'Show less' : 'Show more'}
+                                </button>
+                              )}
+                            </div>
+                          )}
                         </div>
 
                         {/* Right Pricing Column */}

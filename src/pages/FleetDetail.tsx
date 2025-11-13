@@ -25,6 +25,7 @@ interface Vehicle {
   status: string;
   photo_url?: string | null;
   created_at?: string;
+  description?: string | null;
 }
 
 interface ServiceInclusion {
@@ -48,6 +49,21 @@ export default function FleetDetail() {
   const [serviceInclusions, setServiceInclusions] = useState<ServiceInclusion[]>([]);
   const [pricingExtras, setPricingExtras] = useState<PricingExtra[]>([]);
   const [loading, setLoading] = useState(true);
+  const [isDescriptionExpanded, setIsDescriptionExpanded] = useState(false);
+
+  // Description helper
+  const MAX_DESCRIPTION_LENGTH = 200;
+
+  const getDisplayDescription = () => {
+    if (!vehicle?.description) return null;
+    const needsTruncation = vehicle.description.length > MAX_DESCRIPTION_LENGTH;
+
+    if (isDescriptionExpanded || !needsTruncation) {
+      return vehicle.description;
+    }
+
+    return vehicle.description.substring(0, MAX_DESCRIPTION_LENGTH) + '...';
+  };
 
   useEffect(() => {
     loadVehicleData();
@@ -244,9 +260,25 @@ export default function FleetDetail() {
                 <h2 className="font-serif text-3xl md:text-4xl font-bold mb-6">
                   Vehicle Overview
                 </h2>
-                <p className="text-lg text-muted-foreground mb-8 leading-relaxed">
-                  Experience unparalleled luxury and comfort with the {vehicleName}. This exceptional vehicle combines elegant design with cutting-edge technology, ensuring every journey is memorable.
-                </p>
+                {vehicle.description ? (
+                  <div className="mb-8">
+                    <p className="text-lg text-muted-foreground leading-relaxed">
+                      {getDisplayDescription()}
+                    </p>
+                    {vehicle.description.length > MAX_DESCRIPTION_LENGTH && (
+                      <button
+                        onClick={() => setIsDescriptionExpanded(!isDescriptionExpanded)}
+                        className="mt-3 text-sm text-accent hover:text-accent/80 font-medium transition-colors"
+                      >
+                        {isDescriptionExpanded ? 'Show less' : 'Show more'}
+                      </button>
+                    )}
+                  </div>
+                ) : (
+                  <p className="text-lg text-muted-foreground mb-8 leading-relaxed">
+                    Experience unparalleled luxury and comfort with the {vehicleName}. This exceptional vehicle combines elegant design with cutting-edge technology, ensuring every journey is memorable.
+                  </p>
+                )}
 
                 <div className="space-y-3">
                   <div className="flex items-start gap-3">

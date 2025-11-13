@@ -60,6 +60,15 @@ export function TimePicker({ value = "", onChange, disabled, className, id }: Ti
 
   const displayValue = value || "Select time"
 
+  // Check if a preset time matches the current selection
+  const isPresetSelected = (presetH: string, presetM: string, presetP: string) => {
+    if (presetH === "" && presetM === "" && presetP === "") {
+      // "Now" button - never highlight as selected
+      return false;
+    }
+    return hours === presetH && minutes === presetM && period === presetP;
+  };
+
   return (
     <Popover open={isOpen} onOpenChange={setIsOpen}>
       <PopoverTrigger asChild>
@@ -178,34 +187,40 @@ export function TimePicker({ value = "", onChange, disabled, className, id }: Ti
                 { label: "6:00 PM", h: "06", m: "00", p: "PM" },
                 { label: "9:00 PM", h: "09", m: "00", p: "PM" },
                 { label: "Now", h: "", m: "", p: "" },
-              ].map((time) => (
-                <Button
-                  key={time.label}
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={() => {
-                    if (time.label === "Now") {
-                      const now = new Date()
-                      const currentHours = now.getHours()
-                      const currentMinutes = now.getMinutes()
-                      const hour12 = currentHours === 0 ? 12 : currentHours > 12 ? currentHours - 12 : currentHours
-                      const currentPeriod = currentHours >= 12 ? "PM" : "AM"
+              ].map((time) => {
+                const isSelected = isPresetSelected(time.h, time.m, time.p);
+                return (
+                  <Button
+                    key={time.label}
+                    type="button"
+                    variant={isSelected ? "default" : "outline"}
+                    size="sm"
+                    onClick={() => {
+                      if (time.label === "Now") {
+                        const now = new Date()
+                        const currentHours = now.getHours()
+                        const currentMinutes = now.getMinutes()
+                        const hour12 = currentHours === 0 ? 12 : currentHours > 12 ? currentHours - 12 : currentHours
+                        const currentPeriod = currentHours >= 12 ? "PM" : "AM"
 
-                      setHours(hour12.toString().padStart(2, "0"))
-                      setMinutes(currentMinutes.toString().padStart(2, "0"))
-                      setPeriod(currentPeriod)
-                    } else {
-                      setHours(time.h)
-                      setMinutes(time.m)
-                      setPeriod(time.p as "AM" | "PM")
-                    }
-                  }}
-                  className="text-xs"
-                >
-                  {time.label}
-                </Button>
-              ))}
+                        setHours(hour12.toString().padStart(2, "0"))
+                        setMinutes(currentMinutes.toString().padStart(2, "0"))
+                        setPeriod(currentPeriod)
+                      } else {
+                        setHours(time.h)
+                        setMinutes(time.m)
+                        setPeriod(time.p as "AM" | "PM")
+                      }
+                    }}
+                    className={cn(
+                      "text-xs",
+                      isSelected && "bg-accent text-accent-foreground hover:bg-accent/90"
+                    )}
+                  >
+                    {time.label}
+                  </Button>
+                );
+              })}
             </div>
           </div>
 
