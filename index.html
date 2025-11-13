@@ -1,21 +1,56 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" suppressHydrationWarning>
   <head>
+    <script>
+      // Apply theme before React loads to prevent flash
+      try {
+        const theme = localStorage.getItem('vite-ui-theme') || 'dark';
+        if (theme === 'dark') {
+          document.documentElement.classList.add('dark');
+        } else {
+          document.documentElement.classList.remove('dark');
+        }
+      } catch (e) {}
+    </script>
     <meta charset="UTF-8" />
+    <link rel="icon" href="/brand-icon-2025.png" type="image/png" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>9c16caf2-ec31-4bfb-a7df-7cd34705cfbe</title>
-    <meta name="description" content="Lovable Generated Project" />
-    <meta name="author" content="Lovable" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="theme-color" content="#E5C26E" />
+    <link rel="manifest" href="/manifest.json" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="Drive 917" />
+    <link rel="apple-touch-icon" href="/icons/icon-512.png" />
+    <meta http-equiv="Cache-Control" content="public, max-age=31536000, immutable" />
+    <title>Drive 917 - Premium Luxury Car Rentals</title>
+    <meta name="description" content="Experience premium luxury car rentals with Drive 917. Rent top-tier vehicles with flexible daily, weekly, and monthly rates.">
+    <meta name="author" content="Drive 917" />
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;500;600;700&family=Playfair+Display:wght@400;500;600;700;800&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 
-    <meta property="og:title" content="9c16caf2-ec31-4bfb-a7df-7cd34705cfbe" />
-    <meta property="og:description" content="Lovable Generated Project" />
+    
+    
     <meta property="og:type" content="website" />
-    <meta property="og:image" content="https://lovable.dev/opengraph-image-p98pqg.png" />
+    <meta property="og:image" content="https://storage.googleapis.com/gpt-engineer-file-uploads/Dqk25JwdNwgm9Ehq0X2tBZVnj8r2/social-images/social-1759427601630-TRAVEL IN SUPREME STYLE (9).png">
 
     <meta name="twitter:card" content="summary_large_image" />
-    <meta name="twitter:site" content="@Lovable" />
-    <meta name="twitter:image" content="https://lovable.dev/opengraph-image-p98pqg.png" />
-  </head>
+    <meta name="twitter:site" content="@lovable_dev" />
+    <meta name="twitter:image" content="https://storage.googleapis.com/gpt-engineer-file-uploads/Dqk25JwdNwgm9Ehq0X2tBZVnj8r2/social-images/social-1759427601630-TRAVEL IN SUPREME STYLE (9).png">
+    
+  
+  
+  
+  
+  
+  
+  
+  <meta property="og:title" content="Drive 917 - Premium Luxury Car Rentals">
+  <meta name="twitter:title" content="Drive 917 - Premium Luxury Car Rentals">
+  <meta property="og:description" content="Experience premium luxury car rentals with Drive 917. Rent top-tier vehicles with flexible daily, weekly, and monthly rates.">
+  <meta name="twitter:description" content="Experience premium luxury car rentals with Drive 917. Rent top-tier vehicles with flexible daily, weekly, and monthly rates.">
+</head>
 
   <body>
     <div id="root"></div>
