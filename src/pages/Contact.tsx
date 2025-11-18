@@ -12,8 +12,6 @@ import { toast } from "sonner";
 import { z } from "zod";
 import { Link } from "react-router-dom";
 import PWAInstall from "@/components/PWAInstall";
-import { useSiteSettings } from "@/hooks/useSiteSettings";
-import { Skeleton } from "@/components/ui/skeleton";
 import { supabase } from "@/integrations/supabase/client";
 import SEO from "@/components/SEO";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
@@ -35,7 +33,6 @@ const contactSchema = z.object({
 });
 
 const Contact = () => {
-  const { settings, isLoading: settingsLoading } = useSiteSettings();
   const [loading, setLoading] = useState(false);
   const [submitStatus, setSubmitStatus] = useState<'idle' | 'success' | 'error'>('idle');
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -48,6 +45,15 @@ const Contact = () => {
     gdprConsent: false,
   });
 
+  // Hardcoded contact settings
+  const contactSettings = {
+    phone: "+44 800 123 4567",
+    email: "info@drive917.com",
+    office_address: "123 Luxury Lane, London, UK",
+    availability: "24 hours a day, 7 days a week, 365 days a year",
+    whatsapp_number: "+447900123456",
+  };
+
   // LocalBusiness schema for SEO
   const businessSchema = {
     "@context": "https://schema.org",
@@ -55,8 +61,8 @@ const Contact = () => {
     "name": "Drive917",
     "description": "Premium luxury car rentals in Los Angeles",
     "url": window.location.origin,
-    "telephone": settings.phone,
-    "email": settings.email,
+    "telephone": contactSettings.phone,
+    "email": contactSettings.email,
     "address": {
       "@type": "PostalAddress",
       "streetAddress": "902 Melrose Avenue",
@@ -77,13 +83,11 @@ const Contact = () => {
       "name": "Los Angeles"
     }
   };
-  
+
   // Format phone number for tel: link (remove spaces and special chars except +)
-  const phoneLink = settings.phone.replace(/[^\d+]/g, '');
+  const phoneLink = contactSettings.phone.replace(/[^\d+]/g, '');
   // Format WhatsApp number (remove all non-digits and add country code)
-  const whatsappNumber = settings.whatsapp_number
-    ? settings.whatsapp_number.replace(/[^\d]/g, '')
-    : phoneLink;
+  const whatsappNumber = contactSettings.whatsapp_number.replace(/[^\d]/g, '');
 
   // Validate individual field
   const validateField = (fieldName: keyof typeof formData, value: any) => {
@@ -193,162 +197,143 @@ const Contact = () => {
           <div className="grid lg:grid-cols-2 gap-12 max-w-7xl mx-auto">
             {/* Left Column - Contact Info */}
             <div className="space-y-6 animate-fade-in animation-delay-200">
-              {settingsLoading ? (
-                <>
-                  {[...Array(5)].map((_, i) => (
-                    <Card key={i} className="p-6">
-                      <div className="flex items-start gap-4">
-                        <Skeleton className="w-12 h-12 rounded-lg" />
-                        <div className="flex-1 space-y-2">
-                          <Skeleton className="h-6 w-24" />
-                          <Skeleton className="h-5 w-full" />
-                          <Skeleton className="h-4 w-3/4" />
+              {/* Phone Card */}
+              <Card className="group p-6 shadow-metal bg-card/50 backdrop-blur border-t-2 border-t-accent/30 transition-all duration-300 hover:scale-[1.01] hover:shadow-glow">
+                <div className="flex items-start gap-4">
+                  <div className="p-3 rounded-lg bg-accent/10 border border-accent/20 group-hover:bg-accent/20 transition-colors flex-shrink-0">
+                    <Phone className="w-6 h-6 text-accent" />
+                  </div>
+                  <div className="flex-1">
+                    <h3 className="text-xl font-display font-semibold mb-2 text-gradient-silver">Phone</h3>
+                    <a
+                      href={`tel:${phoneLink}`}
+                      className="text-lg text-accent hover:underline block mb-2 font-medium"
+                    >
+                      {contactSettings.phone}
+                    </a>
+                    <p className="text-sm text-muted-foreground">
+                      {contactSettings.availability}
+                    </p>
+                  </div>
+                </div>
+              </Card>
+
+              {/* Email Card */}
+              <Card className="group p-6 shadow-metal bg-card/50 backdrop-blur border-t-2 border-t-accent/30 transition-all duration-300 hover:scale-[1.01] hover:shadow-glow">
+                <div className="flex items-start gap-4">
+                  <div className="p-3 rounded-lg bg-accent/10 border border-accent/20 group-hover:bg-accent/20 transition-colors flex-shrink-0">
+                    <Mail className="w-6 h-6 text-accent" />
+                  </div>
+                  <div className="flex-1">
+                    <h3 className="text-xl font-display font-semibold mb-2 text-gradient-silver">Email</h3>
+                    <a
+                      href={`mailto:${contactSettings.email}`}
+                      className="text-lg text-accent hover:underline block mb-2 font-medium break-all"
+                    >
+                      {contactSettings.email}
+                    </a>
+                    <p className="text-sm text-muted-foreground">
+                      Response within 2 hours during business hours (PST)
+                    </p>
+                  </div>
+                </div>
+              </Card>
+
+              {/* Office Card */}
+              <Card className="group p-6 shadow-metal bg-card/50 backdrop-blur border-t-2 border-t-accent/30 transition-all duration-300 hover:scale-[1.01] hover:shadow-glow">
+                <div className="flex items-start gap-4">
+                  <div className="p-3 rounded-lg bg-accent/10 border border-accent/20 group-hover:bg-accent/20 transition-colors flex-shrink-0">
+                    <MapPin className="w-6 h-6 text-accent" />
+                  </div>
+                  <div className="flex-1">
+                    <h3 className="text-xl font-display font-semibold mb-2 text-gradient-silver">Office</h3>
+                    <p className="text-muted-foreground leading-relaxed">
+                      {contactSettings.office_address}
+                    </p>
+                  </div>
+                </div>
+              </Card>
+
+              {/* Availability Card */}
+              <Card className="group p-6 shadow-metal bg-card/50 backdrop-blur border-t-2 border-t-accent/30 transition-all duration-300 hover:scale-[1.01] hover:shadow-glow">
+                <div className="flex items-start gap-4">
+                  <div className="p-3 rounded-lg bg-accent/10 border border-accent/20 group-hover:bg-accent/20 transition-colors flex-shrink-0">
+                    <Clock className="w-6 h-6 text-accent" />
+                  </div>
+                  <div className="flex-1">
+                    <h3 className="text-xl font-display font-semibold mb-2 text-gradient-silver">Availability</h3>
+                    <p className="text-muted-foreground leading-relaxed">
+                      {contactSettings.availability}
+                    </p>
+                  </div>
+                </div>
+              </Card>
+
+              {/* WhatsApp Button */}
+              <Card className="group p-6 shadow-metal bg-card/50 backdrop-blur border-t-2 border-t-accent/30 transition-all duration-300 hover:scale-[1.01] hover:shadow-glow">
+                <div className="flex items-start gap-4">
+                  <div className="p-3 rounded-lg bg-accent/10 border border-accent/20 group-hover:bg-accent/20 transition-colors flex-shrink-0">
+                    <MessageCircle className="w-6 h-6 text-accent" />
+                  </div>
+                  <div className="flex-1">
+                    <h3 className="text-xl font-display font-semibold mb-2 text-gradient-silver">WhatsApp</h3>
+                    <a
+                      href={`https://wa.me/${whatsappNumber}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-lg text-accent hover:underline block mb-2 font-medium"
+                    >
+                      Message us on WhatsApp
+                    </a>
+                    <p className="text-sm text-muted-foreground">
+                      Quick response for urgent enquiries
+                    </p>
+                  </div>
+                </div>
+              </Card>
+
+              {/* Trust Badges */}
+              <TooltipProvider>
+                <Card className="p-6 shadow-metal bg-gradient-to-br from-card via-secondary/20 to-card backdrop-blur border-accent/20">
+                  <div className="flex items-center justify-around text-center gap-4">
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <div className="flex-1 cursor-help">
+                          <Shield className="w-8 h-8 text-accent mx-auto mb-2" aria-label="Secure" />
+                          <p className="text-xs text-muted-foreground font-medium">Secure</p>
                         </div>
-                      </div>
-                    </Card>
-                  ))}
-                </>
-              ) : (
-                <>
-                  {/* Phone Card */}
-                  <Card className="group p-6 shadow-metal bg-card/50 backdrop-blur border-t-2 border-t-accent/30 transition-all duration-300 hover:scale-[1.01] hover:shadow-glow">
-                    <div className="flex items-start gap-4">
-                      <div className="p-3 rounded-lg bg-accent/10 border border-accent/20 group-hover:bg-accent/20 transition-colors flex-shrink-0">
-                        <Phone className="w-6 h-6 text-accent" />
-                      </div>
-                      <div className="flex-1">
-                        <h3 className="text-xl font-display font-semibold mb-2 text-gradient-silver">Phone</h3>
-                        <a 
-                          href={`tel:${phoneLink}`}
-                          className="text-lg text-accent hover:underline block mb-2 font-medium"
-                        >
-                          {settings.phone}
-                        </a>
-                        <p className="text-sm text-muted-foreground">
-                          {settings.availability}
-                        </p>
-                      </div>
-                    </div>
-                  </Card>
-
-                  {/* Email Card */}
-                  <Card className="group p-6 shadow-metal bg-card/50 backdrop-blur border-t-2 border-t-accent/30 transition-all duration-300 hover:scale-[1.01] hover:shadow-glow">
-                    <div className="flex items-start gap-4">
-                      <div className="p-3 rounded-lg bg-accent/10 border border-accent/20 group-hover:bg-accent/20 transition-colors flex-shrink-0">
-                        <Mail className="w-6 h-6 text-accent" />
-                      </div>
-                      <div className="flex-1">
-                        <h3 className="text-xl font-display font-semibold mb-2 text-gradient-silver">Email</h3>
-                        <a 
-                          href={`mailto:${settings.email}`}
-                          className="text-lg text-accent hover:underline block mb-2 font-medium break-all"
-                        >
-                          {settings.email}
-                        </a>
-                        <p className="text-sm text-muted-foreground">
-                          Response within 2 hours during business hours (PST)
-                        </p>
-                      </div>
-                    </div>
-                  </Card>
-
-                  {/* Office Card */}
-                  <Card className="group p-6 shadow-metal bg-card/50 backdrop-blur border-t-2 border-t-accent/30 transition-all duration-300 hover:scale-[1.01] hover:shadow-glow">
-                    <div className="flex items-start gap-4">
-                      <div className="p-3 rounded-lg bg-accent/10 border border-accent/20 group-hover:bg-accent/20 transition-colors flex-shrink-0">
-                        <MapPin className="w-6 h-6 text-accent" />
-                      </div>
-                      <div className="flex-1">
-                        <h3 className="text-xl font-display font-semibold mb-2 text-gradient-silver">Office</h3>
-                        <p className="text-muted-foreground leading-relaxed">
-                          {settings.office_address}
-                        </p>
-                      </div>
-                    </div>
-                  </Card>
-
-                  {/* Availability Card */}
-                  <Card className="group p-6 shadow-metal bg-card/50 backdrop-blur border-t-2 border-t-accent/30 transition-all duration-300 hover:scale-[1.01] hover:shadow-glow">
-                    <div className="flex items-start gap-4">
-                      <div className="p-3 rounded-lg bg-accent/10 border border-accent/20 group-hover:bg-accent/20 transition-colors flex-shrink-0">
-                        <Clock className="w-6 h-6 text-accent" />
-                      </div>
-                      <div className="flex-1">
-                        <h3 className="text-xl font-display font-semibold mb-2 text-gradient-silver">Availability</h3>
-                        <p className="text-muted-foreground leading-relaxed">
-                          {settings.availability}
-                        </p>
-                      </div>
-                    </div>
-                  </Card>
-
-                  {/* WhatsApp Button */}
-                  <Card className="group p-6 shadow-metal bg-card/50 backdrop-blur border-t-2 border-t-accent/30 transition-all duration-300 hover:scale-[1.01] hover:shadow-glow">
-                    <div className="flex items-start gap-4">
-                      <div className="p-3 rounded-lg bg-accent/10 border border-accent/20 group-hover:bg-accent/20 transition-colors flex-shrink-0">
-                        <MessageCircle className="w-6 h-6 text-accent" />
-                      </div>
-                      <div className="flex-1">
-                        <h3 className="text-xl font-display font-semibold mb-2 text-gradient-silver">WhatsApp</h3>
-                        <a 
-                          href={`https://wa.me/${whatsappNumber}`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-lg text-accent hover:underline block mb-2 font-medium"
-                        >
-                          Message us on WhatsApp
-                        </a>
-                        <p className="text-sm text-muted-foreground">
-                          Quick response for urgent enquiries
-                        </p>
-                      </div>
-                    </div>
-                  </Card>
-
-                  {/* Trust Badges */}
-                  <TooltipProvider>
-                    <Card className="p-6 shadow-metal bg-gradient-to-br from-card via-secondary/20 to-card backdrop-blur border-accent/20">
-                      <div className="flex items-center justify-around text-center gap-4">
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <div className="flex-1 cursor-help">
-                              <Shield className="w-8 h-8 text-accent mx-auto mb-2" aria-label="Secure" />
-                              <p className="text-xs text-muted-foreground font-medium">Secure</p>
-                            </div>
-                          </TooltipTrigger>
-                          <TooltipContent>
-                            <p>Your data and booking details are encrypted and secure</p>
-                          </TooltipContent>
-                        </Tooltip>
-                        <div className="h-10 w-[1px] bg-accent/20" />
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <div className="flex-1 cursor-help">
-                              <Lock className="w-8 h-8 text-accent mx-auto mb-2" aria-label="Confidential" />
-                              <p className="text-xs text-muted-foreground font-medium">Confidential</p>
-                            </div>
-                          </TooltipTrigger>
-                          <TooltipContent>
-                            <p>All information is kept strictly confidential</p>
-                          </TooltipContent>
-                        </Tooltip>
-                        <div className="h-10 w-[1px] bg-accent/20" />
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <div className="flex-1 cursor-help">
-                              <Clock className="w-8 h-8 text-accent mx-auto mb-2" aria-label="24/7 Support" />
-                              <p className="text-xs text-muted-foreground font-medium">24/7 Support</p>
-                            </div>
-                          </TooltipTrigger>
-                          <TooltipContent>
-                            <p>Our concierge team is available around the clock</p>
-                          </TooltipContent>
-                        </Tooltip>
-                      </div>
-                    </Card>
-                  </TooltipProvider>
-                </>
-              )}
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        <p>Your data and booking details are encrypted and secure</p>
+                      </TooltipContent>
+                    </Tooltip>
+                    <div className="h-10 w-[1px] bg-accent/20" />
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <div className="flex-1 cursor-help">
+                          <Lock className="w-8 h-8 text-accent mx-auto mb-2" aria-label="Confidential" />
+                          <p className="text-xs text-muted-foreground font-medium">Confidential</p>
+                        </div>
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        <p>All information is kept strictly confidential</p>
+                      </TooltipContent>
+                    </Tooltip>
+                    <div className="h-10 w-[1px] bg-accent/20" />
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <div className="flex-1 cursor-help">
+                          <Clock className="w-8 h-8 text-accent mx-auto mb-2" aria-label="24/7 Support" />
+                          <p className="text-xs text-muted-foreground font-medium">24/7 Support</p>
+                        </div>
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        <p>Our concierge team is available around the clock</p>
+                      </TooltipContent>
+                    </Tooltip>
+                  </div>
+                </Card>
+              </TooltipProvider>
             </div>
 
             {/* Right Column - Contact Form */}

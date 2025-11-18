@@ -98,7 +98,7 @@ export default function PortfolioManagement() {
         .order("created_at", { ascending: false });
 
       if (statusFilter !== "all") {
-        query = query.eq("status", statusFilter);
+        query = query.ilike("status", statusFilter);
       }
 
       if (serviceFilter !== "all") {

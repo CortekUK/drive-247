@@ -106,12 +106,35 @@ const getIconComponent = (iconName: string) => {
 
 const Pricing = () => {
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
-  const [serviceInclusions, setServiceInclusions] = useState<ServiceInclusion[]>([]);
-  const [pricingExtras, setPricingExtras] = useState<PricingExtra[]>([]);
   const [makeFilter, setMakeFilter] = useState<string>("all");
   const [colourFilter, setColourFilter] = useState<string>("all");
   const [sortBy, setSortBy] = useState<string>("daily_asc");
   const [expandedDescriptions, setExpandedDescriptions] = useState<Set<string>>(new Set());
+
+  // Hardcoded service inclusions
+  const serviceInclusions: ServiceInclusion[] = [
+    // Standard inclusions
+    { id: '1', title: 'Comprehensive Insurance Coverage', icon_name: 'Shield', category: 'standard', display_order: 1, is_active: true },
+    { id: '2', title: '24/7 Roadside Assistance', icon_name: 'Phone', category: 'standard', display_order: 2, is_active: true },
+    { id: '3', title: 'Unlimited Mileage', icon_name: 'MapPin', category: 'standard', display_order: 3, is_active: true },
+    { id: '4', title: 'Full Tank of Premium Fuel', icon_name: 'Fuel', category: 'standard', display_order: 4, is_active: true },
+    { id: '5', title: 'Professional Vehicle Handover', icon_name: 'User', category: 'standard', display_order: 5, is_active: true },
+    { id: '6', title: 'Vehicle Valeting & Cleaning', icon_name: 'Sparkles', category: 'standard', display_order: 6, is_active: true },
+
+    // Premium add-ons
+    { id: '7', title: 'Chauffeur Service (per hour)', icon_name: 'User', category: 'premium', display_order: 1, is_active: true },
+    { id: '8', title: 'Airport Meet & Greet', icon_name: 'Plane', category: 'premium', display_order: 2, is_active: true },
+    { id: '9', title: 'Additional Driver', icon_name: 'User', category: 'premium', display_order: 3, is_active: true },
+    { id: '10', title: 'GPS Navigation System', icon_name: 'MapPin', category: 'premium', display_order: 4, is_active: true },
+  ];
+
+  // Hardcoded pricing extras
+  const pricingExtras: PricingExtra[] = [
+    { id: '1', extra_name: 'Child Safety Seat', price: 15, description: 'Per day', is_active: true },
+    { id: '2', extra_name: 'Mobile WiFi Hotspot', price: 10, description: 'Per day', is_active: true },
+    { id: '3', extra_name: 'Delivery & Collection', price: 50, description: 'Within 25 miles', is_active: true },
+    { id: '4', extra_name: 'Extended Insurance', price: 25, description: 'Per day', is_active: true },
+  ];
 
   // Description helper functions
   const MAX_DESCRIPTION_LENGTH = 150;
@@ -142,8 +165,6 @@ const Pricing = () => {
 
   useEffect(() => {
     loadVehicles();
-    loadServiceInclusions();
-    loadPricingExtras();
   }, []);
 
   const loadVehicles = async () => {
@@ -161,26 +182,6 @@ const Pricing = () => {
       setVehicles(data as any);
     } else if (error) {
       console.error("Error loading vehicles:", error);
-    }
-  };
-
-  const loadServiceInclusions = async () => {
-    const { data, error } = await supabase
-      .from("service_inclusions")
-      .select("*")
-      .eq("is_active", true)
-      .order("category, display_order");
-
-    if (!error && data) {
-      setServiceInclusions(data);
-    }
-  };
-
-  const loadPricingExtras = async () => {
-    const { data, error } = await supabase.from("pricing_extras").select("*").eq("is_active", true).order("price");
-
-    if (!error && data) {
-      setPricingExtras(data);
     }
   };
 

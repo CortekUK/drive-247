@@ -198,7 +198,7 @@ const MultiStepBookingWidget = () => {
       vehicle_photos (
         photo_url
       )
-    `).eq("status", "Available").order("reg");
+    `).ilike("status", "Available").order("reg");
     const {
       data: extrasData
     } = await supabase.from("pricing_extras").select("*");
@@ -893,53 +893,6 @@ const MultiStepBookingWidget = () => {
       newErrors.driverAge = "Please select a valid driver age range.";
     }
 
-    // Validate customer name
-    const nameValue = formData.customerName.trim();
-    if (!nameValue) {
-      newErrors.customerName = "Full name is required";
-    } else if (nameValue.length < 2) {
-      newErrors.customerName = "Full name must be at least 2 characters";
-    } else if (!/^[a-zA-Z\s\-']+$/.test(nameValue)) {
-      newErrors.customerName = "Name must contain only letters, spaces, hyphens, and apostrophes";
-    } else if (!/[a-zA-Z]{2,}/.test(nameValue)) {
-      newErrors.customerName = "Name must contain at least 2 alphabetic characters";
-    } else if (nameValue.replace(/[\s\-']/g, '').length < 2) {
-      newErrors.customerName = "Name must have actual alphabetic content";
-    }
-
-    // Validate email
-    if (!formData.customerEmail.trim()) {
-      newErrors.customerEmail = "Email address is required";
-    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.customerEmail)) {
-      newErrors.customerEmail = "Please enter a valid email address";
-    }
-
-    // Validate phone number (international format)
-    const phoneValue = formData.customerPhone.trim();
-    if (!phoneValue) {
-      newErrors.customerPhone = "Phone number is required";
-    } else {
-      // Remove all spaces, hyphens, parentheses for validation
-      const cleaned = phoneValue.replace(/[\s\-()]/g, '');
-      // Count actual digits
-      const digitCount = (cleaned.match(/\d/g) || []).length;
-      // Valid international phone: 7-15 digits, optional + at start
-      if (digitCount < 7 || digitCount > 15) {
-        newErrors.customerPhone = "Please enter a valid phone number (7-15 digits)";
-      } else if (cleaned.startsWith('+') && !/^\+\d+$/.test(cleaned)) {
-        newErrors.customerPhone = "Invalid phone number format";
-      } else if (!cleaned.startsWith('+') && !/^\d+$/.test(cleaned.replace(/[\s\-()]/g, ''))) {
-        newErrors.customerPhone = "Phone number should contain only digits";
-      }
-    }
-
-    // Validate customer type
-    if (!formData.customerType || formData.customerType.trim() === "") {
-      newErrors.customerType = "Please select a customer type";
-    } else if (formData.customerType !== "Individual" && formData.customerType !== "Company") {
-      newErrors.customerType = "Invalid customer type selected";
-    }
-
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
@@ -1207,6 +1160,25 @@ const MultiStepBookingWidget = () => {
       setCurrentStep(3);
     }
   };
+
+  const handleStep3Continue = () => {
+    if (validateStep3()) {
+      // Analytics tracking
+      if ((window as any).gtag) {
+        (window as any).gtag('event', 'booking_step3_submitted', {
+          customer_type: formData.customerType,
+          verification_status: verificationStatus
+        });
+      }
+      setCurrentStep(4);
+    }
+  };
+
+  const validateStep4 = () => {
+    // Step 4 is review/confirm, no additional validation needed
+    // All validation has been done in previous steps
+    return true;
+  };
   if (showConfirmation && bookingDetails) {
     return <BookingConfirmation bookingDetails={bookingDetails} onClose={handleCloseConfirmation} />;
   }
@@ -1219,6 +1191,8 @@ const MultiStepBookingWidget = () => {
       case 2:
         return "Choose Vehicle";
       case 3:
+        return "Your Details";
+      case 4:
         return "Review & Confirm";
       default:
         return "Book Your Rental";
@@ -1243,30 +1217,39 @@ const MultiStepBookingWidget = () => {
       <Card className="p-4 md:p-8 bg-card backdrop-blur-sm border-border shadow-[0_8px_30px_rgba(0,0,0,0.12)] dark:shadow-[0_8px_30px_rgba(0,0,0,0.4)]">
         <div className="space-y-8 bk-steps">
           {/* Enhanced Progress Indicator */}
-          <div className="w-full">
-            <div className="flex items-center justify-between relative">
+          <div className="w-full overflow-x-auto py-4">
+            <div className="flex items-center justify-between relative min-w-[280px]">
               {[{
               step: 1,
-              label: "Trip Details"
+              label: "Trip",
+              fullLabel: "Trip Details"
             }, {
               step: 2,
-              label: "Choose Vehicle"
+              label: "Vehicle",
+              fullLabel: "Choose Vehicle"
             }, {
               step: 3,
-              label: "Review & Confirm"
+              label: "Details",
+              fullLabel: "Customer Details"
+            }, {
+              step: 4,
+              label: "Review",
+              fullLabel: "Review & Confirm"
             }].map(({
               step,
-              label
+              label,
+              fullLabel
             }, index) => <div key={step} className="flex flex-col items-center flex-1 relative z-10">
-                  <div className={cn("bk-step__node flex items-center justify-center w-12 h-12 md:w-14 md:h-14 rounded-full border-2 transition-all", currentStep >= step ? 'bg-[#F5B942] border-[#F5B942] shadow-[0_0_20px_rgba(245,185,66,0.5)]' : 'border-border bg-muted', currentStep === step && 'bk-step__node--active shadow-[0_0_24px_rgba(245,185,66,0.6)]')} aria-label={`Step ${step} of 3: ${label}`} aria-current={currentStep === step ? "step" : undefined}>
-                    {currentStep > step ? <Check className="w-5 h-5 md:w-6 md:h-6 text-[#0C1A17]" /> : <span className={cn("text-lg md:text-xl font-bold", currentStep === step ? "text-[#0C1A17]" : "text-muted-foreground")}>
+                  <div className={cn("bk-step__node flex items-center justify-center w-10 h-10 sm:w-12 sm:h-12 md:w-14 md:h-14 rounded-full border-2 transition-all", currentStep >= step ? 'bg-[#F5B942] border-[#F5B942] shadow-[0_0_20px_rgba(245,185,66,0.5)]' : 'border-border bg-muted', currentStep === step && 'bk-step__node--active shadow-[0_0_24px_rgba(245,185,66,0.6)]')} aria-label={`Step ${step} of 4: ${fullLabel}`} aria-current={currentStep === step ? "step" : undefined}>
+                    {currentStep > step ? <Check className="w-4 h-4 sm:w-5 sm:h-5 md:w-6 md:h-6 text-[#0C1A17]" /> : <span className={cn("text-base sm:text-lg md:text-xl font-bold", currentStep === step ? "text-[#0C1A17]" : "text-muted-foreground")}>
                         {step}
                       </span>}
                   </div>
-                  <span className={`mt-2 text-xs md:text-sm font-medium ${currentStep >= step ? 'text-[#F5B942]' : 'text-muted-foreground'}`}>
-                    {label}
+                  <span className={`mt-1.5 sm:mt-2 text-[10px] sm:text-xs md:text-sm font-medium text-center leading-tight ${currentStep >= step ? 'text-[#F5B942]' : 'text-muted-foreground'}`}>
+                    <span className="hidden sm:inline">{fullLabel}</span>
+                    <span className="sm:hidden">{label}</span>
                   </span>
-                  {index < 2 && <div className={cn("bk-step__line absolute top-6 left-[calc(50%+24px)] md:left-[calc(50%+28px)] w-[calc(100%-48px)] md:w-[calc(100%-56px)] h-0.5", currentStep > step ? 'bg-[#F5B942]' : 'bg-border')} />}
+                  {index < 3 && <div className={cn("bk-step__line absolute top-5 sm:top-6 md:top-7 left-[calc(50%+20px)] sm:left-[calc(50%+24px)] md:left-[calc(50%+28px)] w-[calc(100%-40px)] sm:w-[calc(100%-48px)] md:w-[calc(100%-56px)] h-0.5", currentStep > step ? 'bg-[#F5B942]' : 'bg-border')} />}
               </div>)}
           </div>
         </div>
@@ -1499,229 +1482,15 @@ const MultiStepBookingWidget = () => {
                 }} placeholder="Enter promo code" className="h-12 focus-visible:ring-[#C5A572]" maxLength={20} />
                 </div>
               </div>
-
-              {/* Divider */}
-              <div className="border-t border-border/50 pt-8">
-                <h4 className="text-lg font-semibold mb-4">Your Details</h4>
-
-                {/* Row 4: Customer Name & Email */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6 mb-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="customerName" className="font-medium">Full Name *</Label>
-                    <Input
-                      id="customerName"
-                      value={formData.customerName}
-                      onChange={e => {
-                        const value = e.target.value;
-                        setFormData({
-                          ...formData,
-                          customerName: value
-                        });
-                        // Instant validation
-                        validateField('customerName', value);
-                      }}
-                      placeholder="Enter your full name"
-                      className="h-12 focus-visible:ring-[#C5A572]"
-                    />
-                    {errors.customerName && <p className="text-sm text-destructive">{errors.customerName}</p>}
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="customerEmail" className="font-medium">Email Address *</Label>
-                    <Input
-                      id="customerEmail"
-                      type="email"
-                      value={formData.customerEmail}
-                      onChange={e => {
-                        const value = e.target.value;
-                        setFormData({
-                          ...formData,
-                          customerEmail: value
-                        });
-                        // Instant validation
-                        validateField('customerEmail', value);
-                      }}
-                      placeholder="your@email.com"
-                      className="h-12 focus-visible:ring-[#C5A572]"
-                    />
-                    {errors.customerEmail && <p className="text-sm text-destructive">{errors.customerEmail}</p>}
-                  </div>
-                </div>
-
-                {/* Row 5: Customer Phone & Type */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
-                  <div className="space-y-2">
-                    <Label htmlFor="customerPhone" className="font-medium">Phone Number *</Label>
-                    <Input
-                      id="customerPhone"
-                      type="tel"
-                      value={formData.customerPhone}
-                      onChange={e => {
-                        const value = e.target.value;
-                        setFormData({
-                          ...formData,
-                          customerPhone: value
-                        });
-                        // Instant validation
-                        validateField('customerPhone', value);
-                      }}
-                      placeholder="+1 (555) 123-4567"
-                      className="h-12 focus-visible:ring-[#C5A572]"
-                    />
-                    {errors.customerPhone && <p className="text-sm text-destructive">{errors.customerPhone}</p>}
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="customerType" className="font-medium">Customer Type *</Label>
-                    <Select value={formData.customerType} onValueChange={value => {
-                      setFormData({
-                        ...formData,
-                        customerType: value
-                      });
-                      // Instant validation
-                      validateField('customerType', value);
-                    }}>
-                      <SelectTrigger id="customerType" className="h-12 focus-visible:ring-[#C5A572]">
-                        <SelectValue placeholder="Select customer type" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="Individual">Individual</SelectItem>
-                        <SelectItem value="Company">Company</SelectItem>
-                      </SelectContent>
-                    </Select>
-                    {errors.customerType && <p className="text-sm text-destructive">{errors.customerType}</p>}
-                  </div>
-                </div>
-
-                {/* Identity Verification Section */}
-                <div className="mt-8 border-t border-border/50 pt-8">
-                  <h4 className="text-lg font-semibold mb-2 flex items-center gap-2">
-                    Identity Verification <span className="text-destructive">*</span>
-                  </h4>
-                  <p className="text-sm text-muted-foreground mb-4">
-                    <strong>Required:</strong> To ensure security and compliance, all customers must complete identity verification before proceeding with their rental.
-                  </p>
-
-                  {verificationStatus === 'init' && (
-                    <div className="bg-destructive/10 border border-destructive/20 rounded-lg p-4">
-                      <div className="flex items-start gap-3">
-                        <AlertCircle className="w-5 h-5 text-destructive mt-0.5 flex-shrink-0" />
-                        <div className="flex-1">
-                          <p className="text-sm font-medium mb-2 text-destructive">Verification Required</p>
-                          <p className="text-sm text-muted-foreground mb-4">
-                            <strong>You must verify your identity to continue.</strong> Please fill in your details above, then click the button below to start the verification process.
-                          </p>
-                          <Button
-                            onClick={handleStartVerification}
-                            disabled={isVerifying || !formData.customerName || !formData.customerEmail || !formData.customerPhone}
-                            variant="outline"
-                            className="border-accent text-accent hover:bg-accent hover:text-white"
-                          >
-                            {isVerifying ? (
-                              <>
-                                <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin mr-2" />
-                                Starting Verification...
-                              </>
-                            ) : (
-                              <>
-                                <FileCheck className="w-4 h-4 mr-2" />
-                                Start Identity Verification
-                              </>
-                            )}
-                          </Button>
-                        </div>
-                      </div>
-                    </div>
-                  )}
-
-                  {verificationStatus === 'pending' && (
-                    <div className="bg-yellow-500/10 border border-yellow-500/20 rounded-lg p-4">
-                      <div className="flex items-start gap-3">
-                        <Clock className="w-5 h-5 text-yellow-500 mt-0.5 flex-shrink-0" />
-                        <div className="flex-1">
-                          <p className="text-sm font-medium mb-2 text-yellow-600 dark:text-yellow-500">Verification Pending</p>
-                          <p className="text-sm text-muted-foreground mb-2">
-                            Your identity verification is in progress. Please complete the verification in the popup window.
-                          </p>
-                          <p className="text-xs text-muted-foreground">
-                            Once verified, you can proceed with your booking. This may take a few moments.
-                          </p>
-                        </div>
-                      </div>
-                    </div>
-                  )}
-
-                  {verificationStatus === 'verified' && (
-                    <div className="bg-green-500/10 border border-green-500/20 rounded-lg p-4">
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="flex items-start gap-3 flex-1">
-                          <CheckCircle className="w-5 h-5 text-green-500 mt-0.5 flex-shrink-0" />
-                          <div className="flex-1">
-                            <p className="text-sm font-medium mb-1 text-green-600 dark:text-green-500">Verified</p>
-                            <p className="text-sm text-muted-foreground">
-                              Your identity has been successfully verified. You can proceed with your booking.
-                            </p>
-                          </div>
-                        </div>
-                        <Button
-                          onClick={handleClearVerification}
-                          variant="ghost"
-                          size="sm"
-                          className="text-destructive hover:text-destructive hover:bg-destructive/10 flex-shrink-0"
-                          title="Clear verification to verify again"
-                        >
-                          <X className="w-4 h-4 mr-1" />
-                          Clear
-                        </Button>
-                      </div>
-                    </div>
-                  )}
-
-                  {verificationStatus === 'rejected' && (
-                    <div className="bg-destructive/10 border border-destructive/20 rounded-lg p-4">
-                      <div className="flex items-start gap-3">
-                        <X className="w-5 h-5 text-destructive mt-0.5 flex-shrink-0" />
-                        <div className="flex-1">
-                          <p className="text-sm font-medium mb-2 text-destructive">Verification Failed</p>
-                          <p className="text-sm text-muted-foreground mb-3">
-                            Your identity verification was not successful. Please try again or contact support.
-                          </p>
-                          <Button
-                            onClick={handleStartVerification}
-                            disabled={isVerifying}
-                            variant="outline"
-                            className="border-accent text-accent hover:bg-accent hover:text-white"
-                            size="sm"
-                          >
-                            <FileCheck className="w-4 h-4 mr-2" />
-                            Retry Verification
-                          </Button>
-                        </div>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Show validation error if user tries to continue without verification */}
-                  {errors.verification && (
-                    <p className="text-sm text-destructive mt-3 font-medium">{errors.verification}</p>
-                  )}
-                </div>
-              </div>
             </div>
 
             <Button
               onClick={handleStep1Continue}
-              disabled={verificationStatus !== 'verified'}
-              className="w-full h-12 bg-[#F5B942] hover:bg-[#E9B63E] text-[#0C1A17] font-semibold text-base shadow-md hover:shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+              className="w-full h-12 bg-[#F5B942] hover:bg-[#E9B63E] text-[#0C1A17] font-semibold text-base shadow-md hover:shadow-lg transition-all"
               size="lg"
             >
               Continue to Vehicle Selection <ChevronRight className="ml-2 w-5 h-5" />
             </Button>
-            {verificationStatus !== 'verified' && (
-              <p className="text-sm text-destructive text-center mt-2">
-                Please complete identity verification to continue
-              </p>
-            )}
           </div>}
 
         {/* Step 2: Vehicle Selection */}
@@ -2260,8 +2029,249 @@ const MultiStepBookingWidget = () => {
             </div>
           </div>}
 
-        {/* Step 3: Review & Payment */}
-        {currentStep === 3 && <div className="animate-fade-in">
+        {/* Step 3: Customer Details */}
+        {currentStep === 3 && <div className="space-y-8 animate-fade-in">
+            {/* Header with underline */}
+            <div>
+              <h3 className="text-2xl md:text-3xl font-display font-semibold text-foreground pb-2 border-b-2 border-[#C5A572]/30">
+                Your Details
+              </h3>
+            </div>
+
+            {/* Form Fields */}
+            <div className="space-y-8">
+              {/* Row 1: Customer Name & Email */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
+                <div className="space-y-2">
+                  <Label htmlFor="customerName" className="font-medium">Full Name *</Label>
+                  <Input
+                    id="customerName"
+                    value={formData.customerName}
+                    onChange={e => {
+                      const value = e.target.value;
+                      setFormData({
+                        ...formData,
+                        customerName: value
+                      });
+                      // Instant validation
+                      validateField('customerName', value);
+                    }}
+                    placeholder="Enter your full name"
+                    className="h-12 focus-visible:ring-[#C5A572]"
+                  />
+                  {errors.customerName && <p className="text-sm text-destructive">{errors.customerName}</p>}
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="customerEmail" className="font-medium">Email Address *</Label>
+                  <Input
+                    id="customerEmail"
+                    type="email"
+                    value={formData.customerEmail}
+                    onChange={e => {
+                      const value = e.target.value;
+                      setFormData({
+                        ...formData,
+                        customerEmail: value
+                      });
+                      // Instant validation
+                      validateField('customerEmail', value);
+                    }}
+                    placeholder="your@email.com"
+                    className="h-12 focus-visible:ring-[#C5A572]"
+                  />
+                  {errors.customerEmail && <p className="text-sm text-destructive">{errors.customerEmail}</p>}
+                </div>
+              </div>
+
+              {/* Row 2: Customer Phone & Type */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
+                <div className="space-y-2">
+                  <Label htmlFor="customerPhone" className="font-medium">Phone Number *</Label>
+                  <Input
+                    id="customerPhone"
+                    type="tel"
+                    value={formData.customerPhone}
+                    onChange={e => {
+                      const value = e.target.value;
+                      setFormData({
+                        ...formData,
+                        customerPhone: value
+                      });
+                      // Instant validation
+                      validateField('customerPhone', value);
+                    }}
+                    placeholder="+1 (555) 123-4567"
+                    className="h-12 focus-visible:ring-[#C5A572]"
+                  />
+                  {errors.customerPhone && <p className="text-sm text-destructive">{errors.customerPhone}</p>}
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="customerType" className="font-medium">Customer Type *</Label>
+                  <Select value={formData.customerType} onValueChange={value => {
+                    setFormData({
+                      ...formData,
+                      customerType: value
+                    });
+                    // Instant validation
+                    validateField('customerType', value);
+                  }}>
+                    <SelectTrigger id="customerType" className="h-12 focus-visible:ring-[#C5A572]">
+                      <SelectValue placeholder="Select customer type" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="Individual">Individual</SelectItem>
+                      <SelectItem value="Company">Company</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  {errors.customerType && <p className="text-sm text-destructive">{errors.customerType}</p>}
+                </div>
+              </div>
+
+              {/* Identity Verification Section */}
+              <div className="border-t border-border/50 pt-8">
+                <h4 className="text-lg font-semibold mb-2 flex items-center gap-2">
+                  Identity Verification <span className="text-destructive">*</span>
+                </h4>
+                <p className="text-sm text-muted-foreground mb-4">
+                  <strong>Required:</strong> To ensure security and compliance, all customers must complete identity verification before proceeding with their rental.
+                </p>
+
+                {verificationStatus === 'init' && (
+                  <div className="bg-destructive/10 border border-destructive/20 rounded-lg p-4">
+                    <div className="flex items-start gap-3">
+                      <AlertCircle className="w-5 h-5 text-destructive mt-0.5 flex-shrink-0" />
+                      <div className="flex-1">
+                        <p className="text-sm font-medium mb-2 text-destructive">Verification Required</p>
+                        <p className="text-sm text-muted-foreground mb-4">
+                          <strong>You must verify your identity to continue.</strong> Please fill in your details above, then click the button below to start the verification process.
+                        </p>
+                        <Button
+                          onClick={handleStartVerification}
+                          disabled={isVerifying || !formData.customerName || !formData.customerEmail || !formData.customerPhone}
+                          variant="outline"
+                          className="border-accent text-accent hover:bg-accent hover:text-white"
+                        >
+                          {isVerifying ? (
+                            <>
+                              <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin mr-2" />
+                              Starting Verification...
+                            </>
+                          ) : (
+                            <>
+                              <FileCheck className="w-4 h-4 mr-2" />
+                              Start Identity Verification
+                            </>
+                          )}
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {verificationStatus === 'pending' && (
+                  <div className="bg-yellow-500/10 border border-yellow-500/20 rounded-lg p-4">
+                    <div className="flex items-start gap-3">
+                      <Clock className="w-5 h-5 text-yellow-500 mt-0.5 flex-shrink-0" />
+                      <div className="flex-1">
+                        <p className="text-sm font-medium mb-2 text-yellow-600 dark:text-yellow-500">Verification Pending</p>
+                        <p className="text-sm text-muted-foreground mb-2">
+                          Your identity verification is in progress. Please complete the verification in the popup window.
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          Once verified, you can proceed with your booking. This may take a few moments.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {verificationStatus === 'verified' && (
+                  <div className="bg-green-500/10 border border-green-500/20 rounded-lg p-4">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="flex items-start gap-3 flex-1">
+                        <CheckCircle className="w-5 h-5 text-green-500 mt-0.5 flex-shrink-0" />
+                        <div className="flex-1">
+                          <p className="text-sm font-medium mb-1 text-green-600 dark:text-green-500">Verified</p>
+                          <p className="text-sm text-muted-foreground">
+                            Your identity has been successfully verified. You can proceed with your booking.
+                          </p>
+                        </div>
+                      </div>
+                      <Button
+                        onClick={handleClearVerification}
+                        variant="ghost"
+                        size="sm"
+                        className="text-destructive hover:text-destructive hover:bg-destructive/10 flex-shrink-0"
+                        title="Clear verification to verify again"
+                      >
+                        <X className="w-4 h-4 mr-1" />
+                        Clear
+                      </Button>
+                    </div>
+                  </div>
+                )}
+
+                {verificationStatus === 'rejected' && (
+                  <div className="bg-destructive/10 border border-destructive/20 rounded-lg p-4">
+                    <div className="flex items-start gap-3">
+                      <X className="w-5 h-5 text-destructive mt-0.5 flex-shrink-0" />
+                      <div className="flex-1">
+                        <p className="text-sm font-medium mb-2 text-destructive">Verification Failed</p>
+                        <p className="text-sm text-muted-foreground mb-3">
+                          Your identity verification was not successful. Please try again or contact support.
+                        </p>
+                        <Button
+                          onClick={handleStartVerification}
+                          disabled={isVerifying}
+                          variant="outline"
+                          className="border-accent text-accent hover:bg-accent hover:text-white"
+                          size="sm"
+                        >
+                          <FileCheck className="w-4 h-4 mr-2" />
+                          Retry Verification
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Show validation error if user tries to continue without verification */}
+                {errors.verification && (
+                  <p className="text-sm text-destructive mt-3 font-medium">{errors.verification}</p>
+                )}
+              </div>
+            </div>
+
+            {/* Navigation Buttons */}
+            <div className="flex gap-4">
+              <Button
+                onClick={() => setCurrentStep(2)}
+                variant="outline"
+                className="w-full h-12 border-[#C5A572] text-[#C5A572] hover:bg-[#C5A572]/10 font-semibold text-base"
+                size="lg"
+              >
+                <ChevronLeft className="mr-2 w-5 h-5" /> Back
+              </Button>
+              <Button
+                onClick={handleStep3Continue}
+                disabled={verificationStatus !== 'verified'}
+                className="w-full h-12 bg-[#F5B942] hover:bg-[#E9B63E] text-[#0C1A17] font-semibold text-base shadow-md hover:shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                size="lg"
+              >
+                Continue to Review <ChevronRight className="ml-2 w-5 h-5" />
+              </Button>
+            </div>
+            {verificationStatus !== 'verified' && (
+              <p className="text-sm text-destructive text-center mt-2">
+                Please complete identity verification to continue
+              </p>
+            )}
+          </div>}
+
+        {/* Step 4: Review & Payment */}
+        {currentStep === 4 && <div className="animate-fade-in">
             <BookingCheckoutStep
               formData={formData}
               selectedVehicle={selectedVehicle}
@@ -2272,7 +2282,7 @@ const MultiStepBookingWidget = () => {
               }}
               vehicleTotal={estimatedBooking?.total || 0}
               selectedProtectionPlan={selectedProtectionPlan}
-              onBack={() => setCurrentStep(2)}
+              onBack={() => setCurrentStep(3)}
             />
           </div>}
 

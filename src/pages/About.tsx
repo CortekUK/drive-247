@@ -204,7 +204,7 @@ const About = () => {
                 <p>This commitment creates a service that is second to none:</p>
                 <ul className="list-disc list-inside pl-4">
                   <li>Flexible daily, weekly, and monthly rental options</li>
-                  <li>The finest luxury vehicles in the UK</li>
+                  <li>The finest luxury vehicles in the USA</li>
                   <li>Transparent pricing with no hidden fees</li>
                   <li>24/7 customer support and roadside assistance</li>
                   <li>Immaculate vehicles delivered to your door</li>

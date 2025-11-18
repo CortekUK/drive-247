@@ -199,20 +199,63 @@ export default function BookingCheckoutStep({
     console.log('🔍 Verification Session ID:', formData.verificationSessionId);
 
     try {
-      // Step 1: Create customer in portal DB
-      const { data: customer, error: customerError } = await supabase
+      // Step 1: Check if customer already exists by email or phone
+      const { data: existingCustomers, error: searchError } = await supabase
         .from("customers")
-        .insert({
-          type: formData.customerType, // "Individual" or "Company"
-          name: formData.customerName,
-          email: formData.customerEmail,
-          phone: formData.customerPhone,
-          status: "Active",
-        })
-        .select()
-        .single();
+        .select("*")
+        .or(`email.eq.${formData.customerEmail},phone.eq.${formData.customerPhone}`)
+        .limit(1);
 
-      if (customerError) throw customerError;
+      if (searchError) {
+        console.error('Error searching for existing customer:', searchError);
+      }
+
+      let customer;
+
+      if (existingCustomers && existingCustomers.length > 0) {
+        // Use existing customer
+        customer = existingCustomers[0];
+        console.log('✅ Found existing customer:', customer.id, '- Linking rental to existing customer');
+        toast.success(`Welcome back! We found your existing account.`);
+
+        // Optionally update customer info if needed (e.g., if name or type changed)
+        const { data: updatedCustomer, error: updateError } = await supabase
+          .from("customers")
+          .update({
+            name: formData.customerName,
+            type: formData.customerType,
+            status: "Active", // Ensure status is active
+          })
+          .eq("id", customer.id)
+          .select()
+          .single();
+
+        if (updateError) {
+          console.error('Warning: Could not update customer info:', updateError);
+          // Don't throw - use original customer data
+        } else {
+          customer = updatedCustomer;
+          console.log('✅ Updated existing customer info');
+        }
+      } else {
+        // Create new customer
+        console.log('📝 No existing customer found - Creating new customer');
+        const { data: newCustomer, error: customerError } = await supabase
+          .from("customers")
+          .insert({
+            type: formData.customerType, // "Individual" or "Company"
+            name: formData.customerName,
+            email: formData.customerEmail,
+            phone: formData.customerPhone,
+            status: "Active",
+          })
+          .select()
+          .single();
+
+        if (customerError) throw customerError;
+        customer = newCustomer;
+        console.log('✅ Created new customer:', customer.id);
+      }
 
       // Step 1.5: Link verification to customer if verification was completed
       if (formData.verificationSessionId) {
