@@ -152,6 +152,46 @@ const MultiStepBookingWidget = () => {
       setFormData(prev => ({ ...prev, verificationSessionId: savedVerificationSessionId }));
       console.log('✅ Loaded verification from localStorage:', savedVerificationSessionId, savedVerificationStatus);
     }
+
+    // Handle window focus - check verification when user returns from Veriff popup
+    // This is critical for iOS Safari which throttles background tabs
+    const handleWindowFocus = async () => {
+      const pendingSessionId = localStorage.getItem('verificationSessionId');
+      const currentStatus = localStorage.getItem('verificationStatus');
+
+      // Only check if status is pending (user might have completed verification in popup)
+      if (pendingSessionId && currentStatus === 'pending') {
+        console.log('🔄 Window focused - checking verification status for iOS Safari...');
+        const status = await checkVerificationStatus(pendingSessionId);
+        if (status) {
+          if (status.review_result === 'GREEN') {
+            setVerificationStatus('verified');
+            localStorage.setItem('verificationStatus', 'verified');
+            toast.success("Identity verification successful!");
+            console.log('✅ Verification updated on window focus');
+          } else if (status.review_result === 'RED') {
+            setVerificationStatus('rejected');
+            localStorage.setItem('verificationStatus', 'rejected');
+            toast.error("Identity verification failed.");
+          }
+        }
+      }
+    };
+
+    // Handle visibility change - also check when tab becomes visible
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        handleWindowFocus(); // Reuse same logic
+      }
+    };
+
+    window.addEventListener('focus', handleWindowFocus);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    return () => {
+      window.removeEventListener('focus', handleWindowFocus);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
   }, []);
 
   // Note: Verification no longer resets when customer details change
@@ -378,6 +418,7 @@ const MultiStepBookingWidget = () => {
         toast.success("Verification window opened. Please complete the identity verification.");
 
         // Start polling for verification status
+        // More frequent checks initially (3s) to catch quick verifications before Safari throttles
         const pollInterval = setInterval(async () => {
           const status = await checkVerificationStatus(data.verificationId);
           if (status) {
@@ -407,7 +448,7 @@ const MultiStepBookingWidget = () => {
               }
             }
           }
-        }, 5000); // Check every 5 seconds
+        }, 3000); // Check every 3 seconds (faster for iOS Safari compatibility)
 
         // Stop polling after 5 minutes
         setTimeout(() => clearInterval(pollInterval), 5 * 60 * 1000);
