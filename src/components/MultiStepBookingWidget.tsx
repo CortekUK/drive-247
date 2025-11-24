@@ -1637,7 +1637,7 @@ const MultiStepBookingWidget = () => {
                     <SelectTrigger id="driverAge" className="h-12 focus-visible:ring-[#C5A572]">
                       <SelectValue placeholder="Select age range" />
                     </SelectTrigger>
-                    <SelectContent>
+                    <SelectContent position="popper" sideOffset={4}>
                       <SelectItem value="under_25">Under 25</SelectItem>
                       <SelectItem value="25_70">25–70</SelectItem>
                       <SelectItem value="over_70">70+</SelectItem>
@@ -2345,7 +2345,7 @@ const MultiStepBookingWidget = () => {
                     <SelectTrigger id="customerType" className="h-12 focus-visible:ring-[#C5A572]">
                       <SelectValue placeholder="Select customer type" />
                     </SelectTrigger>
-                    <SelectContent>
+                    <SelectContent position="popper" sideOffset={4}>
                       <SelectItem value="Individual">Individual</SelectItem>
                       <SelectItem value="Company">Company</SelectItem>
                     </SelectContent>
