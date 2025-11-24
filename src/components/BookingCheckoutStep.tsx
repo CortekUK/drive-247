@@ -21,6 +21,7 @@ interface BookingCheckoutStepProps {
   };
   vehicleTotal: number;
   selectedProtectionPlan?: any;
+  existingCustomerId?: string | null;
   onBack: () => void;
 }
 
@@ -31,6 +32,7 @@ export default function BookingCheckoutStep({
   rentalDuration,
   vehicleTotal,
   selectedProtectionPlan,
+  existingCustomerId,
   onBack
 }: BookingCheckoutStepProps) {
   const navigate = useNavigate();
@@ -199,32 +201,33 @@ export default function BookingCheckoutStep({
     console.log('🔍 Verification Session ID:', formData.verificationSessionId);
 
     try {
-      // Step 1: Check if customer already exists by email or phone
-      const { data: existingCustomers, error: searchError } = await supabase
-        .from("customers")
-        .select("*")
-        .or(`email.eq.${formData.customerEmail},phone.eq.${formData.customerPhone}`)
-        .limit(1);
-
-      if (searchError) {
-        console.error('Error searching for existing customer:', searchError);
-      }
-
       let customer;
 
-      if (existingCustomers && existingCustomers.length > 0) {
-        // Use existing customer
-        customer = existingCustomers[0];
-        console.log('✅ Found existing customer:', customer.id, '- Linking rental to existing customer');
-        toast.success(`Welcome back! We found your existing account.`);
+      // Step 1: Use validated existing customer ID if provided
+      if (existingCustomerId) {
+        console.log('🔄 Using pre-validated customer ID:', existingCustomerId);
+        const { data: existingCustomer, error: fetchError } = await supabase
+          .from("customers")
+          .select("*")
+          .eq("id", existingCustomerId)
+          .single();
 
-        // Optionally update customer info if needed (e.g., if name or type changed)
+        if (fetchError) {
+          console.error('Error fetching existing customer:', fetchError);
+          throw new Error('Failed to fetch customer information');
+        }
+
+        customer = existingCustomer;
+        console.log('✅ Using existing customer:', customer.id, '- Linking rental to existing customer');
+        toast.success(`Welcome back! Linking rental to your existing account.`);
+
+        // Update customer info if needed
         const { data: updatedCustomer, error: updateError } = await supabase
           .from("customers")
           .update({
             name: formData.customerName,
             type: formData.customerType,
-            status: "Active", // Ensure status is active
+            status: "Active",
           })
           .eq("id", customer.id)
           .select()
@@ -232,29 +235,66 @@ export default function BookingCheckoutStep({
 
         if (updateError) {
           console.error('Warning: Could not update customer info:', updateError);
-          // Don't throw - use original customer data
         } else {
           customer = updatedCustomer;
           console.log('✅ Updated existing customer info');
         }
       } else {
-        // Create new customer
-        console.log('📝 No existing customer found - Creating new customer');
-        const { data: newCustomer, error: customerError } = await supabase
+        // Step 1: Check if customer already exists by email or phone
+        const { data: existingCustomers, error: searchError } = await supabase
           .from("customers")
-          .insert({
-            type: formData.customerType, // "Individual" or "Company"
-            name: formData.customerName,
-            email: formData.customerEmail,
-            phone: formData.customerPhone,
-            status: "Active",
-          })
-          .select()
-          .single();
+          .select("*")
+          .or(`email.eq.${formData.customerEmail},phone.eq.${formData.customerPhone}`)
+          .limit(1);
 
-        if (customerError) throw customerError;
-        customer = newCustomer;
-        console.log('✅ Created new customer:', customer.id);
+        if (searchError) {
+          console.error('Error searching for existing customer:', searchError);
+        }
+
+        if (existingCustomers && existingCustomers.length > 0) {
+          // Use existing customer
+          customer = existingCustomers[0];
+          console.log('✅ Found existing customer:', customer.id, '- Linking rental to existing customer');
+          toast.success(`Welcome back! We found your existing account.`);
+
+          // Optionally update customer info if needed (e.g., if name or type changed)
+          const { data: updatedCustomer, error: updateError } = await supabase
+            .from("customers")
+            .update({
+              name: formData.customerName,
+              type: formData.customerType,
+              status: "Active", // Ensure status is active
+            })
+            .eq("id", customer.id)
+            .select()
+            .single();
+
+          if (updateError) {
+            console.error('Warning: Could not update customer info:', updateError);
+            // Don't throw - use original customer data
+          } else {
+            customer = updatedCustomer;
+            console.log('✅ Updated existing customer info');
+          }
+        } else {
+          // Create new customer
+          console.log('📝 No existing customer found - Creating new customer');
+          const { data: newCustomer, error: customerError } = await supabase
+            .from("customers")
+            .insert({
+              type: formData.customerType, // "Individual" or "Company"
+              name: formData.customerName,
+              email: formData.customerEmail,
+              phone: formData.customerPhone,
+              status: "Active",
+            })
+            .select()
+            .single();
+
+          if (customerError) throw customerError;
+          customer = newCustomer;
+          console.log('✅ Created new customer:', customer.id);
+        }
       }
 
       // Step 1.5: Link verification to customer if verification was completed
@@ -334,7 +374,7 @@ export default function BookingCheckoutStep({
 
       // Step 2: Create rental in portal DB with Pending status
       const rentalPeriodType = calculateRentalPeriodType();
-      const monthlyAmount = calculateMonthlyAmount();
+      const grandTotal = calculateGrandTotal(); // Use grand total (includes taxes/fees) for rental amount
 
       const { data: rental, error: rentalError } = await supabase
         .from("rentals")
@@ -344,7 +384,7 @@ export default function BookingCheckoutStep({
           start_date: formData.pickupDate, // Already in YYYY-MM-DD format from step 1
           end_date: formData.dropoffDate,   // Already in YYYY-MM-DD format from step 1
           rental_period_type: rentalPeriodType,
-          monthly_amount: monthlyAmount,
+          monthly_amount: grandTotal, // Store grand total (rental + taxes + fees + protection)
           status: "Pending", // Set to Pending until payment succeeds
         })
         .select()
@@ -464,6 +504,19 @@ export default function BookingCheckoutStep({
         // Don't throw - continue with payment flow even if invoice creation fails
         // The invoice can be manually created later if needed
       }
+
+      // Step 5: Store payment details in localStorage for success page
+      // Payment record will be created ONLY after Stripe confirms successful payment
+      console.log('💳 Storing payment details for success page...');
+      const paymentDetails = {
+        amount: calculateGrandTotal(),
+        customer_id: customer.id,
+        rental_id: rental.id,
+        vehicle_id: selectedVehicle.id,
+        apply_from_date: formData.pickupDate,
+      };
+      localStorage.setItem('pendingPaymentDetails', JSON.stringify(paymentDetails));
+      console.log('✅ Payment details stored:', paymentDetails);
 
       // Store rental and invoice data for later use
       setCreatedRentalData({

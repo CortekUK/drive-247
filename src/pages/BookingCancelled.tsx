@@ -23,6 +23,8 @@ const BookingCancelled = () => {
             .single();
 
           if (rental && !fetchError) {
+            console.log('🧹 Cleaning up cancelled booking...');
+
             // Step 2: Delete the rental record (payment failed)
             const { error: deleteError } = await supabase
               .from("rentals")
@@ -31,6 +33,8 @@ const BookingCancelled = () => {
 
             if (deleteError) {
               console.error("Failed to delete rental:", deleteError);
+            } else {
+              console.log('✅ Rental deleted');
             }
 
             // Step 3: Update vehicle status back to Available
@@ -41,12 +45,19 @@ const BookingCancelled = () => {
 
             if (vehicleUpdateError) {
               console.error("Failed to update vehicle status:", vehicleUpdateError);
+            } else {
+              console.log('✅ Vehicle status reset to Available');
             }
           }
         } catch (error) {
           console.error("Error cleaning up failed rental:", error);
         }
       }
+
+      // Step 4: Clear localStorage (pending payment details)
+      localStorage.removeItem('pendingPaymentDetails');
+      console.log('✅ LocalStorage cleared');
+
       setLoading(false);
     };
 

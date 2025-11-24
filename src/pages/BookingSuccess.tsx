@@ -48,6 +48,69 @@ const BookingSuccess = () => {
             toast.error(errorMessage, { duration: 8000 });
           }
 
+          // Step 1.5: Create payment record (only on successful payment)
+          const pendingPaymentDetailsStr = localStorage.getItem('pendingPaymentDetails');
+
+          if (pendingPaymentDetailsStr) {
+            try {
+              const paymentDetails = JSON.parse(pendingPaymentDetailsStr);
+              console.log('💳 Creating payment record after successful Stripe payment...');
+
+              // Verify this payment is for the correct rental
+              if (paymentDetails.rental_id === rentalId) {
+                const today = new Date().toISOString().split('T')[0];
+
+                const { data: paymentRecord, error: paymentError } = await supabase
+                  .from("payments")
+                  .insert({
+                    amount: paymentDetails.amount,
+                    customer_id: paymentDetails.customer_id,
+                    rental_id: paymentDetails.rental_id,
+                    vehicle_id: paymentDetails.vehicle_id,
+                    payment_date: today,
+                    payment_type: "Payment",
+                    method: "Card",
+                    status: "Applied", // Payment confirmed by Stripe
+                    is_early: false,
+                    remaining_amount: 0, // Fully applied
+                    apply_from_date: paymentDetails.apply_from_date,
+                  })
+                  .select()
+                  .single();
+
+                if (paymentError) {
+                  console.error("❌ Failed to create payment record:", paymentError);
+                  toast.error("Payment recorded by Stripe but failed to save locally. Please contact support.");
+                } else {
+                  console.log('✅ Payment record created successfully:', paymentRecord.id);
+
+                  // Apply the payment to charges using edge function
+                  try {
+                    console.log('🔄 Applying payment to charges...');
+                    const { data: applyResult, error: applyError } = await supabase.functions.invoke('apply-payment', {
+                      body: { paymentId: paymentRecord.id }
+                    });
+
+                    if (applyError) {
+                      console.error("❌ Failed to apply payment:", applyError);
+                    } else {
+                      console.log('✅ Payment applied successfully:', applyResult);
+                    }
+                  } catch (applyErr) {
+                    console.error("❌ Error applying payment:", applyErr);
+                  }
+                }
+
+                // Clear localStorage after processing
+                localStorage.removeItem('pendingPaymentDetails');
+              } else {
+                console.warn('⚠️ Payment details rental_id mismatch');
+              }
+            } catch (parseError) {
+              console.error("Error parsing payment details:", parseError);
+            }
+          }
+
           // Step 2: Fetch rental details with customer and vehicle info
           const { data: rental, error: fetchError } = await supabase
             .from("rentals")

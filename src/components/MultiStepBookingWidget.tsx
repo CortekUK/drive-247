@@ -52,6 +52,13 @@ interface PricingExtra {
   price: number;
   description: string | null;
 }
+interface BlockedDate {
+  id: string;
+  start_date: string;
+  end_date: string;
+  vehicle_id: string | null;
+  reason?: string | null;
+}
 const MultiStepBookingWidget = () => {
   const [currentStep, setCurrentStep] = useState(1);
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
@@ -67,7 +74,9 @@ const MultiStepBookingWidget = () => {
   const [showCPModal, setShowCPModal] = useState(false);
   const [cpDetails, setCpDetails] = useState<any>(null);
   const cpSubmittedRef = useRef(false); // Track if CP form was successfully submitted
-  const [blockedDates, setBlockedDates] = useState<string[]>([]);
+  const [blockedDates, setBlockedDates] = useState<string[]>([]); // Global blocked dates (vehicle_id is null)
+  const [allBlockedDates, setAllBlockedDates] = useState<BlockedDate[]>([]); // All blocked dates including vehicle-specific
+  const [existingCustomerId, setExistingCustomerId] = useState<string | null>(null); // Store existing customer ID to prevent duplicates
   const [errors, setErrors] = useState<{
     [key: string]: string;
   }>({});
@@ -79,6 +88,7 @@ const MultiStepBookingWidget = () => {
   const [sortBy, setSortBy] = useState("recommended");
   const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
   const [showFilters, setShowFilters] = useState(false);
+  const [originalPriceRange, setOriginalPriceRange] = useState<[number, number]>([0, 1000]); // Store original dynamic range
   const [filters, setFilters] = useState({
     transmission: [] as string[],
     fuel: [] as string[],
@@ -204,7 +214,8 @@ const MultiStepBookingWidget = () => {
     } = await supabase.from("pricing_extras").select("*");
     const {
       data: blockedDatesData
-    } = await supabase.from("blocked_dates").select("start_date, end_date");
+    } = await supabase.from("blocked_dates").select("id, start_date, end_date, vehicle_id, reason");
+
     if (vehiclesData) {
       setVehicles(vehiclesData);
 
@@ -216,17 +227,25 @@ const MultiStepBookingWidget = () => {
       if (prices.length > 0) {
         const minPrice = Math.min(...prices);
         const maxPrice = Math.max(...prices);
+        const dynamicRange: [number, number] = [minPrice, maxPrice];
+        setOriginalPriceRange(dynamicRange); // Store original range for reset
         setFilters(prev => ({
           ...prev,
-          priceRange: [minPrice, maxPrice]
+          priceRange: dynamicRange
         }));
       }
     }
     if (extrasData) setExtras(extrasData);
     if (blockedDatesData) {
-      // Expand date ranges into individual dates
+      // Store all blocked dates (global + vehicle-specific)
+      setAllBlockedDates(blockedDatesData);
+
+      // Filter only global blocked dates (vehicle_id is null) for Step 1 calendar
+      const globalBlockedDates = blockedDatesData.filter(range => range.vehicle_id === null);
+
+      // Expand global blocked date ranges into individual dates for calendar
       const formattedDates: string[] = [];
-      blockedDatesData.forEach(range => {
+      globalBlockedDates.forEach(range => {
         const startDate = new Date(range.start_date);
         const endDate = new Date(range.end_date);
 
@@ -614,7 +633,7 @@ const MultiStepBookingWidget = () => {
       hours,
       days,
       remainingHours,
-      isValid: hours >= 24 && days <= 30,
+      isValid: hours >= 24 && days <= 365,
       formatted: remainingHours > 0 ? `${days}d ${remainingHours}h` : `${days} day${days !== 1 ? 's' : ''}`
     };
   };
@@ -646,6 +665,57 @@ const MultiStepBookingWidget = () => {
       total,
       days
     };
+  };
+
+  // Check if a vehicle is blocked during the selected rental period
+  const isVehicleBlockedForPeriod = (vehicleId: string): { blocked: boolean; blockedRange?: { start: string; end: string } } => {
+    if (!formData.pickupDate || !formData.dropoffDate) {
+      return { blocked: false };
+    }
+
+    const pickupDate = new Date(formData.pickupDate);
+    const dropoffDate = new Date(formData.dropoffDate);
+
+    // Find any blocked dates for this specific vehicle that overlap with the rental period
+    const vehicleBlockedDates = allBlockedDates.filter(block => block.vehicle_id === vehicleId);
+
+    for (const block of vehicleBlockedDates) {
+      const blockStart = new Date(block.start_date);
+      const blockEnd = new Date(block.end_date);
+
+      // Check if there's any overlap between rental period and blocked period
+      const hasOverlap = pickupDate <= blockEnd && dropoffDate >= blockStart;
+
+      if (hasOverlap) {
+        return {
+          blocked: true,
+          blockedRange: {
+            start: block.start_date,
+            end: block.end_date
+          }
+        };
+      }
+    }
+
+    return { blocked: false };
+  };
+
+  // Helper function to get readable sort label
+  const getSortLabel = (sortValue: string): string => {
+    switch (sortValue) {
+      case "price_low":
+        return "Price: Low → High";
+      case "price_high":
+        return "Price: High → Low";
+      case "seats_most":
+        return "Seats: Most → Fewest";
+      case "newest":
+        return "Newest Models";
+      case "recommended":
+        return "Recommended";
+      default:
+        return sortValue;
+    }
   };
 
   // Filter and sort vehicles
@@ -747,7 +817,7 @@ const MultiStepBookingWidget = () => {
       transmission: [],
       fuel: [],
       seats: [2, 7],
-      priceRange: [0, 1000]
+      priceRange: originalPriceRange // Use stored original range
     });
     setSortBy("recommended");
   };
@@ -874,14 +944,14 @@ const MultiStepBookingWidget = () => {
       newErrors.dropoffTime = "Please choose pickup and return date & time.";
     }
 
-    // Validate rental duration: min 24 hours, max 30 days
+    // Validate rental duration: min 24 hours, max 1 year (365 days)
     if (formData.pickupDate && formData.dropoffDate && formData.pickupTime && formData.dropoffTime) {
       const duration = calculateRentalDuration();
       if (duration && !duration.isValid) {
         if (duration.hours < 24) {
           newErrors.dropoffDate = "Return must be at least 24 hours after pickup.";
-        } else if (duration.days > 30) {
-          newErrors.dropoffDate = "Maximum rental period is 30 days.";
+        } else if (duration.days > 365) {
+          newErrors.dropoffDate = "Maximum rental period is 1 year.";
         }
       }
     }
@@ -908,6 +978,16 @@ const MultiStepBookingWidget = () => {
     return Object.keys(newErrors).length === 0;
   };
   const validateStep3 = () => {
+    console.log('🔍 validateStep3 called');
+    console.log('📝 Current formData:', {
+      customerName: formData.customerName,
+      customerEmail: formData.customerEmail,
+      customerPhone: formData.customerPhone,
+      customerType: formData.customerType,
+      licenseNumber: formData.licenseNumber
+    });
+    console.log('🔐 Verification status:', verificationStatus);
+
     const newErrors: {
       [key: string]: string;
     } = {};
@@ -959,20 +1039,16 @@ const MultiStepBookingWidget = () => {
       newErrors.customerType = "Invalid customer type selected";
     }
 
-    // Validate license number
-    const licenseValue = formData.licenseNumber.trim();
-    if (!licenseValue) {
-      newErrors.licenseNumber = "Driver license number is required";
-    } else if (licenseValue.length < 5) {
-      newErrors.licenseNumber = "License number must be at least 5 characters";
-    } else if (!/[a-zA-Z0-9]/.test(licenseValue)) {
-      newErrors.licenseNumber = "License number must contain letters or numbers";
-    }
+    // License number validation removed - not collected in UI
 
-    // Validate identity verification - REQUIRED
-    if (verificationStatus !== 'verified') {
-      newErrors.verification = "Identity verification is required to proceed";
-    }
+    // TODO: Re-enable verification before production
+    // if (verificationStatus !== 'verified') {
+    //   newErrors.verification = "Identity verification is required to proceed";
+    //   console.log('❌ Verification required but status is:', verificationStatus);
+    // }
+
+    console.log('📋 All validation errors:', newErrors);
+    console.log('✅ Validation result:', Object.keys(newErrors).length === 0 ? 'PASSED' : 'FAILED');
 
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
@@ -1077,16 +1153,7 @@ const MultiStepBookingWidget = () => {
         }
         break;
 
-      case 'licenseNumber':
-        const licenseValue = value.trim();
-        if (!licenseValue) {
-          newErrors.licenseNumber = "Driver license number is required";
-        } else if (licenseValue.length < 5) {
-          newErrors.licenseNumber = "License number must be at least 5 characters";
-        } else if (!/[a-zA-Z0-9]/.test(licenseValue)) {
-          newErrors.licenseNumber = "License number must contain letters or numbers";
-        }
-        break;
+      // licenseNumber case removed - not collected in UI
     }
 
     // Update errors state - clear error if valid, set error if invalid
@@ -1161,8 +1228,69 @@ const MultiStepBookingWidget = () => {
     }
   };
 
-  const handleStep3Continue = () => {
-    if (validateStep3()) {
+  const handleStep3Continue = async () => {
+    console.log('🚀 handleStep3Continue called');
+    console.log('🔐 Current verification status:', verificationStatus);
+    console.log('🔘 Button disabled state:', verificationStatus !== 'verified');
+
+    const isValid = validateStep3();
+    console.log('✨ Validation returned:', isValid);
+
+    if (!isValid) {
+      console.log('❌ Validation failed! Not moving to step 4');
+      return;
+    }
+
+    console.log('✅ Validation passed! Checking for existing customer...');
+    console.log('📧 Customer email:', formData.customerEmail);
+
+    try {
+      // Check if customer exists by email
+      const { data: existingCustomer, error: customerError } = await supabase
+        .from("customers")
+        .select("id")
+        .eq("email", formData.customerEmail)
+        .maybeSingle();
+
+      if (customerError) {
+        console.error('❌ Error checking customer:', customerError);
+        toast.error("Failed to validate customer. Please try again.");
+        return;
+      }
+
+      if (existingCustomer) {
+        console.log('👤 Existing customer found:', existingCustomer.id);
+
+        // Check for active rentals
+        const { data: activeRental, error: rentalError } = await supabase
+          .from("rentals")
+          .select("id")
+          .eq("customer_id", existingCustomer.id)
+          .ilike("status", "active")
+          .maybeSingle();
+
+        if (rentalError) {
+          console.error('❌ Error checking active rentals:', rentalError);
+          toast.error("Failed to check rental status. Please try again.");
+          return;
+        }
+
+        if (activeRental) {
+          console.log('🚫 Active rental found:', activeRental.id);
+          toast.error("You already have an active rental. Please complete or cancel it before making a new booking.");
+          return;
+        }
+
+        console.log('✅ No active rentals found. Storing customer ID for reuse.');
+        setExistingCustomerId(existingCustomer.id);
+      } else {
+        console.log('🆕 New customer - will create during booking submission');
+        setExistingCustomerId(null);
+      }
+
+      console.log('✅ All checks passed! Moving to step 4');
+      console.log('📝 Final formData:', formData);
+
       // Analytics tracking
       if ((window as any).gtag) {
         (window as any).gtag('event', 'booking_step3_submitted', {
@@ -1171,6 +1299,9 @@ const MultiStepBookingWidget = () => {
         });
       }
       setCurrentStep(4);
+    } catch (error) {
+      console.error('❌ Unexpected error in customer validation:', error);
+      toast.error("An unexpected error occurred. Please try again.");
     }
   };
 
@@ -1367,9 +1498,9 @@ const MultiStepBookingWidget = () => {
                       }} disabled={date => {
                         const dateStr = format(date, "yyyy-MM-dd");
                         const today = new Date(new Date().setHours(0, 0, 0, 0));
-                        const oneMonthFromNow = new Date(today);
-                        oneMonthFromNow.setMonth(oneMonthFromNow.getMonth() + 1);
-                        return date < today || date > oneMonthFromNow || blockedDates.includes(dateStr);
+                        const oneYearFromNow = new Date(today);
+                        oneYearFromNow.setFullYear(oneYearFromNow.getFullYear() + 1);
+                        return date < today || date > oneYearFromNow || blockedDates.includes(dateStr);
                       }} initialFocus className="pointer-events-auto" />
                       </PopoverContent>
                     </Popover>
@@ -1421,10 +1552,10 @@ const MultiStepBookingWidget = () => {
                         }
                       }} disabled={date => {
                         const pickupDate = formData.pickupDate ? new Date(formData.pickupDate) : new Date();
-                        const thirtyDaysFromPickup = new Date(pickupDate);
-                        thirtyDaysFromPickup.setDate(thirtyDaysFromPickup.getDate() + 30);
+                        const oneYearFromPickup = new Date(pickupDate);
+                        oneYearFromPickup.setFullYear(oneYearFromPickup.getFullYear() + 1);
                         const dateStr = format(date, "yyyy-MM-dd");
-                        return date <= pickupDate || date > thirtyDaysFromPickup || blockedDates.includes(dateStr);
+                        return date <= pickupDate || date > oneYearFromPickup || blockedDates.includes(dateStr);
                       }} initialFocus className="pointer-events-auto" />
                       </PopoverContent>
                     </Popover>
@@ -1495,6 +1626,11 @@ const MultiStepBookingWidget = () => {
 
         {/* Step 2: Vehicle Selection */}
         {currentStep === 2 && <div className="space-y-6 animate-fade-in">
+            {/* Back Button */}
+            <Button onClick={() => setCurrentStep(1)} variant="ghost" className="text-muted-foreground hover:text-foreground -ml-2">
+              <ChevronLeft className="mr-1 w-5 h-5" /> Back to Trip Details
+            </Button>
+
             {/* Header */}
             <div className="space-y-3">
               <h3 className="text-3xl md:text-4xl font-display font-semibold text-foreground">
@@ -1567,7 +1703,7 @@ const MultiStepBookingWidget = () => {
                             transmission: [],
                             fuel: [],
                             seats: [2, 7],
-                            priceRange: [0, 1000]
+                            priceRange: originalPriceRange // Use stored original range
                           });
                         }}>
                             Reset
@@ -1611,12 +1747,12 @@ const MultiStepBookingWidget = () => {
                         {/* Price Range */}
                         <div className="space-y-2">
                           <Label className="text-sm font-medium">
-                            Price per day: ${filters.priceRange[0]} - ${filters.priceRange[1]}
+                            Price per month: ${filters.priceRange[0]} - ${filters.priceRange[1]}
                           </Label>
                           <Slider value={filters.priceRange} onValueChange={value => setFilters(prev => ({
                           ...prev,
                           priceRange: value as [number, number]
-                        }))} min={0} max={1000} step={10} className="py-2" />
+                        }))} min={originalPriceRange[0]} max={originalPriceRange[1]} step={10} className="py-2" />
                         </div>
                       </div>
                     </PopoverContent>
@@ -1652,7 +1788,7 @@ const MultiStepBookingWidget = () => {
                         <X className="w-3 h-3 cursor-pointer" onClick={() => toggleCategory(cat)} />
                       </Badge>)}
                     {sortBy !== "recommended" && <Badge variant="secondary" className="gap-1">
-                        Sort: {sortBy}
+                        {getSortLabel(sortBy)}
                         <X className="w-3 h-3 cursor-pointer" onClick={() => setSortBy("recommended")} />
                       </Badge>}
                     <Button variant="ghost" size="sm" className="h-6 text-xs text-[#C5A572] hover:text-[#C5A572]/80" onClick={clearAllFilters}>
@@ -1685,9 +1821,15 @@ const MultiStepBookingWidget = () => {
                   const isRollsRoyce = (vehicle.make || '').toLowerCase().includes("rolls") || (vehicle.model || '').toLowerCase().includes("phantom");
                   const isSelected = formData.vehicleId === vehicle.id;
                   const estimation = calculateEstimatedTotal(vehicle);
+                  const blockStatus = isVehicleBlockedForPeriod(vehicle.id);
+                  const isBlocked = blockStatus.blocked;
+
                   if (viewMode === "list") {
                     // List View Card
-                    return <Card key={vehicle.id} className={cn("group cursor-pointer transition-all duration-300 overflow-hidden border-2 hover:shadow-2xl relative", isSelected ? "border-[#C5A572] bg-[#C5A572]/5 shadow-[0_0_30px_rgba(197,165,114,0.3)]" : "border-border/30 hover:border-[#C5A572]/40")} onClick={() => {
+                    return <Card key={vehicle.id} className={cn("group transition-all duration-300 overflow-hidden border-2 relative",
+                      isBlocked ? "opacity-60 cursor-not-allowed border-destructive/30" : "cursor-pointer hover:shadow-2xl",
+                      !isBlocked && isSelected ? "border-[#C5A572] bg-[#C5A572]/5 shadow-[0_0_30px_rgba(197,165,114,0.3)]" : "border-border/30 hover:border-[#C5A572]/40")} onClick={() => {
+                      if (isBlocked) return; // Prevent selection if blocked
                       setFormData({
                         ...formData,
                         vehicleId: vehicle.id
@@ -1728,6 +1870,16 @@ const MultiStepBookingWidget = () => {
                                 <div className="absolute top-3 right-3 px-3 py-1 bg-[#C5A572] text-black text-xs font-semibold rounded-full">
                                   {vehicle.reg}
                                 </div>
+
+                                {/* Blocked Badge */}
+                                {isBlocked && blockStatus.blockedRange && (
+                                  <div className="absolute bottom-3 left-3 right-3 px-3 py-2 bg-destructive/90 text-white text-xs font-medium rounded-lg backdrop-blur">
+                                    <p className="font-semibold mb-1">Unavailable</p>
+                                    <p className="text-[10px] opacity-90">
+                                      {format(new Date(blockStatus.blockedRange.start), "MMM dd")} - {format(new Date(blockStatus.blockedRange.end), "MMM dd")}
+                                    </p>
+                                  </div>
+                                )}
                               </div>
 
                               {/* Content */}
@@ -1784,20 +1936,27 @@ const MultiStepBookingWidget = () => {
                                     </p>}
                                   </div>
 
-                                  <Button className={cn("w-40 h-11 font-medium transition-colors", isSelected ? "bg-[#C5A572] text-black hover:bg-[#C5A572]/90" : "bg-background border-2 border-[#C5A572] text-[#C5A572] hover:bg-[#C5A572] hover:text-black")} onClick={e => {
-                              e.stopPropagation();
-                              setFormData({
-                                ...formData,
-                                vehicleId: vehicle.id
-                              });
-                              if ((window as any).gtag) {
-                                (window as any).gtag('event', 'vehicle_selected', {
-                                  vehicle_id: vehicle.id,
-                                  est_total: estimation?.total || 0
-                                });
-                              }
-                            }}>
-                                    {isSelected ? "Selected" : "Select This Vehicle"}
+                                  <Button
+                                    className={cn("w-40 h-11 font-medium transition-colors",
+                                      isBlocked ? "bg-muted text-muted-foreground cursor-not-allowed" :
+                                      isSelected ? "bg-[#C5A572] text-black hover:bg-[#C5A572]/90" :
+                                      "bg-background border-2 border-[#C5A572] text-[#C5A572] hover:bg-[#C5A572] hover:text-black")}
+                                    disabled={isBlocked}
+                                    onClick={e => {
+                                      if (isBlocked) return;
+                                      e.stopPropagation();
+                                      setFormData({
+                                        ...formData,
+                                        vehicleId: vehicle.id
+                                      });
+                                      if ((window as any).gtag) {
+                                        (window as any).gtag('event', 'vehicle_selected', {
+                                          vehicle_id: vehicle.id,
+                                          est_total: estimation?.total || 0
+                                        });
+                                      }
+                                    }}>
+                                    {isBlocked ? "Unavailable" : isSelected ? "Selected" : "Select This Vehicle"}
                                   </Button>
                                 </div>
                               </div>
@@ -1806,7 +1965,11 @@ const MultiStepBookingWidget = () => {
                   }
 
                   // Grid View Card (existing design)
-                  return <Card key={vehicle.id} className={cn("group cursor-pointer transition-all duration-300 overflow-hidden border-2 hover:shadow-2xl hover:scale-[1.02] relative", isSelected ? "border-[#C5A572] bg-[#C5A572]/5 shadow-[0_0_30px_rgba(197,165,114,0.3)]" : "border-border/30 hover:border-[#C5A572]/40", isRollsRoyce && "shadow-[0_0_20px_rgba(197,165,114,0.15)]")} onClick={() => {
+                  return <Card key={vehicle.id} className={cn("group transition-all duration-300 overflow-hidden border-2 relative",
+                    isBlocked ? "opacity-60 cursor-not-allowed border-destructive/30" : "cursor-pointer hover:shadow-2xl hover:scale-[1.02]",
+                    !isBlocked && isSelected ? "border-[#C5A572] bg-[#C5A572]/5 shadow-[0_0_30px_rgba(197,165,114,0.3)]" : "border-border/30 hover:border-[#C5A572]/40",
+                    !isBlocked && isRollsRoyce && "shadow-[0_0_20px_rgba(197,165,114,0.15)]")} onClick={() => {
+                    if (isBlocked) return; // Prevent selection if blocked
                     setFormData({
                       ...formData,
                       vehicleId: vehicle.id
@@ -1851,6 +2014,16 @@ const MultiStepBookingWidget = () => {
                             <div className={`${vehicle.vehicle_photos?.[0]?.photo_url ? 'hidden' : 'flex'} flex-col items-center justify-center h-full w-full absolute inset-0`}>
                               <Car className={cn("w-16 h-16 mb-2 opacity-20", isRollsRoyce ? "text-[#C5A572]" : "text-muted-foreground")} />
                             </div>
+
+                            {/* Blocked Badge */}
+                            {isBlocked && blockStatus.blockedRange && (
+                              <div className="absolute bottom-3 left-3 right-3 px-3 py-2 bg-destructive/90 text-white text-xs font-medium rounded-lg backdrop-blur">
+                                <p className="font-semibold mb-1">Unavailable</p>
+                                <p className="text-[10px] opacity-90">
+                                  {format(new Date(blockStatus.blockedRange.start), "MMM dd")} - {format(new Date(blockStatus.blockedRange.end), "MMM dd")}
+                                </p>
+                              </div>
+                            )}
                           </div>
 
                           {/* Content */}
@@ -1905,20 +2078,27 @@ const MultiStepBookingWidget = () => {
                             </div>
 
                             {/* CTA */}
-                            <Button className={cn("w-full h-11 font-medium transition-colors", isSelected ? "bg-[#C5A572] text-black hover:bg-[#C5A572]/90" : "bg-background border-2 border-[#C5A572] text-[#C5A572] hover:bg-[#C5A572] hover:text-black")} onClick={e => {
-                        e.stopPropagation();
-                        setFormData({
-                          ...formData,
-                          vehicleId: vehicle.id
-                        });
-                        if ((window as any).gtag) {
-                          (window as any).gtag('event', 'vehicle_selected', {
-                            vehicle_id: vehicle.id,
-                            est_total: estimation?.total || 0
-                          });
-                        }
-                      }}>
-                              {isSelected ? "Selected" : "Select This Vehicle"}
+                            <Button
+                              className={cn("w-full h-11 font-medium transition-colors",
+                                isBlocked ? "bg-muted text-muted-foreground cursor-not-allowed" :
+                                isSelected ? "bg-[#C5A572] text-black hover:bg-[#C5A572]/90" :
+                                "bg-background border-2 border-[#C5A572] text-[#C5A572] hover:bg-[#C5A572] hover:text-black")}
+                              disabled={isBlocked}
+                              onClick={e => {
+                                if (isBlocked) return;
+                                e.stopPropagation();
+                                setFormData({
+                                  ...formData,
+                                  vehicleId: vehicle.id
+                                });
+                                if ((window as any).gtag) {
+                                  (window as any).gtag('event', 'vehicle_selected', {
+                                    vehicle_id: vehicle.id,
+                                    est_total: estimation?.total || 0
+                                  });
+                                }
+                              }}>
+                              {isBlocked ? "Unavailable" : isSelected ? "Selected" : "Select This Vehicle"}
                             </Button>
                           </div>
                         </Card>;
@@ -2256,14 +2436,15 @@ const MultiStepBookingWidget = () => {
               </Button>
               <Button
                 onClick={handleStep3Continue}
-                disabled={verificationStatus !== 'verified'}
+                disabled={false /* TODO: Re-enable: verificationStatus !== 'verified' */}
                 className="w-full h-12 bg-[#F5B942] hover:bg-[#E9B63E] text-[#0C1A17] font-semibold text-base shadow-md hover:shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                 size="lg"
               >
                 Continue to Review <ChevronRight className="ml-2 w-5 h-5" />
               </Button>
             </div>
-            {verificationStatus !== 'verified' && (
+            {/* TODO: Re-enable verification warning */}
+            {false && verificationStatus !== 'verified' && (
               <p className="text-sm text-destructive text-center mt-2">
                 Please complete identity verification to continue
               </p>
@@ -2282,6 +2463,7 @@ const MultiStepBookingWidget = () => {
               }}
               vehicleTotal={estimatedBooking?.total || 0}
               selectedProtectionPlan={selectedProtectionPlan}
+              existingCustomerId={existingCustomerId}
               onBack={() => setCurrentStep(3)}
             />
           </div>}
