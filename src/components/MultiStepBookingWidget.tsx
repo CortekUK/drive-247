@@ -14,7 +14,7 @@ import { Slider } from "@/components/ui/slider";
 import { Badge } from "@/components/ui/badge";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import { ChevronRight, ChevronLeft, Check, Baby, Coffee, MapPin, UserCheck, Car, Crown, TrendingUp, Users as GroupIcon, Calculator, Shield, CheckCircle, CalendarIcon, Clock, Search, Grid3x3, List, SlidersHorizontal, X, AlertCircle, FileCheck } from "lucide-react";
+import { ChevronRight, ChevronLeft, Check, Baby, Coffee, MapPin, UserCheck, Car, Crown, TrendingUp, Users as GroupIcon, Calculator, Shield, CheckCircle, CalendarIcon, Clock, Search, Grid3x3, List, SlidersHorizontal, X, AlertCircle, FileCheck, RefreshCw } from "lucide-react";
 import { format, differenceInHours } from "date-fns";
 import { cn } from "@/lib/utils";
 import BookingConfirmation from "./BookingConfirmation";
@@ -2490,9 +2490,39 @@ const MultiStepBookingWidget = () => {
                         <p className="text-xs sm:text-sm text-muted-foreground mb-2">
                           Your identity verification is in progress. Please complete the verification in the popup window.
                         </p>
-                        <p className="text-xs text-muted-foreground">
+                        <p className="text-xs text-muted-foreground mb-3">
                           Once verified, you can proceed with your booking. This may take a few moments.
                         </p>
+                        <div className="flex flex-col sm:flex-row gap-2">
+                          <Button
+                            onClick={handleStartVerification}
+                            disabled={isVerifying}
+                            variant="outline"
+                            className="border-yellow-500 text-yellow-600 hover:bg-yellow-500 hover:text-white w-full sm:w-auto"
+                            size="sm"
+                          >
+                            {isVerifying ? (
+                              <>
+                                <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin mr-2" />
+                                <span>Starting...</span>
+                              </>
+                            ) : (
+                              <>
+                                <RefreshCw className="w-4 h-4 mr-2 flex-shrink-0" />
+                                <span>Reopen Verification</span>
+                              </>
+                            )}
+                          </Button>
+                          <Button
+                            onClick={handleClearVerification}
+                            variant="ghost"
+                            className="text-muted-foreground hover:text-destructive hover:bg-destructive/10 w-full sm:w-auto"
+                            size="sm"
+                          >
+                            <X className="w-4 h-4 mr-2 flex-shrink-0" />
+                            Cancel & Start Over
+                          </Button>
+                        </div>
                       </div>
                     </div>
                   </div>
