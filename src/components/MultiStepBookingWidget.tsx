@@ -23,6 +23,7 @@ import LocationAutocomplete from "./LocationAutocomplete";
 import BookingCheckoutStep from "./BookingCheckoutStep";
 import ProtectionPlanSelector from "./ProtectionPlanSelector";
 import { stripePromise } from "@/config/stripe";
+import { usePageContent, defaultHomeContent, mergeWithDefaults } from "@/hooks/usePageContent";
 interface VehiclePhoto {
   photo_url: string;
 }
@@ -83,6 +84,10 @@ const MultiStepBookingWidget = () => {
     [key: string]: string;
   }>({});
   const [sameAsPickup, setSameAsPickup] = useState(true);
+
+  // CMS Content for booking header
+  const { data: rawCmsContent } = usePageContent("home");
+  const cmsContent = mergeWithDefaults(rawCmsContent, defaultHomeContent);
 
   // Step 2 enhancements
   const [searchTerm, setSearchTerm] = useState("");
@@ -1446,9 +1451,10 @@ const MultiStepBookingWidget = () => {
 
   // Dynamic title based on step
   const getStepTitle = () => {
+    const defaultTitle = cmsContent.booking_header?.title || "Book Your Rental";
     switch (currentStep) {
       case 1:
-        return "Book Your Rental";
+        return defaultTitle;
       case 2:
         return "Choose Vehicle";
       case 3:
@@ -1456,7 +1462,7 @@ const MultiStepBookingWidget = () => {
       case 4:
         return "Review & Confirm";
       default:
-        return "Book Your Rental";
+        return defaultTitle;
     }
   };
   return <>
@@ -1468,10 +1474,10 @@ const MultiStepBookingWidget = () => {
             <div className="h-[1px] w-24 bg-gradient-to-r from-transparent via-[#F5B942] to-transparent" />
           </div>
           <p className="bk-hero__subtitle">
-            Quick, easy, and affordable car rentals in Dallas — from pickup to drop-off, we've got you covered.
+            {cmsContent.booking_header?.subtitle || "Quick, easy, and affordable car rentals in Dallas — from pickup to drop-off, we've got you covered."}
           </p>
-          
-          <p className="bk-hero__meta">Dallas–Fort Worth Area · Transparent Rates · 24/7 Support</p>
+
+          <p className="bk-hero__meta">{(cmsContent.booking_header?.trust_points || ["Dallas–Fort Worth Area", "Transparent Rates", "24/7 Support"]).join(" · ")}</p>
         </div>
       </section>
 

@@ -7,6 +7,7 @@ import { Star, MessageSquareQuote, Sparkles, ChevronLeft, ChevronRight } from "l
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { FeedbackModal } from "@/components/FeedbackModal";
+import { usePageContent, defaultReviewsContent, mergeWithDefaults } from "@/hooks/usePageContent";
 
 interface Testimonial {
   id: string;
@@ -26,6 +27,10 @@ const Testimonials = () => {
   const [feedbackModalOpen, setFeedbackModalOpen] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const [totalCount, setTotalCount] = useState(0);
+
+  // CMS Content
+  const { data: cmsContent } = usePageContent("reviews");
+  const content = mergeWithDefaults(cmsContent, defaultReviewsContent);
 
   useEffect(() => {
     loadTestimonials();
@@ -60,9 +65,9 @@ const Testimonials = () => {
   return (
     <>
       <SEO
-        title="Drive917 — Customer Reviews"
-        description="Read verified customer reviews of Drive917's luxury car rentals. Real experiences from our distinguished clientele."
-        keywords="Drive917 reviews, luxury car rental reviews, customer testimonials, verified reviews"
+        title={content.seo?.title || "Customer Reviews"}
+        description={content.seo?.description || "Read verified customer reviews of our luxury car rentals."}
+        keywords={content.seo?.keywords || "reviews, customer testimonials, verified reviews"}
       />
       <div className="min-h-screen bg-background">
       <Navigation />
@@ -72,13 +77,13 @@ const Testimonials = () => {
         <div className="container mx-auto px-4">
           <div className="max-w-4xl mx-auto text-center mb-20 animate-fade-in">
             <h1 className="text-5xl md:text-6xl lg:text-7xl font-display font-bold mb-6 text-gradient-metal leading-tight">
-              Customer Reviews
+              {content.hero?.title || "Customer Reviews"}
             </h1>
             <div className="flex items-center justify-center mb-8">
               <div className="h-[1px] w-24 bg-gradient-to-r from-transparent via-accent to-transparent" />
             </div>
             <p className="text-lg md:text-xl text-muted-foreground max-w-3xl mx-auto leading-relaxed">
-              What our customers say about their luxury vehicle rental experience.
+              {content.hero?.subtitle || "What our customers say about their luxury vehicle rental experience."}
             </p>
           </div>
 
@@ -188,14 +193,14 @@ const Testimonials = () => {
                   No reviews yet
                 </h3>
                 <p className="text-muted-foreground mb-8">
-                  Be the first to share your Drive917 experience.
+                  {content.feedback_cta?.empty_state_message || "Be the first to share your experience."}
                 </p>
                 <Button 
                   size="lg"
                   onClick={() => setFeedbackModalOpen(true)}
                   className="shadow-glow"
                 >
-                  Submit Feedback
+                  {content.feedback_cta?.button_text || "Submit Feedback"}
                 </Button>
               </Card>
             )}
@@ -210,10 +215,10 @@ const Testimonials = () => {
             <Card className="p-10 md:p-12 text-center shadow-metal bg-gradient-to-br from-card via-secondary/20 to-card backdrop-blur border-accent/20">
               <MessageSquareQuote className="w-12 h-12 text-accent mx-auto mb-6" />
               <h2 className="text-3xl md:text-4xl font-display font-bold mb-4 text-gradient-silver">
-                Would you like to share your experience?
+                {content.feedback_cta?.title || "Would you like to share your experience?"}
               </h2>
               <p className="text-lg text-muted-foreground mb-8 max-w-xl mx-auto leading-relaxed">
-                We value your feedback and would love to hear about your rental experience with Drive917.
+                {content.feedback_cta?.description || "We value your feedback and would love to hear about your rental experience."}
               </p>
               <div className="flex flex-col sm:flex-row gap-4 justify-center">
                 <Button 
@@ -221,7 +226,7 @@ const Testimonials = () => {
                   className="shadow-glow hover:shadow-[0_0_40px_rgba(255,215,0,0.4)] transition-all text-base px-10 py-6"
                   onClick={() => setFeedbackModalOpen(true)}
                 >
-                  Submit Feedback
+                  {content.feedback_cta?.button_text || "Submit Feedback"}
                 </Button>
               </div>
             </Card>

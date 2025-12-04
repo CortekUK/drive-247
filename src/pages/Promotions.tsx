@@ -14,6 +14,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Crown, Calendar, Tag, ChevronRight, Info } from "lucide-react";
 import { format, isBefore, isAfter, isToday } from "date-fns";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
+import { usePageContent, defaultPromotionsContent, mergeWithDefaults } from "@/hooks/usePageContent";
 
 interface Promotion {
   id: string;
@@ -44,6 +45,10 @@ const Promotions = () => {
   const [sortBy, setSortBy] = useState<string>("newest");
   const [selectedPromotion, setSelectedPromotion] = useState<Promotion | null>(null);
   const [showDetailsModal, setShowDetailsModal] = useState(false);
+
+  // CMS Content
+  const { data: rawContent } = usePageContent("promotions");
+  const content = mergeWithDefaults(rawContent, defaultPromotionsContent);
 
   useEffect(() => {
     loadData();
@@ -118,7 +123,7 @@ const Promotions = () => {
     if (promo.promo_code) {
       params.set("promo", promo.promo_code);
     }
-    window.location.href = `/#booking?${params.toString()}`;
+    window.location.href = `/booking/vehicles?${params.toString()}`;
   };
 
   const getDiscountBadge = (promo: Promotion) => {
@@ -144,25 +149,25 @@ const Promotions = () => {
   return (
     <>
       <SEO
-        title="Promotions & Offers | Drive 917 - Exclusive Luxury Car Rental Deals"
-        description="Exclusive deals on luxury car rentals with daily, weekly, and monthly rates. Limited-time Drive 917 offers with transparent savings."
-        keywords="luxury car rental deals, car rental promotions, exclusive offers, discount car hire, Drive 917 deals"
+        title={content.seo?.title || "Promotions & Offers | Drive 917 - Exclusive Luxury Car Rental Deals"}
+        description={content.seo?.description || "Exclusive deals on luxury car rentals with daily, weekly, and monthly rates. Limited-time Drive 917 offers with transparent savings."}
+        keywords={content.seo?.keywords || "luxury car rental deals, car rental promotions, exclusive offers, discount car hire, Drive 917 deals"}
       />
       <div className="min-h-screen flex flex-col bg-background">
         <Navigation />
 
         <UniversalHero
-          headline={<>Promotions & Offers</>}
-          subheading="Exclusive rental offers with transparent savings."
-          backgroundImage={luxuryHero}
+          headline={<>{content.promotions_hero?.headline || "Promotions & Offers"}</>}
+          subheading={content.promotions_hero?.subheading || "Exclusive rental offers with transparent savings."}
+          backgroundImage={content.promotions_hero?.background_image || luxuryHero}
           backgroundAlt="Drive 917 luxury car rental promotions"
           overlayStrength="medium"
           primaryCTA={{
-            text: "View Fleet & Pricing",
-            href: "/fleet"
+            text: content.promotions_hero?.primary_cta_text || "View Fleet & Pricing",
+            href: content.promotions_hero?.primary_cta_href || "/fleet"
           }}
           secondaryCTA={{
-            text: "Book Now",
+            text: content.promotions_hero?.secondary_cta_text || "Book Now",
             onClick: () => {
               const bookingSection = document.getElementById("booking");
               if (bookingSection) {
@@ -224,15 +229,15 @@ const Promotions = () => {
                 <div className="text-center py-16 max-w-2xl mx-auto">
                   <Crown className="w-16 h-16 mx-auto mb-4 text-muted-foreground opacity-50" />
                   <h3 className="text-2xl font-display font-bold mb-4">
-                    {statusFilter === "active" 
-                      ? "No active promotions right now"
-                      : "No promotions found"}
+                    {statusFilter === "active"
+                      ? (content.empty_state?.title_active || "No active promotions right now")
+                      : (content.empty_state?.title_default || "No promotions found")}
                   </h3>
                   <p className="text-muted-foreground mb-8">
-                    Check back soon or browse our Fleet & Pricing.
+                    {content.empty_state?.description || "Check back soon or browse our Fleet & Pricing."}
                   </p>
                   <Button asChild size="lg">
-                    <a href="/fleet">Browse Fleet & Pricing</a>
+                    <a href="/fleet">{content.empty_state?.button_text || "Browse Fleet & Pricing"}</a>
                   </Button>
                 </div>
               ) : (
@@ -337,34 +342,31 @@ const Promotions = () => {
           <section className="py-20 bg-accent/5">
             <div className="container mx-auto px-4">
               <div className="max-w-4xl mx-auto text-center mb-12">
-                <h2 className="font-serif text-4xl font-bold mb-4">How Promotions Work</h2>
-                <p className="text-muted-foreground">Simple steps to save on your luxury car rental</p>
+                <h2 className="font-serif text-4xl font-bold mb-4">
+                  {content.how_it_works?.title || "How Promotions Work"}
+                </h2>
+                <p className="text-muted-foreground">
+                  {content.how_it_works?.subtitle || "Simple steps to save on your luxury car rental"}
+                </p>
               </div>
 
               <div className="grid md:grid-cols-3 gap-8 max-w-5xl mx-auto">
-                <Card className="text-center p-8">
-                  <div className="w-16 h-16 rounded-full bg-accent/10 flex items-center justify-center mx-auto mb-4">
-                    <span className="text-3xl font-bold text-accent">1</span>
-                  </div>
-                  <h3 className="font-bold text-xl mb-2">Select Offer</h3>
-                  <p className="text-muted-foreground">Browse active promotions and choose your preferred deal</p>
-                </Card>
-
-                <Card className="text-center p-8">
-                  <div className="w-16 h-16 rounded-full bg-accent/10 flex items-center justify-center mx-auto mb-4">
-                    <span className="text-3xl font-bold text-accent">2</span>
-                  </div>
-                  <h3 className="font-bold text-xl mb-2">Choose Vehicle</h3>
-                  <p className="text-muted-foreground">Select from eligible vehicles in our premium fleet</p>
-                </Card>
-
-                <Card className="text-center p-8">
-                  <div className="w-16 h-16 rounded-full bg-accent/10 flex items-center justify-center mx-auto mb-4">
-                    <span className="text-3xl font-bold text-accent">3</span>
-                  </div>
-                  <h3 className="font-bold text-xl mb-2">Apply at Checkout</h3>
-                  <p className="text-muted-foreground">Discount automatically applied with promo code</p>
-                </Card>
+                {(content.how_it_works?.steps && content.how_it_works.steps.length > 0
+                  ? content.how_it_works.steps
+                  : [
+                      { number: "1", title: "Select Offer", description: "Browse active promotions and choose your preferred deal" },
+                      { number: "2", title: "Choose Vehicle", description: "Select from eligible vehicles in our premium fleet" },
+                      { number: "3", title: "Apply at Checkout", description: "Discount automatically applied with promo code" },
+                    ]
+                ).map((step, index) => (
+                  <Card key={index} className="text-center p-8">
+                    <div className="w-16 h-16 rounded-full bg-accent/10 flex items-center justify-center mx-auto mb-4">
+                      <span className="text-3xl font-bold text-accent">{step.number}</span>
+                    </div>
+                    <h3 className="font-bold text-xl mb-2">{step.title}</h3>
+                    <p className="text-muted-foreground">{step.description}</p>
+                  </Card>
+                ))}
               </div>
             </div>
           </section>
@@ -374,14 +376,23 @@ const Promotions = () => {
             <div className="container mx-auto px-4">
               <div className="max-w-3xl mx-auto">
                 <Card className="p-8 border-accent/20">
-                  <h3 className="font-bold text-xl mb-4">Terms & Conditions</h3>
+                  <h3 className="font-bold text-xl mb-4">
+                    {content.terms?.title || "Terms & Conditions"}
+                  </h3>
                   <ul className="space-y-2 text-sm text-muted-foreground">
-                    <li>• Promotions are subject to availability and vehicle eligibility</li>
-                    <li>• Discounts cannot be combined with other offers</li>
-                    <li>• Valid for new bookings only during the promotional period</li>
-                    <li>• Promo codes must be applied at the time of booking</li>
-                    <li>• Drive 917 reserves the right to modify or cancel promotions at any time</li>
-                    <li>• Standard rental terms and conditions apply</li>
+                    {(content.terms?.terms && content.terms.terms.length > 0
+                      ? content.terms.terms
+                      : [
+                          "Promotions are subject to availability and vehicle eligibility",
+                          "Discounts cannot be combined with other offers",
+                          "Valid for new bookings only during the promotional period",
+                          "Promo codes must be applied at the time of booking",
+                          "Drive 917 reserves the right to modify or cancel promotions at any time",
+                          "Standard rental terms and conditions apply",
+                        ]
+                    ).map((term, index) => (
+                      <li key={index}>• {term}</li>
+                    ))}
                   </ul>
                 </Card>
               </div>

@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Card } from "@/components/ui/card";
 import { Star } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
+import { usePageContent, defaultHomeContent, mergeWithDefaults } from "@/hooks/usePageContent";
 
 interface Testimonial {
   id: string;
@@ -15,6 +16,10 @@ interface Testimonial {
 const EnhancedTestimonials = () => {
   const [testimonials, setTestimonials] = useState<Testimonial[]>([]);
   const [activeIndex, setActiveIndex] = useState(0);
+
+  // CMS Content
+  const { data: rawContent } = usePageContent("home");
+  const content = mergeWithDefaults(rawContent, defaultHomeContent);
 
   useEffect(() => {
     loadTestimonials();
@@ -60,7 +65,7 @@ const EnhancedTestimonials = () => {
       <div className="container mx-auto px-4">
         <div className="text-center mb-16 animate-fade-in">
           <h2 className="text-4xl md:text-5xl font-display font-bold mb-4 text-foreground">
-            Why Dallas Drivers Choose Drive917
+            {content.testimonials_header?.title || "Why Dallas Drivers Choose Drive917"}
           </h2>
           <div className="flex items-center justify-center mt-6">
             <div className="h-[1px] w-24 bg-gradient-to-r from-transparent via-[#F5B942] to-transparent" />

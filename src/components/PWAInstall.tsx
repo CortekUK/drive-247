@@ -10,7 +10,12 @@ interface BeforeInstallPromptEvent extends Event {
   userChoice: Promise<{ outcome: "accepted" | "dismissed" }>;
 }
 
-const PWAInstall = () => {
+interface PWAInstallProps {
+  title?: string;
+  description?: string;
+}
+
+const PWAInstall = ({ title, description }: PWAInstallProps) => {
   const [deferredPrompt, setDeferredPrompt] =
     useState<BeforeInstallPromptEvent | null>(null);
   const [showInstructions, setShowInstructions] = useState(false);
@@ -124,12 +129,12 @@ const PWAInstall = () => {
         <div className="pwa-card">
           <div className="flex-1">
             <h3 className="text-2xl md:text-3xl font-display font-bold mb-2 text-foreground">
-              Install Drive917
+              {title || "Install Drive917"}
             </h3>
             <p className="text-base text-muted-foreground mb-6">
-              {isMobile
+              {description || (isMobile
                 ? "Add Drive917 to your home screen for fast, seamless bookings in Los Angeles and beyond."
-                : "Scan the QR code to add Drive917 to your home screen for fast, seamless bookings in Los Angeles and beyond."}
+                : "Scan the QR code to add Drive917 to your home screen for fast, seamless bookings in Los Angeles and beyond.")}
             </p>
 
             <div className="flex flex-wrap gap-3 mb-4">

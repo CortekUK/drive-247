@@ -11,6 +11,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Link } from "react-router-dom";
 import SEO from "@/components/SEO";
 import luxuryHero from "@/assets/luxury-fleet-hero.jpg";
+import { usePageContent, defaultFleetContent, mergeWithDefaults } from "@/hooks/usePageContent";
 import {
   Car,
   CarFront,
@@ -110,6 +111,10 @@ const Pricing = () => {
   const [colourFilter, setColourFilter] = useState<string>("all");
   const [sortBy, setSortBy] = useState<string>("daily_asc");
   const [expandedDescriptions, setExpandedDescriptions] = useState<Set<string>>(new Set());
+
+  // CMS Content
+  const { data: rawContent } = usePageContent("fleet");
+  const content = mergeWithDefaults(rawContent, defaultFleetContent);
 
   // Hardcoded service inclusions
   const serviceInclusions: ServiceInclusion[] = [
@@ -221,22 +226,22 @@ const Pricing = () => {
   return (
     <div className="min-h-screen bg-background">
       <SEO
-        title="Fleet & Pricing | Drive 917 - Premium Luxury Car Rentals"
-        description="Browse our exclusive fleet of luxury vehicles including Rolls-Royce, Bentley, and Range Rover. Transparent daily, weekly, and monthly rental rates with no hidden fees."
-        keywords="luxury car rental pricing, Rolls-Royce rental rates, premium vehicle hire, executive car rental, London luxury cars"
+        title={content.seo?.title || "Fleet & Pricing | Drive 917 - Premium Luxury Car Rentals"}
+        description={content.seo?.description || "Browse our exclusive fleet of luxury vehicles including Rolls-Royce, Bentley, and Range Rover. Transparent daily, weekly, and monthly rental rates with no hidden fees."}
+        keywords={content.seo?.keywords || "luxury car rental pricing, Rolls-Royce rental rates, premium vehicle hire, executive car rental, London luxury cars"}
       />
       <Navigation />
 
       {/* Hero Section */}
       <UniversalHero
-        headline="Fleet & Pricing"
-        subheading="Browse our premium vehicles with clear daily, weekly, and monthly rates."
-        backgroundImage={luxuryHero}
+        headline={content.fleet_hero?.headline || "Fleet & Pricing"}
+        subheading={content.fleet_hero?.subheading || "Browse our premium vehicles with clear daily, weekly, and monthly rates."}
+        backgroundImage={content.fleet_hero?.background_image || luxuryHero}
         backgroundAlt="Drive 917 luxury vehicle fleet"
         overlayStrength="medium"
         minHeight="min-h-screen"
         primaryCTA={{
-          text: "Book Now",
+          text: content.fleet_hero?.primary_cta_text || "Book Now",
           onClick: () => {
             const bookingSection = document.getElementById("booking");
             if (bookingSection) {
@@ -247,7 +252,7 @@ const Pricing = () => {
           },
         }}
         secondaryCTA={{
-          text: "View Fleet Below",
+          text: content.fleet_hero?.secondary_cta_text || "View Fleet Below",
           onClick: () => {
             const fleetSection = document.getElementById("fleet-section");
             if (fleetSection) {
@@ -475,7 +480,7 @@ const Pricing = () => {
           <div className="max-w-6xl mx-auto">
             <div className="text-center mb-12">
               <h2 className="text-4xl md:text-5xl font-display font-bold text-gradient-metal mb-4">
-                Flexible Rental Rates
+                {content.rental_rates?.section_title || "Flexible Rental Rates"}
               </h2>
               <div className="flex items-center justify-center">
                 <div className="h-[1px] w-32 bg-gradient-to-r from-transparent via-accent to-transparent" />
@@ -485,33 +490,33 @@ const Pricing = () => {
             <div className="grid md:grid-cols-3 gap-8 mb-16">
               <Card className="p-8 bg-card/50 backdrop-blur shadow-metal border-accent/20 text-center group hover:shadow-[0_0_30px_rgba(255,215,0,0.2)] transition-all duration-500">
                 <div className="text-5xl font-display font-bold text-gradient-metal mb-4 group-hover:scale-105 transition-transform duration-300">
-                  Daily
+                  {content.rental_rates?.daily?.title || "Daily"}
                 </div>
-                <p className="text-muted-foreground leading-relaxed">Ideal for short stays and one-day hires.</p>
+                <p className="text-muted-foreground leading-relaxed">{content.rental_rates?.daily?.description || "Ideal for short stays and one-day hires."}</p>
               </Card>
               <Card className="p-8 bg-card/50 backdrop-blur shadow-metal border-accent/20 text-center group hover:shadow-[0_0_30px_rgba(255,215,0,0.2)] transition-all duration-500">
                 <div className="text-5xl font-display font-bold text-gradient-metal mb-4 group-hover:scale-105 transition-transform duration-300">
-                  Weekly
+                  {content.rental_rates?.weekly?.title || "Weekly"}
                 </div>
-                <p className="text-muted-foreground leading-relaxed">Perfect balance of flexibility and value.</p>
+                <p className="text-muted-foreground leading-relaxed">{content.rental_rates?.weekly?.description || "Perfect balance of flexibility and value."}</p>
               </Card>
               <Card className="p-8 bg-card/50 backdrop-blur shadow-metal border-accent/20 text-center group hover:shadow-[0_0_30px_rgba(255,215,0,0.2)] transition-all duration-500">
                 <div className="text-5xl font-display font-bold text-gradient-metal mb-4 group-hover:scale-105 transition-transform duration-300">
-                  Monthly
+                  {content.rental_rates?.monthly?.title || "Monthly"}
                 </div>
-                <p className="text-muted-foreground leading-relaxed">Exclusive long-term rates for regular clients.</p>
+                <p className="text-muted-foreground leading-relaxed">{content.rental_rates?.monthly?.description || "Exclusive long-term rates for regular clients."}</p>
               </Card>
             </div>
 
             <div className="text-center mb-16 space-y-4">
               <h3 className="text-3xl md:text-4xl font-display font-bold text-gradient-metal">
-                Every Drive917 Rental Includes
+                {content.inclusions?.section_title || "Every Drive917 Rental Includes"}
               </h3>
               <div className="flex items-center justify-center">
                 <div className="h-[1px] w-24 bg-gradient-to-r from-transparent via-accent to-transparent" />
               </div>
               <p className="text-base text-muted-foreground max-w-2xl mx-auto pt-2">
-                Peace of mind and premium service come standard with every vehicle.
+                {content.inclusions?.section_subtitle || "Peace of mind and premium service come standard with every vehicle."}
               </p>
             </div>
 
@@ -519,7 +524,7 @@ const Pricing = () => {
               {/* Standard Service */}
               <Card className="p-8 bg-card/50 backdrop-blur shadow-metal border-accent/20">
                 <div className="mb-6">
-                  <h4 className="text-2xl font-display font-semibold mb-2 text-gradient-silver">Standard Inclusions</h4>
+                  <h4 className="text-2xl font-display font-semibold mb-2 text-gradient-silver">{content.inclusions?.standard_title || "Standard Inclusions"}</h4>
                   <div className="h-[1px] w-20 bg-gradient-to-r from-accent to-transparent" />
                 </div>
                 <ul className="space-y-4">
@@ -538,7 +543,7 @@ const Pricing = () => {
               {/* Premium Add-ons */}
               <Card className="p-8 bg-card/50 backdrop-blur shadow-metal border-accent/20">
                 <div className="mb-6">
-                  <h4 className="text-2xl font-display font-semibold mb-2 text-gradient-silver">Premium Add-ons</h4>
+                  <h4 className="text-2xl font-display font-semibold mb-2 text-gradient-silver">{content.inclusions?.premium_title || "Premium Add-ons"}</h4>
                   <div className="h-[1px] w-20 bg-gradient-to-r from-accent to-transparent" />
                 </div>
                 <ul className="space-y-4">
@@ -570,7 +575,7 @@ const Pricing = () => {
             </div>
 
             <p className="text-center text-sm text-muted-foreground mb-12 italic">
-              All add-ons can be selected and customized during booking.
+              {content.extras?.footer_text || "All add-ons can be selected and customized during booking."}
             </p>
 
             {/* CTA Buttons */}

@@ -1,3 +1,4 @@
+import React from "react";
 import Navigation from "@/components/Navigation";
 import Footer from "@/components/Footer";
 import { Card } from "@/components/ui/card";
@@ -6,8 +7,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Phone, Mail, MapPin, Clock, MessageCircle, CheckCircle, AlertCircle, Shield, Lock } from "lucide-react";
-import { useState } from "react";
+import { Phone, Mail, MapPin, Clock, MessageCircle, CheckCircle, AlertCircle, Shield, Lock, Award, Star, Heart, Zap } from "lucide-react";
+import { useState, useMemo } from "react";
 import { toast } from "sonner";
 import { z } from "zod";
 import { Link } from "react-router-dom";
@@ -16,6 +17,7 @@ import { supabase } from "@/integrations/supabase/client";
 import SEO from "@/components/SEO";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { usePageContent, defaultContactContent, mergeWithDefaults } from "@/hooks/usePageContent";
 
 const contactSchema = z.object({
   name: z.string().trim().min(2, "Name must be at least 2 characters").max(100, "Name must be less than 100 characters"),
@@ -25,9 +27,7 @@ const contactSchema = z.object({
     const digitCount = (cleaned.match(/\d/g) || []).length;
     return digitCount >= 7 && digitCount <= 15;
   }, "Please enter a valid phone number (7-15 digits)"),
-  subject: z.enum(["General Enquiry", "Corporate Rental", "Vehicle Availability", "Partnerships"], {
-    errorMap: () => ({ message: "Please select a subject" })
-  }),
+  subject: z.string().min(1, "Please select a subject"),
   message: z.string().trim().min(10, "Message must be at least 10 characters").max(2000, "Message must be less than 2000 characters"),
   gdprConsent: z.boolean().refine(val => val === true, "You must consent to being contacted"),
 });
@@ -45,14 +45,23 @@ const Contact = () => {
     gdprConsent: false,
   });
 
-  // Hardcoded contact settings
-  const contactSettings = {
-    phone: "+44 800 123 4567",
-    email: "info@drive917.com",
-    office_address: "123 Luxury Lane, London, UK",
-    availability: "24 hours a day, 7 days a week, 365 days a year",
-    whatsapp_number: "+447900123456",
-  };
+  // Fetch CMS content for contact page
+  const { data: cmsContent } = usePageContent("contact");
+  const content = useMemo(
+    () => mergeWithDefaults(cmsContent, defaultContactContent),
+    [cmsContent]
+  );
+
+  // Derive contact settings from CMS content
+  const contactSettings = useMemo(() => ({
+    phone: content.contact_info?.phone?.number || "+44 800 123 4567",
+    email: content.contact_info?.email?.address || "info@drive917.com",
+    office_address: content.contact_info?.office?.address || "123 Luxury Lane, London, UK",
+    availability: content.contact_info?.phone?.availability || "24 hours a day, 7 days a week, 365 days a year",
+    whatsapp_number: content.contact_info?.whatsapp?.number || "+447900123456",
+    whatsapp_description: content.contact_info?.whatsapp?.description || "Quick response for urgent enquiries",
+    email_response_time: content.contact_info?.email?.response_time || "Response within 2 hours during business hours (PST)",
+  }), [content]);
 
   // LocalBusiness schema for SEO
   const businessSchema = {
@@ -136,7 +145,7 @@ const Contact = () => {
       }
 
       setSubmitStatus('success');
-      toast.success("Thank you for contacting Drive917. Our concierge team will respond within 2 hours during business hours (PST).");
+      toast.success(content.contact_form?.success_message || "Thank you for contacting Drive917. Our concierge team will respond within 2 hours during business hours (PST).");
 
       // Reset form
       setFormData({
@@ -169,9 +178,9 @@ const Contact = () => {
   return (
     <div className="min-h-screen bg-background">
       <SEO 
-        title="Contact Drive917 — Los Angeles Luxury Car Rentals"
-        description="Get in touch with Drive917 for premium vehicle rentals, chauffeur services, and exclusive offers in Los Angeles."
-        keywords="contact Drive917, luxury car rental Los Angeles, premium vehicle rental contact, chauffeur service inquiry"
+        title={content.seo?.title || "Contact Drive917 — Los Angeles Luxury Car Rentals"}
+        description={content.seo?.description || "Get in touch with Drive917 for premium vehicle rentals, chauffeur services, and exclusive offers in Los Angeles."}
+        keywords={content.seo?.keywords || "contact Drive917, luxury car rental Los Angeles, premium vehicle rental contact, chauffeur service inquiry"}
         schema={businessSchema}
         canonical={`${window.location.origin}/contact`}
       />
@@ -183,13 +192,13 @@ const Contact = () => {
         <div className="container mx-auto px-4 relative">
           <div className="max-w-4xl mx-auto text-center mb-20 animate-fade-in">
             <h1 className="text-5xl md:text-6xl lg:text-7xl font-display font-bold mb-6 text-gradient-metal leading-tight">
-              Contact Drive917
+              {content.hero?.title || "Contact Drive917"}
             </h1>
             <div className="flex items-center justify-center mb-8">
               <div className="h-[1px] w-24 bg-gradient-to-r from-transparent via-accent to-transparent" />
             </div>
             <p className="text-lg md:text-xl text-muted-foreground max-w-3xl mx-auto leading-relaxed">
-              Get in touch for premium vehicle rentals, chauffeur services, and exclusive offers in Los Angeles.
+              {content.hero?.subtitle || "Get in touch for premium vehicle rentals, chauffeur services, and exclusive offers in Los Angeles."}
             </p>
           </div>
 
@@ -233,7 +242,7 @@ const Contact = () => {
                       {contactSettings.email}
                     </a>
                     <p className="text-sm text-muted-foreground">
-                      Response within 2 hours during business hours (PST)
+                      {contactSettings.email_response_time}
                     </p>
                   </div>
                 </div>
@@ -286,7 +295,7 @@ const Contact = () => {
                       Message us on WhatsApp
                     </a>
                     <p className="text-sm text-muted-foreground">
-                      Quick response for urgent enquiries
+                      {contactSettings.whatsapp_description}
                     </p>
                   </div>
                 </div>
@@ -296,41 +305,30 @@ const Contact = () => {
               <TooltipProvider>
                 <Card className="p-6 shadow-metal bg-gradient-to-br from-card via-secondary/20 to-card backdrop-blur border-accent/20">
                   <div className="flex items-center justify-around text-center gap-4">
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <div className="flex-1 cursor-help">
-                          <Shield className="w-8 h-8 text-accent mx-auto mb-2" aria-label="Secure" />
-                          <p className="text-xs text-muted-foreground font-medium">Secure</p>
-                        </div>
-                      </TooltipTrigger>
-                      <TooltipContent>
-                        <p>Your data and booking details are encrypted and secure</p>
-                      </TooltipContent>
-                    </Tooltip>
-                    <div className="h-10 w-[1px] bg-accent/20" />
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <div className="flex-1 cursor-help">
-                          <Lock className="w-8 h-8 text-accent mx-auto mb-2" aria-label="Confidential" />
-                          <p className="text-xs text-muted-foreground font-medium">Confidential</p>
-                        </div>
-                      </TooltipTrigger>
-                      <TooltipContent>
-                        <p>All information is kept strictly confidential</p>
-                      </TooltipContent>
-                    </Tooltip>
-                    <div className="h-10 w-[1px] bg-accent/20" />
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <div className="flex-1 cursor-help">
-                          <Clock className="w-8 h-8 text-accent mx-auto mb-2" aria-label="24/7 Support" />
-                          <p className="text-xs text-muted-foreground font-medium">24/7 Support</p>
-                        </div>
-                      </TooltipTrigger>
-                      <TooltipContent>
-                        <p>Our concierge team is available around the clock</p>
-                      </TooltipContent>
-                    </Tooltip>
+                    {(content.trust_badges?.badges || [
+                      { icon: "shield", label: "Secure", tooltip: "Your data and booking details are encrypted and secure" },
+                      { icon: "lock", label: "Confidential", tooltip: "All information is kept strictly confidential" },
+                      { icon: "clock", label: "24/7 Support", tooltip: "Our concierge team is available around the clock" }
+                    ]).map((badge, index, arr) => {
+                      const iconMap: Record<string, any> = { shield: Shield, lock: Lock, clock: Clock, award: Award, star: Star, heart: Heart, zap: Zap, check: CheckCircle };
+                      const IconComponent = iconMap[badge.icon?.toLowerCase()] || Shield;
+                      return (
+                        <React.Fragment key={index}>
+                          {index > 0 && <div className="h-10 w-[1px] bg-accent/20" />}
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <div className="flex-1 cursor-help">
+                                <IconComponent className="w-8 h-8 text-accent mx-auto mb-2" aria-label={badge.label} />
+                                <p className="text-xs text-muted-foreground font-medium">{badge.label}</p>
+                              </div>
+                            </TooltipTrigger>
+                            <TooltipContent>
+                              <p>{badge.tooltip}</p>
+                            </TooltipContent>
+                          </Tooltip>
+                        </React.Fragment>
+                      );
+                    })}
                   </div>
                 </Card>
               </TooltipProvider>
@@ -338,9 +336,11 @@ const Contact = () => {
 
             {/* Right Column - Contact Form */}
             <Card className="p-8 lg:p-10 shadow-metal bg-card/50 backdrop-blur border-accent/20 animate-fade-in animation-delay-400">
-              <h3 className="text-3xl font-display font-bold mb-2 dark:text-gradient-silver text-gradient-black">Send Us a Message</h3>
+              <h3 className="text-3xl font-display font-bold mb-2 dark:text-gradient-silver text-gradient-black">
+                {content.contact_form?.title || "Send Us a Message"}
+              </h3>
               <p className="text-sm text-muted-foreground mb-8">
-                We typically reply within 2 hours during business hours.
+                {content.contact_form?.subtitle || "We typically reply within 2 hours during business hours."}
               </p>
               
               <form onSubmit={handleSubmit} className="space-y-5" noValidate>
@@ -438,10 +438,9 @@ const Contact = () => {
                       <SelectValue placeholder="Select a subject" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="General Enquiry">General Enquiry</SelectItem>
-                      <SelectItem value="Corporate Rental">Corporate Rental</SelectItem>
-                      <SelectItem value="Vehicle Availability">Vehicle Availability</SelectItem>
-                      <SelectItem value="Partnerships">Partnerships</SelectItem>
+                      {(content.contact_form?.subject_options || ["General Enquiry", "Corporate Rental", "Vehicle Availability", "Partnerships"]).map((option) => (
+                        <SelectItem key={option} value={option}>{option}</SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
                   {errors.subject && (
@@ -496,7 +495,7 @@ const Contact = () => {
                       htmlFor="gdprConsent"
                       className="text-sm cursor-pointer leading-relaxed font-normal block"
                     >
-                      I consent to being contacted regarding my enquiry. *
+                      {content.contact_form?.gdpr_text || "I consent to being contacted regarding my enquiry."} *
                     </Label>
                     {errors.gdprConsent && (
                       <p id="gdpr-error" className="text-sm text-destructive flex items-center gap-1" role="alert">
@@ -540,7 +539,7 @@ const Contact = () => {
                   className="w-full h-14 text-base shadow-glow hover:shadow-[0_0_40px_rgba(255,215,0,0.4)] transition-all"
                   disabled={loading}
                 >
-                  {loading ? "Sending..." : "Send Message"}
+                  {loading ? "Sending..." : (content.contact_form?.submit_button_text || "Send Message")}
                 </Button>
               </form>
             </Card>
@@ -548,7 +547,7 @@ const Contact = () => {
         </div>
       </section>
 
-      <PWAInstall />
+      <PWAInstall title={content.pwa_install?.title} description={content.pwa_install?.description} />
 
       <Footer />
     </div>
