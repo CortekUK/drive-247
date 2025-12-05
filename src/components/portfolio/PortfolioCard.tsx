@@ -21,7 +21,7 @@ interface PortfolioCardProps {
 export const PortfolioCard = ({ item }: PortfolioCardProps) => {
   return (
     <Link to={`/portfolio/${item.slug}`} className="w-full md:min-w-[400px]">
-      <Card className="group w-full md:min-w-[400px] overflow-hidden transition-all duration-500 hover:shadow-[0_10px_40px_rgba(255,215,0,0.25)] hover:shadow-glow hover:-translate-y-2 hover:border-accent/50 bg-card border-border/50 min-h-[480px] flex flex-col">
+      <Card className="group w-full md:min-w-[400px] overflow-hidden transition-all duration-500 hover:shadow-glow hover:-translate-y-2 hover:border-accent/50 bg-card border-border/50 min-h-[480px] flex flex-col">
         <div className="relative aspect-video overflow-hidden">
           <img
             src={item.cover_image_url}
@@ -61,7 +61,7 @@ export const PortfolioCard = ({ item }: PortfolioCardProps) => {
                 Confidential
               </Badge>
             ) : item.is_featured ? (
-              <Badge className="bg-accent/95 backdrop-blur-md text-accent-foreground border-accent-foreground/20 gap-1.5 shadow-[0_0_20px_rgba(255,215,0,0.3)] flex-shrink-0">
+              <Badge className="bg-accent/95 backdrop-blur-md text-accent-foreground border-accent-foreground/20 gap-1.5 shadow-glow flex-shrink-0">
                 <Star className="w-3 h-3 fill-current" />
                 Featured
               </Badge>

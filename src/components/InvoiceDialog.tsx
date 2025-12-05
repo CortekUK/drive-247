@@ -301,14 +301,14 @@ export const InvoiceDialog = ({
                     <tr className="border-b">
                       <td className="p-3 text-sm">
                         <div className="flex items-start gap-2">
-                          <Shield className="w-4 h-4 text-[#C5A572] mt-0.5" />
+                          <Shield className="w-4 h-4 text-primary mt-0.5" />
                           <div>
                             <p className="font-medium">Protection Plan</p>
                             <p className="text-xs text-muted-foreground">{protectionPlan.name}</p>
                           </div>
                         </div>
                       </td>
-                      <td className="p-3 text-sm text-right font-medium text-[#C5A572]">
+                      <td className="p-3 text-sm text-right font-medium text-primary">
                         {formatCurrency(protectionPlan.cost)}
                       </td>
                     </tr>

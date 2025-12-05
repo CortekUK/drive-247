@@ -709,7 +709,7 @@ const MultiStepBookingWidget = () => {
       return {
         text: "Ultra Luxury",
         icon: Crown,
-        color: "text-[#C5A572] border-[#C5A572]"
+        color: "text-primary border-primary"
       };
     }
     if (model.includes("s-class") || model.includes("s class") || fullName.includes("s class")) {
@@ -1471,7 +1471,7 @@ const MultiStepBookingWidget = () => {
         <div className="bk-hero__inner">
           <h1 className="bk-hero__title">{getStepTitle()}</h1>
           <div className="flex items-center justify-center mt-4">
-            <div className="h-[1px] w-24 bg-gradient-to-r from-transparent via-[#F5B942] to-transparent" />
+            <div className="h-[1px] w-24 bg-gradient-to-r from-transparent via-primary to-transparent" />
           </div>
           <p className="bk-hero__subtitle">
             {cmsContent.booking_header?.subtitle || "Quick, easy, and affordable car rentals in Dallas — from pickup to drop-off, we've got you covered."}
@@ -1507,16 +1507,16 @@ const MultiStepBookingWidget = () => {
               label,
               fullLabel
             }, index) => <div key={step} className="flex flex-col items-center flex-1 relative z-10">
-                  <div className={cn("bk-step__node flex items-center justify-center w-10 h-10 sm:w-12 sm:h-12 md:w-14 md:h-14 rounded-full border-2 transition-all", currentStep >= step ? 'bg-[#F5B942] border-[#F5B942] shadow-[0_0_20px_rgba(245,185,66,0.5)]' : 'border-border bg-muted', currentStep === step && 'bk-step__node--active shadow-[0_0_24px_rgba(245,185,66,0.6)]')} aria-label={`Step ${step} of 4: ${fullLabel}`} aria-current={currentStep === step ? "step" : undefined}>
-                    {currentStep > step ? <Check className="w-4 h-4 sm:w-5 sm:h-5 md:w-6 md:h-6 text-[#0C1A17]" /> : <span className={cn("text-base sm:text-lg md:text-xl font-bold", currentStep === step ? "text-[#0C1A17]" : "text-muted-foreground")}>
+                  <div className={cn("bk-step__node flex items-center justify-center w-10 h-10 sm:w-12 sm:h-12 md:w-14 md:h-14 rounded-full border-2 transition-all", currentStep >= step ? 'bg-primary border-primary shadow-glow' : 'border-border bg-muted', currentStep === step && 'bk-step__node--active shadow-glow')} aria-label={`Step ${step} of 4: ${fullLabel}`} aria-current={currentStep === step ? "step" : undefined}>
+                    {currentStep > step ? <Check className="w-4 h-4 sm:w-5 sm:h-5 md:w-6 md:h-6 text-primary-foreground" /> : <span className={cn("text-base sm:text-lg md:text-xl font-bold", currentStep === step ? "text-primary-foreground" : "text-muted-foreground")}>
                         {step}
                       </span>}
                   </div>
-                  <span className={`mt-1.5 sm:mt-2 text-[10px] sm:text-xs md:text-sm font-medium text-center leading-tight ${currentStep >= step ? 'text-[#F5B942]' : 'text-muted-foreground'}`}>
+                  <span className={`mt-1.5 sm:mt-2 text-[10px] sm:text-xs md:text-sm font-medium text-center leading-tight ${currentStep >= step ? 'text-primary' : 'text-muted-foreground'}`}>
                     <span className="hidden sm:inline">{fullLabel}</span>
                     <span className="sm:hidden">{label}</span>
                   </span>
-                  {index < 3 && <div className={cn("bk-step__line absolute top-5 sm:top-6 md:top-7 left-[calc(50%+20px)] sm:left-[calc(50%+24px)] md:left-[calc(50%+28px)] w-[calc(100%-40px)] sm:w-[calc(100%-48px)] md:w-[calc(100%-56px)] h-0.5", currentStep > step ? 'bg-[#F5B942]' : 'bg-border')} />}
+                  {index < 3 && <div className={cn("bk-step__line absolute top-5 sm:top-6 md:top-7 left-[calc(50%+20px)] sm:left-[calc(50%+24px)] md:left-[calc(50%+28px)] w-[calc(100%-40px)] sm:w-[calc(100%-48px)] md:w-[calc(100%-56px)] h-0.5", currentStep > step ? 'bg-primary' : 'bg-border')} />}
               </div>)}
           </div>
         </div>
@@ -1525,7 +1525,7 @@ const MultiStepBookingWidget = () => {
         {currentStep === 1 && <div className="space-y-8 animate-fade-in">
             {/* Header with underline */}
             <div>
-              <h3 className="text-2xl md:text-3xl font-display font-semibold text-foreground pb-2 border-b-2 border-[#C5A572]/30">
+              <h3 className="text-2xl md:text-3xl font-display font-semibold text-foreground pb-2 border-b-2 border-primary/30">
                 Rental Details
               </h3>
             </div>
@@ -1549,7 +1549,7 @@ const MultiStepBookingWidget = () => {
                   });
                   // Instant validation
                   validateField('pickupLocation', value);
-                }} placeholder="Enter pickup address" className="h-12 focus-visible:ring-[#C5A572]" />
+                }} placeholder="Enter pickup address" className="h-12 focus-visible:ring-primary" />
                   <p className="text-xs text-muted-foreground">Start typing a Dallas address or landmark</p>
                   {errors.pickupLocation && <p className="text-sm text-destructive">{errors.pickupLocation}</p>}
                 </div>
@@ -1590,7 +1590,7 @@ const MultiStepBookingWidget = () => {
                   });
                   // Instant validation
                   validateField('dropoffLocation', value);
-                }} placeholder="Enter return address" className="h-12 focus-visible:ring-[#C5A572]" disabled={sameAsPickup} />
+                }} placeholder="Enter return address" className="h-12 focus-visible:ring-primary" disabled={sameAsPickup} />
                   <p className="text-xs text-muted-foreground">Start typing a Dallas address or landmark</p>
                   {errors.dropoffLocation && <p className="text-sm text-destructive">{errors.dropoffLocation}</p>}
                 </div>
@@ -1651,7 +1651,7 @@ const MultiStepBookingWidget = () => {
                         pickupTime: ""
                       });
                     }
-                  }} className="h-12 focus-visible:ring-[#C5A572]" />
+                  }} className="h-12 focus-visible:ring-primary" />
                   </div>
                   {errors.pickupDate && <p className="text-sm text-destructive">{errors.pickupDate}</p>}
                   {errors.pickupTime && !errors.pickupDate && <p className="text-sm text-destructive">{errors.pickupTime}</p>}
@@ -1706,7 +1706,7 @@ const MultiStepBookingWidget = () => {
                         dropoffTime: ""
                       });
                     }
-                  }} className="h-12 focus-visible:ring-[#C5A572]" />
+                  }} className="h-12 focus-visible:ring-primary" />
                   </div>
                   {errors.dropoffDate && <p className="text-sm text-destructive">{errors.dropoffDate}</p>}
                   {errors.dropoffTime && !errors.dropoffDate && <p className="text-sm text-destructive">{errors.dropoffTime}</p>}
@@ -1725,7 +1725,7 @@ const MultiStepBookingWidget = () => {
                   // Instant validation
                   validateField('driverAge', value);
                 }}>
-                    <SelectTrigger id="driverAge" className="h-12 focus-visible:ring-[#C5A572]">
+                    <SelectTrigger id="driverAge" className="h-12 focus-visible:ring-primary">
                       <SelectValue placeholder="Select age range" />
                     </SelectTrigger>
                     <SelectContent position="popper" sideOffset={4}>
@@ -1735,7 +1735,7 @@ const MultiStepBookingWidget = () => {
                     </SelectContent>
                   </Select>
                   {errors.driverAge && <p className="text-sm text-destructive">{errors.driverAge}</p>}
-                  {formData.driverAge === 'under_25' && <p className="text-xs text-[#C5A572]">Young Driver Fee will apply</p>}
+                  {formData.driverAge === 'under_25' && <p className="text-xs text-primary">Young Driver Fee will apply</p>}
                 </div>
 
                 <div className="space-y-2">
@@ -1746,14 +1746,14 @@ const MultiStepBookingWidget = () => {
                     ...formData,
                     promoCode: value
                   });
-                }} placeholder="Enter promo code" className="h-12 focus-visible:ring-[#C5A572]" maxLength={20} />
+                }} placeholder="Enter promo code" className="h-12 focus-visible:ring-primary" maxLength={20} />
                 </div>
               </div>
             </div>
 
             <Button
               onClick={handleStep1Continue}
-              className="w-full h-12 bg-[#F5B942] hover:bg-[#E9B63E] text-[#0C1A17] font-semibold text-base shadow-md hover:shadow-lg transition-all"
+              className="w-full h-12 bg-primary hover:bg-primary/90 text-primary-foreground font-semibold text-base shadow-md hover:shadow-lg transition-all"
               size="lg"
             >
               Continue to Vehicle Selection <ChevronRight className="ml-2 w-5 h-5" />
@@ -1788,14 +1788,14 @@ const MultiStepBookingWidget = () => {
             </div>
 
             {/* Toolbar */}
-            <Card className="p-4 bg-card/90 backdrop-blur-sm border-[#C5A572]/15 sticky top-20 z-10 shadow-lg">
+            <Card className="p-4 bg-card/90 backdrop-blur-sm border-primary/15 sticky top-20 z-10 shadow-lg">
               <div className="flex flex-col gap-4">
                 {/* Top Row: Search, Sort, View Toggle */}
                 <div className="flex flex-col sm:flex-row gap-3">
                   {/* Search */}
                   <div className="relative flex-1">
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                    <Input value={searchTerm} onChange={e => handleSearchChange(e.target.value)} placeholder="Search model or brand…" className="pl-10 h-10 bg-background focus-visible:ring-[#C5A572]" aria-label="Search vehicles" />
+                    <Input value={searchTerm} onChange={e => handleSearchChange(e.target.value)} placeholder="Search model or brand…" className="pl-10 h-10 bg-background focus-visible:ring-primary" aria-label="Search vehicles" />
                   </div>
 
                   {/* Sort */}
@@ -1807,10 +1807,10 @@ const MultiStepBookingWidget = () => {
                     });
                   }
                 }}>
-                    <SelectTrigger className="w-full sm:w-[200px] h-10 focus-visible:ring-[#C5A572]">
+                    <SelectTrigger className="w-full sm:w-[200px] h-10 focus-visible:ring-primary">
                       <SelectValue placeholder="Sort by" />
                     </SelectTrigger>
-                    <SelectContent className="bg-card border-[#C5A572]/20">
+                    <SelectContent className="bg-card border-primary/20">
                       <SelectItem value="recommended">Recommended</SelectItem>
                       <SelectItem value="price_low">Price: Low → High</SelectItem>
                       <SelectItem value="price_high">Price: High → Low</SelectItem>
@@ -1822,15 +1822,15 @@ const MultiStepBookingWidget = () => {
                   {/* More Filters */}
                   <Popover open={showFilters} onOpenChange={setShowFilters}>
                     <PopoverTrigger asChild>
-                      <Button variant="outline" className="h-10 gap-2 border-[#C5A572]/30 hover:bg-[#C5A572]/10">
+                      <Button variant="outline" className="h-10 gap-2 border-primary/30 hover:bg-primary/10">
                         <SlidersHorizontal className="w-4 h-4" />
                         Filters
-                        {(filters.transmission.length > 0 || filters.fuel.length > 0) && <Badge className="ml-1 h-5 w-5 rounded-full p-0 bg-[#C5A572] text-black">
+                        {(filters.transmission.length > 0 || filters.fuel.length > 0) && <Badge className="ml-1 h-5 w-5 rounded-full p-0 bg-primary text-primary-foreground">
                             {filters.transmission.length + filters.fuel.length}
                           </Badge>}
                       </Button>
                     </PopoverTrigger>
-                    <PopoverContent className="w-80 bg-card border-[#C5A572]/20 p-4" align="end">
+                    <PopoverContent className="w-80 bg-card border-primary/20 p-4" align="end">
                       <div className="space-y-4">
                         <div className="flex items-center justify-between">
                           <h4 className="font-semibold">Filters</h4>
@@ -1895,11 +1895,11 @@ const MultiStepBookingWidget = () => {
                   </Popover>
 
                   {/* View Toggle */}
-                  <div className="flex gap-1 border border-[#C5A572]/30 rounded-md p-1">
-                    <Button variant="ghost" size="sm" className={cn("h-8 w-8 p-0", viewMode === "grid" && "bg-[#C5A572]/20 text-[#C5A572]")} onClick={() => handleViewModeChange("grid")} aria-label="Grid view">
+                  <div className="flex gap-1 border border-primary/30 rounded-md p-1">
+                    <Button variant="ghost" size="sm" className={cn("h-8 w-8 p-0", viewMode === "grid" && "bg-primary/20 text-primary")} onClick={() => handleViewModeChange("grid")} aria-label="Grid view">
                       <Grid3x3 className="w-4 h-4" />
                     </Button>
-                    <Button variant="ghost" size="sm" className={cn("h-8 w-8 p-0", viewMode === "list" && "bg-[#C5A572]/20 text-[#C5A572]")} onClick={() => handleViewModeChange("list")} aria-label="List view">
+                    <Button variant="ghost" size="sm" className={cn("h-8 w-8 p-0", viewMode === "list" && "bg-primary/20 text-primary")} onClick={() => handleViewModeChange("list")} aria-label="List view">
                       <List className="w-4 h-4" />
                     </Button>
                   </div>
@@ -1907,7 +1907,7 @@ const MultiStepBookingWidget = () => {
 
                 {/* Category Chips - Hidden for portal (no categories in portal DB) */}
                 {/* <div className="flex flex-wrap gap-2">
-                  {["Ultra Luxury", "Executive", "Luxury SUV", "Sport Coupe", "Convertible", "Group Transport"].map(category => <Button key={category} variant="outline" size="sm" className={cn("h-8 rounded-full border-[#C5A572]/30 transition-colors", selectedCategories.includes(category) ? "bg-[#C5A572] text-black border-[#C5A572] hover:bg-[#C5A572]/90" : "hover:bg-[#C5A572]/10 hover:border-[#C5A572]/50")} onClick={() => toggleCategory(category)} aria-pressed={selectedCategories.includes(category)}>
+                  {["Ultra Luxury", "Executive", "Luxury SUV", "Sport Coupe", "Convertible", "Group Transport"].map(category => <Button key={category} variant="outline" size="sm" className={cn("h-8 rounded-full border-primary/30 transition-colors", selectedCategories.includes(category) ? "bg-primary text-primary-foreground border-primary hover:bg-primary/90" : "hover:bg-primary/10 hover:border-primary/50")} onClick={() => toggleCategory(category)} aria-pressed={selectedCategories.includes(category)}>
                       {category}
                     </Button>)}
                 </div> */}
@@ -1927,7 +1927,7 @@ const MultiStepBookingWidget = () => {
                         {getSortLabel(sortBy)}
                         <X className="w-3 h-3 cursor-pointer" onClick={() => setSortBy("recommended")} />
                       </Badge>}
-                    <Button variant="ghost" size="sm" className="h-6 text-xs text-[#C5A572] hover:text-[#C5A572]/80" onClick={clearAllFilters}>
+                    <Button variant="ghost" size="sm" className="h-6 text-xs text-primary hover:text-primary/80" onClick={clearAllFilters}>
                       Clear all
                     </Button>
                   </div>}
@@ -1947,7 +1947,7 @@ const MultiStepBookingWidget = () => {
                     <p className="text-sm text-muted-foreground mb-4">
                       Try adjusting your dates or categories.
                     </p>
-                    <Button variant="outline" onClick={clearAllFilters} className="border-[#C5A572]/30">
+                    <Button variant="outline" onClick={clearAllFilters} className="border-primary/30">
                       Clear Filters
                     </Button>
                   </Card> : <div className={cn("grid gap-6", viewMode === "grid" ? "grid-cols-1 md:grid-cols-2 lg:grid-cols-3" : "grid-cols-1")}>
@@ -1964,7 +1964,7 @@ const MultiStepBookingWidget = () => {
                     // List View Card
                     return <Card key={vehicle.id} className={cn("group transition-all duration-300 overflow-hidden border-2 relative",
                       isBlocked ? "opacity-60 cursor-not-allowed border-destructive/30" : "cursor-pointer hover:shadow-2xl",
-                      !isBlocked && isSelected ? "border-[#C5A572] bg-[#C5A572]/5 shadow-[0_0_30px_rgba(197,165,114,0.3)]" : "border-border/30 hover:border-[#C5A572]/40")} onClick={() => {
+                      !isBlocked && isSelected ? "border-primary bg-primary/5 shadow-glow" : "border-border/30 hover:border-primary/40")} onClick={() => {
                       if (isBlocked) return; // Prevent selection if blocked
                       setFormData({
                         ...formData,
@@ -2003,7 +2003,7 @@ const MultiStepBookingWidget = () => {
                                 </div>
 
                                 {/* Registration Chip */}
-                                <div className="absolute top-3 right-3 px-3 py-1 bg-[#C5A572] text-black text-xs font-semibold rounded-full">
+                                <div className="absolute top-3 right-3 px-3 py-1 bg-primary text-primary-foreground text-xs font-semibold rounded-full">
                                   {vehicle.reg}
                                 </div>
 
@@ -2026,11 +2026,11 @@ const MultiStepBookingWidget = () => {
                                     <div>
                                       <h4 className="font-display text-2xl font-semibold text-foreground flex items-center gap-2">
                                         {vehicleName}
-                                        {isRollsRoyce && <Crown className="w-5 h-5 text-[#C5A572]" />}
+                                        {isRollsRoyce && <Crown className="w-5 h-5 text-primary" />}
                                       </h4>
                                       {vehicle.colour && <p className="text-xs text-muted-foreground mt-1">{vehicle.colour}</p>}
                                     </div>
-                                    {isSelected && <div className="w-6 h-6 bg-[#C5A572] rounded-full flex items-center justify-center">
+                                    {isSelected && <div className="w-6 h-6 bg-primary rounded-full flex items-center justify-center">
                                         <Check className="w-4 h-4 text-black" />
                                       </div>}
                                   </div>
@@ -2047,7 +2047,7 @@ const MultiStepBookingWidget = () => {
                                             e.stopPropagation();
                                             toggleDescription(vehicle.id);
                                           }}
-                                          className="text-xs text-[#C5A572] hover:text-[#C5A572]/80 font-medium transition-colors"
+                                          className="text-xs text-primary hover:text-primary/80 font-medium transition-colors"
                                         >
                                           {expandedDescriptions.has(vehicle.id) ? 'Show less' : 'Show more'}
                                         </button>
@@ -2060,7 +2060,7 @@ const MultiStepBookingWidget = () => {
                                 <div className="flex items-end justify-between gap-4 mt-4">
                                   <div className="space-y-1">
                                     <div className="flex items-baseline gap-2">
-                                      <span className="text-3xl font-bold text-[#C5A572]">
+                                      <span className="text-3xl font-bold text-primary">
                                         ${vehicle.monthly_rent || vehicle.daily_rent || 0}
                                       </span>
                                       <span className="text-sm text-muted-foreground">/ month</span>
@@ -2075,8 +2075,8 @@ const MultiStepBookingWidget = () => {
                                   <Button
                                     className={cn("w-40 h-11 font-medium transition-colors",
                                       isBlocked ? "bg-muted text-muted-foreground cursor-not-allowed" :
-                                      isSelected ? "bg-[#C5A572] text-black hover:bg-[#C5A572]/90" :
-                                      "bg-background border-2 border-[#C5A572] text-[#C5A572] hover:bg-[#C5A572] hover:text-black")}
+                                      isSelected ? "bg-primary text-primary-foreground hover:bg-primary/90" :
+                                      "bg-background border-2 border-primary text-primary hover:bg-primary hover:text-primary-foreground")}
                                     disabled={isBlocked}
                                     onClick={e => {
                                       if (isBlocked) return;
@@ -2103,8 +2103,8 @@ const MultiStepBookingWidget = () => {
                   // Grid View Card (existing design)
                   return <Card key={vehicle.id} className={cn("group transition-all duration-300 overflow-hidden border-2 relative",
                     isBlocked ? "opacity-60 cursor-not-allowed border-destructive/30" : "cursor-pointer hover:shadow-2xl hover:scale-[1.02]",
-                    !isBlocked && isSelected ? "border-[#C5A572] bg-[#C5A572]/5 shadow-[0_0_30px_rgba(197,165,114,0.3)]" : "border-border/30 hover:border-[#C5A572]/40",
-                    !isBlocked && isRollsRoyce && "shadow-[0_0_20px_rgba(197,165,114,0.15)]")} onClick={() => {
+                    !isBlocked && isSelected ? "border-primary bg-primary/5 shadow-glow" : "border-border/30 hover:border-primary/40",
+                    !isBlocked && isRollsRoyce && "shadow-glow")} onClick={() => {
                     if (isBlocked) return; // Prevent selection if blocked
                     setFormData({
                       ...formData,
@@ -2123,17 +2123,17 @@ const MultiStepBookingWidget = () => {
                     }
                   }}>
                           {/* Registration Chip */}
-                          <div className="absolute top-3 right-3 z-10 px-3 py-1 bg-[#C5A572] text-black text-xs font-semibold rounded-full">
+                          <div className="absolute top-3 right-3 z-10 px-3 py-1 bg-primary text-primary-foreground text-xs font-semibold rounded-full">
                             {vehicle.reg}
                           </div>
 
                           {/* Selected Tick */}
-                          {isSelected && <div className="absolute top-3 right-3 z-20 w-6 h-6 bg-[#C5A572] rounded-full flex items-center justify-center">
+                          {isSelected && <div className="absolute top-3 right-3 z-20 w-6 h-6 bg-primary rounded-full flex items-center justify-center">
                               <Check className="w-4 h-4 text-black" />
                             </div>}
 
                           {/* Image Block */}
-                          <div className={cn("relative aspect-video overflow-hidden bg-gradient-to-br", isRollsRoyce ? "from-[#C5A572]/10 to-[#8B7355]/10" : "from-muted/30 to-muted/5")}>
+                          <div className={cn("relative aspect-video overflow-hidden bg-gradient-to-br", isRollsRoyce ? "from-primary/10 to-primary/20" : "from-muted/30 to-muted/5")}>
                             {vehicle.vehicle_photos?.[0]?.photo_url ? (
                               <img
                                 src={vehicle.vehicle_photos[0].photo_url}
@@ -2148,7 +2148,7 @@ const MultiStepBookingWidget = () => {
                               />
                             ) : null}
                             <div className={`${vehicle.vehicle_photos?.[0]?.photo_url ? 'hidden' : 'flex'} flex-col items-center justify-center h-full w-full absolute inset-0`}>
-                              <Car className={cn("w-16 h-16 mb-2 opacity-20", isRollsRoyce ? "text-[#C5A572]" : "text-muted-foreground")} />
+                              <Car className={cn("w-16 h-16 mb-2 opacity-20", isRollsRoyce ? "text-primary" : "text-muted-foreground")} />
                             </div>
 
                             {/* Blocked Badge */}
@@ -2168,7 +2168,7 @@ const MultiStepBookingWidget = () => {
                             <div>
                               <h4 className="font-display text-xl font-semibold text-foreground mb-1 flex items-center gap-2">
                                 {vehicleName}
-                                {isRollsRoyce && <Crown className="w-5 h-5 text-[#C5A572]" />}
+                                {isRollsRoyce && <Crown className="w-5 h-5 text-primary" />}
                               </h4>
                               {vehicle.colour && <p className="text-xs text-muted-foreground">{vehicle.colour}</p>}
                             </div>
@@ -2185,7 +2185,7 @@ const MultiStepBookingWidget = () => {
                                       e.stopPropagation();
                                       toggleDescription(vehicle.id);
                                     }}
-                                    className="text-xs text-[#C5A572] hover:text-[#C5A572]/80 font-medium transition-colors"
+                                    className="text-xs text-primary hover:text-primary/80 font-medium transition-colors"
                                   >
                                     {expandedDescriptions.has(vehicle.id) ? 'Show less' : 'Show more'}
                                   </button>
@@ -2201,7 +2201,7 @@ const MultiStepBookingWidget = () => {
                             {/* Price Section */}
                             <div className="space-y-1">
                               <div className="flex items-baseline justify-between">
-                                <span className="text-2xl font-bold text-[#C5A572]">
+                                <span className="text-2xl font-bold text-primary">
                                   ${vehicle.monthly_rent || vehicle.daily_rent || 0}
                                 </span>
                                 <span className="text-sm text-muted-foreground">/ month</span>
@@ -2217,8 +2217,8 @@ const MultiStepBookingWidget = () => {
                             <Button
                               className={cn("w-full h-11 font-medium transition-colors",
                                 isBlocked ? "bg-muted text-muted-foreground cursor-not-allowed" :
-                                isSelected ? "bg-[#C5A572] text-black hover:bg-[#C5A572]/90" :
-                                "bg-background border-2 border-[#C5A572] text-[#C5A572] hover:bg-[#C5A572] hover:text-black")}
+                                isSelected ? "bg-primary text-primary-foreground hover:bg-primary/90" :
+                                "bg-background border-2 border-primary text-primary hover:bg-primary hover:text-primary-foreground")}
                               disabled={isBlocked}
                               onClick={e => {
                                 if (isBlocked) return;
@@ -2244,7 +2244,7 @@ const MultiStepBookingWidget = () => {
 
               {/* Sidebar Summary (Desktop Only) */}
               <div className="hidden lg:block">
-                <Card className="sticky top-24 p-6 bg-card border-[#C5A572]/20 space-y-4">
+                <Card className="sticky top-24 p-6 bg-card border-primary/20 space-y-4">
                   <h4 className="font-display text-xl font-semibold">Your Trip</h4>
                   
                   <div className="space-y-3 text-sm">
@@ -2297,7 +2297,7 @@ const MultiStepBookingWidget = () => {
                             {selectedVehicle.make && selectedVehicle.model ? `${selectedVehicle.make} ${selectedVehicle.model}` : selectedVehicle.make || selectedVehicle.model || selectedVehicle.reg}
                           </p>
                           <p className="text-xs text-muted-foreground">{estimatedBooking.days} days</p>
-                          <p className="text-lg font-bold text-[#C5A572] mt-1">
+                          <p className="text-lg font-bold text-primary mt-1">
                             ${estimatedBooking.total.toFixed(0)}
                           </p>
                         </div>
@@ -2313,7 +2313,7 @@ const MultiStepBookingWidget = () => {
                       </p>
                     </div>}
 
-                  <Button onClick={handleStep2Continue} disabled={!formData.vehicleId} className="w-full h-11 bg-[#F5B942] hover:bg-[#E9B63E] text-[#0C1A17] font-semibold shadow-md hover:shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed" size="lg">
+                  <Button onClick={handleStep2Continue} disabled={!formData.vehicleId} className="w-full h-11 bg-primary hover:bg-primary/90 text-primary-foreground font-semibold shadow-md hover:shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed" size="lg">
                     Review & Pay <ChevronRight className="ml-2 w-5 h-5" />
                   </Button>
                 </Card>
@@ -2339,7 +2339,7 @@ const MultiStepBookingWidget = () => {
               <Button onClick={() => setCurrentStep(1)} variant="outline" className="w-full sm:flex-1" size="lg">
                 <ChevronLeft className="mr-2 w-5 h-5" /> Back
               </Button>
-              <Button onClick={handleStep2Continue} disabled={!formData.vehicleId} className="w-full sm:flex-1 bg-[#F5B942] hover:bg-[#E9B63E] text-[#0C1A17] font-semibold shadow-md hover:shadow-lg transition-all disabled:opacity-50" size="lg">
+              <Button onClick={handleStep2Continue} disabled={!formData.vehicleId} className="w-full sm:flex-1 bg-primary hover:bg-primary/90 text-primary-foreground font-semibold shadow-md hover:shadow-lg transition-all disabled:opacity-50" size="lg">
                 Review & Pay <ChevronRight className="ml-2 w-5 h-5" />
               </Button>
             </div>
@@ -2349,7 +2349,7 @@ const MultiStepBookingWidget = () => {
         {currentStep === 3 && <div className="space-y-8 animate-fade-in">
             {/* Header with underline */}
             <div>
-              <h3 className="text-2xl md:text-3xl font-display font-semibold text-foreground pb-2 border-b-2 border-[#C5A572]/30">
+              <h3 className="text-2xl md:text-3xl font-display font-semibold text-foreground pb-2 border-b-2 border-primary/30">
                 Your Details
               </h3>
             </div>
@@ -2373,7 +2373,7 @@ const MultiStepBookingWidget = () => {
                       validateField('customerName', value);
                     }}
                     placeholder="Enter your full name"
-                    className="h-12 focus-visible:ring-[#C5A572]"
+                    className="h-12 focus-visible:ring-primary"
                   />
                   {errors.customerName && <p className="text-sm text-destructive">{errors.customerName}</p>}
                 </div>
@@ -2394,7 +2394,7 @@ const MultiStepBookingWidget = () => {
                       validateField('customerEmail', value);
                     }}
                     placeholder="your@email.com"
-                    className="h-12 focus-visible:ring-[#C5A572]"
+                    className="h-12 focus-visible:ring-primary"
                   />
                   {errors.customerEmail && <p className="text-sm text-destructive">{errors.customerEmail}</p>}
                 </div>
@@ -2418,7 +2418,7 @@ const MultiStepBookingWidget = () => {
                       validateField('customerPhone', value);
                     }}
                     placeholder="+1 (555) 123-4567"
-                    className="h-12 focus-visible:ring-[#C5A572]"
+                    className="h-12 focus-visible:ring-primary"
                   />
                   {errors.customerPhone && <p className="text-sm text-destructive">{errors.customerPhone}</p>}
                 </div>
@@ -2433,7 +2433,7 @@ const MultiStepBookingWidget = () => {
                     // Instant validation
                     validateField('customerType', value);
                   }}>
-                    <SelectTrigger id="customerType" className="h-12 focus-visible:ring-[#C5A572]">
+                    <SelectTrigger id="customerType" className="h-12 focus-visible:ring-primary">
                       <SelectValue placeholder="Select customer type" />
                     </SelectTrigger>
                     <SelectContent position="popper" sideOffset={4}>
@@ -2596,7 +2596,7 @@ const MultiStepBookingWidget = () => {
               <Button
                 onClick={() => setCurrentStep(2)}
                 variant="outline"
-                className="w-full sm:flex-1 h-11 sm:h-12 border-[#C5A572] text-[#C5A572] hover:bg-[#C5A572]/10 font-semibold text-sm sm:text-base"
+                className="w-full sm:flex-1 h-11 sm:h-12 border-primary text-primary hover:bg-primary/10 font-semibold text-sm sm:text-base"
                 size="lg"
               >
                 <ChevronLeft className="mr-2 w-4 h-4 sm:w-5 sm:h-5" /> Back
@@ -2604,7 +2604,7 @@ const MultiStepBookingWidget = () => {
               <Button
                 onClick={handleStep3Continue}
                 disabled={verificationStatus !== 'verified'}
-                className="w-full sm:flex-1 h-11 sm:h-12 bg-[#F5B942] hover:bg-[#E9B63E] text-[#0C1A17] font-semibold text-sm sm:text-base shadow-md hover:shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                className="w-full sm:flex-1 h-11 sm:h-12 bg-primary hover:bg-primary/90 text-primary-foreground font-semibold text-sm sm:text-base shadow-md hover:shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                 size="lg"
               >
                 <span className="sm:hidden">Continue</span>

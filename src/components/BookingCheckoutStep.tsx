@@ -598,9 +598,9 @@ export default function BookingCheckoutStep({
               {/* Protection Plan */}
               {selectedProtectionPlan && (
                 <div className="flex items-start gap-3 pt-3 border-t border-border/50">
-                  <Shield className="w-5 h-5 text-[#C5A572] mt-0.5" />
+                  <Shield className="w-5 h-5 text-primary mt-0.5" />
                   <div className="flex-1">
-                    <p className="font-medium text-[#C5A572]">{selectedProtectionPlan.display_name}</p>
+                    <p className="font-medium text-primary">{selectedProtectionPlan.display_name}</p>
                     <p className="text-sm text-muted-foreground">{selectedProtectionPlan.description}</p>
                     <div className="mt-2 space-y-1">
                       {selectedProtectionPlan.deductible_amount === 0 && (
@@ -614,7 +614,7 @@ export default function BookingCheckoutStep({
                     </div>
                   </div>
                   <div className="text-right">
-                    <p className="font-semibold text-[#C5A572]">
+                    <p className="font-semibold text-primary">
                       ${calculateProtectionCost().toLocaleString()}
                     </p>
                     <p className="text-xs text-muted-foreground">
@@ -689,10 +689,10 @@ export default function BookingCheckoutStep({
               {selectedProtectionPlan && (
                 <div className="flex justify-between text-sm">
                   <div className="flex items-center gap-2">
-                    <Shield className="w-4 h-4 text-[#C5A572]" />
+                    <Shield className="w-4 h-4 text-primary" />
                     <span className="text-muted-foreground">{selectedProtectionPlan.display_name}</span>
                   </div>
-                  <span className="font-medium text-[#C5A572]">
+                  <span className="font-medium text-primary">
                     +${calculateProtectionCost().toLocaleString()}
                   </span>
                 </div>

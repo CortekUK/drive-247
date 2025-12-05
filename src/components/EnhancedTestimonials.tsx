@@ -68,7 +68,7 @@ const EnhancedTestimonials = () => {
             {content.testimonials_header?.title || "Why Dallas Drivers Choose Drive917"}
           </h2>
           <div className="flex items-center justify-center mt-6">
-            <div className="h-[1px] w-24 bg-gradient-to-r from-transparent via-[#F5B942] to-transparent" />
+            <div className="h-[1px] w-24 bg-gradient-to-r from-transparent via-primary to-transparent" />
           </div>
         </div>
 
@@ -85,7 +85,7 @@ const EnhancedTestimonials = () => {
                 {[...Array(testimonial.stars || 5)].map((_, i) => (
                   <Star
                     key={i}
-                    className="w-5 h-5 fill-[#F5B942] text-[#F5B942]"
+                    className="w-5 h-5 fill-primary text-primary"
                     aria-hidden="true"
                   />
                 ))}
@@ -112,7 +112,7 @@ const EnhancedTestimonials = () => {
               onClick={() => setActiveIndex(index)}
               className={`h-2 rounded-full transition-all duration-300 ${
                 index === activeIndex
-                  ? 'bg-[#F5B942] w-8'
+                  ? 'bg-primary w-8'
                   : 'bg-muted-foreground/30 w-2 hover:bg-muted-foreground/50'
               }`}
               aria-label={`View page ${index + 1}`}

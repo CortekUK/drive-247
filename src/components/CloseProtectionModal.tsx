@@ -249,7 +249,7 @@ ${formData.requirements || 'None specified'}
       <DialogContent className="sm:max-w-[500px] max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <div className="flex items-center gap-2">
-            <Shield className="w-6 h-6 text-[#C5A572]" />
+            <Shield className="w-6 h-6 text-primary" />
             <DialogTitle className="text-2xl">Close Protection Services</DialogTitle>
           </div>
           <DialogDescription className="text-base pt-2">

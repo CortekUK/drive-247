@@ -26,7 +26,7 @@ const ContactCard = () => {
                 <a href={`tel:${content.contact_card?.phone_number || "+19725156635"}`}>
                   <Button
                     size="lg"
-                    className="bg-[#F5B942] hover:bg-[#E9B63E] text-[#0C1A17] font-semibold px-8 py-6 shadow-md hover:shadow-lg transition-all"
+                    className="bg-primary hover:bg-primary/90 text-primary-foreground font-semibold px-8 py-6 shadow-md hover:shadow-lg transition-all"
                   >
                     <Phone className="w-5 h-5 mr-2" />
                     {content.contact_card?.call_button_text || "Call Now"}

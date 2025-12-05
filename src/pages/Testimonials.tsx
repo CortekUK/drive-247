@@ -105,7 +105,7 @@ const Testimonials = () => {
                             key={i}
                             className={`w-6 h-6 transition-all duration-300 ${
                               i < testimonial.stars
-                                ? "fill-accent text-accent drop-shadow-[0_0_8px_rgba(255,215,0,0.5)]"
+                                ? "fill-primary text-primary drop-shadow-glow"
                                 : "text-muted-foreground/30"
                             }`}
                           />
@@ -223,7 +223,7 @@ const Testimonials = () => {
               <div className="flex flex-col sm:flex-row gap-4 justify-center">
                 <Button 
                   size="lg" 
-                  className="shadow-glow hover:shadow-[0_0_40px_rgba(255,215,0,0.4)] transition-all text-base px-10 py-6"
+                  className="shadow-glow hover:shadow-glow transition-all text-base px-10 py-6"
                   onClick={() => setFeedbackModalOpen(true)}
                 >
                   {content.feedback_cta?.button_text || "Submit Feedback"}

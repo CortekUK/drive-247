@@ -5,6 +5,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { ThemeProvider } from "next-themes";
+import { ThemeInitializer } from "./components/ThemeInitializer";
 import Index from "./pages/Index";
 import Pricing from "./pages/Pricing";
 import About from "./pages/About";
@@ -34,17 +35,18 @@ const queryClient = new QueryClient();
 
 const App = () => (
   <QueryClientProvider client={queryClient}>
-    <ThemeProvider 
-      attribute="class" 
-      defaultTheme="dark" 
+    <ThemeProvider
+      attribute="class"
+      defaultTheme="dark"
       enableSystem={true}
       storageKey="vite-ui-theme"
       disableTransitionOnChange
     >
-      <TooltipProvider>
-        <Toaster />
-        <Sonner />
-        <BrowserRouter>
+      <ThemeInitializer>
+        <TooltipProvider>
+          <Toaster />
+          <Sonner />
+          <BrowserRouter>
           <ScrollToTopOnNavigate />
           <GDPRConsent />
           <Routes>
@@ -80,8 +82,9 @@ const App = () => (
           
           <Route path="*" element={<NotFound />} />
         </Routes>
-      </BrowserRouter>
-    </TooltipProvider>
+          </BrowserRouter>
+        </TooltipProvider>
+      </ThemeInitializer>
     </ThemeProvider>
   </QueryClientProvider>
 );

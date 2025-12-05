@@ -40,7 +40,7 @@ const EnhancedServiceHighlights = () => {
             {content.service_highlights?.title || "Why Choose Drive917"}
           </h2>
           <div className="flex items-center justify-center mt-6">
-            <div className="h-[1px] w-24 bg-gradient-to-r from-transparent via-[#F5B942] to-transparent" />
+            <div className="h-[1px] w-24 bg-gradient-to-r from-transparent via-primary to-transparent" />
           </div>
           <p className="text-base md:text-lg text-foreground/70 max-w-3xl mx-auto font-light mt-6">
             {content.service_highlights?.subtitle || "Delivering excellence through premium vehicle rentals and exceptional service."}
@@ -53,13 +53,13 @@ const EnhancedServiceHighlights = () => {
             return (
               <Card
                 key={index}
-                className="relative overflow-hidden p-8 lg:p-10 bg-card border border-border hover:border-[#F5B942]/30 transition-all duration-500 hover:-translate-y-2 shadow-[0_4px_20px_rgba(0,0,0,0.08)] dark:shadow-[0_4px_20px_rgba(0,0,0,0.3)] hover:shadow-[0_12px_40px_rgba(245,185,66,0.2)] animate-fade-in-up group rounded-2xl"
+                className="relative overflow-hidden p-8 lg:p-10 bg-card border border-border hover:border-primary/30 transition-all duration-500 hover:-translate-y-2 shadow-[0_4px_20px_rgba(0,0,0,0.08)] dark:shadow-[0_4px_20px_rgba(0,0,0,0.3)] hover:shadow-glow animate-fade-in-up group rounded-2xl"
                 style={{ animationDelay: `${index * 0.1}s` }}
               >
                 <div className="relative space-y-5 flex flex-col">
-                  {/* Gold circular icon with glow */}
-                  <div className="relative w-16 h-16 rounded-full bg-gradient-to-br from-[#F5B942] to-[#E9B63E] flex items-center justify-center shadow-[0_0_24px_rgba(245,185,66,0.35)] group-hover:shadow-[0_0_32px_rgba(245,185,66,0.5)] transition-all duration-500">
-                    <Icon className="w-8 h-8 text-white" strokeWidth={2} aria-hidden="true" />
+                  {/* Circular icon with dynamic accent color */}
+                  <div className="relative w-16 h-16 rounded-full bg-primary flex items-center justify-center shadow-glow group-hover:shadow-glow transition-all duration-500">
+                    <Icon className="w-8 h-8 text-primary-foreground" strokeWidth={2} aria-hidden="true" />
                   </div>
 
                   <div className="space-y-3">

@@ -325,7 +325,7 @@ const Pricing = () => {
                 return (
                   <Card
                     key={vehicle.id}
-                    className="group relative overflow-hidden transition-all duration-500 hover:-translate-y-2 hover:shadow-[0_10px_40px_rgba(255,215,0,0.25)]"
+                    className="group relative overflow-hidden transition-all duration-500 hover:-translate-y-2 hover:shadow-glow"
                   >
                     {/* Gradient Background */}
                     <div className="absolute inset-0 bg-gradient-to-br from-card via-card to-secondary/20 opacity-80" />
@@ -454,7 +454,7 @@ const Pricing = () => {
                           {/* CTA Buttons */}
                           <div className="flex flex-col gap-3 pt-4">
                             <a href="/#booking">
-                              <Button className="w-full gradient-accent hover:shadow-[0_0_30px_rgba(255,215,0,0.4)] transition-all duration-300">
+                              <Button className="w-full gradient-accent hover:shadow-glow transition-all duration-300">
                                 Book Now
                               </Button>
                             </a>
@@ -488,19 +488,19 @@ const Pricing = () => {
             </div>
 
             <div className="grid md:grid-cols-3 gap-8 mb-16">
-              <Card className="p-8 bg-card/50 backdrop-blur shadow-metal border-accent/20 text-center group hover:shadow-[0_0_30px_rgba(255,215,0,0.2)] transition-all duration-500">
+              <Card className="p-8 bg-card/50 backdrop-blur shadow-metal border-accent/20 text-center group hover:shadow-glow transition-all duration-500">
                 <div className="text-5xl font-display font-bold text-gradient-metal mb-4 group-hover:scale-105 transition-transform duration-300">
                   {content.rental_rates?.daily?.title || "Daily"}
                 </div>
                 <p className="text-muted-foreground leading-relaxed">{content.rental_rates?.daily?.description || "Ideal for short stays and one-day hires."}</p>
               </Card>
-              <Card className="p-8 bg-card/50 backdrop-blur shadow-metal border-accent/20 text-center group hover:shadow-[0_0_30px_rgba(255,215,0,0.2)] transition-all duration-500">
+              <Card className="p-8 bg-card/50 backdrop-blur shadow-metal border-accent/20 text-center group hover:shadow-glow transition-all duration-500">
                 <div className="text-5xl font-display font-bold text-gradient-metal mb-4 group-hover:scale-105 transition-transform duration-300">
                   {content.rental_rates?.weekly?.title || "Weekly"}
                 </div>
                 <p className="text-muted-foreground leading-relaxed">{content.rental_rates?.weekly?.description || "Perfect balance of flexibility and value."}</p>
               </Card>
-              <Card className="p-8 bg-card/50 backdrop-blur shadow-metal border-accent/20 text-center group hover:shadow-[0_0_30px_rgba(255,215,0,0.2)] transition-all duration-500">
+              <Card className="p-8 bg-card/50 backdrop-blur shadow-metal border-accent/20 text-center group hover:shadow-glow transition-all duration-500">
                 <div className="text-5xl font-display font-bold text-gradient-metal mb-4 group-hover:scale-105 transition-transform duration-300">
                   {content.rental_rates?.monthly?.title || "Monthly"}
                 </div>

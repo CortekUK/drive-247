@@ -141,8 +141,8 @@ const ProtectionPlanSelector = ({ selectedPlanId, onSelectPlan, rentalDays }: Pr
         className={cn(
           "cursor-pointer transition-all duration-300 border-2",
           selectedPlanId === null
-            ? "border-[#C5A572] bg-[#C5A572]/5"
-            : "border-border hover:border-[#C5A572]/40"
+            ? "border-primary bg-primary/5"
+            : "border-border hover:border-primary/40"
         )}
         onClick={() => onSelectPlan(null, null)}
       >
@@ -151,9 +151,9 @@ const ProtectionPlanSelector = ({ selectedPlanId, onSelectPlan, rentalDays }: Pr
             <div className="flex items-center gap-3 sm:gap-4">
               <div className={cn(
                 "w-10 h-10 sm:w-12 sm:h-12 rounded-lg flex items-center justify-center flex-shrink-0",
-                selectedPlanId === null ? "bg-[#C5A572]/20" : "bg-muted"
+                selectedPlanId === null ? "bg-primary/20" : "bg-muted"
               )}>
-                <Info className={cn("w-5 h-5 sm:w-6 sm:h-6", selectedPlanId === null ? "text-[#C5A572]" : "text-muted-foreground")} />
+                <Info className={cn("w-5 h-5 sm:w-6 sm:h-6", selectedPlanId === null ? "text-primary" : "text-muted-foreground")} />
               </div>
               <div className="min-w-0">
                 <h4 className="font-semibold text-base sm:text-lg">Decline Protection</h4>
@@ -166,8 +166,8 @@ const ProtectionPlanSelector = ({ selectedPlanId, onSelectPlan, rentalDays }: Pr
                 <div className="text-xs text-muted-foreground">No additional cost</div>
               </div>
               {selectedPlanId === null && (
-                <div className="w-6 h-6 bg-[#C5A572] rounded-full flex items-center justify-center flex-shrink-0">
-                  <Check className="w-4 h-4 text-black" />
+                <div className="w-6 h-6 bg-primary rounded-full flex items-center justify-center flex-shrink-0">
+                  <Check className="w-4 h-4 text-primary-foreground" />
                 </div>
               )}
             </div>
@@ -189,9 +189,9 @@ const ProtectionPlanSelector = ({ selectedPlanId, onSelectPlan, rentalDays }: Pr
             className={cn(
               "cursor-pointer transition-all duration-300 border-2 relative overflow-hidden",
               isSelected
-                ? "border-[#C5A572] bg-[#C5A572]/5 shadow-[0_0_30px_rgba(197,165,114,0.3)]"
-                : "border-border hover:border-[#C5A572]/40",
-              isPremium && "shadow-[0_0_20px_rgba(197,165,114,0.15)]"
+                ? "border-primary bg-primary/5 shadow-glow"
+                : "border-border hover:border-primary/40",
+              isPremium && "shadow-glow"
             )}
             onClick={() => onSelectPlan(plan.id, plan)}
           >
@@ -204,7 +204,7 @@ const ProtectionPlanSelector = ({ selectedPlanId, onSelectPlan, rentalDays }: Pr
 
             {isPremium && (
               <div className="flex justify-end mt-2 mr-3">
-                <Badge className="bg-[#C5A572] text-black">Best Value</Badge>
+                <Badge className="bg-primary text-primary-foreground">Best Value</Badge>
               </div>
             )}
 
@@ -253,8 +253,8 @@ const ProtectionPlanSelector = ({ selectedPlanId, onSelectPlan, rentalDays }: Pr
                     </div>
                   </div>
                   {isSelected && (
-                    <div className="w-8 h-8 bg-[#C5A572] rounded-full flex items-center justify-center sm:mt-3">
-                      <Check className="w-5 h-5 text-black" />
+                    <div className="w-8 h-8 bg-primary rounded-full flex items-center justify-center sm:mt-3">
+                      <Check className="w-5 h-5 text-primary-foreground" />
                     </div>
                   )}
                 </div>
@@ -346,8 +346,8 @@ const ProtectionPlanSelector = ({ selectedPlanId, onSelectPlan, rentalDays }: Pr
                   className={cn(
                     "w-full mt-4",
                     isPremium
-                      ? "bg-[#C5A572] text-black hover:bg-[#C5A572]/90"
-                      : "bg-background border-2 border-[#C5A572] text-[#C5A572] hover:bg-[#C5A572] hover:text-black"
+                      ? "bg-primary text-primary-foreground hover:bg-primary/90"
+                      : "bg-background border-2 border-primary text-primary hover:bg-primary hover:text-primary-foreground"
                   )}
                   onClick={(e) => {
                     e.stopPropagation();

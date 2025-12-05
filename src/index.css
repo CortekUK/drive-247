@@ -53,7 +53,7 @@ All colors MUST be HSL.
     
     /* Shadows - Light theme */
     --shadow-metal: 0 4px 20px rgba(34, 51, 49, 0.15);
-    --shadow-glow: 0 0 40px rgba(233, 182, 62, 0.25);
+    --shadow-glow: 0 0 40px hsl(var(--primary) / 0.25);
 
     --sidebar-background: 165 20% 17%;
     --sidebar-foreground: 0 0% 95%;
@@ -162,7 +162,7 @@ All colors MUST be HSL.
   padding: 56px 16px 28px;
   background: radial-gradient(
     1200px 300px at 50% 0%,
-    rgba(199, 162, 75, 0.10),
+    hsl(var(--primary) / 0.10),
     transparent 60%
   );
 }
@@ -203,11 +203,11 @@ All colors MUST be HSL.
   display: inline-block;
   width: 0;
   height: 2px;
-  background: var(--bk-gold);
+  background: hsl(var(--primary));
   border-radius: 2px;
   margin: 8px auto 10px;
   animation: dividerGrow 0.3s ease 0.2s forwards;
-  box-shadow: 0 0 12px rgba(199, 162, 75, 0.3);
+  box-shadow: 0 0 12px hsl(var(--primary) / 0.3);
 }
 
 .bk-hero__meta {
@@ -228,25 +228,25 @@ All colors MUST be HSL.
   position: relative;
   background: radial-gradient(
     circle at 35% 35%,
-    rgba(199, 162, 75, 0.35),
-    rgba(199, 162, 75, 0.15)
+    hsl(var(--primary) / 0.35),
+    hsl(var(--primary) / 0.15)
   );
-  box-shadow: 0 0 0 2px rgba(199, 162, 75, 0.25),
+  box-shadow: 0 0 0 2px hsl(var(--primary) / 0.25),
     0 8px 24px rgba(0, 0, 0, 0.5);
 }
 
 .bk-step__node--active {
-  box-shadow: 0 0 0 3px var(--bk-gold),
-    0 10px 28px rgba(199, 162, 75, 0.35),
-    0 0 40px rgba(199, 162, 75, 0.25);
+  box-shadow: 0 0 0 3px hsl(var(--primary)),
+    0 10px 28px hsl(var(--primary) / 0.35),
+    0 0 40px hsl(var(--primary) / 0.25);
   transform: scale(1.05);
 }
 
 .bk-step__line {
   background: linear-gradient(
     90deg,
-    rgba(199, 162, 75, 0.35),
-    rgba(199, 162, 75, 0.15)
+    hsl(var(--primary) / 0.35),
+    hsl(var(--primary) / 0.15)
   );
 }
 
@@ -294,6 +294,10 @@ All colors MUST be HSL.
   
   .shadow-glow {
     box-shadow: var(--shadow-glow);
+  }
+
+  .drop-shadow-glow {
+    filter: drop-shadow(0 0 8px hsl(var(--primary) / 0.5));
   }
   
   .text-gradient-metal {
@@ -393,6 +397,25 @@ All colors MUST be HSL.
 
   .scrollbar-hide::-webkit-scrollbar {
     display: none;
+  }
+
+  /* Footer link hover - uses dynamic accent color */
+  .footer-link {
+    color: #EAEAEA;
+    transition: color 0.2s ease;
+  }
+
+  .footer-link:hover {
+    color: hsl(var(--accent));
+  }
+
+  .footer-link-muted {
+    color: #CCCCCC;
+    transition: color 0.2s ease;
+  }
+
+  .footer-link-muted:hover {
+    color: hsl(var(--accent));
   }
 }
 

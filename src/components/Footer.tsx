@@ -36,7 +36,7 @@ const Footer = () => {
                 <h3 className="text-xl font-display font-bold text-white mb-2">
                   {settings.company_name || "Drive917"}
                 </h3>
-                <div className="w-12 h-[2px] bg-[#F5B942] mb-4"></div>
+                <div className="w-12 h-[2px] mb-4" style={{ backgroundColor: 'hsl(var(--accent))' }}></div>
               </>
             )}
             <p className="text-sm text-[#EAEAEA]">
@@ -46,20 +46,20 @@ const Footer = () => {
 
           <div>
             <h4 className="font-semibold text-white mb-2">Services</h4>
-            <div className="w-12 h-[2px] bg-[#F5B942] mb-4"></div>
+            <div className="w-12 h-[2px] mb-4" style={{ backgroundColor: 'hsl(var(--accent))' }}></div>
             <ul className="space-y-2">
               <li>
-                <Link to="/fleet" className="text-sm text-[#EAEAEA] hover:text-[#F5B942] transition-colors duration-200">
+                <Link to="/fleet" className="text-sm footer-link">
                   Fleet & Pricing
                 </Link>
               </li>
               <li>
-                <Link to="/#booking" className="text-sm text-[#EAEAEA] hover:text-[#F5B942] transition-colors duration-200">
+                <Link to="/#booking" className="text-sm footer-link">
                   Book a Vehicle
                 </Link>
               </li>
               <li>
-                <Link to="/promotions" className="text-sm text-[#EAEAEA] hover:text-[#F5B942] transition-colors duration-200">
+                <Link to="/promotions" className="text-sm footer-link">
                   Promotions
                 </Link>
               </li>
@@ -68,20 +68,20 @@ const Footer = () => {
 
           <div>
             <h4 className="font-semibold text-white mb-2">Company</h4>
-            <div className="w-12 h-[2px] bg-[#F5B942] mb-4"></div>
+            <div className="w-12 h-[2px] mb-4" style={{ backgroundColor: 'hsl(var(--accent))' }}></div>
             <ul className="space-y-2">
               <li>
-                <Link to="/about" className="text-sm text-[#EAEAEA] hover:text-[#F5B942] transition-colors duration-200">
+                <Link to="/about" className="text-sm footer-link">
                   About Us
                 </Link>
               </li>
               <li>
-                <Link to="/testimonials" className="text-sm text-[#EAEAEA] hover:text-[#F5B942] transition-colors duration-200">
+                <Link to="/testimonials" className="text-sm footer-link">
                   Testimonials
                 </Link>
               </li>
               <li>
-                <Link to="/contact" className="text-sm text-[#EAEAEA] hover:text-[#F5B942] transition-colors duration-200">
+                <Link to="/contact" className="text-sm footer-link">
                   Contact
                 </Link>
               </li>
@@ -90,17 +90,17 @@ const Footer = () => {
 
           <div>
             <h4 className="font-semibold text-white mb-2">Contact</h4>
-            <div className="w-12 h-[2px] bg-[#F5B942] mb-4"></div>
+            <div className="w-12 h-[2px] mb-4" style={{ backgroundColor: 'hsl(var(--accent))' }}></div>
             <ul className="space-y-2">
               <li className="flex items-center gap-2 text-sm text-[#EAEAEA]">
                 <Phone className="w-4 h-4 flex-shrink-0" />
-                <a href={`tel:${phoneLink}`} className="hover:text-[#F5B942] transition-colors duration-200">
+                <a href={`tel:${phoneLink}`} className="footer-link">
                   {settings.phone_display || settings.phone}
                 </a>
               </li>
               <li className="flex items-center gap-2 text-sm text-[#EAEAEA]">
                 <Mail className="w-4 h-4 flex-shrink-0" />
-                <a href={`mailto:${settings.email}`} className="hover:text-[#F5B942] transition-colors duration-200">
+                <a href={`mailto:${settings.email}`} className="footer-link">
                   {settings.email}
                 </a>
               </li>
@@ -110,7 +110,7 @@ const Footer = () => {
                   href={mapsUrl}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="hover:text-[#F5B942] transition-colors duration-200"
+                  className="footer-link"
                 >
                   {addressDisplay}
                 </a>
@@ -124,10 +124,10 @@ const Footer = () => {
             {settings.copyright_text}
           </p>
           <div className="flex gap-6">
-            <Link to="/privacy" className="text-sm text-[#CCCCCC] hover:text-[#F5B942] transition-colors duration-200">
+            <Link to="/privacy" className="text-sm footer-link-muted">
               Privacy Policy
             </Link>
-            <Link to="/terms" className="text-sm text-[#CCCCCC] hover:text-[#F5B942] transition-colors duration-200">
+            <Link to="/terms" className="text-sm footer-link-muted">
               Terms of Service
             </Link>
           </div>

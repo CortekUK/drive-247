@@ -113,7 +113,7 @@ const Index = () => {
             {/* CTA Buttons */}
             <div className="flex flex-col sm:flex-row gap-4 justify-center items-center pt-4">
               <a href={`tel:${content.home_hero?.phone_number || "08001234567"}`}>
-                <Button size="lg" className="bg-[#F5B942] hover:bg-[#F5B942]/90 text-white font-semibold text-base md:text-lg px-8 py-6 rounded-md shadow-[0_0_30px_rgba(245,185,66,0.4)] hover:shadow-[0_0_40px_rgba(245,185,66,0.6)] transition-all">
+                <Button size="lg" className="bg-primary hover:bg-primary/90 text-primary-foreground font-semibold text-base md:text-lg px-8 py-6 rounded-md shadow-glow hover:shadow-glow transition-all">
                   <Phone className="w-5 h-5 mr-2" />
                   {content.home_hero?.phone_cta_text || "Call 0800 123 4567"}
                 </Button>
@@ -139,11 +139,11 @@ const Index = () => {
             className="absolute bottom-12 right-8 md:bottom-16 md:right-16 z-20 group cursor-pointer animate-fade-in"
             style={{ animationDelay: '0.5s' }}
           >
-            <div className="relative w-28 h-28 md:w-36 md:h-36 rounded-full bg-gradient-to-br from-[#F5B942] via-[#E9B63E] to-[#F5B942] flex flex-col items-center justify-center shadow-[0_8px_32px_rgba(245,185,66,0.5)] group-hover:shadow-[0_12px_40px_rgba(245,185,66,0.7)] transition-all duration-300 group-hover:scale-105">
-              <span className="text-2xl md:text-3xl font-bold text-[#0C1A17] leading-none">{content.promo_badge?.discount_amount || "20%"}</span>
-              <span className="text-xl md:text-2xl font-bold text-[#0C1A17] leading-none">{content.promo_badge?.discount_label || "OFF"}</span>
-              <span className="text-[9px] md:text-[10px] font-semibold text-[#0C1A17]/80 mt-1 uppercase tracking-wide">{content.promo_badge?.line1 || "When You Book"}</span>
-              <span className="text-[9px] md:text-[10px] font-semibold text-[#0C1A17]/80 uppercase tracking-wide">{content.promo_badge?.line2 || "Online"}</span>
+            <div className="relative w-28 h-28 md:w-36 md:h-36 rounded-full bg-primary flex flex-col items-center justify-center shadow-glow group-hover:shadow-glow transition-all duration-300 group-hover:scale-105">
+              <span className="text-2xl md:text-3xl font-bold text-primary-foreground leading-none">{content.promo_badge?.discount_amount || "20%"}</span>
+              <span className="text-xl md:text-2xl font-bold text-primary-foreground leading-none">{content.promo_badge?.discount_label || "OFF"}</span>
+              <span className="text-[9px] md:text-[10px] font-semibold text-primary-foreground/80 mt-1 uppercase tracking-wide">{content.promo_badge?.line1 || "When You Book"}</span>
+              <span className="text-[9px] md:text-[10px] font-semibold text-primary-foreground/80 uppercase tracking-wide">{content.promo_badge?.line2 || "Online"}</span>
             </div>
           </a>
         )}
@@ -178,7 +178,7 @@ const Index = () => {
                 {content.home_cta?.title || "Ready to Book Your Dallas Rental?"}
               </h2>
               <div className="flex items-center justify-center">
-                <div className="h-[1px] w-24 bg-gradient-to-r from-transparent via-[#F5B942] to-transparent" />
+                <div className="h-[1px] w-24 bg-gradient-to-r from-transparent via-primary to-transparent" />
               </div>
             </div>
             <p className="text-xl text-foreground/80 max-w-3xl mx-auto leading-relaxed text-center">
@@ -186,7 +186,7 @@ const Index = () => {
             </p>
             <div className="flex flex-col sm:flex-row gap-6 justify-center items-center pt-4">
               <a href="#booking">
-                <Button size="lg" className="bg-[#F5B942] hover:bg-[#E9B63E] text-[#0C1A17] shadow-md hover:shadow-lg transition-all text-lg px-10 py-7 font-semibold min-w-[200px]">
+                <Button size="lg" className="bg-primary hover:bg-primary/90 text-primary-foreground shadow-md hover:shadow-lg transition-all text-lg px-10 py-7 font-semibold min-w-[200px]">
                   {content.home_cta?.primary_cta_text || "Book Now"}
                 </Button>
               </a>
@@ -199,7 +199,7 @@ const Index = () => {
             <div className="pt-6 flex items-center justify-center gap-4 text-sm text-muted-foreground flex-wrap">
               {(content.home_cta?.trust_points || ["Reliable Service", "Clean Vehicles", "24/7 Support"]).map((point, index) => (
                 <span key={index} className="flex items-center gap-2">
-                  <span className="w-1.5 h-1.5 rounded-full bg-[#F5B942]"></span>
+                  <span className="w-1.5 h-1.5 rounded-full bg-primary"></span>
                   {point}
                 </span>
               ))}
