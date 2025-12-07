@@ -421,7 +421,7 @@ const Pricing = () => {
                           <div className="space-y-3">
                             <div className="space-y-1">
                               <div className="text-4xl font-display font-bold text-gradient-metal">
-                                £{vehicle.daily_rent}
+                                ${vehicle.daily_rent}
                               </div>
                               <div className="text-xs text-muted-foreground uppercase tracking-wider font-medium">
                                 per day
@@ -432,7 +432,7 @@ const Pricing = () => {
 
                             <div className="space-y-1">
                               <div className="text-3xl font-display font-semibold text-accent">
-                                £{vehicle.weekly_rent}
+                                ${vehicle.weekly_rent}
                               </div>
                               <div className="text-xs text-muted-foreground uppercase tracking-wider font-medium">
                                 per week
@@ -443,7 +443,7 @@ const Pricing = () => {
 
                             <div className="space-y-1">
                               <div className="text-3xl font-display font-semibold text-accent/80">
-                                £{vehicle.monthly_rent}
+                                ${vehicle.monthly_rent}
                               </div>
                               <div className="text-xs text-muted-foreground uppercase tracking-wider font-medium">
                                 per month
@@ -567,7 +567,7 @@ const Pricing = () => {
                           )}
                         </div>
                       </div>
-                      <span className="text-accent font-semibold whitespace-nowrap text-sm">£{extra.price}</span>
+                      <span className="text-accent font-semibold whitespace-nowrap text-sm">${extra.price}</span>
                     </li>
                   ))}
                 </ul>
