@@ -8,6 +8,8 @@ export interface InvoiceData {
   invoice_date: Date;
   due_date?: Date;
   subtotal: number;
+  rental_fee?: number;
+  protection_fee?: number;
   tax_amount?: number;
   total_amount: number;
   notes?: string;
@@ -22,6 +24,8 @@ export interface Invoice {
   invoice_date: string;
   due_date?: string;
   subtotal: number;
+  rental_fee?: number;
+  protection_fee?: number;
   tax_amount: number;
   total_amount: number;
   status: string;
@@ -29,31 +33,27 @@ export interface Invoice {
   created_at: string;
 }
 
-// Generate unique invoice number
-export const generateInvoiceNumber = async (): Promise<string> => {
+// Generate unique invoice number using timestamp + random
+export const generateInvoiceNumber = (): string => {
   const now = new Date();
   const year = format(now, 'yyyy');
   const month = format(now, 'MM');
-
-  // Get count of invoices this month
-  const { count, error } = await supabase
-    .from('invoices')
-    .select('*', { count: 'exact', head: true })
-    .gte('invoice_date', `${year}-${month}-01`)
-    .lt('invoice_date', `${year}-${String(Number(month) + 1).padStart(2, '0')}-01`);
-
-  if (error) {
-    console.error('Error counting invoices:', error);
-    throw error;
-  }
-
-  const sequence = String((count || 0) + 1).padStart(4, '0');
-  return `INV-${year}${month}-${sequence}`;
+  const day = format(now, 'dd');
+  const random = Math.random().toString(36).substring(2, 6).toUpperCase();
+  return `INV-${year}${month}${day}-${random}`;
 };
 
-// Create invoice
+// Create invoice in database
 export const createInvoice = async (data: InvoiceData): Promise<Invoice> => {
-  const invoiceNumber = await generateInvoiceNumber();
+  const invoiceNumber = generateInvoiceNumber();
+
+  console.log('📄 Creating invoice with data:', {
+    rental_id: data.rental_id,
+    customer_id: data.customer_id,
+    vehicle_id: data.vehicle_id,
+    invoice_number: invoiceNumber,
+    total_amount: data.total_amount,
+  });
 
   const { data: invoice, error } = await supabase
     .from('invoices')
@@ -65,6 +65,8 @@ export const createInvoice = async (data: InvoiceData): Promise<Invoice> => {
       invoice_date: format(data.invoice_date, 'yyyy-MM-dd'),
       due_date: data.due_date ? format(data.due_date, 'yyyy-MM-dd') : null,
       subtotal: data.subtotal,
+      rental_fee: data.rental_fee || data.subtotal,
+      protection_fee: data.protection_fee || 0,
       tax_amount: data.tax_amount || 0,
       total_amount: data.total_amount,
       status: 'pending',
@@ -74,14 +76,50 @@ export const createInvoice = async (data: InvoiceData): Promise<Invoice> => {
     .single();
 
   if (error) {
-    console.error('Error creating invoice:', error);
+    console.error('❌ Error creating invoice in database:', error);
     throw error;
   }
 
+  console.log('✅ Invoice created:', invoice.invoice_number);
   return invoice as Invoice;
 };
 
-// Format currency
+// Create a local invoice object (without saving to database)
+// Use this as fallback if database insert fails
+export const createLocalInvoice = (data: InvoiceData): Invoice => {
+  const invoiceNumber = generateInvoiceNumber();
+  const now = new Date().toISOString();
+
+  return {
+    id: crypto.randomUUID(),
+    rental_id: data.rental_id,
+    customer_id: data.customer_id,
+    vehicle_id: data.vehicle_id,
+    invoice_number: invoiceNumber,
+    invoice_date: format(data.invoice_date, 'yyyy-MM-dd'),
+    due_date: data.due_date ? format(data.due_date, 'yyyy-MM-dd') : undefined,
+    subtotal: data.subtotal,
+    rental_fee: data.rental_fee || data.subtotal,
+    protection_fee: data.protection_fee || 0,
+    tax_amount: data.tax_amount || 0,
+    total_amount: data.total_amount,
+    status: 'pending',
+    notes: data.notes,
+    created_at: now,
+  };
+};
+
+// Try to create invoice in DB, fallback to local if fails
+export const createInvoiceWithFallback = async (data: InvoiceData): Promise<Invoice> => {
+  try {
+    return await createInvoice(data);
+  } catch (error) {
+    console.warn('⚠️ Database invoice creation failed, using local invoice:', error);
+    return createLocalInvoice(data);
+  }
+};
+
+// Format currency - Always USD
 export const formatCurrency = (amount: number): string => {
   return new Intl.NumberFormat('en-US', {
     style: 'currency',

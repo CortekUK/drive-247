@@ -79,7 +79,6 @@ const MultiStepBookingWidget = () => {
   const stepContainerRef = useRef<HTMLDivElement>(null); // Ref for scrolling to step content on step change
   const [blockedDates, setBlockedDates] = useState<string[]>([]); // Global blocked dates (vehicle_id is null)
   const [allBlockedDates, setAllBlockedDates] = useState<BlockedDate[]>([]); // All blocked dates including vehicle-specific
-  const [existingCustomerId, setExistingCustomerId] = useState<string | null>(null); // Store existing customer ID to prevent duplicates
   const [errors, setErrors] = useState<{
     [key: string]: string;
   }>({});
@@ -120,8 +119,8 @@ const MultiStepBookingWidget = () => {
     customerPhone: "",
     customerType: "",
     licenseNumber: "",
-    verificationSessionId: "", // Store verification session ID to link after customer creation
-    protectionPlanId: null as string | null, // Selected protection plan ID
+    verificationSessionId: "",
+    protectionPlanId: null as string | null,
   });
 
   // Protection plan state
@@ -1376,68 +1375,16 @@ const MultiStepBookingWidget = () => {
       return;
     }
 
-    console.log('✅ Validation passed! Checking for existing customer...');
-    console.log('📧 Customer email:', formData.customerEmail);
+    console.log('✅ Validation passed! Moving to step 4');
 
-    try {
-      // Check if customer exists by email
-      const { data: existingCustomer, error: customerError } = await supabase
-        .from("customers")
-        .select("id")
-        .eq("email", formData.customerEmail)
-        .maybeSingle();
-
-      if (customerError) {
-        console.error('❌ Error checking customer:', customerError);
-        toast.error("Failed to validate customer. Please try again.");
-        return;
-      }
-
-      if (existingCustomer) {
-        console.log('👤 Existing customer found:', existingCustomer.id);
-
-        // Check for active rentals
-        const { data: activeRental, error: rentalError } = await supabase
-          .from("rentals")
-          .select("id")
-          .eq("customer_id", existingCustomer.id)
-          .ilike("status", "active")
-          .maybeSingle();
-
-        if (rentalError) {
-          console.error('❌ Error checking active rentals:', rentalError);
-          toast.error("Failed to check rental status. Please try again.");
-          return;
-        }
-
-        if (activeRental) {
-          console.log('🚫 Active rental found:', activeRental.id);
-          toast.error("You already have an active rental. Please complete or cancel it before making a new booking.");
-          return;
-        }
-
-        console.log('✅ No active rentals found. Storing customer ID for reuse.');
-        setExistingCustomerId(existingCustomer.id);
-      } else {
-        console.log('🆕 New customer - will create during booking submission');
-        setExistingCustomerId(null);
-      }
-
-      console.log('✅ All checks passed! Moving to step 4');
-      console.log('📝 Final formData:', formData);
-
-      // Analytics tracking
-      if ((window as any).gtag) {
-        (window as any).gtag('event', 'booking_step3_submitted', {
-          customer_type: formData.customerType,
-          verification_status: verificationStatus
-        });
-      }
-      setCurrentStep(4);
-    } catch (error) {
-      console.error('❌ Unexpected error in customer validation:', error);
-      toast.error("An unexpected error occurred. Please try again.");
+    // Analytics tracking
+    if ((window as any).gtag) {
+      (window as any).gtag('event', 'booking_step3_submitted', {
+        customer_type: formData.customerType,
+        verification_status: verificationStatus
+      });
     }
+    setCurrentStep(4);
   };
 
   const validateStep4 = () => {
@@ -2631,7 +2578,6 @@ const MultiStepBookingWidget = () => {
               }}
               vehicleTotal={estimatedBooking?.total || 0}
               selectedProtectionPlan={selectedProtectionPlan}
-              existingCustomerId={existingCustomerId}
               onBack={() => setCurrentStep(3)}
             />
           </div>}

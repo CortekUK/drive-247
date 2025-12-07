@@ -33,12 +33,12 @@ serve(async (req) => {
       line_items: [
         {
           price_data: {
-            currency: 'gbp',
+            currency: 'usd',
             product_data: {
               name: 'Luxury Vehicle Rental',
-              description: 'Premium chauffeur-driven vehicle rental - Drive 917',
+              description: 'Premium chauffeur-driven vehicle rental - Drive 247',
             },
-            unit_amount: Math.round(totalAmount * 100), // Convert to pence
+            unit_amount: Math.round(totalAmount * 100), // Convert to cents
           },
           quantity: 1,
         },

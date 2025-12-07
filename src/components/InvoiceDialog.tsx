@@ -1,6 +1,6 @@
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { FileText, Download, Shield } from "lucide-react";
+import { FileText, Download, Shield, ArrowRight } from "lucide-react";
 import { format } from "date-fns";
 import { useRef } from "react";
 import { useReactToPrint } from "react-to-print";
@@ -345,13 +345,14 @@ export const InvoiceDialog = ({
           </div>
 
           {/* Action Buttons */}
-          <div className="flex justify-end gap-2 border-t pt-4">
-            <Button variant="outline" onClick={() => onOpenChange(false)}>
-              Close
-            </Button>
-            <Button onClick={handlePrint} className="gradient-accent">
+          <div className="flex justify-between items-center border-t pt-4">
+            <Button variant="outline" onClick={handlePrint}>
               <Download className="h-4 w-4 mr-2" />
               Print / Save PDF
+            </Button>
+            <Button onClick={() => onOpenChange(false)} className="gradient-accent">
+              Continue to Sign Agreement
+              <ArrowRight className="h-4 w-4 ml-2" />
             </Button>
           </div>
         </DialogContent>

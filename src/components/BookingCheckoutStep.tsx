@@ -9,7 +9,7 @@ import { ChevronLeft, CreditCard, Shield, Calendar, MapPin, Clock, Car, User, Lo
 import { supabase } from "@/integrations/supabase/client";
 import { format } from "date-fns";
 import { InvoiceDialog } from "@/components/InvoiceDialog";
-import { createInvoice, Invoice } from "@/lib/invoiceUtils";
+import { createInvoiceWithFallback, Invoice } from "@/lib/invoiceUtils";
 
 interface BookingCheckoutStepProps {
   formData: any;
@@ -21,7 +21,6 @@ interface BookingCheckoutStepProps {
   };
   vehicleTotal: number;
   selectedProtectionPlan?: any;
-  existingCustomerId?: string | null;
   onBack: () => void;
 }
 
@@ -32,7 +31,6 @@ export default function BookingCheckoutStep({
   rentalDuration,
   vehicleTotal,
   selectedProtectionPlan,
-  existingCustomerId,
   onBack
 }: BookingCheckoutStepProps) {
   const navigate = useNavigate();
@@ -100,7 +98,22 @@ export default function BookingCheckoutStep({
 
   const depositAmount = 500; // Fixed deposit
 
-  // Function to redirect to Stripe payment
+  // Function to get booking payment mode
+  const getBookingMode = async (): Promise<'manual' | 'auto'> => {
+    try {
+      const { data, error } = await supabase.functions.invoke('get-booking-mode');
+      if (error) {
+        console.error('Error fetching booking mode:', error);
+        return 'manual'; // Default to manual for safety
+      }
+      return data?.mode || 'manual';
+    } catch (error) {
+      console.error('Error fetching booking mode:', error);
+      return 'manual';
+    }
+  };
+
+  // Function to redirect to Stripe payment (auto mode - immediate capture)
   const redirectToStripePayment = async () => {
     if (!createdRentalData) {
       toast.error("Rental data not found");
@@ -142,7 +155,58 @@ export default function BookingCheckoutStep({
     }
   };
 
-  // Function to send DocuSign envelope
+  // Function to redirect to Stripe pre-auth payment (manual mode - hold only)
+  const redirectToPreAuthPayment = async () => {
+    if (!createdRentalData) {
+      toast.error("Rental data not found");
+      return;
+    }
+
+    try {
+      setIsProcessing(true);
+
+      // Create Stripe pre-auth checkout session
+      const { data, error: functionError } = await supabase.functions.invoke('create-preauth-checkout', {
+        body: {
+          rentalId: createdRentalData.rental.id,
+          customerId: createdRentalData.customer.id,
+          customerEmail: formData.customerEmail,
+          customerName: formData.customerName,
+          customerPhone: formData.customerPhone,
+          vehicleId: selectedVehicle.id,
+          vehicleName: selectedVehicle.make && selectedVehicle.model
+            ? `${selectedVehicle.make} ${selectedVehicle.model}`
+            : selectedVehicle.reg,
+          totalAmount: calculateGrandTotal(),
+          pickupDate: formData.pickupDate,
+          returnDate: formData.dropoffDate,
+          protectionPlan: selectedProtectionPlan?.display_name || 'none',
+        },
+      });
+
+      if (functionError) throw functionError;
+
+      if (data?.url) {
+        // Redirect to Stripe checkout
+        if (typeof window !== 'undefined' && (window as any).gtag) {
+          (window as any).gtag('event', 'redirecting_to_stripe_preauth', {
+            rental_id: createdRentalData.rental.id,
+            customer_id: createdRentalData.customer.id,
+            total: calculateGrandTotal(),
+          });
+        }
+        window.location.href = data.url;
+      } else {
+        throw new Error('Failed to create checkout session');
+      }
+    } catch (error: any) {
+      console.error("Stripe pre-auth redirect error:", error);
+      toast.error(error.message || "Failed to redirect to payment");
+      setIsProcessing(false);
+    }
+  };
+
+  // Function to send DocuSign envelope and then redirect to appropriate payment flow
   const handleSendDocuSign = async () => {
     if (!createdRentalData) return;
 
@@ -171,8 +235,13 @@ export default function BookingCheckoutStep({
       toast.error(error.message || "Failed to send rental agreement", { id: "docusign-send" });
     } finally {
       setSendingDocuSign(false);
-      // Proceed to payment regardless of DocuSign success
-      redirectToStripePayment();
+      // Proceed to payment based on booking mode
+      const bookingMode = await getBookingMode();
+      if (bookingMode === 'manual') {
+        redirectToPreAuthPayment();
+      } else {
+        redirectToStripePayment();
+      }
     }
   };
 
@@ -201,101 +270,56 @@ export default function BookingCheckoutStep({
     console.log('🔍 Verification Session ID:', formData.verificationSessionId);
 
     try {
+      // Step 1: Find existing customer or create new one
+      console.log('📝 Finding or creating customer...');
+
+      // First, check if customer exists by email
+      const { data: existingCustomer } = await supabase
+        .from("customers")
+        .select("*")
+        .eq("email", formData.customerEmail)
+        .maybeSingle();
+
       let customer;
 
-      // Step 1: Use validated existing customer ID if provided
-      if (existingCustomerId) {
-        console.log('🔄 Using pre-validated customer ID:', existingCustomerId);
-        const { data: existingCustomer, error: fetchError } = await supabase
-          .from("customers")
-          .select("*")
-          .eq("id", existingCustomerId)
-          .single();
-
-        if (fetchError) {
-          console.error('Error fetching existing customer:', fetchError);
-          throw new Error('Failed to fetch customer information');
-        }
-
-        customer = existingCustomer;
-        console.log('✅ Using existing customer:', customer.id, '- Linking rental to existing customer');
-        toast.success(`Welcome back! Linking rental to your existing account.`);
-
-        // Update customer info if needed
+      if (existingCustomer) {
+        // Update existing customer
+        console.log('👤 Found existing customer, updating...');
         const { data: updatedCustomer, error: updateError } = await supabase
           .from("customers")
           .update({
-            name: formData.customerName,
             type: formData.customerType,
+            name: formData.customerName,
+            phone: formData.customerPhone,
             status: "Active",
           })
-          .eq("id", customer.id)
+          .eq("id", existingCustomer.id)
           .select()
           .single();
 
-        if (updateError) {
-          console.error('Warning: Could not update customer info:', updateError);
-        } else {
-          customer = updatedCustomer;
-          console.log('✅ Updated existing customer info');
-        }
+        if (updateError) throw updateError;
+        customer = updatedCustomer;
       } else {
-        // Step 1: Check if customer already exists by email or phone
-        const { data: existingCustomers, error: searchError } = await supabase
+        // Create new customer
+        console.log('🆕 Creating new customer...');
+        const { data: newCustomer, error: createError } = await supabase
           .from("customers")
-          .select("*")
-          .or(`email.eq.${formData.customerEmail},phone.eq.${formData.customerPhone}`)
-          .limit(1);
+          .insert({
+            type: formData.customerType,
+            name: formData.customerName,
+            email: formData.customerEmail,
+            phone: formData.customerPhone,
+            status: "Active",
+            is_blocked: false,
+          })
+          .select()
+          .single();
 
-        if (searchError) {
-          console.error('Error searching for existing customer:', searchError);
-        }
-
-        if (existingCustomers && existingCustomers.length > 0) {
-          // Use existing customer
-          customer = existingCustomers[0];
-          console.log('✅ Found existing customer:', customer.id, '- Linking rental to existing customer');
-          toast.success(`Welcome back! We found your existing account.`);
-
-          // Optionally update customer info if needed (e.g., if name or type changed)
-          const { data: updatedCustomer, error: updateError } = await supabase
-            .from("customers")
-            .update({
-              name: formData.customerName,
-              type: formData.customerType,
-              status: "Active", // Ensure status is active
-            })
-            .eq("id", customer.id)
-            .select()
-            .single();
-
-          if (updateError) {
-            console.error('Warning: Could not update customer info:', updateError);
-            // Don't throw - use original customer data
-          } else {
-            customer = updatedCustomer;
-            console.log('✅ Updated existing customer info');
-          }
-        } else {
-          // Create new customer
-          console.log('📝 No existing customer found - Creating new customer');
-          const { data: newCustomer, error: customerError } = await supabase
-            .from("customers")
-            .insert({
-              type: formData.customerType, // "Individual" or "Company"
-              name: formData.customerName,
-              email: formData.customerEmail,
-              phone: formData.customerPhone,
-              status: "Active",
-            })
-            .select()
-            .single();
-
-          if (customerError) throw customerError;
-          customer = newCustomer;
-          console.log('✅ Created new customer:', customer.id);
-        }
+        if (createError) throw createError;
+        customer = newCustomer;
       }
+
+      console.log('✅ Customer ready:', customer.id);
 
       // Step 1.5: Link verification to customer if verification was completed
       if (formData.verificationSessionId) {
@@ -408,15 +432,28 @@ export default function BookingCheckoutStep({
         console.log('✅ First charge generated successfully');
       }
 
-      // Step 3: Update vehicle status to "Rented"
-      const { error: vehicleUpdateError } = await supabase
-        .from("vehicles")
-        .update({ status: "Rented" })
-        .eq("id", selectedVehicle.id);
+      // Step 3: Check booking mode and conditionally update vehicle status
+      // In MANUAL mode: Keep vehicle as "Available" until admin approves
+      // In AUTO mode: Mark as "Rented" immediately (old behavior)
+      const bookingMode = await getBookingMode();
+      console.log('📋 Booking mode:', bookingMode);
 
-      if (vehicleUpdateError) {
-        console.error("Failed to update vehicle status:", vehicleUpdateError);
-        // Don't throw - continue with payment flow
+      if (bookingMode === 'auto') {
+        // AUTO mode: Update vehicle status to "Rented" immediately
+        const { error: vehicleUpdateError } = await supabase
+          .from("vehicles")
+          .update({ status: "Rented" })
+          .eq("id", selectedVehicle.id);
+
+        if (vehicleUpdateError) {
+          console.error("Failed to update vehicle status:", vehicleUpdateError);
+          // Don't throw - continue with payment flow
+        } else {
+          console.log('✅ Vehicle marked as Rented (AUTO mode)');
+        }
+      } else {
+        // MANUAL mode: Keep vehicle Available until admin approves
+        console.log('⏳ Vehicle status unchanged (MANUAL mode - awaiting approval)');
       }
 
       // Step 3.5: Save protection plan selection if selected
@@ -465,45 +502,38 @@ export default function BookingCheckoutStep({
         console.log('⚠️ Skipping protection plan save - no plan selected or missing planId');
       }
 
-      // Step 4: Create invoice in database
-      let invoice: Invoice | null = null;
-      try {
-        const protectionCost = calculateProtectionCost();
-        let invoiceNotes = `Security deposit of $${depositAmount.toLocaleString()} will be held during the rental period.`;
+      // Step 4: Create invoice (with fallback to local if DB fails)
+      const protectionCost = calculateProtectionCost();
+      let invoiceNotes = `Security deposit of $${depositAmount.toLocaleString()} will be held during the rental period.`;
 
-        if (selectedProtectionPlan) {
-          invoiceNotes += `\n\nProtection Plan: ${selectedProtectionPlan.display_name} - $${protectionCost.toLocaleString()} (${rentalDuration.days} days @ $${selectedProtectionPlan.price_per_day}/day)`;
-          if (selectedProtectionPlan.deductible_amount === 0) {
-            invoiceNotes += `\n✓ Zero Deductible Coverage`;
-          } else {
-            invoiceNotes += `\n• Deductible: $${selectedProtectionPlan.deductible_amount.toLocaleString()}`;
-          }
-          if (selectedProtectionPlan.max_coverage_amount) {
-            invoiceNotes += `\n• Maximum Coverage: $${selectedProtectionPlan.max_coverage_amount.toLocaleString()}`;
-          }
+      if (selectedProtectionPlan) {
+        invoiceNotes += `\n\nProtection Plan: ${selectedProtectionPlan.display_name} - $${protectionCost.toLocaleString()} (${rentalDuration.days} days @ $${selectedProtectionPlan.price_per_day}/day)`;
+        if (selectedProtectionPlan.deductible_amount === 0) {
+          invoiceNotes += `\n✓ Zero Deductible Coverage`;
+        } else {
+          invoiceNotes += `\n• Deductible: $${selectedProtectionPlan.deductible_amount.toLocaleString()}`;
         }
-
-        invoice = await createInvoice({
-          rental_id: rental.id,
-          customer_id: customer.id,
-          vehicle_id: selectedVehicle.id,
-          invoice_date: new Date(),
-          due_date: new Date(formData.pickupDate), // Due on pickup date
-          subtotal: vehicleTotal + protectionCost,
-          rental_fee: vehicleTotal, // NEW: Separate rental fee
-          protection_fee: protectionCost, // NEW: Separate protection fee
-          tax_amount: calculateTaxesAndFees(),
-          total_amount: calculateGrandTotal(),
-          notes: invoiceNotes,
-        });
-
-        console.log('✅ Invoice created successfully:', invoice.invoice_number);
-        setGeneratedInvoice(invoice);
-      } catch (invoiceError: any) {
-        console.error('❌ Failed to create invoice:', invoiceError);
-        // Don't throw - continue with payment flow even if invoice creation fails
-        // The invoice can be manually created later if needed
+        if (selectedProtectionPlan.max_coverage_amount) {
+          invoiceNotes += `\n• Maximum Coverage: $${selectedProtectionPlan.max_coverage_amount.toLocaleString()}`;
+        }
       }
+
+      const invoice = await createInvoiceWithFallback({
+        rental_id: rental.id,
+        customer_id: customer.id,
+        vehicle_id: selectedVehicle.id,
+        invoice_date: new Date(),
+        due_date: new Date(formData.pickupDate),
+        subtotal: vehicleTotal + protectionCost,
+        rental_fee: vehicleTotal,
+        protection_fee: protectionCost,
+        tax_amount: calculateTaxesAndFees(),
+        total_amount: calculateGrandTotal(),
+        notes: invoiceNotes,
+      });
+
+      console.log('✅ Invoice ready:', invoice.invoice_number);
+      setGeneratedInvoice(invoice);
 
       // Step 5: Store payment details in localStorage for success page
       // Payment record will be created ONLY after Stripe confirms successful payment

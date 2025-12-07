@@ -24,6 +24,7 @@ import NotFound from "./pages/NotFound";
 import GDPRConsent from "./components/GDPRConsent";
 import ScrollToTopOnNavigate from "./components/ScrollToTopOnNavigate";
 import BookingSuccess from "./pages/BookingSuccess";
+import BookingPending from "./pages/BookingPending";
 import BookingCancelled from "./pages/BookingCancelled";
 import Booking from "./pages/Booking";
 import BookingVehicles from "./pages/BookingVehicles";
@@ -70,6 +71,7 @@ const App = () => (
           <Route path="/booking/vehicles" element={<BookingVehicles />} />
           <Route path="/booking/checkout" element={<BookingCheckout />} />
           <Route path="/booking-success" element={<BookingSuccess />} />
+          <Route path="/booking-pending" element={<BookingPending />} />
           <Route path="/booking-cancelled" element={<BookingCancelled />} />
           <Route path="/veriff-callback" element={<VeriffCallback />} />
 
