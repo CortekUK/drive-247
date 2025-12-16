@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { useTenant } from "@/contexts/TenantContext";
 import Navigation from "@/components/Navigation";
 import Footer from "@/components/Footer";
 import UniversalHero from "@/components/UniversalHero";
@@ -38,6 +39,7 @@ interface Vehicle {
 }
 
 const Promotions = () => {
+  const { tenant } = useTenant();
   const [promotions, setPromotions] = useState<Promotion[]>([]);
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
   const [filteredPromotions, setFilteredPromotions] = useState<Promotion[]>([]);
@@ -54,7 +56,7 @@ const Promotions = () => {
 
   useEffect(() => {
     loadData();
-  }, []);
+  }, [tenant?.id]);
 
   useEffect(() => {
     filterAndSortPromotions();
@@ -63,21 +65,33 @@ const Promotions = () => {
   const loadData = async () => {
     setLoading(true);
     try {
-      // Load promotions
-      const { data: promoData, error: promoError } = await supabase
+      // Load promotions with tenant filtering
+      let promoQuery = supabase
         .from("promotions")
         .select("*")
         .order("created_at", { ascending: false });
 
+      if (tenant?.id) {
+        promoQuery = promoQuery.eq("tenant_id", tenant.id);
+      }
+
+      const { data: promoData, error: promoError } = await promoQuery;
+
       if (promoError) throw promoError;
       setPromotions(promoData || []);
 
-      // Load vehicles
-      const { data: vehicleData } = await supabase
+      // Load vehicles with tenant filtering
+      let vehicleQuery = supabase
         .from("vehicles")
         .select("id, name")
         .eq("is_active", true)
         .order("name");
+
+      if (tenant?.id) {
+        vehicleQuery = vehicleQuery.eq("tenant_id", tenant.id);
+      }
+
+      const { data: vehicleData } = await vehicleQuery;
 
       setVehicles(vehicleData || []);
     } catch (error) {
@@ -121,11 +135,13 @@ const Promotions = () => {
   };
 
   const handleApplyBooking = (promo: Promotion) => {
-    const params = new URLSearchParams();
-    if (promo.promo_code) {
-      params.set("promo", promo.promo_code);
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams();
+      if (promo.promo_code) {
+        params.set("promo", promo.promo_code);
+      }
+      window.location.href = `/booking/vehicles?${params.toString()}`;
     }
-    window.location.href = `/booking/vehicles?${params.toString()}`;
   };
 
   const getDiscountBadge = (promo: Promotion) => {

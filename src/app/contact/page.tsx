@@ -71,7 +71,7 @@ const Contact = () => {
     "@type": "CarRental",
     "name": "Drive917",
     "description": "Premium luxury car rentals in Los Angeles",
-    "url": window.location.origin,
+    "url": typeof window !== 'undefined' ? window.location.origin : 'https://drive917.com',
     "telephone": contactSettings.phone,
     "email": contactSettings.email,
     "address": {
@@ -179,12 +179,12 @@ const Contact = () => {
 
   return (
     <div className="min-h-screen bg-background">
-      <SEO 
+      <SEO
         title={content.seo?.title || "Contact Drive917 — Los Angeles Luxury Car Rentals"}
         description={content.seo?.description || "Get in touch with Drive917 for premium vehicle rentals, chauffeur services, and exclusive offers in Los Angeles."}
         keywords={content.seo?.keywords || "contact Drive917, luxury car rental Los Angeles, premium vehicle rental contact, chauffeur service inquiry"}
         schema={businessSchema}
-        canonical={`${window.location.origin}/contact`}
+        canonical={typeof window !== 'undefined' ? `${window.location.origin}/contact` : 'https://drive917.com/contact'}
       />
       <Navigation />
       

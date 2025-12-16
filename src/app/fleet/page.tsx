@@ -10,6 +10,7 @@ import { Separator } from "@/components/ui/separator";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { useTenant } from "@/contexts/TenantContext";
 import Link from "next/link";
 import SEO from "@/components/SEO";
 import luxuryHero from "@/assets/luxury-fleet-hero.jpg";
@@ -108,6 +109,7 @@ const getIconComponent = (iconName: string) => {
 };
 
 const Pricing = () => {
+  const { tenant } = useTenant();
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
   const [makeFilter, setMakeFilter] = useState<string>("all");
   const [colourFilter, setColourFilter] = useState<string>("all");
@@ -172,10 +174,10 @@ const Pricing = () => {
 
   useEffect(() => {
     loadVehicles();
-  }, []);
+  }, [tenant?.id]);
 
   const loadVehicles = async () => {
-    const { data, error } = await supabase
+    let query = supabase
       .from("vehicles")
       .select(`
         *,
@@ -184,6 +186,13 @@ const Pricing = () => {
         )
       `)
       .order("daily_rent");
+
+    // Add tenant filter if tenant context exists
+    if (tenant?.id) {
+      query = query.eq("tenant_id", tenant.id);
+    }
+
+    const { data, error } = await query;
 
     if (!error && data) {
       setVehicles(data as any);
@@ -245,20 +254,24 @@ const Pricing = () => {
         primaryCTA={{
           text: content.fleet_hero?.primary_cta_text || "Book Now",
           onClick: () => {
-            const bookingSection = document.getElementById("booking");
-            if (bookingSection) {
-              bookingSection.scrollIntoView({ behavior: "smooth" });
-            } else {
-              window.location.href = "/#booking";
+            if (typeof window !== 'undefined') {
+              const bookingSection = document.getElementById("booking");
+              if (bookingSection) {
+                bookingSection.scrollIntoView({ behavior: "smooth" });
+              } else {
+                window.location.href = "/#booking";
+              }
             }
           },
         }}
         secondaryCTA={{
           text: content.fleet_hero?.secondary_cta_text || "View Fleet Below",
           onClick: () => {
-            const fleetSection = document.getElementById("fleet-section");
-            if (fleetSection) {
-              fleetSection.scrollIntoView({ behavior: "smooth", block: "start" });
+            if (typeof window !== 'undefined') {
+              const fleetSection = document.getElementById("fleet-section");
+              if (fleetSection) {
+                fleetSection.scrollIntoView({ behavior: "smooth", block: "start" });
+              }
             }
           },
         }}

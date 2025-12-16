@@ -95,16 +95,18 @@ export default function Booking() {
 
   // Load from localStorage on mount
   useEffect(() => {
-    const saved = localStorage.getItem("booking_context");
-    if (saved) {
-      try {
-        const data = JSON.parse(saved);
-        if (data.pickupDate) data.pickupDate = parseISO(data.pickupDate);
-        if (data.returnDate) data.returnDate = parseISO(data.returnDate);
-        form.reset(data);
-        setSameAsPickup(data.sameAsPickup ?? true);
-      } catch (e) {
-        console.error("Failed to load booking context:", e);
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem("booking_context");
+      if (saved) {
+        try {
+          const data = JSON.parse(saved);
+          if (data.pickupDate) data.pickupDate = parseISO(data.pickupDate);
+          if (data.returnDate) data.returnDate = parseISO(data.returnDate);
+          form.reset(data);
+          setSameAsPickup(data.sameAsPickup ?? true);
+        } catch (e) {
+          console.error("Failed to load booking context:", e);
+        }
       }
     }
 
@@ -150,21 +152,23 @@ export default function Booking() {
     }
 
     // Save to localStorage
-    const saveData = {
-      ...data,
-      pickupDate: data.pickupDate.toISOString(),
-      returnDate: data.returnDate.toISOString(),
-    };
-    localStorage.setItem("booking_context", JSON.stringify(saveData));
+    if (typeof window !== 'undefined') {
+      const saveData = {
+        ...data,
+        pickupDate: data.pickupDate.toISOString(),
+        returnDate: data.returnDate.toISOString(),
+      };
+      localStorage.setItem("booking_context", JSON.stringify(saveData));
 
-    // Analytics event
-    if (typeof window !== "undefined" && (window as any).gtag) {
-      (window as any).gtag("event", "booking_step1_submitted", {
-        pickup_location: data.pickupLocation,
-        return_location: data.returnLocation,
-        driver_age: data.driverAge,
-        has_promo: !!data.promoCode,
-      });
+      // Analytics event
+      if ((window as any).gtag) {
+        (window as any).gtag("event", "booking_step1_submitted", {
+          pickup_location: data.pickupLocation,
+          return_location: data.returnLocation,
+          driver_age: data.driverAge,
+          has_promo: !!data.promoCode,
+        });
+      }
     }
 
     toast.success("Rental details saved. Loading available vehicles...");
@@ -208,11 +212,11 @@ export default function Booking() {
 
   return (
     <div className="min-h-screen bg-background">
-      <SEO 
+      <SEO
         title="Rental Booking — Drive 917"
         description="Book your luxury vehicle rental with Drive 917. Choose pickup and return details for premium cars in Los Angeles."
         keywords="luxury car rental booking, Los Angeles car rental, premium vehicle booking"
-        canonical={`${window.location.origin}/booking`}
+        canonical={typeof window !== 'undefined' ? `${window.location.origin}/booking` : 'https://drive917.com/booking'}
       />
       <Navigation />
 

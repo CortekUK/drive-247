@@ -8,30 +8,36 @@ const VeriffCallback = () => {
   const [countdown, setCountdown] = useState(3);
 
   useEffect(() => {
-    // Notify parent window that verification is complete (for iOS Safari)
-    if (window.opener && !window.opener.closed) {
-      console.log('📢 Notifying parent window: verification complete');
-      window.opener.postMessage({ type: 'VERIFF_COMPLETE' }, window.location.origin);
+    if (typeof window !== 'undefined') {
+      // Notify parent window that verification is complete (for iOS Safari)
+      if (window.opener && !window.opener.closed) {
+        console.log('📢 Notifying parent window: verification complete');
+        window.opener.postMessage({ type: 'VERIFF_COMPLETE' }, window.location.origin);
+      }
+
+      // Start countdown
+      const countdownInterval = setInterval(() => {
+        setCountdown((prev) => {
+          if (prev <= 1) {
+            clearInterval(countdownInterval);
+            // Try to close the window
+            if (typeof window !== 'undefined') {
+              window.close();
+            }
+            return 0;
+          }
+          return prev - 1;
+        });
+      }, 1000);
+
+      return () => clearInterval(countdownInterval);
     }
-
-    // Start countdown
-    const countdownInterval = setInterval(() => {
-      setCountdown((prev) => {
-        if (prev <= 1) {
-          clearInterval(countdownInterval);
-          // Try to close the window
-          window.close();
-          return 0;
-        }
-        return prev - 1;
-      });
-    }, 1000);
-
-    return () => clearInterval(countdownInterval);
   }, []);
 
   const handleManualClose = () => {
-    window.close();
+    if (typeof window !== 'undefined') {
+      window.close();
+    }
   };
 
   return (

@@ -18,8 +18,10 @@ import { Button } from '@/components/ui/button';
 import { useEffect, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { usePageContent, defaultHomeContent, mergeWithDefaults } from '@/hooks/usePageContent';
+import { useTenant } from '@/contexts/TenantContext';
 
 export default function Home() {
+  const { tenant } = useTenant();
   const [testimonialStats, setTestimonialStats] = useState({
     avgRating: '5.0',
     count: '0'
@@ -31,27 +33,37 @@ export default function Home() {
 
   // Handle hash scrolling on page load
   useEffect(() => {
-    const hash = window.location.hash;
-    if (hash) {
-      const element = document.querySelector(hash);
-      if (element) {
-        setTimeout(() => {
-          element.scrollIntoView({
-            behavior: 'smooth',
-            block: 'start'
-          });
-        }, 100);
+    if (typeof window !== 'undefined') {
+      const hash = window.location.hash;
+      if (hash) {
+        const element = document.querySelector(hash);
+        if (element) {
+          setTimeout(() => {
+            element.scrollIntoView({
+              behavior: 'smooth',
+              block: 'start'
+            });
+          }, 100);
+        }
       }
     }
   }, []);
 
-  // Load real testimonial data
+  // Load real testimonial data with tenant filtering
   useEffect(() => {
     const loadTestimonialStats = async () => {
-      const {
-        data,
-        error
-      } = await supabase.from('testimonials').select('rating').eq('is_active', true);
+      let query = supabase
+        .from('testimonials')
+        .select('rating')
+        .eq('is_active', true);
+
+      // Add tenant filter if tenant context exists
+      if (tenant?.id) {
+        query = query.eq('tenant_id', tenant.id);
+      }
+
+      const { data, error } = await query;
+
       if (!error && data && data.length > 0) {
         const avgRating = (data.reduce((sum, t) => sum + (t.rating || 5), 0) / data.length).toFixed(1);
         setTestimonialStats({
@@ -61,7 +73,7 @@ export default function Home() {
       }
     };
     loadTestimonialStats();
-  }, []);
+  }, [tenant?.id]);
 
   const businessSchema = {
     '@context': 'https://schema.org',
