@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import Navigation from "@/components/Navigation";
@@ -11,7 +11,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { format } from "date-fns";
 
-const BookingPending = () => {
+const BookingPendingContent = () => {
   const searchParams = useSearchParams();
   const [bookingDetails, setBookingDetails] = useState<any>(null);
   const [loading, setLoading] = useState(true);
@@ -200,12 +200,12 @@ const BookingPending = () => {
 
                 {/* Action Buttons */}
                 <div className="flex flex-col sm:flex-row gap-4 justify-center">
-                  <Link to="/">
+                  <Link href="/">
                     <Button variant="outline" className="w-full sm:w-auto">
                       Return Home
                     </Button>
                   </Link>
-                  <Link to="/booking">
+                  <Link href="/booking">
                     <Button className="w-full sm:w-auto gradient-accent">
                       Book Another Vehicle
                     </Button>
@@ -218,6 +218,29 @@ const BookingPending = () => {
       </main>
       <Footer />
     </>
+  );
+};
+
+const BookingPending = () => {
+  return (
+    <Suspense fallback={
+      <>
+        <Navigation />
+        <main className="min-h-screen bg-gradient-to-b from-background to-muted flex items-center justify-center py-16">
+          <div className="container mx-auto px-6 max-w-2xl">
+            <div className="bg-card rounded-2xl shadow-metal border border-accent/20 p-8 md:p-12">
+              <div className="text-center py-12">
+                <Loader2 className="w-12 h-12 text-accent mx-auto mb-4 animate-spin" />
+                <p className="text-muted-foreground">Loading...</p>
+              </div>
+            </div>
+          </div>
+        </main>
+        <Footer />
+      </>
+    }>
+      <BookingPendingContent />
+    </Suspense>
   );
 };
 
