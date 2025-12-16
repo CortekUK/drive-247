@@ -179,7 +179,7 @@ export default function Booking() {
   const returnTime = form.watch("returnTime");
 
   // Calculate rental duration
-  const rentalDuration = () => {
+  const rentalDurationContent = () => {
     if (!pickupDate || !returnDate || !pickupTime || !returnTime) return null;
 
     try {

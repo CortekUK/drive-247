@@ -35,7 +35,7 @@ interface Vehicle {
   vehicle_photos?: VehiclePhoto[];
 }
 
-const BookingVehicles = () => {
+const BookingVehiclesContent = () => {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
@@ -268,6 +268,21 @@ const BookingVehicles = () => {
 
       <Footer />
     </div>
+  );
+};
+const BookingVehicles = () => {
+  return (
+    <Suspense fallback={
+      <>
+        <Navigation />
+        <main className="min-h-screen flex items-center justify-center">
+          <Loader2 className="w-12 h-12 text-accent animate-spin" />
+        </main>
+        <Footer />
+      </>
+    }>
+      <BookingVehiclesContent />
+    </Suspense>
   );
 };
 

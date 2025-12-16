@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import Navigation from "@/components/Navigation";
@@ -11,7 +11,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { format } from "date-fns";
 
-const BookingSuccess = () => {
+const BookingSuccessContent = () => {
   const searchParams = useSearchParams();
   const [bookingDetails, setBookingDetails] = useState<any>(null);
   const [loading, setLoading] = useState(true);
@@ -322,6 +322,21 @@ const BookingSuccess = () => {
       </main>
       <Footer />
     </>
+  );
+};
+const BookingSuccess = () => {
+  return (
+    <Suspense fallback={
+      <>
+        <Navigation />
+        <main className="min-h-screen flex items-center justify-center">
+          <Loader2 className="w-12 h-12 text-accent animate-spin" />
+        </main>
+        <Footer />
+      </>
+    }>
+      <BookingSuccessContent />
+    </Suspense>
   );
 };
 
