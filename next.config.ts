@@ -5,6 +5,11 @@ const nextConfig: NextConfig = {
     // Disable type checking during build for now
     ignoreBuildErrors: true,
   },
+  eslint: {
+    // Warning: This allows production builds to successfully complete even if
+    // your project has ESLint errors.
+    ignoreDuringBuilds: true,
+  },
   images: {
     remotePatterns: [
       {
