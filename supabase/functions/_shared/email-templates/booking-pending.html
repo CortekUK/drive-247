@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Booking Received - DRIVE 247</title>
+</head>
+<body style="margin: 0; padding: 0; font-family: 'Segoe UI', Arial, sans-serif; background-color: #f5f5f5;">
+    <table role="presentation" style="width: 100%; border-collapse: collapse;">
+        <tr>
+            <td align="center" style="padding: 40px 0;">
+                <table role="presentation" style="width: 600px; max-width: 100%; border-collapse: collapse; background: white; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.1);">
+                    <!-- Header -->
+                    <tr>
+                        <td style="background: linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 100%); padding: 30px; border-radius: 12px 12px 0 0; text-align: center;">
+                            <h1 style="margin: 0; color: #C5A572; font-size: 28px; letter-spacing: 2px;">DRIVE 247</h1>
+                            <p style="margin: 10px 0 0; color: #888; font-size: 14px;">Premium Car Rentals</p>
+                        </td>
+                    </tr>
+
+                    <!-- Status Badge -->
+                    <tr>
+                        <td style="padding: 30px 30px 0; text-align: center;">
+                            <span style="display: inline-block; background: #fef3c7; color: #92400e; padding: 8px 20px; border-radius: 20px; font-weight: 600; font-size: 14px;">
+                                ⏳ BOOKING UNDER REVIEW
+                            </span>
+                        </td>
+                    </tr>
+
+                    <!-- Content -->
+                    <tr>
+                        <td style="padding: 30px;">
+                            <h2 style="margin: 0 0 20px; color: #1a1a1a; font-size: 22px;">Hello {{customerName}},</h2>
+
+                            <p style="margin: 0 0 20px; color: #444; line-height: 1.6; font-size: 16px;">
+                                Thank you for choosing DRIVE 247! We've received your booking request and our team is reviewing it.
+                            </p>
+
+                            <p style="margin: 0 0 25px; color: #444; line-height: 1.6; font-size: 16px;">
+                                You'll receive a confirmation email within <strong>24 hours</strong> once your booking is approved.
+                            </p>
+
+                            <!-- Booking Details Card -->
+                            <table role="presentation" style="width: 100%; border-collapse: collapse; background: #f8f9fa; border-radius: 8px; margin-bottom: 25px;">
+                                <tr>
+                                    <td style="padding: 20px;">
+                                        <h3 style="margin: 0 0 15px; color: #1a1a1a; font-size: 16px; text-transform: uppercase; letter-spacing: 1px;">Booking Details</h3>
+
+                                        <table role="presentation" style="width: 100%; border-collapse: collapse;">
+                                            <tr>
+                                                <td style="padding: 8px 0; color: #666; font-size: 14px;">Reference:</td>
+                                                <td style="padding: 8px 0; color: #1a1a1a; font-weight: 600; font-size: 14px; text-align: right;">{{bookingRef}}</td>
+                                            </tr>
+                                            <tr>
+                                                <td style="padding: 8px 0; color: #666; font-size: 14px;">Vehicle:</td>
+                                                <td style="padding: 8px 0; color: #1a1a1a; font-weight: 600; font-size: 14px; text-align: right;">{{vehicleName}}</td>
+                                            </tr>
+                                            <tr>
+                                                <td style="padding: 8px 0; color: #666; font-size: 14px;">Pickup Date:</td>
+                                                <td style="padding: 8px 0; color: #1a1a1a; font-weight: 600; font-size: 14px; text-align: right;">{{pickupDate}}</td>
+                                            </tr>
+                                            <tr>
+                                                <td style="padding: 8px 0; color: #666; font-size: 14px;">Return Date:</td>
+                                                <td style="padding: 8px 0; color: #1a1a1a; font-weight: 600; font-size: 14px; text-align: right;">{{returnDate}}</td>
+                                            </tr>
+                                        </table>
+                                    </td>
+                                </tr>
+                            </table>
+
+                            <!-- Amount Held -->
+                            <table role="presentation" style="width: 100%; border-collapse: collapse; background: linear-gradient(135deg, #C5A572 0%, #d4b896 100%); border-radius: 8px; margin-bottom: 25px;">
+                                <tr>
+                                    <td style="padding: 20px; text-align: center;">
+                                        <p style="margin: 0 0 5px; color: rgba(255,255,255,0.9); font-size: 14px;">Amount Held</p>
+                                        <p style="margin: 0; color: white; font-size: 32px; font-weight: bold;">{{amount}}</p>
+                                        <p style="margin: 10px 0 0; color: rgba(255,255,255,0.8); font-size: 12px;">Your card has been authorized. You will only be charged upon approval.</p>
+                                    </td>
+                                </tr>
+                            </table>
+
+                            <p style="margin: 0; color: #666; font-size: 14px; line-height: 1.6;">
+                                If you have any questions, please don't hesitate to contact us.
+                            </p>
+                        </td>
+                    </tr>
+
+                    <!-- Footer -->
+                    <tr>
+                        <td style="background: #f8f9fa; padding: 25px 30px; border-radius: 0 0 12px 12px; text-align: center;">
+                            <p style="margin: 0 0 10px; color: #666; font-size: 14px;">
+                                Need help? Contact us at <a href="mailto:support@drive-247.com" style="color: #C5A572; text-decoration: none;">support@drive-247.com</a>
+                            </p>
+                            <p style="margin: 0; color: #999; font-size: 12px;">
+                                &copy; 2024 DRIVE 247. All rights reserved.
+                            </p>
+                        </td>
+                    </tr>
+                </table>
+            </td>
+        </tr>
+    </table>
+</body>
+</html>

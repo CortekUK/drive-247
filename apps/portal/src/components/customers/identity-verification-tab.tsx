@@ -1,0 +1,276 @@
+import { useState, useEffect } from "react";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Shield, CheckCircle2, AlertCircle, XCircle, Clock, ExternalLink, RefreshCw } from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
+import { toast } from "sonner";
+import { format } from "date-fns";
+import { EmptyState } from "@/components/shared/data-display/empty-state";
+
+interface IdentityVerification {
+  id: string;
+  status: string;
+  review_status: string | null;
+  review_result: string | null;
+  document_type: string | null;
+  document_number: string | null;
+  document_country: string | null;
+  document_expiry_date: string | null;
+  first_name: string | null;
+  last_name: string | null;
+  date_of_birth: string | null;
+  verification_url: string | null;
+  verification_completed_at: string | null;
+  rejection_reason: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+interface IdentityVerificationTabProps {
+  customerId: string;
+}
+
+export function IdentityVerificationTab({ customerId }: IdentityVerificationTabProps) {
+  const [verifications, setVerifications] = useState<IdentityVerification[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [creating, setCreating] = useState(false);
+
+  const fetchVerifications = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('identity_verifications')
+        .select('*')
+        .eq('customer_id', customerId)
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+      setVerifications(data || []);
+    } catch (error) {
+      console.error('Error fetching verifications:', error);
+      toast.error('Failed to load identity verifications');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchVerifications();
+  }, [customerId]);
+
+  const handleCreateVerification = async () => {
+    setCreating(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('create-veriff-session', {
+        body: { customerId }
+      });
+
+      if (error) throw error;
+
+      if (!data.ok) {
+        throw new Error(data.detail || data.error || 'Failed to create verification session');
+      }
+
+      toast.success('Verification session created successfully');
+
+      // Open Veriff verification in new window
+      if (data.sessionUrl) {
+        window.open(data.sessionUrl, '_blank');
+      }
+
+      // Refresh the list
+      await fetchVerifications();
+    } catch (error: any) {
+      console.error('Error creating verification:', error);
+      toast.error(error.message || 'Failed to create verification session');
+    } finally {
+      setCreating(false);
+    }
+  };
+
+  const getStatusBadge = (verification: IdentityVerification) => {
+    if (verification.review_result === 'GREEN') {
+      return (
+        <Badge variant="default" className="bg-green-500 hover:bg-green-600">
+          <CheckCircle2 className="h-3 w-3 mr-1" />
+          Verified
+        </Badge>
+      );
+    } else if (verification.review_result === 'RED') {
+      return (
+        <Badge variant="destructive">
+          <XCircle className="h-3 w-3 mr-1" />
+          Rejected
+        </Badge>
+      );
+    } else if (verification.review_result === 'RETRY') {
+      return (
+        <Badge variant="outline" className="border-yellow-500 text-yellow-600">
+          <AlertCircle className="h-3 w-3 mr-1" />
+          Needs Review
+        </Badge>
+      );
+    } else if (verification.review_status === 'pending' || verification.review_status === 'queued') {
+      return (
+        <Badge variant="secondary">
+          <Clock className="h-3 w-3 mr-1" />
+          Under Review
+        </Badge>
+      );
+    } else {
+      return (
+        <Badge variant="outline">
+          <Clock className="h-3 w-3 mr-1" />
+          Pending
+        </Badge>
+      );
+    }
+  };
+
+  if (loading) {
+    return (
+      <Card>
+        <CardContent className="py-12">
+          <div className="flex items-center justify-center">
+            <RefreshCw className="h-6 w-6 animate-spin text-muted-foreground" />
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  return (
+    <Card>
+      <CardHeader>
+        <div className="flex items-center justify-between">
+          <div>
+            <CardTitle className="flex items-center gap-2">
+              <Shield className="h-5 w-5" />
+              Identity Verification
+            </CardTitle>
+            <CardDescription>
+              Verify customer identity using driver's license or ID card
+            </CardDescription>
+          </div>
+          <Button onClick={handleCreateVerification} disabled={creating} size="sm">
+            {creating ? (
+              <>
+                <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                Creating...
+              </>
+            ) : (
+              <>
+                <Shield className="h-4 w-4 mr-2" />
+                Start Verification
+              </>
+            )}
+          </Button>
+        </div>
+      </CardHeader>
+      <CardContent>
+        {verifications.length === 0 ? (
+          <EmptyState
+            icon={Shield}
+            title="No verifications yet"
+            description="Start a verification session to verify this customer's identity using their driver's license or ID card."
+            action={
+              <Button onClick={handleCreateVerification} disabled={creating}>
+                <Shield className="h-4 w-4 mr-2" />
+                Start Verification
+              </Button>
+            }
+          />
+        ) : (
+          <div className="overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Status</TableHead>
+                  <TableHead>Document Type</TableHead>
+                  <TableHead>Document Info</TableHead>
+                  <TableHead>Name</TableHead>
+                  <TableHead>Date of Birth</TableHead>
+                  <TableHead>Created</TableHead>
+                  <TableHead>Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {verifications.map((verification) => (
+                  <TableRow key={verification.id}>
+                    <TableCell>
+                      {getStatusBadge(verification)}
+                    </TableCell>
+                    <TableCell>
+                      {verification.document_type ? (
+                        <span className="capitalize">
+                          {verification.document_type.replace('_', ' ').toLowerCase()}
+                        </span>
+                      ) : (
+                        <span className="text-muted-foreground">—</span>
+                      )}
+                    </TableCell>
+                    <TableCell>
+                      {verification.document_number ? (
+                        <div className="text-sm">
+                          <div className="font-mono">{verification.document_number}</div>
+                          {verification.document_country && (
+                            <div className="text-muted-foreground text-xs">
+                              {verification.document_country}
+                            </div>
+                          )}
+                          {verification.document_expiry_date && (
+                            <div className="text-muted-foreground text-xs">
+                              Exp: {format(new Date(verification.document_expiry_date), 'MMM d, yyyy')}
+                            </div>
+                          )}
+                        </div>
+                      ) : (
+                        <span className="text-muted-foreground">—</span>
+                      )}
+                    </TableCell>
+                    <TableCell>
+                      {verification.first_name || verification.last_name ? (
+                        <span>
+                          {verification.first_name} {verification.last_name}
+                        </span>
+                      ) : (
+                        <span className="text-muted-foreground">—</span>
+                      )}
+                    </TableCell>
+                    <TableCell>
+                      {verification.date_of_birth ? (
+                        format(new Date(verification.date_of_birth), 'MMM d, yyyy')
+                      ) : (
+                        <span className="text-muted-foreground">—</span>
+                      )}
+                    </TableCell>
+                    <TableCell>
+                      <div className="text-sm">
+                        <div>{format(new Date(verification.created_at), 'MMM d, yyyy')}</div>
+                        <div className="text-muted-foreground text-xs">
+                          {format(new Date(verification.created_at), 'h:mm a')}
+                        </div>
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      {verification.verification_url && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => window.open(verification.verification_url!, '_blank')}
+                        >
+                          <ExternalLink className="h-4 w-4" />
+                        </Button>
+                      )}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}

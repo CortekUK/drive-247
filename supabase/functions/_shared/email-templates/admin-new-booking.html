@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>New Booking Requires Approval - DRIVE 247</title>
+</head>
+<body style="margin: 0; padding: 0; font-family: 'Segoe UI', Arial, sans-serif; background-color: #f5f5f5;">
+    <table role="presentation" style="width: 100%; border-collapse: collapse;">
+        <tr>
+            <td align="center" style="padding: 40px 0;">
+                <table role="presentation" style="width: 600px; max-width: 100%; border-collapse: collapse; background: white; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.1);">
+                    <!-- Header -->
+                    <tr>
+                        <td style="background: linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 100%); padding: 30px; border-radius: 12px 12px 0 0;">
+                            <table role="presentation" style="width: 100%; border-collapse: collapse;">
+                                <tr>
+                                    <td>
+                                        <h1 style="margin: 0; color: #C5A572; font-size: 24px; letter-spacing: 2px;">DRIVE 247</h1>
+                                        <p style="margin: 5px 0 0; color: #888; font-size: 12px;">Admin Portal</p>
+                                    </td>
+                                    <td style="text-align: right;">
+                                        <span style="display: inline-block; background: #f97316; color: white; padding: 6px 16px; border-radius: 20px; font-weight: 600; font-size: 12px;">
+                                            ACTION REQUIRED
+                                        </span>
+                                    </td>
+                                </tr>
+                            </table>
+                        </td>
+                    </tr>
+
+                    <!-- Alert Banner -->
+                    <tr>
+                        <td style="background: #fff7ed; padding: 20px 30px; border-left: 4px solid #f97316;">
+                            <h2 style="margin: 0; color: #9a3412; font-size: 18px;">🔔 New Booking Pending Approval</h2>
+                            <p style="margin: 8px 0 0; color: #c2410c; font-size: 14px;">
+                                A customer has submitted a new booking that requires your review.
+                            </p>
+                        </td>
+                    </tr>
+
+                    <!-- Content -->
+                    <tr>
+                        <td style="padding: 30px;">
+                            <!-- Customer Info -->
+                            <table role="presentation" style="width: 100%; border-collapse: collapse; margin-bottom: 20px;">
+                                <tr>
+                                    <td style="width: 50%; padding-right: 10px; vertical-align: top;">
+                                        <div style="background: #f8f9fa; padding: 15px; border-radius: 8px;">
+                                            <p style="margin: 0 0 5px; color: #666; font-size: 12px; text-transform: uppercase;">Customer</p>
+                                            <p style="margin: 0; color: #1a1a1a; font-size: 16px; font-weight: 600;">{{customerName}}</p>
+                                            <p style="margin: 5px 0 0; color: #666; font-size: 13px;">{{customerEmail}}</p>
+                                            <p style="margin: 2px 0 0; color: #666; font-size: 13px;">{{customerPhone}}</p>
+                                        </div>
+                                    </td>
+                                    <td style="width: 50%; padding-left: 10px; vertical-align: top;">
+                                        <div style="background: #f8f9fa; padding: 15px; border-radius: 8px;">
+                                            <p style="margin: 0 0 5px; color: #666; font-size: 12px; text-transform: uppercase;">Vehicle</p>
+                                            <p style="margin: 0; color: #1a1a1a; font-size: 16px; font-weight: 600;">{{vehicleName}}</p>
+                                            <p style="margin: 5px 0 0; color: #666; font-size: 13px;">Reg: {{vehicleReg}}</p>
+                                        </div>
+                                    </td>
+                                </tr>
+                            </table>
+
+                            <!-- Booking Details -->
+                            <table role="presentation" style="width: 100%; border-collapse: collapse; background: #f8f9fa; border-radius: 8px; margin-bottom: 20px;">
+                                <tr>
+                                    <td style="padding: 20px;">
+                                        <h3 style="margin: 0 0 15px; color: #1a1a1a; font-size: 14px; text-transform: uppercase; letter-spacing: 1px;">Booking Details</h3>
+
+                                        <table role="presentation" style="width: 100%; border-collapse: collapse;">
+                                            <tr>
+                                                <td style="padding: 8px 0; color: #666; font-size: 14px; border-bottom: 1px solid #e5e5e5;">Reference:</td>
+                                                <td style="padding: 8px 0; color: #1a1a1a; font-weight: 600; font-size: 14px; text-align: right; border-bottom: 1px solid #e5e5e5;">{{bookingRef}}</td>
+                                            </tr>
+                                            <tr>
+                                                <td style="padding: 8px 0; color: #666; font-size: 14px; border-bottom: 1px solid #e5e5e5;">Pickup Date:</td>
+                                                <td style="padding: 8px 0; color: #1a1a1a; font-weight: 600; font-size: 14px; text-align: right; border-bottom: 1px solid #e5e5e5;">{{pickupDate}}</td>
+                                            </tr>
+                                            <tr>
+                                                <td style="padding: 8px 0; color: #666; font-size: 14px; border-bottom: 1px solid #e5e5e5;">Return Date:</td>
+                                                <td style="padding: 8px 0; color: #1a1a1a; font-weight: 600; font-size: 14px; text-align: right; border-bottom: 1px solid #e5e5e5;">{{returnDate}}</td>
+                                            </tr>
+                                            <tr>
+                                                <td style="padding: 8px 0; color: #666; font-size: 14px; border-bottom: 1px solid #e5e5e5;">Duration:</td>
+                                                <td style="padding: 8px 0; color: #1a1a1a; font-weight: 600; font-size: 14px; text-align: right; border-bottom: 1px solid #e5e5e5;">{{duration}}</td>
+                                            </tr>
+                                            <tr>
+                                                <td style="padding: 8px 0; color: #666; font-size: 14px;">Protection Plan:</td>
+                                                <td style="padding: 8px 0; color: #1a1a1a; font-weight: 600; font-size: 14px; text-align: right;">{{protectionPlan}}</td>
+                                            </tr>
+                                        </table>
+                                    </td>
+                                </tr>
+                            </table>
+
+                            <!-- Amount Box -->
+                            <table role="presentation" style="width: 100%; border-collapse: collapse; background: linear-gradient(135deg, #f97316 0%, #fb923c 100%); border-radius: 8px; margin-bottom: 25px;">
+                                <tr>
+                                    <td style="padding: 20px; text-align: center;">
+                                        <p style="margin: 0 0 5px; color: rgba(255,255,255,0.9); font-size: 14px;">Amount Held (Pre-Authorization)</p>
+                                        <p style="margin: 0; color: white; font-size: 36px; font-weight: bold;">{{amount}}</p>
+                                        <p style="margin: 10px 0 0; color: rgba(255,255,255,0.8); font-size: 12px;">Pre-auth expires in 7 days</p>
+                                    </td>
+                                </tr>
+                            </table>
+
+                            <!-- Verification Status -->
+                            <table role="presentation" style="width: 100%; border-collapse: collapse; background: #f0fdf4; border-radius: 8px; margin-bottom: 25px;">
+                                <tr>
+                                    <td style="padding: 15px 20px;">
+                                        <table role="presentation" style="width: 100%; border-collapse: collapse;">
+                                            <tr>
+                                                <td style="color: #166534; font-size: 14px;">
+                                                    <strong>Identity Verification:</strong> {{veriffStatus}}
+                                                </td>
+                                            </tr>
+                                        </table>
+                                    </td>
+                                </tr>
+                            </table>
+
+                            <!-- CTA Buttons -->
+                            <table role="presentation" style="width: 100%; border-collapse: collapse;">
+                                <tr>
+                                    <td style="text-align: center; padding: 10px 0;">
+                                        <a href="{{adminUrl}}/pending-bookings" style="display: inline-block; background: #C5A572; color: white; padding: 14px 40px; border-radius: 6px; text-decoration: none; font-weight: 600; font-size: 16px;">
+                                            Review Booking
+                                        </a>
+                                    </td>
+                                </tr>
+                            </table>
+
+                            <p style="margin: 20px 0 0; color: #666; font-size: 13px; text-align: center;">
+                                ⏰ Please review within 24 hours to ensure a great customer experience.
+                            </p>
+                        </td>
+                    </tr>
+
+                    <!-- Footer -->
+                    <tr>
+                        <td style="background: #f8f9fa; padding: 20px 30px; border-radius: 0 0 12px 12px; text-align: center;">
+                            <p style="margin: 0; color: #999; font-size: 12px;">
+                                DRIVE 247 Admin Notification • This is an automated message
+                            </p>
+                        </td>
+                    </tr>
+                </table>
+            </td>
+        </tr>
+    </table>
+</body>
+</html>

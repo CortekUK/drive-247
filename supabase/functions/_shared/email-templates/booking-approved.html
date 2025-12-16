@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Booking Confirmed - DRIVE 247</title>
+</head>
+<body style="margin: 0; padding: 0; font-family: 'Segoe UI', Arial, sans-serif; background-color: #f5f5f5;">
+    <table role="presentation" style="width: 100%; border-collapse: collapse;">
+        <tr>
+            <td align="center" style="padding: 40px 0;">
+                <table role="presentation" style="width: 600px; max-width: 100%; border-collapse: collapse; background: white; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.1);">
+                    <!-- Header -->
+                    <tr>
+                        <td style="background: linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 100%); padding: 30px; border-radius: 12px 12px 0 0; text-align: center;">
+                            <h1 style="margin: 0; color: #C5A572; font-size: 28px; letter-spacing: 2px;">DRIVE 247</h1>
+                            <p style="margin: 10px 0 0; color: #888; font-size: 14px;">Premium Car Rentals</p>
+                        </td>
+                    </tr>
+
+                    <!-- Status Badge -->
+                    <tr>
+                        <td style="padding: 30px 30px 0; text-align: center;">
+                            <span style="display: inline-block; background: #dcfce7; color: #166534; padding: 8px 20px; border-radius: 20px; font-weight: 600; font-size: 14px;">
+                                ✓ BOOKING CONFIRMED
+                            </span>
+                        </td>
+                    </tr>
+
+                    <!-- Content -->
+                    <tr>
+                        <td style="padding: 30px;">
+                            <h2 style="margin: 0 0 20px; color: #1a1a1a; font-size: 22px;">Great news, {{customerName}}!</h2>
+
+                            <p style="margin: 0 0 20px; color: #444; line-height: 1.6; font-size: 16px;">
+                                Your booking has been approved and confirmed! Your vehicle is reserved and waiting for you.
+                            </p>
+
+                            <!-- Booking Details Card -->
+                            <table role="presentation" style="width: 100%; border-collapse: collapse; background: #f8f9fa; border-radius: 8px; margin-bottom: 25px;">
+                                <tr>
+                                    <td style="padding: 20px;">
+                                        <h3 style="margin: 0 0 15px; color: #1a1a1a; font-size: 16px; text-transform: uppercase; letter-spacing: 1px;">Your Rental Details</h3>
+
+                                        <table role="presentation" style="width: 100%; border-collapse: collapse;">
+                                            <tr>
+                                                <td style="padding: 8px 0; color: #666; font-size: 14px;">Confirmation #:</td>
+                                                <td style="padding: 8px 0; color: #1a1a1a; font-weight: 600; font-size: 14px; text-align: right;">{{bookingRef}}</td>
+                                            </tr>
+                                            <tr>
+                                                <td style="padding: 8px 0; color: #666; font-size: 14px;">Vehicle:</td>
+                                                <td style="padding: 8px 0; color: #1a1a1a; font-weight: 600; font-size: 14px; text-align: right;">{{vehicleName}}</td>
+                                            </tr>
+                                            <tr>
+                                                <td style="padding: 8px 0; color: #666; font-size: 14px;">Pickup:</td>
+                                                <td style="padding: 8px 0; color: #1a1a1a; font-weight: 600; font-size: 14px; text-align: right;">{{pickupDate}}</td>
+                                            </tr>
+                                            <tr>
+                                                <td style="padding: 8px 0; color: #666; font-size: 14px;">Return:</td>
+                                                <td style="padding: 8px 0; color: #1a1a1a; font-weight: 600; font-size: 14px; text-align: right;">{{returnDate}}</td>
+                                            </tr>
+                                        </table>
+                                    </td>
+                                </tr>
+                            </table>
+
+                            <!-- Amount Charged -->
+                            <table role="presentation" style="width: 100%; border-collapse: collapse; background: linear-gradient(135deg, #166534 0%, #22c55e 100%); border-radius: 8px; margin-bottom: 25px;">
+                                <tr>
+                                    <td style="padding: 20px; text-align: center;">
+                                        <p style="margin: 0 0 5px; color: rgba(255,255,255,0.9); font-size: 14px;">Total Charged</p>
+                                        <p style="margin: 0; color: white; font-size: 32px; font-weight: bold;">{{amount}}</p>
+                                    </td>
+                                </tr>
+                            </table>
+
+                            <!-- Pickup Instructions -->
+                            <table role="presentation" style="width: 100%; border-collapse: collapse; border: 2px solid #C5A572; border-radius: 8px; margin-bottom: 25px;">
+                                <tr>
+                                    <td style="padding: 20px;">
+                                        <h3 style="margin: 0 0 15px; color: #C5A572; font-size: 16px;">📍 Pickup Instructions</h3>
+                                        <p style="margin: 0 0 10px; color: #444; font-size: 14px; line-height: 1.6;">
+                                            <strong>Location:</strong> {{pickupLocation}}
+                                        </p>
+                                        <p style="margin: 0; color: #444; font-size: 14px; line-height: 1.6;">
+                                            Please bring a valid driver's license and the credit card used for booking.
+                                        </p>
+                                    </td>
+                                </tr>
+                            </table>
+
+                            <!-- DocuSign Notice -->
+                            <table role="presentation" style="width: 100%; border-collapse: collapse; background: #eff6ff; border-radius: 8px; margin-bottom: 25px;">
+                                <tr>
+                                    <td style="padding: 20px;">
+                                        <h3 style="margin: 0 0 10px; color: #1e40af; font-size: 14px;">📄 Rental Agreement</h3>
+                                        <p style="margin: 0; color: #1e40af; font-size: 14px; line-height: 1.6;">
+                                            You'll receive a separate email from DocuSign with your rental agreement. Please sign it before pickup.
+                                        </p>
+                                    </td>
+                                </tr>
+                            </table>
+
+                            <p style="margin: 0; color: #666; font-size: 14px; line-height: 1.6;">
+                                We look forward to serving you! If you have any questions, please don't hesitate to reach out.
+                            </p>
+                        </td>
+                    </tr>
+
+                    <!-- Footer -->
+                    <tr>
+                        <td style="background: #f8f9fa; padding: 25px 30px; border-radius: 0 0 12px 12px; text-align: center;">
+                            <p style="margin: 0 0 10px; color: #666; font-size: 14px;">
+                                Need help? Contact us at <a href="mailto:support@drive-247.com" style="color: #C5A572; text-decoration: none;">support@drive-247.com</a>
+                            </p>
+                            <p style="margin: 0; color: #999; font-size: 12px;">
+                                &copy; 2024 DRIVE 247. All rights reserved.
+                            </p>
+                        </td>
+                    </tr>
+                </table>
+            </td>
+        </tr>
+    </table>
+</body>
+</html>

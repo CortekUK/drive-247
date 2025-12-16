@@ -1,4 +1,5 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.57.4'
 import Stripe from 'https://esm.sh/stripe@14.21.0?target=deno'
 
 const stripe = new Stripe(Deno.env.get('STRIPE_SECRET_KEY') || '', {
@@ -8,7 +9,7 @@ const stripe = new Stripe(Deno.env.get('STRIPE_SECRET_KEY') || '', {
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-requested-with',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-requested-with, x-tenant-slug',
   'Access-Control-Allow-Methods': 'POST, GET, OPTIONS, PUT, DELETE',
   'Access-Control-Max-Age': '86400',
 }
@@ -20,12 +21,41 @@ serve(async (req) => {
   }
 
   try {
-    const { bookingId, rentalId, customerEmail, customerName, totalAmount } = await req.json()
+    const { bookingId, rentalId, customerEmail, customerName, totalAmount, tenantSlug } = await req.json()
+
+    // Get tenant slug from header or body
+    const slug = tenantSlug || req.headers.get('x-tenant-slug')
 
     const origin = req.headers.get('origin') || 'http://localhost:5173'
 
     // Support both bookingId (legacy) and rentalId (portal integration)
     const referenceId = rentalId || bookingId
+
+    // Initialize Supabase client to fetch tenant info
+    const supabaseClient = createClient(
+      Deno.env.get('SUPABASE_URL') ?? '',
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+    )
+
+    // Fetch tenant details for customization
+    let tenantId: string | null = null
+    let companyName = 'Drive 917'
+    let currencyCode = 'usd'
+
+    if (slug) {
+      const { data: tenant, error: tenantError } = await supabaseClient
+        .from('tenants')
+        .select('id, company_name, currency_code')
+        .eq('slug', slug)
+        .eq('status', 'active')
+        .single()
+
+      if (tenant && !tenantError) {
+        tenantId = tenant.id
+        companyName = tenant.company_name || companyName
+        currencyCode = (tenant.currency_code || 'USD').toLowerCase()
+      }
+    }
 
     // Create Stripe Checkout Session
     const session = await stripe.checkout.sessions.create({
@@ -33,10 +63,10 @@ serve(async (req) => {
       line_items: [
         {
           price_data: {
-            currency: 'usd',
+            currency: currencyCode,
             product_data: {
-              name: 'Luxury Vehicle Rental',
-              description: 'Premium chauffeur-driven vehicle rental - Drive 247',
+              name: 'Vehicle Rental',
+              description: `Premium vehicle rental - ${companyName}`,
             },
             unit_amount: Math.round(totalAmount * 100), // Convert to cents
           },
@@ -56,6 +86,8 @@ serve(async (req) => {
         booking_id: bookingId,
         rental_id: rentalId,
         customer_name: customerName,
+        tenant_id: tenantId,
+        tenant_slug: slug,
       },
     })
 
@@ -68,53 +100,11 @@ serve(async (req) => {
     )
   } catch (error) {
     console.error('Error creating checkout session:', error)
-
-    // Provide user-friendly error messages
-    let errorMessage = 'Unable to create payment session. Please try again.'
-    let statusCode = 400
-
-    if (error instanceof Stripe.errors.StripeError) {
-      // Handle specific Stripe errors
-      switch (error.type) {
-        case 'StripeCardError':
-          errorMessage = 'There was an issue with your card. Please check your card details.'
-          break
-        case 'StripeRateLimitError':
-          errorMessage = 'Too many requests. Please wait a moment and try again.'
-          statusCode = 429
-          break
-        case 'StripeInvalidRequestError':
-          errorMessage = 'Invalid payment request. Please check your booking details.'
-          break
-        case 'StripeAPIError':
-        case 'StripeConnectionError':
-          errorMessage = 'Payment service temporarily unavailable. Please try again in a few moments.'
-          statusCode = 503
-          break
-        case 'StripeAuthenticationError':
-          errorMessage = 'Payment configuration error. Please contact support.'
-          statusCode = 500
-          break
-        default:
-          errorMessage = error.message || errorMessage
-      }
-    } else if (error.message) {
-      // For other errors, check if it's a validation error
-      if (error.message.includes('required') || error.message.includes('missing')) {
-        errorMessage = 'Missing required booking information. Please complete all fields.'
-      } else if (error.message.includes('invalid')) {
-        errorMessage = 'Invalid booking information provided. Please check your details.'
-      }
-    }
-
     return new Response(
-      JSON.stringify({
-        error: errorMessage,
-        code: error.code || 'payment_error'
-      }),
+      JSON.stringify({ error: error.message }),
       {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        status: statusCode,
+        status: 400,
       }
     )
   }

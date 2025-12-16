@@ -12,6 +12,13 @@ dist
 dist-ssr
 *.local
 
+# Next.js
+.next/
+out/
+
+# Turbo
+.turbo/
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

@@ -246,21 +246,83 @@ async function handleVeriffWebhook(
       return { ok: false, error: updateError.message };
     }
 
+    // Check if the document number is in the blocked list
+    let isBlockedIdentity = false;
+    let blockReason = '';
+
+    if (updateData.document_number) {
+      const { data: blockedCheck } = await supabaseClient
+        .from('blocked_identities')
+        .select('reason, identity_type')
+        .eq('identity_number', updateData.document_number)
+        .eq('is_active', true)
+        .single();
+
+      if (blockedCheck) {
+        isBlockedIdentity = true;
+        blockReason = blockedCheck.reason;
+        console.log('BLOCKED IDENTITY DETECTED:', updateData.document_number, 'Reason:', blockReason);
+      }
+    }
+
     // Update customer status
     let customerStatus = 'pending';
-    if (payload.verification.code === 9001) {
+    let customerIsBlocked = false;
+
+    if (isBlockedIdentity) {
+      // Override to rejected if identity is blocked
+      customerStatus = 'rejected';
+      customerIsBlocked = true;
+      console.log('Setting customer as blocked due to blocked identity');
+    } else if (payload.verification.code === 9001) {
       customerStatus = 'verified';
     } else if (payload.verification.code === 9102) {
       customerStatus = 'rejected';
     }
 
+    // Update customer with verification status and potentially block them
+    const customerUpdatePayload: any = {
+      identity_verification_status: customerStatus,
+      // Also store the license/ID number on the customer record
+      license_number: updateData.document_number || null
+    };
+
+    if (customerIsBlocked) {
+      customerUpdatePayload.is_blocked = true;
+      customerUpdatePayload.blocked_at = new Date().toISOString();
+      customerUpdatePayload.blocked_reason = `Blocked identity: ${blockReason}`;
+    }
+
     const { error: customerUpdateError } = await supabaseClient
       .from('customers')
-      .update({ identity_verification_status: customerStatus })
+      .update(customerUpdatePayload)
       .eq('id', verification.customer_id);
 
     if (customerUpdateError) {
       console.error('Error updating customer status:', customerUpdateError);
+    }
+
+    // If blocked, create a notification for admins
+    if (isBlockedIdentity) {
+      const { data: adminUsers } = await supabaseClient
+        .from('app_users')
+        .select('id')
+        .in('role', ['admin', 'head_admin']);
+
+      for (const admin of adminUsers || []) {
+        await supabaseClient.from('notifications').insert({
+          user_id: admin.id,
+          title: 'Blocked Identity Detected',
+          message: `A blocked identity was detected during verification. Document: ${updateData.document_number}. Reason: ${blockReason}`,
+          type: 'reminder_critical',
+          link: `/customers/${verification.customer_id}`,
+          metadata: {
+            customer_id: verification.customer_id,
+            document_number: updateData.document_number,
+            block_reason: blockReason
+          }
+        });
+      }
     }
 
     console.log('Successfully processed webhook for verification:', verification.id);

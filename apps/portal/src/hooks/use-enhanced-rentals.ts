@@ -1,0 +1,239 @@
+import { useQuery } from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase/client";
+import { calculateDuration, getRentalStatus } from "@/lib/rental-utils";
+import { useTenant } from "@/contexts/TenantContext";
+
+export interface RentalFilters {
+  captureStatus?: string;
+  search?: string;
+  status?: string;
+  customerType?: string;
+  duration?: string;
+  durationMin?: number;
+  durationMax?: number;
+  initialPayment?: string;
+  startDateFrom?: Date;
+  startDateTo?: Date;
+  sortBy?: string;
+  sortOrder?: 'asc' | 'desc';
+  page?: number;
+  pageSize?: number;
+}
+
+export interface EnhancedRental {
+  id: string;
+  rental_number: string;
+  start_date: string;
+  end_date: string | null;
+  rental_period_type?: string;
+  monthly_amount: number;
+  protection_cost: number;
+  total_amount: number;
+  status: string;
+  computed_status: string;
+  duration_months: number;
+  initial_payment: number | null;
+  customer: {
+    id: string;
+    name: string;
+    customer_type: string;
+  };
+  vehicle: {
+    id: string;
+    reg: string;
+    make: string;
+    model: string;
+  };
+}
+
+export interface RentalStats {
+  total: number;
+  active: number;
+  closed: number;
+  upcoming: number;
+  avgDuration: number;
+}
+
+const ITEMS_PER_PAGE = 25;
+
+export const useEnhancedRentals = (filters: RentalFilters = {}) => {
+  const { tenant } = useTenant();
+  const {
+    search = "",
+    status = "all",
+    customerType = "all",
+    duration = "all",
+    durationMin,
+    durationMax,
+    initialPayment = "all",
+    startDateFrom,
+    startDateTo,
+    sortBy = "start_date",
+    sortOrder = "desc",
+    page = 1,
+    pageSize = ITEMS_PER_PAGE
+  } = filters;
+
+  return useQuery({
+    queryKey: ["enhanced-rentals", tenant?.id, filters],
+    queryFn: async () => {
+      if (!tenant) throw new Error("No tenant context available");
+
+      let query = supabase
+        .from("rentals")
+        .select(`
+          id,
+          rental_number,
+          start_date,
+          end_date,
+          monthly_amount,
+          status,
+          customers!inner(id, name, customer_type),
+          vehicles!inner(id, reg, make, model)
+        `, { count: 'exact' })
+        .eq("tenant_id", tenant.id) as any;
+
+      // Apply customer type filter at DB level
+      if (customerType !== "all") {
+        query = query.eq("customers.customer_type", customerType);
+      }
+
+      // Apply date range filters
+      if (startDateFrom) {
+        query = query.gte("start_date", startDateFrom.toISOString().split('T')[0]);
+      }
+      if (startDateTo) {
+        query = query.lte("start_date", startDateTo.toISOString().split('T')[0]);
+      }
+
+      // Apply sorting
+      const ascending = sortOrder === "asc";
+      if (sortBy === "rental_number") {
+        query = query.order("rental_number", { ascending });
+      } else if (sortBy === "monthly_amount") {
+        query = query.order("monthly_amount", { ascending });
+      } else if (sortBy === "end_date") {
+        query = query.order("end_date", { ascending, nullsFirst: !ascending });
+      } else {
+        query = query.order(sortBy as any, { ascending });
+      }
+
+      const { data: rentalsData, error } = await query;
+
+      if (error) throw error;
+
+      // Get initial payments for these rentals
+      const rentalIds = rentalsData?.map((r: any) => r.id) || [];
+      const { data: initialPayments } = await supabase
+        .from("payments")
+        .select("rental_id, amount")
+        .in("rental_id", rentalIds)
+        .eq("payment_type", "InitialFee");
+
+      const initialPaymentMap = new Map(
+        initialPayments?.map(p => [p.rental_id, p.amount]) || []
+      );
+
+      // Get protection plans for these rentals
+      const { data: protectionSelections } = await supabase
+        .from("rental_protection_selections" as any)
+        .select("rental_id, total_cost")
+        .in("rental_id", rentalIds);
+
+      const protectionCostMap = new Map(
+        protectionSelections?.map((p: any) => [p.rental_id, p.total_cost]) || []
+      );
+
+      // Transform and filter data
+      const enhancedRentals: EnhancedRental[] = (rentalsData || [])
+        .map((rental: any) => {
+          const periodType = 'Monthly';
+          const durationMonths = calculateDuration(rental.start_date, rental.end_date, periodType);
+          const computedStatus = getRentalStatus(rental.start_date, rental.end_date, rental.status);
+          const initialPaymentAmount = initialPaymentMap.get(rental.id) || null;
+          const protectionCost = protectionCostMap.get(rental.id) || 0;
+          const totalAmount = rental.monthly_amount + protectionCost;
+
+          return {
+            id: rental.id,
+            rental_number: rental.rental_number,
+            start_date: rental.start_date,
+            end_date: rental.end_date,
+            rental_period_type: periodType,
+            monthly_amount: rental.monthly_amount,
+            protection_cost: protectionCost,
+            total_amount: totalAmount,
+            status: rental.status,
+            computed_status: computedStatus,
+            duration_months: durationMonths,
+            initial_payment: initialPaymentAmount,
+            customer: rental.customers as any,
+            vehicle: rental.vehicles as any,
+          };
+        })
+        .filter((rental: EnhancedRental) => {
+          // Apply search filter (client-side for related fields)
+          if (search) {
+            const searchLower = search.toLowerCase();
+            const matchesRentalNumber = rental.rental_number?.toLowerCase().includes(searchLower);
+            const matchesCustomer = rental.customer?.name?.toLowerCase().includes(searchLower);
+            const matchesVehicle = rental.vehicle?.reg?.toLowerCase().includes(searchLower);
+            if (!matchesRentalNumber && !matchesCustomer && !matchesVehicle) return false;
+          }
+
+          // Apply status filter (handle both 'active' and 'Active' formats)
+          if (status !== "all") {
+            const normalizedFilter = status.toLowerCase();
+            const normalizedStatus = rental.computed_status.toLowerCase();
+            if (normalizedFilter !== normalizedStatus) return false;
+          }
+
+          // Apply duration filter (custom range takes precedence)
+          if (durationMin !== undefined || durationMax !== undefined) {
+            const months = rental.duration_months;
+            if (durationMin !== undefined && months < durationMin) return false;
+            if (durationMax !== undefined && months > durationMax) return false;
+          } else if (duration !== "all") {
+            const months = rental.duration_months;
+            if (duration === "≤3 mo" && months > 3) return false;
+            if (duration === "3–6 mo" && (months <= 3 || months > 6)) return false;
+            if (duration === "6–12 mo" && (months <= 6 || months > 12)) return false;
+            if (duration === "12–18 mo" && (months <= 12 || months > 18)) return false;
+            if (duration === "18–24 mo" && (months <= 18 || months > 24)) return false;
+            if (duration === ">24 mo" && months <= 24) return false;
+          }
+
+          // Apply initial payment filter
+          if (initialPayment !== "all") {
+            if (initialPayment === "set" && !rental.initial_payment) return false;
+            if (initialPayment === "missing" && rental.initial_payment) return false;
+          }
+
+          return true;
+        });
+
+      // Paginate filtered results
+      const startIndex = (page - 1) * pageSize;
+      const paginatedRentals = enhancedRentals.slice(startIndex, startIndex + pageSize);
+
+      // Calculate stats from ALL filtered data (not just current page)
+      const stats: RentalStats = {
+        total: enhancedRentals.length,
+        active: enhancedRentals.filter(r => r.computed_status === "Active").length,
+        closed: enhancedRentals.filter(r => r.computed_status === "Closed").length,
+        upcoming: enhancedRentals.filter(r => r.computed_status === "Upcoming").length,
+        avgDuration: enhancedRentals.length > 0
+          ? Math.round(enhancedRentals.reduce((sum, r) => sum + r.duration_months, 0) / enhancedRentals.length)
+          : 0
+      };
+
+      return {
+        rentals: paginatedRentals,
+        stats,
+        totalCount: enhancedRentals.length,
+        totalPages: Math.ceil(enhancedRentals.length / pageSize)
+      };
+    },
+    enabled: !!tenant,
+  });
+};

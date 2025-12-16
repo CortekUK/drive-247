@@ -1,1 +1,7 @@
-project_id = "tybkmgqfolvsddimfkku"
+project_id = "hviqoaokxvlancmftwuo"
+
+[functions.docusign-webhook]
+verify_jwt = false
+
+[functions.veriff-webhook]
+verify_jwt = false
