@@ -2,6 +2,7 @@
 
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { useTenant } from "@/contexts/TenantContext";
 
 export interface BrandingSettings {
   // Base colors
@@ -54,11 +55,13 @@ const DEFAULT_BRANDING: BrandingSettings = {
 };
 
 export const useBrandingSettings = () => {
+  const { tenant } = useTenant();
+
   const { data: branding, isLoading, error } = useQuery({
-    queryKey: ["org-branding-settings"],
+    queryKey: ["org-branding-settings", tenant?.id],
     queryFn: async () => {
-      // Fetch branding from org_settings table
-      const { data, error } = await supabase
+      // Build query with tenant filtering
+      let query = supabase
         .from("org_settings")
         .select(`
           primary_color,
@@ -80,9 +83,14 @@ export const useBrandingSettings = () => {
           meta_title,
           meta_description,
           og_image_url
-        `)
-        .limit(1)
-        .single();
+        `);
+
+      // Add tenant filter if tenant context exists
+      if (tenant?.id) {
+        query = query.eq("tenant_id", tenant.id);
+      }
+
+      const { data, error } = await query.limit(1).single();
 
       if (error) {
         if (error.code === "PGRST116") {
@@ -99,6 +107,7 @@ export const useBrandingSettings = () => {
     },
     staleTime: 2 * 60 * 1000, // Cache for 2 minutes
     retry: 1,
+    enabled: true, // Always enabled, will work with or without tenant
   });
 
   return {

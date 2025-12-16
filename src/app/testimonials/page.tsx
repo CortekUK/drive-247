@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Star, MessageSquareQuote, Sparkles, ChevronLeft, ChevronRight } from "lucide-react";
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { useTenant } from "@/contexts/TenantContext";
 import { FeedbackModal } from "@/components/FeedbackModal";
 import { usePageContent, defaultReviewsContent, mergeWithDefaults } from "@/hooks/usePageContent";
 
@@ -25,6 +26,7 @@ interface Testimonial {
 const ITEMS_PER_PAGE = 12;
 
 const Testimonials = () => {
+  const { tenant } = useTenant();
   const [testimonials, setTestimonials] = useState<Testimonial[]>([]);
   const [feedbackModalOpen, setFeedbackModalOpen] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
@@ -36,22 +38,34 @@ const Testimonials = () => {
 
   useEffect(() => {
     loadTestimonials();
-  }, [currentPage]);
+  }, [currentPage, tenant?.id]);
 
   const loadTestimonials = async () => {
-    // Get total count
-    const { count } = await supabase
+    // Get total count with tenant filtering
+    let countQuery = supabase
       .from("testimonials")
       .select("*", { count: "exact", head: true });
 
+    if (tenant?.id) {
+      countQuery = countQuery.eq("tenant_id", tenant.id);
+    }
+
+    const { count } = await countQuery;
+
     setTotalCount(count || 0);
 
-    // Get paginated data
-    const { data, error } = await supabase
+    // Get paginated data with tenant filtering
+    let dataQuery = supabase
       .from("testimonials")
       .select("*")
       .order("created_at", { ascending: false })
       .range((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE - 1);
+
+    if (tenant?.id) {
+      dataQuery = dataQuery.eq("tenant_id", tenant.id);
+    }
+
+    const { data, error } = await dataQuery;
 
     if (!error && data) {
       setTestimonials(data);

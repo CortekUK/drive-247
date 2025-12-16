@@ -200,12 +200,12 @@ const BookingPending = () => {
 
                 {/* Action Buttons */}
                 <div className="flex flex-col sm:flex-row gap-4 justify-center">
-                  <Link to="/">
+                  <Link href="/">
                     <Button variant="outline" className="w-full sm:w-auto">
                       Return Home
                     </Button>
                   </Link>
-                  <Link to="/booking">
+                  <Link href="/booking">
                     <Button className="w-full sm:w-auto gradient-accent">
                       Book Another Vehicle
                     </Button>

@@ -511,7 +511,7 @@ const Contact = () => {
                 {/* Privacy Note */}
                 <p className="text-xs text-muted-foreground">
                   Your data is handled in accordance with our{' '}
-                  <Link to="/privacy" className="text-accent hover:underline">
+                  <Link href="/privacy" className="text-accent hover:underline">
                     Privacy Policy
                   </Link>
                   . We never share your information with third parties.

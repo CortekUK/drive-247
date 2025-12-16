@@ -32,11 +32,6 @@ interface InvoiceDialogProps {
     end_date: string;
     monthly_amount: number;
   };
-  protectionPlan?: {
-    name: string;
-    cost: number;
-    rentalFee: number; // Vehicle rental cost only (excluding protection)
-  };
 }
 
 const formatCurrency = (amount: number) => {
@@ -47,9 +42,9 @@ const formatCurrency = (amount: number) => {
 };
 
 // Separate printable component
-const PrintableInvoice = ({ invoice, customer, vehicle, rental, protectionPlan }: Omit<InvoiceDialogProps, "open" | "onOpenChange">) => {
+const PrintableInvoice = ({ invoice, customer, vehicle, rental }: Omit<InvoiceDialogProps, "open" | "onOpenChange">) => {
   const vehicleName = vehicle.make && vehicle.model ? `${vehicle.make} ${vehicle.model}` : vehicle.reg;
-  const rentalFee = protectionPlan?.rentalFee ?? invoice.subtotal;
+  const rentalFee = invoice.subtotal;
 
   return (
     <div className="p-8 bg-white text-black">
@@ -122,22 +117,6 @@ const PrintableInvoice = ({ invoice, customer, vehicle, rental, protectionPlan }
                 {formatCurrency(rentalFee)}
               </td>
             </tr>
-            {protectionPlan && (
-              <tr className="border-b border-gray-300">
-                <td className="p-3 text-sm">
-                  <div className="flex items-start gap-2">
-                    <span style={{ color: '#C5A572' }}>🛡</span>
-                    <div>
-                      <p className="font-medium">Protection Plan</p>
-                      <p className="text-xs text-gray-600">{protectionPlan.name}</p>
-                    </div>
-                  </div>
-                </td>
-                <td className="p-3 text-sm text-right font-medium" style={{ color: '#C5A572' }}>
-                  {formatCurrency(protectionPlan.cost)}
-                </td>
-              </tr>
-            )}
             {invoice.tax_amount > 0 && (
               <tr className="border-b border-gray-300">
                 <td className="p-3 text-sm">Taxes & Fees</td>
@@ -178,11 +157,10 @@ export const InvoiceDialog = ({
   customer,
   vehicle,
   rental,
-  protectionPlan,
 }: InvoiceDialogProps) => {
   const printRef = useRef<HTMLDivElement>(null);
   const vehicleName = vehicle.make && vehicle.model ? `${vehicle.make} ${vehicle.model}` : vehicle.reg;
-  const rentalFee = protectionPlan?.rentalFee ?? invoice.subtotal;
+  const rentalFee = invoice.subtotal;
 
   const handlePrint = useReactToPrint({
     contentRef: printRef,
@@ -211,7 +189,6 @@ export const InvoiceDialog = ({
             customer={customer}
             vehicle={vehicle}
             rental={rental}
-            protectionPlan={protectionPlan}
           />
         </div>
       </div>
@@ -297,22 +274,6 @@ export const InvoiceDialog = ({
                       {formatCurrency(rentalFee)}
                     </td>
                   </tr>
-                  {protectionPlan && (
-                    <tr className="border-b">
-                      <td className="p-3 text-sm">
-                        <div className="flex items-start gap-2">
-                          <Shield className="w-4 h-4 text-primary mt-0.5" />
-                          <div>
-                            <p className="font-medium">Protection Plan</p>
-                            <p className="text-xs text-muted-foreground">{protectionPlan.name}</p>
-                          </div>
-                        </div>
-                      </td>
-                      <td className="p-3 text-sm text-right font-medium text-primary">
-                        {formatCurrency(protectionPlan.cost)}
-                      </td>
-                    </tr>
-                  )}
                   {invoice.tax_amount > 0 && (
                     <tr className="border-b">
                       <td className="p-3 text-sm">Taxes & Fees</td>

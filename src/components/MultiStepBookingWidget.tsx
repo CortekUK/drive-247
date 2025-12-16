@@ -13,15 +13,16 @@ import { TimePicker } from "@/components/ui/time-picker";
 import { Slider } from "@/components/ui/slider";
 import { Badge } from "@/components/ui/badge";
 import { supabase } from "@/integrations/supabase/client";
+import { useTenant } from "@/contexts/TenantContext";
 import { toast } from "sonner";
-import { ChevronRight, ChevronLeft, Check, Baby, Coffee, MapPin, UserCheck, Car, Crown, TrendingUp, Users as GroupIcon, Calculator, Shield, CheckCircle, CalendarIcon, Clock, Search, Grid3x3, List, SlidersHorizontal, X, AlertCircle, FileCheck, RefreshCw } from "lucide-react";
+import { ChevronRight, ChevronLeft, Check, Baby, Coffee, MapPin, UserCheck, Car, Crown, TrendingUp, Users as GroupIcon, Calculator, Shield, CheckCircle, CalendarIcon, Clock, Search, Grid3x3, List, SlidersHorizontal, X, AlertCircle, FileCheck, RefreshCw, Upload } from "lucide-react";
 import { format, differenceInHours } from "date-fns";
 import { cn } from "@/lib/utils";
 import BookingConfirmation from "./BookingConfirmation";
-import CloseProtectionModal from "./CloseProtectionModal";
 import LocationAutocomplete from "./LocationAutocomplete";
 import BookingCheckoutStep from "./BookingCheckoutStep";
-import ProtectionPlanSelector from "./ProtectionPlanSelector";
+import InsuranceUploadDialog from "./insurance-upload-dialog";
+import AIScanProgress from "./ai-scan-progress";
 import { stripePromise } from "@/config/stripe";
 import { usePageContent, defaultHomeContent, mergeWithDefaults } from "@/hooks/usePageContent";
 interface VehiclePhoto {
@@ -61,6 +62,7 @@ interface BlockedDate {
   reason?: string | null;
 }
 const MultiStepBookingWidget = () => {
+  const { tenant } = useTenant();
   const [currentStep, setCurrentStep] = useState(1);
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
   const [extras, setExtras] = useState<PricingExtra[]>([]);
@@ -71,11 +73,6 @@ const MultiStepBookingWidget = () => {
   const [bookingDetails, setBookingDetails] = useState<any>(null);
   const [calculatedDistance, setCalculatedDistance] = useState<number | null>(null);
   const [distanceOverride, setDistanceOverride] = useState(false);
-  const [cpInterested, setCpInterested] = useState(false);
-  const [showCPModal, setShowCPModal] = useState(false);
-  const [cpDetails, setCpDetails] = useState<any>(null);
-  const cpSubmittedRef = useRef(false); // Track if CP form was successfully submitted
-  const protectionPlanRef = useRef<HTMLDivElement>(null); // Ref for auto-scroll to protection plans
   const stepContainerRef = useRef<HTMLDivElement>(null); // Ref for scrolling to step content on step change
   const [blockedDates, setBlockedDates] = useState<string[]>([]); // Global blocked dates (vehicle_id is null)
   const [allBlockedDates, setAllBlockedDates] = useState<BlockedDate[]>([]); // All blocked dates including vehicle-specific
@@ -120,11 +117,13 @@ const MultiStepBookingWidget = () => {
     customerType: "",
     licenseNumber: "",
     verificationSessionId: "",
-    protectionPlanId: null as string | null,
   });
 
-  // Protection plan state
-  const [selectedProtectionPlan, setSelectedProtectionPlan] = useState<any>(null);
+  // Insurance state
+  const [hasInsurance, setHasInsurance] = useState<boolean | null>(null);
+  const [showUploadDialog, setShowUploadDialog] = useState(false);
+  const [uploadedDocumentId, setUploadedDocumentId] = useState<string | null>(null);
+  const [scanningDocument, setScanningDocument] = useState(false);
 
   // Identity verification state
   const [verificationSessionId, setVerificationSessionId] = useState<string | null>(null);
@@ -240,7 +239,7 @@ const MultiStepBookingWidget = () => {
       document.removeEventListener('visibilitychange', handleVisibilityChange);
       window.removeEventListener('message', handleMessage);
     };
-  }, []);
+  }, [tenant?.id]);
 
   // Note: Verification no longer resets when customer details change
   // Users can freely edit their details after verification
@@ -263,24 +262,6 @@ const MultiStepBookingWidget = () => {
     }
   }, [sameAsPickup, formData.pickupLocation, locationCoords.pickupLat, locationCoords.pickupLon]);
 
-  // Auto-scroll to protection plans when vehicle is selected
-  useEffect(() => {
-    if (formData.vehicleId && protectionPlanRef.current && currentStep === 2) {
-      // Small delay to ensure the protection plan section is rendered
-      setTimeout(() => {
-        // Gentle scroll - just enough to reveal the protection section
-        const element = protectionPlanRef.current;
-        if (element) {
-          const elementTop = element.getBoundingClientRect().top + window.scrollY;
-          const offset = 250; // Keep vehicle selection visible above
-          window.scrollTo({
-            top: elementTop - offset,
-            behavior: 'smooth'
-          });
-        }
-      }, 300);
-    }
-  }, [formData.vehicleId, currentStep]);
 
   // Scroll to step container when step changes
   useEffect(() => {
@@ -323,20 +304,43 @@ const MultiStepBookingWidget = () => {
     }
   }, []);
   const loadData = async () => {
-    const {
-      data: vehiclesData
-    } = await supabase.from("vehicles").select(`
-      *,
-      vehicle_photos (
-        photo_url
-      )
-    `).ilike("status", "Available").order("reg");
-    const {
-      data: extrasData
-    } = await supabase.from("pricing_extras").select("*");
-    const {
-      data: blockedDatesData
-    } = await supabase.from("blocked_dates").select("id, start_date, end_date, vehicle_id, reason");
+    // Build query for vehicles with tenant filtering
+    let vehiclesQuery = supabase
+      .from("vehicles")
+      .select(`
+        *,
+        vehicle_photos (
+          photo_url
+        )
+      `)
+      .ilike("status", "Available")
+      .order("reg");
+
+    if (tenant?.id) {
+      vehiclesQuery = vehiclesQuery.eq("tenant_id", tenant.id);
+    }
+
+    const { data: vehiclesData } = await vehiclesQuery;
+
+    // Build query for pricing extras with tenant filtering
+    let extrasQuery = supabase.from("pricing_extras").select("*");
+
+    if (tenant?.id) {
+      extrasQuery = extrasQuery.eq("tenant_id", tenant.id);
+    }
+
+    const { data: extrasData } = await extrasQuery;
+
+    // Build query for blocked dates with tenant filtering
+    let blockedDatesQuery = supabase
+      .from("blocked_dates")
+      .select("id, start_date, end_date, vehicle_id, reason");
+
+    if (tenant?.id) {
+      blockedDatesQuery = blockedDatesQuery.eq("tenant_id", tenant.id);
+    }
+
+    const { data: blockedDatesData } = await blockedDatesQuery;
 
     if (vehiclesData) {
       setVehicles(vehiclesData);
@@ -577,10 +581,8 @@ const MultiStepBookingWidget = () => {
     try {
       const priceBreakdown = calculatePriceBreakdown();
       const selectedVehicle = vehicles.find(v => v.id === formData.vehicleId);
-      const {
-        data,
-        error
-      } = await supabase.from("bookings").insert({
+      // Build booking data
+      const bookingData: any = {
         pickup_location: formData.pickupLocation,
         dropoff_location: formData.dropoffLocation,
         pickup_date: formData.pickupDate,
@@ -597,7 +599,17 @@ const MultiStepBookingWidget = () => {
         payment_status: 'pending',
         service_type: 'rental',
         status: 'new'
-      }).select().single();
+      };
+
+      // Add tenant_id if tenant context exists
+      if (tenant?.id) {
+        bookingData.tenant_id = tenant.id;
+      }
+
+      const {
+        data,
+        error
+      } = await supabase.from("bookings").insert(bookingData).select().single();
       if (error) throw error;
 
       // Generate reference using timestamp
@@ -638,7 +650,6 @@ const MultiStepBookingWidget = () => {
     setSelectedExtras([]);
     setCalculatedDistance(null);
     setDistanceOverride(false);
-    setCpInterested(false);
   };
 
   // Calculate distance using Haversine formula (great-circle distance)
@@ -1111,82 +1122,6 @@ const MultiStepBookingWidget = () => {
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
-  const validateStep3 = () => {
-    console.log('🔍 validateStep3 called');
-    console.log('📝 Current formData:', {
-      customerName: formData.customerName,
-      customerEmail: formData.customerEmail,
-      customerPhone: formData.customerPhone,
-      customerType: formData.customerType,
-      licenseNumber: formData.licenseNumber
-    });
-    console.log('🔐 Verification status:', verificationStatus);
-
-    const newErrors: {
-      [key: string]: string;
-    } = {};
-
-    // Validate customer name
-    const nameValue = formData.customerName.trim();
-    if (!nameValue) {
-      newErrors.customerName = "Full name is required";
-    } else if (nameValue.length < 2) {
-      newErrors.customerName = "Full name must be at least 2 characters";
-    } else if (!/^[a-zA-Z\s\-']+$/.test(nameValue)) {
-      newErrors.customerName = "Name must contain only letters, spaces, hyphens, and apostrophes";
-    } else if (!/[a-zA-Z]{2,}/.test(nameValue)) {
-      newErrors.customerName = "Name must contain at least 2 alphabetic characters";
-    } else if (nameValue.replace(/[\s\-']/g, '').length < 2) {
-      newErrors.customerName = "Name must have actual alphabetic content";
-    }
-
-    // Validate email
-    if (!formData.customerEmail.trim()) {
-      newErrors.customerEmail = "Email address is required";
-    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.customerEmail)) {
-      newErrors.customerEmail = "Please enter a valid email address";
-    }
-
-    // Validate phone number (international format)
-    const phoneValue = formData.customerPhone.trim();
-    if (!phoneValue) {
-      newErrors.customerPhone = "Phone number is required";
-    } else {
-      // Remove all spaces, hyphens, parentheses for validation
-      const cleaned = phoneValue.replace(/[\s\-()]/g, '');
-      // Count actual digits
-      const digitCount = (cleaned.match(/\d/g) || []).length;
-      // Valid international phone: 7-15 digits, optional + at start
-      if (digitCount < 7 || digitCount > 15) {
-        newErrors.customerPhone = "Please enter a valid phone number (7-15 digits)";
-      } else if (cleaned.startsWith('+') && !/^\+\d+$/.test(cleaned)) {
-        newErrors.customerPhone = "Invalid phone number format";
-      } else if (!cleaned.startsWith('+') && !/^\d+$/.test(cleaned.replace(/[\s\-()]/g, ''))) {
-        newErrors.customerPhone = "Phone number should contain only digits";
-      }
-    }
-
-    // Validate customer type
-    if (!formData.customerType || formData.customerType.trim() === "") {
-      newErrors.customerType = "Please select a customer type";
-    } else if (formData.customerType !== "Individual" && formData.customerType !== "Company") {
-      newErrors.customerType = "Invalid customer type selected";
-    }
-
-    // License number validation removed - not collected in UI
-
-    // TODO: Re-enable verification before production
-    // if (verificationStatus !== 'verified') {
-    //   newErrors.verification = "Identity verification is required to proceed";
-    //   console.log('❌ Verification required but status is:', verificationStatus);
-    // }
-
-    console.log('📋 All validation errors:', newErrors);
-    console.log('✅ Validation result:', Object.keys(newErrors).length === 0 ? 'PASSED' : 'FAILED');
-
-    setErrors(newErrors);
-    return Object.keys(newErrors).length === 0;
-  };
 
   // Instant field validation for onChange events
   const validateField = (fieldName: string, value: string) => {
@@ -1358,37 +1293,90 @@ const MultiStepBookingWidget = () => {
           sortBy
         }
       }));
-      setCurrentStep(3);
+      setCurrentStep(3); // Go to insurance verification
     }
   };
 
-  const handleStep3Continue = async () => {
-    console.log('🚀 handleStep3Continue called');
+  // New Step 3: Insurance verification
+  const handleStep3Continue = () => {
+    // DEV: Check for bypass flag
+    const devSkip = typeof window !== 'undefined' && localStorage.getItem('dev_skip_insurance') === 'true';
+    if (devSkip) {
+      console.log('🔓 DEV MODE: Skipping insurance verification');
+      setHasInsurance(true);
+      setUploadedDocumentId('dev-bypass-doc-id');
+    }
+
+    // Insurance step - just move to customer details (Step 4)
+    setCurrentStep(4);
+  };
+
+  // Step 4: Customer Details
+  const handleStep4Continue = async () => {
+    console.log('🚀 handleStep4Continue called');
     console.log('🔐 Current verification status:', verificationStatus);
     console.log('🔘 Button disabled state:', verificationStatus !== 'verified');
 
-    const isValid = validateStep3();
+    const isValid = validateStep4();
     console.log('✨ Validation returned:', isValid);
 
     if (!isValid) {
-      console.log('❌ Validation failed! Not moving to step 4');
+      console.log('❌ Validation failed! Not moving to step 5');
       return;
     }
 
-    console.log('✅ Validation passed! Moving to step 4');
+    console.log('✅ Validation passed! Moving to step 5');
 
     // Analytics tracking
     if ((window as any).gtag) {
-      (window as any).gtag('event', 'booking_step3_submitted', {
+      (window as any).gtag('event', 'booking_step4_submitted', {
         customer_type: formData.customerType,
         verification_status: verificationStatus
       });
     }
-    setCurrentStep(4);
+    setCurrentStep(5);
+  };
+
+  const validateStep3 = () => {
+    // Step 3 is insurance - optional, always valid
+    return true;
   };
 
   const validateStep4 = () => {
-    // Step 4 is review/confirm, no additional validation needed
+    // Validation for customer details (moved from old validateStep3)
+    const newErrors: { [key: string]: string } = {};
+
+    if (!formData.customerName || formData.customerName.trim() === '') {
+      newErrors.customerName = 'Please enter your name';
+    }
+    if (!formData.customerEmail || !formData.customerEmail.includes('@')) {
+      newErrors.customerEmail = 'Please enter a valid email';
+    }
+    if (!formData.customerPhone || formData.customerPhone.trim() === '') {
+      newErrors.customerPhone = 'Please enter your phone number';
+    }
+    if (!formData.customerType) {
+      newErrors.customerType = 'Please select customer type';
+    }
+    // License number validation removed - field not in UI
+
+    // Check verification status (with dev bypass)
+    const devBypassVerification = typeof window !== 'undefined' && localStorage.getItem('dev_bypass_verification') === 'true';
+    if (verificationStatus !== 'verified' && !devBypassVerification) {
+      console.log('❌ Verification not completed:', verificationStatus);
+      toast.error('Please complete identity verification to continue');
+      return false;
+    }
+    if (devBypassVerification) {
+      console.log('🔓 DEV MODE: Bypassing verification check');
+    }
+
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
+  };
+
+  const validateStep5 = () => {
+    // Step 5 is review/confirm, no additional validation needed
     // All validation has been done in previous steps
     return true;
   };
@@ -1405,8 +1393,10 @@ const MultiStepBookingWidget = () => {
       case 2:
         return "Choose Vehicle";
       case 3:
-        return "Your Details";
+        return "Insurance Verification";
       case 4:
+        return "Your Details";
+      case 5:
         return "Review & Confirm";
       default:
         return defaultTitle;
@@ -1443,10 +1433,14 @@ const MultiStepBookingWidget = () => {
               fullLabel: "Choose Vehicle"
             }, {
               step: 3,
+              label: "Insurance",
+              fullLabel: "Insurance Verification"
+            }, {
+              step: 4,
               label: "Details",
               fullLabel: "Customer Details"
             }, {
-              step: 4,
+              step: 5,
               label: "Review",
               fullLabel: "Review & Confirm"
             }].map(({
@@ -1454,7 +1448,7 @@ const MultiStepBookingWidget = () => {
               label,
               fullLabel
             }, index) => <div key={step} className="flex flex-col items-center flex-1 relative z-10">
-                  <div className={cn("bk-step__node flex items-center justify-center w-10 h-10 sm:w-12 sm:h-12 md:w-14 md:h-14 rounded-full border-2 transition-all", currentStep >= step ? 'bg-primary border-primary shadow-glow' : 'border-border bg-muted', currentStep === step && 'bk-step__node--active shadow-glow')} aria-label={`Step ${step} of 4: ${fullLabel}`} aria-current={currentStep === step ? "step" : undefined}>
+                  <div className={cn("bk-step__node flex items-center justify-center w-10 h-10 sm:w-12 sm:h-12 md:w-14 md:h-14 rounded-full border-2 transition-all", currentStep >= step ? 'bg-primary border-primary shadow-glow' : 'border-border bg-muted', currentStep === step && 'bk-step__node--active shadow-glow')} aria-label={`Step ${step} of 5: ${fullLabel}`} aria-current={currentStep === step ? "step" : undefined}>
                     {currentStep > step ? <Check className="w-4 h-4 sm:w-5 sm:h-5 md:w-6 md:h-6 text-primary-foreground" /> : <span className={cn("text-base sm:text-lg md:text-xl font-bold", currentStep === step ? "text-primary-foreground" : "text-muted-foreground")}>
                         {step}
                       </span>}
@@ -1463,7 +1457,7 @@ const MultiStepBookingWidget = () => {
                     <span className="hidden sm:inline">{fullLabel}</span>
                     <span className="sm:hidden">{label}</span>
                   </span>
-                  {index < 3 && <div className={cn("bk-step__line absolute top-5 sm:top-6 md:top-7 left-[calc(50%+20px)] sm:left-[calc(50%+24px)] md:left-[calc(50%+28px)] w-[calc(100%-40px)] sm:w-[calc(100%-48px)] md:w-[calc(100%-56px)] h-0.5", currentStep > step ? 'bg-primary' : 'bg-border')} />}
+                  {index < 4 && <div className={cn("bk-step__line absolute top-5 sm:top-6 md:top-7 left-[calc(50%+20px)] sm:left-[calc(50%+24px)] md:left-[calc(50%+28px)] w-[calc(100%-40px)] sm:w-[calc(100%-48px)] md:w-[calc(100%-56px)] h-0.5", currentStep > step ? 'bg-primary' : 'bg-border')} />}
               </div>)}
           </div>
         </div>
@@ -2267,19 +2261,6 @@ const MultiStepBookingWidget = () => {
               </div>
             </div>
 
-            {/* Protection Plan Selection - Show only when vehicle is selected */}
-            {formData.vehicleId && calculateRentalDuration() && (
-              <div className="mt-8" ref={protectionPlanRef}>
-                <ProtectionPlanSelector
-                  selectedPlanId={formData.protectionPlanId}
-                  onSelectPlan={(planId, plan) => {
-                    setFormData({ ...formData, protectionPlanId: planId });
-                    setSelectedProtectionPlan(plan);
-                  }}
-                  rentalDays={calculateRentalDuration()?.days || 1}
-                />
-              </div>
-            )}
 
             {/* Mobile Action Bar */}
             <div className="flex flex-col sm:flex-row gap-3 lg:hidden mt-8">
@@ -2292,8 +2273,346 @@ const MultiStepBookingWidget = () => {
             </div>
           </div>}
 
-        {/* Step 3: Customer Details */}
+        {/* Step 3: Insurance Verification */}
         {currentStep === 3 && <div className="space-y-8 animate-fade-in">
+            {/* Header */}
+            <div className="text-center space-y-2">
+              <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-primary/10 mb-4">
+                <Shield className="w-8 h-8 text-primary" />
+              </div>
+              <h3 className="text-2xl md:text-3xl font-display font-bold text-foreground">
+                Insurance Verification
+              </h3>
+              <p className="text-base text-muted-foreground max-w-2xl mx-auto">
+                Protect your rental with insurance coverage. Choose from your existing policy or get instant coverage through our partner.
+              </p>
+            </div>
+
+            {/* Insurance Question */}
+            {hasInsurance === null && (
+              <div className="max-w-4xl mx-auto">
+                <Card className="overflow-hidden border-2 border-border/50 hover:border-primary/30 transition-all">
+                  <div className="p-8 md:p-12">
+                    <h4 className="text-xl md:text-2xl font-semibold text-center mb-8">
+                      Do you have existing insurance coverage?
+                    </h4>
+
+                    <div className="grid md:grid-cols-2 gap-6">
+                      {/* YES Option */}
+                      <Card
+                        className="group relative overflow-hidden border-2 border-border hover:border-primary hover:shadow-lg transition-all cursor-pointer bg-gradient-to-br from-primary/5 to-transparent"
+                        onClick={() => {
+                          setHasInsurance(true);
+                          setShowUploadDialog(true);
+                        }}
+                      >
+                        <div className="p-8 text-center space-y-4">
+                          <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-primary/10 mb-2">
+                            <CheckCircle className="w-8 h-8 text-primary" />
+                          </div>
+                          <div>
+                            <h5 className="text-lg font-semibold mb-2">Yes, I Have Insurance</h5>
+                            <p className="text-sm text-muted-foreground">
+                              Upload your current insurance certificate and we'll verify it instantly
+                            </p>
+                          </div>
+                          <Button
+                            className="w-full bg-primary hover:bg-primary/90"
+                            size="lg"
+                          >
+                            <Upload className="mr-2 h-5 w-5" />
+                            Upload Certificate
+                          </Button>
+                          <div className="pt-4 border-t border-border/50">
+                            <p className="text-xs text-muted-foreground">
+                              ✓ Instant AI verification<br/>
+                              ✓ Accepted formats: PDF, JPG, PNG<br/>
+                              ✓ Max file size: 5MB
+                            </p>
+                          </div>
+                        </div>
+                      </Card>
+
+                      {/* NO Option */}
+                      <Card
+                        className="group relative overflow-hidden border-2 border-border hover:border-accent hover:shadow-lg transition-all cursor-pointer bg-gradient-to-br from-accent/5 to-transparent"
+                        onClick={() => setHasInsurance(false)}
+                      >
+                        <div className="p-8 text-center space-y-4">
+                          <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-accent/10 mb-2">
+                            <Shield className="w-8 h-8 text-accent" />
+                          </div>
+                          <div>
+                            <h5 className="text-lg font-semibold mb-2">No, I Need Insurance</h5>
+                            <p className="text-sm text-muted-foreground">
+                              Get instant coverage through our trusted partner Bonzah
+                            </p>
+                          </div>
+                          <Button
+                            className="w-full bg-accent hover:bg-accent/90"
+                            size="lg"
+                          >
+                            <Shield className="mr-2 h-5 w-5" />
+                            Get Insurance Now
+                          </Button>
+                          <div className="pt-4 border-t border-border/50">
+                            <p className="text-xs text-muted-foreground">
+                              ✓ Instant online quotes<br/>
+                              ✓ Affordable rates<br/>
+                              ✓ Quick 5-minute setup
+                            </p>
+                          </div>
+                        </div>
+                      </Card>
+                    </div>
+                  </div>
+                </Card>
+              </div>
+            )}
+
+            {/* YES Path - Upload completed or scanning */}
+            {hasInsurance === true && (
+              <div className="max-w-3xl mx-auto space-y-6">
+                {uploadedDocumentId ? (
+                  <Card className="overflow-hidden border-2 border-primary/30 bg-card">
+                    <div className="p-8">
+                      <div className="flex items-start gap-6">
+                        <div className="flex-shrink-0">
+                          <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center">
+                            <FileCheck className="w-8 h-8 text-primary" />
+                          </div>
+                        </div>
+                        <div className="flex-1 space-y-4">
+                          <div>
+                            <h4 className="text-xl font-semibold text-foreground mb-2">
+                              Documents Uploaded Successfully!
+                            </h4>
+                            <p className="text-muted-foreground">
+                              Our team is reviewing your insurance certificate now.
+                            </p>
+                          </div>
+
+                          {/* Upload Complete Progress */}
+                          <div className="bg-gradient-to-br from-primary/5 to-transparent rounded-lg p-6 border-2 border-primary/20">
+                            <div className="max-w-2xl mx-auto">
+                              <div className="text-center space-y-6">
+                                {/* Success Icon with animated background */}
+                                <div className="relative inline-block mb-4">
+                                  <div className="absolute inset-0 bg-primary/10 rounded-full blur-2xl animate-pulse"></div>
+                                  <div className="relative">
+                                    <CheckCircle className="h-16 w-16 mx-auto text-primary" />
+                                  </div>
+                                </div>
+
+                                <h3 className="text-2xl md:text-3xl font-bold text-primary">
+                                  Upload Complete!
+                                </h3>
+
+                                <p className="text-base md:text-lg text-muted-foreground max-w-lg mx-auto">
+                                  Your insurance certificate is being reviewed by our team
+                                </p>
+
+                                {/* Progress Bar at 100% */}
+                                <div className="space-y-3 pt-2">
+                                  <div className="w-full bg-muted rounded-full h-3 overflow-hidden">
+                                    <div className="bg-primary h-full w-full transition-all duration-500"></div>
+                                  </div>
+                                  <p className="text-sm font-medium text-primary">
+                                    100% complete
+                                  </p>
+
+                                  {/* Subtle AI indicator */}
+                                  <div className="flex items-center justify-center gap-2 pt-2">
+                                    <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-primary/10 border border-primary/20">
+                                      <div className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse"></div>
+                                      <span className="text-xs text-muted-foreground">AI-assisted verification</span>
+                                    </div>
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                            <CheckCircle className="w-4 h-4 text-primary" />
+                            <span>You can continue with your booking</span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </Card>
+                ) : (
+                  <Card className="overflow-hidden border-2 border-border/50">
+                    <div className="p-8 text-center space-y-6">
+                      <div className="inline-flex items-center justify-center w-20 h-20 rounded-full bg-primary/10">
+                        <Upload className="w-10 h-10 text-primary" />
+                      </div>
+                      <div className="space-y-2">
+                        <h4 className="text-xl font-semibold">Upload Your Insurance Certificate</h4>
+                        <p className="text-muted-foreground max-w-md mx-auto">
+                          Please upload your current insurance certificate. Our AI will instantly verify the details.
+                        </p>
+                      </div>
+                      <div className="flex flex-col sm:flex-row gap-4 justify-center items-center">
+                        <Button
+                          onClick={() => setShowUploadDialog(true)}
+                          size="lg"
+                          className="bg-primary hover:bg-primary/90 px-8"
+                        >
+                          <Upload className="mr-2 h-5 w-5" />
+                          Choose File to Upload
+                        </Button>
+                        <Button
+                          onClick={() => setHasInsurance(null)}
+                          variant="ghost"
+                          size="lg"
+                        >
+                          Go Back
+                        </Button>
+                      </div>
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-6 border-t border-border/50">
+                        <div className="text-center space-y-1">
+                          <FileCheck className="w-5 h-5 mx-auto text-muted-foreground" />
+                          <p className="text-xs text-muted-foreground">PDF, JPG, PNG</p>
+                        </div>
+                        <div className="text-center space-y-1">
+                          <Shield className="w-5 h-5 mx-auto text-muted-foreground" />
+                          <p className="text-xs text-muted-foreground">Max 5MB</p>
+                        </div>
+                        <div className="text-center space-y-1">
+                          <CheckCircle className="w-5 h-5 mx-auto text-muted-foreground" />
+                          <p className="text-xs text-muted-foreground">AI Verified</p>
+                        </div>
+                      </div>
+                    </div>
+                  </Card>
+                )}
+              </div>
+            )}
+
+            {/* NO Path - Bonzah Instructions */}
+            {hasInsurance === false && (
+              <div className="max-w-3xl mx-auto">
+                <Card className="overflow-hidden border-2 border-accent/30 bg-gradient-to-br from-accent/5 to-transparent">
+                  <div className="p-8 md:p-10 space-y-8">
+                    {/* Header */}
+                    <div className="text-center space-y-4">
+                      <div className="inline-flex items-center justify-center w-20 h-20 rounded-full bg-accent/10">
+                        <Shield className="w-10 h-10 text-accent" />
+                      </div>
+                      <div>
+                        <h4 className="text-2xl font-bold mb-2">Get Instant Insurance Coverage</h4>
+                        <p className="text-muted-foreground max-w-xl mx-auto">
+                          Partner with Bonzah to get affordable, instant insurance coverage for your rental. Quick setup in just 5 minutes!
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* How it works */}
+                    <div className="bg-card/80 backdrop-blur rounded-xl p-6 md:p-8 border border-border/50">
+                      <h5 className="text-lg font-semibold mb-6 text-center">How It Works</h5>
+                      <div className="space-y-6">
+                        <div className="flex gap-4">
+                          <div className="flex-shrink-0">
+                            <div className="w-10 h-10 rounded-full bg-accent text-accent-foreground flex items-center justify-center font-bold text-lg">
+                              1
+                            </div>
+                          </div>
+                          <div className="pt-1">
+                            <h6 className="font-semibold mb-1">Get Instant Quote</h6>
+                            <p className="text-sm text-muted-foreground">
+                              Visit Bonzah's website and receive an instant quote tailored to your rental
+                            </p>
+                          </div>
+                        </div>
+                        <div className="flex gap-4">
+                          <div className="flex-shrink-0">
+                            <div className="w-10 h-10 rounded-full bg-accent text-accent-foreground flex items-center justify-center font-bold text-lg">
+                              2
+                            </div>
+                          </div>
+                          <div className="pt-1">
+                            <h6 className="font-semibold mb-1">Purchase Online</h6>
+                            <p className="text-sm text-muted-foreground">
+                              Complete your purchase securely online in just a few minutes
+                            </p>
+                          </div>
+                        </div>
+                        <div className="flex gap-4">
+                          <div className="flex-shrink-0">
+                            <div className="w-10 h-10 rounded-full bg-accent text-accent-foreground flex items-center justify-center font-bold text-lg">
+                              3
+                            </div>
+                          </div>
+                          <div className="pt-1">
+                            <h6 className="font-semibold mb-1">Upload or Continue</h6>
+                            <p className="text-sm text-muted-foreground">
+                              Upload your certificate here, or proceed with your booking and upload later
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* CTA */}
+                    <div className="text-center space-y-4">
+                      <a
+                        href="https://bonzah.com"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-block w-full sm:w-auto"
+                      >
+                        <Button
+                          size="lg"
+                          className="bg-accent hover:bg-accent/90 px-8 w-full sm:w-auto"
+                        >
+                          <Shield className="mr-2 h-5 w-5" />
+                          Get Insurance from Bonzah
+                          <ChevronRight className="ml-2 h-5 w-5" />
+                        </Button>
+                      </a>
+                      <div className="flex items-center justify-center gap-2">
+                        <Button
+                          onClick={() => setHasInsurance(null)}
+                          variant="ghost"
+                          size="sm"
+                        >
+                          Go Back
+                        </Button>
+                      </div>
+                      <p className="text-xs text-muted-foreground max-w-md mx-auto pt-4 border-t border-border/50">
+                        <AlertCircle className="w-4 h-4 inline mr-1" />
+                        You can upload your insurance certificate after completing your booking if you prefer
+                      </p>
+                    </div>
+                  </div>
+                </Card>
+              </div>
+            )}
+
+            {/* Navigation */}
+            <div className="flex flex-col sm:flex-row gap-4">
+              <Button
+                onClick={() => setCurrentStep(2)}
+                variant="outline"
+                className="w-full sm:flex-1"
+                size="lg"
+              >
+                <ChevronLeft className="mr-2 w-5 h-5" /> Back to Vehicles
+              </Button>
+              <Button
+                onClick={handleStep3Continue}
+                disabled={hasInsurance === null}
+                className="w-full sm:flex-1 bg-primary hover:bg-primary/90 text-primary-foreground font-semibold shadow-md hover:shadow-lg transition-all disabled:opacity-50"
+                size="lg"
+              >
+                Continue to Details <ChevronRight className="ml-2 w-5 h-5" />
+              </Button>
+            </div>
+          </div>}
+
+        {/* Step 4: Customer Details */}
+        {currentStep === 4 && <div className="space-y-8 animate-fade-in">
             {/* Header with underline */}
             <div>
               <h3 className="text-2xl md:text-3xl font-display font-semibold text-foreground pb-2 border-b-2 border-primary/30">
@@ -2541,7 +2860,7 @@ const MultiStepBookingWidget = () => {
             {/* Navigation Buttons */}
             <div className="flex flex-col sm:flex-row gap-3 sm:gap-4">
               <Button
-                onClick={() => setCurrentStep(2)}
+                onClick={() => setCurrentStep(3)}
                 variant="outline"
                 className="w-full sm:flex-1 h-11 sm:h-12 border-primary text-primary hover:bg-primary/10 font-semibold text-sm sm:text-base"
                 size="lg"
@@ -2549,7 +2868,7 @@ const MultiStepBookingWidget = () => {
                 <ChevronLeft className="mr-2 w-4 h-4 sm:w-5 sm:h-5" /> Back
               </Button>
               <Button
-                onClick={handleStep3Continue}
+                onClick={handleStep4Continue}
                 disabled={verificationStatus !== 'verified'}
                 className="w-full sm:flex-1 h-11 sm:h-12 bg-primary hover:bg-primary/90 text-primary-foreground font-semibold text-sm sm:text-base shadow-md hover:shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                 size="lg"
@@ -2566,8 +2885,8 @@ const MultiStepBookingWidget = () => {
             )}
           </div>}
 
-        {/* Step 4: Review & Payment */}
-        {currentStep === 4 && <div className="animate-fade-in">
+        {/* Step 5: Review & Payment */}
+        {currentStep === 5 && <div className="animate-fade-in">
             <BookingCheckoutStep
               formData={formData}
               selectedVehicle={selectedVehicle}
@@ -2577,38 +2896,43 @@ const MultiStepBookingWidget = () => {
                 formatted: '1 day'
               }}
               vehicleTotal={estimatedBooking?.total || 0}
-              selectedProtectionPlan={selectedProtectionPlan}
-              onBack={() => setCurrentStep(3)}
+              onBack={() => setCurrentStep(4)}
             />
           </div>}
 
-        {/* Close Protection Modal */}
-        <CloseProtectionModal open={showCPModal} onOpenChange={open => {
-          setShowCPModal(open);
-          // If modal is being closed and form wasn't successfully submitted, reset the toggle
-          if (!open && !cpSubmittedRef.current) {
-            setCpInterested(false);
-          }
-          // Reset the ref when modal is closed
-          if (!open) {
-            cpSubmittedRef.current = false;
-          }
-        }} customerName={formData.customerName} customerEmail={formData.customerEmail} customerPhone={formData.customerPhone} bookingDetails={`${formData.pickupLocation} → ${formData.dropoffLocation} on ${formData.pickupDate} at ${formData.pickupTime}`} fullBookingData={{
-          pickupLocation: formData.pickupLocation,
-          dropoffLocation: formData.dropoffLocation,
-          pickupDate: formData.pickupDate,
-          pickupTime: formData.pickupTime,
-          vehicleName: (() => {
-            const v = vehicles.find(v => v.id === formData.vehicleId);
-            return v ? (v.make && v.model ? `${v.make} ${v.model}` : v.make || v.model || v.reg) : 'Not selected';
-          })()
-        }} onSubmit={details => {
-          setCpDetails(details);
-          setCpInterested(true);
-          cpSubmittedRef.current = true; // Mark as successfully submitted
-        }} />
       </div>
     </Card>
+
+    {/* Insurance Upload Dialog */}
+    <InsuranceUploadDialog
+      open={showUploadDialog}
+      onOpenChange={setShowUploadDialog}
+      onUploadComplete={async (documentId) => {
+        // documentId is the database record ID
+        setUploadedDocumentId(documentId);
+        setScanningDocument(true);
+        setShowUploadDialog(false);
+
+        // Trigger document review
+        try {
+          const { error } = await supabase.functions.invoke('scan-insurance-document', {
+            body: { documentId, fileUrl: documentId }
+          });
+
+          if (error) {
+            console.error('Document review error:', error);
+            toast.error("Document uploaded but review failed. You can continue with your booking.");
+          } else {
+            toast.success("Insurance document uploaded! Our team is reviewing it now...");
+          }
+        } catch (error) {
+          console.error('Document review error:', error);
+          toast.error("Document uploaded but review failed. You can continue with your booking.");
+        } finally {
+          setScanningDocument(false);
+        }
+      }}
+    />
     </>;
 };
 export default MultiStepBookingWidget;

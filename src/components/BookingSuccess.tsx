@@ -304,12 +304,12 @@ const BookingSuccess = () => {
                 </div>
 
                 <div className="flex flex-col sm:flex-row gap-4 justify-center">
-                  <Link to="/">
+                  <Link href="/">
                     <Button className="gradient-accent hover-lift w-full sm:w-auto">
                       Return to Home
                     </Button>
                   </Link>
-                  <Link to="/contact">
+                  <Link href="/contact">
                     <Button variant="outline" className="w-full sm:w-auto">
                       Contact Support
                     </Button>

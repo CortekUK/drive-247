@@ -9,6 +9,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Separator } from "@/components/ui/separator";
 import { TimePicker } from "@/components/ui/time-picker";
 import { supabase } from "@/integrations/supabase/client";
+import { useTenant } from "@/contexts/TenantContext";
 import { toast } from "sonner";
 import { Car } from "lucide-react";
 import BookingConfirmation from "./BookingConfirmation";
@@ -36,6 +37,7 @@ interface PricingExtra {
 
 
 const EnhancedBookingWidget = () => {
+  const { tenant } = useTenant();
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
   const [pricingExtras, setPricingExtras] = useState<PricingExtra[]>([]);
   const [selectedVehicle, setSelectedVehicle] = useState<Vehicle | null>(null);
@@ -63,12 +65,29 @@ const EnhancedBookingWidget = () => {
 
   useEffect(() => {
     loadData();
-  }, []);
+  }, [tenant?.id]);
 
   const loadData = async () => {
+    // Build queries with tenant filtering
+    let vehiclesQuery = supabase
+      .from("vehicles")
+      .select("*")
+      .eq("status", "Available")
+      .order("reg");
+
+    let extrasQuery = supabase
+      .from("pricing_extras")
+      .select("*")
+      .eq("is_active", true);
+
+    if (tenant?.id) {
+      vehiclesQuery = vehiclesQuery.eq("tenant_id", tenant.id);
+      extrasQuery = extrasQuery.eq("tenant_id", tenant.id);
+    }
+
     const [vehiclesRes, extrasRes] = await Promise.all([
-      supabase.from("vehicles").select("*").eq("status", "Available").order("reg"),
-      supabase.from("pricing_extras").select("*").eq("is_active", true)
+      vehiclesQuery,
+      extrasQuery
     ]);
 
     if (vehiclesRes.data) setVehicles(vehiclesRes.data);
@@ -117,7 +136,8 @@ const EnhancedBookingWidget = () => {
 
     setLoading(true);
 
-    const { error } = await supabase.from("bookings").insert({
+    // Build booking data
+    const bookingData: any = {
       vehicle_id: selectedVehicle.id,
       pickup_location: formData.pickupLocation,
       dropoff_location: formData.dropoffLocation,
@@ -134,7 +154,14 @@ const EnhancedBookingWidget = () => {
       customer_email: formData.customerEmail,
       customer_phone: formData.customerPhone,
       status: "new",
-    });
+    };
+
+    // Add tenant_id if tenant context exists
+    if (tenant?.id) {
+      bookingData.tenant_id = tenant.id;
+    }
+
+    const { error } = await supabase.from("bookings").insert(bookingData);
 
     setLoading(false);
 

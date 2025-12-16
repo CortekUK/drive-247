@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import type { LogoContent, SiteContactContent, SocialLinksContent, FooterSettingsContent } from "./usePageContent";
+import { useTenant } from "@/contexts/TenantContext";
 
 export interface SiteSettings {
   id: string;
@@ -91,9 +92,17 @@ interface CMSPage {
 }
 
 export const useSiteSettings = () => {
+  const { tenant } = useTenant();
+
   const { data: settings, isLoading, error } = useQuery({
-    queryKey: ["site-settings-cms"],
+    queryKey: ["site-settings-cms", tenant?.id],
     queryFn: async () => {
+      // If no tenant, use defaults
+      if (!tenant) {
+        console.log("No tenant context, using default settings");
+        return null;
+      }
+
       // Fetch from CMS site-settings page
       const { data: page, error } = await supabase
         .from("cms_pages")
@@ -106,6 +115,7 @@ export const useSiteSettings = () => {
             content
           )
         `)
+        .eq("tenant_id", tenant.id)
         .eq("slug", "site-settings")
         .eq("status", "published")
         .single();

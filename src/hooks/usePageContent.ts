@@ -1,5 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { useTenant } from "@/contexts/TenantContext";
 
 // CMS Content Types
 export interface HeroContent {
@@ -340,11 +341,14 @@ interface CMSPage {
 }
 
 export const usePageContent = (slug: string) => {
+  const { tenant } = useTenant();
+
   return useQuery({
-    queryKey: ["cms-page-content", slug],
+    queryKey: ["cms-page-content", slug, tenant?.id],
     queryFn: async (): Promise<PageContent | null> => {
       try {
-        const { data: page, error } = await supabase
+        // Build query with tenant filtering
+        let query = supabase
           .from("cms_pages")
           .select(`
             id,
@@ -357,8 +361,14 @@ export const usePageContent = (slug: string) => {
             )
           `)
           .eq("slug", slug)
-          .eq("status", "published")
-          .single();
+          .eq("status", "published");
+
+        // Add tenant filter if tenant context exists
+        if (tenant?.id) {
+          query = query.eq("tenant_id", tenant.id);
+        }
+
+        const { data: page, error } = await query.single();
 
         if (error) {
           // If no published page found, return null (will use defaults)
@@ -387,6 +397,7 @@ export const usePageContent = (slug: string) => {
     },
     staleTime: 5 * 60 * 1000, // Cache for 5 minutes
     retry: 1, // Only retry once on failure
+    enabled: true, // Always enabled, will work with or without tenant
   });
 };
 

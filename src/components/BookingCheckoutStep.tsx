@@ -22,7 +22,6 @@ interface BookingCheckoutStepProps {
     formatted: string;
   };
   vehicleTotal: number;
-  selectedProtectionPlan?: any;
   onBack: () => void;
 }
 
@@ -32,7 +31,6 @@ export default function BookingCheckoutStep({
   extras,
   rentalDuration,
   vehicleTotal,
-  selectedProtectionPlan,
   onBack
 }: BookingCheckoutStepProps) {
   const router = useRouter();
@@ -71,31 +69,13 @@ export default function BookingCheckoutStep({
     }
   };
 
-  const calculateProtectionCost = () => {
-    if (!selectedProtectionPlan) return 0;
-
-    const days = rentalDuration.days;
-
-    // Calculate most cost-effective pricing
-    if (days >= 30 && selectedProtectionPlan.price_per_month) {
-      const months = Math.ceil(days / 30);
-      return selectedProtectionPlan.price_per_month * months;
-    } else if (days >= 7 && selectedProtectionPlan.price_per_week) {
-      const weeks = Math.ceil(days / 7);
-      return selectedProtectionPlan.price_per_week * weeks;
-    } else {
-      return selectedProtectionPlan.price_per_day * days;
-    }
-  };
-
   const calculateTaxesAndFees = () => {
     return (vehicleTotal * 0.10) + 50; // 10% tax + $50 service fee
   };
 
   const calculateGrandTotal = () => {
     const taxesAndFees = calculateTaxesAndFees();
-    const protectionCost = calculateProtectionCost();
-    return vehicleTotal + taxesAndFees + protectionCost;
+    return vehicleTotal + taxesAndFees;
   };
 
   const depositAmount = 500; // Fixed deposit
@@ -182,7 +162,6 @@ export default function BookingCheckoutStep({
           totalAmount: calculateGrandTotal(),
           pickupDate: formData.pickupDate,
           returnDate: formData.dropoffDate,
-          protectionPlan: selectedProtectionPlan?.display_name || 'none',
         },
       });
 
@@ -458,67 +437,8 @@ export default function BookingCheckoutStep({
         console.log('⏳ Vehicle status unchanged (MANUAL mode - awaiting approval)');
       }
 
-      // Step 3.5: Save protection plan selection if selected
-      console.log('🛡️ Protection Plan Debug:', {
-        hasSelectedPlan: !!selectedProtectionPlan,
-        planId: formData.protectionPlanId,
-        planDetails: selectedProtectionPlan ? {
-          display_name: selectedProtectionPlan.display_name,
-          price_per_day: selectedProtectionPlan.price_per_day
-        } : null,
-        rentalId: rental.id,
-        rentalDays: rentalDuration.days
-      });
-
-      if (selectedProtectionPlan && formData.protectionPlanId) {
-        try {
-          const protectionCost = calculateProtectionCost();
-
-          const insertData = {
-            rental_id: rental.id,
-            protection_plan_id: formData.protectionPlanId,
-            daily_rate: selectedProtectionPlan.price_per_day,
-            total_days: rentalDuration.days,
-            total_cost: protectionCost,
-          };
-
-          console.log('🛡️ Inserting protection selection:', insertData);
-
-          const { data: protectionData, error: protectionError } = await supabase
-            .from('rental_protection_selections')
-            .insert(insertData)
-            .select();
-
-          if (protectionError) {
-            console.error('❌ Failed to save protection plan selection:', protectionError);
-            console.error('❌ Error details:', JSON.stringify(protectionError, null, 2));
-            // Don't throw - continue with invoice creation
-          } else {
-            console.log('✅ Protection plan selection saved successfully!');
-            console.log('✅ Saved data:', protectionData);
-          }
-        } catch (protectionSaveError) {
-          console.error('❌ Protection plan save error (catch):', protectionSaveError);
-        }
-      } else {
-        console.log('⚠️ Skipping protection plan save - no plan selected or missing planId');
-      }
-
       // Step 4: Create invoice (with fallback to local if DB fails)
-      const protectionCost = calculateProtectionCost();
       let invoiceNotes = `Security deposit of $${depositAmount.toLocaleString()} will be held during the rental period.`;
-
-      if (selectedProtectionPlan) {
-        invoiceNotes += `\n\nProtection Plan: ${selectedProtectionPlan.display_name} - $${protectionCost.toLocaleString()} (${rentalDuration.days} days @ $${selectedProtectionPlan.price_per_day}/day)`;
-        if (selectedProtectionPlan.deductible_amount === 0) {
-          invoiceNotes += `\n✓ Zero Deductible Coverage`;
-        } else {
-          invoiceNotes += `\n• Deductible: $${selectedProtectionPlan.deductible_amount.toLocaleString()}`;
-        }
-        if (selectedProtectionPlan.max_coverage_amount) {
-          invoiceNotes += `\n• Maximum Coverage: $${selectedProtectionPlan.max_coverage_amount.toLocaleString()}`;
-        }
-      }
 
       const invoice = await createInvoiceWithFallback({
         rental_id: rental.id,
@@ -526,9 +446,9 @@ export default function BookingCheckoutStep({
         vehicle_id: selectedVehicle.id,
         invoice_date: new Date(),
         due_date: new Date(formData.pickupDate),
-        subtotal: vehicleTotal + protectionCost,
+        subtotal: vehicleTotal,
         rental_fee: vehicleTotal,
-        protection_fee: protectionCost,
+        protection_fee: 0,
         tax_amount: calculateTaxesAndFees(),
         total_amount: calculateGrandTotal(),
         notes: invoiceNotes,
@@ -627,34 +547,6 @@ export default function BookingCheckoutStep({
                 </div>
               </div>
 
-              {/* Protection Plan */}
-              {selectedProtectionPlan && (
-                <div className="flex items-start gap-3 pt-3 border-t border-border/50">
-                  <Shield className="w-5 h-5 text-primary mt-0.5" />
-                  <div className="flex-1">
-                    <p className="font-medium text-primary">{selectedProtectionPlan.display_name}</p>
-                    <p className="text-sm text-muted-foreground">{selectedProtectionPlan.description}</p>
-                    <div className="mt-2 space-y-1">
-                      {selectedProtectionPlan.deductible_amount === 0 && (
-                        <p className="text-xs text-green-600 font-medium">✓ Zero Deductible</p>
-                      )}
-                      {selectedProtectionPlan.max_coverage_amount && (
-                        <p className="text-xs text-muted-foreground">
-                          Coverage up to ${selectedProtectionPlan.max_coverage_amount.toLocaleString()}
-                        </p>
-                      )}
-                    </div>
-                  </div>
-                  <div className="text-right">
-                    <p className="font-semibold text-primary">
-                      ${calculateProtectionCost().toLocaleString()}
-                    </p>
-                    <p className="text-xs text-muted-foreground">
-                      ${selectedProtectionPlan.price_per_day}/day
-                    </p>
-                  </div>
-                </div>
-              )}
             </div>
           </Card>
 
@@ -716,19 +608,6 @@ export default function BookingCheckoutStep({
                 <span className="text-muted-foreground">Rental ({rentalDuration.days} days)</span>
                 <span className="font-medium">${vehicleTotal.toLocaleString()}</span>
               </div>
-
-              {/* Protection Plan */}
-              {selectedProtectionPlan && (
-                <div className="flex justify-between text-sm">
-                  <div className="flex items-center gap-2">
-                    <Shield className="w-4 h-4 text-primary" />
-                    <span className="text-muted-foreground">{selectedProtectionPlan.display_name}</span>
-                  </div>
-                  <span className="font-medium text-primary">
-                    +${calculateProtectionCost().toLocaleString()}
-                  </span>
-                </div>
-              )}
 
               <div className="flex justify-between text-sm">
                 <span className="text-muted-foreground">Taxes & Fees</span>
@@ -826,15 +705,6 @@ export default function BookingCheckoutStep({
             end_date: formData.dropoffDate,
             monthly_amount: createdRentalData.rental.monthly_amount,
           }}
-          protectionPlan={
-            selectedProtectionPlan
-              ? {
-                  name: selectedProtectionPlan.display_name,
-                  cost: calculateProtectionCost(),
-                  rentalFee: vehicleTotal,
-                }
-              : undefined
-          }
         />
       )}
 

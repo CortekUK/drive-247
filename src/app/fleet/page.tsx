@@ -473,7 +473,7 @@ const Pricing = () => {
                                 Book Now
                               </Button>
                             </a>
-                            <Link to={`/fleet/${vehicle.id}`}>
+                            <Link href={`/fleet/${vehicle.id}`}>
                               <Button
                                 variant="outline"
                                 className="w-full border-accent/30 hover:bg-accent/10 hover:border-accent/50 transition-all duration-300"
@@ -595,12 +595,12 @@ const Pricing = () => {
 
             {/* CTA Buttons */}
             <div className="flex flex-col sm:flex-row gap-4 justify-center mb-16">
-              <Link to="/booking">
+              <Link href="/booking">
                 <Button size="lg" className="text-base px-8 py-6" aria-label="Start your booking">
                   Start Your Booking
                 </Button>
               </Link>
-              <Link to="/fleet">
+              <Link href="/fleet">
                 <Button size="lg" variant="outline" className="text-base px-8 py-6" aria-label="View fleet and pricing">
                   View Fleet & Pricing
                 </Button>

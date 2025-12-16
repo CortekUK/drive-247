@@ -8,6 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Checkbox } from "@/components/ui/checkbox";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
+import { useTenant } from "@/contexts/TenantContext";
 import { Star } from "lucide-react";
 import { z } from "zod";
 
@@ -58,6 +59,7 @@ interface FeedbackModalProps {
 }
 
 export function FeedbackModal({ open, onOpenChange }: FeedbackModalProps) {
+  const { tenant } = useTenant();
   const { toast } = useToast();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [rating, setRating] = useState(0);
@@ -91,7 +93,8 @@ export function FeedbackModal({ open, onOpenChange }: FeedbackModalProps) {
       // Insert feedback without awaiting - prevents any async errors from bubbling up
       setTimeout(async () => {
         try {
-          await supabase.from("feedback_submissions").insert({
+          // Build feedback data
+          const feedbackData: any = {
             customer_name: validated.customer_name,
             customer_email: validated.customer_email,
             customer_phone: validated.customer_phone || null,
@@ -100,7 +103,14 @@ export function FeedbackModal({ open, onOpenChange }: FeedbackModalProps) {
             rating: validated.rating,
             feedback_message: validated.feedback_message,
             would_recommend: validated.would_recommend,
-          });
+          };
+
+          // Add tenant_id if tenant context exists
+          if (tenant?.id) {
+            feedbackData.tenant_id = tenant.id;
+          }
+
+          await supabase.from("feedback_submissions").insert(feedbackData);
         } catch (err) {
           // Silently catch - data is still saved
           console.log('Feedback saved:', err);

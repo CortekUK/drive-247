@@ -202,7 +202,7 @@ export default function FleetDetail() {
           <h1 className="text-3xl font-bold mb-4">Vehicle Not Found</h1>
           <p className="text-muted-foreground mb-8">The vehicle you're looking for doesn't exist or has been removed.</p>
           <Button asChild>
-            <Link to="/fleet">Back to Fleet</Link>
+            <Link href="/fleet">Back to Fleet</Link>
           </Button>
         </div>
       </div>
@@ -259,7 +259,7 @@ export default function FleetDetail() {
                   asChild
                   className="border-white/30 text-white hover:bg-white/10"
                 >
-                  <Link to="/fleet">
+                  <Link href="/fleet">
                     <ArrowLeft className="w-4 h-4 mr-2" />
                     Back to Fleet
                   </Link>
@@ -436,7 +436,7 @@ export default function FleetDetail() {
                   All rates include comprehensive insurance and 24/7 roadside assistance.
                 </p>
                 <Button variant="outline" asChild>
-                  <Link to="/pricing">View All Pricing Options</Link>
+                  <Link href="/pricing">View All Pricing Options</Link>
                 </Button>
               </div>
             </div>
@@ -602,7 +602,7 @@ export default function FleetDetail() {
                           <span className="text-sm text-muted-foreground font-normal ml-1">per day</span>
                         </p>
                         <Button asChild className="w-full">
-                          <Link to={`/fleet/${similarVehicle.id}`}>View Details</Link>
+                          <Link href={`/fleet/${similarVehicle.id}`}>View Details</Link>
                         </Button>
                       </CardContent>
                     </Card>
@@ -637,7 +637,7 @@ export default function FleetDetail() {
                     variant="outline"
                     asChild
                   >
-                    <Link to="/contact">Contact Us</Link>
+                    <Link href="/contact">Contact Us</Link>
                   </Button>
                 </div>
               </CardContent>
