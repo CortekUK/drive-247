@@ -10,6 +10,7 @@ import { FileText, Download, ExternalLink } from "lucide-react";
 import { EmptyState } from "@/components/shared/data-display/empty-state";
 import { format } from "date-fns";
 import { useState } from "react";
+import { useTenant } from "@/contexts/TenantContext";
 import { Input } from "@/components/ui/input";
 
 interface Document {
@@ -30,12 +31,13 @@ interface Document {
 
 export default function DocumentsList() {
   const [searchQuery, setSearchQuery] = useState("");
+  const { tenant } = useTenant();
 
   // Fetch completed documents from customer_documents table
   const { data: completedDocuments = [], isLoading: isLoadingCompleted } = useQuery({
-    queryKey: ["completed-documents"],
+    queryKey: ["completed-documents", tenant?.id],
     queryFn: async () => {
-      const { data, error } = await supabase
+      let query = supabase
         .from("customer_documents")
         .select(`
           *,
@@ -43,16 +45,23 @@ export default function DocumentsList() {
         `)
         .order("created_at", { ascending: false });
 
+      if (tenant?.id) {
+        query = query.eq("tenant_id", tenant.id);
+      }
+
+      const { data, error } = await query;
+
       if (error) throw error;
       return data as Document[];
     },
+    enabled: !!tenant,
   });
 
   // Fetch rental agreements (including pending/sent DocuSign)
   const { data: rentalAgreements = [], isLoading: isLoadingRentals } = useQuery({
-    queryKey: ["rental-agreements"],
+    queryKey: ["rental-agreements", tenant?.id],
     queryFn: async () => {
-      const { data, error } = await supabase
+      let query = supabase
         .from("rentals")
         .select(`
           id,
@@ -64,9 +73,16 @@ export default function DocumentsList() {
         `)
         .order("created_at", { ascending: false });
 
+      if (tenant?.id) {
+        query = query.eq("tenant_id", tenant.id);
+      }
+
+      const { data, error } = await query;
+
       if (error) throw error;
       return data;
     },
+    enabled: !!tenant,
   });
 
   const isLoading = isLoadingCompleted || isLoadingRentals;

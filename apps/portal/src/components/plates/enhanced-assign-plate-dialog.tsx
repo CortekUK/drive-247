@@ -29,6 +29,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
+import { useTenant } from "@/contexts/TenantContext";
 import { AlertTriangle, Car } from "lucide-react";
 import { enhancedAssignPlateSchema, type EnhancedAssignPlateFormValues } from "@/client-schemas/plates/enhanced-assign-plate";
 
@@ -73,6 +74,7 @@ export const EnhancedAssignPlateDialog = ({
   const [conflictMode, setConflictMode] = useState<'replace' | null>(null);
   const [conflictVehicle, setConflictVehicle] = useState<VehicleWithPlate | null>(null);
   const { toast } = useToast();
+  const { tenant } = useTenant();
 
   const form = useForm<AssignFormData>({
     resolver: zodResolver(enhancedAssignPlateSchema),
@@ -135,14 +137,20 @@ export const EnhancedAssignPlateDialog = ({
     try {
       // If replacing existing plate, unassign it first
       if (conflictMode === 'replace' && conflictVehicle?.current_plate) {
-        const { error: unassignError } = await supabase
+        let unassignQuery = supabase
           .from("plates")
-          .update({ 
-            vehicle_id: null, 
+          .update({
+            vehicle_id: null,
             status: 'received',
             updated_at: new Date().toISOString()
           })
           .eq("id", conflictVehicle.current_plate.id);
+
+        if (tenant?.id) {
+          unassignQuery = unassignQuery.eq("tenant_id", tenant.id);
+        }
+
+        const { error: unassignError } = await unassignQuery;
 
         if (unassignError) throw unassignError;
 
@@ -152,19 +160,26 @@ export const EnhancedAssignPlateDialog = ({
           event_type: "expense_added",
           summary: `Plate ${conflictVehicle.current_plate.plate_number} unassigned (replaced by ${plate.plate_number})`,
           reference_id: conflictVehicle.current_plate.id,
-          reference_table: "plates"
+          reference_table: "plates",
+          tenant_id: tenant?.id,
         });
       }
 
       // Assign new plate
-      const { error } = await supabase
+      let assignQuery = supabase
         .from("plates")
-        .update({ 
-          vehicle_id: data.vehicle_id, 
+        .update({
+          vehicle_id: data.vehicle_id,
           status: 'assigned',
           updated_at: new Date().toISOString()
         })
         .eq("id", plate.id);
+
+      if (tenant?.id) {
+        assignQuery = assignQuery.eq("tenant_id", tenant.id);
+      }
+
+      const { error } = await assignQuery;
 
       if (error) throw error;
 
@@ -174,7 +189,8 @@ export const EnhancedAssignPlateDialog = ({
         event_type: "expense_added",
         summary: `Plate ${plate.plate_number} assigned${data.assignment_note ? ` - ${data.assignment_note}` : ''}`,
         reference_id: plate.id,
-        reference_table: "plates"
+        reference_table: "plates",
+        tenant_id: tenant?.id,
       });
 
       const vehicle = vehicles?.find(v => v.id === data.vehicle_id);

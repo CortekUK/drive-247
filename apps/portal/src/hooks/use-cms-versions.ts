@@ -37,14 +37,17 @@ export const useCMSVersions = (pageSlug: string) => {
       }
 
       // Get versions
-      const { data, error } = await supabase
+      let versionsQuery = supabase
         .from("cms_page_versions")
-        .select(`
-          *,
-
-        `)
+        .select("*")
         .eq("page_id", page.id)
         .order("version_number", { ascending: false });
+
+      if (tenant?.id) {
+        versionsQuery = versionsQuery.eq("tenant_id", tenant.id);
+      }
+
+      const { data, error } = await versionsQuery;
 
       if (error) throw error;
       return data as CMSPageVersion[];
@@ -55,23 +58,35 @@ export const useCMSVersions = (pageSlug: string) => {
   // Rollback to a specific version
   const rollbackMutation = useMutation({
     mutationFn: async (versionId: string) => {
-      // Get the version content
-      const { data: version, error: versionError } = await supabase
+      // Get the version content - validate tenant ownership through page
+      let versionQuery = supabase
         .from("cms_page_versions")
-        .select("*, page:cms_pages!cms_page_versions_page_id_fkey(id, slug)")
-        .eq("id", versionId)
-        .single();
+        .select("*, page:cms_pages!cms_page_versions_page_id_fkey(id, slug, tenant_id)")
+        .eq("id", versionId);
+
+      const { data: version, error: versionError } = await versionQuery.single();
 
       if (versionError) throw versionError;
+
+      // Validate tenant ownership
+      if (tenant?.id && version.page.tenant_id && version.page.tenant_id !== tenant.id) {
+        throw new Error("Access denied: Version belongs to a different tenant");
+      }
 
       const pageId = version.page.id;
       const sections = version.content as any[];
 
       // Delete current sections
-      await supabase
+      let deleteQuery = supabase
         .from("cms_page_sections")
         .delete()
         .eq("page_id", pageId);
+
+      if (tenant?.id) {
+        deleteQuery = deleteQuery.eq("tenant_id", tenant.id);
+      }
+
+      await deleteQuery;
 
       // Insert version sections (with new IDs)
       if (sections && sections.length > 0) {
@@ -81,6 +96,7 @@ export const useCMSVersions = (pageSlug: string) => {
           content: s.content,
           display_order: s.display_order,
           is_visible: s.is_visible,
+          tenant_id: tenant?.id || null,
         }));
 
         const { error: insertError } = await supabase
@@ -91,13 +107,19 @@ export const useCMSVersions = (pageSlug: string) => {
       }
 
       // Set page status back to draft (requires re-publish)
-      await supabase
+      let updateQuery = supabase
         .from("cms_pages")
         .update({
           status: "draft",
           updated_at: new Date().toISOString(),
         })
         .eq("id", pageId);
+
+      if (tenant?.id) {
+        updateQuery = updateQuery.eq("tenant_id", tenant.id);
+      }
+
+      await updateQuery;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["cms-page", pageSlug] });
@@ -125,23 +147,35 @@ export const useCMSVersions = (pageSlug: string) => {
       if (pageError || !page) throw new Error("Page not found");
 
       // Get versions to keep
-      const { data: versionsToKeep } = await supabase
+      let versionsToKeepQuery = supabase
         .from("cms_page_versions")
         .select("id")
         .eq("page_id", page.id)
         .order("version_number", { ascending: false })
         .limit(keepCount);
 
+      if (tenant?.id) {
+        versionsToKeepQuery = versionsToKeepQuery.eq("tenant_id", tenant.id);
+      }
+
+      const { data: versionsToKeep } = await versionsToKeepQuery;
+
       const keepIds = versionsToKeep?.map((v) => v.id) || [];
 
       if (keepIds.length === 0) return;
 
       // Delete older versions
-      const { error } = await supabase
+      let deleteQuery = supabase
         .from("cms_page_versions")
         .delete()
         .eq("page_id", page.id)
         .not("id", "in", `(${keepIds.join(",")})`);
+
+      if (tenant?.id) {
+        deleteQuery = deleteQuery.eq("tenant_id", tenant.id);
+      }
+
+      const { error } = await deleteQuery;
 
       if (error) throw error;
     },

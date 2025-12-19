@@ -184,16 +184,21 @@ export const useTenantBranding = () => {
           instagram_url,
           twitter_url,
           linkedin_url
-        `)
-        .single();
+        `);
 
       if (error) {
         console.error('[TenantBranding] Update error:', error);
         throw error;
       }
 
-      console.log('[TenantBranding] Branding updated:', data);
-      return { ...DEFAULT_BRANDING, ...data } as TenantBranding;
+      // Handle case where no rows were updated (shouldn't happen but be defensive)
+      if (!data || data.length === 0) {
+        console.warn('[TenantBranding] No rows updated, tenant may not exist');
+        throw new Error('Tenant not found or no permission to update');
+      }
+
+      console.log('[TenantBranding] Branding updated:', data[0]);
+      return { ...DEFAULT_BRANDING, ...data[0] } as TenantBranding;
     },
     onSuccess: (data) => {
       // Update the cache with new data

@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { supabase } from "@/integrations/supabase/client";
+import { useTenant } from "@/contexts/TenantContext";
 import { toast } from "sonner";
 import { Upload, FileText, X, Loader2, AlertCircle } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -20,6 +21,7 @@ const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB
 const ALLOWED_TYPES = ['application/pdf', 'image/jpeg', 'image/jpg', 'image/png'];
 
 export default function InsuranceUploadDialog({ open, onOpenChange, onUploadComplete }: Props) {
+  const { tenant } = useTenant();
   const [files, setFiles] = useState<File[]>([]);
   const [uploading, setUploading] = useState(false);
   const [dragActive, setDragActive] = useState(false);
@@ -140,14 +142,20 @@ export default function InsuranceUploadDialog({ open, onOpenChange, onUploadComp
         // This will be linked to the actual customer when booking is created
         // Use unique email to avoid duplicate constraint violations
         const uniqueEmail = `pending-${Date.now()}-${Math.random().toString(36).substring(7)}@temp.booking`;
+        const customerData: any = {
+          name: 'Pending Booking',
+          email: uniqueEmail,
+          phone: '0000000000',
+          customer_type: 'Individual'
+        };
+
+        if (tenant?.id) {
+          customerData.tenant_id = tenant.id;
+        }
+
         const { data: tempCustomer, error: customerError } = await supabase
           .from('customers')
-          .insert({
-            name: 'Pending Booking',
-            email: uniqueEmail,
-            phone: '0000000000',
-            type: 'Individual'
-          })
+          .insert(customerData)
           .select()
           .single();
 
@@ -157,19 +165,25 @@ export default function InsuranceUploadDialog({ open, onOpenChange, onUploadComp
         }
 
         // Create customer_documents record with temp customer
+        const docInsertData: any = {
+          customer_id: tempCustomer.id,
+          document_type: 'Insurance Certificate',
+          document_name: file.name,
+          file_url: filePath,
+          file_name: file.name,
+          file_size: file.size,
+          mime_type: file.type,
+          ai_scan_status: 'pending',
+          uploaded_at: new Date().toISOString()
+        };
+
+        if (tenant?.id) {
+          docInsertData.tenant_id = tenant.id;
+        }
+
         const { data: docData, error: docError } = await supabase
           .from('customer_documents')
-          .insert({
-            customer_id: tempCustomer.id,
-            document_type: 'Insurance Certificate',
-            document_name: file.name,
-            file_url: filePath,
-            file_name: file.name,
-            file_size: file.size,
-            mime_type: file.type,
-            ai_scan_status: 'pending',
-            uploaded_at: new Date().toISOString()
-          })
+          .insert(docInsertData)
           .select()
           .single();
 

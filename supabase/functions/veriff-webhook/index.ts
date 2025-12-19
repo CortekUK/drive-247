@@ -304,13 +304,23 @@ async function handleVeriffWebhook(
 
     // If blocked, create a notification for admins
     if (isBlockedIdentity) {
-      const { data: adminUsers } = await supabaseClient
+      // Get tenant_id from the verification or customer
+      const tenantId = verification.tenant_id || verification.customers?.tenant_id;
+
+      // Query admins for the same tenant (or all admins if no tenant)
+      let adminQuery = supabaseClient
         .from('app_users')
         .select('id')
         .in('role', ['admin', 'head_admin']);
 
+      if (tenantId) {
+        adminQuery = adminQuery.eq('tenant_id', tenantId);
+      }
+
+      const { data: adminUsers } = await adminQuery;
+
       for (const admin of adminUsers || []) {
-        await supabaseClient.from('notifications').insert({
+        const notificationData: any = {
           user_id: admin.id,
           title: 'Blocked Identity Detected',
           message: `A blocked identity was detected during verification. Document: ${updateData.document_number}. Reason: ${blockReason}`,
@@ -321,7 +331,14 @@ async function handleVeriffWebhook(
             document_number: updateData.document_number,
             block_reason: blockReason
           }
-        });
+        };
+
+        // Add tenant_id if available
+        if (tenantId) {
+          notificationData.tenant_id = tenantId;
+        }
+
+        await supabaseClient.from('notifications').insert(notificationData);
       }
     }
 

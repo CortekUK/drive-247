@@ -47,6 +47,8 @@ export function useVehicleServices(vehicleId: string) {
   // Add service record mutation
   const addServiceMutation = useMutation({
     mutationFn: async (formData: ServiceFormData) => {
+      if (!tenant?.id) throw new Error("No tenant context available");
+
       const { data, error } = await supabase
         .from('service_records')
         .insert({
@@ -55,6 +57,7 @@ export function useVehicleServices(vehicleId: string) {
           mileage: formData.mileage,
           description: formData.description,
           cost: formData.cost,
+          tenant_id: tenant.id,
         })
         .select()
         .single();
@@ -84,7 +87,7 @@ export function useVehicleServices(vehicleId: string) {
   // Edit service record mutation
   const editServiceMutation = useMutation({
     mutationFn: async ({ id, ...formData }: ServiceFormData & { id: string }) => {
-      const { data, error } = await supabase
+      let query = supabase
         .from('service_records')
         .update({
           service_date: formData.service_date,
@@ -92,9 +95,13 @@ export function useVehicleServices(vehicleId: string) {
           description: formData.description,
           cost: formData.cost,
         })
-        .eq('id', id)
-        .select()
-        .single();
+        .eq('id', id);
+
+      if (tenant?.id) {
+        query = query.eq('tenant_id', tenant.id);
+      }
+
+      const { data, error } = await query.select().single();
 
       if (error) throw error;
       return data;
@@ -121,10 +128,16 @@ export function useVehicleServices(vehicleId: string) {
   // Delete service record mutation
   const deleteServiceMutation = useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await supabase
+      let query = supabase
         .from('service_records')
         .delete()
         .eq('id', id);
+
+      if (tenant?.id) {
+        query = query.eq('tenant_id', tenant.id);
+      }
+
+      const { error } = await query;
 
       if (error) throw error;
     },

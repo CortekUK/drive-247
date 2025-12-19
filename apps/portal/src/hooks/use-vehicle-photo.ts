@@ -2,6 +2,7 @@ import { useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { useQueryClient } from "@tanstack/react-query";
+import { useTenant } from "@/contexts/TenantContext";
 
 interface UseVehiclePhotoOptions {
   vehicleId: string;
@@ -14,6 +15,7 @@ export const useVehiclePhoto = ({ vehicleId, vehicleReg, onPhotoUpdate }: UseVeh
   const [isRemoving, setIsRemoving] = useState(false);
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const { tenant } = useTenant();
 
   const uploadPhoto = async (file: File) => {
     // Validate file type
@@ -57,10 +59,16 @@ export const useVehiclePhoto = ({ vehicleId, vehicleReg, onPhotoUpdate }: UseVeh
         .getPublicUrl(filePath);
 
       // Update vehicle record
-      const { error: updateError } = await supabase
+      let updateQuery = supabase
         .from('vehicles')
         .update({ photo_url: publicUrl })
         .eq('id', vehicleId);
+
+      if (tenant?.id) {
+        updateQuery = updateQuery.eq('tenant_id', tenant.id);
+      }
+
+      const { error: updateError } = await updateQuery;
 
       if (updateError) throw updateError;
 
@@ -108,10 +116,16 @@ export const useVehiclePhoto = ({ vehicleId, vehicleReg, onPhotoUpdate }: UseVeh
       }
 
       // Update vehicle record
-      const { error: updateError } = await supabase
+      let removeUpdateQuery = supabase
         .from('vehicles')
         .update({ photo_url: null })
         .eq('id', vehicleId);
+
+      if (tenant?.id) {
+        removeUpdateQuery = removeUpdateQuery.eq('tenant_id', tenant.id);
+      }
+
+      const { error: updateError } = await removeUpdateQuery;
 
       if (updateError) throw updateError;
 

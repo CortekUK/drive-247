@@ -29,6 +29,7 @@ export interface NotificationOptions {
   type: NotificationType;
   link?: string;
   metadata?: Record<string, any>;
+  tenantId?: string;
 }
 
 /**
@@ -70,6 +71,7 @@ export class NotificationService {
         type: options.type,
         link: options.link,
         metadata: options.metadata,
+        tenant_id: options.tenantId,
       });
 
       if (error) {
@@ -97,7 +99,8 @@ export class NotificationService {
     message: string,
     type: NotificationType,
     link?: string,
-    metadata?: Record<string, any>
+    metadata?: Record<string, any>,
+    tenantId?: string
   ): Promise<void> {
     const notifications = userIds.map((userId) => ({
       user_id: userId,
@@ -106,6 +109,7 @@ export class NotificationService {
       type,
       link,
       metadata,
+      tenant_id: tenantId,
     }));
 
     try {
@@ -123,13 +127,20 @@ export class NotificationService {
 
   /**
    * Get admin user IDs (admin and head_admin roles)
+   * @param tenantId Optional tenant ID to filter admins by tenant
    * @returns Array of admin user IDs
    */
-  async getAdminUserIds(): Promise<string[]> {
-    const { data, error } = await supabase
+  async getAdminUserIds(tenantId?: string): Promise<string[]> {
+    let query = supabase
       .from("app_users")
       .select("id")
       .in("role", ["admin", "head_admin"]);
+
+    if (tenantId) {
+      query = query.eq("tenant_id", tenantId);
+    }
+
+    const { data, error } = await query;
 
     if (error) {
       console.error("Error fetching admin users:", error);
@@ -146,15 +157,17 @@ export class NotificationService {
    * @param type Notification type
    * @param link Optional link
    * @param metadata Optional metadata
+   * @param tenantId Optional tenant ID
    */
   async notifyAdmins(
     title: string,
     message: string,
     type: NotificationType,
     link?: string,
-    metadata?: Record<string, any>
+    metadata?: Record<string, any>,
+    tenantId?: string
   ): Promise<void> {
-    const adminIds = await this.getAdminUserIds();
+    const adminIds = await this.getAdminUserIds(tenantId);
 
     if (adminIds.length === 0) {
       console.warn("No admin users found to notify");
@@ -167,7 +180,8 @@ export class NotificationService {
       message,
       type,
       link,
-      metadata
+      metadata,
+      tenantId
     );
   }
 

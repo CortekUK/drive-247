@@ -57,15 +57,21 @@ export function useCustomerDocuments(customerId: string) {
 
 export function useDeleteCustomerDocument() {
   const queryClient = useQueryClient();
+  const { tenant } = useTenant();
 
   return useMutation({
     mutationFn: async (documentId: string) => {
       // First get the document to find the file URL
-      const { data: document } = await supabase
+      let selectQuery = supabase
         .from("customer_documents")
         .select("file_url, customer_id")
-        .eq("id", documentId)
-        .single();
+        .eq("id", documentId);
+
+      if (tenant?.id) {
+        selectQuery = selectQuery.eq("tenant_id", tenant.id);
+      }
+
+      const { data: document } = await selectQuery.single();
 
       // Delete the file from storage if it exists
       if (document?.file_url) {
@@ -76,10 +82,16 @@ export function useDeleteCustomerDocument() {
       }
 
       // Delete the database record
-      const { error } = await supabase
+      let deleteQuery = supabase
         .from("customer_documents")
         .delete()
         .eq("id", documentId);
+
+      if (tenant?.id) {
+        deleteQuery = deleteQuery.eq("tenant_id", tenant.id);
+      }
+
+      const { error } = await deleteQuery;
 
       if (error) throw error;
       return document?.customer_id;

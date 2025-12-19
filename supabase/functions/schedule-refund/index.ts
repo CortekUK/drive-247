@@ -41,10 +41,10 @@ serve(async (req) => {
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    // Get payment details
+    // Get payment details (including tenant_id for isolation)
     const { data: payment, error: paymentError } = await supabase
       .from('payments')
-      .select('id, amount, customer_id, rental_id, stripe_payment_intent_id, capture_status')
+      .select('id, amount, customer_id, rental_id, stripe_payment_intent_id, capture_status, tenant_id')
       .eq('id', paymentId)
       .single();
 
@@ -102,7 +102,8 @@ serve(async (req) => {
           amount: finalRefundAmount,
           reason: reason,
           stripe_payment_intent_id: payment.stripe_payment_intent_id
-        }
+        },
+        tenant_id: payment.tenant_id
       });
 
     if (reminderError) {

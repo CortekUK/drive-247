@@ -15,6 +15,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage, FormDescription } from "@/components/ui/form";
 import { ArrowLeft, AlertTriangle, Save } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { useTenant } from "@/contexts/TenantContext";
 import { DatePickerInput } from "@/components/shared/forms/date-picker-input";
 import { CurrencyInput } from "@/components/shared/forms/currency-input";
 import { EnhancedFileUpload } from "@/components/fines/enhanced-file-upload";
@@ -45,6 +46,7 @@ const CreateFine = () => {
   const router = useRouter();
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const { tenant } = useTenant();
   const [loading, setLoading] = useState(false);
   const [evidenceFiles, setEvidenceFiles] = useState<FileWithPreview[]>([]);
 
@@ -77,24 +79,30 @@ const CreateFine = () => {
 
   // Fetch all customers and vehicles for searchable dropdowns
   const { data: customers } = useQuery({
-    queryKey: ["customers-for-fines"],
+    queryKey: ["customers-for-fines", tenant?.id],
     queryFn: async () => {
-      const { data, error } = await supabase
+      let query = supabase
         .from("customers")
-        .select("id, name, email, phone, type")
+        .select("id, name, email, phone, customer_type")
         .eq("status", "Active")
         .order("name");
 
+      if (tenant?.id) {
+        query = query.eq("tenant_id", tenant.id);
+      }
+
+      const { data, error } = await query;
       if (error) throw error;
       return data;
     },
+    enabled: !!tenant,
   });
 
   const { data: vehicles } = useQuery({
-    queryKey: ["rented-vehicles"],
+    queryKey: ["rented-vehicles", tenant?.id],
     queryFn: async () => {
       // Get unique vehicles that have been added to rentals
-      const { data, error } = await supabase
+      let query = supabase
         .from("rentals")
         .select(`
           vehicle_id,
@@ -108,6 +116,12 @@ const CreateFine = () => {
         `)
         .order("vehicles(reg)");
 
+      if (tenant?.id) {
+        query = query.eq("tenant_id", tenant.id);
+      }
+
+      const { data, error } = await query;
+
       if (error) throw error;
 
       // Extract unique vehicles from the rentals
@@ -120,6 +134,7 @@ const CreateFine = () => {
 
       return Array.from(uniqueVehiclesMap.values());
     },
+    enabled: !!tenant,
   });
 
   const createFineMutation = useMutation({
@@ -138,6 +153,7 @@ const CreateFine = () => {
           liability: data.liability,
           notes: data.notes || null,
           status: "Open",
+          tenant_id: tenant?.id || null,
         })
         .select()
         .single();
@@ -167,6 +183,7 @@ const CreateFine = () => {
               fine_id: fine.id,
               file_name: file.name,
               file_url: publicUrl,
+              tenant_id: tenant?.id || null,
             });
         }
       }
@@ -303,7 +320,7 @@ const CreateFine = () => {
                             <SelectContent>
                               {customers?.map((customer) => (
                                 <SelectItem key={customer.id} value={customer.id}>
-                                  {customer.name} • {customer.email || customer.phone || customer.type}
+                                  {customer.name} • {customer.email || customer.phone || customer.customer_type}
                                 </SelectItem>
                               ))}
                             </SelectContent>

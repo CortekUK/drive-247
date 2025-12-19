@@ -5,6 +5,7 @@ import { Camera, Upload, Trash2, RotateCcw, Car, X } from "lucide-react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
+import { useTenant } from "@/contexts/TenantContext";
 
 interface VehiclePhoto {
   id: string;
@@ -27,6 +28,7 @@ export const VehiclePhotoGallery = ({
   const [uploadingCount, setUploadingCount] = useState(0);
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const { tenant } = useTenant();
 
   // Fetch vehicle photos
   const { data: photos = [], isLoading } = useQuery({
@@ -58,10 +60,16 @@ export const VehiclePhotoGallery = ({
       if (storageError) throw storageError;
 
       // Delete from database
-      const { error: dbError } = await supabase
+      let deleteQuery = supabase
         .from("vehicle_photos")
         .delete()
         .eq("id", photo.id);
+
+      if (tenant?.id) {
+        deleteQuery = deleteQuery.eq("tenant_id", tenant.id);
+      }
+
+      const { error: dbError } = await deleteQuery;
 
       if (dbError) throw dbError;
     },
@@ -146,6 +154,7 @@ export const VehiclePhotoGallery = ({
             vehicle_id: vehicleId,
             photo_url: publicUrl,
             display_order: currentMaxOrder + i + 1,
+            tenant_id: tenant?.id,
           });
 
         if (dbError) {

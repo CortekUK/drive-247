@@ -14,6 +14,7 @@ interface PaymentVerificationRequest {
   customerName: string;
   amount: number;
   vehicleReg?: string;
+  tenantId?: string;
 }
 
 async function sendEmail(to: string, subject: string, html: string, from: string = 'DRIVE917 <notifications@drive917.com>') {
@@ -236,6 +237,17 @@ serve(async (req) => {
     const data: PaymentVerificationRequest = await req.json();
     console.log('Sending payment verification email for payment:', data.paymentId);
 
+    // Get tenant_id from payment if not provided
+    let tenantId = data.tenantId;
+    if (!tenantId && data.paymentId) {
+      const { data: payment } = await supabase
+        .from('payments')
+        .select('tenant_id')
+        .eq('id', data.paymentId)
+        .single();
+      tenantId = payment?.tenant_id;
+    }
+
     // Get admin email from settings
     const { data: adminEmailSetting } = await supabase
       .from('settings')
@@ -266,7 +278,8 @@ serve(async (req) => {
           customer_id: data.customerId,
           customer_name: data.customerName,
           amount: data.amount
-        }
+        },
+        tenant_id: tenantId
       });
     } catch (emailError) {
       console.error('Error sending verification email:', emailError);
@@ -282,7 +295,8 @@ serve(async (req) => {
           customer_id: data.customerId,
           customer_name: data.customerName,
           amount: data.amount
-        }
+        },
+        tenant_id: tenantId
       });
     }
 

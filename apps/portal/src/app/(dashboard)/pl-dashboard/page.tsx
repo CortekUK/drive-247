@@ -15,6 +15,7 @@ import { format, startOfMonth, endOfMonth, subMonths } from 'date-fns';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { useToast } from '@/hooks/use-toast';
+import { useTenant } from '@/contexts/TenantContext';
 
 interface PLSummary {
   total_revenue: number;
@@ -54,6 +55,7 @@ type SortDirection = 'asc' | 'desc';
 const PLDashboard: React.FC = () => {
   const router = useRouter();
   const { toast } = useToast();
+  const { tenant } = useTenant();
   const searchParams = useSearchParams();
 
   // State for filters and sorting - initialize from URL params
@@ -93,17 +95,23 @@ const PLDashboard: React.FC = () => {
 
   // Fetch P&L summary data with date filtering
   const { data: plSummary, isLoading: isSummaryLoading } = useQuery({
-    queryKey: ['pl-summary', dateRange],
+    queryKey: ['pl-summary', tenant?.id, dateRange],
     queryFn: async (): Promise<PLSummary> => {
       const fromDate = format(dateRange.from, 'yyyy-MM-dd');
       const toDate = format(dateRange.to, 'yyyy-MM-dd');
 
       // Query pnl_entries directly with date filter
-      const { data, error } = await supabase
+      let query = supabase
         .from('pnl_entries')
         .select('amount, side, vehicle_id')
         .gte('entry_date', fromDate)
         .lte('entry_date', toDate);
+
+      if (tenant?.id) {
+        query = query.eq('tenant_id', tenant.id);
+      }
+
+      const { data, error } = await query;
 
       if (error) throw error;
 
@@ -134,24 +142,36 @@ const PLDashboard: React.FC = () => {
 
   // Fetch vehicle P&L data with date filtering
   const { data: vehiclePLData, isLoading: isVehicleLoading } = useQuery({
-    queryKey: ['vehicle-pl', dateRange, groupByMonth],
+    queryKey: ['vehicle-pl', tenant?.id, dateRange, groupByMonth],
     queryFn: async (): Promise<VehiclePL[]> => {
       const fromDate = format(dateRange.from, 'yyyy-MM-dd');
       const toDate = format(dateRange.to, 'yyyy-MM-dd');
 
       // Query pnl_entries directly with date filter
-      const { data: pnlData, error: pnlError } = await supabase
+      let pnlQuery = supabase
         .from('pnl_entries')
         .select('vehicle_id, amount, side, category')
         .gte('entry_date', fromDate)
         .lte('entry_date', toDate);
 
+      if (tenant?.id) {
+        pnlQuery = pnlQuery.eq('tenant_id', tenant.id);
+      }
+
+      const { data: pnlData, error: pnlError } = await pnlQuery;
+
       if (pnlError) throw pnlError;
 
       // Fetch vehicle info
-      const { data: vehiclesData, error: vehiclesError } = await supabase
+      let vehiclesQuery = supabase
         .from('vehicles')
         .select('id, reg, make, model, is_disposed, disposal_date');
+
+      if (tenant?.id) {
+        vehiclesQuery = vehiclesQuery.eq('tenant_id', tenant.id);
+      }
+
+      const { data: vehiclesData, error: vehiclesError } = await vehiclesQuery;
 
       if (vehiclesError) throw vehiclesError;
 

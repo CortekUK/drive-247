@@ -3,6 +3,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { useTenant } from "@/contexts/TenantContext";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
@@ -29,6 +30,7 @@ export const FineAppealDialog = ({
   const [loading, setLoading] = useState(false);
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const { tenant } = useTenant();
   
   const form = useForm<AppealFormData>({
     resolver: zodResolver(fineAppealSchema),
@@ -41,13 +43,19 @@ export const FineAppealDialog = ({
     if (!customerId) return;
 
     // Get current remaining amount for this customer's fine charges
-    const { data: charges } = await supabase
+    let chargesQuery = supabase
       .from("ledger_entries")
       .select("remaining_amount")
       .eq("customer_id", customerId)
       .eq("category", "Fine")
       .eq("type", "Charge")
       .gt("remaining_amount", 0);
+
+    if (tenant?.id) {
+      chargesQuery = chargesQuery.eq("tenant_id", tenant.id);
+    }
+
+    const { data: charges } = await chargesQuery;
 
     const totalRemaining = charges?.reduce((sum, charge) => sum + Number(charge.remaining_amount), 0) || 0;
     const totalPaid = fineAmount - totalRemaining;
@@ -62,17 +70,24 @@ export const FineAppealDialog = ({
           type: "Adjustment",
           category: "Fine",
           amount: -totalRemaining,
-          remaining_amount: 0
+          remaining_amount: 0,
+          tenant_id: tenant?.id || null,
         });
 
       // Clear remaining amounts on existing charges
-      await supabase
+      let clearAppealQuery = supabase
         .from("ledger_entries")
         .update({ remaining_amount: 0 })
         .eq("customer_id", customerId)
         .eq("category", "Fine")
         .eq("type", "Charge")
         .gt("remaining_amount", 0);
+
+      if (tenant?.id) {
+        clearAppealQuery = clearAppealQuery.eq("tenant_id", tenant.id);
+      }
+
+      await clearAppealQuery;
     }
 
     // If amount was already paid, create customer credit
@@ -85,28 +100,41 @@ export const FineAppealDialog = ({
           type: "Credit",
           category: "Fine",
           amount: totalPaid,
-          remaining_amount: totalPaid  // Unapplied credit
+          remaining_amount: totalPaid,  // Unapplied credit
+          tenant_id: tenant?.id || null,
         });
     }
 
     // Update fine status
-    await supabase
+    let appealFineQuery = supabase
       .from("fines")
       .update({ status: "Appeal Successful" })
       .eq("id", fineId);
+
+    if (tenant?.id) {
+      appealFineQuery = appealFineQuery.eq("tenant_id", tenant.id);
+    }
+
+    await appealFineQuery;
   };
 
   const handleWaive = async () => {
     if (!customerId) return;
 
     // Clear unpaid remainder with negative adjustment
-    const { data: charges } = await supabase
+    let waiveChargesQuery = supabase
       .from("ledger_entries")
       .select("remaining_amount")
       .eq("customer_id", customerId)
       .eq("category", "Fine")
       .eq("type", "Charge")
       .gt("remaining_amount", 0);
+
+    if (tenant?.id) {
+      waiveChargesQuery = waiveChargesQuery.eq("tenant_id", tenant.id);
+    }
+
+    const { data: charges } = await waiveChargesQuery;
 
     const totalRemaining = charges?.reduce((sum, charge) => sum + Number(charge.remaining_amount), 0) || 0;
 
@@ -119,24 +147,37 @@ export const FineAppealDialog = ({
           type: "Adjustment",
           category: "Fine",
           amount: -totalRemaining,
-          remaining_amount: 0
+          remaining_amount: 0,
+          tenant_id: tenant?.id || null,
         });
 
       // Clear remaining amounts on existing charges
-      await supabase
+      let clearWaivedQuery = supabase
         .from("ledger_entries")
         .update({ remaining_amount: 0 })
         .eq("customer_id", customerId)
         .eq("category", "Fine")
         .eq("type", "Charge")
         .gt("remaining_amount", 0);
+
+      if (tenant?.id) {
+        clearWaivedQuery = clearWaivedQuery.eq("tenant_id", tenant.id);
+      }
+
+      await clearWaivedQuery;
     }
 
     // Update fine status
-    await supabase
+    let waiveFineQuery = supabase
       .from("fines")
       .update({ status: "Waived" })
       .eq("id", fineId);
+
+    if (tenant?.id) {
+      waiveFineQuery = waiveFineQuery.eq("tenant_id", tenant.id);
+    }
+
+    await waiveFineQuery;
   };
 
   const onSubmit = async (data: AppealFormData) => {

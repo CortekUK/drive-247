@@ -581,35 +581,74 @@ const MultiStepBookingWidget = () => {
     try {
       const priceBreakdown = calculatePriceBreakdown();
       const selectedVehicle = vehicles.find(v => v.id === formData.vehicleId);
-      // Build booking data
-      const bookingData: any = {
-        pickup_location: formData.pickupLocation,
-        dropoff_location: formData.dropoffLocation,
-        pickup_date: formData.pickupDate,
-        dropoff_date: formData.dropoffDate || null,
-        pickup_time: formData.pickupTime,
-        special_requests: formData.specialRequests || null,
+
+      // First, create or find customer
+      let customerId: string | null = null;
+
+      // Check if customer exists
+      let customerQuery = supabase
+        .from("customers")
+        .select("id")
+        .eq("email", formData.customerEmail);
+
+      if (tenant?.id) {
+        customerQuery = customerQuery.eq("tenant_id", tenant.id);
+      }
+
+      const { data: existingCustomer } = await customerQuery.maybeSingle();
+
+      if (existingCustomer) {
+        customerId = existingCustomer.id;
+      } else {
+        // Create new customer
+        const customerData: any = {
+          name: formData.customerName,
+          email: formData.customerEmail,
+          phone: formData.customerPhone,
+          customer_type: formData.customerType || "Individual",
+          status: "Active"
+        };
+
+        if (tenant?.id) {
+          customerData.tenant_id = tenant.id;
+        }
+
+        const { data: newCustomer, error: customerError } = await supabase
+          .from("customers")
+          .insert(customerData)
+          .select("id")
+          .single();
+
+        if (customerError) {
+          toast.error("Failed to create customer");
+          setLoading(false);
+          return;
+        }
+        customerId = newCustomer.id;
+      }
+
+      // Build rental data
+      const rentalData: any = {
+        customer_id: customerId,
         vehicle_id: formData.vehicleId || null,
-        rental_days: priceBreakdown?.rentalDays || null,
-        total_price: priceBreakdown?.totalPrice || 0,
-        customer_name: formData.customerName,
-        customer_email: formData.customerEmail,
-        customer_phone: formData.customerPhone,
-        license_number: formData.licenseNumber || null,
-        payment_status: 'pending',
-        service_type: 'rental',
-        status: 'new'
+        pickup_location: formData.pickupLocation,
+        return_location: formData.dropoffLocation,
+        start_date: formData.pickupDate,
+        end_date: formData.dropoffDate || formData.pickupDate,
+        monthly_amount: priceBreakdown?.totalPrice || 0,
+        notes: formData.specialRequests || null,
+        status: "Pending"
       };
 
       // Add tenant_id if tenant context exists
       if (tenant?.id) {
-        bookingData.tenant_id = tenant.id;
+        rentalData.tenant_id = tenant.id;
       }
 
       const {
         data,
         error
-      } = await supabase.from("bookings").insert(bookingData).select().single();
+      } = await supabase.from("rentals").insert(rentalData).select().single();
       if (error) throw error;
 
       // Generate reference using timestamp

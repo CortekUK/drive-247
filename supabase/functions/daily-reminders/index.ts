@@ -15,6 +15,7 @@ interface LedgerEntry {
   due_date: string;
   remaining_amount: number;
   category: string;
+  tenant_id: string;
   customers: { name: string; whatsapp_opt_in?: boolean };
   vehicles: { reg: string };
 }
@@ -55,6 +56,7 @@ serve(async (req) => {
         due_date,
         remaining_amount,
         category,
+        tenant_id,
         customers!inner(name, whatsapp_opt_in),
         vehicles!inner(reg)
       `)
@@ -142,7 +144,8 @@ serve(async (req) => {
           status: 'Delivered',
           message_preview: message,
           delivered_at: new Date().toISOString(),
-          delivered_to: 'in_app'
+          delivered_to: 'in_app',
+          tenant_id: typedCharge.tenant_id
         });
 
       if (insertError) {

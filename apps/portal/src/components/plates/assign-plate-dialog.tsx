@@ -3,6 +3,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { useTenant } from "@/contexts/TenantContext";
 import {
   Dialog,
   DialogContent,
@@ -62,6 +63,7 @@ export const AssignPlateDialog = ({
 }: AssignPlateDialogProps) => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const { toast } = useToast();
+  const { tenant } = useTenant();
 
   const form = useForm<AssignFormData>({
     resolver: zodResolver(assignPlateSchema),
@@ -72,25 +74,37 @@ export const AssignPlateDialog = ({
 
   // Get available vehicles (not currently assigned to other plates)
   const { data: vehicles } = useQuery({
-    queryKey: ["available-vehicles"],
+    queryKey: ["available-vehicles", tenant?.id],
     queryFn: async () => {
-      const { data, error } = await supabase
+      let vehiclesQuery = supabase
         .from("vehicles")
         .select("*")
         .order("reg");
-      
+
+      if (tenant?.id) {
+        vehiclesQuery = vehiclesQuery.eq("tenant_id", tenant.id);
+      }
+
+      const { data, error } = await vehiclesQuery;
+
       if (error) throw error;
-      
+
       // Get currently assigned vehicles
-      const { data: assignedPlates } = await supabase
+      let platesQuery = supabase
         .from("plates")
         .select("assigned_vehicle_id")
         .not("assigned_vehicle_id", "is", null);
-      
+
+      if (tenant?.id) {
+        platesQuery = platesQuery.eq("tenant_id", tenant.id);
+      }
+
+      const { data: assignedPlates } = await platesQuery;
+
       const assignedVehicleIds = assignedPlates?.map(p => p.assigned_vehicle_id) || [];
-      
+
       // Filter out assigned vehicles (except the current plate's vehicle if it has one)
-      return (data as Vehicle[]).filter(vehicle => 
+      return (data as Vehicle[]).filter(vehicle =>
         !assignedVehicleIds.includes(vehicle.id) || vehicle.id === plate?.assigned_vehicle_id
       );
     },
@@ -102,10 +116,16 @@ export const AssignPlateDialog = ({
     
     setIsSubmitting(true);
     try {
-      const { error } = await supabase
+      let query = supabase
         .from("plates")
         .update({ assigned_vehicle_id: data.vehicle_id })
         .eq("id", plate.id);
+
+      if (tenant?.id) {
+        query = query.eq("tenant_id", tenant.id);
+      }
+
+      const { error } = await query;
 
       if (error) throw error;
 

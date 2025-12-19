@@ -106,7 +106,8 @@ Deno.serve(async (req) => {
                 reminder_type: reminderType,
                 status: 'Delivered',
                 message_preview: messagePreview,
-                delivered_at: new Date().toISOString()
+                delivered_at: new Date().toISOString(),
+                tenant_id: charge.tenant_id
               })
 
             if (!error) {

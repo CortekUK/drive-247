@@ -136,32 +136,70 @@ const EnhancedBookingWidget = () => {
 
     setLoading(true);
 
-    // Build booking data
-    const bookingData: any = {
+    // First, create or find customer
+    let customerId: string | null = null;
+
+    // Check if customer exists
+    let customerQuery = supabase
+      .from("customers")
+      .select("id")
+      .eq("email", formData.customerEmail);
+
+    if (tenant?.id) {
+      customerQuery = customerQuery.eq("tenant_id", tenant.id);
+    }
+
+    const { data: existingCustomer } = await customerQuery.maybeSingle();
+
+    if (existingCustomer) {
+      customerId = existingCustomer.id;
+    } else {
+      // Create new customer
+      const customerData: any = {
+        name: formData.customerName,
+        email: formData.customerEmail,
+        phone: formData.customerPhone,
+        customer_type: "Individual",
+        status: "Active"
+      };
+
+      if (tenant?.id) {
+        customerData.tenant_id = tenant.id;
+      }
+
+      const { data: newCustomer, error: customerError } = await supabase
+        .from("customers")
+        .insert(customerData)
+        .select("id")
+        .single();
+
+      if (customerError) {
+        toast.error("Failed to create customer");
+        setLoading(false);
+        return;
+      }
+      customerId = newCustomer.id;
+    }
+
+    // Build rental data
+    const rentalData: any = {
+      customer_id: customerId,
       vehicle_id: selectedVehicle.id,
       pickup_location: formData.pickupLocation,
-      dropoff_location: formData.dropoffLocation,
-      pickup_date: formData.pickupDate,
-      pickup_time: formData.pickupTime,
-      passengers: parseInt(formData.passengers),
-      luggage: parseInt(formData.luggage),
-      additional_requirements: formData.additionalRequirements,
-      is_long_drive: isLongDrive,
-      has_overnight_stop: hasOvernightStop,
-      estimated_miles: estimatedMiles,
-      total_price: breakdown.total,
-      customer_name: formData.customerName,
-      customer_email: formData.customerEmail,
-      customer_phone: formData.customerPhone,
-      status: "new",
+      return_location: formData.dropoffLocation,
+      start_date: formData.pickupDate,
+      end_date: formData.pickupDate, // Same day for chauffeur service
+      monthly_amount: breakdown.total,
+      notes: formData.additionalRequirements,
+      status: "Pending",
     };
 
     // Add tenant_id if tenant context exists
     if (tenant?.id) {
-      bookingData.tenant_id = tenant.id;
+      rentalData.tenant_id = tenant.id;
     }
 
-    const { error } = await supabase.from("bookings").insert(bookingData);
+    const { error } = await supabase.from("rentals").insert(rentalData);
 
     setLoading(false);
 

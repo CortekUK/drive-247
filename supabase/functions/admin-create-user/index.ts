@@ -10,6 +10,7 @@ interface CreateUserRequest {
   name: string;
   role: 'head_admin' | 'admin' | 'ops' | 'viewer';
   temporaryPassword: string;
+  tenant_id?: string; // Optional: super admins can specify tenant_id for the new user
 }
 
 Deno.serve(async (req) => {
@@ -54,10 +55,10 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Check if user has admin privileges
+    // Check if user has admin privileges and get their tenant_id
     const { data: currentUserData, error: roleError } = await supabase
       .from('app_users')
-      .select('role, is_active')
+      .select('role, is_active, tenant_id, is_super_admin')
       .eq('auth_user_id', user.id)
       .single();
 
@@ -78,11 +79,19 @@ Deno.serve(async (req) => {
     }
 
     // Only head_admin can create other admins or head_admins
-    const { email, name, role, temporaryPassword }: CreateUserRequest = await req.json();
+    const { email, name, role, temporaryPassword, tenant_id }: CreateUserRequest = await req.json();
 
-    if ((role === 'admin' || role === 'head_admin') && currentUserData.role !== 'head_admin') {
+    if ((role === 'admin' || role === 'head_admin') && currentUserData.role !== 'head_admin' && !currentUserData.is_super_admin) {
       return new Response(
         JSON.stringify({ error: 'Only head admin can create admin users' }),
+        { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // Super admins can specify tenant_id, others inherit from creator
+    if (tenant_id && !currentUserData.is_super_admin) {
+      return new Response(
+        JSON.stringify({ error: 'Only super admins can specify tenant_id' }),
         { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
@@ -107,6 +116,10 @@ Deno.serve(async (req) => {
     }
 
     // Create corresponding app_users record
+    // If tenant_id is specified (by super admin), use it
+    // Otherwise: super admins create users with NULL tenant_id, regular users inherit from creator
+    const newUserTenantId = tenant_id || (currentUserData.is_super_admin ? null : currentUserData.tenant_id);
+
     const { data: appUser, error: appUserError } = await supabaseAdmin
       .from('app_users')
       .insert({
@@ -115,7 +128,8 @@ Deno.serve(async (req) => {
         name,
         role,
         is_active: true,
-        must_change_password: true
+        must_change_password: true,
+        tenant_id: newUserTenantId
       })
       .select()
       .single();
@@ -130,13 +144,14 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Log the action
-    await supabase
+    // Log the action (tenant_id is auto-set by trigger, but we can be explicit)
+    await supabaseAdmin
       .from('audit_logs')
       .insert({
         actor_id: (await supabase.from('app_users').select('id').eq('auth_user_id', user.id).single()).data?.id,
         action: 'create_user',
         target_user_id: appUser.id,
+        tenant_id: newUserTenantId,
         details: {
           email,
           name,

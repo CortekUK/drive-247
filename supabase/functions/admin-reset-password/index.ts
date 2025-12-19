@@ -55,7 +55,7 @@ Deno.serve(async (req) => {
     // Check if user has admin privileges
     const { data: currentUserData, error: roleError } = await supabase
       .from('app_users')
-      .select('id, role, is_active')
+      .select('id, role, is_active, tenant_id')
       .eq('auth_user_id', user.id)
       .single();
 
@@ -127,16 +127,23 @@ Deno.serve(async (req) => {
       .eq('id', userId);
 
     // Log the action
+    const auditData: any = {
+      actor_id: currentUserData.id,
+      action: 'reset_password',
+      target_user_id: targetUser.id,
+      details: {
+        target_email: targetUser.email
+      }
+    };
+
+    // Add tenant_id if available
+    if (currentUserData.tenant_id) {
+      auditData.tenant_id = currentUserData.tenant_id;
+    }
+
     await supabase
       .from('audit_logs')
-      .insert({
-        actor_id: currentUserData.id,
-        action: 'reset_password',
-        target_user_id: targetUser.id,
-        details: {
-          target_email: targetUser.email
-        }
-      });
+      .insert(auditData);
 
     console.log('Password reset successfully for user:', targetUser.email);
 

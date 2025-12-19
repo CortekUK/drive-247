@@ -17,6 +17,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Settings as SettingsIcon, Building2, Bell, Zap, Upload, Save, Loader2, Database, AlertTriangle, Trash2, CreditCard, Palette } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
 import { useOrgSettings } from '@/hooks/use-org-settings';
+import { useTenantBranding } from '@/hooks/use-tenant-branding';
 import { LogoUploadWithResize } from '@/components/settings/logo-upload-with-resize';
 import { FaviconUpload } from '@/components/settings/favicon-upload';
 import { DataCleanupDialog } from '@/components/settings/data-cleanup-dialog';
@@ -42,9 +43,16 @@ const Settings = () => {
     toggleReminder,
     setPaymentMode,
     setBookingPaymentMode,
-    updateBranding,
+    updateBranding: updateOrgBranding,
     isUpdating
   } = useOrgSettings();
+
+  // Use tenant branding hook for multi-tenant branding updates
+  const {
+    branding: tenantBranding,
+    updateBranding: updateTenantBranding,
+    isUpdating: isUpdatingTenantBranding
+  } = useTenantBranding();
 
   // Handle URL tab parameter
   useEffect(() => {
@@ -77,56 +85,59 @@ const Settings = () => {
   });
   const [isSavingBranding, setIsSavingBranding] = useState(false);
 
-  // Sync form with settings whenever settings change (including after save)
+  // Sync form with tenant branding ONLY (not org_settings to avoid cross-tenant data leakage)
   useEffect(() => {
-    if (settings) {
-      setBrandingForm(prev => ({
-        app_name: settings.app_name || 'Drive 917',
-        primary_color: settings.primary_color || '#C6A256',
-        secondary_color: settings.secondary_color || '#C6A256',
-        accent_color: settings.accent_color || '#C6A256',
-        light_primary_color: settings.light_primary_color || '',
-        light_secondary_color: settings.light_secondary_color || '',
-        light_accent_color: settings.light_accent_color || '',
-        dark_primary_color: settings.dark_primary_color || '',
-        dark_secondary_color: settings.dark_secondary_color || '',
-        dark_accent_color: settings.dark_accent_color || '',
-        light_background_color: settings.light_background_color || '',
-        dark_background_color: settings.dark_background_color || '',
-        light_header_footer_color: settings.light_header_footer_color || '',
-        dark_header_footer_color: settings.dark_header_footer_color || '',
-        meta_title: settings.meta_title || 'Drive 917 - Portal',
-        meta_description: settings.meta_description || 'Fleet management portal',
-        og_image_url: settings.og_image_url || '',
-        favicon_url: settings.favicon_url || '',
-      }));
-    }
-  }, [settings]);
+    // Only use tenantBranding - org_settings is not tenant-aware for branding
+    const b = tenantBranding;
+    if (!b) return; // Wait for tenant branding to load
 
-  // Helper to reset form to current settings
+    setBrandingForm({
+      app_name: b.app_name || 'Drive 917',
+      primary_color: b.primary_color || '#C6A256',
+      secondary_color: b.secondary_color || '#C6A256',
+      accent_color: b.accent_color || '#C6A256',
+      light_primary_color: b.light_primary_color || '',
+      light_secondary_color: b.light_secondary_color || '',
+      light_accent_color: b.light_accent_color || '',
+      dark_primary_color: b.dark_primary_color || '',
+      dark_secondary_color: b.dark_secondary_color || '',
+      dark_accent_color: b.dark_accent_color || '',
+      light_background_color: b.light_background_color || '',
+      dark_background_color: b.dark_background_color || '',
+      light_header_footer_color: b.light_header_footer_color || '',
+      dark_header_footer_color: b.dark_header_footer_color || '',
+      meta_title: b.meta_title || '',
+      meta_description: b.meta_description || '',
+      og_image_url: b.og_image_url || '',
+      favicon_url: b.favicon_url || '',
+    });
+  }, [tenantBranding]);
+
+  // Helper to reset form to current tenant branding
   const resetBrandingForm = () => {
-    if (settings) {
-      setBrandingForm({
-        app_name: settings.app_name || 'Drive 917',
-        primary_color: settings.primary_color || '#C6A256',
-        secondary_color: settings.secondary_color || '#C6A256',
-        accent_color: settings.accent_color || '#C6A256',
-        light_primary_color: settings.light_primary_color || '',
-        light_secondary_color: settings.light_secondary_color || '',
-        light_accent_color: settings.light_accent_color || '',
-        dark_primary_color: settings.dark_primary_color || '',
-        dark_secondary_color: settings.dark_secondary_color || '',
-        dark_accent_color: settings.dark_accent_color || '',
-        light_background_color: settings.light_background_color || '',
-        dark_background_color: settings.dark_background_color || '',
-        light_header_footer_color: settings.light_header_footer_color || '',
-        dark_header_footer_color: settings.dark_header_footer_color || '',
-        meta_title: settings.meta_title || 'Drive 917 - Portal',
-        meta_description: settings.meta_description || 'Fleet management portal',
-        og_image_url: settings.og_image_url || '',
-        favicon_url: settings.favicon_url || '',
-      });
-    }
+    const b = tenantBranding;
+    if (!b) return;
+
+    setBrandingForm({
+      app_name: b.app_name || 'Drive 917',
+      primary_color: b.primary_color || '#C6A256',
+      secondary_color: b.secondary_color || '#C6A256',
+      accent_color: b.accent_color || '#C6A256',
+      light_primary_color: b.light_primary_color || '',
+      light_secondary_color: b.light_secondary_color || '',
+      light_accent_color: b.light_accent_color || '',
+      dark_primary_color: b.dark_primary_color || '',
+      dark_secondary_color: b.dark_secondary_color || '',
+      dark_accent_color: b.dark_accent_color || '',
+      light_background_color: b.light_background_color || '',
+      dark_background_color: b.dark_background_color || '',
+      light_header_footer_color: b.light_header_footer_color || '',
+      dark_header_footer_color: b.dark_header_footer_color || '',
+      meta_title: b.meta_title || '',
+      meta_description: b.meta_description || '',
+      og_image_url: b.og_image_url || '',
+      favicon_url: b.favicon_url || '',
+    });
   };
 
   // Maintenance run tracking
@@ -181,12 +192,17 @@ const Settings = () => {
         meta_description: brandingForm.meta_description,
         og_image_url: brandingForm.og_image_url,
         favicon_url: brandingForm.favicon_url || null,
-        logo_url: settings?.logo_url,
+        logo_url: tenantBranding?.logo_url || null,
       };
 
       console.log('Saving branding data:', brandingData);
 
-      await updateBranding(brandingData);
+      // Update tenant branding (multi-tenant aware - updates tenants table)
+      // This is what useDynamicTheme reads from
+      await updateTenantBranding(brandingData);
+
+      // Also update org settings for backward compatibility
+      await updateOrgBranding(brandingData);
 
       toast({
         title: "Branding Updated",
@@ -397,9 +413,12 @@ const Settings = () => {
               {/* Logo Upload */}
               <div className="space-y-2">
                 <LogoUploadWithResize
-                  currentLogoUrl={settings?.logo_url || undefined}
-                  onLogoChange={(logoUrl) => {
-                    updateBranding({ logo_url: logoUrl || '' });
+                  currentLogoUrl={tenantBranding?.logo_url || undefined}
+                  onLogoChange={async (logoUrl) => {
+                    // Update tenant branding (primary source for multi-tenant)
+                    await updateTenantBranding({ logo_url: logoUrl || '' });
+                    // Also update org settings for backward compatibility
+                    await updateOrgBranding({ logo_url: logoUrl || '' });
                   }}
                   label="Company Logo"
                   description="Upload your logo (you can resize before uploading)"
@@ -497,25 +516,30 @@ const Settings = () => {
                 <div className="p-4 border rounded-lg" style={{ backgroundColor: brandingForm.light_background_color || '#F5F3EE' }}>
                   <p className="text-sm font-medium mb-3" style={{ color: '#1A2B25' }}>Light Mode Preview</p>
                   <div className="flex items-center gap-3">
-                    <Button
+                    <button
+                      type="button"
                       style={{ backgroundColor: brandingForm.light_primary_color || brandingForm.primary_color }}
-                      className="text-white hover:opacity-90"
+                      className="inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium h-10 px-4 py-2 text-white hover:opacity-90 transition-opacity"
                     >
                       Primary
-                    </Button>
-                    <Button
-                      variant="outline"
+                    </button>
+                    <button
+                      type="button"
                       style={{
                         borderColor: brandingForm.light_secondary_color || brandingForm.secondary_color,
                         color: brandingForm.light_secondary_color || brandingForm.secondary_color,
                         backgroundColor: 'transparent'
                       }}
+                      className="inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium h-10 px-4 py-2 border-2 hover:opacity-90 transition-opacity"
                     >
                       Secondary
-                    </Button>
-                    <Badge style={{ backgroundColor: brandingForm.light_accent_color || brandingForm.accent_color }} className="text-white">
+                    </button>
+                    <span
+                      style={{ backgroundColor: brandingForm.light_accent_color || brandingForm.accent_color }}
+                      className="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold text-white"
+                    >
                       Accent
-                    </Badge>
+                    </span>
                   </div>
                 </div>
               </div>
@@ -570,25 +594,30 @@ const Settings = () => {
                 <div className="p-4 border rounded-lg" style={{ backgroundColor: brandingForm.dark_background_color || '#1A2B25' }}>
                   <p className="text-sm font-medium mb-3" style={{ color: '#F5F3EE' }}>Dark Mode Preview</p>
                   <div className="flex items-center gap-3">
-                    <Button
+                    <button
+                      type="button"
                       style={{ backgroundColor: brandingForm.dark_primary_color || brandingForm.primary_color }}
-                      className="text-white hover:opacity-90"
+                      className="inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium h-10 px-4 py-2 text-white hover:opacity-90 transition-opacity"
                     >
                       Primary
-                    </Button>
-                    <Button
-                      variant="outline"
+                    </button>
+                    <button
+                      type="button"
                       style={{
                         borderColor: brandingForm.dark_secondary_color || brandingForm.secondary_color,
                         color: brandingForm.dark_secondary_color || brandingForm.secondary_color,
                         backgroundColor: 'transparent'
                       }}
+                      className="inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium h-10 px-4 py-2 border-2 hover:opacity-90 transition-opacity"
                     >
                       Secondary
-                    </Button>
-                    <Badge style={{ backgroundColor: brandingForm.dark_accent_color || brandingForm.accent_color }} className="text-white">
+                    </button>
+                    <span
+                      style={{ backgroundColor: brandingForm.dark_accent_color || brandingForm.accent_color }}
+                      className="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold text-white"
+                    >
                       Accent
-                    </Badge>
+                    </span>
                   </div>
                 </div>
               </div>
@@ -796,7 +825,7 @@ const Settings = () => {
                     onClick={async () => {
                       setIsSavingBranding(true);
                       try {
-                        await updateBranding({
+                        const defaultBranding = {
                           app_name: 'Drive 917',
                           primary_color: '#C6A256',
                           secondary_color: '#C6A256',
@@ -813,12 +842,15 @@ const Settings = () => {
                           meta_description: 'Fleet management portal',
                           og_image_url: '',
                           favicon_url: null,
-                        });
+                        };
+                        // Update tenant branding (for useDynamicTheme)
+                        await updateTenantBranding(defaultBranding);
+                        // Update org settings for backward compatibility
+                        await updateOrgBranding(defaultBranding);
                         toast({
                           title: "Branding Reset",
-                          description: "All branding settings have been restored to defaults. Reloading...",
+                          description: "All branding settings have been restored to defaults.",
                         });
-                        setTimeout(() => window.location.reload(), 1000);
                       } catch (error: any) {
                         toast({
                           title: "Error",

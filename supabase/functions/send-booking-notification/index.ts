@@ -20,6 +20,7 @@ interface BookingNotificationRequest {
   endDate: string;
   monthlyAmount: number;
   totalAmount: number;
+  tenantId?: string;
 }
 
 async function sendEmail(to: string, subject: string, html: string, from: string = 'DRIVE917 <notifications@drive917.com>') {
@@ -375,6 +376,17 @@ serve(async (req) => {
     const data: BookingNotificationRequest = await req.json();
     console.log('Sending booking notifications for rental:', data.rentalId);
 
+    // Get tenant_id from rental if not provided
+    let tenantId = data.tenantId;
+    if (!tenantId && data.rentalId) {
+      const { data: rental } = await supabase
+        .from('rentals')
+        .select('tenant_id')
+        .eq('id', data.rentalId)
+        .single();
+      tenantId = rental?.tenant_id;
+    }
+
     // Get admin email from settings
     const { data: adminEmailSetting } = await supabase
       .from('settings')
@@ -400,7 +412,8 @@ serve(async (req) => {
         subject: customerSubject,
         template: 'booking_confirmation',
         status: 'sent',
-        metadata: { rental_id: data.rentalId, type: 'customer' }
+        metadata: { rental_id: data.rentalId, type: 'customer' },
+        tenant_id: tenantId
       });
     } catch (emailError) {
       console.error('Error sending customer email:', emailError);
@@ -411,7 +424,8 @@ serve(async (req) => {
         template: 'booking_confirmation',
         status: 'failed',
         error_message: emailError.message,
-        metadata: { rental_id: data.rentalId, type: 'customer' }
+        metadata: { rental_id: data.rentalId, type: 'customer' },
+        tenant_id: tenantId
       });
     }
 
@@ -430,7 +444,8 @@ serve(async (req) => {
         subject: adminSubject,
         template: 'booking_admin_notification',
         status: 'sent',
-        metadata: { rental_id: data.rentalId, type: 'admin' }
+        metadata: { rental_id: data.rentalId, type: 'admin' },
+        tenant_id: tenantId
       });
     } catch (emailError) {
       console.error('Error sending admin email:', emailError);
@@ -441,7 +456,8 @@ serve(async (req) => {
         template: 'booking_admin_notification',
         status: 'failed',
         error_message: emailError.message,
-        metadata: { rental_id: data.rentalId, type: 'admin' }
+        metadata: { rental_id: data.rentalId, type: 'admin' },
+        tenant_id: tenantId
       });
     }
 

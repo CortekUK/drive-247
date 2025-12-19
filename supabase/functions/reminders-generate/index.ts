@@ -223,7 +223,7 @@ serve(async (req) => {
       .update({ status: 'expired' })
       .lt('due_on', today)
       .in('status', ['pending', 'snoozed'])
-      .select('id');
+      .select('id, tenant_id');
 
     if (expireError) {
       console.error('Error expiring reminders:', expireError);
@@ -237,7 +237,8 @@ serve(async (req) => {
           .insert({
             reminder_id: reminder.id,
             action: 'expired',
-            note: 'Automatically expired due to past due date'
+            note: 'Automatically expired due to past due date',
+            tenant_id: reminder.tenant_id
           });
       }
     }
@@ -273,7 +274,7 @@ serve(async (req) => {
     // 3. Generate Vehicle MOT/TAX/Immobiliser reminders
     const { data: vehicles } = await supabase
       .from('vehicles')
-      .select('id, reg, make, model, mot_due_date, tax_due_date, has_remote_immobiliser, acquisition_date')
+      .select('id, reg, make, model, mot_due_date, tax_due_date, has_remote_immobiliser, acquisition_date, tenant_id')
       .or('mot_due_date.not.is.null,tax_due_date.not.is.null,has_remote_immobiliser.eq.false')
       .eq('is_disposed', false);
 
@@ -339,7 +340,8 @@ serve(async (req) => {
               remind_on: remindDateStr,
               severity: bestRule.severity,
               context: context,
-              status: 'pending'
+              status: 'pending',
+              tenant_id: vehicle.tenant_id
             }, {
               onConflict: 'rule_code,object_type,object_id,due_on,remind_on'
             });
@@ -411,7 +413,8 @@ serve(async (req) => {
               remind_on: remindDateStr,
               severity: bestRule.severity,
               context: context,
-              status: 'pending'
+              status: 'pending',
+              tenant_id: vehicle.tenant_id
             }, {
               onConflict: 'rule_code,object_type,object_id,due_on,remind_on'
             });
@@ -470,7 +473,8 @@ serve(async (req) => {
                 due_on: vehicle.warranty_end_date,
                 remind_on: remindDateStr,
                 context: context,
-                status: 'pending'
+                status: 'pending',
+                tenant_id: vehicle.tenant_id
               }, {
                 onConflict: 'rule_code,object_type,object_id,due_on,remind_on'
               });
@@ -532,7 +536,8 @@ serve(async (req) => {
                 remind_on: remindDateStr,
                 severity: rule.severity,
                 context: context,
-                status: 'pending'
+                status: 'pending',
+                tenant_id: vehicle.tenant_id
               }, {
                 onConflict: 'rule_code,object_type,object_id,due_on,remind_on'
               });
@@ -550,7 +555,7 @@ serve(async (req) => {
       const { data: activeRentals } = await supabase
         .from('rentals')
         .select(`
-          id, customer_id, vehicle_id, start_date, end_date,
+          id, customer_id, vehicle_id, start_date, end_date, tenant_id,
           customers!inner(name),
           vehicles!inner(reg)
         `)
@@ -619,7 +624,8 @@ serve(async (req) => {
                   remind_on: reminderDateStr,
                   severity: verificationRule.severity,
                   context: context,
-                  status: 'pending'
+                  status: 'pending',
+                  tenant_id: rental.tenant_id
                 }, {
                   onConflict: 'rule_code,object_type,object_id,due_on,remind_on'
                 });
@@ -639,7 +645,7 @@ serve(async (req) => {
       const { data: overdueCharges } = await supabase
         .from('ledger_entries')
         .select(`
-          rental_id, customer_id, vehicle_id, due_date, remaining_amount,
+          rental_id, customer_id, vehicle_id, due_date, remaining_amount, tenant_id,
           rentals!inner(status),
           customers!inner(name),
           vehicles!inner(reg, make, model)
@@ -709,7 +715,8 @@ serve(async (req) => {
               remind_on: today,
               severity: appropriateRule.severity,
               context: context,
-              status: 'pending'
+              status: 'pending',
+              tenant_id: oldestCharge.tenant_id
             }, {
               onConflict: 'rule_code,object_type,object_id,due_on,remind_on'
             });

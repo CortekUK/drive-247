@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "./use-toast";
+import { useTenant } from "@/contexts/TenantContext";
 
 export interface Reminder {
   id: string;
@@ -30,12 +31,20 @@ export interface ReminderFilters {
 }
 
 export function useReminders(filters?: ReminderFilters) {
+  const { tenant } = useTenant();
+
   return useQuery({
-    queryKey: ['reminders', filters],
+    queryKey: ['reminders', tenant?.id, filters],
     queryFn: async () => {
       let query = supabase
         .from('reminders')
-        .select('*')
+        .select('*');
+
+      if (tenant?.id) {
+        query = query.eq('tenant_id', tenant.id);
+      }
+
+      query = query
         .order('due_on', { ascending: true })
         .order('remind_on', { ascending: true });
 
@@ -86,16 +95,23 @@ export function useReminders(filters?: ReminderFilters) {
 }
 
 export function useRemindersByObject(objectType: string, objectId: string) {
+  const { tenant } = useTenant();
+
   return useQuery({
-    queryKey: ['reminders', 'object', objectType, objectId],
+    queryKey: ['reminders', 'object', tenant?.id, objectType, objectId],
     queryFn: async () => {
-      const { data, error } = await supabase
+      let query = supabase
         .from('reminders')
         .select('*')
         .eq('object_type', objectType)
         .eq('object_id', objectId)
-        .in('status', ['pending', 'sent', 'snoozed'])
-        .order('due_on', { ascending: true });
+        .in('status', ['pending', 'sent', 'snoozed']);
+
+      if (tenant?.id) {
+        query = query.eq('tenant_id', tenant.id);
+      }
+
+      const { data, error } = await query.order('due_on', { ascending: true });
 
       if (error) {
         console.error('Error fetching object reminders:', error);
@@ -114,34 +130,60 @@ export function useRemindersByObject(objectType: string, objectId: string) {
 }
 
 export function useReminderStats() {
+  const { tenant } = useTenant();
+
   return useQuery({
-    queryKey: ['reminder-stats'],
+    queryKey: ['reminder-stats', tenant?.id],
     queryFn: async () => {
       const today = new Date().toISOString().split('T')[0];
-      
+
       // Get counts for different reminder states
-      const { count: pendingCount, error: pendingError } = await supabase
+      let pendingQuery = supabase
         .from('reminders')
         .select('*', { count: 'exact', head: true })
         .eq('status', 'pending')
         .lte('remind_on', today);
 
-      const { count: snoozedTotalCount, error: snoozedError } = await supabase
+      if (tenant?.id) {
+        pendingQuery = pendingQuery.eq('tenant_id', tenant.id);
+      }
+
+      const { count: pendingCount, error: pendingError } = await pendingQuery;
+
+      let snoozedQuery = supabase
         .from('reminders')
         .select('*', { count: 'exact', head: true })
         .eq('status', 'snoozed');
 
-      const { count: criticalCount, error: criticalError } = await supabase
+      if (tenant?.id) {
+        snoozedQuery = snoozedQuery.eq('tenant_id', tenant.id);
+      }
+
+      const { count: snoozedTotalCount, error: snoozedError } = await snoozedQuery;
+
+      let criticalQuery = supabase
         .from('reminders')
         .select('*', { count: 'exact', head: true })
         .eq('severity', 'critical')
         .in('status', ['pending', 'sent'])
         .lte('remind_on', today);
 
-      const { count: totalActiveCount, error: totalError } = await supabase
+      if (tenant?.id) {
+        criticalQuery = criticalQuery.eq('tenant_id', tenant.id);
+      }
+
+      const { count: criticalCount, error: criticalError } = await criticalQuery;
+
+      let totalQuery = supabase
         .from('reminders')
         .select('*', { count: 'exact', head: true })
         .in('status', ['pending', 'sent', 'snoozed']);
+
+      if (tenant?.id) {
+        totalQuery = totalQuery.eq('tenant_id', tenant.id);
+      }
+
+      const { count: totalActiveCount, error: totalError } = await totalQuery;
 
       if (pendingError || snoozedError || criticalError || totalError) {
         console.error('Error fetching reminder stats:', { pendingError, snoozedError, criticalError, totalError });
@@ -168,6 +210,7 @@ export function useReminderStats() {
 export function useReminderActions() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
+  const { tenant } = useTenant();
 
   const updateReminderStatus = useMutation({
     mutationFn: async ({ 
@@ -188,11 +231,16 @@ export function useReminderActions() {
         updateData.snooze_until = snoozeUntil;
       }
 
-      const { data, error } = await supabase
+      let updateQuery = supabase
         .from('reminders')
         .update(updateData)
-        .eq('id', id)
-        .select();
+        .eq('id', id);
+
+      if (tenant?.id) {
+        updateQuery = updateQuery.eq('tenant_id', tenant.id);
+      }
+
+      const { data, error } = await updateQuery.select();
 
       if (error) {
         console.error('Failed to update reminder:', error);
@@ -208,7 +256,8 @@ export function useReminderActions() {
           .insert({
             reminder_id: id,
             action: status,
-            note: note || `Reminder marked as ${status}`
+            note: note || `Reminder marked as ${status}`,
+            tenant_id: tenant?.id || null,
           })
           .select();
 
@@ -284,11 +333,16 @@ export function useReminderActions() {
         updateData.snooze_until = snoozeUntil;
       }
 
-      const { data, error } = await supabase
+      let bulkUpdateQuery = supabase
         .from('reminders')
         .update(updateData)
-        .in('id', ids)
-        .select();
+        .in('id', ids);
+
+      if (tenant?.id) {
+        bulkUpdateQuery = bulkUpdateQuery.eq('tenant_id', tenant.id);
+      }
+
+      const { data, error } = await bulkUpdateQuery.select();
 
       if (error) {
         console.error('Failed to bulk update reminders:', error);
@@ -302,7 +356,8 @@ export function useReminderActions() {
         const actions = ids.map(id => ({
           reminder_id: id,
           action: action,
-          note: note || `Bulk ${action} operation`
+          note: note || `Bulk ${action} operation`,
+          tenant_id: tenant?.id || null,
         }));
 
         const { data: actionData, error: actionError } = await supabase

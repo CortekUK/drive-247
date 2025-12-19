@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { supabase } from "@/integrations/supabase/client";
+import { useTenant } from "@/contexts/TenantContext";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
@@ -52,6 +53,7 @@ export default function FleetDetail() {
   const params = useParams();
   const id = params?.id as string;
   const router = useRouter();
+  const { tenant } = useTenant();
   const [vehicle, setVehicle] = useState<Vehicle | null>(null);
   const [similarVehicles, setSimilarVehicles] = useState<Vehicle[]>([]);
   const [serviceInclusions, setServiceInclusions] = useState<ServiceInclusion[]>([]);
@@ -83,7 +85,7 @@ export default function FleetDetail() {
     setLoading(true);
     try {
       // Load vehicle details
-      const { data: vehicleData, error: vehicleError } = await supabase
+      let vehicleQuery = supabase
         .from("vehicles")
         .select(`
           *,
@@ -91,15 +93,20 @@ export default function FleetDetail() {
             photo_url
           )
         `)
-        .eq("id", id)
-        .single();
+        .eq("id", id);
+
+      if (tenant?.id) {
+        vehicleQuery = vehicleQuery.eq("tenant_id", tenant.id);
+      }
+
+      const { data: vehicleData, error: vehicleError } = await vehicleQuery.single();
 
       if (vehicleError) throw vehicleError;
       setVehicle(vehicleData as any);
 
       // Load similar vehicles (same make)
       if (vehicleData && vehicleData.make) {
-        const { data: similarData } = await supabase
+        let similarQuery = supabase
           .from("vehicles")
           .select(`
             *,
@@ -108,26 +115,42 @@ export default function FleetDetail() {
             )
           `)
           .eq("make", vehicleData.make)
-          .neq("id", id)
-          .limit(3);
+          .neq("id", id);
+
+        if (tenant?.id) {
+          similarQuery = similarQuery.eq("tenant_id", tenant.id);
+        }
+
+        const { data: similarData } = await similarQuery.limit(3);
 
         setSimilarVehicles(similarData as any || []);
       }
 
       // Load service inclusions
-      const { data: inclusionsData } = await supabase
+      let inclusionsQuery = supabase
         .from("service_inclusions")
         .select("*")
-        .eq("is_active", true)
-        .order("display_order");
+        .eq("is_active", true);
+
+      if (tenant?.id) {
+        inclusionsQuery = inclusionsQuery.eq("tenant_id", tenant.id);
+      }
+
+      const { data: inclusionsData } = await inclusionsQuery.order("display_order");
 
       setServiceInclusions(inclusionsData || []);
 
       // Load pricing extras
-      const { data: extrasData } = await supabase
+      let extrasQuery = supabase
         .from("pricing_extras")
         .select("*")
         .eq("is_active", true);
+
+      if (tenant?.id) {
+        extrasQuery = extrasQuery.eq("tenant_id", tenant.id);
+      }
+
+      const { data: extrasData } = await extrasQuery;
 
       setPricingExtras(extrasData || []);
     } catch (error) {

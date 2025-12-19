@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { useTenant } from "@/contexts/TenantContext";
 import {
   Dialog,
   DialogContent,
@@ -34,6 +35,7 @@ export function DocumentUploadDialog({
   onOpenChange,
   policyId
 }: DocumentUploadDialogProps) {
+  const { tenant } = useTenant();
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [documentType, setDocumentType] = useState<string>("");
   const queryClient = useQueryClient();
@@ -69,6 +71,7 @@ export function DocumentUploadDialog({
             doc_type: documentType,
             file_url: urlData.publicUrl,
             file_name: file.name,
+            tenant_id: tenant?.id,
           });
 
         if (dbError) throw dbError;

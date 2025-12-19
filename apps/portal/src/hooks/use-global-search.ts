@@ -1,8 +1,10 @@
 import { useState, useCallback, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { searchService, SearchResults } from "@/lib/search-service";
+import { useTenant } from "@/contexts/TenantContext";
 
 export const useGlobalSearch = () => {
+  const { tenant } = useTenant();
   const [query, setQuery] = useState("");
   const [debouncedQuery, setDebouncedQuery] = useState("");
   const [isOpen, setIsOpen] = useState(false);
@@ -25,8 +27,8 @@ export const useGlobalSearch = () => {
     isLoading,
     error,
   } = useQuery({
-    queryKey: ["global-search", debouncedQuery, entityFilter],
-    queryFn: () => searchService.searchAll(debouncedQuery, entityFilter),
+    queryKey: ["global-search", debouncedQuery, entityFilter, tenant?.id],
+    queryFn: () => searchService.searchAll(debouncedQuery, entityFilter, tenant?.id),
     enabled: debouncedQuery.length > 0,
     staleTime: 30000, // 30 seconds
   });

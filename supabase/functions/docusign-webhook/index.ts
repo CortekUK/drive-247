@@ -243,10 +243,10 @@ async function handleDocuSignWebhook(supabaseClient: any, event: DocuSignEvent) 
 
     console.log(`Envelope ${envelopeId} status: ${status}`);
 
-    // Find the rental by envelope ID
+    // Find the rental by envelope ID (include tenant_id for document insert)
     const { data: rental, error: rentalError } = await supabaseClient
       .from('rentals')
-      .select('*, customers:customer_id(id, name, email)')
+      .select('*, tenant_id, customers:customer_id(id, name, email)')
       .eq('docusign_envelope_id', envelopeId)
       .single();
 
@@ -327,7 +327,8 @@ async function handleDocuSignWebhook(supabaseClient: any, event: DocuSignEvent) 
             file_name: downloadResult.fileName || `rental-agreement-${envelopeId}-signed.pdf`,
             mime_type: 'application/pdf',
             verified: true,
-            status: 'Active'
+            status: 'Active',
+            tenant_id: rental.tenant_id
           })
           .select()
           .single();

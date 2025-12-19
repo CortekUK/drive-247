@@ -2,6 +2,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "./use-toast";
 import { useAuth } from "@/stores/auth-store";
+import { useTenant } from "@/contexts/TenantContext";
 
 export interface BlockedIdentity {
   id: string;
@@ -29,14 +30,22 @@ export interface AddBlockedIdentityRequest {
 
 // Hook to get all blocked identities
 export function useBlockedIdentities() {
+  const { tenant } = useTenant();
+
   return useQuery({
-    queryKey: ['blocked-identities'],
+    queryKey: ['blocked-identities', tenant?.id],
     queryFn: async () => {
-      const { data, error } = await supabase
+      let query = supabase
         .from('blocked_identities')
         .select('*')
         .eq('is_active', true)
         .order('created_at', { ascending: false });
+
+      if (tenant?.id) {
+        query = query.eq('tenant_id', tenant.id);
+      }
+
+      const { data, error } = await query;
 
       if (error) {
         console.error('Error fetching blocked identities:', error);
@@ -50,17 +59,24 @@ export function useBlockedIdentities() {
 
 // Hook to check if an identity is blocked
 export function useCheckBlockedIdentity(identityNumber: string | null) {
+  const { tenant } = useTenant();
+
   return useQuery({
-    queryKey: ['blocked-identity-check', identityNumber],
+    queryKey: ['blocked-identity-check', identityNumber, tenant?.id],
     queryFn: async () => {
       if (!identityNumber) return null;
 
-      const { data, error } = await supabase
+      let query = supabase
         .from('blocked_identities')
         .select('*')
         .eq('identity_number', identityNumber)
-        .eq('is_active', true)
-        .single();
+        .eq('is_active', true);
+
+      if (tenant?.id) {
+        query = query.eq('tenant_id', tenant.id);
+      }
+
+      const { data, error } = await query.single();
 
       if (error && error.code !== 'PGRST116') {
         console.error('Error checking blocked identity:', error);
@@ -78,6 +94,7 @@ export function useCustomerBlockingActions() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const { appUser } = useAuth();
+  const { tenant } = useTenant();
 
   // Block a customer
   const blockCustomer = useMutation({
@@ -147,7 +164,8 @@ export function useCustomerBlockingActions() {
           identity_number: identityNumber,
           reason,
           notes,
-          blocked_by: appUser?.id || null
+          blocked_by: appUser?.id || null,
+          tenant_id: tenant?.id
         })
         .select()
         .single();
@@ -182,10 +200,16 @@ export function useCustomerBlockingActions() {
   // Remove identity from blocklist (deactivate)
   const removeBlockedIdentity = useMutation({
     mutationFn: async (identityId: string) => {
-      const { error } = await supabase
+      let query = supabase
         .from('blocked_identities')
         .update({ is_active: false, updated_at: new Date().toISOString() })
         .eq('id', identityId);
+
+      if (tenant?.id) {
+        query = query.eq('tenant_id', tenant.id);
+      }
+
+      const { error } = await query;
 
       if (error) throw error;
     },
@@ -217,7 +241,7 @@ export function useCustomerBlockingActions() {
 
 // Utility function to check identity blocking (for use in forms/validation)
 // Only checks license, id_card, passport types - NOT email
-export async function checkIdentityBlocked(identityNumber: string): Promise<{
+export async function checkIdentityBlocked(identityNumber: string, tenantId?: string): Promise<{
   isBlocked: boolean;
   reason?: string;
   type?: string;
@@ -226,13 +250,18 @@ export async function checkIdentityBlocked(identityNumber: string): Promise<{
     return { isBlocked: false };
   }
 
-  const { data, error } = await supabase
+  let query = supabase
     .from('blocked_identities')
     .select('identity_type, reason')
     .eq('identity_number', identityNumber.trim())
     .eq('is_active', true)
-    .in('identity_type', ['license', 'id_card', 'passport'])
-    .single();
+    .in('identity_type', ['license', 'id_card', 'passport']);
+
+  if (tenantId) {
+    query = query.eq('tenant_id', tenantId);
+  }
+
+  const { data, error } = await query.single();
 
   if (data && !error) {
     return {

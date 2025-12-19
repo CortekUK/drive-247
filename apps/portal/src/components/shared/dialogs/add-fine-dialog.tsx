@@ -6,6 +6,7 @@ import { format } from "date-fns";
 import { CalendarIcon, Upload, X } from "lucide-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { useTenant } from "@/contexts/TenantContext";
 import { toast } from "sonner";
 
 import {
@@ -70,6 +71,7 @@ interface AddFineDialogProps {
 
 export const AddFineDialog = ({ open, onOpenChange, vehicle_id, customer_id }: AddFineDialogProps) => {
   const [uploadedFiles, setUploadedFiles] = useState<File[]>([]);
+  const { tenant } = useTenant();
   const queryClient = useQueryClient();
 
   const form = useForm<FineFormValues>({
@@ -96,72 +98,95 @@ export const AddFineDialog = ({ open, onOpenChange, vehicle_id, customer_id }: A
 
   // Fetch pre-selected vehicle if provided
   const { data: preSelectedVehicle } = useQuery({
-    queryKey: ["vehicle-info", vehicle_id],
+    queryKey: ["vehicle-info", tenant?.id, vehicle_id],
     queryFn: async () => {
       if (!vehicle_id) return null;
-      const { data, error } = await supabase
+      let query = supabase
         .from("vehicles")
         .select("id, reg, make, model")
-        .eq("id", vehicle_id)
-        .single();
+        .eq("id", vehicle_id);
+
+      if (tenant?.id) {
+        query = query.eq("tenant_id", tenant.id);
+      }
+
+      const { data, error } = await query.single();
 
       if (error) throw error;
       return data;
     },
-    enabled: !!vehicle_id,
+    enabled: !!tenant && !!vehicle_id,
   });
 
   // Fetch pre-selected customer if provided
   const { data: preSelectedCustomer } = useQuery({
-    queryKey: ["customer-info", customer_id],
+    queryKey: ["customer-info", tenant?.id, customer_id],
     queryFn: async () => {
       if (!customer_id) return null;
-      const { data, error } = await supabase
+      let query = supabase
         .from("customers")
         .select("id, name")
-        .eq("id", customer_id)
-        .single();
+        .eq("id", customer_id);
+
+      if (tenant?.id) {
+        query = query.eq("tenant_id", tenant.id);
+      }
+
+      const { data, error } = await query.single();
 
       if (error) throw error;
       return data;
     },
-    enabled: !!customer_id,
+    enabled: !!tenant && !!customer_id,
   });
 
   // Fetch all customers for generic usage
   const { data: allCustomers } = useQuery({
-    queryKey: ["all-customers"],
+    queryKey: ["all-customers", tenant?.id],
     queryFn: async () => {
-      const { data, error } = await supabase
+      let query = supabase
         .from("customers")
         .select("id, name")
         .order("name");
 
+      if (tenant?.id) {
+        query = query.eq("tenant_id", tenant.id);
+      }
+
+      const { data, error } = await query;
+
       if (error) throw error;
       return data;
     },
-    
+    enabled: !!tenant,
   });
 
   // Fetch all vehicles for generic usage
   const { data: allVehicles } = useQuery({
-    queryKey: ["all-vehicles"],
+    queryKey: ["all-vehicles", tenant?.id],
     queryFn: async () => {
-      const { data, error } = await supabase
+      let query = supabase
         .from("vehicles")
         .select("id, reg, make, model")
         .order("reg");
 
+      if (tenant?.id) {
+        query = query.eq("tenant_id", tenant.id);
+      }
+
+      const { data, error } = await query;
+
       if (error) throw error;
       return data;
     },
+    enabled: !!tenant,
   });
 
   // Fetch active rentals for customer-vehicle sync
   const { data: activeRentals } = useQuery({
-    queryKey: ["active-rentals"],
+    queryKey: ["active-rentals", tenant?.id],
     queryFn: async () => {
-      const { data, error } = await supabase
+      let query = supabase
         .from("rentals")
         .select(`
           id,
@@ -172,6 +197,12 @@ export const AddFineDialog = ({ open, onOpenChange, vehicle_id, customer_id }: A
         `)
         .eq("status", "Active")
         .order("customers(name)");
+
+      if (tenant?.id) {
+        query = query.eq("tenant_id", tenant.id);
+      }
+
+      const { data, error } = await query;
 
       if (error) throw error;
 
@@ -185,6 +216,7 @@ export const AddFineDialog = ({ open, onOpenChange, vehicle_id, customer_id }: A
         vehicle_model: (rental.vehicles as any).model,
       }));
     },
+    enabled: !!tenant,
   });
 
   const selectedCustomerId = form.watch("customer_id");
@@ -275,6 +307,7 @@ export const AddFineDialog = ({ open, onOpenChange, vehicle_id, customer_id }: A
           amount: Number(values.amount),
           liability: values.liability,
           notes: values.notes || null,
+          tenant_id: tenant?.id,
         })
         .select()
         .single();
@@ -303,6 +336,7 @@ export const AddFineDialog = ({ open, onOpenChange, vehicle_id, customer_id }: A
               fine_id: fine.id,
               file_url: publicUrl,
               file_name: file.name,
+              tenant_id: tenant?.id,
             });
         });
 

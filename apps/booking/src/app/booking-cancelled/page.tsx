@@ -8,8 +8,10 @@ import Footer from "@/components/Footer";
 import { XCircle, ArrowLeft, MessageCircle, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
+import { useTenant } from "@/contexts/TenantContext";
 
 const BookingCancelledContent = () => {
+  const { tenant } = useTenant();
   const searchParams = useSearchParams();
   const [loading, setLoading] = useState(true);
   const rentalId = searchParams?.get("rental_id");
@@ -19,20 +21,31 @@ const BookingCancelledContent = () => {
       if (rentalId) {
         try {
           // Step 1: Get the vehicle_id from the rental before deleting
-          const { data: rental, error: fetchError } = await supabase
+          let fetchQuery = supabase
             .from("rentals")
             .select("vehicle_id")
-            .eq("id", rentalId)
-            .single();
+            .eq("id", rentalId);
+
+          if (tenant?.id) {
+            fetchQuery = fetchQuery.eq("tenant_id", tenant.id);
+          }
+
+          const { data: rental, error: fetchError } = await fetchQuery.single();
 
           if (rental && !fetchError) {
             console.log('🧹 Cleaning up cancelled booking...');
 
             // Step 2: Delete the rental record (payment failed)
-            const { error: deleteError } = await supabase
+            let deleteQuery = supabase
               .from("rentals")
               .delete()
               .eq("id", rentalId);
+
+            if (tenant?.id) {
+              deleteQuery = deleteQuery.eq("tenant_id", tenant.id);
+            }
+
+            const { error: deleteError } = await deleteQuery;
 
             if (deleteError) {
               console.error("Failed to delete rental:", deleteError);
@@ -41,10 +54,16 @@ const BookingCancelledContent = () => {
             }
 
             // Step 3: Update vehicle status back to Available
-            const { error: vehicleUpdateError } = await supabase
+            let vehicleUpdateQuery = supabase
               .from("vehicles")
               .update({ status: "Available" })
               .eq("id", rental.vehicle_id);
+
+            if (tenant?.id) {
+              vehicleUpdateQuery = vehicleUpdateQuery.eq("tenant_id", tenant.id);
+            }
+
+            const { error: vehicleUpdateError } = await vehicleUpdateQuery;
 
             if (vehicleUpdateError) {
               console.error("Failed to update vehicle status:", vehicleUpdateError);
@@ -65,7 +84,7 @@ const BookingCancelledContent = () => {
     };
 
     cleanupFailedRental();
-  }, [rentalId]);
+  }, [rentalId, tenant?.id]);
 
   return (
     <>

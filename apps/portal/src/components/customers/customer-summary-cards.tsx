@@ -22,7 +22,7 @@ export const CustomerSummaryCards = ({ customers }: CustomerSummaryCardsProps) =
   const activeCustomers = customers.filter(c => c.status === 'Active').length;
   const rejectedCustomers = customers.filter(c => c.status === 'Rejected').length;
   const highSwitchers = customers.filter(c => c.high_switcher).length;
-  const companies = customers.filter(c => (c.customer_type || c.type) === 'Company').length;
+  const companies = customers.filter(c => c.customer_type === 'Company').length;
 
   const cards = [
     {

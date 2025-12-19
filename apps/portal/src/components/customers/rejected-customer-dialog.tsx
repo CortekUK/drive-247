@@ -78,7 +78,7 @@ export function RejectedCustomerDialog({
 
   if (!customer) return null;
 
-  const customerType = customer.customer_type || customer.type || "Individual";
+  const customerType = customer.customer_type || "Individual";
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>

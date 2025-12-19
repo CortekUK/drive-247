@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "./use-toast";
+import { useTenant } from "@/contexts/TenantContext";
 
 export interface ReminderRule {
   id: string;
@@ -26,15 +27,25 @@ export interface ReminderRuleUpdate {
 }
 
 export function useReminderRules() {
+  const { tenant } = useTenant();
+
   return useQuery({
-    queryKey: ['reminder-rules'],
+    queryKey: ['reminder-rules', tenant?.id],
     queryFn: async () => {
-      const { data, error } = await supabase
+      let query = supabase
         .from('reminder_rules')
-        .select('*')
+        .select('*');
+
+      if (tenant?.id) {
+        query = query.eq('tenant_id', tenant.id);
+      }
+
+      query = query
         .order('category', { ascending: true })
         .order('rule_type', { ascending: true })
         .order('lead_days', { ascending: false });
+
+      const { data, error } = await query;
 
       if (error) {
         console.error('Error fetching reminder rules:', error);
@@ -69,16 +80,22 @@ export function useReminderRulesByCategory() {
 export function useReminderRuleActions() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
+  const { tenant } = useTenant();
 
   const updateRule = useMutation({
     mutationFn: async (updates: ReminderRuleUpdate) => {
       const { id, ...updateData } = updates;
-      
-      const { data, error } = await supabase
+
+      let query = supabase
         .from('reminder_rules')
         .update(updateData)
-        .eq('id', id)
-        .select();
+        .eq('id', id);
+
+      if (tenant?.id) {
+        query = query.eq('tenant_id', tenant.id);
+      }
+
+      const { data, error } = await query.select();
 
       if (error) {
         console.error('Failed to update reminder rule:', error);
@@ -109,17 +126,22 @@ export function useReminderRuleActions() {
       
       for (const update of updates) {
         const { id, ...updateData } = update;
-        const { data, error } = await supabase
+        let query = supabase
           .from('reminder_rules')
           .update(updateData)
-          .eq('id', id)
-          .select();
+          .eq('id', id);
+
+        if (tenant?.id) {
+          query = query.eq('tenant_id', tenant.id);
+        }
+
+        const { data, error } = await query.select();
 
         if (error) {
           console.error('Failed to update reminder rule:', error);
           throw new Error(`Failed to update reminder rule: ${error.message}`);
         }
-        
+
         results.push(data[0]);
       }
 
@@ -188,7 +210,7 @@ export function useReminderRuleActions() {
 
       const results = [];
       for (const defaultRule of defaultRules) {
-        const { data, error } = await supabase
+        let query = supabase
           .from('reminder_rules')
           .update({
             lead_days: defaultRule.lead_days,
@@ -196,14 +218,19 @@ export function useReminderRuleActions() {
             is_enabled: defaultRule.is_enabled
           })
           .eq('rule_type', defaultRule.rule_type)
-          .eq('lead_days', defaultRule.lead_days)
-          .select();
+          .eq('lead_days', defaultRule.lead_days);
+
+        if (tenant?.id) {
+          query = query.eq('tenant_id', tenant.id);
+        }
+
+        const { data, error } = await query.select();
 
         if (error) {
           console.error('Failed to reset reminder rule:', error);
           throw new Error(`Failed to reset reminder rules: ${error.message}`);
         }
-        
+
         if (data.length > 0) {
           results.push(...data);
         }

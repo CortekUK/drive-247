@@ -2,6 +2,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from '@/hooks/use-toast';
 import { sendPaymentRejectionNotification } from '@/lib/notifications';
+import { useTenant } from '@/contexts/TenantContext';
 
 export type VerificationStatus = 'pending' | 'approved' | 'rejected' | 'auto_approved';
 
@@ -15,13 +16,21 @@ export interface PaymentVerification {
 
 // Hook to get pending payments count
 export const usePendingPaymentsCount = () => {
+  const { tenant } = useTenant();
+
   return useQuery({
-    queryKey: ['pending-payments-count'],
+    queryKey: ['pending-payments-count', tenant?.id],
     queryFn: async () => {
-      const { count, error } = await supabase
+      let query = supabase
         .from('payments')
         .select('*', { count: 'exact', head: true })
         .eq('verification_status', 'pending');
+
+      if (tenant?.id) {
+        query = query.eq('tenant_id', tenant.id);
+      }
+
+      const { count, error } = await query;
 
       if (error) throw error;
       return count || 0;

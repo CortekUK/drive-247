@@ -51,10 +51,10 @@ serve(async (req) => {
 
     const today = new Date().toISOString().split('T')[0];
 
-    // Get reminders due today or snoozed until today
+    // Get reminders due today or snoozed until today (including tenant_id for inserts)
     const { data: dueReminders, error: reminderError } = await supabase
       .from('reminders')
-      .select('*')
+      .select('*, tenant_id')
       .or(`and(status.eq.pending,remind_on.lte.${today}),and(status.eq.snoozed,snooze_until.lte.${today})`)
       .order('severity', { ascending: false })
       .order('due_on', { ascending: true });
@@ -115,6 +115,9 @@ serve(async (req) => {
     console.log('Recipients:', recipients);
     console.log('Email Body (first 200 chars):', textBody.substring(0, 200) + '...');
 
+    // Get tenant_id from first reminder (all should be same tenant in multi-tenant context)
+    const reminderTenantId = dueReminders[0]?.tenant_id;
+
     // Save email record
     const { error: emailError } = await supabase
       .from('reminder_emails')
@@ -128,7 +131,8 @@ serve(async (req) => {
           critical_count: critical.length,
           warning_count: warning.length,
           info_count: info.length
-        }
+        },
+        tenant_id: reminderTenantId
       });
 
     if (emailError) {
@@ -156,7 +160,8 @@ serve(async (req) => {
         .insert({
           reminder_id: reminder.id,
           action: 'sent',
-          note: 'Included in daily digest email'
+          note: 'Included in daily digest email',
+          tenant_id: reminder.tenant_id
         });
     }
 

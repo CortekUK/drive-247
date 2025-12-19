@@ -4,6 +4,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQueryClient, useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { useTenant } from "@/contexts/TenantContext";
 
 import {
   Dialog,
@@ -54,6 +55,7 @@ export default function AddCustomerDocumentDialog({
   documentId,
 }: AddCustomerDocumentDialogProps) {
   const queryClient = useQueryClient();
+  const { tenant } = useTenant();
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [dragActive, setDragActive] = useState(false);
 
@@ -185,15 +187,24 @@ export default function AddCustomerDocumentDialog({
       };
 
       if (documentId) {
-        const { error } = await supabase
+        let updateQuery = supabase
           .from("customer_documents")
           .update(documentData)
           .eq("id", documentId);
+
+        if (tenant?.id) {
+          updateQuery = updateQuery.eq("tenant_id", tenant.id);
+        }
+
+        const { error } = await updateQuery;
         if (error) throw error;
       } else {
         const { error } = await supabase
           .from("customer_documents")
-          .insert(documentData);
+          .insert({
+            ...documentData,
+            tenant_id: tenant?.id || null,
+          });
         if (error) throw error;
       }
     },

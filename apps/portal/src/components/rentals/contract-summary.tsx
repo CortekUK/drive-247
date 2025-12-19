@@ -59,7 +59,7 @@ export const ContractSummary = ({
             <div className="pl-4">
               <div className="font-medium">{customer.name}</div>
               <Badge variant="secondary" className="text-xs">
-                {customer.customer_type || customer.type}
+                {customer.customer_type || 'Individual'}
               </Badge>
             </div>
           ) : (

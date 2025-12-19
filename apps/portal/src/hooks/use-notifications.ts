@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/stores/auth-store";
+import { useTenant } from "@/contexts/TenantContext";
 
 export interface Notification {
   id: string;
@@ -17,19 +18,26 @@ export interface Notification {
 export function useNotifications() {
   const { appUser } = useAuth();
   const queryClient = useQueryClient();
+  const { tenant } = useTenant();
 
   // Fetch notifications for current user
   const { data: notifications, isLoading } = useQuery({
-    queryKey: ["notifications", appUser?.id],
+    queryKey: ["notifications", tenant?.id, appUser?.id],
     queryFn: async () => {
       if (!appUser?.id) return [];
 
-      const { data, error } = await supabase
+      let query = supabase
         .from("notifications")
         .select("*")
         .or(`user_id.eq.${appUser.id},user_id.is.null`)
         .order("created_at", { ascending: false })
         .limit(50);
+
+      if (tenant?.id) {
+        query = query.eq("tenant_id", tenant.id);
+      }
+
+      const { data, error } = await query;
 
       if (error) {
         console.error("Error fetching notifications:", error);
@@ -38,7 +46,7 @@ export function useNotifications() {
 
       return data as Notification[];
     },
-    enabled: !!appUser?.id,
+    enabled: !!appUser?.id && !!tenant,
     refetchInterval: 30000, // Refetch every 30 seconds
   });
 
@@ -48,15 +56,21 @@ export function useNotifications() {
   // Mark single notification as read
   const markAsRead = useMutation({
     mutationFn: async (notificationId: string) => {
-      const { error } = await supabase
+      let query = supabase
         .from("notifications")
         .update({ is_read: true })
         .eq("id", notificationId);
 
+      if (tenant?.id) {
+        query = query.eq("tenant_id", tenant.id);
+      }
+
+      const { error } = await query;
+
       if (error) throw error;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["notifications", appUser?.id] });
+      queryClient.invalidateQueries({ queryKey: ["notifications", tenant?.id, appUser?.id] });
     },
   });
 
@@ -65,31 +79,43 @@ export function useNotifications() {
     mutationFn: async () => {
       if (!appUser?.id) return;
 
-      const { error } = await supabase
+      let query = supabase
         .from("notifications")
         .update({ is_read: true })
         .or(`user_id.eq.${appUser.id},user_id.is.null`)
         .eq("is_read", false);
 
+      if (tenant?.id) {
+        query = query.eq("tenant_id", tenant.id);
+      }
+
+      const { error } = await query;
+
       if (error) throw error;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["notifications", appUser?.id] });
+      queryClient.invalidateQueries({ queryKey: ["notifications", tenant?.id, appUser?.id] });
     },
   });
 
   // Delete a notification
   const deleteNotification = useMutation({
     mutationFn: async (notificationId: string) => {
-      const { error } = await supabase
+      let query = supabase
         .from("notifications")
         .delete()
         .eq("id", notificationId);
 
+      if (tenant?.id) {
+        query = query.eq("tenant_id", tenant.id);
+      }
+
+      const { error } = await query;
+
       if (error) throw error;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["notifications", appUser?.id] });
+      queryClient.invalidateQueries({ queryKey: ["notifications", tenant?.id, appUser?.id] });
     },
   });
 
@@ -98,15 +124,21 @@ export function useNotifications() {
     mutationFn: async () => {
       if (!appUser?.id) return;
 
-      const { error } = await supabase
+      let query = supabase
         .from("notifications")
         .delete()
         .or(`user_id.eq.${appUser.id},user_id.is.null`);
 
+      if (tenant?.id) {
+        query = query.eq("tenant_id", tenant.id);
+      }
+
+      const { error } = await query;
+
       if (error) throw error;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["notifications", appUser?.id] });
+      queryClient.invalidateQueries({ queryKey: ["notifications", tenant?.id, appUser?.id] });
     },
   });
 

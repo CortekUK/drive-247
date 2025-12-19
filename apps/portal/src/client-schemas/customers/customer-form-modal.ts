@@ -1,7 +1,6 @@
 import { z } from "zod";
 
 export const customerFormModalSchema = z.object({
-  type: z.enum(['Individual', 'Company']),
   customer_type: z.enum(['Individual', 'Company']),
   name: z.string()
     .min(1, "Name is required")

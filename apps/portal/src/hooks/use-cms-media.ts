@@ -127,11 +127,16 @@ export const useCMSMedia = (folder?: string) => {
   const deleteMutation = useMutation({
     mutationFn: async (mediaId: string) => {
       // Get the media record
-      const { data: mediaRecord, error: fetchError } = await supabase
+      let selectQuery = supabase
         .from("cms_media")
         .select("file_url")
-        .eq("id", mediaId)
-        .single();
+        .eq("id", mediaId);
+
+      if (tenant?.id) {
+        selectQuery = selectQuery.eq("tenant_id", tenant.id);
+      }
+
+      const { data: mediaRecord, error: fetchError } = await selectQuery.single();
 
       if (fetchError) throw fetchError;
 
@@ -146,10 +151,16 @@ export const useCMSMedia = (folder?: string) => {
       }
 
       // Delete from database
-      const { error: deleteError } = await supabase
+      let deleteQuery = supabase
         .from("cms_media")
         .delete()
         .eq("id", mediaId);
+
+      if (tenant?.id) {
+        deleteQuery = deleteQuery.eq("tenant_id", tenant.id);
+      }
+
+      const { error: deleteError } = await deleteQuery;
 
       if (deleteError) throw deleteError;
     },
@@ -172,10 +183,16 @@ export const useCMSMedia = (folder?: string) => {
   // Update alt text
   const updateAltTextMutation = useMutation({
     mutationFn: async ({ mediaId, altText }: { mediaId: string; altText: string }) => {
-      const { error } = await supabase
+      let updateQuery = supabase
         .from("cms_media")
         .update({ alt_text: altText })
         .eq("id", mediaId);
+
+      if (tenant?.id) {
+        updateQuery = updateQuery.eq("tenant_id", tenant.id);
+      }
+
+      const { error } = await updateQuery;
 
       if (error) throw error;
     },

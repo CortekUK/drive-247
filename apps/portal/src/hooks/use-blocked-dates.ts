@@ -62,11 +62,14 @@ export const useBlockedDates = (vehicle_id?: string) => {
   // Add blocked date mutation
   const addBlockedDateMutation = useMutation({
     mutationFn: async (data: AddBlockedDateData) => {
+      if (!tenant) throw new Error("No tenant context available");
+
       const { error } = await supabase.from("blocked_dates").insert({
         start_date: format(data.start_date, 'yyyy-MM-dd'),
         end_date: format(data.end_date, 'yyyy-MM-dd'),
         reason: data.reason,
         vehicle_id: data.vehicle_id || null,
+        tenant_id: tenant.id,
       });
 
       if (error) throw error;
@@ -91,10 +94,16 @@ export const useBlockedDates = (vehicle_id?: string) => {
   // Delete blocked date mutation
   const deleteBlockedDateMutation = useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await supabase
+      let query = supabase
         .from("blocked_dates")
         .delete()
         .eq("id", id);
+
+      if (tenant?.id) {
+        query = query.eq("tenant_id", tenant.id);
+      }
+
+      const { error } = await query;
 
       if (error) throw error;
     },

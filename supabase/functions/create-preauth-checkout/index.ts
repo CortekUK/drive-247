@@ -26,6 +26,7 @@ interface PreAuthCheckoutRequest {
   pickupDate: string
   returnDate: string
   protectionPlan?: string
+  tenantId?: string
 }
 
 serve(async (req) => {
@@ -44,6 +45,17 @@ serve(async (req) => {
     const origin = req.headers.get('origin') || 'https://drive-247.com'
 
     console.log('Creating pre-auth checkout for rental:', body.rentalId)
+
+    // Get tenant_id from rental if not provided
+    let tenantId = body.tenantId
+    if (!tenantId && body.rentalId) {
+      const { data: rental } = await supabase
+        .from('rentals')
+        .select('tenant_id')
+        .eq('id', body.rentalId)
+        .single()
+      tenantId = rental?.tenant_id
+    }
 
     // Create Stripe PaymentIntent with manual capture (pre-authorization)
     const paymentIntent = await stripe.paymentIntents.create({
@@ -89,6 +101,7 @@ serve(async (req) => {
         capture_status: 'requires_capture',
         preauth_expires_at: preauthExpiresAt.toISOString(),
         booking_source: 'website',
+        tenant_id: tenantId,
       })
       .select()
       .single()

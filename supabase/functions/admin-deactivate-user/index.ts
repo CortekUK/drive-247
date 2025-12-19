@@ -55,7 +55,7 @@ Deno.serve(async (req) => {
     // Check if user has admin privileges
     const { data: currentUserData, error: roleError } = await supabase
       .from('app_users')
-      .select('id, role, is_active')
+      .select('id, role, is_active, tenant_id')
       .eq('auth_user_id', user.id)
       .single();
 
@@ -135,18 +135,25 @@ Deno.serve(async (req) => {
     }
 
     // Log the action
+    const auditData: any = {
+      actor_id: currentUserData.id,
+      action: isActive ? 'activate_user' : 'deactivate_user',
+      target_user_id: targetUser.id,
+      details: {
+        target_email: targetUser.email,
+        previous_status: wasActive ? 'active' : 'inactive',
+        new_status: isActive ? 'active' : 'inactive'
+      }
+    };
+
+    // Add tenant_id if available
+    if (currentUserData.tenant_id) {
+      auditData.tenant_id = currentUserData.tenant_id;
+    }
+
     await supabase
       .from('audit_logs')
-      .insert({
-        actor_id: currentUserData.id,
-        action: isActive ? 'activate_user' : 'deactivate_user',
-        target_user_id: targetUser.id,
-        details: {
-          target_email: targetUser.email,
-          previous_status: wasActive ? 'active' : 'inactive',
-          new_status: isActive ? 'active' : 'inactive'
-        }
-      });
+      .insert(auditData);
 
     console.log(`User ${isActive ? 'activated' : 'deactivated'} successfully:`, targetUser.email);
 

@@ -26,6 +26,7 @@ import {
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
 import { useDebounce } from "@/hooks/use-debounce";
+import { useTenant } from "@/contexts/TenantContext";
 import { PlateStatusBadge } from "@/components/plates/plate-status-badge";
 import { PlateHistoryDrawer } from "@/components/plates/plate-history-drawer";
 import { EnhancedAddPlateDialog } from "@/components/plates/enhanced-add-plate-dialog";
@@ -87,6 +88,7 @@ export default function PlatesListEnhanced() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const { toast } = useToast();
+  const { tenant } = useTenant();
 
   // UI State
   const [addPlateOpen, setAddPlateOpen] = useState(false);
@@ -120,7 +122,7 @@ export default function PlatesListEnhanced() {
 
   // Fetch plates data
   const { data: plates, isLoading, refetch } = useQuery({
-    queryKey: ["plates-enhanced", debouncedSearch, statusFilter, documentFilter],
+    queryKey: ["plates-enhanced", tenant?.id, debouncedSearch, statusFilter, documentFilter],
     queryFn: async () => {
       let query = supabase
         .from("plates")
@@ -134,6 +136,11 @@ export default function PlatesListEnhanced() {
           )
         `)
         .order("created_at", { ascending: false });
+
+      // Filter by tenant
+      if (tenant?.id) {
+        query = query.eq("tenant_id", tenant.id);
+      }
 
       // Apply filters
       if (debouncedSearch) {
@@ -197,7 +204,7 @@ export default function PlatesListEnhanced() {
 
   const handleUnassignPlate = async (plate: Plate) => {
     try {
-      const { error } = await supabase
+      let query = supabase
         .from("plates")
         .update({
           vehicle_id: null,
@@ -205,6 +212,12 @@ export default function PlatesListEnhanced() {
           updated_at: new Date().toISOString()
         })
         .eq("id", plate.id);
+
+      if (tenant?.id) {
+        query = query.eq("tenant_id", tenant.id);
+      }
+
+      const { error } = await query;
 
       if (error) throw error;
 
@@ -215,7 +228,8 @@ export default function PlatesListEnhanced() {
           event_type: "expense_added",
           summary: `Plate ${plate.plate_number} unassigned`,
           reference_id: plate.id,
-          reference_table: "plates"
+          reference_table: "plates",
+          tenant_id: tenant?.id || null,
         });
       }
 
@@ -236,13 +250,19 @@ export default function PlatesListEnhanced() {
 
   const handleMarkExpired = async (plate: Plate) => {
     try {
-      const { error } = await supabase
+      let query = supabase
         .from("plates")
         .update({
           status: 'expired',
           updated_at: new Date().toISOString()
         })
         .eq("id", plate.id);
+
+      if (tenant?.id) {
+        query = query.eq("tenant_id", tenant.id);
+      }
+
+      const { error } = await query;
 
       if (error) throw error;
 
@@ -253,7 +273,8 @@ export default function PlatesListEnhanced() {
           event_type: "expense_added",
           summary: `Plate ${plate.plate_number} marked as expired`,
           reference_id: plate.id,
-          reference_table: "plates"
+          reference_table: "plates",
+          tenant_id: tenant?.id || null,
         });
       }
 
@@ -283,10 +304,16 @@ export default function PlatesListEnhanced() {
     }
 
     try {
-      const { error } = await supabase
+      let query = supabase
         .from("plates")
         .delete()
         .eq("id", plate.id);
+
+      if (tenant?.id) {
+        query = query.eq("tenant_id", tenant.id);
+      }
+
+      const { error } = await query;
 
       if (error) throw error;
 

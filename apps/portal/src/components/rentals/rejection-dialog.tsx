@@ -15,6 +15,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "@/hooks/use-toast";
+import { useTenant } from "@/contexts/TenantContext";
 import {
   Loader2,
   AlertTriangle,
@@ -62,6 +63,7 @@ export default function RejectionDialog({
   payment,
 }: RejectionDialogProps) {
   const queryClient = useQueryClient();
+  const { tenant } = useTenant();
   const [activeTab, setActiveTab] = useState("reason");
   const [rejectionReason, setRejectionReason] = useState("");
   const [refundTiming, setRefundTiming] = useState<"now" | "scheduled">("now");
@@ -204,7 +206,7 @@ export default function RejectionDialog({
       }
 
       // Step 2: Update rental status
-      const { error: rentalError } = await supabase
+      let rentalQuery = supabase
         .from('rentals')
         .update({
           status: 'Rejected',
@@ -213,14 +215,26 @@ export default function RejectionDialog({
         })
         .eq('id', rental.id);
 
+      if (tenant?.id) {
+        rentalQuery = rentalQuery.eq('tenant_id', tenant.id);
+      }
+
+      const { error: rentalError } = await rentalQuery;
+
       if (rentalError) throw rentalError;
 
       // Step 3: Mark vehicle as available
       if (rental.vehicle) {
-        await supabase
+        let vehicleQuery = supabase
           .from('vehicles')
           .update({ status: 'Available' })
           .eq('id', rental.vehicle);
+
+        if (tenant?.id) {
+          vehicleQuery = vehicleQuery.eq('tenant_id', tenant.id);
+        }
+
+        await vehicleQuery;
       }
 
       // Step 4: Send rejection email

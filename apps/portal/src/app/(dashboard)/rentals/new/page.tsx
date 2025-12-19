@@ -14,9 +14,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage, FormDescription } from "@/components/ui/form";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
-import { ArrowLeft, FileText, Save, AlertTriangle, Shield } from "lucide-react";
+import { ArrowLeft, FileText, Save, AlertTriangle } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useQueryClient } from "@tanstack/react-query";
+import { useTenant } from "@/contexts/TenantContext";
 import { useCustomerActiveRentals } from "@/hooks/use-customer-active-rentals";
 import { PAYMENT_TYPES } from "@/constants";
 import { ContractSummary } from "@/components/rentals/contract-summary";
@@ -35,7 +36,6 @@ const rentalSchema = z.object({
   rental_period_type: z.enum(["Daily", "Weekly", "Monthly"]),
   monthly_amount: z.coerce.number().min(1, "Rental amount must be at least $1"),
   initial_fee: z.coerce.number().min(0, "Initial fee cannot be negative").optional(),
-  protection_plan_id: z.string().optional(),
 }).refine((data) => {
   let minEndDate: Date;
 
@@ -64,6 +64,7 @@ type RentalFormData = z.infer<typeof rentalSchema>;
 const CreateRental = () => {
   const router = useRouter();
   const { toast } = useToast();
+  const { tenant } = useTenant();
   const queryClient = useQueryClient();
   const [loading, setLoading] = useState(false);
   const [submitError, setSubmitError] = useState<string>("");
@@ -91,7 +92,6 @@ const CreateRental = () => {
       rental_period_type: "Monthly",
       monthly_amount: undefined,
       initial_fee: undefined,
-      protection_plan_id: undefined,
     },
     mode: "onChange", // Validate on change for real-time feedback
   });
@@ -103,30 +103,44 @@ const CreateRental = () => {
 
   // Get customers and available vehicles
   const { data: customers } = useQuery({
-    queryKey: ["customers-for-rental"],
+    queryKey: ["customers-for-rental", tenant?.id],
     queryFn: async () => {
-      const { data, error } = await supabase
+      let query = supabase
         .from("customers")
-        .select("id, name, customer_type, type, email, phone")
+        .select("id, name, customer_type, email, phone")
         .eq("status", "Active");
+
+      if (tenant?.id) {
+        query = query.eq("tenant_id", tenant.id);
+      }
+
+      const { data, error } = await query;
       if (error) throw error;
       return data;
     },
+    enabled: !!tenant,
   });
 
   // Get active rentals count for selected customer to enforce rules
   const { data: activeRentalsCount } = useCustomerActiveRentals(selectedCustomerId);
 
   const { data: vehicles } = useQuery({
-    queryKey: ["vehicles-for-rental"],
+    queryKey: ["vehicles-for-rental", tenant?.id],
     queryFn: async () => {
-      const { data, error } = await (supabase as any)
+      let query = (supabase as any)
         .from("vehicles")
         .select("id, reg, make, model, daily_rent, weekly_rent, monthly_rent")
         .eq("status", "Available");
+
+      if (tenant?.id) {
+        query = query.eq("tenant_id", tenant.id);
+      }
+
+      const { data, error } = await query;
       if (error) throw error;
       return data;
     },
+    enabled: !!tenant,
   });
 
   // Auto-populate rental amount based on selected vehicle and period type
@@ -177,45 +191,8 @@ const CreateRental = () => {
     }
   }, [watchedValues.rental_period_type, watchedValues.start_date, form]);
 
-  // Fetch protection plans
-  const { data: protectionPlans } = useQuery({
-    queryKey: ["protection-plans-for-rental"],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("protection_plans" as any)
-        .select("*")
-        .eq("is_active", true)
-        .order("display_order", { ascending: true });
-      if (error) throw error;
-      return data as any[];
-    },
-  });
-
   const selectedCustomer = customers?.find(c => c.id === selectedCustomerId);
   const selectedVehicle = vehicles?.find(v => v.id === selectedVehicleId);
-  const selectedProtectionPlan = protectionPlans?.find(p => p.id === watchedValues.protection_plan_id);
-
-  // Calculate rental duration in days
-  const calculateRentalDays = () => {
-    if (!watchedValues.start_date || !watchedValues.end_date) return 0;
-    const diffTime = Math.abs(watchedValues.end_date.getTime() - watchedValues.start_date.getTime());
-    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-    return diffDays;
-  };
-
-  // Calculate protection cost
-  const calculateProtectionCost = () => {
-    if (!selectedProtectionPlan) return 0;
-    const days = calculateRentalDays();
-    if (days >= 30 && selectedProtectionPlan.price_per_month) {
-      const months = Math.ceil(days / 30);
-      return selectedProtectionPlan.price_per_month * months;
-    } else if (days >= 7 && selectedProtectionPlan.price_per_week) {
-      const weeks = Math.ceil(days / 7);
-      return selectedProtectionPlan.price_per_week * weeks;
-    }
-    return selectedProtectionPlan.price_per_day * days;
-  };
 
   const onSubmit = async (data: RentalFormData) => {
     setLoading(true);
@@ -235,7 +212,7 @@ const CreateRental = () => {
       }
 
       // Enforce rental rules based on customer type
-      const customerType = selectedCustomer?.customer_type || selectedCustomer?.type;
+      const customerType = selectedCustomer?.customer_type;
       if (customerType === "Individual" && activeRentalsCount && activeRentalsCount > 0) {
         throw new Error("This customer already has an active rental. Individuals can only have one active rental at a time.");
       }
@@ -251,6 +228,7 @@ const CreateRental = () => {
           rental_period_type: data.rental_period_type,
           monthly_amount: data.monthly_amount,
           status: "Pending",
+          tenant_id: tenant?.id,
         })
         .select()
         .single();
@@ -277,6 +255,7 @@ const CreateRental = () => {
             method: "System", // System-generated payment
             verification_status: verificationStatus,
             is_manual_mode: isManualPaymentMode,
+            tenant_id: tenant?.id,
           })
           .select()
           .single();
@@ -329,34 +308,16 @@ const CreateRental = () => {
       }
 
       // Update vehicle status to Rented
-      await supabase
+      let vehicleUpdateQuery = supabase
         .from("vehicles")
         .update({ status: "Rented" })
         .eq("id", data.vehicle_id);
 
-      // Save protection plan selection if selected
-      const protectionCost = calculateProtectionCost();
-      if (data.protection_plan_id && selectedProtectionPlan) {
-        try {
-          const { error: protectionError } = await supabase
-            .from('rental_protection_selections' as any)
-            .insert({
-              rental_id: rental.id,
-              protection_plan_id: data.protection_plan_id,
-              daily_rate: selectedProtectionPlan.price_per_day,
-              total_days: calculateRentalDays(),
-              total_cost: protectionCost,
-            });
-
-          if (protectionError) {
-            console.error('Failed to save protection plan selection:', protectionError);
-          } else {
-            console.log('Protection plan selection saved');
-          }
-        } catch (protectionSaveError) {
-          console.error('Protection plan save error:', protectionSaveError);
-        }
+      if (tenant?.id) {
+        vehicleUpdateQuery = vehicleUpdateQuery.eq("tenant_id", tenant.id);
       }
+
+      await vehicleUpdateQuery;
 
       // Generate only first month's charge (subsequent charges created monthly)
       await supabase.rpc("backfill_rental_charges_first_month_only");
@@ -367,17 +328,7 @@ const CreateRental = () => {
       // Generate invoice
       let invoiceCreated = false;
       try {
-        let invoiceNotes = `Monthly rental fee for ${selectedVehicle?.make} ${selectedVehicle?.model} (${vehicleReg})`;
-
-        if (selectedProtectionPlan) {
-          invoiceNotes += `\n\nProtection Plan: ${selectedProtectionPlan.display_name} - $${protectionCost.toLocaleString()} (${calculateRentalDays()} days @ $${selectedProtectionPlan.price_per_day}/day)`;
-          if (selectedProtectionPlan.deductible_amount === 0) {
-            invoiceNotes += `\n✓ Zero Deductible Coverage`;
-          }
-          if (selectedProtectionPlan.max_coverage_amount) {
-            invoiceNotes += `\n• Maximum Coverage: $${selectedProtectionPlan.max_coverage_amount.toLocaleString()}`;
-          }
-        }
+        const invoiceNotes = `Monthly rental fee for ${selectedVehicle?.make} ${selectedVehicle?.model} (${vehicleReg})`;
 
         const invoice = await createInvoice({
           rental_id: rental.id,
@@ -385,10 +336,11 @@ const CreateRental = () => {
           vehicle_id: data.vehicle_id,
           invoice_date: data.start_date,
           due_date: addMonths(data.start_date, 1),
-          subtotal: data.monthly_amount + protectionCost,
+          subtotal: data.monthly_amount,
           tax_amount: 0,
-          total_amount: data.monthly_amount + protectionCost,
+          total_amount: data.monthly_amount,
           notes: invoiceNotes,
+          tenant_id: tenant?.id,
         });
 
         setGeneratedInvoice(invoice);
@@ -419,7 +371,7 @@ const CreateRental = () => {
           startDate: data.start_date.toISOString(),
           endDate: data.end_date.toISOString(),
           monthlyAmount: data.monthly_amount,
-          totalAmount: data.monthly_amount + protectionCost,
+          totalAmount: data.monthly_amount,
         });
         console.log('Booking notification emails sent');
       } catch (notificationError) {
@@ -535,7 +487,7 @@ const CreateRental = () => {
                             </FormControl>
                             <SelectContent>
                               {customers?.map((customer) => {
-                                const customerType = customer.customer_type || customer.type;
+                                const customerType = customer.customer_type;
                                 const contact = customer.email || customer.phone;
                                 return (
                                   <SelectItem key={customer.id} value={customer.id}>
@@ -744,78 +696,6 @@ const CreateRental = () => {
                     />
                   </div>
 
-                  {/* Protection Plan Selection */}
-                  <div className="grid grid-cols-1 gap-4">
-                    <FormField
-                      control={form.control}
-                      name="protection_plan_id"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel className="flex items-center gap-2">
-                            <Shield className="h-4 w-4 text-[#C5A572]" />
-                            Protection Plan (Optional)
-                          </FormLabel>
-                          <Select
-                            onValueChange={(value) => field.onChange(value === "none" ? undefined : value)}
-                            value={field.value || "none"}
-                          >
-                            <FormControl>
-                              <SelectTrigger>
-                                <SelectValue placeholder="No protection plan" />
-                              </SelectTrigger>
-                            </FormControl>
-                            <SelectContent>
-                              <SelectItem value="none">No Protection</SelectItem>
-                              {protectionPlans?.map((plan) => (
-                                <SelectItem key={plan.id} value={plan.id}>
-                                  <div className="flex items-center justify-between w-full">
-                                    <span>{plan.display_name}</span>
-                                    <span className="ml-4 text-muted-foreground">
-                                      ${plan.price_per_day}/day
-                                    </span>
-                                  </div>
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                          <FormMessage />
-                          {selectedProtectionPlan && (
-                            <div className="mt-2 p-3 bg-[#C5A572]/10 border border-[#C5A572]/30 rounded-lg">
-                              <div className="flex items-start justify-between">
-                                <div className="flex-1">
-                                  <p className="text-sm font-medium text-[#C5A572]">
-                                    {selectedProtectionPlan.display_name}
-                                  </p>
-                                  <p className="text-xs text-muted-foreground mt-1">
-                                    {selectedProtectionPlan.description}
-                                  </p>
-                                  <div className="mt-2 space-y-1">
-                                    {selectedProtectionPlan.deductible_amount === 0 && (
-                                      <p className="text-xs text-green-600 font-medium">✓ Zero Deductible</p>
-                                    )}
-                                    {selectedProtectionPlan.max_coverage_amount && (
-                                      <p className="text-xs text-muted-foreground">
-                                        Coverage up to ${selectedProtectionPlan.max_coverage_amount.toLocaleString()}
-                                      </p>
-                                    )}
-                                  </div>
-                                </div>
-                                <div className="text-right ml-4">
-                                  <p className="text-lg font-semibold text-[#C5A572]">
-                                    ${calculateProtectionCost().toLocaleString()}
-                                  </p>
-                                  <p className="text-xs text-muted-foreground">
-                                    {calculateRentalDays()} days
-                                  </p>
-                                </div>
-                              </div>
-                            </div>
-                          )}
-                        </FormItem>
-                      )}
-                    />
-                  </div>
-
                   {/* Helper Info */}
                   <div className="bg-muted/50 p-4 rounded-lg">
                     <p className="text-sm text-muted-foreground">
@@ -885,15 +765,6 @@ const CreateRental = () => {
             end_date: createdRentalData.formData.end_date.toISOString(),
             monthly_amount: createdRentalData.formData.monthly_amount,
           }}
-          protectionPlan={
-            selectedProtectionPlan
-              ? {
-                  name: selectedProtectionPlan.display_name,
-                  cost: calculateProtectionCost(),
-                  rentalFee: createdRentalData.formData.monthly_amount,
-                }
-              : undefined
-          }
         />
       )}
 

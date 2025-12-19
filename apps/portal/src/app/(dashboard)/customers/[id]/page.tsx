@@ -44,8 +44,7 @@ interface Customer {
   name: string;
   email: string;
   phone: string;
-  type: string;
-  customer_type?: "Individual" | "Company";
+  customer_type: "Individual" | "Company";
   status: string;
   whatsapp_opt_in: boolean;
   high_switcher?: boolean;
@@ -85,7 +84,7 @@ const CustomerDetail = () => {
       const { data, error } = await (supabase as any)
         .from("customers")
         .select(`
-          id, name, email, phone, type, customer_type, status, whatsapp_opt_in, high_switcher,
+          id, name, email, phone, customer_type, status, whatsapp_opt_in, high_switcher,
           license_number, id_number, is_blocked, blocked_at, blocked_reason,
           nok_full_name, nok_relationship, nok_phone, nok_email, nok_address
         `)
@@ -239,7 +238,7 @@ const CustomerDetail = () => {
               )}
             </div>
             <p className="text-muted-foreground text-sm">
-              {customer.customer_type || customer.type} Customer
+              {customer.customer_type} Customer
               {customer.license_number && (
                 <span className="mx-2">•</span>
               )}
@@ -318,7 +317,7 @@ const CustomerDetail = () => {
                 <MetricItem label="Name" value={customer.name} />
                 {customer.email && <MetricItem label="Email" value={customer.email} />}
                 {customer.phone && <MetricItem label="Phone" value={customer.phone} />}
-                <MetricItem label="Type" value={customer.customer_type || customer.type} />
+                <MetricItem label="Type" value={customer.customer_type} />
                 {customer.license_number && <MetricItem label="License Number" value={customer.license_number} />}
                 {customer.id_number && <MetricItem label="ID Number" value={customer.id_number} />}
                 {customer.whatsapp_opt_in && (

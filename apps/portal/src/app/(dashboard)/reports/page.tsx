@@ -16,6 +16,7 @@ import { ReportPreviewModal } from '@/components/reports/report-preview-modal';
 import { AgingReceivablesDetail } from '@/components/reports/aging-receivables-detail';
 import { EmptyStateIllustration } from '@/components/reports/empty-state-illustration';
 import { useToast } from '@/hooks/use-toast';
+import { useTenant } from '@/contexts/TenantContext';
 
 export interface ReportFilters {
   fromDate: Date;
@@ -28,6 +29,7 @@ export interface ReportFilters {
 }
 
 const Reports = () => {
+  const { tenant } = useTenant();
   const [filters, setFilters] = useState<ReportFilters>({
     fromDate: subDays(new Date(), 30),
     toDate: new Date(),
@@ -155,14 +157,22 @@ const Reports = () => {
       if (filters.paymentTypes.length > 0) {
         paymentsQuery = paymentsQuery.in('payment_type', filters.paymentTypes);
       }
+      if (tenant?.id) {
+        paymentsQuery = paymentsQuery.eq('tenant_id', tenant.id);
+      }
 
       const { data: payments } = await paymentsQuery;
 
       // Get P&L totals
-      const { data: plData } = await supabase
+      let plQuery = supabase
         .from('view_pl_consolidated')
-        .select('*')
-        .single();
+        .select('*');
+
+      if (tenant?.id) {
+        plQuery = plQuery.eq('tenant_id', tenant.id);
+      }
+
+      const { data: plData } = await plQuery.single();
 
       // Get rentals count with filters
       let rentalsQuery: any = (supabase as any)
@@ -177,6 +187,9 @@ const Reports = () => {
       if (filters.vehicles.length > 0) {
         rentalsQuery = rentalsQuery.in('vehicle_id', filters.vehicles);
       }
+      if (tenant?.id) {
+        rentalsQuery = rentalsQuery.eq('tenant_id', tenant.id);
+      }
 
       const { data: rentals } = await rentalsQuery;
 
@@ -187,6 +200,9 @@ const Reports = () => {
 
       if (filters.customers.length > 0) {
         agingQuery = agingQuery.in('customer_id', filters.customers);
+      }
+      if (tenant?.id) {
+        agingQuery = agingQuery.eq('tenant_id', tenant.id);
       }
 
       const { data: aging } = await agingQuery;
@@ -203,6 +219,9 @@ const Reports = () => {
       }
       if (filters.vehicles.length > 0) {
         finesQuery = finesQuery.in('vehicle_id', filters.vehicles);
+      }
+      if (tenant?.id) {
+        finesQuery = finesQuery.eq('tenant_id', tenant.id);
       }
 
       const { data: fines } = await finesQuery;

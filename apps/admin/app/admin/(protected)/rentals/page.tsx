@@ -109,6 +109,36 @@ export default function RentalCompaniesPage() {
       const adminEmail = formData.contactEmail;
       const adminPassword = generateRandomPassword();
 
+      // Step 4: Create the admin user via edge function
+      const { data: session } = await supabase.auth.getSession();
+      if (!session?.session?.access_token) {
+        throw new Error('Not authenticated - please log in again');
+      }
+
+      const { data: createUserData, error: createUserError } = await supabase.functions.invoke('admin-create-user', {
+        body: {
+          email: adminEmail,
+          name: `${formData.companyName} Admin`,
+          role: 'head_admin',
+          temporaryPassword: adminPassword,
+          tenant_id: tenant.id, // Assign user to this specific tenant
+        },
+      });
+
+      if (createUserError) {
+        console.error('Failed to create admin user:', createUserError);
+        // Clean up: delete the tenant if user creation failed
+        await supabase.from('tenants').delete().eq('id', tenant.id);
+        throw new Error(`Failed to create admin user: ${createUserError.message}`);
+      }
+
+      if (createUserData?.error) {
+        console.error('Admin user creation returned error:', createUserData.error);
+        // Clean up: delete the tenant if user creation failed
+        await supabase.from('tenants').delete().eq('id', tenant.id);
+        throw new Error(`Failed to create admin user: ${createUserData.error}`);
+      }
+
       // Prepare credentials object
       const credentials: TenantCredentials = {
         tenantId: tenant.id,

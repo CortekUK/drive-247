@@ -10,9 +10,11 @@ import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { format } from "date-fns";
+import { useTenant } from "@/contexts/TenantContext";
 
 const BookingSuccessContent = () => {
   const searchParams = useSearchParams();
+  const { tenant } = useTenant();
   const [bookingDetails, setBookingDetails] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const sessionId = searchParams?.get("session_id");
@@ -29,10 +31,16 @@ const BookingSuccessContent = () => {
         // If we have a rentalId from URL params (portal integration)
         if (rentalId) {
           // Step 1: Update rental status to Active
-          const { error: rentalUpdateError } = await supabase
+          let rentalUpdateQuery = supabase
             .from("rentals")
             .update({ status: "Active" })
             .eq("id", rentalId);
+
+          if (tenant?.id) {
+            rentalUpdateQuery = rentalUpdateQuery.eq("tenant_id", tenant.id);
+          }
+
+          const { error: rentalUpdateError } = await rentalUpdateQuery;
 
           if (rentalUpdateError) {
             console.error("Failed to update rental status:", rentalUpdateError);
@@ -73,10 +81,11 @@ const BookingSuccessContent = () => {
                     payment_date: today,
                     payment_type: "Payment",
                     method: "Card",
-                    status: "Applied", // Payment confirmed by Stripe
+                    status: "Pending", // Will be "Applied" after apply-payment runs
                     is_early: false,
-                    remaining_amount: 0, // Fully applied
-                    apply_from_date: paymentDetails.apply_from_date,
+                    remaining_amount: paymentDetails.amount, // Will be reduced by apply-payment
+                    apply_from_date: paymentDetails.apply_from_date || today,
+                    tenant_id: tenant?.id || paymentDetails.tenant_id,
                   })
                   .select()
                   .single();

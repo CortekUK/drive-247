@@ -65,9 +65,15 @@ export const usePaymentsData = ({
       let vehicleIds: string[] | null = null;
       if (filters.vehicleSearch) {
         const searchTerm = filters.vehicleSearch.toLowerCase();
-        const { data: matchingVehicles } = await supabase
+        let vehicleSearchQuery = supabase
           .from("vehicles")
           .select("id, reg, make, model");
+
+        if (tenant?.id) {
+          vehicleSearchQuery = vehicleSearchQuery.eq("tenant_id", tenant.id);
+        }
+
+        const { data: matchingVehicles } = await vehicleSearchQuery;
 
         if (matchingVehicles) {
           vehicleIds = matchingVehicles
@@ -156,14 +162,20 @@ export const usePaymentsData = ({
 };
 
 // Export CSV function
-export const exportPaymentsCSV = async (filters: PaymentFilters) => {
+export const exportPaymentsCSV = async (filters: PaymentFilters, tenantId?: string) => {
   // If vehicle search is provided, first get matching vehicle IDs
   let vehicleIds: string[] | null = null;
   if (filters.vehicleSearch) {
     const searchTerm = filters.vehicleSearch.toLowerCase();
-    const { data: matchingVehicles } = await supabase
+    let vehicleSearchQuery = supabase
       .from("vehicles")
       .select("id, reg, make, model");
+
+    if (tenantId) {
+      vehicleSearchQuery = vehicleSearchQuery.eq("tenant_id", tenantId);
+    }
+
+    const { data: matchingVehicles } = await vehicleSearchQuery;
 
     if (matchingVehicles) {
       vehicleIds = matchingVehicles
@@ -190,6 +202,10 @@ export const exportPaymentsCSV = async (filters: PaymentFilters) => {
       remaining_amount,
       vehicle_id
     `);
+
+  if (tenantId) {
+    query = query.eq("tenant_id", tenantId);
+  }
 
   // Apply same filters as the main query
   if (filters.customerSearch) {

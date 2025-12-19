@@ -3,6 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { TrendingDown, TrendingUp, Users, Car, PoundSterling, AlertTriangle, Shield } from "lucide-react";
 import { format, addDays, isAfter, isBefore, isToday } from "date-fns";
+import { useTenant } from "@/contexts/TenantContext";
 
 interface StatCardProps {
   title: string;
@@ -51,24 +52,39 @@ const StatCard = ({ title, value, change, trend, icon: Icon, variant = "default"
 };
 
 export const DashboardStats = () => {
+  const { tenant } = useTenant();
+
   const { data: vehicleCount } = useQuery({
-    queryKey: ["vehicle-count"],
+    queryKey: ["vehicle-count", tenant?.id],
     queryFn: async () => {
-      const { count } = await supabase
+      let query = supabase
         .from("vehicles")
         .select("*", { count: "exact", head: true });
+
+      if (tenant?.id) {
+        query = query.eq("tenant_id", tenant.id);
+      }
+
+      const { count } = await query;
       return count || 0;
     },
+    enabled: !!tenant,
   });
 
   // Fetch insurance compliance stats
   const { data: insuranceStats } = useQuery({
-    queryKey: ["insurance-stats"],
+    queryKey: ["insurance-stats", tenant?.id],
     queryFn: async () => {
-      const { data: policies, error } = await supabase
+      let query = supabase
         .from("insurance_policies")
         .select("status, expiry_date")
         .eq("status", "Active");
+
+      if (tenant?.id) {
+        query = query.eq("tenant_id", tenant.id);
+      }
+
+      const { data: policies, error } = await query;
 
       if (error) throw error;
 
@@ -88,123 +104,180 @@ export const DashboardStats = () => {
         expired
       };
     },
+    enabled: !!tenant,
   });
 
   const { data: activeRentals } = useQuery({
-    queryKey: ["active-rentals"],
+    queryKey: ["active-rentals", tenant?.id],
     queryFn: async () => {
-      const { count } = await supabase
+      let query = supabase
         .from("rentals")
         .select("*", { count: "exact", head: true })
         .eq("status", "Active");
+
+      if (tenant?.id) {
+        query = query.eq("tenant_id", tenant.id);
+      }
+
+      const { count } = await query;
       return count || 0;
     },
+    enabled: !!tenant,
   });
 
   const { data: monthlyRevenue } = useQuery({
-    queryKey: ["monthly-revenue"],
+    queryKey: ["monthly-revenue", tenant?.id],
     queryFn: async () => {
       const startOfMonth = new Date();
       startOfMonth.setDate(1);
-      
-      const { data } = await supabase
+
+      let query = supabase
         .from("pnl_entries")
         .select("amount")
         .eq("side", "Revenue")
         .gte("entry_date", format(startOfMonth, "yyyy-MM-dd"));
-      
+
+      if (tenant?.id) {
+        query = query.eq("tenant_id", tenant.id);
+      }
+
+      const { data } = await query;
+
       const total = data?.reduce((sum, entry) => sum + Number(entry.amount), 0) || 0;
       return total;
     },
+    enabled: !!tenant,
   });
 
   const { data: overduePayments } = useQuery({
-    queryKey: ["overdue-payments"],
+    queryKey: ["overdue-payments", tenant?.id],
     queryFn: async () => {
       const today = format(new Date(), "yyyy-MM-dd");
-      
-      const { count } = await supabase
+
+      let query = supabase
         .from("ledger_entries")
         .select("*", { count: "exact", head: true })
         .eq("type", "Charge")
         .gt("remaining_amount", 0)
         .lt("due_date", today);
-      
+
+      if (tenant?.id) {
+        query = query.eq("tenant_id", tenant.id);
+      }
+
+      const { count } = await query;
+
       return count || 0;
     },
+    enabled: !!tenant,
   });
 
   const { data: openFines } = useQuery({
-    queryKey: ["open-fines"],
+    queryKey: ["open-fines", tenant?.id],
     queryFn: async () => {
-      const { count } = await supabase
+      let query = supabase
         .from("fines")
         .select("*", { count: "exact", head: true })
         .not("status", "in", ["Paid", "Appeal Successful", "Waived"]);
-      
+
+      if (tenant?.id) {
+        query = query.eq("tenant_id", tenant.id);
+      }
+
+      const { count } = await query;
+
       return count || 0;
     },
+    enabled: !!tenant,
   });
 
   // MOT & TAX tracking queries
   const { data: motOverdue } = useQuery({
-    queryKey: ["mot-overdue"],
+    queryKey: ["mot-overdue", tenant?.id],
     queryFn: async () => {
       const today = format(new Date(), "yyyy-MM-dd");
-      const { count } = await supabase
+      let query = supabase
         .from("vehicles")
         .select("*", { count: "exact", head: true })
         .not("mot_due_date", "is", null)
         .lt("mot_due_date", today);
-      
+
+      if (tenant?.id) {
+        query = query.eq("tenant_id", tenant.id);
+      }
+
+      const { count } = await query;
+
       return count || 0;
     },
+    enabled: !!tenant,
   });
 
   const { data: motDueSoon } = useQuery({
-    queryKey: ["mot-due-soon"],
+    queryKey: ["mot-due-soon", tenant?.id],
     queryFn: async () => {
       const today = format(new Date(), "yyyy-MM-dd");
       const futureDate = format(addDays(new Date(), 30), "yyyy-MM-dd");
-      const { count } = await supabase
+      let query = supabase
         .from("vehicles")
         .select("*", { count: "exact", head: true })
         .not("mot_due_date", "is", null)
         .gte("mot_due_date", today)
         .lte("mot_due_date", futureDate);
-      
+
+      if (tenant?.id) {
+        query = query.eq("tenant_id", tenant.id);
+      }
+
+      const { count } = await query;
+
       return count || 0;
     },
+    enabled: !!tenant,
   });
 
   const { data: taxOverdue } = useQuery({
-    queryKey: ["tax-overdue"],
+    queryKey: ["tax-overdue", tenant?.id],
     queryFn: async () => {
       const today = format(new Date(), "yyyy-MM-dd");
-      const { count } = await supabase
+      let query = supabase
         .from("vehicles")
         .select("*", { count: "exact", head: true })
         .not("tax_due_date", "is", null)
         .lt("tax_due_date", today);
-      
+
+      if (tenant?.id) {
+        query = query.eq("tenant_id", tenant.id);
+      }
+
+      const { count } = await query;
+
       return count || 0;
     },
+    enabled: !!tenant,
   });
 
   const { data: taxDueSoon } = useQuery({
-    queryKey: ["tax-due-soon"],
+    queryKey: ["tax-due-soon", tenant?.id],
     queryFn: async () => {
       const today = format(new Date(), "yyyy-MM-dd");
       const futureDate = format(addDays(new Date(), 30), "yyyy-MM-dd");
-      const { count } = await supabase
+      let query = supabase
         .from("vehicles")
         .select("*", { count: "exact", head: true })
         .not("tax_due_date", "is", null)
         .gte("tax_due_date", today)
         .lte("tax_due_date", futureDate);
-      
+
+      if (tenant?.id) {
+        query = query.eq("tenant_id", tenant.id);
+      }
+
+      const { count } = await query;
+
       return count || 0;
     },
+    enabled: !!tenant,
   });
 
   return (

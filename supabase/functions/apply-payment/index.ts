@@ -65,21 +65,28 @@ async function applyPayment(supabase: any, paymentId: string): Promise<PaymentPr
     
     // Insert/Update Ledger entry (idempotent)
     console.log(`Creating ledger entry for payment ${paymentId}: amount=${payment.amount}, category=${ledgerCategory}`);
-    
+
+    const ledgerData: any = {
+      customer_id: payment.customer_id,
+      rental_id: payment.rental_id,
+      vehicle_id: payment.vehicle_id,
+      entry_date: entryDate,
+      type: 'Payment',
+      category: ledgerCategory,
+      amount: -Math.abs(payment.amount), // Ensure negative
+      due_date: entryDate,
+      remaining_amount: 0,
+      payment_id: payment.id
+    };
+
+    // Include tenant_id from payment if available
+    if (payment.tenant_id) {
+      ledgerData.tenant_id = payment.tenant_id;
+    }
+
     const { error: ledgerError } = await supabase
       .from('ledger_entries')
-      .insert([{
-        customer_id: payment.customer_id,
-        rental_id: payment.rental_id,
-        vehicle_id: payment.vehicle_id,
-        entry_date: entryDate,
-        type: 'Payment',
-        category: ledgerCategory,
-        amount: -Math.abs(payment.amount), // Ensure negative
-        due_date: entryDate,
-        remaining_amount: 0,
-        payment_id: payment.id
-      }]);
+      .insert([ledgerData]);
 
     if (ledgerError && !ledgerError.message.includes('duplicate key')) {
       console.error('CRITICAL: Ledger insert failed:', ledgerError);
@@ -122,13 +129,17 @@ async function applyPayment(supabase: any, paymentId: string): Promise<PaymentPr
           console.log(`Applying $${toApply} to rental charge ${charge.id} (due ${charge.due_date})`);
 
           // Create payment application record
+          const applicationData1: any = {
+            payment_id: paymentId,
+            charge_entry_id: charge.id,
+            amount_applied: toApply
+          };
+          if (payment.tenant_id) {
+            applicationData1.tenant_id = payment.tenant_id;
+          }
           const { error: applicationError } = await supabase
             .from('payment_applications')
-            .insert({
-              payment_id: paymentId,
-              charge_entry_id: charge.id,
-              amount_applied: toApply
-            });
+            .insert(applicationData1);
 
           if (applicationError && !applicationError.message.includes('duplicate key')) {
             console.error('Payment application error:', applicationError);
@@ -149,18 +160,22 @@ async function applyPayment(supabase: any, paymentId: string): Promise<PaymentPr
           }
 
           // Create P&L revenue entry for the applied amount
+          const pnlData: any = {
+            vehicle_id: charge.vehicle_id || payment.vehicle_id,
+            entry_date: charge.due_date,
+            side: 'Revenue',
+            category: 'Initial Fees',
+            amount: toApply,
+            source_ref: `${paymentId}_${charge.id}`,
+            customer_id: payment.customer_id,
+            rental_id: charge.rental_id
+          };
+          if (payment.tenant_id) {
+            pnlData.tenant_id = payment.tenant_id;
+          }
           const { error: pnlRevenueError } = await supabase
             .from('pnl_entries')
-            .insert({
-              vehicle_id: charge.vehicle_id || payment.vehicle_id,
-              entry_date: charge.due_date,
-              side: 'Revenue',
-              category: 'Initial Fees',
-              amount: toApply,
-              source_ref: `${paymentId}_${charge.id}`,
-              customer_id: payment.customer_id,
-              rental_id: charge.rental_id
-            });
+            .insert(pnlData);
 
           if (pnlRevenueError && !pnlRevenueError.message.includes('duplicate key')) {
             console.error('P&L revenue entry error:', pnlRevenueError);
@@ -252,13 +267,17 @@ async function applyPayment(supabase: any, paymentId: string): Promise<PaymentPr
           console.log(`Applying £${toApply} to ${category} charge ${charge.id} (due ${chargeDueDate})`);
 
           // Create payment application record
+          const applicationData2: any = {
+            payment_id: paymentId,
+            charge_entry_id: charge.id,
+            amount_applied: toApply
+          };
+          if (payment.tenant_id) {
+            applicationData2.tenant_id = payment.tenant_id;
+          }
           const { error: applicationError } = await supabase
             .from('payment_applications')
-            .insert({
-              payment_id: paymentId,
-              charge_entry_id: charge.id,
-              amount_applied: toApply
-            });
+            .insert(applicationData2);
 
           if (applicationError && !applicationError.message.includes('duplicate key')) {
             console.error('Payment application error:', applicationError);
@@ -279,18 +298,22 @@ async function applyPayment(supabase: any, paymentId: string): Promise<PaymentPr
           }
 
           // Create P&L revenue entry for the applied amount (booked on charge due date)
+          const pnlData2: any = {
+            vehicle_id: charge.vehicle_id || payment.vehicle_id,
+            entry_date: chargeDueDate,
+            side: 'Revenue',
+            category: category,
+            amount: toApply,
+            source_ref: `${paymentId}_${charge.id}`,
+            customer_id: payment.customer_id,
+            rental_id: charge.rental_id
+          };
+          if (payment.tenant_id) {
+            pnlData2.tenant_id = payment.tenant_id;
+          }
           const { error: pnlRevenueError } = await supabase
             .from('pnl_entries')
-            .insert({
-              vehicle_id: charge.vehicle_id || payment.vehicle_id,
-              entry_date: chargeDueDate,
-              side: 'Revenue',
-              category: category,
-              amount: toApply,
-              source_ref: `${paymentId}_${charge.id}`,
-              customer_id: payment.customer_id,
-              rental_id: charge.rental_id
-            });
+            .insert(pnlData2);
 
           if (pnlRevenueError && !pnlRevenueError.message.includes('duplicate key')) {
             console.error('P&L revenue entry error:', pnlRevenueError);

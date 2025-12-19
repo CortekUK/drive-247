@@ -4,6 +4,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQueryClient, useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { useTenant } from "@/contexts/TenantContext";
 import {
   Dialog,
   DialogContent,
@@ -68,6 +69,7 @@ export function InsurancePolicyDialog({
   policyId
 }: InsurancePolicyDialogProps) {
   const queryClient = useQueryClient();
+  const { tenant } = useTenant();
   const isEditing = Boolean(policyId);
   const [showOverlapDialog, setShowOverlapDialog] = useState(false);
   const [overlapData, setOverlapData] = useState<any[]>([]);
@@ -207,7 +209,10 @@ export function InsurancePolicyDialog({
       } else {
         const { data: result, error } = await supabase
           .from("insurance_policies")
-          .insert(policyData)
+          .insert({
+            ...policyData,
+            tenant_id: tenant?.id || null,
+          })
           .select()
           .single();
         if (error) throw error;

@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { useTenant } from "@/contexts/TenantContext";
 import {
   Sheet,
   SheetContent,
@@ -58,6 +59,7 @@ export function InsurancePolicyDrawer({
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [uploadDialogOpen, setUploadDialogOpen] = useState(false);
   const queryClient = useQueryClient();
+  const { tenant } = useTenant();
 
   const { data: policy, isLoading } = useQuery({
     queryKey: ["insurance-policy-detail", policyId],
@@ -110,11 +112,17 @@ export function InsurancePolicyDrawer({
   const deactivatePolicyMutation = useMutation({
     mutationFn: async () => {
       if (!policyId) return;
-      
-      const { error } = await supabase
+
+      let query = supabase
         .from("insurance_policies")
         .update({ status: "Inactive", updated_at: new Date().toISOString() })
         .eq("id", policyId);
+
+      if (tenant?.id) {
+        query = query.eq("tenant_id", tenant.id);
+      }
+
+      const { error } = await query;
 
       if (error) throw error;
     },
@@ -131,11 +139,17 @@ export function InsurancePolicyDrawer({
   const deletePolicyMutation = useMutation({
     mutationFn: async () => {
       if (!policyId) return;
-      
-      const { error } = await supabase
+
+      let query = supabase
         .from("insurance_policies")
         .delete()
         .eq("id", policyId);
+
+      if (tenant?.id) {
+        query = query.eq("tenant_id", tenant.id);
+      }
+
+      const { error } = await query;
 
       if (error) throw error;
     },

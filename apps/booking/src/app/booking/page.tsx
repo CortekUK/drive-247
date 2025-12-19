@@ -208,7 +208,7 @@ export default function Booking() {
     }
   };
 
-  const duration = rentalDuration();
+  const duration = rentalDurationContent();
 
   return (
     <div className="min-h-screen bg-background">

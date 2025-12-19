@@ -11,6 +11,7 @@ export interface InvoiceData {
   tax_amount?: number;
   total_amount: number;
   notes?: string;
+  tenant_id?: string;
 }
 
 export interface Invoice {
@@ -30,17 +31,23 @@ export interface Invoice {
 }
 
 // Generate unique invoice number
-export const generateInvoiceNumber = async (): Promise<string> => {
+export const generateInvoiceNumber = async (tenantId?: string): Promise<string> => {
   const now = new Date();
   const year = format(now, 'yyyy');
   const month = format(now, 'MM');
 
   // Get count of invoices this month
-  const { count, error } = await supabase
+  let query = supabase
     .from('invoices')
     .select('*', { count: 'exact', head: true })
     .gte('invoice_date', `${year}-${month}-01`)
     .lt('invoice_date', `${year}-${String(Number(month) + 1).padStart(2, '0')}-01`);
+
+  if (tenantId) {
+    query = query.eq('tenant_id', tenantId);
+  }
+
+  const { count, error } = await query;
 
   if (error) {
     console.error('Error counting invoices:', error);
@@ -53,7 +60,7 @@ export const generateInvoiceNumber = async (): Promise<string> => {
 
 // Create invoice
 export const createInvoice = async (data: InvoiceData): Promise<Invoice> => {
-  const invoiceNumber = await generateInvoiceNumber();
+  const invoiceNumber = await generateInvoiceNumber(data.tenant_id);
 
   const { data: invoice, error } = await supabase
     .from('invoices')
@@ -69,6 +76,7 @@ export const createInvoice = async (data: InvoiceData): Promise<Invoice> => {
       total_amount: data.total_amount,
       status: 'pending',
       notes: data.notes,
+      tenant_id: data.tenant_id,
     })
     .select()
     .single();

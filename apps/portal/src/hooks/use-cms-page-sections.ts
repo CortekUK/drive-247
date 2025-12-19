@@ -47,6 +47,7 @@ export const useCMSPageSections = (pageSlug: string) => {
             section_key: sectionKey,
             content,
             updated_at: new Date().toISOString(),
+            tenant_id: tenant?.id || null,
           },
           {
             onConflict: "page_id,section_key",
@@ -93,6 +94,7 @@ export const useCMSPageSections = (pageSlug: string) => {
         section_key: s.sectionKey,
         content: s.content,
         updated_at: new Date().toISOString(),
+        tenant_id: tenant?.id || null,
       }));
 
       // Upsert all sections
@@ -135,10 +137,16 @@ export const useCMSPageSections = (pageSlug: string) => {
       sectionId: string;
       isVisible: boolean;
     }) => {
-      const { error } = await supabase
+      let query = supabase
         .from("cms_page_sections")
         .update({ is_visible: isVisible })
         .eq("id", sectionId);
+
+      if (tenant?.id) {
+        query = query.eq("tenant_id", tenant.id);
+      }
+
+      const { error } = await query;
 
       if (error) throw error;
     },

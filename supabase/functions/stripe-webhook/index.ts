@@ -111,33 +111,70 @@ serve(async (req) => {
             // Get rental details
             const { data: rental } = await supabase
               .from("rentals")
-              .select("customer_id, vehicle_id, monthly_amount")
+              .select("customer_id, vehicle_id, monthly_amount, tenant_id")
               .eq("id", rentalId)
               .single();
 
             if (rental) {
-              const { error: paymentError } = await supabase
+              const paymentAmount = session.amount_total ? session.amount_total / 100 : rental.monthly_amount;
+              const today = new Date().toISOString().split("T")[0];
+
+              const paymentData: any = {
+                rental_id: rentalId,
+                customer_id: rental.customer_id,
+                vehicle_id: rental.vehicle_id,
+                amount: paymentAmount,
+                payment_date: today,
+                apply_from_date: today,
+                method: "Card",
+                payment_type: "Payment",
+                status: "Pending", // Will be updated by apply-payment
+                remaining_amount: paymentAmount, // Will be reduced by apply-payment
+                verification_status: "auto_approved",
+                stripe_checkout_session_id: session.id,
+                stripe_payment_intent_id: session.payment_intent as string,
+                capture_status: "captured",
+                booking_source: "website",
+              };
+
+              // Add tenant_id if rental has it
+              if (rental.tenant_id) {
+                paymentData.tenant_id = rental.tenant_id;
+              }
+
+              const { data: newPayment, error: paymentError } = await supabase
                 .from("payments")
-                .insert({
-                  rental_id: rentalId,
-                  customer_id: rental.customer_id,
-                  vehicle_id: rental.vehicle_id,
-                  amount: session.amount_total ? session.amount_total / 100 : rental.monthly_amount,
-                  payment_date: new Date().toISOString().split("T")[0],
-                  method: "Card",
-                  payment_type: "Payment",
-                  status: "Applied",
-                  verification_status: "auto_approved",
-                  stripe_checkout_session_id: session.id,
-                  stripe_payment_intent_id: session.payment_intent as string,
-                  capture_status: "captured",
-                  booking_source: "website",
-                });
+                .insert(paymentData)
+                .select()
+                .single();
 
               if (paymentError) {
                 console.error("Failed to create payment record:", paymentError);
               } else {
-                console.log("Payment record created from webhook");
+                console.log("Payment record created from webhook:", newPayment.id);
+
+                // Apply payment to charges using edge function
+                try {
+                  const response = await fetch(
+                    `${Deno.env.get("SUPABASE_URL")}/functions/v1/apply-payment`,
+                    {
+                      method: "POST",
+                      headers: {
+                        "Content-Type": "application/json",
+                        Authorization: `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`,
+                      },
+                      body: JSON.stringify({ paymentId: newPayment.id }),
+                    }
+                  );
+
+                  if (response.ok) {
+                    console.log("Payment applied successfully");
+                  } else {
+                    console.error("Failed to apply payment:", await response.text());
+                  }
+                } catch (applyError) {
+                  console.error("Error calling apply-payment:", applyError);
+                }
               }
             }
           }

@@ -13,6 +13,7 @@ export interface InvoiceData {
   tax_amount?: number;
   total_amount: number;
   notes?: string;
+  tenant_id?: string;
 }
 
 export interface Invoice {
@@ -55,23 +56,29 @@ export const createInvoice = async (data: InvoiceData): Promise<Invoice> => {
     total_amount: data.total_amount,
   });
 
+  const invoiceData: any = {
+    rental_id: data.rental_id,
+    customer_id: data.customer_id,
+    vehicle_id: data.vehicle_id,
+    invoice_number: invoiceNumber,
+    invoice_date: format(data.invoice_date, 'yyyy-MM-dd'),
+    due_date: data.due_date ? format(data.due_date, 'yyyy-MM-dd') : null,
+    subtotal: data.subtotal,
+    rental_fee: data.rental_fee || data.subtotal,
+    protection_fee: data.protection_fee || 0,
+    tax_amount: data.tax_amount || 0,
+    total_amount: data.total_amount,
+    status: 'pending',
+    notes: data.notes,
+  };
+
+  if (data.tenant_id) {
+    invoiceData.tenant_id = data.tenant_id;
+  }
+
   const { data: invoice, error } = await supabase
     .from('invoices')
-    .insert({
-      rental_id: data.rental_id,
-      customer_id: data.customer_id,
-      vehicle_id: data.vehicle_id,
-      invoice_number: invoiceNumber,
-      invoice_date: format(data.invoice_date, 'yyyy-MM-dd'),
-      due_date: data.due_date ? format(data.due_date, 'yyyy-MM-dd') : null,
-      subtotal: data.subtotal,
-      rental_fee: data.rental_fee || data.subtotal,
-      protection_fee: data.protection_fee || 0,
-      tax_amount: data.tax_amount || 0,
-      total_amount: data.total_amount,
-      status: 'pending',
-      notes: data.notes,
-    })
+    .insert(invoiceData)
     .select()
     .single();
 

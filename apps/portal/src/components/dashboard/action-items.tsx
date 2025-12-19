@@ -25,8 +25,8 @@ interface PendingBooking {
 interface UrgentReminder {
   id: string;
   title: string;
-  due_date: string;
-  priority: string;
+  due_on: string;
+  severity: string;
   vehicle_reg?: string;
 }
 
@@ -136,22 +136,23 @@ export const ActionItems = () => {
         .select(`
           id,
           title,
-          due_date,
-          priority,
-          vehicles(reg)
+          due_on,
+          severity,
+          object_id
         `)
-        .eq("status", "active")
-        .gte("due_date", today)
-        .order("due_date", { ascending: true });
+        .in("status", ["pending", "sent", "snoozed"])
+        .gte("due_on", today)
+        .order("due_on", { ascending: true })
+        .limit(10);
 
       if (error) throw error;
 
       return (data || []).map((reminder: any) => ({
         id: reminder.id,
         title: reminder.title,
-        due_date: reminder.due_date,
-        priority: reminder.priority || "medium",
-        vehicle_reg: reminder.vehicles?.reg,
+        due_on: reminder.due_on,
+        severity: reminder.severity || "info",
+        vehicle_reg: undefined, // reminders don't directly link to vehicles
       })) as UrgentReminder[];
     },
   });
@@ -628,15 +629,15 @@ export const ActionItems = () => {
                     <div className="flex items-start justify-between mb-1">
                       <p className="text-sm font-medium truncate flex-1">{reminder.title}</p>
                       <AlertCircle className={`h-4 w-4 ml-2 shrink-0 ${
-                        reminder.priority === 'critical' ? 'text-destructive' :
-                        reminder.priority === 'high' ? 'text-warning' :
+                        reminder.severity === 'critical' ? 'text-destructive' :
+                        reminder.severity === 'warning' ? 'text-warning' :
                         'text-muted-foreground'
                       }`} />
                     </div>
                     <div className="flex justify-between items-center text-xs text-muted-foreground">
                       <span>{reminder.vehicle_reg || 'General'}</span>
                       <span className="font-medium">
-                        Due {format(new Date(reminder.due_date), 'MMM d')}
+                        Due {format(new Date(reminder.due_on), 'MMM d')}
                       </span>
                     </div>
                   </div>

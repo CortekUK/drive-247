@@ -74,10 +74,18 @@ serve(async (req) => {
     } as any);
     if (updateErr) throw updateErr;
 
-    // Ensure admin role
+    // Ensure admin role in app_users (user_roles table no longer exists)
+    // Note: Demo user is created without tenant_id (global admin for testing)
     const { error: roleErr } = await admin
-      .from("user_roles")
-      .upsert({ user_id: userId, role: "admin" }, { onConflict: "user_id,role" });
+      .from("app_users")
+      .upsert({
+        auth_user_id: userId,
+        email,
+        name: "Demo Admin",
+        role: "admin",
+        is_active: true,
+        tenant_id: null  // Explicitly null for global demo user
+      }, { onConflict: "auth_user_id" });
     if (roleErr) throw roleErr;
 
     return new Response(

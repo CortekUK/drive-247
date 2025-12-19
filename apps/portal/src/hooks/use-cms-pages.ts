@@ -63,19 +63,30 @@ export const useCMSPages = () => {
       const { data: { user } } = await supabase.auth.getUser();
 
       // Get current sections for version snapshot
-      const { data: sections } = await supabase
+      let sectionsQuery = supabase
         .from("cms_page_sections")
         .select("*")
         .eq("page_id", pageId);
 
+      if (tenant?.id) {
+        sectionsQuery = sectionsQuery.eq("tenant_id", tenant.id);
+      }
+
+      const { data: sections } = await sectionsQuery;
+
       // Get last version number
-      const { data: lastVersion } = await supabase
+      let versionQuery = supabase
         .from("cms_page_versions")
         .select("version_number")
         .eq("page_id", pageId)
         .order("version_number", { ascending: false })
-        .limit(1)
-        .single();
+        .limit(1);
+
+      if (tenant?.id) {
+        versionQuery = versionQuery.eq("tenant_id", tenant.id);
+      }
+
+      const { data: lastVersion } = await versionQuery.single();
 
       const nextVersion = (lastVersion?.version_number || 0) + 1;
 
@@ -97,7 +108,7 @@ export const useCMSPages = () => {
       });
 
       // Update page status
-      const { error } = await supabase
+      let updateQuery = supabase
         .from("cms_pages")
         .update({
           status: "published",
@@ -105,6 +116,12 @@ export const useCMSPages = () => {
           published_by: appUser?.id || null,
         })
         .eq("id", pageId);
+
+      if (tenant?.id) {
+        updateQuery = updateQuery.eq("tenant_id", tenant.id);
+      }
+
+      const { error } = await updateQuery;
 
       if (error) throw error;
     },
@@ -127,7 +144,7 @@ export const useCMSPages = () => {
   // Unpublish (revert to draft) mutation
   const unpublishPageMutation = useMutation({
     mutationFn: async (pageId: string) => {
-      const { error } = await supabase
+      let updateQuery = supabase
         .from("cms_pages")
         .update({
           status: "draft",
@@ -135,6 +152,12 @@ export const useCMSPages = () => {
           published_by: null,
         })
         .eq("id", pageId);
+
+      if (tenant?.id) {
+        updateQuery = updateQuery.eq("tenant_id", tenant.id);
+      }
+
+      const { error } = await updateQuery;
 
       if (error) throw error;
     },

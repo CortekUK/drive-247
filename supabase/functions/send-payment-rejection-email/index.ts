@@ -16,6 +16,7 @@ interface PaymentRejectionRequest {
   amount: number;
   reason: string;
   vehicleReg?: string;
+  tenantId?: string;
 }
 
 async function sendEmail(to: string, subject: string, html: string, from: string = 'DRIVE917 <notifications@drive917.com>') {
@@ -250,6 +251,17 @@ serve(async (req) => {
     const data: PaymentRejectionRequest = await req.json();
     console.log('Sending payment rejection email for payment:', data.paymentId);
 
+    // Get tenant_id from payment if not provided
+    let tenantId = data.tenantId;
+    if (!tenantId && data.paymentId) {
+      const { data: payment } = await supabase
+        .from('payments')
+        .select('tenant_id')
+        .eq('id', data.paymentId)
+        .single();
+      tenantId = payment?.tenant_id;
+    }
+
     // Send rejection email to customer
     const subject = `Payment Update - Action Required`;
     const html = generateRejectionEmailHTML(data);
@@ -270,7 +282,8 @@ serve(async (req) => {
           payment_id: data.paymentId,
           customer_id: data.customerId,
           reason: data.reason
-        }
+        },
+        tenant_id: tenantId
       });
     } catch (emailError) {
       console.error('Error sending rejection email:', emailError);
@@ -285,7 +298,8 @@ serve(async (req) => {
           payment_id: data.paymentId,
           customer_id: data.customerId,
           reason: data.reason
-        }
+        },
+        tenant_id: tenantId
       });
     }
 

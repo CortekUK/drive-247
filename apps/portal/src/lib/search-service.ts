@@ -69,7 +69,7 @@ const rankResults = (results: SearchResult[], query: string): SearchResult[] => 
 };
 
 export const searchService = {
-  async searchAll(query: string, entityFilter: string = 'all'): Promise<SearchResults> {
+  async searchAll(query: string, entityFilter: string = 'all', tenantId?: string): Promise<SearchResults> {
     if (!query.trim()) {
       return {
         customers: [],
@@ -96,16 +96,21 @@ export const searchService = {
     try {
       // Search customers (if not filtered out)
       if (entityFilter === 'all' || entityFilter === 'customers') {
-        const { data: customers } = await supabase
+        let customerQuery = supabase
           .from("customers")
-          .select("id, name, email, phone, type, customer_type, status")
-          .or(`name.ilike.${searchTerm},email.ilike.${searchTerm},phone.ilike.${searchTerm},type.ilike.${searchTerm}`)
-          .limit(10);
+          .select("id, name, email, phone, customer_type, status")
+          .or(`name.ilike.${searchTerm},email.ilike.${searchTerm},phone.ilike.${searchTerm},customer_type.ilike.${searchTerm}`);
+
+        if (tenantId) {
+          customerQuery = customerQuery.eq("tenant_id", tenantId);
+        }
+
+        const { data: customers } = await customerQuery.limit(10);
 
         const customerResults = (customers || []).map(customer => ({
           id: customer.id,
           title: customer.name,
-          subtitle: `${customer.email || customer.phone || ''} • ${customer.customer_type || customer.type} • ${customer.status || 'Active'}`,
+          subtitle: `${customer.email || customer.phone || ''} • ${customer.customer_type || 'Individual'} • ${customer.status || 'Active'}`,
           category: "Customers",
           url: `/customers/${customer.id}`,
           icon: "user",
@@ -116,11 +121,16 @@ export const searchService = {
 
       // Search vehicles (if not filtered out)
       if (entityFilter === 'all' || entityFilter === 'vehicles') {
-        const { data: vehicles } = await supabase
+        let vehicleQuery = supabase
           .from("vehicles")
           .select("id, reg, make, model, status, colour, color, acquisition_type")
-          .or(`reg.ilike.${searchTerm},make.ilike.${searchTerm},model.ilike.${searchTerm},colour.ilike.${searchTerm},color.ilike.${searchTerm}`)
-          .limit(10);
+          .or(`reg.ilike.${searchTerm},make.ilike.${searchTerm},model.ilike.${searchTerm},colour.ilike.${searchTerm},color.ilike.${searchTerm}`);
+
+        if (tenantId) {
+          vehicleQuery = vehicleQuery.eq("tenant_id", tenantId);
+        }
+
+        const { data: vehicles } = await vehicleQuery.limit(10);
 
         const vehicleResults = (vehicles || []).map(vehicle => ({
           id: vehicle.id,
@@ -136,18 +146,24 @@ export const searchService = {
 
       // Search rentals (if not filtered out)
       if (entityFilter === 'all' || entityFilter === 'rentals') {
-        const { data: rentals } = await supabase
+        let rentalQuery = supabase
           .from("rentals")
           .select(`
-            id, 
+            id,
             rental_number,
-            start_date, 
-            end_date, 
+            start_date,
+            end_date,
             status,
             customers!inner(name),
             vehicles!inner(reg, make, model)
           `)
-          .or(`rental_number.ilike.${searchTerm},customers.name.ilike.${searchTerm},vehicles.reg.ilike.${searchTerm}`)
+          .or(`rental_number.ilike.${searchTerm},customers.name.ilike.${searchTerm},vehicles.reg.ilike.${searchTerm}`);
+
+        if (tenantId) {
+          rentalQuery = rentalQuery.eq("tenant_id", tenantId);
+        }
+
+        const { data: rentals } = await rentalQuery
           .order('start_date', { ascending: false })
           .limit(10);
 
@@ -165,18 +181,24 @@ export const searchService = {
 
       // Search fines (if not filtered out)
       if (entityFilter === 'all' || entityFilter === 'fines') {
-        const { data: fines } = await supabase
+        let fineQuery = supabase
           .from("fines")
           .select(`
-            id, 
-            reference_no, 
-            type, 
-            amount, 
+            id,
+            reference_no,
+            type,
+            amount,
             status,
             customers(name),
             vehicles!inner(reg)
           `)
-          .or(`reference_no.ilike.${searchTerm},type.ilike.${searchTerm},vehicles.reg.ilike.${searchTerm}`)
+          .or(`reference_no.ilike.${searchTerm},type.ilike.${searchTerm},vehicles.reg.ilike.${searchTerm}`);
+
+        if (tenantId) {
+          fineQuery = fineQuery.eq("tenant_id", tenantId);
+        }
+
+        const { data: fines } = await fineQuery
           .order('issue_date', { ascending: false })
           .limit(10);
 
@@ -194,17 +216,23 @@ export const searchService = {
 
       // Search payments (if not filtered out)
       if (entityFilter === 'all' || entityFilter === 'payments') {
-        const { data: payments } = await supabase
+        let paymentQuery = supabase
           .from("payments")
           .select(`
-            id, 
-            amount, 
-            payment_date, 
-            method, 
+            id,
+            amount,
+            payment_date,
+            method,
             payment_type,
             customers!inner(name)
           `)
-          .or(`customers.name.ilike.${searchTerm},method.ilike.${searchTerm},payment_type.ilike.${searchTerm}`)
+          .or(`customers.name.ilike.${searchTerm},method.ilike.${searchTerm},payment_type.ilike.${searchTerm}`);
+
+        if (tenantId) {
+          paymentQuery = paymentQuery.eq("tenant_id", tenantId);
+        }
+
+        const { data: payments } = await paymentQuery
           .order('payment_date', { ascending: false })
           .limit(10);
 
@@ -222,18 +250,23 @@ export const searchService = {
 
       // Search plates (if not filtered out)
       if (entityFilter === 'all' || entityFilter === 'plates') {
-        const { data: plates } = await supabase
+        let plateQuery = supabase
           .from("plates")
           .select(`
-            id, 
-            plate_number, 
+            id,
+            plate_number,
             status,
             supplier,
             notes,
             vehicles(reg, make, model)
           `)
-          .or(`plate_number.ilike.${searchTerm},supplier.ilike.${searchTerm}`)
-          .limit(10);
+          .or(`plate_number.ilike.${searchTerm},supplier.ilike.${searchTerm}`);
+
+        if (tenantId) {
+          plateQuery = plateQuery.eq("tenant_id", tenantId);
+        }
+
+        const { data: plates } = await plateQuery.limit(10);
 
         const plateResults = (plates || []).map(plate => ({
           id: plate.id,
@@ -251,7 +284,7 @@ export const searchService = {
 
       // Search insurance policies (if not filtered out)
       if (entityFilter === 'all' || entityFilter === 'insurance') {
-        const { data: insurance } = await supabase
+        let insuranceQuery = supabase
           .from("insurance_policies")
           .select(`
             id,
@@ -262,7 +295,13 @@ export const searchService = {
             customers!inner(name),
             vehicles(reg, make, model)
           `)
-          .or(`policy_number.ilike.${searchTerm},provider.ilike.${searchTerm},customers.name.ilike.${searchTerm}`)
+          .or(`policy_number.ilike.${searchTerm},provider.ilike.${searchTerm},customers.name.ilike.${searchTerm}`);
+
+        if (tenantId) {
+          insuranceQuery = insuranceQuery.eq("tenant_id", tenantId);
+        }
+
+        const { data: insurance } = await insuranceQuery
           .order('expiry_date', { ascending: false })
           .limit(10);
 

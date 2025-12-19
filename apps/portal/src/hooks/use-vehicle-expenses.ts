@@ -53,6 +53,8 @@ export function useVehicleExpenses(vehicleId: string) {
   // Add expense mutation
   const addExpenseMutation = useMutation({
     mutationFn: async (formData: ExpenseFormData) => {
+      if (!tenant?.id) throw new Error("No tenant context available");
+
       const { data, error } = await supabase
         .from('vehicle_expenses')
         .insert({
@@ -62,6 +64,7 @@ export function useVehicleExpenses(vehicleId: string) {
           amount: formData.amount,
           notes: formData.notes,
           reference: formData.reference,
+          tenant_id: tenant.id,
         })
         .select()
         .single();
@@ -93,10 +96,16 @@ export function useVehicleExpenses(vehicleId: string) {
   // Delete expense mutation
   const deleteExpenseMutation = useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await supabase
+      let query = supabase
         .from('vehicle_expenses')
         .delete()
         .eq('id', id);
+
+      if (tenant?.id) {
+        query = query.eq('tenant_id', tenant.id);
+      }
+
+      const { error } = await query;
 
       if (error) throw error;
     },

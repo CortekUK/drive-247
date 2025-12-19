@@ -54,7 +54,7 @@ serve(async (req) => {
     // Validate fine exists
     const { data: fine, error: fineError } = await supabase
       .from('fines')
-      .select('id, vehicle_id, customer_id, amount')
+      .select('id, vehicle_id, customer_id, amount, tenant_id')
       .eq('id', fineId)
       .single();
 
@@ -73,15 +73,19 @@ serve(async (req) => {
     }
 
     // Insert authority payment record
+    const authorityPaymentData: any = {
+      fine_id: fineId,
+      amount: amount,
+      payment_date: paymentDate,
+      payment_method: paymentMethod,
+      notes: notes
+    };
+    if (fine.tenant_id) {
+      authorityPaymentData.tenant_id = fine.tenant_id;
+    }
     const { data: authorityPayment, error: paymentError } = await supabase
       .from('authority_payments')
-      .insert({
-        fine_id: fineId,
-        amount: amount,
-        payment_date: paymentDate,
-        payment_method: paymentMethod,
-        notes: notes
-      })
+      .insert(authorityPaymentData)
       .select()
       .single();
 
@@ -104,19 +108,23 @@ serve(async (req) => {
 
     // Create P&L Cost entry using unique reference for idempotency
     const reference = `authority:${authorityPayment.id}`;
-    
+
+    const pnlData: any = {
+      vehicle_id: fine.vehicle_id,
+      entry_date: paymentDate,
+      side: 'Cost',
+      category: 'Fines',
+      amount: amount,
+      reference: reference,
+      customer_id: fine.customer_id,
+      source_ref: fineId // Link back to original fine
+    };
+    if (fine.tenant_id) {
+      pnlData.tenant_id = fine.tenant_id;
+    }
     const { data: pnlEntry, error: pnlError } = await supabase
       .from('pnl_entries')
-      .insert({
-        vehicle_id: fine.vehicle_id,
-        entry_date: paymentDate,
-        side: 'Cost',
-        category: 'Fines',
-        amount: amount,
-        reference: reference,
-        customer_id: fine.customer_id,
-        source_ref: fineId // Link back to original fine
-      })
+      .insert(pnlData)
       .select()
       .single();
 

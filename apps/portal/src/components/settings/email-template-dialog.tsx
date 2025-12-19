@@ -10,6 +10,7 @@ import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
+import { useTenant } from "@/contexts/TenantContext";
 import { Loader2 } from "lucide-react";
 import dynamic from 'next/dynamic';
 import 'react-quill/dist/quill.snow.css';
@@ -38,6 +39,7 @@ const AVAILABLE_VARIABLES = [
 ];
 
 export default function EmailTemplateDialog({ open, onOpenChange, template, onSuccess }: Props) {
+  const { tenant } = useTenant();
   const [formData, setFormData] = useState({
     name: '',
     category: 'general' as 'rejection' | 'approval' | 'reminder' | 'general',
@@ -104,7 +106,10 @@ export default function EmailTemplateDialog({ open, onOpenChange, template, onSu
         // Insert new
         const { error } = await supabase
           .from('email_templates')
-          .insert(templateData);
+          .insert({
+            ...templateData,
+            tenant_id: tenant?.id || null,
+          });
 
         if (error) throw error;
         toast({ title: "Template created successfully" });

@@ -19,6 +19,7 @@ import { EnhancedAssignPlateDialog } from "@/components/plates/enhanced-assign-p
 import { PlateStatusBadge } from "@/components/plates/plate-status-badge";
 import { PlateHistoryDrawer } from "@/components/plates/plate-history-drawer";
 import { useToast } from "@/hooks/use-toast";
+import { useTenant } from "@/contexts/TenantContext";
 import { 
   Plus, 
   ExternalLink, 
@@ -57,21 +58,28 @@ export const EnhancedVehiclePlatesPanel = ({ vehicleId, vehicleReg }: EnhancedVe
   const [selectedPlate, setSelectedPlate] = useState<Plate | null>(null);
   const router = useRouter();
   const { toast } = useToast();
+  const { tenant } = useTenant();
 
   // Fetch plates for this vehicle (current and historical)
   const { data: plates, isLoading, refetch } = useQuery({
-    queryKey: ["vehicle-plates", vehicleId],
+    queryKey: ["vehicle-plates", tenant?.id, vehicleId],
     queryFn: async () => {
-      const { data, error } = await supabase
+      let query = supabase
         .from("plates")
         .select("*")
         .eq("vehicle_id", vehicleId)
         .order("updated_at", { ascending: false });
-      
+
+      if (tenant?.id) {
+        query = query.eq("tenant_id", tenant.id);
+      }
+
+      const { data, error } = await query;
+
       if (error) throw error;
       return data as Plate[];
     },
-    enabled: !!vehicleId,
+    enabled: !!tenant && !!vehicleId,
   });
 
   // Get current assigned plate
@@ -79,14 +87,20 @@ export const EnhancedVehiclePlatesPanel = ({ vehicleId, vehicleReg }: EnhancedVe
 
   const handleUnassignPlate = async (plate: Plate) => {
     try {
-      const { error } = await supabase
+      let updateQuery = supabase
         .from("plates")
-        .update({ 
-          vehicle_id: null, 
+        .update({
+          vehicle_id: null,
           status: 'received',
           updated_at: new Date().toISOString()
         })
         .eq("id", plate.id);
+
+      if (tenant?.id) {
+        updateQuery = updateQuery.eq("tenant_id", tenant.id);
+      }
+
+      const { error } = await updateQuery;
 
       if (error) throw error;
 
@@ -96,7 +110,8 @@ export const EnhancedVehiclePlatesPanel = ({ vehicleId, vehicleReg }: EnhancedVe
         event_type: "expense_added",
         summary: `Plate ${plate.plate_number} unassigned`,
         reference_id: plate.id,
-        reference_table: "plates"
+        reference_table: "plates",
+        tenant_id: tenant?.id,
       });
 
       toast({

@@ -135,18 +135,22 @@ async function createVerificationSession(
     }
 
     // Create verification record
+    const verificationData: any = {
+      customer_id: customerId,
+      provider: 'veriff',
+      session_id: sessionResult.sessionId,
+      verification_token: sessionResult.sessionToken,
+      external_user_id: customerId,
+      status: 'init',
+      review_status: 'init',
+      verification_url: sessionResult.sessionUrl,
+    };
+    if (customer.tenant_id) {
+      verificationData.tenant_id = customer.tenant_id;
+    }
     const { data: verification, error: verificationError } = await supabase
       .from('identity_verifications')
-      .insert({
-        customer_id: customerId,
-        provider: 'veriff',
-        session_id: sessionResult.sessionId,
-        verification_token: sessionResult.sessionToken,
-        external_user_id: customerId,
-        status: 'init',
-        review_status: 'init',
-        verification_url: sessionResult.sessionUrl,
-      })
+      .insert(verificationData)
       .select()
       .single();
 

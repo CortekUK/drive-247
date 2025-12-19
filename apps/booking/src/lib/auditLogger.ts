@@ -7,6 +7,7 @@ interface AuditLogParams {
   summary: string;
   before?: Record<string, any>;
   after?: Record<string, any>;
+  tenantId?: string;
 }
 
 /**
@@ -20,6 +21,7 @@ export async function logAuditEvent({
   summary,
   before = {},
   after = {},
+  tenantId,
 }: AuditLogParams) {
   try {
     const { data: { user } } = await supabase.auth.getUser();
@@ -32,7 +34,7 @@ export async function logAuditEvent({
     // Extract only changed fields
     const changedFields = getChangedFields(before, after);
 
-    const auditData = {
+    const auditData: any = {
       user_id: user.id,
       action,
       table_name: entityType.toLowerCase().replace(/\s+/g, "_"),
@@ -41,6 +43,10 @@ export async function logAuditEvent({
       new_values: changedFields.newValues as any,
       // IP and user agent can be captured server-side in production
     };
+
+    if (tenantId) {
+      auditData.tenant_id = tenantId;
+    }
 
     const { error } = await supabase
       .from("audit_logs")

@@ -3,6 +3,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/integrations/supabase/client";
+import { useTenant } from "@/contexts/TenantContext";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Car, TrendingUp, TrendingDown } from "lucide-react";
@@ -147,10 +148,12 @@ const VehicleCard = ({ vehicle, pl }: { vehicle: Vehicle; pl?: VehiclePL }) => {
 };
 
 export const FleetOverview = () => {
+  const { tenant } = useTenant();
+
   const { data: vehicles, isLoading } = useQuery({
-    queryKey: ["vehicles"],
+    queryKey: ["vehicles", tenant?.id],
     queryFn: async () => {
-      const { data, error } = await supabase
+      let query = supabase
         .from("vehicles")
         .select(`
           *,
@@ -158,23 +161,36 @@ export const FleetOverview = () => {
         `)
         .order("created_at", { ascending: false });
 
+      if (tenant?.id) {
+        query = query.eq("tenant_id", tenant.id);
+      }
+
+      const { data, error } = await query;
+
       if (error) throw error;
       return data as unknown as Vehicle[];
     },
+    enabled: !!tenant,
   });
 
   const { data: vehiclePL } = useQuery({
-    queryKey: ["vehicle-pl"],
+    queryKey: ["vehicle-pl", tenant?.id],
     queryFn: async () => {
-      const { data, error } = await supabase
+      let query = supabase
         .from("view_pl_by_vehicle")
         .select("*");
-      
+
+      if (tenant?.id) {
+        query = query.eq("tenant_id", tenant.id);
+      }
+
+      const { data, error } = await query;
+
       if (error) throw error;
-      
+
       // Convert to lookup by vehicle_id
       const plByVehicle: Record<string, VehiclePL> = {};
-      
+
       data?.forEach((entry) => {
         plByVehicle[entry.vehicle_id] = {
           vehicle_id: entry.vehicle_id,
@@ -188,9 +204,10 @@ export const FleetOverview = () => {
           cost_finance: Number(entry.cost_finance || 0),
         };
       });
-      
+
       return plByVehicle;
     },
+    enabled: !!tenant,
   });
 
   if (isLoading) {

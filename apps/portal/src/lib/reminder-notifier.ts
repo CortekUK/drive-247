@@ -15,10 +15,10 @@ interface ReminderForNotification {
 /**
  * Creates in-app notifications for a reminder to all admin users
  */
-export async function createReminderNotification(reminder: ReminderForNotification): Promise<void> {
+export async function createReminderNotification(reminder: ReminderForNotification, tenantId?: string): Promise<void> {
   try {
-    // Get admin users
-    const adminIds = await notificationService.getAdminUserIds();
+    // Get admin users for this tenant
+    const adminIds = await notificationService.getAdminUserIds(tenantId);
 
     if (adminIds.length === 0) return;
 
@@ -37,12 +37,17 @@ export async function createReminderNotification(reminder: ReminderForNotificati
     // Create notification for each admin (only if not already notified for this reminder)
     for (const adminId of adminIds) {
       // Check if notification already exists
-      const { data: existing } = await supabase
+      let existingQuery = supabase
         .from('notifications')
         .select('id')
         .eq('user_id', adminId)
-        .contains('metadata', { reminder_id: reminder.id })
-        .single();
+        .contains('metadata', { reminder_id: reminder.id });
+
+      if (tenantId) {
+        existingQuery = existingQuery.eq('tenant_id', tenantId);
+      }
+
+      const { data: existing } = await existingQuery.single();
 
       if (!existing) {
         await notificationService.createInAppNotification({
@@ -58,7 +63,8 @@ export async function createReminderNotification(reminder: ReminderForNotificati
             object_id: reminder.object_id,
             severity: reminder.severity,
             due_on: reminder.due_on
-          }
+          },
+          tenantId,
         });
       }
     }
@@ -100,18 +106,24 @@ export async function sendReminderNotificationsViaEdgeFunction(): Promise<{
  * Creates in-app notifications for all pending reminders
  * This can be called locally without the edge function
  */
-export async function createNotificationsForPendingReminders(): Promise<number> {
+export async function createNotificationsForPendingReminders(tenantId?: string): Promise<number> {
   let created = 0;
 
   try {
     const today = new Date().toISOString().split('T')[0];
 
     // Get pending reminders that should be notified
-    const { data: pendingReminders, error } = await supabase
+    let query = supabase
       .from('reminders')
       .select('*')
       .eq('status', 'pending')
       .lte('remind_on', today);
+
+    if (tenantId) {
+      query = query.eq('tenant_id', tenantId);
+    }
+
+    const { data: pendingReminders, error } = await query;
 
     if (error) {
       console.error('Error fetching pending reminders:', error);
@@ -129,7 +141,7 @@ export async function createNotificationsForPendingReminders(): Promise<number> 
         object_id: reminder.object_id,
         rule_code: reminder.rule_code,
         due_on: reminder.due_on
-      });
+      }, tenantId);
       created++;
     }
 

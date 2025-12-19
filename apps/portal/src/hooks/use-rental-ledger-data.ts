@@ -1,5 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { useTenant } from "@/contexts/TenantContext";
 
 export interface RentalCharge {
   id: string;
@@ -39,33 +40,47 @@ export interface ChargeAllocation {
 
 // Get rental charges with their payment allocations
 export const useRentalCharges = (rentalId: string | undefined) => {
+  const { tenant } = useTenant();
+
   return useQuery({
-    queryKey: ["rental-charges", rentalId],
+    queryKey: ["rental-charges", tenant?.id, rentalId],
     queryFn: async () => {
       if (!rentalId) return [];
 
       // Get all charges for this rental
-      const { data: charges, error: chargesError } = await supabase
+      let chargesQuery = supabase
         .from("ledger_entries")
         .select("*")
         .eq("rental_id", rentalId)
         .eq("type", "Charge")
         .order("due_date", { ascending: true });
 
+      if (tenant?.id) {
+        chargesQuery = chargesQuery.eq("tenant_id", tenant.id);
+      }
+
+      const { data: charges, error: chargesError } = await chargesQuery;
+
       if (chargesError) throw chargesError;
 
       // Get payment applications for these charges
       const chargeIds = charges.map(c => c.id);
-      
+
       if (chargeIds.length === 0) return [];
 
-      const { data: applications, error: appError } = await supabase
+      let applicationsQuery = supabase
         .from("payment_applications")
         .select(`
           *,
           payments(payment_date, method, amount, payment_type)
         `)
         .in("charge_entry_id", chargeIds);
+
+      if (tenant?.id) {
+        applicationsQuery = applicationsQuery.eq("tenant_id", tenant.id);
+      }
+
+      const { data: applications, error: appError } = await applicationsQuery;
 
       if (appError) throw appError;
 
@@ -91,32 +106,40 @@ export const useRentalCharges = (rentalId: string | undefined) => {
 
       return chargesWithAllocations;
     },
-    enabled: !!rentalId,
+    enabled: !!tenant && !!rentalId,
   });
 };
 
 // Get payments that have allocations to this rental's charges
 export const useRentalPayments = (rentalId: string | undefined) => {
+  const { tenant } = useTenant();
+
   return useQuery({
-    queryKey: ["rental-payments", rentalId],
+    queryKey: ["rental-payments", tenant?.id, rentalId],
     queryFn: async () => {
       if (!rentalId) return [];
 
       // First get all charges for this rental
-      const { data: charges, error: chargesError } = await supabase
+      let chargesQuery = supabase
         .from("ledger_entries")
         .select("id")
         .eq("rental_id", rentalId)
         .eq("type", "Charge");
 
+      if (tenant?.id) {
+        chargesQuery = chargesQuery.eq("tenant_id", tenant.id);
+      }
+
+      const { data: charges, error: chargesError } = await chargesQuery;
+
       if (chargesError) throw chargesError;
 
       const chargeIds = charges.map(c => c.id);
-      
+
       if (chargeIds.length === 0) return [];
 
       // Get payment applications for these charges
-      const { data: applications, error: appError } = await supabase
+      let applicationsQuery = supabase
         .from("payment_applications")
         .select(`
           *,
@@ -124,6 +147,12 @@ export const useRentalPayments = (rentalId: string | undefined) => {
           ledger_entries!charge_entry_id(category, due_date)
         `)
         .in("charge_entry_id", chargeIds);
+
+      if (tenant?.id) {
+        applicationsQuery = applicationsQuery.eq("tenant_id", tenant.id);
+      }
+
+      const { data: applications, error: appError } = await applicationsQuery;
 
       if (appError) throw appError;
 
@@ -152,45 +181,65 @@ export const useRentalPayments = (rentalId: string | undefined) => {
         });
       });
 
-      return Array.from(paymentMap.values()).sort((a, b) => 
+      return Array.from(paymentMap.values()).sort((a, b) =>
         new Date(a.payment_date).getTime() - new Date(b.payment_date).getTime()
       );
     },
-    enabled: !!rentalId,
+    enabled: !!tenant && !!rentalId,
   });
 };
 
 // Get rental totals based on allocations
 export const useRentalTotals = (rentalId: string | undefined) => {
+  const { tenant } = useTenant();
+
   return useQuery({
-    queryKey: ["rental-totals", rentalId],
+    queryKey: ["rental-totals", tenant?.id, rentalId],
     queryFn: async () => {
       if (!rentalId) return { totalCharges: 0, totalPayments: 0, outstanding: 0 };
 
       // Get charges
-      const { data: charges, error: chargesError } = await supabase
+      let chargesQuery = supabase
         .from("ledger_entries")
         .select("amount, remaining_amount")
         .eq("rental_id", rentalId)
         .eq("type", "Charge");
 
+      if (tenant?.id) {
+        chargesQuery = chargesQuery.eq("tenant_id", tenant.id);
+      }
+
+      const { data: charges, error: chargesError } = await chargesQuery;
+
       if (chargesError) throw chargesError;
 
       // Get payment applications for these charges
-      const { data: chargeIds, error: chargeIdsError } = await supabase
+      let chargeIdsQuery = supabase
         .from("ledger_entries")
         .select("id")
         .eq("rental_id", rentalId)
         .eq("type", "Charge");
 
+      if (tenant?.id) {
+        chargeIdsQuery = chargeIdsQuery.eq("tenant_id", tenant.id);
+      }
+
+      const { data: chargeIds, error: chargeIdsError } = await chargeIdsQuery;
+
       if (chargeIdsError) throw chargeIdsError;
 
       let totalPayments = 0;
       if (chargeIds.length > 0) {
-        const { data: applications, error: appError } = await supabase
+        let applicationsQuery = supabase
           .from("payment_applications")
           .select("amount_applied")
           .in("charge_entry_id", chargeIds.map(c => c.id));
+
+        if (tenant?.id) {
+          applicationsQuery = applicationsQuery.eq("tenant_id", tenant.id);
+        }
+
+        const { data: applications, error: appError } = await applicationsQuery;
 
         if (appError) throw appError;
 
@@ -202,6 +251,6 @@ export const useRentalTotals = (rentalId: string | undefined) => {
 
       return { totalCharges, totalPayments, outstanding };
     },
-    enabled: !!rentalId,
+    enabled: !!tenant && !!rentalId,
   });
 };

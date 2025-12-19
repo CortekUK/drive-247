@@ -57,6 +57,7 @@ import {
 } from "@/hooks/use-insurance-data";
 import { exportInsuranceToCSV } from "@/lib/csv-export";
 import { type InsurancePolicyStatus } from "@/lib/insurance-utils";
+import { useTenant } from "@/contexts/TenantContext";
 
 type SortField = "customer" | "vehicle" | "policy_number" | "provider" | "start_date" | "expiry_date" | "status" | "docs_count";
 type SortDirection = "asc" | "desc";
@@ -85,6 +86,7 @@ export default function InsuranceListEnhanced() {
   // Data fetching
   const { policies, stats, isLoading, error } = useInsuranceData(filters);
   const queryClient = useQueryClient();
+  const { tenant } = useTenant();
 
   // Mutations
   const recalculateStatusMutation = useMutation({
@@ -109,10 +111,16 @@ export default function InsuranceListEnhanced() {
 
   const deactivatePolicyMutation = useMutation({
     mutationFn: async (policyId: string) => {
-      const { error } = await supabase
+      let query = supabase
         .from("insurance_policies")
         .update({ status: "Inactive", updated_at: new Date().toISOString() })
         .eq("id", policyId);
+
+      if (tenant?.id) {
+        query = query.eq("tenant_id", tenant.id);
+      }
+
+      const { error } = await query;
       if (error) throw error;
     },
     onSuccess: () => {

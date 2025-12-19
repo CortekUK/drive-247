@@ -14,6 +14,7 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage, FormDes
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
 import { useToast } from "@/hooks/use-toast";
+import { useTenant } from "@/contexts/TenantContext";
 import { useCustomerVehicleRental } from "@/hooks/use-customer-vehicle-rental";
 import { useCustomerBalanceWithStatus } from "@/hooks/use-customer-balance";
 import { cn } from "@/lib/utils";
@@ -48,6 +49,7 @@ export const AddPaymentDialog = ({
 }: AddPaymentDialogProps) => {
   const [loading, setLoading] = useState(false);
   const { toast } = useToast();
+  const { tenant } = useTenant();
   const queryClient = useQueryClient();
   
   const form = useForm<PaymentFormData>({
@@ -101,15 +103,21 @@ export const AddPaymentDialog = ({
 
   // Simplified vehicle lookup for the selected customer
   const { data: activeRentals } = useQuery({
-    queryKey: ["active-rentals", selectedCustomerId],
+    queryKey: ["active-rentals", selectedCustomerId, tenant?.id],
     queryFn: async () => {
       if (!selectedCustomerId) return [];
 
-      const { data, error } = await supabase
+      let query = supabase
         .from("rentals")
         .select("vehicle_id, vehicles(id, reg, make, model)")
         .eq("status", "Active")
         .eq("customer_id", selectedCustomerId);
+
+      if (tenant?.id) {
+        query = query.eq("tenant_id", tenant.id);
+      }
+
+      const { data, error } = await query;
 
       if (error) throw error;
       return data?.map(r => r.vehicles).filter(Boolean) || [];
@@ -118,9 +126,15 @@ export const AddPaymentDialog = ({
   });
 
   const { data: customers } = useQuery({
-    queryKey: ["customers-for-payment"],
+    queryKey: ["customers-for-payment", tenant?.id],
     queryFn: async () => {
-      const { data, error } = await supabase.from("customers").select("id, name");
+      let query = supabase.from("customers").select("id, name");
+
+      if (tenant?.id) {
+        query = query.eq("tenant_id", tenant.id);
+      }
+
+      const { data, error } = await query;
       if (error) throw error;
       return data;
     },
@@ -169,6 +183,7 @@ export const AddPaymentDialog = ({
           payment_date: formatInTimeZone(data.payment_date, 'America/New_York', 'yyyy-MM-dd'),
           method: data.method,
           payment_type: 'Payment', // All customer payments are generic
+          tenant_id: tenant?.id,
         })
         .select()
         .single();
@@ -183,14 +198,22 @@ export const AddPaymentDialog = ({
       if (applyError) {
         console.error('Payment application error:', applyError);
         // Delete the payment record since processing failed
-        await supabase.from('payments').delete().eq('id', payment.id);
-        
+        let deleteQuery = supabase.from('payments').delete().eq('id', payment.id);
+        if (tenant?.id) {
+          deleteQuery = deleteQuery.eq('tenant_id', tenant.id);
+        }
+        await deleteQuery;
+
         throw new Error(applyError.message || 'Payment processing failed');
       }
 
       if (!applyResult?.ok) {
         // Delete the payment record since processing failed
-        await supabase.from('payments').delete().eq('id', payment.id);
+        let deleteQuery = supabase.from('payments').delete().eq('id', payment.id);
+        if (tenant?.id) {
+          deleteQuery = deleteQuery.eq('tenant_id', tenant.id);
+        }
+        await deleteQuery;
         throw new Error(applyResult?.error || applyResult?.detail || 'Payment processing failed');
       }
 

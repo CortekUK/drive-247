@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useTheme } from 'next-themes';
 import { useTenantBranding } from './use-tenant-branding';
 
@@ -114,9 +114,16 @@ function generateColorVariants(hex: string) {
 export function useDynamicTheme() {
   const { branding } = useTenantBranding();
   const { resolvedTheme } = useTheme();
+  const [mounted, setMounted] = useState(false);
+
+  // Wait for client-side mount to avoid hydration mismatch
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   useEffect(() => {
-    if (!branding) return;
+    // Only run on client after mount to avoid hydration mismatch
+    if (!mounted || !branding) return;
 
     const root = document.documentElement;
     const isDarkMode = resolvedTheme === 'dark';
@@ -295,9 +302,9 @@ export function useDynamicTheme() {
       updateMetaTag('twitter:image', branding.og_image_url);
     }
 
-  }, [branding, resolvedTheme]);
+  }, [branding, resolvedTheme, mounted]);
 
-  return { branding };
+  return { branding, mounted };
 }
 
 function updateMetaTag(property: string, content: string) {

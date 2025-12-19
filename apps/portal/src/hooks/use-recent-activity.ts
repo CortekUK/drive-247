@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { formatDistanceToNow } from "date-fns";
+import { useTenant } from "@/contexts/TenantContext";
 
 export interface ActivityItem {
   id: string;
@@ -14,13 +15,15 @@ export interface ActivityItem {
 }
 
 export const useRecentActivity = () => {
+  const { tenant } = useTenant();
+
   return useQuery({
-    queryKey: ["recent-activity"],
+    queryKey: ["recent-activity", tenant?.id],
     queryFn: async () => {
       const activities: ActivityItem[] = [];
 
       // Fetch recent payments
-      const { data: payments } = await supabase
+      let paymentsQuery = supabase
         .from("payments")
         .select(`
           id,
@@ -33,6 +36,12 @@ export const useRecentActivity = () => {
         `)
         .order("created_at", { ascending: false })
         .limit(5);
+
+      if (tenant?.id) {
+        paymentsQuery = paymentsQuery.eq("tenant_id", tenant.id);
+      }
+
+      const { data: payments } = await paymentsQuery;
 
       if (payments) {
         payments.forEach((payment) => {
@@ -50,7 +59,7 @@ export const useRecentActivity = () => {
       }
 
       // Fetch recent rentals
-      const { data: rentals } = await supabase
+      let rentalsQuery = supabase
         .from("rentals")
         .select(`
           id,
@@ -61,6 +70,12 @@ export const useRecentActivity = () => {
         `)
         .order("created_at", { ascending: false })
         .limit(5);
+
+      if (tenant?.id) {
+        rentalsQuery = rentalsQuery.eq("tenant_id", tenant.id);
+      }
+
+      const { data: rentals } = await rentalsQuery;
 
       if (rentals) {
         rentals.forEach((rental) => {
@@ -77,11 +92,17 @@ export const useRecentActivity = () => {
       }
 
       // Fetch recent vehicles
-      const { data: vehicles } = await supabase
+      let vehiclesQuery = supabase
         .from("vehicles")
         .select("id, reg, make, model, status, created_at")
         .order("created_at", { ascending: false })
         .limit(3);
+
+      if (tenant?.id) {
+        vehiclesQuery = vehiclesQuery.eq("tenant_id", tenant.id);
+      }
+
+      const { data: vehicles } = await vehiclesQuery;
 
       if (vehicles) {
         vehicles.forEach((vehicle) => {
@@ -97,11 +118,17 @@ export const useRecentActivity = () => {
       }
 
       // Fetch recent audit logs
-      const { data: auditLogs } = await supabase
+      let auditLogsQuery = supabase
         .from("audit_logs")
         .select("id, action, created_at, details")
         .order("created_at", { ascending: false })
         .limit(3);
+
+      if (tenant?.id) {
+        auditLogsQuery = auditLogsQuery.eq("tenant_id", tenant.id);
+      }
+
+      const { data: auditLogs } = await auditLogsQuery;
 
       if (auditLogs) {
         auditLogs.forEach((log) => {

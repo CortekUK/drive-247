@@ -1,5 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { useTenant } from "@/contexts/TenantContext";
 
 export interface PendingBooking {
   id: string;
@@ -37,12 +38,14 @@ export interface PendingBooking {
 }
 
 export const usePendingBookings = () => {
+  const { tenant } = useTenant();
+
   return useQuery({
-    queryKey: ["pending-bookings"],
+    queryKey: ["pending-bookings", tenant?.id],
     queryFn: async (): Promise<PendingBooking[]> => {
       console.log("Fetching pending bookings...");
 
-      const { data, error } = await supabase
+      let query = supabase
         .from("payments")
         .select(
           `
@@ -81,8 +84,13 @@ export const usePendingBookings = () => {
         `
         )
         .eq("booking_source", "website")
-        .eq("capture_status", "requires_capture")
-        .order("created_at", { ascending: false });
+        .eq("capture_status", "requires_capture");
+
+      if (tenant?.id) {
+        query = query.eq("tenant_id", tenant.id);
+      }
+
+      const { data, error } = await query.order("created_at", { ascending: false });
 
       if (error) {
         console.error("Error fetching pending bookings:", error);
@@ -98,14 +106,22 @@ export const usePendingBookings = () => {
 };
 
 export const usePendingBookingsCount = () => {
+  const { tenant } = useTenant();
+
   return useQuery({
-    queryKey: ["pending-bookings-count"],
+    queryKey: ["pending-bookings-count", tenant?.id],
     queryFn: async (): Promise<number> => {
-      const { count, error } = await supabase
+      let query = supabase
         .from("payments")
         .select("id", { count: "exact", head: true })
         .eq("booking_source", "website")
         .eq("capture_status", "requires_capture");
+
+      if (tenant?.id) {
+        query = query.eq("tenant_id", tenant.id);
+      }
+
+      const { count, error } = await query;
 
       if (error) {
         console.error("Error fetching pending bookings count:", error);

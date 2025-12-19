@@ -9,9 +9,10 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { FileText, ArrowLeft, PoundSterling, Plus, X, Send, Shield, Download, Ban, Check } from "lucide-react";
+import { FileText, ArrowLeft, PoundSterling, Plus, X, Send, Download, Ban, Check, AlertTriangle, Loader2 } from "lucide-react";
 import { AddPaymentDialog } from "@/components/shared/dialogs/add-payment-dialog";
 import { useToast } from "@/hooks/use-toast";
+import { useTenant } from "@/contexts/TenantContext";
 import { useRentalTotals } from "@/hooks/use-rental-ledger-data";
 import { useRentalInitialFee } from "@/hooks/use-rental-initial-fee";
 import { RentalLedger } from "@/components/rentals/rental-ledger";
@@ -40,6 +41,7 @@ const RentalDetail = () => {
   const router = useRouter();
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const { tenant } = useTenant();
   const [showAddPayment, setShowAddPayment] = useState(false);
   const [sendingDocuSign, setSendingDocuSign] = useState(false);
   const [showCancelDialog, setShowCancelDialog] = useState(false);
@@ -98,404 +100,6 @@ const RentalDetail = () => {
 
       if (error && error.code !== 'PGRST116') throw error;
       return data;
-    },
-    enabled: !!id,
-  });
-
-  // Function to download protection plan details as PDF
-  const downloadProtectionDetails = () => {
-    if (!protectionSelection || !protectionSelection.protection_plans) return;
-
-    const plan = protectionSelection.protection_plans;
-
-    // Create a hidden printable div
-    const printWindow = window.open('', '_blank');
-    if (!printWindow) {
-      toast({
-        title: "Error",
-        description: "Could not open print window. Please check your popup blocker.",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    const htmlContent = `
-      <!DOCTYPE html>
-      <html>
-        <head>
-          <title>Protection Coverage - ${rental.vehicles?.reg}</title>
-          <meta charset="UTF-8">
-          <style>
-            @page {
-              margin: 15mm;
-              size: A4;
-            }
-            * {
-              margin: 0;
-              padding: 0;
-              box-sizing: border-box;
-            }
-            body {
-              font-family: 'Segoe UI', 'Helvetica Neue', Arial, sans-serif;
-              line-height: 1.6;
-              color: #1a1a1a;
-              background: white;
-            }
-            .document {
-              max-width: 210mm;
-              margin: 0 auto;
-              background: white;
-            }
-            .header {
-              background: linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 100%);
-              color: white;
-              padding: 40px;
-              margin-bottom: 30px;
-            }
-            .header h1 {
-              font-size: 28px;
-              font-weight: 600;
-              letter-spacing: -0.5px;
-              margin-bottom: 8px;
-            }
-            .header .subtitle {
-              font-size: 14px;
-              color: #C5A572;
-              font-weight: 500;
-              text-transform: uppercase;
-              letter-spacing: 1px;
-            }
-            .content {
-              padding: 0 40px 40px;
-            }
-            .info-card {
-              background: #f8f9fa;
-              border-left: 4px solid #C5A572;
-              padding: 24px;
-              margin-bottom: 30px;
-              box-shadow: 0 1px 3px rgba(0,0,0,0.05);
-            }
-            .info-card h2 {
-              font-size: 16px;
-              font-weight: 600;
-              color: #1a1a1a;
-              margin-bottom: 16px;
-              text-transform: uppercase;
-              letter-spacing: 0.5px;
-            }
-            .info-row {
-              display: flex;
-              justify-content: space-between;
-              padding: 12px 0;
-              border-bottom: 1px solid #e9ecef;
-            }
-            .info-row:last-child {
-              border-bottom: none;
-            }
-            .info-label {
-              font-size: 13px;
-              color: #6c757d;
-              font-weight: 500;
-              text-transform: uppercase;
-              letter-spacing: 0.3px;
-            }
-            .info-value {
-              font-size: 15px;
-              color: #1a1a1a;
-              font-weight: 600;
-            }
-            .section {
-              margin-bottom: 35px;
-            }
-            .section-title {
-              font-size: 18px;
-              font-weight: 600;
-              color: #1a1a1a;
-              margin-bottom: 20px;
-              padding-bottom: 10px;
-              border-bottom: 2px solid #e9ecef;
-              text-transform: uppercase;
-              letter-spacing: 0.5px;
-            }
-            .pricing-grid {
-              display: grid;
-              grid-template-columns: repeat(3, 1fr);
-              gap: 20px;
-              margin-bottom: 30px;
-            }
-            .pricing-card {
-              background: white;
-              border: 1px solid #e9ecef;
-              padding: 20px;
-              text-align: center;
-              box-shadow: 0 2px 4px rgba(0,0,0,0.04);
-            }
-            .pricing-card .label {
-              font-size: 11px;
-              color: #6c757d;
-              font-weight: 600;
-              text-transform: uppercase;
-              letter-spacing: 0.5px;
-              margin-bottom: 8px;
-            }
-            .pricing-card .value {
-              font-size: 24px;
-              font-weight: 700;
-              color: #C5A572;
-              line-height: 1;
-            }
-            .pricing-card .subvalue {
-              font-size: 12px;
-              color: #6c757d;
-              margin-top: 4px;
-            }
-            .coverage-list {
-              display: grid;
-              grid-template-columns: repeat(2, 1fr);
-              gap: 12px;
-              list-style: none;
-            }
-            .coverage-list li {
-              padding: 12px 16px;
-              background: #f8f9fa;
-              border-left: 3px solid #28a745;
-              font-size: 14px;
-              color: #1a1a1a;
-            }
-            .exclusions-list {
-              display: grid;
-              grid-template-columns: repeat(2, 1fr);
-              gap: 12px;
-              list-style: none;
-            }
-            .exclusions-list li {
-              padding: 12px 16px;
-              background: #fff5f5;
-              border-left: 3px solid #dc3545;
-              font-size: 14px;
-              color: #1a1a1a;
-            }
-            .badge {
-              display: inline-block;
-              padding: 6px 14px;
-              border-radius: 4px;
-              font-size: 12px;
-              font-weight: 600;
-              text-transform: uppercase;
-              letter-spacing: 0.5px;
-              margin: 4px 4px 4px 0;
-            }
-            .badge-tier {
-              background: #e3f2fd;
-              color: #1976d2;
-            }
-            .badge-zero {
-              background: #28a745;
-              color: white;
-            }
-            .highlight-box {
-              background: linear-gradient(135deg, #C5A572 0%, #d4b589 100%);
-              color: white;
-              padding: 24px;
-              margin: 30px 0;
-              box-shadow: 0 4px 12px rgba(197, 165, 114, 0.2);
-            }
-            .highlight-box .amount {
-              font-size: 36px;
-              font-weight: 700;
-              margin-bottom: 8px;
-            }
-            .highlight-box .description {
-              font-size: 14px;
-              opacity: 0.95;
-            }
-            .footer {
-              margin-top: 50px;
-              padding-top: 24px;
-              border-top: 2px solid #e9ecef;
-            }
-            .footer-grid {
-              display: grid;
-              grid-template-columns: repeat(2, 1fr);
-              gap: 20px;
-            }
-            .footer-item {
-              font-size: 12px;
-            }
-            .footer-item .label {
-              color: #6c757d;
-              font-weight: 600;
-              text-transform: uppercase;
-              letter-spacing: 0.3px;
-              margin-bottom: 4px;
-            }
-            .footer-item .value {
-              color: #1a1a1a;
-              font-weight: 500;
-            }
-            @media print {
-              body {
-                background: white;
-              }
-            }
-          </style>
-        </head>
-        <body>
-          <div class="document">
-            <div class="header">
-              <h1>Protection Coverage Certificate</h1>
-              <div class="subtitle">Vehicle Protection Plan Details</div>
-            </div>
-
-            <div class="content">
-              <div class="info-card">
-                <h2>Plan Overview</h2>
-                <div class="info-row">
-                  <span class="info-label">Plan Name</span>
-                  <span class="info-value">${plan.display_name}</span>
-                </div>
-                <div class="info-row">
-                  <span class="info-label">Coverage Tier</span>
-                  <span class="info-value">
-                    <span class="badge badge-tier">${plan.tier}</span>
-                    ${plan.deductible_amount === 0 ? '<span class="badge badge-zero">Zero Deductible</span>' : ''}
-                  </span>
-                </div>
-                <div class="info-row">
-                  <span class="info-label">Description</span>
-                  <span class="info-value">${plan.description}</span>
-                </div>
-              </div>
-
-              <div class="highlight-box">
-                <div class="amount">$${Number(protectionSelection.total_cost).toLocaleString()}</div>
-                <div class="description">Total Protection Cost — $${Number(protectionSelection.daily_rate).toLocaleString()}/day × ${protectionSelection.total_days} days</div>
-              </div>
-
-              <div class="section">
-                <div class="section-title">Financial Details</div>
-                <div class="pricing-grid">
-                  <div class="pricing-card">
-                    <div class="label">Daily Rate</div>
-                    <div class="value">$${Number(protectionSelection.daily_rate).toLocaleString()}</div>
-                  </div>
-                  <div class="pricing-card">
-                    <div class="label">Coverage Period</div>
-                    <div class="value">${protectionSelection.total_days}</div>
-                    <div class="subvalue">days</div>
-                  </div>
-                  <div class="pricing-card">
-                    <div class="label">Deductible</div>
-                    <div class="value">${plan.deductible_amount === 0 ? '$0' : `$${plan.deductible_amount.toLocaleString()}`}</div>
-                  </div>
-                  ${plan.max_coverage_amount ? `
-                  <div class="pricing-card">
-                    <div class="label">Max Coverage</div>
-                    <div class="value">$${plan.max_coverage_amount.toLocaleString()}</div>
-                  </div>
-                  ` : ''}
-                </div>
-              </div>
-
-              ${plan.features && Array.isArray(plan.features) && plan.features.length > 0 ? `
-              <div class="section">
-                <div class="section-title">Coverage Includes</div>
-                <ul class="coverage-list">
-                  ${plan.features.map((f: string) => `<li>${f}</li>`).join('')}
-                </ul>
-              </div>
-              ` : ''}
-
-              ${plan.exclusions && Array.isArray(plan.exclusions) && plan.exclusions.length > 0 ? `
-              <div class="section">
-                <div class="section-title">Coverage Exclusions</div>
-                <ul class="exclusions-list">
-                  ${plan.exclusions.map((e: string) => `<li>${e}</li>`).join('')}
-                </ul>
-              </div>
-              ` : ''}
-
-              <div class="footer">
-                <div class="footer-grid">
-                  <div class="footer-item">
-                    <div class="label">Document Generated</div>
-                    <div class="value">${new Date().toLocaleString('en-US', { dateStyle: 'long', timeStyle: 'short' })}</div>
-                  </div>
-                  <div class="footer-item">
-                    <div class="label">Rental Reference</div>
-                    <div class="value">${id}</div>
-                  </div>
-                  <div class="footer-item">
-                    <div class="label">Customer Name</div>
-                    <div class="value">${rental.customers?.name}</div>
-                  </div>
-                  <div class="footer-item">
-                    <div class="label">Vehicle</div>
-                    <div class="value">${rental.vehicles?.reg} — ${rental.vehicles?.make} ${rental.vehicles?.model}</div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </body>
-      </html>
-    `;
-
-    printWindow.document.write(htmlContent);
-    printWindow.document.close();
-
-    // Wait for content to load, then trigger print dialog
-    printWindow.onload = () => {
-      setTimeout(() => {
-        printWindow.print();
-        // Close window after printing/saving
-        setTimeout(() => printWindow.close(), 1000);
-      }, 250);
-    };
-
-    toast({
-      title: "Print Dialog Opened",
-      description: "Save as PDF from the print dialog",
-    });
-  };
-
-  // Fetch protection plan selection for this rental
-  const { data: protectionSelection } = useQuery({
-    queryKey: ["rental-protection", id],
-    queryFn: async () => {
-      console.log('Fetching protection plan for rental:', id);
-
-      const { data, error } = await supabase
-        .from("rental_protection_selections" as any)
-        .select(`
-          *,
-          protection_plans (
-            id,
-            display_name,
-            description,
-            deductible_amount,
-            max_coverage_amount,
-            tier,
-            color_theme,
-            features,
-            exclusions
-          )
-        `)
-        .eq("rental_id", id)
-        .single();
-
-      if (error) {
-        console.log('Protection plan query error:', error);
-        // If no protection plan, return null (not an error)
-        if (error.code === 'PGRST116') {
-          console.log('No protection plan found for this rental');
-          return null;
-        }
-        throw error;
-      }
-
-      console.log('Protection plan data fetched:', data);
-      return data as any;
     },
     enabled: !!id,
   });
@@ -646,15 +250,27 @@ const RentalDetail = () => {
                 variant="outline"
                 onClick={async () => {
                   try {
-                    await supabase
+                    let closeRentalQuery = supabase
                       .from("rentals")
                       .update({ status: "Closed" })
                       .eq("id", id);
 
-                    await supabase
+                    if (tenant?.id) {
+                      closeRentalQuery = closeRentalQuery.eq("tenant_id", tenant.id);
+                    }
+
+                    await closeRentalQuery;
+
+                    let updateVehicleQuery = supabase
                       .from("vehicles")
                       .update({ status: "Available" })
                       .eq("id", rental.vehicles?.id);
+
+                    if (tenant?.id) {
+                      updateVehicleQuery = updateVehicleQuery.eq("tenant_id", tenant.id);
+                    }
+
+                    await updateVehicleQuery;
 
                     toast({
                       title: "Rental Closed",
@@ -983,123 +599,6 @@ const RentalDetail = () => {
                   </div>
                 );
               })}
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Protection Plan Details */}
-      {protectionSelection && protectionSelection.protection_plans && (
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0">
-            <CardTitle className="flex items-center gap-2">
-              <Shield className="h-5 w-5 text-[#C5A572]" />
-              Protection Coverage
-            </CardTitle>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={downloadProtectionDetails}
-            >
-              <Download className="h-4 w-4 mr-2" />
-              Download PDF
-            </Button>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              {/* Plan Header */}
-              <div className="flex items-start justify-between pb-4 border-b">
-                <div className="flex items-start gap-4">
-                  <div
-                    className="w-12 h-12 rounded-lg flex items-center justify-center"
-                    style={{ backgroundColor: protectionSelection.protection_plans.color_theme + '20' || '#C5A57220' }}
-                  >
-                    <Shield
-                      className="w-6 h-6"
-                      style={{ color: protectionSelection.protection_plans.color_theme || '#C5A572' }}
-                    />
-                  </div>
-                  <div>
-                    <h3 className="font-semibold text-lg">{protectionSelection.protection_plans.display_name}</h3>
-                    <p className="text-sm text-muted-foreground">{protectionSelection.protection_plans.description}</p>
-                    <div className="flex items-center gap-2 mt-2">
-                      <Badge variant="outline">{protectionSelection.protection_plans.tier}</Badge>
-                      {protectionSelection.protection_plans.deductible_amount === 0 && (
-                        <Badge className="bg-green-600">ZERO DEDUCTIBLE</Badge>
-                      )}
-                    </div>
-                  </div>
-                </div>
-                <div className="text-right">
-                  <div className="text-2xl font-bold text-[#C5A572]">
-                    ${Number(protectionSelection.total_cost).toLocaleString()}
-                  </div>
-                  <p className="text-sm text-muted-foreground">
-                    ${Number(protectionSelection.daily_rate).toLocaleString()}/day × {protectionSelection.total_days} days
-                  </p>
-                </div>
-              </div>
-
-              {/* Coverage Details */}
-              <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-                <div>
-                  <p className="text-sm text-muted-foreground">Daily Rate</p>
-                  <p className="font-medium">${Number(protectionSelection.daily_rate).toLocaleString()}</p>
-                </div>
-                <div>
-                  <p className="text-sm text-muted-foreground">Total Days</p>
-                  <p className="font-medium">{protectionSelection.total_days} days</p>
-                </div>
-                <div>
-                  <p className="text-sm text-muted-foreground">Total Cost</p>
-                  <p className="font-medium text-[#C5A572]">${Number(protectionSelection.total_cost).toLocaleString()}</p>
-                </div>
-                <div>
-                  <p className="text-sm text-muted-foreground">Deductible</p>
-                  <p className="font-medium">
-                    {protectionSelection.protection_plans.deductible_amount === 0
-                      ? <Badge className="bg-green-600">$0</Badge>
-                      : `$${protectionSelection.protection_plans.deductible_amount.toLocaleString()}`
-                    }
-                  </p>
-                </div>
-                {protectionSelection.protection_plans.max_coverage_amount && (
-                  <div>
-                    <p className="text-sm text-muted-foreground">Max Coverage</p>
-                    <p className="font-medium">${protectionSelection.protection_plans.max_coverage_amount.toLocaleString()}</p>
-                  </div>
-                )}
-              </div>
-
-              {/* Features */}
-              {protectionSelection.protection_plans.features && Array.isArray(protectionSelection.protection_plans.features) && protectionSelection.protection_plans.features.length > 0 && (
-                <div className="pt-4 border-t">
-                  <h4 className="font-semibold text-sm mb-3">Coverage Includes:</h4>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                    {protectionSelection.protection_plans.features.map((feature: string, index: number) => (
-                      <div key={index} className="flex items-start gap-2 text-sm">
-                        <span className="text-green-600">✓</span>
-                        <span>{feature}</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* Exclusions */}
-              {protectionSelection.protection_plans.exclusions && Array.isArray(protectionSelection.protection_plans.exclusions) && protectionSelection.protection_plans.exclusions.length > 0 && (
-                <div className="pt-4 border-t">
-                  <h4 className="font-semibold text-sm mb-3 text-destructive">Not Covered:</h4>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                    {protectionSelection.protection_plans.exclusions.map((exclusion: string, index: number) => (
-                      <div key={index} className="flex items-start gap-2 text-sm text-muted-foreground">
-                        <span className="text-destructive">×</span>
-                        <span>{exclusion}</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
             </div>
           </CardContent>
         </Card>

@@ -13,6 +13,7 @@ interface InsurancePolicy {
   provider: string | null;
   expiry_date: string;
   status: string;
+  tenant_id: string;
   customers: {
     name: string;
     email: string | null;
@@ -40,11 +41,11 @@ Deno.serve(async (req) => {
 
     console.log('🔄 Starting insurance reminders generation...');
 
-    // Get all active insurance policies
+    // Get all active insurance policies (including tenant_id)
     const { data: policies, error: policiesError } = await supabaseClient
       .from('insurance_policies')
       .select(`
-        *,
+        *, tenant_id,
         customers!inner(name, email, phone, whatsapp_opt_in),
         vehicles(reg, make, model)
       `)
@@ -86,6 +87,7 @@ Deno.serve(async (req) => {
           status: 'Delivered',
           delivered_at: new Date().toISOString(),
           delivered_to: 'in_app',
+          tenant_id: policy.tenant_id
         })
         .select()
         .single();
@@ -124,6 +126,7 @@ Deno.serve(async (req) => {
               status: 'Delivered',
               delivered_at: new Date().toISOString(),
               delivered_to: 'in_app',
+              tenant_id: policy.tenant_id
             })
             .select()
             .single();

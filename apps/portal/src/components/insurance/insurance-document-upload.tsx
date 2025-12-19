@@ -2,6 +2,7 @@ import { useState, useRef } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { useTenant } from "@/contexts/TenantContext";
 import { Button } from "@/components/ui/button";
 import {
   Select,
@@ -42,6 +43,7 @@ export function InsuranceDocumentUpload({ policyId, documents }: InsuranceDocume
   const [selectedDocType, setSelectedDocType] = useState<string>("");
   const fileInputRef = useRef<HTMLInputElement>(null);
   const queryClient = useQueryClient();
+  const { tenant } = useTenant();
 
   const uploadMutation = useMutation({
     mutationFn: async ({ file, docType }: { file: File; docType: string }) => {
@@ -68,6 +70,7 @@ export function InsuranceDocumentUpload({ policyId, documents }: InsuranceDocume
           doc_type: docType,
           file_url: publicUrl,
           file_name: file.name,
+          tenant_id: tenant?.id,
         })
         .select()
         .single();
@@ -91,10 +94,16 @@ export function InsuranceDocumentUpload({ policyId, documents }: InsuranceDocume
 
   const deleteMutation = useMutation({
     mutationFn: async (documentId: string) => {
-      const { error } = await supabase
+      let query = supabase
         .from('insurance_documents')
         .delete()
         .eq('id', documentId);
+
+      if (tenant?.id) {
+        query = query.eq('tenant_id', tenant.id);
+      }
+
+      const { error } = await query;
 
       if (error) throw error;
     },

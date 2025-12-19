@@ -37,14 +37,23 @@ function extractSubdomain(hostname: string): string | null {
 
   // Handle localhost: "acme.localhost" -> "acme"
   if (parts.length >= 2 && parts[parts.length - 1] === 'localhost') {
-    return parts[0] !== 'localhost' ? parts[0] : null;
+    const subdomain = parts[0];
+    if (subdomain === 'localhost') {
+      return null;
+    }
+    return subdomain;
   }
 
   // Handle production: "acme.drive-247.com" -> "acme"
   // Must have at least 3 parts (subdomain.domain.tld)
-  // Exclude common non-tenant subdomains like "www" and "admin"
-  if (parts.length >= 3 && parts[0] !== 'www' && parts[0] !== 'admin') {
-    return parts[0];
+  // Exclude reserved subdomains that have their own Vercel projects
+  const reservedSubdomains = ['www', 'admin', 'portal', 'api', 'app'];
+  if (parts.length >= 3) {
+    const subdomain = parts[0];
+    if (reservedSubdomains.includes(subdomain)) {
+      return null;
+    }
+    return subdomain;
   }
 
   return null;

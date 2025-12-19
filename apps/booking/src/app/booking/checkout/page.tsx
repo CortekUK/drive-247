@@ -15,6 +15,7 @@ import Footer from "@/components/Footer";
 import SEO from "@/components/SEO";
 import { z } from "zod";
 import BookingConfirmation from "@/components/BookingConfirmation";
+import { useTenant } from "@/contexts/TenantContext";
 
 const checkoutSchema = z.object({
   customerName: z.string().min(2, "Name must be at least 2 characters"),
@@ -34,6 +35,7 @@ interface PricingExtra {
 const BookingCheckoutContent = () => {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const { tenant } = useTenant();
   const [loading, setLoading] = useState(false);
   const [extras, setExtras] = useState<PricingExtra[]>([]);
   const [selectedExtras, setSelectedExtras] = useState<string[]>([]);
@@ -70,22 +72,33 @@ const BookingCheckoutContent = () => {
 
   const loadData = async () => {
     try {
-      // Load vehicle details
-      const { data: vehicle, error: vError } = await supabase
+      // Load vehicle details (filtered by tenant)
+      let vehicleQuery = supabase
         .from("vehicles")
         .select("*")
-        .eq("id", vehicleId)
-        .single();
-      
+        .eq("id", vehicleId);
+
+      if (tenant?.id) {
+        vehicleQuery = vehicleQuery.eq("tenant_id", tenant.id);
+      }
+
+      const { data: vehicle, error: vError } = await vehicleQuery.single();
+
       if (vError) throw vError;
       setVehicleDetails(vehicle);
 
-      // Load extras
-      const { data: extrasData, error: eError } = await supabase
+      // Load extras (filtered by tenant)
+      let extrasQuery = supabase
         .from("pricing_extras")
         .select("*")
         .eq("is_active", true);
-      
+
+      if (tenant?.id) {
+        extrasQuery = extrasQuery.eq("tenant_id", tenant.id);
+      }
+
+      const { data: extrasData, error: eError } = await extrasQuery;
+
       if (eError) throw eError;
       setExtras(extrasData || []);
     } catch (error: any) {
@@ -104,9 +117,9 @@ const BookingCheckoutContent = () => {
   const calculateVehiclePrice = () => {
     if (!vehicleDetails) return 0;
     const days = calculateRentalDays();
-    if (days >= 28) return vehicleDetails.monthly_rate;
-    if (days >= 7) return Math.floor((days / 7) * vehicleDetails.weekly_rate);
-    return days * vehicleDetails.daily_rate;
+    if (days >= 28) return vehicleDetails.monthly_rent || 0;
+    if (days >= 7) return Math.floor((days / 7) * (vehicleDetails.weekly_rent || 0));
+    return days * (vehicleDetails.daily_rent || 50); // Fallback to $50/day
   };
 
   const calculateExtrasTotal = () => {
@@ -164,13 +177,18 @@ const BookingCheckoutContent = () => {
       const context = JSON.parse(bookingContext);
       const { customerName, customerEmail, customerPhone, customerType } = context;
 
-      // Step 1: Create or find customer
+      // Step 1: Create or find customer (filtered by tenant)
       let customer;
-      const { data: existingCustomer, error: findError } = await supabase
+      let customerQuery = supabase
         .from("customers")
         .select("*")
-        .eq("email", customerEmail)
-        .maybeSingle();
+        .eq("email", customerEmail);
+
+      if (tenant?.id) {
+        customerQuery = customerQuery.eq("tenant_id", tenant.id);
+      }
+
+      const { data: existingCustomer, error: findError } = await customerQuery.maybeSingle();
 
       if (existingCustomer) {
         customer = existingCustomer;
@@ -183,8 +201,9 @@ const BookingCheckoutContent = () => {
             name: customerName,
             email: customerEmail,
             phone: customerPhone,
-            type: customerType,
-            status: "Active"
+            customer_type: customerType || "Individual",
+            status: "Active",
+            tenant_id: tenant?.id
           })
           .select()
           .single();
@@ -194,7 +213,7 @@ const BookingCheckoutContent = () => {
       }
 
       // Step 2: Check if Individual customer already has active rental
-      if (customer.type === "Individual") {
+      if (customer.customer_type === "Individual") {
         const { data: activeRentals, error: checkError } = await supabase
           .from("rentals")
           .select("id")
@@ -209,9 +228,12 @@ const BookingCheckoutContent = () => {
 
       // Step 3: Calculate monthly amount
       const days = calculateRentalDays();
-      const monthlyAmount = vehicleDetails.monthly_rate || calculateVehiclePrice();
+      const monthlyAmount = vehicleDetails.monthly_rent || calculateVehiclePrice();
 
       // Step 4: Create rental
+      // Determine rental period type based on duration
+      const rentalPeriodType = days >= 28 ? "Monthly" : days >= 7 ? "Weekly" : "Daily";
+
       const { data: rental, error: rentalError } = await supabase
         .from("rentals")
         .insert({
@@ -220,18 +242,26 @@ const BookingCheckoutContent = () => {
           start_date: pickupDate,
           end_date: returnDate,
           monthly_amount: monthlyAmount,
-          status: "Active"
+          rental_period_type: rentalPeriodType,
+          status: "Pending",  // Pending until payment confirmed
+          tenant_id: tenant?.id
         })
         .select()
         .single();
 
       if (rentalError) throw rentalError;
 
-      // Step 5: Update vehicle status to Rented
-      const { error: vehicleError } = await supabase
+      // Step 5: Update vehicle status to Rented (filtered by tenant)
+      let vehicleUpdateQuery = supabase
         .from("vehicles")
         .update({ status: "Rented" })
         .eq("id", vehicleId);
+
+      if (tenant?.id) {
+        vehicleUpdateQuery = vehicleUpdateQuery.eq("tenant_id", tenant.id);
+      }
+
+      const { error: vehicleError } = await vehicleUpdateQuery;
 
       if (vehicleError) {
         console.error("Failed to update vehicle status:", vehicleError);

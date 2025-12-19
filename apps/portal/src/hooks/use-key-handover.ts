@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
+import { useTenant } from "@/contexts/TenantContext";
 
 export type HandoverType = "giving" | "receiving";
 
@@ -27,6 +28,7 @@ export interface KeyHandover {
 
 export function useKeyHandover(rentalId: string | undefined) {
   const { toast } = useToast();
+  const { tenant } = useTenant();
   const queryClient = useQueryClient();
 
   // Fetch handovers for this rental
@@ -76,6 +78,7 @@ export function useKeyHandover(rentalId: string | undefined) {
         .insert({
           rental_id: rentalId,
           handover_type: type,
+          tenant_id: tenant?.id,
         })
         .select()
         .single();
@@ -129,6 +132,7 @@ export function useKeyHandover(rentalId: string | undefined) {
           file_url: urlData.publicUrl,
           file_name: file.name,
           caption: caption || null,
+          tenant_id: tenant?.id,
         })
         .select()
         .single();
@@ -163,10 +167,16 @@ export function useKeyHandover(rentalId: string | undefined) {
       if (storageError) console.warn("Storage delete error:", storageError);
 
       // Delete from database
-      const { error } = await supabase
+      let deleteQuery = supabase
         .from("rental_handover_photos")
         .delete()
         .eq("id", photo.id);
+
+      if (tenant?.id) {
+        deleteQuery = deleteQuery.eq("tenant_id", tenant.id);
+      }
+
+      const { error } = await deleteQuery;
 
       if (error) throw error;
     },

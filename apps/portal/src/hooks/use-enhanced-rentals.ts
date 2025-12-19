@@ -134,16 +134,6 @@ export const useEnhancedRentals = (filters: RentalFilters = {}) => {
         initialPayments?.map(p => [p.rental_id, p.amount]) || []
       );
 
-      // Get protection plans for these rentals
-      const { data: protectionSelections } = await supabase
-        .from("rental_protection_selections" as any)
-        .select("rental_id, total_cost")
-        .in("rental_id", rentalIds);
-
-      const protectionCostMap = new Map(
-        protectionSelections?.map((p: any) => [p.rental_id, p.total_cost]) || []
-      );
-
       // Transform and filter data
       const enhancedRentals: EnhancedRental[] = (rentalsData || [])
         .map((rental: any) => {
@@ -151,8 +141,7 @@ export const useEnhancedRentals = (filters: RentalFilters = {}) => {
           const durationMonths = calculateDuration(rental.start_date, rental.end_date, periodType);
           const computedStatus = getRentalStatus(rental.start_date, rental.end_date, rental.status);
           const initialPaymentAmount = initialPaymentMap.get(rental.id) || null;
-          const protectionCost = protectionCostMap.get(rental.id) || 0;
-          const totalAmount = rental.monthly_amount + protectionCost;
+          const totalAmount = rental.monthly_amount;
 
           return {
             id: rental.id,

@@ -2,6 +2,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { useAuth } from "@/stores/auth-store";
+import { useTenant } from "@/contexts/TenantContext";
 
 export interface RejectCustomerRequest {
   customerId: string;
@@ -17,23 +18,29 @@ export interface ApproveCustomerRequest {
 export function useCustomerStatusActions() {
   const queryClient = useQueryClient();
   const { appUser } = useAuth();
+  const { tenant } = useTenant();
 
   // Reject a customer
   const rejectCustomer = useMutation({
     mutationFn: async ({ customerId, reason }: RejectCustomerRequest) => {
       // Get current customer status for audit log
-      const { data: customer, error: fetchError } = await supabase
+      let fetchQuery = supabase
         .from("customers")
         .select("status, name")
-        .eq("id", customerId)
-        .single();
+        .eq("id", customerId);
+
+      if (tenant?.id) {
+        fetchQuery = fetchQuery.eq("tenant_id", tenant.id);
+      }
+
+      const { data: customer, error: fetchError } = await fetchQuery.single();
 
       if (fetchError) throw fetchError;
 
       const previousStatus = customer?.status;
 
       // Update customer status to Rejected
-      const { error: updateError } = await supabase
+      let updateQuery = supabase
         .from("customers")
         .update({
           status: "Rejected",
@@ -42,6 +49,12 @@ export function useCustomerStatusActions() {
           rejected_by: appUser?.id || null,
         })
         .eq("id", customerId);
+
+      if (tenant?.id) {
+        updateQuery = updateQuery.eq("tenant_id", tenant.id);
+      }
+
+      const { error: updateError } = await updateQuery;
 
       if (updateError) throw updateError;
 
@@ -57,6 +70,7 @@ export function useCustomerStatusActions() {
           new_status: "Rejected",
           reason: reason,
         },
+        tenant_id: tenant?.id,
       });
 
       if (auditError) {
@@ -80,11 +94,16 @@ export function useCustomerStatusActions() {
   const approveCustomer = useMutation({
     mutationFn: async ({ customerId, notes }: ApproveCustomerRequest) => {
       // Get current customer status for audit log
-      const { data: customer, error: fetchError } = await supabase
+      let fetchQuery = supabase
         .from("customers")
         .select("status, name, rejection_reason")
-        .eq("id", customerId)
-        .single();
+        .eq("id", customerId);
+
+      if (tenant?.id) {
+        fetchQuery = fetchQuery.eq("tenant_id", tenant.id);
+      }
+
+      const { data: customer, error: fetchError } = await fetchQuery.single();
 
       if (fetchError) throw fetchError;
 
@@ -92,7 +111,7 @@ export function useCustomerStatusActions() {
       const previousReason = customer?.rejection_reason;
 
       // Update customer status to Active and clear rejection fields
-      const { error: updateError } = await supabase
+      let updateQuery = supabase
         .from("customers")
         .update({
           status: "Active",
@@ -101,6 +120,12 @@ export function useCustomerStatusActions() {
           rejected_by: null,
         })
         .eq("id", customerId);
+
+      if (tenant?.id) {
+        updateQuery = updateQuery.eq("tenant_id", tenant.id);
+      }
+
+      const { error: updateError } = await updateQuery;
 
       if (updateError) throw updateError;
 
@@ -117,6 +142,7 @@ export function useCustomerStatusActions() {
           previous_rejection_reason: previousReason,
           notes: notes || null,
         },
+        tenant_id: tenant?.id,
       });
 
       if (auditError) {

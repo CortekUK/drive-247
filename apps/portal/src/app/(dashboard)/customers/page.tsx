@@ -26,6 +26,7 @@ import { useDebounce } from "@/hooks/use-debounce";
 import { useCustomerBlockingActions } from "@/hooks/use-customer-blocking";
 import { useCustomerStatusActions } from "@/hooks/use-customer-status-actions";
 import { toast } from "sonner";
+import { useTenant } from "@/contexts/TenantContext";
 
 interface Customer {
   id: string;
@@ -58,6 +59,7 @@ const CustomersList = () => {
   const router = useRouter();
   const queryClient = useQueryClient();
   const searchParams = useSearchParams();
+  const { tenant } = useTenant();
 
   // State from URL params
   const [searchTerm, setSearchTerm] = useState(searchParams.get('search') || '');
@@ -106,12 +108,18 @@ const CustomersList = () => {
 
   // Fetch customers
   const { data: customers, isLoading, refetch: refetchCustomers } = useQuery({
-    queryKey: ["customers-list"],
+    queryKey: ["customers-list", tenant?.id],
     queryFn: async () => {
-      const { data, error } = await supabase
+      let query = supabase
         .from("customers")
         .select("*")
         .order("created_at", { ascending: false });
+
+      if (tenant?.id) {
+        query = query.eq("tenant_id", tenant.id);
+      }
+
+      const { data, error } = await query;
 
       if (error) {
         console.error("Customers fetch error:", error);
@@ -119,6 +127,7 @@ const CustomersList = () => {
       }
       return data as Customer[];
     },
+    enabled: !!tenant,
   });
 
   // Fetch customer balances using remaining_amount from ledger entries
@@ -131,10 +140,16 @@ const CustomersList = () => {
 
       // Get all ledger entries for all customers at once for efficiency
       const customerIds = customers.map(c => c.id);
-      const { data: allEntries, error } = await supabase
+      let ledgerQuery = supabase
         .from("ledger_entries")
         .select("customer_id, type, amount, remaining_amount, due_date, category")
         .in("customer_id", customerIds);
+
+      if (tenant?.id) {
+        ledgerQuery = ledgerQuery.eq("tenant_id", tenant.id);
+      }
+
+      const { data: allEntries, error } = await ledgerQuery;
 
       if (error) {
         console.error('Error fetching ledger entries:', error);
@@ -218,8 +233,7 @@ const CustomersList = () => {
 
       // Type filter
       if (typeFilter !== "all") {
-        const customerType = customer.customer_type || customer.type;
-        if (customerType !== typeFilter) return false;
+        if (customer.customer_type !== typeFilter) return false;
       }
 
       // Status filter
@@ -252,8 +266,8 @@ const CustomersList = () => {
             bValue = b.status;
             break;
           case 'type':
-            aValue = a.customer_type || a.type;
-            bValue = b.customer_type || b.type;
+            aValue = a.customer_type || 'Individual';
+            bValue = b.customer_type || 'Individual';
             break;
           case 'balance':
             aValue = customerBalances[a.id]?.balance || 0;
@@ -689,12 +703,12 @@ const CustomersList = () => {
                           <Badge
                             variant="secondary"
                             className={
-                              (customer.customer_type === 'Company' || customer.type === 'Company')
+                              customer.customer_type === 'Company'
                                 ? 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200'
                                 : 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200'
                             }
                           >
-                            {customer.customer_type || customer.type}
+                            {customer.customer_type || 'Individual'}
                           </Badge>
                         </TableCell>
                         <TableCell>

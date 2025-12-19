@@ -26,6 +26,7 @@ import { NetPLChip } from "@/components/vehicles/net-pl-chip";
 import { VehiclePhotoThumbnail } from "@/components/vehicles/vehicle-photo-thumbnail";
 import { VehicleStatus, VehiclePLData, formatCurrency } from "@/lib/vehicle-utils";
 import { useToast } from "@/hooks/use-toast";
+import { useTenant } from "@/contexts/TenantContext";
 
 interface VehiclePhoto {
   photo_url: string;
@@ -74,6 +75,7 @@ export default function VehiclesListEnhanced() {
   const searchParams = useSearchParams();
   const queryClient = useQueryClient();
   const { toast } = useToast();
+  const { tenant } = useTenant();
 
   // State from URL params
   const [filters, setFilters] = useState<FiltersState>({
@@ -120,9 +122,9 @@ export default function VehiclesListEnhanced() {
 
   // Data fetching
   const { data: vehicles = [], isLoading: vehiclesLoading } = useQuery({
-    queryKey: ["vehicles-list"],
+    queryKey: ["vehicles-list", tenant?.id],
     queryFn: async () => {
-      const { data, error } = await supabase
+      let query = supabase
         .from("vehicles")
         .select(`
           *,
@@ -131,6 +133,12 @@ export default function VehiclesListEnhanced() {
           )
         `)
         .order("created_at", { ascending: false });
+
+      if (tenant?.id) {
+        query = query.eq("tenant_id", tenant.id);
+      }
+
+      const { data, error } = await query;
 
       if (error) throw error;
 
@@ -142,18 +150,26 @@ export default function VehiclesListEnhanced() {
 
       return transformedData as Vehicle[];
     },
+    enabled: !!tenant,
   });
 
   const { data: plData = [], isLoading: plLoading } = useQuery({
-    queryKey: ["vehicles-pl"],
+    queryKey: ["vehicles-pl", tenant?.id],
     queryFn: async () => {
-      const { data, error } = await supabase
+      let query = supabase
         .from("view_pl_by_vehicle")
         .select("*");
+
+      if (tenant?.id) {
+        query = query.eq("tenant_id", tenant.id);
+      }
+
+      const { data, error } = await query;
 
       if (error) throw error;
       return data as VehiclePLData[];
     },
+    enabled: !!tenant,
   });
 
   const isLoading = vehiclesLoading || plLoading;

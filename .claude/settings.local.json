@@ -2,7 +2,12 @@
   "permissions": {
     "allow": [
       "Bash(grep -E \"$|\\$\")",
-      "Bash(grep:*)"
+      "Bash(grep:*)",
+      "Bash(npx supabase:*)",
+      "Bash(cat:*)",
+      "Bash(lsof:*)",
+      "Bash(xargs kill:*)",
+      "Bash(npm run dev:*)"
     ],
     "deny": [],
     "ask": []

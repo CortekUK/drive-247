@@ -21,33 +21,10 @@ export const PortfolioCarousel = ({ serviceType, title, subtitle }: PortfolioCar
   }, [serviceType]);
 
   const fetchPortfolioItems = async () => {
-    try {
-      const column = serviceType === "chauffeur" 
-        ? "show_on_chauffeur_page" 
-        : "show_on_close_protection_page";
-
-      const { data, error } = await supabase
-        .from("portfolio")
-        .select("*")
-        .eq("is_published", true)
-        .eq("is_active", true)
-        .or(`${column}.eq.true,service_type.eq.both`)
-        .order("is_featured", { ascending: false })
-        .order("event_date", { ascending: false })
-        .limit(6);
-
-      if (error) {
-        console.error("Portfolio fetch error:", error);
-        throw error;
-      }
-      
-      console.log(`Fetched ${data?.length || 0} portfolio items for ${serviceType}:`, data);
-      setItems(data || []);
-    } catch (error) {
-      console.error("Error fetching portfolio items:", error);
-    } finally {
-      setLoading(false);
-    }
+    // Portfolio table has been removed - this component is deprecated
+    // Return empty to hide the section gracefully
+    setItems([]);
+    setLoading(false);
   };
 
   const handlePrevious = () => {

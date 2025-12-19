@@ -30,6 +30,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
+import { useTenant } from "@/contexts/TenantContext";
 import { CalendarIcon, Upload, X, FileText } from "lucide-react";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -72,6 +73,7 @@ export const EnhancedAddPlateDialog = ({
   const [existingDocumentUrl, setExistingDocumentUrl] = useState(editPlate?.document_url || null);
   const [existingDocumentName, setExistingDocumentName] = useState(editPlate?.document_name || null);
   const { toast } = useToast();
+  const { tenant } = useTenant();
 
   const isEditing = !!editPlate;
 
@@ -144,22 +146,27 @@ export const EnhancedAddPlateDialog = ({
   // Watch status to enforce business rules
   const watchedStatus = form.watch("status");
 
-  // Validate plate number uniqueness
+  // Validate plate number uniqueness (per tenant)
   const checkPlateUniqueness = async (plateNumber: string): Promise<string | true> => {
     if (!plateNumber || plateNumber === editPlate?.plate_number) return true;
-    
+
     let query = supabase
       .from("plates")
       .select("id")
       .eq("plate_number", plateNumber.toUpperCase().replace(/\s+/g, ''));
-    
+
+    // Filter by tenant
+    if (tenant?.id) {
+      query = query.eq("tenant_id", tenant.id);
+    }
+
     // Only apply neq filter when editing an existing plate
     if (editPlate?.id) {
       query = query.neq("id", editPlate.id);
     }
-    
+
     const { data, error } = await query;
-    
+
     if (error) return "Error checking plate number";
     return data.length === 0 ? true : "This plate number already exists";
   };
@@ -262,10 +269,16 @@ export const EnhancedAddPlateDialog = ({
 
       if (isEditing) {
         // Update existing plate
-        const { error } = await supabase
+        let updateQuery = supabase
           .from("plates")
           .update(plateData)
           .eq("id", editPlate.id);
+
+        if (tenant?.id) {
+          updateQuery = updateQuery.eq("tenant_id", tenant.id);
+        }
+
+        const { error } = await updateQuery;
 
         if (error) throw error;
 
@@ -276,7 +289,8 @@ export const EnhancedAddPlateDialog = ({
             event_type: "expense_added",
             summary: `Plate ${data.plate_number} updated`,
             reference_id: editPlate.id,
-            reference_table: "plates"
+            reference_table: "plates",
+            tenant_id: tenant?.id || null,
           });
         }
 
@@ -288,7 +302,10 @@ export const EnhancedAddPlateDialog = ({
         // Create new plate
         const { data: newPlate, error } = await supabase
           .from("plates")
-          .insert(plateData)
+          .insert({
+            ...plateData,
+            tenant_id: tenant?.id || null,
+          })
           .select()
           .single();
 
@@ -301,7 +318,8 @@ export const EnhancedAddPlateDialog = ({
             event_type: "expense_added",
             summary: `Plate ${data.plate_number} created`,
             reference_id: newPlate.id,
-            reference_table: "plates"
+            reference_table: "plates",
+            tenant_id: tenant?.id || null,
           });
         }
 

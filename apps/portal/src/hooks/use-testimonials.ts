@@ -54,11 +54,14 @@ export const useTestimonials = () => {
   // Add testimonial mutation
   const addTestimonialMutation = useMutation({
     mutationFn: async (data: AddTestimonialData) => {
+      if (!tenant) throw new Error("No tenant context available");
+
       const { error } = await supabase.from("testimonials").insert({
         author: data.author,
         company_name: data.company_name,
         stars: data.stars,
         review: data.review,
+        tenant_id: tenant.id,
       });
 
       if (error) throw error;
@@ -82,10 +85,16 @@ export const useTestimonials = () => {
   // Update testimonial mutation
   const updateTestimonialMutation = useMutation({
     mutationFn: async ({ id, data }: { id: string; data: UpdateTestimonialData }) => {
-      const { error } = await supabase
+      let query = supabase
         .from("testimonials")
         .update({ ...data, updated_at: new Date().toISOString() })
         .eq("id", id);
+
+      if (tenant?.id) {
+        query = query.eq("tenant_id", tenant.id);
+      }
+
+      const { error } = await query;
 
       if (error) throw error;
     },
@@ -108,10 +117,16 @@ export const useTestimonials = () => {
   // Delete testimonial mutation
   const deleteTestimonialMutation = useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await supabase
+      let query = supabase
         .from("testimonials")
         .delete()
         .eq("id", id);
+
+      if (tenant?.id) {
+        query = query.eq("tenant_id", tenant.id);
+      }
+
+      const { error } = await query;
 
       if (error) throw error;
     },

@@ -29,6 +29,7 @@ import { Ban, Plus, Trash2, User, CreditCard, Search, CheckCircle, AlertTriangle
 import { useCustomerBlockingActions, useBlockedIdentities } from "@/hooks/use-customer-blocking";
 import { format } from "date-fns";
 import { useToast } from "@/hooks/use-toast";
+import { useTenant } from "@/contexts/TenantContext";
 
 interface BlockedCustomer {
   id: string;
@@ -46,6 +47,7 @@ const BlockedCustomers = () => {
   const router = useRouter();
   const queryClient = useQueryClient();
   const { toast } = useToast();
+  const { tenant } = useTenant();
   const [searchTerm, setSearchTerm] = useState("");
   const [addIdentityDialogOpen, setAddIdentityDialogOpen] = useState(false);
   const [newIdentity, setNewIdentity] = useState({
@@ -62,17 +64,24 @@ const BlockedCustomers = () => {
 
   // Fetch blocked customers
   const { data: blockedCustomers, isLoading: customersLoading, refetch: refetchCustomers } = useQuery({
-    queryKey: ["blocked-customers"],
+    queryKey: ["blocked-customers", tenant?.id],
     queryFn: async (): Promise<BlockedCustomer[]> => {
-      const { data, error } = await (supabase as any)
+      let query = supabase
         .from("customers")
         .select("id, name, email, phone, license_number, id_number, is_blocked, blocked_at, blocked_reason")
         .eq("is_blocked", true)
         .order("blocked_at", { ascending: false });
 
+      if (tenant?.id) {
+        query = query.eq("tenant_id", tenant.id);
+      }
+
+      const { data, error } = await query;
+
       if (error) throw error;
       return data as BlockedCustomer[];
     },
+    enabled: !!tenant,
   });
 
   const handleUnblockCustomer = () => {

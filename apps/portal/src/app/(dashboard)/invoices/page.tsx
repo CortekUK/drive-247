@@ -22,7 +22,6 @@ interface Invoice {
   due_date: string;
   subtotal: number;
   rental_fee?: number;
-  protection_fee?: number;
   tax_amount: number;
   total_amount: number;
   status: string;
@@ -42,12 +41,6 @@ interface Invoice {
     start_date: string;
     end_date: string;
     monthly_amount: number;
-    rental_protection_selections?: {
-      total_cost: number;
-      protection_plans: {
-        display_name: string;
-      };
-    };
   };
 }
 
@@ -68,11 +61,7 @@ const InvoicesList = () => {
           rentals:rental_id (
             start_date,
             end_date,
-            monthly_amount,
-            rental_protection_selections (
-              total_cost,
-              protection_plans (display_name)
-            )
+            monthly_amount
           )
         `)
         .order("created_at", { ascending: false });
@@ -193,15 +182,6 @@ const InvoicesList = () => {
             end_date: selectedInvoice.rentals?.end_date || "",
             monthly_amount: selectedInvoice.rentals?.monthly_amount || 0,
           }}
-          protectionPlan={
-            selectedInvoice.rentals?.rental_protection_selections
-              ? {
-                  name: selectedInvoice.rentals.rental_protection_selections.protection_plans.display_name,
-                  cost: selectedInvoice.protection_fee || selectedInvoice.rentals.rental_protection_selections.total_cost,
-                  rentalFee: selectedInvoice.rental_fee || (selectedInvoice.subtotal - (selectedInvoice.protection_fee || selectedInvoice.rentals.rental_protection_selections.total_cost)),
-                }
-              : undefined
-          }
         />
       )}
     </div>

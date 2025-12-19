@@ -38,27 +38,36 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { toast } from '@/hooks/use-toast';
 import { format } from 'date-fns';
+import { useTenant } from '@/contexts/TenantContext';
 
 
 export default function UsersManagement() {
   const { appUser } = useAuth();
+  const { tenant } = useTenant();
   const queryClient = useQueryClient();
   const [showResetDialog, setShowResetDialog] = useState(false);
   const [selectedUser, setSelectedUser] = useState<AppUser | null>(null);
   const [resetPassword, setResetPassword] = useState('');
 
-  // Fetch users
+  // Fetch users for this tenant
   const { data: users, isLoading } = useQuery({
-    queryKey: ['users'],
+    queryKey: ['users', tenant?.id],
     queryFn: async () => {
-      const { data, error } = await supabase
+      let query = supabase
         .from('app_users')
         .select('*')
         .order('created_at', { ascending: false });
 
+      if (tenant?.id) {
+        query = query.eq('tenant_id', tenant.id);
+      }
+
+      const { data, error } = await query;
+
       if (error) throw error;
       return data as AppUser[];
-    }
+    },
+    enabled: !!tenant,
   });
 
   // Generate random password

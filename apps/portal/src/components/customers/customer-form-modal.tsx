@@ -15,6 +15,7 @@ import { Users, Mail, Phone, ChevronDown, ChevronUp, CreditCard, AlertTriangle }
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { useQueryClient } from "@tanstack/react-query";
+import { useTenant } from "@/contexts/TenantContext";
 import { customerFormModalSchema, type CustomerFormModalFormValues } from "@/client-schemas/customers/customer-form-modal";
 
 type CustomerFormData = CustomerFormModalFormValues;
@@ -24,8 +25,7 @@ interface Customer {
   name: string;
   email: string | null;
   phone: string | null;
-  type: string;
-  customer_type?: "Individual" | "Company";
+  customer_type: "Individual" | "Company";
   status: string;
   whatsapp_opt_in: boolean;
   high_switcher?: boolean;
@@ -47,6 +47,7 @@ interface CustomerFormModalProps {
 }
 
 export const CustomerFormModal = ({ open, onOpenChange, customer }: CustomerFormModalProps) => {
+  const { tenant } = useTenant();
   const [loading, setLoading] = useState(false);
   const [showNextOfKin, setShowNextOfKin] = useState(false);
   const [blockWarning, setBlockWarning] = useState<{ isBlocked: boolean; reason?: string; type?: string } | null>(null);
@@ -57,7 +58,6 @@ export const CustomerFormModal = ({ open, onOpenChange, customer }: CustomerForm
   const form = useForm<CustomerFormData>({
     resolver: zodResolver(customerFormModalSchema),
     defaultValues: {
-      type: "Individual",
       customer_type: "Individual",
       name: "",
       email: "",
@@ -87,7 +87,6 @@ export const CustomerFormModal = ({ open, onOpenChange, customer }: CustomerForm
       setShowNextOfKin(!!hasNextOfKin);
 
       form.reset({
-        type: customer.type as "Individual" | "Company",
         customer_type: customer.customer_type || "Individual",
         name: customer.name,
         email: customer.email || "",
@@ -107,7 +106,6 @@ export const CustomerFormModal = ({ open, onOpenChange, customer }: CustomerForm
     } else {
       setShowNextOfKin(false);
       form.reset({
-        type: "Individual",
         customer_type: "Individual",
         name: "",
         email: "",
@@ -306,8 +304,7 @@ export const CustomerFormModal = ({ open, onOpenChange, customer }: CustomerForm
         }
       }
 
-      const payload = {
-        type: data.type,
+      const payload: any = {
         customer_type: data.customer_type,
         name: data.name,
         email: data.email || null,
@@ -324,11 +321,22 @@ export const CustomerFormModal = ({ open, onOpenChange, customer }: CustomerForm
         nok_address: data.nok_address || null,
       };
 
+      // Add tenant_id for new customers
+      if (!isEditing && tenant?.id) {
+        payload.tenant_id = tenant.id;
+      }
+
       if (isEditing) {
-        const { error } = await supabase
+        let updateQuery = supabase
           .from("customers")
           .update(payload)
           .eq("id", customer.id);
+
+        if (tenant?.id) {
+          updateQuery = updateQuery.eq("tenant_id", tenant.id);
+        }
+
+        const { error } = await updateQuery;
 
         if (error) throw error;
 
@@ -392,21 +400,34 @@ export const CustomerFormModal = ({ open, onOpenChange, customer }: CustomerForm
             <div className="grid grid-cols-2 gap-4">
               <FormField
                 control={form.control}
-                name="type"
+                name="customer_type"
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Customer Type <span className="text-red-500">*</span></FormLabel>
-                    <Select onValueChange={field.onChange} defaultValue={field.value}>
-                      <FormControl>
-                        <SelectTrigger className="input-focus">
-                          <SelectValue placeholder="Select type" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        <SelectItem value="Individual">Individual</SelectItem>
-                        <SelectItem value="Company">Company</SelectItem>
-                      </SelectContent>
-                    </Select>
+                    <FormControl>
+                      <div className="flex gap-6">
+                        <label className="flex items-center space-x-2 cursor-pointer">
+                          <input
+                            type="radio"
+                            value="Individual"
+                            checked={field.value === "Individual"}
+                            onChange={() => field.onChange("Individual")}
+                            className="w-4 h-4 text-primary"
+                          />
+                          <span>Individual</span>
+                        </label>
+                        <label className="flex items-center space-x-2 cursor-pointer">
+                          <input
+                            type="radio"
+                            value="Company"
+                            checked={field.value === "Company"}
+                            onChange={() => field.onChange("Company")}
+                            className="w-4 h-4 text-primary"
+                          />
+                          <span>Company</span>
+                        </label>
+                      </div>
+                    </FormControl>
                     <FormMessage />
                   </FormItem>
                 )}
@@ -433,41 +454,6 @@ export const CustomerFormModal = ({ open, onOpenChange, customer }: CustomerForm
                 )}
               />
             </div>
-
-            <FormField
-              control={form.control}
-              name="customer_type"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Customer Type <span className="text-red-500">*</span></FormLabel>
-                  <FormControl>
-                    <div className="flex gap-6">
-                      <label className="flex items-center space-x-2 cursor-pointer">
-                        <input
-                          type="radio"
-                          value="Individual"
-                          checked={field.value === "Individual"}
-                          onChange={() => field.onChange("Individual")}
-                          className="w-4 h-4 text-primary"
-                        />
-                        <span>Individual</span>
-                      </label>
-                      <label className="flex items-center space-x-2 cursor-pointer">
-                        <input
-                          type="radio"
-                          value="Company"
-                          checked={field.value === "Company"}
-                          onChange={() => field.onChange("Company")}
-                          className="w-4 h-4 text-primary"
-                        />
-                        <span>Company</span>
-                      </label>
-                    </div>
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
 
             <FormField
               control={form.control}

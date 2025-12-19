@@ -7,12 +7,17 @@ import { toZonedTime } from "date-fns-tz";
 const DEFAULT_TIMEZONE = 'America/New_York';
 
 // Get timezone from org settings or use default
-async function getOrgTimezone(): Promise<string> {
+async function getOrgTimezone(tenantId?: string): Promise<string> {
   try {
-    const { data, error } = await supabase
+    let query = supabase
       .from('org_settings')
-      .select('timezone')
-      .single();
+      .select('timezone');
+
+    if (tenantId) {
+      query = query.eq('tenant_id', tenantId);
+    }
+
+    const { data, error } = await query.single();
 
     if (error || !data?.timezone) {
       return DEFAULT_TIMEZONE;
@@ -81,8 +86,8 @@ export const REMINDER_SOURCES: GenerationSource[] = [
   }
 ];
 
-async function getToday(timezone?: string): Promise<Date> {
-  const tz = timezone || await getOrgTimezone();
+async function getToday(timezone?: string, tenantId?: string): Promise<Date> {
+  const tz = timezone || await getOrgTimezone(tenantId);
   return toZonedTime(new Date(), tz);
 }
 
@@ -123,27 +128,39 @@ function selectBestRule(daysUntilDue: number, rulePrefix: string): ReminderRule 
 }
 
 // Clean up duplicate reminders for a specific vehicle and event type
-async function cleanupDuplicateReminders(vehicleId: string, eventType: 'MOT' | 'TAX'): Promise<void> {
-  await supabase
+async function cleanupDuplicateReminders(vehicleId: string, eventType: 'MOT' | 'TAX', tenantId?: string): Promise<void> {
+  let query = supabase
     .from('reminders')
     .delete()
     .eq('object_type', 'Vehicle')
     .eq('object_id', vehicleId)
     .like('rule_code', `%${eventType}%`)
     .in('status', ['pending', 'snoozed']);
+
+  if (tenantId) {
+    query = query.eq('tenant_id', tenantId);
+  }
+
+  await query;
 }
 
-export async function generateVehicleReminders(): Promise<number> {
+export async function generateVehicleReminders(tenantId?: string): Promise<number> {
   let generated = 0;
-  const today = await getToday();
-  
+  const today = await getToday(undefined, tenantId);
+
   // Get vehicles with MOT or TAX dates, or without immobilisers
-  const { data: vehicles, error } = await supabase
+  let vehiclesQuery = supabase
     .from('vehicles')
     .select('id, reg, make, model, mot_due_date, tax_due_date, has_remote_immobiliser, acquisition_date')
     .or('mot_due_date.not.is.null,tax_due_date.not.is.null,has_remote_immobiliser.eq.false')
     .eq('is_disposed', false);
-    
+
+  if (tenantId) {
+    vehiclesQuery = vehiclesQuery.eq('tenant_id', tenantId);
+  }
+
+  const { data: vehicles, error } = await vehiclesQuery;
+
   if (error) {
     console.error('Error fetching vehicles:', error);
     return 0;
@@ -156,7 +173,7 @@ export async function generateVehicleReminders(): Promise<number> {
       const daysUntilDue = Math.ceil((motDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
       
       // Clean up existing MOT reminders first
-      await cleanupDuplicateReminders(vehicle.id, 'MOT');
+      await cleanupDuplicateReminders(vehicle.id, 'MOT', tenantId);
       
       // Select the best rule based on days remaining
       const bestRule = selectBestRule(daysUntilDue, 'MOT');
@@ -184,9 +201,10 @@ export async function generateVehicleReminders(): Promise<number> {
             due_on: vehicle.mot_due_date,
             remind_on: formatDate(remindDate),
             severity: getSeverityForRule(bestRule.code),
-            context
+            context,
+            tenant_id: tenantId
           });
-          
+
           if (created) generated++;
         }
       }
@@ -198,7 +216,7 @@ export async function generateVehicleReminders(): Promise<number> {
       const daysUntilDue = Math.ceil((taxDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
       
       // Clean up existing TAX reminders first
-      await cleanupDuplicateReminders(vehicle.id, 'TAX');
+      await cleanupDuplicateReminders(vehicle.id, 'TAX', tenantId);
       
       // Select the best rule based on days remaining
       const bestRule = selectBestRule(daysUntilDue, 'TAX');
@@ -226,9 +244,10 @@ export async function generateVehicleReminders(): Promise<number> {
             due_on: vehicle.tax_due_date,
             remind_on: formatDate(remindDate),
             severity: getSeverityForRule(bestRule.code),
-            context
+            context,
+            tenant_id: tenantId
           });
-          
+
           if (created) generated++;
         }
       }
@@ -238,22 +257,28 @@ export async function generateVehicleReminders(): Promise<number> {
     if (!vehicle.has_remote_immobiliser && vehicle.acquisition_date) {
       const acquisitionDate = parseISO(vehicle.acquisition_date);
       const daysSinceAcquisition = Math.ceil((today.getTime() - acquisitionDate.getTime()) / (1000 * 60 * 60 * 24));
-      
+
       // Clean up existing immobiliser reminders first
-      await supabase
+      let immCleanupQuery = supabase
         .from('reminders')
         .delete()
         .eq('object_type', 'Vehicle')
         .eq('object_id', vehicle.id)
         .like('rule_code', '%IMM_FIT%')
         .in('status', ['pending', 'snoozed']);
-      
+
+      if (tenantId) {
+        immCleanupQuery = immCleanupQuery.eq('tenant_id', tenantId);
+      }
+
+      await immCleanupQuery;
+
       // Select the best rule based on days since acquisition
       const immobiliserRule = selectBestRule(daysSinceAcquisition, 'IMM_FIT');
-      
+
       if (immobiliserRule) {
         const remindDate = addDays(acquisitionDate, immobiliserRule.leadDays);
-        
+
         // Only create if remind date has passed
         if (format(remindDate, 'yyyy-MM-dd') <= formatDate(today)) {
           const context: ReminderContext = {
@@ -264,7 +289,7 @@ export async function generateVehicleReminders(): Promise<number> {
             acquisition_date: vehicle.acquisition_date,
             days_since_acquisition: daysSinceAcquisition
           };
-          
+
           const created = await upsertReminder({
             rule_code: immobiliserRule.code,
             object_type: 'Vehicle',
@@ -274,24 +299,25 @@ export async function generateVehicleReminders(): Promise<number> {
             due_on: formatDate(today), // Due immediately since it's overdue
             remind_on: formatDate(remindDate),
             severity: getSeverityForRule(immobiliserRule.code),
-            context
+            context,
+            tenant_id: tenantId
           });
-          
+
           if (created) generated++;
         }
       }
     }
   }
-  
+
   return generated;
 }
 
-export async function generateDocumentReminders(): Promise<number> {
+export async function generateDocumentReminders(tenantId?: string): Promise<number> {
   let generated = 0;
-  const today = await getToday();
-  
+  const today = await getToday(undefined, tenantId);
+
   // Get customer documents with end dates
-  const { data: documents, error } = await supabase
+  let documentsQuery = supabase
     .from('customer_documents')
     .select(`
       id, document_type, policy_number, insurance_provider, end_date, policy_end_date,
@@ -301,7 +327,13 @@ export async function generateDocumentReminders(): Promise<number> {
     `)
     .not('end_date', 'is', null)
     .or('policy_end_date.not.is.null');
-    
+
+  if (tenantId) {
+    documentsQuery = documentsQuery.eq('tenant_id', tenantId);
+  }
+
+  const { data: documents, error } = await documentsQuery;
+
   if (error) {
     console.error('Error fetching documents:', error);
     return 0;
@@ -340,23 +372,24 @@ export async function generateDocumentReminders(): Promise<number> {
           due_on: endDate,
           remind_on: formatDate(remindDate),
           severity: getSeverityForRule(rule.code),
-          context
+          context,
+          tenant_id: tenantId
         });
-        
+
         if (created) generated++;
       }
     }
   }
-  
+
   return generated;
 }
 
-export async function generateRentalReminders(): Promise<number> {
+export async function generateRentalReminders(tenantId?: string): Promise<number> {
   let generated = 0;
-  const today = await getToday();
-  
+  const today = await getToday(undefined, tenantId);
+
   // Get rentals with overdue charges
-  const { data: overdueRentals, error } = await supabase
+  let overdueQuery = supabase
     .from('ledger_entries')
     .select(`
       rental_id, customer_id, vehicle_id,
@@ -370,7 +403,13 @@ export async function generateRentalReminders(): Promise<number> {
     .gt('remaining_amount', 0)
     .lt('due_date', formatDate(today))
     .eq('rentals.status', 'Active');
-    
+
+  if (tenantId) {
+    overdueQuery = overdueQuery.eq('tenant_id', tenantId);
+  }
+
+  const { data: overdueRentals, error } = await overdueQuery;
+
   if (error) {
     console.error('Error fetching overdue rentals:', error);
     return 0;
@@ -408,21 +447,22 @@ export async function generateRentalReminders(): Promise<number> {
       due_on: oldestCharge.due_date,
       remind_on: formatDate(today),
       severity: getSeverityForRule('RENT_OVERDUE'),
-      context
+      context,
+      tenant_id: tenantId
     });
-    
+
     if (created) generated++;
   }
-  
+
   return generated;
 }
 
-export async function generateFineReminders(): Promise<number> {
+export async function generateFineReminders(tenantId?: string): Promise<number> {
   let generated = 0;
-  const today = await getToday();
-  
+  const today = await getToday(undefined, tenantId);
+
   // Get fines with due dates
-  const { data: fines, error } = await supabase
+  let finesQuery = supabase
     .from('fines')
     .select(`
       id, reference_no, type, amount, due_date, liability,
@@ -432,7 +472,13 @@ export async function generateFineReminders(): Promise<number> {
     `)
     .in('status', ['Open', 'Appealed', 'Charged'])
     .not('due_date', 'is', null);
-    
+
+  if (tenantId) {
+    finesQuery = finesQuery.eq('tenant_id', tenantId);
+  }
+
+  const { data: fines, error } = await finesQuery;
+
   if (error) {
     console.error('Error fetching fines:', error);
     return 0;
@@ -467,14 +513,15 @@ export async function generateFineReminders(): Promise<number> {
           due_on: fine.due_date,
           remind_on: formatDate(remindDate),
           severity: getSeverityForRule(rule.code),
-          context
+          context,
+          tenant_id: tenantId
         });
-        
+
         if (created) generated++;
       }
     }
   }
-  
+
   return generated;
 }
 
@@ -488,48 +535,60 @@ interface ReminderInput {
   remind_on: string;
   severity: string;
   context: ReminderContext;
+  tenant_id?: string;
 }
 
 async function upsertReminder(input: ReminderInput): Promise<boolean> {
   try {
     // First check if reminder already exists and is done/dismissed
-    const { data: existing } = await supabase
+    let existingQuery = supabase
       .from('reminders')
       .select('id, status')
       .eq('rule_code', input.rule_code)
       .eq('object_type', input.object_type)
       .eq('object_id', input.object_id)
       .eq('due_on', input.due_on)
-      .eq('remind_on', input.remind_on)
-      .single();
-    
+      .eq('remind_on', input.remind_on);
+
+    if (input.tenant_id) {
+      existingQuery = existingQuery.eq('tenant_id', input.tenant_id);
+    }
+
+    const { data: existing } = await existingQuery.single();
+
     if (existing && ['done', 'dismissed', 'expired'].includes(existing.status)) {
       return false; // Don't recreate completed reminders
     }
-    
+
+    const upsertData: any = {
+      rule_code: input.rule_code,
+      object_type: input.object_type,
+      object_id: input.object_id,
+      title: input.title,
+      message: input.message,
+      due_on: input.due_on,
+      remind_on: input.remind_on,
+      severity: input.severity,
+      context: input.context as any,
+      status: 'pending'
+    };
+
+    if (input.tenant_id) {
+      upsertData.tenant_id = input.tenant_id;
+    }
+
     const { error } = await supabase
       .from('reminders')
-      .upsert({
-        rule_code: input.rule_code,
-        object_type: input.object_type,
-        object_id: input.object_id,
-        title: input.title,
-        message: input.message,
-        due_on: input.due_on,
-        remind_on: input.remind_on,
-        severity: input.severity,
-        context: input.context as any,
-        status: 'pending'
-      });
-    
+      .upsert(upsertData);
+
     if (error) {
       console.error('Error upserting reminder:', error);
       return false;
     }
-    
+
     // Note: We'd need the actual reminder ID for action logging
     // For now, skip action logging during generation to avoid complexity
-    
+
     return !existing; // Return true if this was a new reminder
   } catch (error) {
     console.error('Error in upsertReminder:', error);
@@ -537,31 +596,42 @@ async function upsertReminder(input: ReminderInput): Promise<boolean> {
   }
 }
 
-export async function expireOldReminders(): Promise<number> {
-  const today = getToday();
-  
-  const { data: expiredReminders, error } = await supabase
+export async function expireOldReminders(tenantId?: string): Promise<number> {
+  const today = await getToday(undefined, tenantId);
+
+  let expireQuery = supabase
     .from('reminders')
     .update({ status: 'expired' })
     .lt('due_on', formatDate(today))
-    .in('status', ['pending', 'snoozed'])
-    .select('id');
-    
+    .in('status', ['pending', 'snoozed']);
+
+  if (tenantId) {
+    expireQuery = expireQuery.eq('tenant_id', tenantId);
+  }
+
+  const { data: expiredReminders, error } = await expireQuery.select('id');
+
   if (error) {
     console.error('Error expiring old reminders:', error);
     return 0;
   }
-  
+
   // Log expiry actions
   for (const reminder of expiredReminders || []) {
+    const actionData: any = {
+      reminder_id: reminder.id,
+      action: 'expired',
+      note: 'Automatically expired due to past due date'
+    };
+
+    if (tenantId) {
+      actionData.tenant_id = tenantId;
+    }
+
     await supabase
       .from('reminder_actions')
-      .insert({
-        reminder_id: reminder.id,
-        action: 'expired',
-        note: 'Automatically expired due to past due date'
-      });
+      .insert(actionData);
   }
-  
+
   return expiredReminders?.length || 0;
 }

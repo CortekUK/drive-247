@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
+import { useTenant } from "@/contexts/TenantContext";
 import { toast } from "sonner";
 import { Car, Users, Briefcase, Check, ArrowLeft, Loader2 } from "lucide-react";
 import Navigation from "@/components/Navigation";
@@ -29,15 +30,16 @@ interface Vehicle {
   status: string;
   created_at: string;
   // Optional fields that might exist
-  monthly_rate?: number;
-  daily_rate?: number;
-  weekly_rate?: number;
+  monthly_rent?: number;
+  daily_rent?: number;
+  weekly_rent?: number;
   vehicle_photos?: VehiclePhoto[];
 }
 
 const BookingVehiclesContent = () => {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const { tenant } = useTenant();
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedVehicle, setSelectedVehicle] = useState<string | null>(null);
@@ -63,7 +65,7 @@ const BookingVehiclesContent = () => {
     setLoading(true);
     try {
       // Fetch only vehicles with status "Available" (not rented, not in maintenance)
-      const { data, error } = await supabase
+      let query = supabase
         .from("vehicles")
         .select(`
           *,
@@ -71,8 +73,13 @@ const BookingVehiclesContent = () => {
             photo_url
           )
         `)
-        .eq("status", "Available")
-        .order("monthly_rate", { ascending: true });
+        .eq("status", "Available");
+
+      if (tenant?.id) {
+        query = query.eq("tenant_id", tenant.id);
+      }
+
+      const { data, error } = await query.order("monthly_rent", { ascending: true });
 
       if (error) throw error;
 
@@ -103,9 +110,9 @@ const BookingVehiclesContent = () => {
 
   const calculatePrice = (vehicle: Vehicle) => {
     const days = calculateRentalDays();
-    // Use monthly_rate if available, otherwise estimate
-    if (vehicle.monthly_rate) {
-      return vehicle.monthly_rate;
+    // Use monthly_rent if available, otherwise estimate
+    if (vehicle.monthly_rent) {
+      return vehicle.monthly_rent;
     }
     // Fallback: estimate $50/day if no rate exists
     return days * 50;

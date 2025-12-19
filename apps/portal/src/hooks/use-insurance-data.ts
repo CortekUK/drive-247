@@ -128,6 +128,8 @@ export function useInsuranceData(filters: InsuranceFilters) {
 }
 
 export function useInsuranceValidation() {
+  const { tenant } = useTenant();
+
   const checkPolicyOverlap = async (
     customerId: string,
     vehicleId: string | null,
@@ -152,19 +154,23 @@ export function useInsuranceValidation() {
     policyNumber: string,
     excludePolicyId?: string
   ) => {
-    const query = supabase
+    let query = supabase
       .from('insurance_policies')
       .select('id')
       .eq('customer_id', customerId)
       .eq('policy_number', policyNumber);
 
+    if (tenant?.id) {
+      query = query.eq('tenant_id', tenant.id);
+    }
+
     if (excludePolicyId) {
-      query.neq('id', excludePolicyId);
+      query = query.neq('id', excludePolicyId);
     }
 
     const { data, error } = await query;
     if (error) throw error;
-    
+
     return data.length === 0;
   };
 

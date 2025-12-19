@@ -9,6 +9,7 @@ import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import { ChevronLeft, CreditCard, Shield, Calendar, MapPin, Clock, Car, User, Loader2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
+import { useTenant } from "@/contexts/TenantContext";
 import { format } from "date-fns";
 import { InvoiceDialog } from "@/components/InvoiceDialog";
 import { createInvoiceWithFallback, Invoice } from "@/lib/invoiceUtils";
@@ -34,6 +35,7 @@ export default function BookingCheckoutStep({
   onBack
 }: BookingCheckoutStepProps) {
   const router = useRouter();
+  const { tenant } = useTenant();
   const [agreeTerms, setAgreeTerms] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
 
@@ -254,27 +256,38 @@ export default function BookingCheckoutStep({
       // Step 1: Find existing customer or create new one
       console.log('📝 Finding or creating customer...');
 
-      // First, check if customer exists by email
-      const { data: existingCustomer } = await supabase
+      // First, check if customer exists by email within this tenant
+      let customerQuery = supabase
         .from("customers")
         .select("*")
-        .eq("email", formData.customerEmail)
-        .maybeSingle();
+        .eq("email", formData.customerEmail);
+
+      if (tenant?.id) {
+        customerQuery = customerQuery.eq("tenant_id", tenant.id);
+      }
+
+      const { data: existingCustomer } = await customerQuery.maybeSingle();
 
       let customer;
 
       if (existingCustomer) {
         // Update existing customer
         console.log('👤 Found existing customer, updating...');
-        const { data: updatedCustomer, error: updateError } = await supabase
+        let updateQuery = supabase
           .from("customers")
           .update({
-            type: formData.customerType,
+            customer_type: formData.customerType,
             name: formData.customerName,
             phone: formData.customerPhone,
             status: "Active",
           })
-          .eq("id", existingCustomer.id)
+          .eq("id", existingCustomer.id);
+
+        if (tenant?.id) {
+          updateQuery = updateQuery.eq("tenant_id", tenant.id);
+        }
+
+        const { data: updatedCustomer, error: updateError } = await updateQuery
           .select()
           .single();
 
@@ -283,16 +296,22 @@ export default function BookingCheckoutStep({
       } else {
         // Create new customer
         console.log('🆕 Creating new customer...');
+        const customerData: any = {
+          customer_type: formData.customerType,
+          name: formData.customerName,
+          email: formData.customerEmail,
+          phone: formData.customerPhone,
+          status: "Active",
+          is_blocked: false,
+        };
+
+        if (tenant?.id) {
+          customerData.tenant_id = tenant.id;
+        }
+
         const { data: newCustomer, error: createError } = await supabase
           .from("customers")
-          .insert({
-            type: formData.customerType,
-            name: formData.customerName,
-            email: formData.customerEmail,
-            phone: formData.customerPhone,
-            status: "Active",
-            is_blocked: false,
-          })
+          .insert(customerData)
           .select()
           .single();
 
@@ -307,11 +326,17 @@ export default function BookingCheckoutStep({
         console.log('🔗 Linking verification to customer:', formData.verificationSessionId);
         console.log('🔗 Customer ID to link:', customer.id);
 
-        // Query the verification record by session_id
-        const { data: verification, error: verificationQueryError } = await supabase
+        // Query the verification record by session_id within this tenant
+        let verificationQuery = supabase
           .from('identity_verifications')
           .select('*') // Select all fields to debug
-          .eq('session_id', formData.verificationSessionId)
+          .eq('session_id', formData.verificationSessionId);
+
+        if (tenant?.id) {
+          verificationQuery = verificationQuery.eq('tenant_id', tenant.id);
+        }
+
+        const { data: verification, error: verificationQueryError } = await verificationQuery
           .maybeSingle(); // Use maybeSingle() in case webhook hasn't created the record yet
 
         console.log('🔍 Query result - verification:', verification);
@@ -326,10 +351,16 @@ export default function BookingCheckoutStep({
           });
 
           // Update verification to link it to the customer
-          const { data: updateResult, error: verificationUpdateError } = await supabase
+          let verificationUpdateQuery = supabase
             .from('identity_verifications')
             .update({ customer_id: customer.id })
-            .eq('id', verification.id)
+            .eq('id', verification.id);
+
+          if (tenant?.id) {
+            verificationUpdateQuery = verificationUpdateQuery.eq('tenant_id', tenant.id);
+          }
+
+          const { data: updateResult, error: verificationUpdateError } = await verificationUpdateQuery
             .select(); // Return the updated record
 
           console.log('📝 Update result - data:', updateResult);
@@ -381,17 +412,23 @@ export default function BookingCheckoutStep({
       const rentalPeriodType = calculateRentalPeriodType();
       const grandTotal = calculateGrandTotal(); // Use grand total (includes taxes/fees) for rental amount
 
+      const rentalData: any = {
+        customer_id: customer.id,
+        vehicle_id: selectedVehicle.id,
+        start_date: formData.pickupDate, // Already in YYYY-MM-DD format from step 1
+        end_date: formData.dropoffDate,   // Already in YYYY-MM-DD format from step 1
+        rental_period_type: rentalPeriodType,
+        monthly_amount: grandTotal, // Store grand total (rental + taxes + fees + protection)
+        status: "Pending", // Set to Pending until payment succeeds
+      };
+
+      if (tenant?.id) {
+        rentalData.tenant_id = tenant.id;
+      }
+
       const { data: rental, error: rentalError } = await supabase
         .from("rentals")
-        .insert({
-          customer_id: customer.id,
-          vehicle_id: selectedVehicle.id,
-          start_date: formData.pickupDate, // Already in YYYY-MM-DD format from step 1
-          end_date: formData.dropoffDate,   // Already in YYYY-MM-DD format from step 1
-          rental_period_type: rentalPeriodType,
-          monthly_amount: grandTotal, // Store grand total (rental + taxes + fees + protection)
-          status: "Pending", // Set to Pending until payment succeeds
-        })
+        .insert(rentalData)
         .select()
         .single();
 
@@ -421,10 +458,16 @@ export default function BookingCheckoutStep({
 
       if (bookingMode === 'auto') {
         // AUTO mode: Update vehicle status to "Rented" immediately
-        const { error: vehicleUpdateError } = await supabase
+        let vehicleUpdateQuery = supabase
           .from("vehicles")
           .update({ status: "Rented" })
           .eq("id", selectedVehicle.id);
+
+        if (tenant?.id) {
+          vehicleUpdateQuery = vehicleUpdateQuery.eq("tenant_id", tenant.id);
+        }
+
+        const { error: vehicleUpdateError } = await vehicleUpdateQuery;
 
         if (vehicleUpdateError) {
           console.error("Failed to update vehicle status:", vehicleUpdateError);
@@ -452,6 +495,7 @@ export default function BookingCheckoutStep({
         tax_amount: calculateTaxesAndFees(),
         total_amount: calculateGrandTotal(),
         notes: invoiceNotes,
+        tenant_id: tenant?.id,
       });
 
       console.log('✅ Invoice ready:', invoice.invoice_number);

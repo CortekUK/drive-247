@@ -154,19 +154,23 @@ async function chargeFineToAccount(supabase: any, fineId: string): Promise<FineC
   console.log(`Creating charge entry for fine ${fineId}, amount: ${fine.amount}`);
 
   // Create charge entry in ledger (idempotent using reference)
+  const chargeData: any = {
+    customer_id: fine.customer_id,
+    vehicle_id: fine.vehicle_id,
+    entry_date: fine.issue_date,
+    due_date: fine.due_date,
+    type: 'Charge',
+    category: 'Fine',
+    amount: fine.amount,
+    remaining_amount: fine.amount,
+    reference: `FINE-${fine.id}`
+  };
+  if (fine.tenant_id) {
+    chargeData.tenant_id = fine.tenant_id;
+  }
   const { error: chargeError } = await supabase
     .from('ledger_entries')
-    .insert({
-      customer_id: fine.customer_id,
-      vehicle_id: fine.vehicle_id,
-      entry_date: fine.issue_date,
-      due_date: fine.due_date,
-      type: 'Charge',
-      category: 'Fine',
-      amount: fine.amount,
-      remaining_amount: fine.amount,
-      reference: `FINE-${fine.id}`
-    });
+    .insert(chargeData);
 
   if (chargeError && !chargeError.message.includes('duplicate key')) {
     console.error('Error creating charge entry:', chargeError);
@@ -204,17 +208,21 @@ async function chargeFineToAccount(supabase: any, fineId: string): Promise<FineC
 
   // Create P&L cost entry for customer fine when charged (idempotent)
   console.log(`Creating P&L cost entry for customer fine ${fineId}, amount: ${fine.amount}`);
+  const pnlData: any = {
+    vehicle_id: fine.vehicle_id,
+    entry_date: fine.issue_date,
+    side: 'Cost',
+    category: 'Fines',
+    amount: fine.amount,
+    source_ref: fine.id,
+    customer_id: fine.customer_id
+  };
+  if (fine.tenant_id) {
+    pnlData.tenant_id = fine.tenant_id;
+  }
   const { error: pnlError } = await supabase
     .from('pnl_entries')
-    .insert({
-      vehicle_id: fine.vehicle_id,
-      entry_date: fine.issue_date,
-      side: 'Cost',
-      category: 'Fines',
-      amount: fine.amount,
-      source_ref: fine.id,
-      customer_id: fine.customer_id
-    });
+    .insert(pnlData);
 
   if (pnlError && !pnlError.message.includes('duplicate key')) {
     console.error('Error creating P&L cost entry:', pnlError);
@@ -224,7 +232,7 @@ async function chargeFineToAccount(supabase: any, fineId: string): Promise<FineC
   }
 
   // Auto-allocate available credit (FIFO)
-  const allocatedAmount = await allocateAvailableCredit(supabase, fine.customer_id, chargeEntry.id, chargeEntry.remaining_amount);
+  const allocatedAmount = await allocateAvailableCredit(supabase, fine.customer_id, chargeEntry.id, chargeEntry.remaining_amount, fine.tenant_id);
   
   console.log(`Allocated ${allocatedAmount} from available credit`);
 
@@ -286,7 +294,7 @@ async function chargeFineToAccount(supabase: any, fineId: string): Promise<FineC
   };
 }
 
-async function allocateAvailableCredit(supabase: any, customerId: string, chargeEntryId: string, chargeAmount: number): Promise<number> {
+async function allocateAvailableCredit(supabase: any, customerId: string, chargeEntryId: string, chargeAmount: number, tenantId?: string): Promise<number> {
   let totalAllocated = 0;
   let remainingToAllocate = chargeAmount;
 
@@ -323,13 +331,17 @@ async function allocateAvailableCredit(supabase: any, customerId: string, charge
     console.log(`Applying ${toApply} from payment ${payment.id} (available: ${availableCredit})`);
 
     // Create payment application (idempotent)
+    const appData: any = {
+      payment_id: payment.id,
+      charge_entry_id: chargeEntryId,
+      amount_applied: toApply
+    };
+    if (tenantId) {
+      appData.tenant_id = tenantId;
+    }
     const { error: appError } = await supabase
       .from('payment_applications')
-      .insert({
-        payment_id: payment.id,
-        charge_entry_id: chargeEntryId,
-        amount_applied: toApply
-      });
+      .insert(appData);
 
     if (appError && !appError.message.includes('duplicate key')) {
       console.error('Error creating payment application:', appError);
@@ -473,18 +485,22 @@ async function waiveFine(supabase: any, fineId: string): Promise<FineChargeResul
         // Create negative P&L Revenue entry for refund
         const refundReference = `refund:${fineId}:${application.payment_id}:${Date.now()}`;
         
+        const refundPnlData: any = {
+          vehicle_id: application.ledger_entries.vehicle_id,
+          entry_date: new Date().toISOString().split('T')[0],
+          side: 'Revenue',
+          category: 'Fines',
+          amount: -Math.abs(application.amount_applied), // Negative for refund
+          reference: refundReference,
+          customer_id: application.ledger_entries.customer_id,
+          source_ref: fineId
+        };
+        if (fine.tenant_id) {
+          refundPnlData.tenant_id = fine.tenant_id;
+        }
         const { error: refundPnlError } = await supabase
           .from('pnl_entries')
-          .insert({
-            vehicle_id: application.ledger_entries.vehicle_id,
-            entry_date: new Date().toISOString().split('T')[0],
-            side: 'Revenue',
-            category: 'Fines',
-            amount: -Math.abs(application.amount_applied), // Negative for refund
-            reference: refundReference,
-            customer_id: application.ledger_entries.customer_id,
-            source_ref: fineId
-          });
+          .insert(refundPnlData);
 
         if (refundPnlError && !refundPnlError.message.includes('duplicate key')) {
           console.error('Error creating refund P&L entry:', refundPnlError);

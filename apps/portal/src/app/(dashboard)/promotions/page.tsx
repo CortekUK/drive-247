@@ -5,6 +5,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import { supabase } from "@/integrations/supabase/client";
+import { useTenant } from "@/contexts/TenantContext";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -71,6 +72,7 @@ const defaultFormData: PromotionFormValues = {
 };
 
 export default function PromotionsManager() {
+  const { tenant } = useTenant();
   const [promotions, setPromotions] = useState<Promotion[]>([]);
   const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -94,10 +96,17 @@ export default function PromotionsManager() {
 
   const loadPromotions = async () => {
     setLoading(true);
-    const { data, error } = await (supabase as any)
+    let query = (supabase as any)
       .from("promotions")
-      .select("*")
-      .order("created_at", { ascending: false });
+      .select("*");
+
+    if (tenant?.id) {
+      query = query.eq("tenant_id", tenant.id);
+    }
+
+    query = query.order("created_at", { ascending: false });
+
+    const { data, error } = await query;
 
     if (error) {
       console.error("Failed to load promotions:", error);
@@ -123,10 +132,16 @@ export default function PromotionsManager() {
     const oldPromotions = [...promotions];
     setPromotions(promotions.map(p => p.id === id ? { ...p, is_active: value } : p));
 
-    const { error } = await (supabase as any)
+    let query = (supabase as any)
       .from("promotions")
       .update({ is_active: value })
       .eq("id", id);
+
+    if (tenant?.id) {
+      query = query.eq("tenant_id", tenant.id);
+    }
+
+    const { error } = await query;
 
     if (error) {
       toast.error("Failed to update promotion");
@@ -191,10 +206,16 @@ export default function PromotionsManager() {
     };
 
     if (editingPromotion) {
-      const { error } = await (supabase as any)
+      let updateQuery = (supabase as any)
         .from("promotions")
         .update(promoData)
         .eq("id", editingPromotion.id);
+
+      if (tenant?.id) {
+        updateQuery = updateQuery.eq("tenant_id", tenant.id);
+      }
+
+      const { error } = await updateQuery;
 
       if (error) {
         console.error("Update error:", error);
@@ -206,7 +227,10 @@ export default function PromotionsManager() {
     } else {
       const { error } = await (supabase as any)
         .from("promotions")
-        .insert(promoData);
+        .insert({
+          ...promoData,
+          tenant_id: tenant?.id || null,
+        });
 
       if (error) {
         console.error("Insert error:", error);
@@ -231,7 +255,13 @@ export default function PromotionsManager() {
   const handleDelete = async () => {
     if (!deletingId) return;
 
-    const { error } = await (supabase as any).from("promotions").delete().eq("id", deletingId);
+    let deleteQuery = (supabase as any).from("promotions").delete().eq("id", deletingId);
+
+    if (tenant?.id) {
+      deleteQuery = deleteQuery.eq("tenant_id", tenant.id);
+    }
+
+    const { error } = await deleteQuery;
 
     if (error) {
       toast.error("Failed to delete promotion");

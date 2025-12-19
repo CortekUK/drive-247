@@ -1,5 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { useTenant } from "@/contexts/TenantContext";
 
 export interface CustomerVehicleHistory {
   rental_id: string;
@@ -14,10 +15,12 @@ export interface CustomerVehicleHistory {
 }
 
 export const useCustomerVehicleHistory = (customerId: string) => {
+  const { tenant } = useTenant();
+
   return useQuery({
-    queryKey: ["customer-vehicle-history", customerId],
+    queryKey: ["customer-vehicle-history", tenant?.id, customerId],
     queryFn: async () => {
-      const { data, error } = await supabase
+      let query = supabase
         .from("rentals")
         .select(`
           id,
@@ -30,9 +33,15 @@ export const useCustomerVehicleHistory = (customerId: string) => {
         `)
         .eq("customer_id", customerId)
         .order("start_date", { ascending: false });
-      
+
+      if (tenant?.id) {
+        query = query.eq("tenant_id", tenant.id);
+      }
+
+      const { data, error } = await query;
+
       if (error) throw error;
-      
+
       return data.map(rental => ({
         rental_id: rental.id,
         vehicle_id: rental.vehicle_id,
@@ -45,6 +54,6 @@ export const useCustomerVehicleHistory = (customerId: string) => {
         monthly_amount: rental.monthly_amount
       })) as CustomerVehicleHistory[];
     },
-    enabled: !!customerId,
+    enabled: !!tenant && !!customerId,
   });
 };

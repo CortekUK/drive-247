@@ -65,6 +65,7 @@ export const useCustomerBalanceWithStatus = (customerId: string | undefined) => 
       const { data: paymentsData, error: paymentsError } = await supabase
         .from("payments")
         .select("remaining_amount")
+        .eq("tenant_id", tenant.id)
         .eq("customer_id", customerId);
 
       if (paymentsError) throw paymentsError;

@@ -39,7 +39,7 @@ CUSTOMER:
 Name: ${customer.name}
 Email: ${customer.email}
 Phone: ${customer.phone}
-Type: ${customer.customer_type || customer.type}
+Type: ${customer.customer_type || 'Individual'}
 
 ===============================================================================
 

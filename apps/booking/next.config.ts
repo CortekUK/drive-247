@@ -1,4 +1,5 @@
 import type { NextConfig } from 'next';
+import path from 'path';
 
 const nextConfig: NextConfig = {
   typescript: {
@@ -21,8 +22,10 @@ const nextConfig: NextConfig = {
   experimental: {
     optimizePackageImports: ['lucide-react', '@radix-ui/react-icons'],
   },
-  // Disable static page generation to avoid SSR issues with Supabase client
+  // Standalone output for Vercel deployment
   output: 'standalone',
+  // Set workspace root to fix monorepo lockfile detection
+  outputFileTracingRoot: path.join(__dirname, '../../'),
   webpack: (config, { isServer }) => {
     // Fix for Supabase module resolution in Next.js 15
     config.resolve.extensionAlias = {
@@ -40,15 +43,8 @@ const nextConfig: NextConfig = {
       };
     }
 
-    // Force resolve @supabase modules correctly
-    config.resolve.alias = {
-      ...config.resolve.alias,
-    };
-
     return config;
   },
-  // Transpile Supabase packages
-  transpilePackages: ['@supabase/supabase-js', '@supabase/auth-helpers-nextjs'],
 };
 
 export default nextConfig;

@@ -19,6 +19,7 @@ import { FormDescription } from "@/components/ui/form";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { useQueryClient } from "@tanstack/react-query";
+import { useTenant } from "@/contexts/TenantContext";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
 import { addVehicleDialogSchema, type AddVehicleDialogFormValues } from "@/client-schemas/vehicles/add-vehicle-dialog";
@@ -38,6 +39,7 @@ export const AddVehicleDialog = ({ open, onOpenChange }: AddVehicleDialogProps) 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const { tenant } = useTenant();
 
   const form = useForm<VehicleFormData>({
     resolver: zodResolver(addVehicleDialogSchema),
@@ -172,7 +174,10 @@ export const AddVehicleDialog = ({ open, onOpenChange }: AddVehicleDialogProps) 
       // Insert vehicle first
       const { data: insertedVehicle, error } = await supabase
         .from("vehicles")
-        .insert(vehicleData)
+        .insert({
+          ...vehicleData,
+          tenant_id: tenant?.id || null,
+        })
         .select()
         .single();
 
@@ -211,6 +216,7 @@ export const AddVehicleDialog = ({ open, onOpenChange }: AddVehicleDialogProps) 
                 vehicle_id: insertedVehicle.id,
                 photo_url: publicUrl,
                 display_order: i,
+                tenant_id: tenant?.id || null,
               });
 
             if (insertError) {

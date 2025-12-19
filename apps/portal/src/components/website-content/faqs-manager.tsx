@@ -22,6 +22,7 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import { toast } from "sonner";
+import { useTenant } from "@/contexts/TenantContext";
 import { Plus, Edit, Trash2, GripVertical, Search, HelpCircle, ChevronUp, ChevronDown } from "lucide-react";
 
 interface FAQ {
@@ -45,6 +46,7 @@ const faqFormSchema = z.object({
 type FAQFormValues = z.infer<typeof faqFormSchema>;
 
 export function FAQsManager() {
+  const { tenant } = useTenant();
   const [faqs, setFaqs] = useState<FAQ[]>([]);
   const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -63,15 +65,23 @@ export function FAQsManager() {
   });
 
   useEffect(() => {
-    loadFAQs();
-  }, []);
+    if (tenant?.id) {
+      loadFAQs();
+    }
+  }, [tenant?.id]);
 
   const loadFAQs = async () => {
     setLoading(true);
-    const { data, error } = await supabase
+    let query = supabase
       .from("faqs")
       .select("*")
       .order("display_order", { ascending: true });
+
+    if (tenant?.id) {
+      query = query.eq("tenant_id", tenant.id);
+    }
+
+    const { data, error } = await query;
 
     if (error) {
       console.error("Failed to load FAQs:", error);
@@ -91,8 +101,16 @@ export function FAQsManager() {
     setFaqs(newOrder);
 
     try {
-      await supabase.from("faqs").update({ display_order: index - 1 }).eq("id", id);
-      await supabase.from("faqs").update({ display_order: index }).eq("id", newOrder[index].id);
+      let query1 = supabase.from("faqs").update({ display_order: index - 1 }).eq("id", id);
+      let query2 = supabase.from("faqs").update({ display_order: index }).eq("id", newOrder[index].id);
+
+      if (tenant?.id) {
+        query1 = query1.eq("tenant_id", tenant.id);
+        query2 = query2.eq("tenant_id", tenant.id);
+      }
+
+      await query1;
+      await query2;
       toast.success("FAQ order updated");
     } catch {
       toast.error("Failed to update order");
@@ -109,8 +127,16 @@ export function FAQsManager() {
     setFaqs(newOrder);
 
     try {
-      await supabase.from("faqs").update({ display_order: index + 1 }).eq("id", id);
-      await supabase.from("faqs").update({ display_order: index }).eq("id", newOrder[index].id);
+      let query1 = supabase.from("faqs").update({ display_order: index + 1 }).eq("id", id);
+      let query2 = supabase.from("faqs").update({ display_order: index }).eq("id", newOrder[index].id);
+
+      if (tenant?.id) {
+        query1 = query1.eq("tenant_id", tenant.id);
+        query2 = query2.eq("tenant_id", tenant.id);
+      }
+
+      await query1;
+      await query2;
       toast.success("FAQ order updated");
     } catch {
       toast.error("Failed to update order");
@@ -122,10 +148,16 @@ export function FAQsManager() {
     const oldFAQs = [...faqs];
     setFaqs(faqs.map(f => f.id === id ? { ...f, is_active: value } : f));
 
-    const { error } = await supabase
+    let query = supabase
       .from("faqs")
       .update({ is_active: value })
       .eq("id", id);
+
+    if (tenant?.id) {
+      query = query.eq("tenant_id", tenant.id);
+    }
+
+    const { error } = await query;
 
     if (error) {
       toast.error("Failed to update FAQ");
@@ -137,7 +169,7 @@ export function FAQsManager() {
 
   const onSubmit = async (data: FAQFormValues) => {
     if (editingFAQ) {
-      const { error } = await supabase
+      let updateQuery = supabase
         .from("faqs")
         .update({
           question: data.question,
@@ -145,6 +177,12 @@ export function FAQsManager() {
           is_active: data.is_active,
         })
         .eq("id", editingFAQ.id);
+
+      if (tenant?.id) {
+        updateQuery = updateQuery.eq("tenant_id", tenant.id);
+      }
+
+      const { error } = await updateQuery;
 
       if (error) {
         console.error("FAQ update error:", error);
@@ -161,6 +199,7 @@ export function FAQsManager() {
           answer: data.answer,
           is_active: data.is_active,
           display_order: maxOrder + 1,
+          tenant_id: tenant?.id || null,
         });
 
       if (error) {
@@ -184,7 +223,13 @@ export function FAQsManager() {
   const handleDelete = async () => {
     if (!deletingId) return;
 
-    const { error } = await supabase.from("faqs").delete().eq("id", deletingId);
+    let deleteQuery = supabase.from("faqs").delete().eq("id", deletingId);
+
+    if (tenant?.id) {
+      deleteQuery = deleteQuery.eq("tenant_id", tenant.id);
+    }
+
+    const { error } = await deleteQuery;
 
     if (error) {
       toast.error("Failed to delete FAQ");

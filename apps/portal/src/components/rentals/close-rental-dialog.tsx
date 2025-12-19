@@ -14,6 +14,7 @@ import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import { formatInTimeZone } from "date-fns-tz";
 import { closeRentalSchema, type CloseRentalFormValues } from "@/client-schemas/rentals/close-rental";
+import { useTenant } from "@/contexts/TenantContext";
 
 type CloseRentalFormData = CloseRentalFormValues;
 
@@ -44,6 +45,7 @@ export const CloseRentalDialog = ({ open, onOpenChange, rental }: CloseRentalDia
   const [step, setStep] = useState<'details' | 'confirm'>('details');
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const { tenant } = useTenant();
   
   const form = useForm<CloseRentalFormData>({
     resolver: zodResolver(closeRentalSchema),
@@ -57,7 +59,7 @@ export const CloseRentalDialog = ({ open, onOpenChange, rental }: CloseRentalDia
       if (!rental) throw new Error('No rental selected');
 
       // Update rental status to Closed
-      const { error: rentalError } = await supabase
+      let rentalQuery = supabase
         .from('rentals')
         .update({
           status: 'Closed',
@@ -66,13 +68,25 @@ export const CloseRentalDialog = ({ open, onOpenChange, rental }: CloseRentalDia
         })
         .eq('id', rental.id);
 
+      if (tenant?.id) {
+        rentalQuery = rentalQuery.eq('tenant_id', tenant.id);
+      }
+
+      const { error: rentalError } = await rentalQuery;
+
       if (rentalError) throw rentalError;
 
       // Update vehicle status to Available
-      const { error: vehicleError } = await supabase
+      let vehicleQuery = supabase
         .from('vehicles')
         .update({ status: 'Available' })
         .eq('id', rental.vehicle.id);
+
+      if (tenant?.id) {
+        vehicleQuery = vehicleQuery.eq('tenant_id', tenant.id);
+      }
+
+      const { error: vehicleError } = await vehicleQuery;
 
       if (vehicleError) throw vehicleError;
     },

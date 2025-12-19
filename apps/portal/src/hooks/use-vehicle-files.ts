@@ -77,6 +77,8 @@ export function useVehicleFiles(vehicleId: string) {
       if (uploadError) throw uploadError;
 
       // Save file metadata to database
+      if (!tenant?.id) throw new Error("No tenant context available");
+
       const { data, error: dbError } = await supabase
         .from('vehicle_files')
         .insert({
@@ -85,6 +87,7 @@ export function useVehicleFiles(vehicleId: string) {
           storage_path: filePath,
           content_type: file.type,
           size_bytes: file.size,
+          tenant_id: tenant.id,
         })
         .select()
         .single();
@@ -124,10 +127,16 @@ export function useVehicleFiles(vehicleId: string) {
       if (storageError) throw storageError;
 
       // Delete from database
-      const { error: dbError } = await supabase
+      let deleteQuery = supabase
         .from('vehicle_files')
         .delete()
         .eq('id', file.id);
+
+      if (tenant?.id) {
+        deleteQuery = deleteQuery.eq('tenant_id', tenant.id);
+      }
+
+      const { error: dbError } = await deleteQuery;
 
       if (dbError) throw dbError;
     },

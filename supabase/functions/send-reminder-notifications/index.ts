@@ -211,7 +211,7 @@ serve(async (req) => {
     // Get pending reminders that need to be sent today (remind_on <= today)
     const { data: pendingReminders, error: remindersError } = await supabase
       .from('reminders')
-      .select('*')
+      .select('*, tenant_id')
       .eq('status', 'pending')
       .lte('remind_on', today)
       .order('severity', { ascending: true }) // critical first
@@ -268,7 +268,8 @@ serve(async (req) => {
                 object_id: reminder.object_id,
                 severity: reminder.severity,
                 due_on: reminder.due_on
-              }
+              },
+              tenant_id: reminder.tenant_id
             });
 
           if (!notificationError) {
@@ -294,7 +295,8 @@ serve(async (req) => {
         .insert({
           reminder_id: reminder.id,
           action: 'sent',
-          note: 'Notification sent via send-reminder-notifications function'
+          note: 'Notification sent via send-reminder-notifications function',
+          tenant_id: reminder.tenant_id
         });
     }
 
@@ -313,7 +315,8 @@ serve(async (req) => {
         if (emailSent) {
           emailsSent++;
 
-          // Log email
+          // Log email - get tenant_id from first reminder
+          const emailTenantId = pendingReminders[0]?.tenant_id;
           await supabase.from('email_logs').insert({
             recipient_email: admin.email,
             recipient_name: admin.name || 'Admin',
@@ -323,7 +326,8 @@ serve(async (req) => {
             metadata: {
               reminder_count: pendingReminders.length,
               critical_count: pendingReminders.filter(r => r.severity === 'critical').length
-            }
+            },
+            tenant_id: emailTenantId
           });
         }
       }
