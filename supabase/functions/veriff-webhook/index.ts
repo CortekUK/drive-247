@@ -246,23 +246,30 @@ async function handleVeriffWebhook(
       return { ok: false, error: updateError.message };
     }
 
-    // Check if the document number is in the blocked list
+    // Check if the document number is in the blocked list (tenant-scoped)
     let isBlockedIdentity = false;
     let blockReason = '';
 
-    if (updateData.document_number) {
+    // Get tenant_id from verification or customer for tenant-scoped blocking check
+    const tenantId = verification.tenant_id || verification.customers?.tenant_id;
+
+    if (updateData.document_number && tenantId) {
+      // Use tenant-scoped check - only check blocked identities for this tenant
       const { data: blockedCheck } = await supabaseClient
         .from('blocked_identities')
         .select('reason, identity_type')
         .eq('identity_number', updateData.document_number)
+        .eq('tenant_id', tenantId)
         .eq('is_active', true)
-        .single();
+        .maybeSingle();
 
       if (blockedCheck) {
         isBlockedIdentity = true;
         blockReason = blockedCheck.reason;
-        console.log('BLOCKED IDENTITY DETECTED:', updateData.document_number, 'Reason:', blockReason);
+        console.log('BLOCKED IDENTITY DETECTED:', updateData.document_number, 'Tenant:', tenantId, 'Reason:', blockReason);
       }
+    } else if (updateData.document_number && !tenantId) {
+      console.log('WARNING: No tenant_id found for verification - skipping blocked identity check');
     }
 
     // Update customer status
@@ -304,8 +311,7 @@ async function handleVeriffWebhook(
 
     // If blocked, create a notification for admins
     if (isBlockedIdentity) {
-      // Get tenant_id from the verification or customer
-      const tenantId = verification.tenant_id || verification.customers?.tenant_id;
+      // tenantId already defined above for blocked identity check
 
       // Query admins for the same tenant (or all admins if no tenant)
       let adminQuery = supabaseClient

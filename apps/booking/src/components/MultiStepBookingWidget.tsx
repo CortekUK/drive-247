@@ -25,6 +25,7 @@ import InsuranceUploadDialog from "./insurance-upload-dialog";
 import AIScanProgress from "./ai-scan-progress";
 import { stripePromise } from "@/config/stripe";
 import { usePageContent, defaultHomeContent, mergeWithDefaults } from "@/hooks/usePageContent";
+import { canCustomerBook } from "@/lib/tenantQueries";
 interface VehiclePhoto {
   photo_url: string;
 }
@@ -641,6 +642,21 @@ const MultiStepBookingWidget = () => {
     }
     setLoading(true);
     try {
+      // Check if customer is blocked before proceeding
+      if (tenant?.id) {
+        const blockCheck = await canCustomerBook(
+          tenant.id,
+          formData.customerEmail,
+          formData.licenseNumber || undefined
+        );
+
+        if (!blockCheck.canBook) {
+          toast.error(blockCheck.reason || "You are not allowed to make a booking. Please contact support.");
+          setLoading(false);
+          return;
+        }
+      }
+
       const priceBreakdown = calculatePriceBreakdown();
       const selectedVehicle = vehicles.find(v => v.id === formData.vehicleId);
 

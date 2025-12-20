@@ -89,14 +89,84 @@ export function getTenantBlockedDates(tenantId: string) {
  */
 export async function isCustomerBlocked(tenantId: string, customerId: string) {
   const { data, error } = await supabase
-    .from('blocked_customers')
-    .select('id')
+    .from('customers')
+    .select('is_blocked, blocked_reason')
+    .eq('id', customerId)
     .eq('tenant_id', tenantId)
-    .eq('customer_id', customerId)
-    .eq('is_active', true)
     .single();
 
-  return { isBlocked: !!data, error };
+  return {
+    isBlocked: data?.is_blocked ?? false,
+    reason: data?.blocked_reason,
+    error
+  };
+}
+
+/**
+ * Check if an identity (license number, ID number) is blocked for a tenant
+ * @param tenantId - The tenant ID
+ * @param identityNumber - The license number or ID number to check
+ */
+export async function isIdentityBlocked(tenantId: string, identityNumber: string) {
+  if (!identityNumber || identityNumber.trim() === '') {
+    return { isBlocked: false, reason: null, identityType: null, error: null };
+  }
+
+  const { data, error } = await supabase
+    .from('blocked_identities')
+    .select('reason, identity_type')
+    .eq('tenant_id', tenantId)
+    .eq('identity_number', identityNumber.trim())
+    .eq('is_active', true)
+    .in('identity_type', ['license', 'id_card', 'passport'])
+    .maybeSingle();
+
+  return {
+    isBlocked: !!data,
+    reason: data?.reason ?? null,
+    identityType: data?.identity_type ?? null,
+    error
+  };
+}
+
+/**
+ * Check if a customer can book (not blocked by customer record or identity)
+ * @param tenantId - The tenant ID
+ * @param customerEmail - Customer email to look up existing customer
+ * @param licenseNumber - License number to check against blocked identities
+ */
+export async function canCustomerBook(
+  tenantId: string,
+  customerEmail: string,
+  licenseNumber?: string
+): Promise<{ canBook: boolean; reason: string | null }> {
+  // Check if existing customer is blocked
+  const { data: existingCustomer } = await supabase
+    .from('customers')
+    .select('id, is_blocked, blocked_reason')
+    .eq('tenant_id', tenantId)
+    .eq('email', customerEmail)
+    .maybeSingle();
+
+  if (existingCustomer?.is_blocked) {
+    return {
+      canBook: false,
+      reason: existingCustomer.blocked_reason || 'Your account has been blocked. Please contact support.'
+    };
+  }
+
+  // Check if license number is in blocked identities
+  if (licenseNumber && licenseNumber.trim() !== '') {
+    const identityCheck = await isIdentityBlocked(tenantId, licenseNumber);
+    if (identityCheck.isBlocked) {
+      return {
+        canBook: false,
+        reason: identityCheck.reason || 'This identity has been blocked. Please contact support.'
+      };
+    }
+  }
+
+  return { canBook: true, reason: null };
 }
 
 /**
