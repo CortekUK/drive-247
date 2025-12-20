@@ -148,12 +148,20 @@ const MultiStepBookingWidget = () => {
     const savedVerificationSessionId = localStorage.getItem('verificationSessionId');
     const savedVerificationStatus = localStorage.getItem('verificationStatus') as 'init' | 'pending' | 'verified' | 'rejected' | null;
     const savedVerificationToken = localStorage.getItem('verificationToken');
+    const savedVerifiedName = localStorage.getItem('verifiedCustomerName');
+    const savedLicenseNumber = localStorage.getItem('verifiedLicenseNumber');
 
     if (savedVerificationSessionId && savedVerificationStatus) {
       setVerificationSessionId(savedVerificationSessionId);
       setVerificationStatus(savedVerificationStatus);
-      setFormData(prev => ({ ...prev, verificationSessionId: savedVerificationSessionId }));
-      console.log('✅ Loaded verification from localStorage:', savedVerificationSessionId, savedVerificationStatus);
+      setFormData(prev => ({
+        ...prev,
+        verificationSessionId: savedVerificationSessionId,
+        // Restore verified data if available
+        ...(savedVerifiedName && { customerName: savedVerifiedName }),
+        ...(savedLicenseNumber && { licenseNumber: savedLicenseNumber }),
+      }));
+      console.log('✅ Loaded verification from localStorage:', savedVerificationSessionId, savedVerificationStatus, savedVerifiedName);
     }
 
     // Handle window focus - check verification when user returns from Veriff popup
@@ -170,8 +178,9 @@ const MultiStepBookingWidget = () => {
           if (status.review_result === 'GREEN') {
             setVerificationStatus('verified');
             localStorage.setItem('verificationStatus', 'verified');
-            toast.success("Identity verification successful!");
             console.log('✅ Verification updated on window focus');
+            // Auto-populate form with verified data
+            populateFormWithVerifiedData(status);
           } else if (status.review_result === 'RED') {
             setVerificationStatus('rejected');
             localStorage.setItem('verificationStatus', 'rejected');
@@ -207,8 +216,9 @@ const MultiStepBookingWidget = () => {
             if (status?.review_result === 'GREEN') {
               setVerificationStatus('verified');
               localStorage.setItem('verificationStatus', 'verified');
-              toast.success("Identity verification successful!");
               console.log('✅ Verification confirmed via popup message');
+              // Auto-populate form with verified data
+              populateFormWithVerifiedData(status);
               return true;
             } else if (status?.review_result === 'RED') {
               setVerificationStatus('rejected');
@@ -386,12 +396,12 @@ const MultiStepBookingWidget = () => {
     }
   };
 
-  // Check verification status
+  // Check verification status - returns full verified data for auto-population
   const checkVerificationStatus = async (sessionId: string) => {
     try {
       const { data, error } = await supabase
         .from('identity_verifications')
-        .select('review_result, status, review_status')
+        .select('review_result, status, review_status, first_name, last_name, document_number, date_of_birth')
         .eq('session_id', sessionId)
         .maybeSingle(); // Use maybeSingle() instead of single() to avoid 406 errors when record doesn't exist yet
 
@@ -407,14 +417,64 @@ const MultiStepBookingWidget = () => {
     }
   };
 
+  // Auto-populate form with verified data from Veriff
+  const populateFormWithVerifiedData = (verificationData: { first_name?: string | null; last_name?: string | null; document_number?: string | null }) => {
+    const firstName = verificationData.first_name || '';
+    const lastName = verificationData.last_name || '';
+    const fullName = [firstName, lastName].filter(Boolean).join(' ').trim();
+
+    if (fullName) {
+      setFormData(prev => ({
+        ...prev,
+        customerName: fullName,
+        licenseNumber: verificationData.document_number || prev.licenseNumber,
+      }));
+
+      // Store verified name in localStorage for persistence across page refreshes
+      localStorage.setItem('verifiedCustomerName', fullName);
+      if (verificationData.document_number) {
+        localStorage.setItem('verifiedLicenseNumber', verificationData.document_number);
+      }
+
+      toast.success(`Your details have been verified and updated: ${fullName}`, { duration: 5000 });
+      console.log('✅ Form populated with verified data:', { customerName: fullName, licenseNumber: verificationData.document_number });
+    }
+  };
+
+  // DEV MODE: Simulate Veriff verification with mock data
+  const handleDevMockVerification = () => {
+    const mockVerificationData = {
+      review_result: 'GREEN',
+      status: 'completed',
+      review_status: 'completed',
+      first_name: 'John',
+      last_name: 'Developer',
+      document_number: 'DL123456789',
+      date_of_birth: '1990-01-15',
+    };
+
+    const mockSessionId = `dev-mock-${Date.now()}`;
+
+    setVerificationSessionId(mockSessionId);
+    setVerificationStatus('verified');
+    setFormData(prev => ({ ...prev, verificationSessionId: mockSessionId }));
+    localStorage.setItem('verificationSessionId', mockSessionId);
+    localStorage.setItem('verificationStatus', 'verified');
+
+    populateFormWithVerifiedData(mockVerificationData);
+    console.log('🔓 DEV MODE: Mock verification completed with data:', mockVerificationData);
+  };
+
   // Clear verification data
   const handleClearVerification = () => {
     setVerificationSessionId(null);
     setVerificationStatus('init');
-    setFormData(prev => ({ ...prev, verificationSessionId: "" }));
+    setFormData(prev => ({ ...prev, verificationSessionId: "", licenseNumber: "" }));
     localStorage.removeItem('verificationSessionId');
     localStorage.removeItem('verificationToken');
     localStorage.removeItem('verificationStatus');
+    localStorage.removeItem('verifiedCustomerName');
+    localStorage.removeItem('verifiedLicenseNumber');
     toast.info("Verification cleared. You can verify again.");
   };
 
@@ -477,8 +537,10 @@ const MultiStepBookingWidget = () => {
             if (status.review_result === 'GREEN') {
               setVerificationStatus('verified');
               localStorage.setItem('verificationStatus', 'verified');
-              toast.success("Identity verification successful!");
               clearInterval(pollInterval);
+
+              // Auto-populate form with verified data
+              populateFormWithVerifiedData(status);
 
               if (typeof window !== 'undefined' && (window as any).gtag) {
                 (window as any).gtag('event', 'verification_completed', {
@@ -2678,8 +2740,14 @@ const MultiStepBookingWidget = () => {
                       validateField('customerName', value);
                     }}
                     placeholder="Enter your full name"
-                    className="h-12 focus-visible:ring-primary"
+                    className={cn("h-12 focus-visible:ring-primary", verificationStatus === 'verified' && "bg-muted cursor-not-allowed")}
+                    disabled={verificationStatus === 'verified'}
                   />
+                  {verificationStatus === 'verified' && (
+                    <p className="text-xs text-green-600 flex items-center gap-1">
+                      <CheckCircle className="w-3 h-3" /> Verified from ID document
+                    </p>
+                  )}
                   {errors.customerName && <p className="text-sm text-destructive">{errors.customerName}</p>}
                 </div>
 
@@ -2787,6 +2855,18 @@ const MultiStepBookingWidget = () => {
                             </>
                           )}
                         </Button>
+                        {/* DEV MODE: Mock verification button - only visible when dev_mode is enabled in localStorage */}
+                        {typeof window !== 'undefined' && localStorage.getItem('dev_mode') === 'true' && (
+                          <Button
+                            onClick={handleDevMockVerification}
+                            variant="outline"
+                            className="border-purple-500 text-purple-600 hover:bg-purple-500 hover:text-white w-full sm:w-auto text-sm"
+                            size="sm"
+                          >
+                            <span className="mr-2">🔧</span>
+                            DEV: Mock Verify
+                          </Button>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -2845,10 +2925,15 @@ const MultiStepBookingWidget = () => {
                       <div className="flex items-start gap-2 sm:gap-3 flex-1">
                         <CheckCircle className="w-5 h-5 text-green-500 mt-0.5 flex-shrink-0" />
                         <div className="flex-1 min-w-0">
-                          <p className="text-sm font-medium mb-1 text-green-600 dark:text-green-500">Verified</p>
+                          <p className="text-sm font-medium mb-1 text-green-600 dark:text-green-500">Identity Verified</p>
                           <p className="text-xs sm:text-sm text-muted-foreground">
-                            Your identity has been successfully verified. You can proceed with your booking.
+                            Your identity has been verified as <strong>{formData.customerName}</strong>. Your details have been updated with verified information.
                           </p>
+                          {formData.licenseNumber && (
+                            <p className="text-xs text-muted-foreground mt-1">
+                              License/ID: {formData.licenseNumber.slice(0, 4)}****
+                            </p>
+                          )}
                         </div>
                       </div>
                       <Button
