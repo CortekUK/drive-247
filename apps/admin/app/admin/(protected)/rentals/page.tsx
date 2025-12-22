@@ -3,6 +3,8 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { generateMasterPassword, hashMasterPassword } from '@/lib/masterPassword';
+import { toast } from '@/components/ui/sonner';
+import { TableSkeleton } from '@/components/skeletons/TableSkeleton';
 
 interface Tenant {
   id: string;
@@ -160,7 +162,7 @@ export default function RentalCompaniesPage() {
       loadTenants();
 
     } catch (error: any) {
-      alert(`Error creating tenant: ${error.message}`);
+      toast.error(`Error creating tenant: ${error.message}`);
     } finally {
       setCreating(false);
     }
@@ -169,12 +171,12 @@ export default function RentalCompaniesPage() {
   const handleViewDetails = async (tenant: Tenant) => {
     // Check if master password exists
     if (!tenant.master_password_hash) {
-      alert('Please generate a master password first');
+      toast.error('Please generate a master password first');
       return;
     }
 
     // Show info that credentials cannot be retrieved
-    alert('For security reasons, credentials can only be viewed once during creation. Please use the "Generate" button to create new credentials if needed.');
+    toast.info('For security reasons, credentials can only be viewed once during creation. Please use the "Generate" button to create new credentials if needed.');
   };
 
   const handleUpdateStatus = async (id: string, newStatus: string) => {
@@ -187,7 +189,7 @@ export default function RentalCompaniesPage() {
       if (error) throw error;
       loadTenants();
     } catch (error: any) {
-      alert(`Error updating status: ${error.message}`);
+      toast.error(`Error updating status: ${error.message}`);
     }
   };
 
@@ -211,7 +213,7 @@ export default function RentalCompaniesPage() {
     );
 
     if (confirmName !== companyName) {
-      alert('Company name did not match. Deletion cancelled.');
+      toast.error('Company name did not match. Deletion cancelled.');
       return;
     }
 
@@ -223,10 +225,10 @@ export default function RentalCompaniesPage() {
 
       if (error) throw error;
 
-      alert(`${companyName} has been permanently deleted.`);
+      toast.success(`${companyName} has been permanently deleted.`);
       loadTenants();
     } catch (error: any) {
-      alert(`Error deleting tenant: ${error.message}`);
+      toast.error(`Error deleting tenant: ${error.message}`);
     }
   };
 
@@ -246,13 +248,13 @@ export default function RentalCompaniesPage() {
       setShowMasterPassword(tenantId);
       loadTenants();
     } catch (error: any) {
-      alert(`Error generating master password: ${error.message}`);
+      toast.error(`Error generating master password: ${error.message}`);
     }
   };
 
   const copyToClipboard = (text: string, label: string) => {
     navigator.clipboard.writeText(text);
-    alert(`${label} copied to clipboard!`);
+    toast.success(`${label} copied to clipboard!`);
   };
 
   const copyAllCredentials = () => {
@@ -281,14 +283,17 @@ Access URLs:
     `.trim();
 
     navigator.clipboard.writeText(text);
-    alert('All credentials copied to clipboard!');
+    toast.success('All credentials copied to clipboard!');
   };
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-full">
-        <div className="text-xl text-gray-600">Loading rental companies...</div>
-      </div>
+      <TableSkeleton
+        rows={5}
+        columns={7}
+        title="Rental Companies"
+        subtitle="Manage all rental companies on the platform"
+      />
     );
   }
 
@@ -296,62 +301,62 @@ Access URLs:
     <div className="p-8">
       <div className="flex justify-between items-center mb-8">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900">Rental Companies</h1>
-          <p className="mt-2 text-gray-600">Manage all rental companies on the platform</p>
+          <h1 className="text-3xl font-bold text-white">Rental Companies</h1>
+          <p className="mt-2 text-gray-400">Manage all rental companies on the platform</p>
         </div>
         <button
           onClick={() => setShowCreateModal(true)}
-          className="px-6 py-3 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 font-medium"
+          className="px-6 py-3 bg-primary-600 text-white rounded-lg hover:bg-primary-700 font-medium"
         >
           + Add New Company
         </button>
       </div>
 
-      <div className="bg-white rounded-lg shadow overflow-hidden">
-        <table className="min-w-full divide-y divide-gray-200">
-          <thead className="bg-gray-50">
+      <div className="bg-dark-card rounded-lg shadow overflow-hidden border border-dark-border">
+        <table className="min-w-full divide-y divide-dark-border">
+          <thead className="bg-dark-bg">
             <tr>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">
                 Company
               </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">
                 Slug
               </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">
                 Contact Email
               </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">
                 Status
               </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">
                 Master Password
               </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">
                 Created
               </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">
                 Actions
               </th>
             </tr>
           </thead>
-          <tbody className="bg-white divide-y divide-gray-200">
+          <tbody className="bg-dark-card divide-y divide-dark-border">
             {tenants.map((tenant) => (
-              <tr key={tenant.id}>
+              <tr key={tenant.id} className="hover:bg-dark-hover">
                 <td className="px-6 py-4 whitespace-nowrap">
-                  <div className="text-sm font-medium text-gray-900">{tenant.company_name}</div>
+                  <div className="text-sm font-medium text-white">{tenant.company_name}</div>
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap">
-                  <div className="text-sm text-gray-900">{tenant.slug}</div>
+                  <div className="text-sm text-gray-300">{tenant.slug}</div>
                   <div className="text-xs text-gray-500">{tenant.slug}.portal.drive-247.com</div>
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap">
-                  <div className="text-sm text-gray-500">{tenant.contact_email}</div>
+                  <div className="text-sm text-gray-400">{tenant.contact_email}</div>
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap">
                   <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
                     tenant.status === 'active'
-                      ? 'bg-green-100 text-green-800'
-                      : 'bg-red-100 text-red-800'
+                      ? 'bg-green-900/30 text-green-400 border border-green-800/50'
+                      : 'bg-red-900/30 text-red-400 border border-red-800/50'
                   }`}>
                     {tenant.status}
                   </span>
@@ -359,12 +364,12 @@ Access URLs:
                 <td className="px-6 py-4 whitespace-nowrap">
                   {tenant.master_password_hash ? (
                     <div className="flex items-center space-x-2">
-                      <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-blue-100 text-blue-800">
+                      <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-blue-900/30 text-blue-400 border border-blue-800/50">
                         Configured
                       </span>
                       <button
                         onClick={() => handleGenerateMasterPassword(tenant.id)}
-                        className="text-xs text-indigo-600 hover:text-indigo-900"
+                        className="text-xs text-primary-400 hover:text-primary-300"
                       >
                         Regenerate
                       </button>
@@ -372,40 +377,40 @@ Access URLs:
                   ) : (
                     <button
                       onClick={() => handleGenerateMasterPassword(tenant.id)}
-                      className="text-xs text-indigo-600 hover:text-indigo-900 font-medium"
+                      className="text-xs text-primary-400 hover:text-primary-300 font-medium"
                     >
                       Generate
                     </button>
                   )}
                 </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-400">
                   {new Date(tenant.created_at).toLocaleDateString('en-US')}
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm font-medium space-x-2">
                   {tenant.status === 'active' ? (
                     <button
                       onClick={() => handleUpdateStatus(tenant.id, 'suspended')}
-                      className="text-red-600 hover:text-red-900"
+                      className="text-red-400 hover:text-red-300"
                     >
                       Suspend
                     </button>
                   ) : (
                     <button
                       onClick={() => handleUpdateStatus(tenant.id, 'active')}
-                      className="text-green-600 hover:text-green-900"
+                      className="text-green-400 hover:text-green-300"
                     >
                       Activate
                     </button>
                   )}
                   <button
                     onClick={() => handleViewDetails(tenant)}
-                    className="text-indigo-600 hover:text-indigo-900"
+                    className="text-primary-400 hover:text-primary-300"
                   >
                     View Details
                   </button>
                   <button
                     onClick={() => handleDeleteTenant(tenant.id, tenant.company_name)}
-                    className="text-red-600 hover:text-red-900 font-semibold"
+                    className="text-red-400 hover:text-red-300 font-semibold"
                   >
                     Delete
                   </button>
@@ -417,20 +422,20 @@ Access URLs:
 
         {tenants.length === 0 && (
           <div className="text-center py-12">
-            <p className="text-gray-500">No rental companies yet. Create one to get started.</p>
+            <p className="text-gray-400">No rental companies yet. Create one to get started.</p>
           </div>
         )}
       </div>
 
       {/* Create Tenant Modal */}
       {showCreateModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-8 max-w-md w-full">
-            <h2 className="text-2xl font-bold text-gray-900 mb-4">Add New Rental Company</h2>
+        <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50">
+          <div className="bg-dark-card rounded-lg p-8 max-w-md w-full border border-dark-border">
+            <h2 className="text-2xl font-bold text-white mb-4">Add New Rental Company</h2>
 
             <form onSubmit={handleCreateTenant} className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="block text-sm font-medium text-gray-300 mb-1">
                   Company Name *
                 </label>
                 <input
@@ -438,13 +443,13 @@ Access URLs:
                   required
                   value={formData.companyName}
                   onChange={(e) => setFormData({ ...formData, companyName: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  className="w-full px-3 py-2 bg-dark-bg border border-dark-border rounded-md text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-primary-500"
                   placeholder="Acme Rentals"
                 />
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="block text-sm font-medium text-gray-300 mb-1">
                   Slug (subdomain) *
                 </label>
                 <input
@@ -452,7 +457,7 @@ Access URLs:
                   required
                   value={formData.slug}
                   onChange={(e) => setFormData({ ...formData, slug: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  className="w-full px-3 py-2 bg-dark-bg border border-dark-border rounded-md text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-primary-500"
                   placeholder="acme-rentals"
                 />
                 <p className="text-xs text-gray-500 mt-1">
@@ -461,7 +466,7 @@ Access URLs:
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="block text-sm font-medium text-gray-300 mb-1">
                   Contact Email *
                 </label>
                 <input
@@ -469,7 +474,7 @@ Access URLs:
                   required
                   value={formData.contactEmail}
                   onChange={(e) => setFormData({ ...formData, contactEmail: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  className="w-full px-3 py-2 bg-dark-bg border border-dark-border rounded-md text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-primary-500"
                   placeholder="admin@acmerentals.com"
                 />
               </div>
@@ -478,14 +483,14 @@ Access URLs:
                 <button
                   type="button"
                   onClick={() => setShowCreateModal(false)}
-                  className="flex-1 px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50"
+                  className="flex-1 px-4 py-2 border border-dark-border rounded-md text-gray-300 hover:bg-dark-hover"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={creating}
-                  className="flex-1 px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 disabled:opacity-50"
+                  className="flex-1 px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700 disabled:opacity-50"
                 >
                   {creating ? 'Creating...' : 'Create Company'}
                 </button>
@@ -497,25 +502,25 @@ Access URLs:
 
       {/* Tenant Details Modal with Complete Credentials */}
       {showDetailsModal && selectedTenantCreds && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-lg p-8 max-w-2xl w-full max-h-[90vh] overflow-y-auto">
-            <h2 className="text-2xl font-bold text-gray-900 mb-2">
+        <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50 p-4">
+          <div className="bg-dark-card rounded-lg p-8 max-w-2xl w-full max-h-[90vh] overflow-y-auto border border-dark-border">
+            <h2 className="text-2xl font-bold text-white mb-2">
               {selectedTenantCreds.companyName} - Complete Setup
             </h2>
-            <p className="text-sm text-gray-600 mb-6">
+            <p className="text-sm text-gray-400 mb-6">
               Rental company created successfully! Save these credentials securely.
             </p>
 
             {/* Warning Banner */}
-            <div className="bg-yellow-50 border-l-4 border-yellow-400 p-4 mb-6">
+            <div className="bg-yellow-900/20 border-l-4 border-yellow-500 p-4 mb-6">
               <div className="flex">
                 <div className="flex-shrink-0">
-                  <svg className="h-5 w-5 text-yellow-400" viewBox="0 0 20 20" fill="currentColor">
+                  <svg className="h-5 w-5 text-yellow-500" viewBox="0 0 20 20" fill="currentColor">
                     <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
                   </svg>
                 </div>
                 <div className="ml-3">
-                  <p className="text-sm text-yellow-700">
+                  <p className="text-sm text-yellow-400">
                     <strong>Important:</strong> These credentials will only be shown once. Please save them securely before closing this window.
                   </p>
                 </div>
@@ -523,38 +528,38 @@ Access URLs:
             </div>
 
             {/* Company Information */}
-            <div className="bg-gray-50 rounded-lg p-4 mb-4 border border-gray-200">
-              <h3 className="text-lg font-semibold text-gray-900 mb-3">Company Information</h3>
+            <div className="bg-dark-bg rounded-lg p-4 mb-4 border border-dark-border">
+              <h3 className="text-lg font-semibold text-white mb-3">Company Information</h3>
               <div className="space-y-2">
                 <div className="flex justify-between items-center">
-                  <span className="text-sm text-gray-600">Company Name:</span>
-                  <span className="text-sm font-medium text-gray-900">{selectedTenantCreds.companyName}</span>
+                  <span className="text-sm text-gray-400">Company Name:</span>
+                  <span className="text-sm font-medium text-white">{selectedTenantCreds.companyName}</span>
                 </div>
                 <div className="flex justify-between items-center">
-                  <span className="text-sm text-gray-600">Slug:</span>
-                  <span className="text-sm font-medium text-gray-900">{selectedTenantCreds.slug}</span>
+                  <span className="text-sm text-gray-400">Slug:</span>
+                  <span className="text-sm font-medium text-white">{selectedTenantCreds.slug}</span>
                 </div>
                 <div className="flex justify-between items-center">
-                  <span className="text-sm text-gray-600">Portal:</span>
-                  <span className="text-sm font-semibold text-indigo-600">{selectedTenantCreds.slug}.portal.drive-247.com</span>
+                  <span className="text-sm text-gray-400">Portal:</span>
+                  <span className="text-sm font-semibold text-primary-400">{selectedTenantCreds.slug}.portal.drive-247.com</span>
                 </div>
                 <div className="flex justify-between items-center">
-                  <span className="text-sm text-gray-600">Booking:</span>
-                  <span className="text-sm font-semibold text-indigo-600">{selectedTenantCreds.slug}.drive-247.com</span>
+                  <span className="text-sm text-gray-400">Booking:</span>
+                  <span className="text-sm font-semibold text-primary-400">{selectedTenantCreds.slug}.drive-247.com</span>
                 </div>
                 <div className="flex justify-between items-center">
-                  <span className="text-sm text-gray-600">Contact Email:</span>
-                  <span className="text-sm font-medium text-gray-900">{selectedTenantCreds.contactEmail}</span>
+                  <span className="text-sm text-gray-400">Contact Email:</span>
+                  <span className="text-sm font-medium text-white">{selectedTenantCreds.contactEmail}</span>
                 </div>
               </div>
             </div>
 
             {/* Master Password */}
-            <div className="bg-indigo-50 rounded-lg p-4 mb-4 border border-indigo-200">
-              <h3 className="text-lg font-semibold text-gray-900 mb-3">Master Password (Super Admin)</h3>
-              <p className="text-xs text-gray-600 mb-2">Use this to access the tenant portal as super admin</p>
+            <div className="bg-indigo-900/20 rounded-lg p-4 mb-4 border border-indigo-800/50">
+              <h3 className="text-lg font-semibold text-white mb-3">Master Password (Super Admin)</h3>
+              <p className="text-xs text-gray-400 mb-2">Use this to access the tenant portal as super admin</p>
               <div className="flex items-center space-x-2">
-                <code className="flex-1 bg-indigo-100 px-4 py-3 rounded-lg border-2 border-indigo-300 text-sm font-mono break-all text-indigo-900 font-semibold">
+                <code className="flex-1 bg-indigo-900/30 px-4 py-3 rounded-lg border border-indigo-700 text-sm font-mono break-all text-indigo-300 font-semibold">
                   {selectedTenantCreds.masterPassword}
                 </code>
                 <button
@@ -567,15 +572,15 @@ Access URLs:
             </div>
 
             {/* Admin User Credentials */}
-            <div className="bg-green-50 rounded-lg p-4 mb-4 border border-green-200">
-              <h3 className="text-lg font-semibold text-gray-900 mb-3">Admin User Credentials</h3>
-              <p className="text-xs text-gray-600 mb-3">Initial admin account for the rental company</p>
+            <div className="bg-green-900/20 rounded-lg p-4 mb-4 border border-green-800/50">
+              <h3 className="text-lg font-semibold text-white mb-3">Admin User Credentials</h3>
+              <p className="text-xs text-gray-400 mb-3">Initial admin account for the rental company</p>
 
               <div className="space-y-3">
                 <div>
-                  <label className="block text-xs font-semibold text-gray-700 mb-1">Email</label>
+                  <label className="block text-xs font-semibold text-gray-300 mb-1">Email</label>
                   <div className="flex items-center space-x-2">
-                    <code className="flex-1 bg-green-100 px-4 py-3 rounded-lg border-2 border-green-300 text-sm font-mono break-all text-green-900 font-semibold">
+                    <code className="flex-1 bg-green-900/30 px-4 py-3 rounded-lg border border-green-700 text-sm font-mono break-all text-green-300 font-semibold">
                       {selectedTenantCreds.adminEmail}
                     </code>
                     <button
@@ -588,9 +593,9 @@ Access URLs:
                 </div>
 
                 <div>
-                  <label className="block text-xs font-semibold text-gray-700 mb-1">Password</label>
+                  <label className="block text-xs font-semibold text-gray-300 mb-1">Password</label>
                   <div className="flex items-center space-x-2">
-                    <code className="flex-1 bg-green-100 px-4 py-3 rounded-lg border-2 border-green-300 text-sm font-mono break-all text-green-900 font-semibold">
+                    <code className="flex-1 bg-green-900/30 px-4 py-3 rounded-lg border border-green-700 text-sm font-mono break-all text-green-300 font-semibold">
                       {selectedTenantCreds.adminPassword}
                     </code>
                     <button
@@ -605,14 +610,14 @@ Access URLs:
             </div>
 
             {/* Access URLs */}
-            <div className="bg-blue-50 rounded-lg p-4 mb-6 border border-blue-200">
-              <h3 className="text-lg font-semibold text-gray-900 mb-3">Access URLs</h3>
+            <div className="bg-blue-900/20 rounded-lg p-4 mb-6 border border-blue-800/50">
+              <h3 className="text-lg font-semibold text-white mb-3">Access URLs</h3>
 
               <div className="space-y-3">
                 <div>
-                  <label className="block text-xs font-semibold text-gray-700 mb-1">Rental Portal (Admin Dashboard)</label>
+                  <label className="block text-xs font-semibold text-gray-300 mb-1">Rental Portal (Admin Dashboard)</label>
                   <div className="flex items-center space-x-2">
-                    <code className="flex-1 bg-blue-100 px-4 py-3 rounded-lg border-2 border-blue-300 text-sm break-all text-blue-900 font-semibold">
+                    <code className="flex-1 bg-blue-900/30 px-4 py-3 rounded-lg border border-blue-700 text-sm break-all text-blue-300 font-semibold">
                       {selectedTenantCreds.portalUrl}
                     </code>
                     <button
@@ -625,9 +630,9 @@ Access URLs:
                 </div>
 
                 <div>
-                  <label className="block text-xs font-semibold text-gray-700 mb-1">Booking Site (Customer Facing)</label>
+                  <label className="block text-xs font-semibold text-gray-300 mb-1">Booking Site (Customer Facing)</label>
                   <div className="flex items-center space-x-2">
-                    <code className="flex-1 bg-blue-100 px-4 py-3 rounded-lg border-2 border-blue-300 text-sm break-all text-blue-900 font-semibold">
+                    <code className="flex-1 bg-blue-900/30 px-4 py-3 rounded-lg border border-blue-700 text-sm break-all text-blue-300 font-semibold">
                       {selectedTenantCreds.bookingUrl}
                     </code>
                     <button
@@ -645,18 +650,18 @@ Access URLs:
             <div className="flex space-x-3">
               <button
                 onClick={copyAllCredentials}
-                className="flex-1 px-6 py-3 bg-gray-700 text-white rounded-lg hover:bg-gray-800 font-semibold shadow-md hover:shadow-lg transition-all"
+                className="flex-1 px-6 py-3 bg-dark-hover text-white rounded-lg hover:bg-dark-border font-semibold shadow-md hover:shadow-lg transition-all border border-dark-border"
               >
-                📋 Copy All Credentials
+                Copy All Credentials
               </button>
               <button
                 onClick={() => {
                   setShowDetailsModal(false);
                   setSelectedTenantCreds(null);
                 }}
-                className="flex-1 px-6 py-3 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 font-semibold shadow-md hover:shadow-lg transition-all"
+                className="flex-1 px-6 py-3 bg-primary-600 text-white rounded-lg hover:bg-primary-700 font-semibold shadow-md hover:shadow-lg transition-all"
               >
-                ✓ Done
+                Done
               </button>
             </div>
           </div>
@@ -665,36 +670,36 @@ Access URLs:
 
       {/* Master Password Regeneration Modal */}
       {showMasterPassword && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-8 max-w-md w-full">
-            <h2 className="text-2xl font-bold text-gray-900 mb-4">Master Password Generated</h2>
+        <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50">
+          <div className="bg-dark-card rounded-lg p-8 max-w-md w-full border border-dark-border">
+            <h2 className="text-2xl font-bold text-white mb-4">Master Password Generated</h2>
 
-            <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-4">
-              <p className="text-sm text-yellow-800 mb-2">
-                ⚠️ <strong>Important:</strong> Save this password securely. It will only be shown once.
+            <div className="bg-yellow-900/20 border border-yellow-700 rounded-lg p-4 mb-4">
+              <p className="text-sm text-yellow-400 mb-2">
+                <strong>Important:</strong> Save this password securely. It will only be shown once.
               </p>
             </div>
 
-            <div className="bg-gray-100 rounded-lg p-4 mb-4">
-              <label className="block text-sm font-medium text-gray-700 mb-2">
+            <div className="bg-dark-bg rounded-lg p-4 mb-4 border border-dark-border">
+              <label className="block text-sm font-medium text-gray-300 mb-2">
                 Master Password
               </label>
               <div className="flex items-center space-x-2">
-                <code className="flex-1 bg-white px-3 py-2 rounded border border-gray-300 text-sm font-mono break-all">
+                <code className="flex-1 bg-dark-hover px-3 py-2 rounded border border-dark-border text-sm font-mono break-all text-white">
                   {generatedPassword}
                 </code>
                 <button
                   onClick={() => copyToClipboard(generatedPassword, 'Master password')}
-                  className="px-3 py-2 bg-indigo-600 text-white rounded hover:bg-indigo-700 text-sm whitespace-nowrap"
+                  className="px-3 py-2 bg-primary-600 text-white rounded hover:bg-primary-700 text-sm whitespace-nowrap"
                 >
                   Copy
                 </button>
               </div>
             </div>
 
-            <p className="text-sm text-gray-600 mb-6">
+            <p className="text-sm text-gray-400 mb-6">
               Use this password to log into the tenant's portal without knowing their actual password.
-              Access the portal at: <strong>{tenants.find(t => t.id === showMasterPassword)?.slug}.portal.drive-247.com</strong>
+              Access the portal at: <strong className="text-primary-400">{tenants.find(t => t.id === showMasterPassword)?.slug}.portal.drive-247.com</strong>
             </p>
 
             <button
@@ -702,7 +707,7 @@ Access URLs:
                 setShowMasterPassword(null);
                 setGeneratedPassword('');
               }}
-              className="w-full px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-700"
+              className="w-full px-4 py-2 bg-dark-hover text-white rounded-md hover:bg-dark-border border border-dark-border"
             >
               Close
             </button>

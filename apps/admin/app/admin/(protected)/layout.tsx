@@ -4,6 +4,8 @@ import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuthStore } from '@/store/authStore';
 import Sidebar from '@/components/admin/Sidebar';
+import { SidebarProvider } from '@/components/admin/SidebarContext';
+import { MobileHeader } from '@/components/admin/MobileHeader';
 
 export default function ProtectedLayout({
   children,
@@ -25,8 +27,8 @@ export default function ProtectedLayout({
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="text-xl text-gray-600">Loading...</div>
+      <div className="flex items-center justify-center min-h-screen bg-dark-bg">
+        <div className="text-xl text-gray-400">Loading...</div>
       </div>
     );
   }
@@ -36,11 +38,14 @@ export default function ProtectedLayout({
   }
 
   return (
-    <div className="flex h-screen bg-gray-100">
-      <Sidebar />
-      <main className="flex-1 overflow-y-auto">
-        {children}
-      </main>
-    </div>
+    <SidebarProvider>
+      <div className="flex h-screen bg-dark-bg">
+        <Sidebar />
+        <MobileHeader />
+        <main className="flex-1 overflow-y-auto pt-14 md:pt-0">
+          {children}
+        </main>
+      </div>
+    </SidebarProvider>
   );
 }

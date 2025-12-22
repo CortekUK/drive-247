@@ -3,8 +3,10 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useAuthStore } from '@/store/authStore';
+import { useSidebar } from './SidebarContext';
+import { Sheet, SheetContent } from '@/components/ui/sheet';
 
-export default function Sidebar() {
+function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
   const pathname = usePathname();
   const { user, logout } = useAuthStore();
 
@@ -25,8 +27,14 @@ export default function Sidebar() {
 
   const isActive = (href: string) => pathname === href;
 
+  const handleLinkClick = () => {
+    if (onNavigate) {
+      onNavigate();
+    }
+  };
+
   return (
-    <div className="flex flex-col h-screen w-64 bg-dark-card border-r border-dark-border text-white">
+    <div className="flex flex-col h-full bg-dark-card text-white">
       <div className="flex items-center justify-center h-16 bg-dark-bg border-b border-dark-border">
         <div className="text-center">
           <h1 className="text-xl font-bold gradient-text">CORTEK</h1>
@@ -39,6 +47,7 @@ export default function Sidebar() {
           <Link
             key={item.name}
             href={item.href}
+            onClick={handleLinkClick}
             className={`flex items-center px-4 py-3 text-sm font-medium rounded-lg transition-colors ${
               isActive(item.href)
                 ? 'bg-primary-600 text-white'
@@ -68,6 +77,28 @@ export default function Sidebar() {
           Sign out
         </button>
       </div>
+    </div>
+  );
+}
+
+export default function Sidebar() {
+  const { isMobile, isOpen, close } = useSidebar();
+
+  // Mobile: Render in Sheet
+  if (isMobile) {
+    return (
+      <Sheet open={isOpen} onOpenChange={close}>
+        <SheetContent side="left" className="p-0 w-64">
+          <SidebarContent onNavigate={close} />
+        </SheetContent>
+      </Sheet>
+    );
+  }
+
+  // Desktop: Fixed sidebar
+  return (
+    <div className="hidden md:flex flex-col h-screen w-64 border-r border-dark-border">
+      <SidebarContent />
     </div>
   );
 }

@@ -387,11 +387,12 @@ serve(async (req) => {
       tenantId = rental?.tenant_id;
     }
 
-    // Get admin email from settings
+    // Get admin email from settings (tenant-specific)
     const { data: adminEmailSetting } = await supabase
       .from('settings')
       .select('value')
       .eq('key', 'admin_email')
+      .eq('tenant_id', tenantId)
       .single();
 
     const adminEmail = adminEmailSetting?.value?.replace(/"/g, '') || 'admin@drive917.com';

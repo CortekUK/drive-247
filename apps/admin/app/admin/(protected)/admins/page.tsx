@@ -4,6 +4,8 @@ import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useAuthStore } from '@/store/authStore';
 import { useRouter } from 'next/navigation';
+import { toast } from '@/components/ui/sonner';
+import { TableSkeleton } from '@/components/skeletons/TableSkeleton';
 
 interface Admin {
   id: string;
@@ -88,9 +90,9 @@ export default function ManageAdminsPage() {
       setShowCreateModal(false);
       setFormData({ name: '', email: '', password: '' });
       loadAdmins();
-      alert('Super admin created successfully!');
+      toast.success('Super admin created successfully!');
     } catch (error: any) {
-      alert(`Error creating admin: ${error.message}`);
+      toast.error(`Error creating admin: ${error.message}`);
     } finally {
       setCreating(false);
     }
@@ -99,16 +101,19 @@ export default function ManageAdminsPage() {
   if (!user?.is_primary_super_admin) {
     return (
       <div className="flex items-center justify-center h-full">
-        <div className="text-xl text-red-600">Access denied. Primary super admin only.</div>
+        <div className="text-xl text-red-400">Access denied. Primary super admin only.</div>
       </div>
     );
   }
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-full">
-        <div className="text-xl text-gray-600">Loading super admins...</div>
-      </div>
+      <TableSkeleton
+        rows={3}
+        columns={5}
+        title="Manage Super Admins"
+        subtitle="Add and manage super admin accounts"
+      />
     );
   }
 
@@ -116,65 +121,65 @@ export default function ManageAdminsPage() {
     <div className="p-8">
       <div className="flex justify-between items-center mb-8">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900">Manage Super Admins</h1>
-          <p className="mt-2 text-gray-600">Add and manage super admin accounts</p>
-          <p className="mt-1 text-sm text-red-600">⚠️ Primary super admin access only</p>
+          <h1 className="text-3xl font-bold text-white">Manage Super Admins</h1>
+          <p className="mt-2 text-gray-400">Add and manage super admin accounts</p>
+          <p className="mt-1 text-sm text-red-400">Primary super admin access only</p>
         </div>
         <button
           onClick={() => setShowCreateModal(true)}
-          className="px-6 py-3 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 font-medium"
+          className="px-6 py-3 bg-primary-600 text-white rounded-lg hover:bg-primary-700 font-medium"
         >
           + Add Super Admin
         </button>
       </div>
 
-      <div className="bg-white rounded-lg shadow overflow-hidden">
-        <table className="min-w-full divide-y divide-gray-200">
-          <thead className="bg-gray-50">
+      <div className="bg-dark-card rounded-lg shadow overflow-hidden border border-dark-border">
+        <table className="min-w-full divide-y divide-dark-border">
+          <thead className="bg-dark-bg">
             <tr>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase">
                 Name
               </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase">
                 Email
               </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase">
                 Role
               </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase">
                 Created
               </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase">
                 Actions
               </th>
             </tr>
           </thead>
-          <tbody className="bg-white divide-y divide-gray-200">
+          <tbody className="bg-dark-card divide-y divide-dark-border">
             {admins.map((admin) => (
-              <tr key={admin.id}>
+              <tr key={admin.id} className="hover:bg-dark-hover">
                 <td className="px-6 py-4 whitespace-nowrap">
-                  <div className="text-sm font-medium text-gray-900">{admin.name}</div>
+                  <div className="text-sm font-medium text-white">{admin.name}</div>
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap">
-                  <div className="text-sm text-gray-500">{admin.email}</div>
+                  <div className="text-sm text-gray-400">{admin.email}</div>
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap">
                   {admin.is_primary_super_admin ? (
-                    <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-yellow-100 text-yellow-800">
+                    <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-yellow-900/30 text-yellow-400 border border-yellow-800/50">
                       Primary Admin
                     </span>
                   ) : (
-                    <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-blue-100 text-blue-800">
+                    <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-blue-900/30 text-blue-400 border border-blue-800/50">
                       Super Admin
                     </span>
                   )}
                 </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-400">
                   {new Date(admin.created_at).toLocaleDateString('en-US')}
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                   {!admin.is_primary_super_admin && (
-                    <button className="text-red-600 hover:text-red-900">
+                    <button className="text-red-400 hover:text-red-300">
                       Deactivate
                     </button>
                   )}
@@ -187,13 +192,13 @@ export default function ManageAdminsPage() {
 
       {/* Create Admin Modal */}
       {showCreateModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-8 max-w-md w-full">
-            <h2 className="text-2xl font-bold text-gray-900 mb-4">Add Super Admin</h2>
+        <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50">
+          <div className="bg-dark-card rounded-lg p-8 max-w-md w-full border border-dark-border">
+            <h2 className="text-2xl font-bold text-white mb-4">Add Super Admin</h2>
 
             <form onSubmit={handleCreateAdmin} className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="block text-sm font-medium text-gray-300 mb-1">
                   Full Name *
                 </label>
                 <input
@@ -201,13 +206,13 @@ export default function ManageAdminsPage() {
                   required
                   value={formData.name}
                   onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  className="w-full px-3 py-2 bg-dark-bg border border-dark-border rounded-md text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-primary-500"
                   placeholder="John Doe"
                 />
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="block text-sm font-medium text-gray-300 mb-1">
                   Email *
                 </label>
                 <input
@@ -215,13 +220,13 @@ export default function ManageAdminsPage() {
                   required
                   value={formData.email}
                   onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  className="w-full px-3 py-2 bg-dark-bg border border-dark-border rounded-md text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-primary-500"
                   placeholder="admin@example.com"
                 />
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="block text-sm font-medium text-gray-300 mb-1">
                   Password *
                 </label>
                 <input
@@ -229,15 +234,15 @@ export default function ManageAdminsPage() {
                   required
                   value={formData.password}
                   onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  className="w-full px-3 py-2 bg-dark-bg border border-dark-border rounded-md text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-primary-500"
                   placeholder="Minimum 8 characters"
                   minLength={8}
                 />
               </div>
 
-              <div className="bg-yellow-50 border border-yellow-200 rounded-md p-3">
-                <p className="text-xs text-yellow-800">
-                  ⚠️ This will create a super admin with full platform access (except primary admin functions).
+              <div className="bg-yellow-900/20 border border-yellow-700 rounded-md p-3">
+                <p className="text-xs text-yellow-400">
+                  This will create a super admin with full platform access (except primary admin functions).
                 </p>
               </div>
 
@@ -245,14 +250,14 @@ export default function ManageAdminsPage() {
                 <button
                   type="button"
                   onClick={() => setShowCreateModal(false)}
-                  className="flex-1 px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50"
+                  className="flex-1 px-4 py-2 border border-dark-border rounded-md text-gray-300 hover:bg-dark-hover"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={creating}
-                  className="flex-1 px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 disabled:opacity-50"
+                  className="flex-1 px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700 disabled:opacity-50"
                 >
                   {creating ? 'Creating...' : 'Create Admin'}
                 </button>
