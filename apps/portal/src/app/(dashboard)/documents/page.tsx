@@ -43,7 +43,7 @@ export default function DocumentsList() {
         .from("customer_documents")
         .update({
           verified: true,
-          status: "Approved",
+          status: "Active",
           updated_at: new Date().toISOString()
         })
         .eq("id", documentId);
@@ -65,7 +65,7 @@ export default function DocumentsList() {
         .from("customer_documents")
         .update({
           verified: false,
-          status: "Rejected",
+          status: "Expired",
           updated_at: new Date().toISOString()
         })
         .eq("id", documentId);
@@ -358,7 +358,7 @@ export default function DocumentsList() {
                                 <ExternalLink className="h-4 w-4" />
                               </Button>
                               {/* Approve/Reject buttons for pending documents */}
-                              {!doc.isRentalAgreement && doc.status?.toLowerCase() !== "approved" && doc.status?.toLowerCase() !== "rejected" && (
+                              {!doc.isRentalAgreement && doc.status?.toLowerCase() !== "active" && !doc.verified && (
                                 <>
                                   <Button
                                     variant="outline"
