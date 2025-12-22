@@ -219,7 +219,7 @@ const RentalDetail = () => {
         .from("customer_documents")
         .update({
           verified: true,
-          status: "Approved",
+          status: "Active",
           updated_at: new Date().toISOString()
         })
         .eq("id", documentId);
@@ -991,8 +991,8 @@ const RentalDetail = () => {
                         )}
                       </div>
 
-                      {/* Approve/Reject Buttons - only show if not already approved/rejected and document is linked */}
-                      {!doc.isUnlinked && doc.status?.toLowerCase() !== 'approved' && doc.status?.toLowerCase() !== 'rejected' && (
+                      {/* Approve/Reject Buttons - only show if not already active/verified and document is linked */}
+                      {!doc.isUnlinked && doc.status?.toLowerCase() !== 'active' && !doc.verified && (
                         <div className="flex gap-2">
                           <Button
                             variant="outline"
@@ -1016,17 +1016,17 @@ const RentalDetail = () => {
                         </div>
                       )}
 
-                      {/* Show status badge if already approved/rejected */}
-                      {doc.status?.toLowerCase() === 'approved' && (
+                      {/* Show status badge if already approved (Active status or verified) */}
+                      {(doc.status?.toLowerCase() === 'active' || doc.verified) && (
                         <Badge className="bg-green-600">
                           <CheckCircle className="h-3 w-3 mr-1" />
                           Approved
                         </Badge>
                       )}
-                      {doc.status?.toLowerCase() === 'rejected' && (
+                      {doc.status?.toLowerCase() === 'expired' && (
                         <Badge variant="destructive">
                           <XCircle className="h-3 w-3 mr-1" />
-                          Rejected
+                          Expired
                         </Badge>
                       )}
                     </div>
