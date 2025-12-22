@@ -267,15 +267,23 @@ function LoginPageContent() {
         <CardHeader className="text-center space-y-4">
           <div className="flex justify-center py-4">
             <div className="bg-[hsl(159,21%,30%)] dark:bg-[hsl(159,21%,15%)]/30 rounded-2xl p-6 border border-primary/20 transition-all duration-300 hover:border-primary/40 hover:shadow-[0_0_20px_rgba(198,162,86,0.15)]">
-              <img
-                src={logoUrl}
-                alt={appName}
-                className="h-32 w-32 object-cover transition-transform duration-300 hover:scale-105"
-                style={{
-                  filter: "drop-shadow(0 2px 8px rgba(198, 162, 86, 0.2))",
-                  imageRendering: "crisp-edges",
-                }}
-              />
+              {logoUrl && logoUrl !== "/logo.png" ? (
+                <img
+                  src={logoUrl}
+                  alt={appName}
+                  className="h-32 w-32 object-cover transition-transform duration-300 hover:scale-105"
+                  style={{
+                    filter: "drop-shadow(0 2px 8px rgba(198, 162, 86, 0.2))",
+                    imageRendering: "crisp-edges",
+                  }}
+                />
+              ) : (
+                <div className="h-32 w-32 flex items-center justify-center">
+                  <span className="text-3xl font-bold text-primary text-center leading-tight">
+                    {appName}
+                  </span>
+                </div>
+              )}
             </div>
           </div>
 
