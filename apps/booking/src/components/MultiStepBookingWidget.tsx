@@ -6,7 +6,6 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Switch } from "@/components/ui/switch";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { TimePicker } from "@/components/ui/time-picker";
@@ -19,7 +18,7 @@ import { ChevronRight, ChevronLeft, Check, Baby, Coffee, MapPin, UserCheck, Car,
 import { format, differenceInHours } from "date-fns";
 import { cn } from "@/lib/utils";
 import BookingConfirmation from "./BookingConfirmation";
-import LocationAutocomplete from "./LocationAutocomplete";
+import LocationPicker from "./LocationPicker";
 import BookingCheckoutStep from "./BookingCheckoutStep";
 import InsuranceUploadDialog from "./insurance-upload-dialog";
 import AIScanProgress from "./ai-scan-progress";
@@ -80,7 +79,6 @@ const MultiStepBookingWidget = () => {
   const [errors, setErrors] = useState<{
     [key: string]: string;
   }>({});
-  const [sameAsPickup, setSameAsPickup] = useState(true);
 
   // CMS Content for booking header
   const { data: rawCmsContent } = usePageContent("home");
@@ -104,6 +102,8 @@ const MultiStepBookingWidget = () => {
   const [formData, setFormData] = useState({
     pickupLocation: "",
     dropoffLocation: "",
+    pickupLocationId: "",
+    returnLocationId: "",
     pickupDate: "",
     dropoffDate: "",
     pickupTime: "",
@@ -255,24 +255,6 @@ const MultiStepBookingWidget = () => {
   // Note: Verification no longer resets when customer details change
   // Users can freely edit their details after verification
   // The verification session ID remains valid
-
-  // Sync return location when "Same as Pickup" is enabled
-  useEffect(() => {
-    if (sameAsPickup && formData.pickupLocation) {
-      setFormData(prev => ({
-        ...prev,
-        dropoffLocation: prev.pickupLocation
-      }));
-      if (locationCoords.pickupLat && locationCoords.pickupLon) {
-        setLocationCoords(prev => ({
-          ...prev,
-          dropoffLat: prev.pickupLat,
-          dropoffLon: prev.pickupLon
-        }));
-      }
-    }
-  }, [sameAsPickup, formData.pickupLocation, locationCoords.pickupLat, locationCoords.pickupLon]);
-
 
   // Scroll to step container when step changes
   useEffect(() => {
@@ -1595,61 +1577,56 @@ const MultiStepBookingWidget = () => {
                 {/* Pickup Location */}
                 <div className="space-y-2">
                   <Label htmlFor="pickupLocation" className="font-medium">Pickup *</Label>
-                  <LocationAutocomplete id="pickupLocation" value={formData.pickupLocation} onChange={(value, lat, lon) => {
-                  setFormData({
-                    ...formData,
-                    pickupLocation: value
-                  });
-                  setLocationCoords({
-                    ...locationCoords,
-                    pickupLat: lat || null,
-                    pickupLon: lon || null
-                  });
-                  // Instant validation
-                  validateField('pickupLocation', value);
-                }} placeholder="Enter pickup address" className="h-12 focus-visible:ring-primary" />
-                  <p className="text-xs text-muted-foreground">Start typing a Dallas address or landmark</p>
+                  <LocationPicker
+                    type="pickup"
+                    value={formData.pickupLocation}
+                    locationId={formData.pickupLocationId}
+                    onChange={(address, locId, lat, lon) => {
+                      setFormData({
+                        ...formData,
+                        pickupLocation: address,
+                        pickupLocationId: locId || "",
+                      });
+                      setLocationCoords({
+                        ...locationCoords,
+                        pickupLat: lat || null,
+                        pickupLon: lon || null
+                      });
+                      // Instant validation
+                      validateField('pickupLocation', address);
+                    }}
+                    placeholder="Enter pickup address"
+                    className="h-12 focus-visible:ring-primary"
+                  />
+                  <p className="text-xs text-muted-foreground">Start typing an address or landmark</p>
                   {errors.pickupLocation && <p className="text-sm text-destructive">{errors.pickupLocation}</p>}
                 </div>
 
-                {/* Return Location with Toggle */}
+                {/* Return Location */}
                 <div className="space-y-2">
-                  <div className="flex items-center justify-between">
-                    <Label htmlFor="dropoffLocation" className="font-medium">Return *</Label>
-                    <div className="flex items-center gap-2">
-                      <Switch id="sameAsPickup" checked={sameAsPickup} onCheckedChange={checked => {
-                      setSameAsPickup(checked);
-                      if (!checked) {
-                        setFormData(prev => ({
-                          ...prev,
-                          dropoffLocation: ""
-                        }));
-                        setLocationCoords(prev => ({
-                          ...prev,
-                          dropoffLat: null,
-                          dropoffLon: null
-                        }));
-                      }
-                    }} aria-label="Same as pickup location" />
-                      <Label htmlFor="sameAsPickup" className="text-xs cursor-pointer font-normal">
-                        Same as pickup
-                      </Label>
-                    </div>
-                  </div>
-                  <LocationAutocomplete id="dropoffLocation" value={formData.dropoffLocation} onChange={(value, lat, lon) => {
-                  setFormData({
-                    ...formData,
-                    dropoffLocation: value
-                  });
-                  setLocationCoords({
-                    ...locationCoords,
-                    dropoffLat: lat || null,
-                    dropoffLon: lon || null
-                  });
-                  // Instant validation
-                  validateField('dropoffLocation', value);
-                }} placeholder="Enter return address" className="h-12 focus-visible:ring-primary" disabled={sameAsPickup} />
-                  <p className="text-xs text-muted-foreground">Start typing a Dallas address or landmark</p>
+                  <Label htmlFor="dropoffLocation" className="font-medium">Return *</Label>
+                  <LocationPicker
+                    type="return"
+                    value={formData.dropoffLocation}
+                    locationId={formData.returnLocationId}
+                    onChange={(address, locId, lat, lon) => {
+                      setFormData({
+                        ...formData,
+                        dropoffLocation: address,
+                        returnLocationId: locId || "",
+                      });
+                      setLocationCoords({
+                        ...locationCoords,
+                        dropoffLat: lat || null,
+                        dropoffLon: lon || null
+                      });
+                      // Instant validation
+                      validateField('dropoffLocation', address);
+                    }}
+                    placeholder="Enter return address"
+                    className="h-12 focus-visible:ring-primary"
+                  />
+                  <p className="text-xs text-muted-foreground">Start typing an address or landmark</p>
                   {errors.dropoffLocation && <p className="text-sm text-destructive">{errors.dropoffLocation}</p>}
                 </div>
               </div>

@@ -11,7 +11,7 @@ import { CalendarIcon, MapPin, Clock, ChevronRight, AlertCircle } from "lucide-r
 import Navigation from "@/components/Navigation";
 import Footer from "@/components/Footer";
 import SEO from "@/components/SEO";
-import LocationAutocomplete from "@/components/LocationAutocomplete";
+import LocationPicker from "@/components/LocationPicker";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
@@ -73,6 +73,8 @@ export default function Booking() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [sameAsPickup, setSameAsPickup] = useState(true);
+  const [pickupLocationId, setPickupLocationId] = useState<string | undefined>(undefined);
+  const [returnLocationId, setReturnLocationId] = useState<string | undefined>(undefined);
 
   const form = useForm<RentalDetailsForm>({
     resolver: zodResolver(rentalDetailsSchema),
@@ -103,6 +105,9 @@ export default function Booking() {
         if (data.returnDate) data.returnDate = parseISO(data.returnDate);
         form.reset(data);
         setSameAsPickup(data.sameAsPickup ?? true);
+        // Restore location IDs
+        if (data.pickupLocationId) setPickupLocationId(data.pickupLocationId);
+        if (data.returnLocationId) setReturnLocationId(data.returnLocationId);
       } catch (e) {
         console.error("Failed to load booking context:", e);
       }
@@ -111,8 +116,12 @@ export default function Booking() {
     // Also check URL params
     const pl = searchParams?.get("pl");
     const rl = searchParams?.get("rl");
+    const plid = searchParams?.get("plid");
+    const rlid = searchParams?.get("rlid");
     if (pl) form.setValue("pickupLocation", pl);
     if (rl) form.setValue("returnLocation", rl);
+    if (plid) setPickupLocationId(plid);
+    if (rlid) setReturnLocationId(rlid);
   }, [searchParams]);
 
   // Watch sameAsPickup toggle
@@ -122,8 +131,10 @@ export default function Booking() {
     if (watchSameAsPickup) {
       const pickup = form.getValues("pickupLocation");
       form.setValue("returnLocation", pickup);
+      // Also sync location ID
+      setReturnLocationId(pickupLocationId);
     }
-  }, [watchSameAsPickup]);
+  }, [watchSameAsPickup, pickupLocationId]);
 
   // Sync returnLocation when pickup changes and sameAsPickup is true
   const watchPickupLocation = form.watch("pickupLocation");
@@ -149,11 +160,21 @@ export default function Booking() {
       params.set("promo", data.promoCode);
     }
 
+    // Add location IDs if present
+    if (pickupLocationId) {
+      params.set("plid", pickupLocationId);
+    }
+    if (returnLocationId) {
+      params.set("rlid", returnLocationId);
+    }
+
     // Save to localStorage
     const saveData = {
       ...data,
       pickupDate: data.pickupDate.toISOString(),
       returnDate: data.returnDate.toISOString(),
+      pickupLocationId,
+      returnLocationId,
     };
     localStorage.setItem("booking_context", JSON.stringify(saveData));
 
@@ -269,10 +290,14 @@ export default function Booking() {
                             Pickup Location *
                           </FormLabel>
                           <FormControl>
-                            <LocationAutocomplete
-                              id="pickupLocation"
+                            <LocationPicker
+                              type="pickup"
                               value={field.value}
-                              onChange={(value) => field.onChange(value)}
+                              locationId={pickupLocationId}
+                              onChange={(address, locId) => {
+                                field.onChange(address);
+                                setPickupLocationId(locId);
+                              }}
                               placeholder="Enter pickup address in Los Angeles"
                               className="h-12"
                             />
@@ -314,10 +339,14 @@ export default function Booking() {
                               Return Location *
                             </FormLabel>
                             <FormControl>
-                              <LocationAutocomplete
-                                id="returnLocation"
+                              <LocationPicker
+                                type="return"
                                 value={field.value}
-                                onChange={(value) => field.onChange(value)}
+                                locationId={returnLocationId}
+                                onChange={(address, locId) => {
+                                  field.onChange(address);
+                                  setReturnLocationId(locId);
+                                }}
                                 placeholder="Enter return address in Los Angeles"
                                 className="h-12"
                               />

@@ -1,4 +1,3 @@
-Initialising login role...
 export type Json =
   | string
   | number

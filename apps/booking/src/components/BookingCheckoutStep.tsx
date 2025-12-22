@@ -420,6 +420,11 @@ export default function BookingCheckoutStep({
         rental_period_type: rentalPeriodType,
         monthly_amount: grandTotal, // Store grand total (rental + taxes + fees + protection)
         status: "Pending", // Set to Pending until payment succeeds
+        // Location data
+        pickup_location: formData.pickupLocation || null,
+        pickup_location_id: formData.pickupLocationId || null,
+        return_location: formData.dropoffLocation || null,
+        return_location_id: formData.returnLocationId || null,
       };
 
       if (tenant?.id) {

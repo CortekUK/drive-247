@@ -59,6 +59,12 @@ export interface Tenant {
   require_identity_verification: boolean | null;
   require_insurance_upload: boolean | null;
   payment_mode: string | null;
+
+  // Location settings
+  pickup_location_mode: 'fixed' | 'custom' | 'multiple' | null;
+  return_location_mode: 'fixed' | 'custom' | 'multiple' | null;
+  fixed_pickup_address: string | null;
+  fixed_return_address: string | null;
 }
 
 interface TenantContextType {
@@ -187,7 +193,11 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
           booking_lead_time_hours,
           require_identity_verification,
           require_insurance_upload,
-          payment_mode
+          payment_mode,
+          pickup_location_mode,
+          return_location_mode,
+          fixed_pickup_address,
+          fixed_return_address
         `)
         .eq('slug', slug)
         .eq('status', 'active')
