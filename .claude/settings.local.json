@@ -20,7 +20,8 @@
       "Bash(taskkill //F //PID 17996)",
       "Bash(npm run update-cms:*)",
       "Bash(cd:*)",
-      "Bash(node -e:*)"
+      "Bash(node -e:*)",
+      "Bash(git ls-tree:*)"
     ],
     "deny": [],
     "ask": []

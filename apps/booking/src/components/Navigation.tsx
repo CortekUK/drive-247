@@ -32,10 +32,10 @@ const Navigation = () => {
 
   const navLinks = [
     { path: '/', label: 'Home' },
-    { path: '/fleet', label: 'Fleet & Pricing' },
-    { path: '/promotions', label: 'Promotions' },
     { path: '/about', label: 'About' },
+    { path: '/fleet', label: 'Fleet & Pricing' },
     { path: '/testimonials', label: 'Reviews' },
+    { path: '/promotions', label: 'Promotions' },
     { path: '/contact', label: 'Contact' }
   ];
 

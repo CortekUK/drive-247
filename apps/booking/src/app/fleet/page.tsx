@@ -349,7 +349,7 @@ const Pricing = () => {
           </div>
 
           {/* Vehicle Pricing Cards */}
-          <div className="space-y-8 mb-24">
+          <div className="space-y-4 mb-24">
             {filteredAndSortedVehicles.length === 0 ? (
               <Card className="p-12 text-center">
                 <p className="text-muted-foreground text-lg">No vehicles found matching your filters.</p>
@@ -360,16 +360,16 @@ const Pricing = () => {
                 return (
                   <Card
                     key={vehicle.id}
-                    className="group relative overflow-hidden transition-all duration-500 hover:-translate-y-2 hover:shadow-glow"
+                    className="group relative overflow-hidden transition-all duration-500 hover:-translate-y-1 hover:shadow-glow"
                   >
                     {/* Gradient Background */}
                     <div className="absolute inset-0 bg-gradient-to-br from-card via-card to-secondary/20 opacity-80" />
 
-                    <div className="relative p-8 md:p-10">
-                      <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-8">
+                    <div className="relative p-4 md:p-6">
+                      <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 lg:gap-6">
                         {/* Vehicle Image */}
                         {vehicle.vehicle_photos?.[0]?.photo_url ? (
-                          <div className="w-full lg:w-64 flex-shrink-0">
+                          <div className="w-full lg:w-48 flex-shrink-0">
                             <div className="relative aspect-[4/3] rounded-lg overflow-hidden shadow-glow border border-accent/20">
                               <img
                                 src={vehicle.vehicle_photos[0].photo_url}
@@ -381,50 +381,50 @@ const Pricing = () => {
                             </div>
                           </div>
                         ) : (
-                          <div className="hidden lg:flex w-64 aspect-[4/3] items-center justify-center rounded-lg bg-accent/10 border border-accent/20">
-                            <Car className="w-16 h-16 text-accent/40" />
+                          <div className="hidden lg:flex w-48 aspect-[4/3] items-center justify-center rounded-lg bg-accent/10 border border-accent/20">
+                            <Car className="w-12 h-12 text-accent/40" />
                           </div>
                         )}
 
                         {/* Left Content */}
-                        <div className="flex-1 space-y-6">
-                          <div className="flex items-start gap-4">
+                        <div className="flex-1 space-y-2">
+                          <div className="flex items-start gap-3">
                             {!vehicle.vehicle_photos?.[0]?.photo_url && (
-                              <div className="lg:hidden p-3 rounded-lg bg-accent/10 border border-accent/20 group-hover:bg-accent/20 transition-colors">
-                                <Car className="w-6 h-6 text-accent" />
+                              <div className="lg:hidden p-2 rounded-lg bg-accent/10 border border-accent/20 group-hover:bg-accent/20 transition-colors">
+                                <Car className="w-5 h-5 text-accent" />
                               </div>
                             )}
                             <div>
                               <div className="flex items-center gap-3 mb-2">
-                                <h3 className="text-3xl md:text-4xl font-display font-bold text-gradient-silver">
+                                <h3 className="text-xl md:text-2xl font-display font-bold text-gradient-silver">
                                   {vehicleName}
                                 </h3>
                               </div>
-                              <p className="text-sm uppercase tracking-widest text-accent/80 font-medium">
+                              <p className="text-xs uppercase tracking-widest text-accent/80 font-medium">
                                 {vehicle.reg}
                               </p>
                             </div>
                           </div>
 
                           {/* Vehicle Details */}
-                          <div className="flex flex-wrap gap-2">
+                          <div className="flex flex-wrap gap-1.5">
                             {vehicle.year && (
                               <Badge
                                 variant="outline"
-                                className="px-4 py-2 rounded-full bg-secondary/50 border-accent/30 text-foreground"
+                                className="px-2 py-0.5 text-xs rounded-full bg-secondary/50 border-accent/30 text-foreground"
                               >
                                 {vehicle.year}
                               </Badge>
                             )}
                             <Badge
                               variant="outline"
-                              className="px-4 py-2 rounded-full bg-secondary/50 border-accent/30 text-foreground"
+                              className="px-2 py-0.5 text-xs rounded-full bg-secondary/50 border-accent/30 text-foreground"
                             >
                               {vehicle.colour}
                             </Badge>
                             <Badge
                               variant="outline"
-                              className="px-4 py-2 rounded-full bg-secondary/50 border-accent/30 text-foreground"
+                              className="px-2 py-0.5 text-xs rounded-full bg-secondary/50 border-accent/30 text-foreground"
                             >
                               {vehicle.status}
                             </Badge>
@@ -432,8 +432,8 @@ const Pricing = () => {
 
                           {/* Description */}
                           {vehicle.description && (
-                            <div className="space-y-2 mt-4">
-                              <p className="text-sm text-muted-foreground leading-relaxed">
+                            <div className="space-y-1 mt-2">
+                              <p className="text-xs text-muted-foreground leading-relaxed">
                                 {getDisplayDescription(vehicle)}
                               </p>
                               {vehicle.description.length > MAX_DESCRIPTION_LENGTH && (
@@ -451,55 +451,30 @@ const Pricing = () => {
                           )}
                         </div>
 
-                        {/* Right Pricing Column */}
-                        <div className="lg:text-right space-y-6 lg:min-w-[280px]">
-                          <div className="space-y-3">
-                            <div className="space-y-1">
-                              <div className="text-4xl font-display font-bold text-gradient-metal">
-                                ${vehicle.daily_rent}
-                              </div>
-                              <div className="text-xs text-muted-foreground uppercase tracking-wider font-medium">
-                                per day
-                              </div>
+                        {/* Pricing & Actions */}
+                        <div className="flex flex-col items-end gap-2">
+                          <div className="flex items-center gap-3 text-right">
+                            <div>
+                              <div className="text-lg font-bold text-gradient-metal">${vehicle.daily_rent}</div>
+                              <div className="text-[10px] text-muted-foreground">/day</div>
                             </div>
-
-                            <Separator className="my-2 bg-accent/10" />
-
-                            <div className="space-y-1">
-                              <div className="text-3xl font-display font-semibold text-accent">
-                                ${vehicle.weekly_rent}
-                              </div>
-                              <div className="text-xs text-muted-foreground uppercase tracking-wider font-medium">
-                                per week
-                              </div>
+                            <div className="h-6 w-px bg-accent/20" />
+                            <div>
+                              <div className="text-sm font-semibold text-accent">${vehicle.weekly_rent}</div>
+                              <div className="text-[10px] text-muted-foreground">/week</div>
                             </div>
-
-                            <Separator className="my-2 bg-accent/10" />
-
-                            <div className="space-y-1">
-                              <div className="text-3xl font-display font-semibold text-accent/80">
-                                ${vehicle.monthly_rent}
-                              </div>
-                              <div className="text-xs text-muted-foreground uppercase tracking-wider font-medium">
-                                per month
-                              </div>
+                            <div className="h-6 w-px bg-accent/20" />
+                            <div>
+                              <div className="text-sm font-semibold text-accent/80">${vehicle.monthly_rent}</div>
+                              <div className="text-[10px] text-muted-foreground">/month</div>
                             </div>
                           </div>
-
-                          {/* CTA Buttons */}
-                          <div className="flex flex-col gap-3 pt-4">
+                          <div className="flex gap-2">
                             <a href="/#booking">
-                              <Button className="w-full gradient-accent hover:shadow-glow transition-all duration-300">
-                                Book Now
-                              </Button>
+                              <Button size="sm" className="gradient-accent w-24">Book Now</Button>
                             </a>
                             <Link href={`/fleet/${vehicle.id}`}>
-                              <Button
-                                variant="outline"
-                                className="w-full border-accent/30 hover:bg-accent/10 hover:border-accent/50 transition-all duration-300"
-                              >
-                                View Details
-                              </Button>
+                              <Button size="sm" variant="outline" className="border-accent/30 w-24">Details</Button>
                             </Link>
                           </div>
                         </div>
