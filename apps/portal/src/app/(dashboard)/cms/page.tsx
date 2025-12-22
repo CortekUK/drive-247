@@ -54,7 +54,7 @@ export default function CMS() {
   }
 
   return (
-    <div className="space-y-6 pt-6">
+    <div className="space-y-4 md:space-y-6 p-4 md:p-6">
       <div>
         <h1 className="text-3xl font-display font-bold text-gradient-metal mb-2">
           Website Content

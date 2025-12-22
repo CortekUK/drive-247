@@ -107,7 +107,8 @@ function generateColorVariants(hex: string) {
     hover: formatHSL({ ...hsl, l: Math.max(0, hsl.l - 8) }),
     light: formatHSL({ ...hsl, l: 95 }),
     dark: formatHSL({ ...hsl, l: Math.max(0, hsl.l - 15) }),
-    foreground: hsl.l > 50 ? '0 0% 0%' : '0 0% 100%',
+    // Use white text unless color is very light (pastel). Threshold 70 ensures good contrast.
+    foreground: hsl.l > 70 ? '0 0% 0%' : '0 0% 100%',
   };
 }
 

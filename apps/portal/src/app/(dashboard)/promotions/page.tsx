@@ -341,7 +341,7 @@ export default function PromotionsManager() {
   const discountType = form.watch("discount_type");
 
   return (
-    <div className="space-y-6 pt-6">
+    <div className="space-y-4 md:space-y-6 p-4 md:p-6">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
