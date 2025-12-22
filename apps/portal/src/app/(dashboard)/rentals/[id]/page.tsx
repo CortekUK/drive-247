@@ -9,7 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { FileText, ArrowLeft, PoundSterling, Plus, X, Send, Download, Ban, Check, AlertTriangle, Loader2, Shield, CheckCircle, XCircle, ExternalLink, UserCheck, IdCard, Camera, FileSignature, Clock, Mail } from "lucide-react";
+import { FileText, ArrowLeft, PoundSterling, Plus, X, Send, Download, Ban, Check, AlertTriangle, Loader2, Shield, CheckCircle, XCircle, ExternalLink, UserCheck, IdCard, Camera, FileSignature, Clock, Mail, RefreshCw } from "lucide-react";
 import { AddPaymentDialog } from "@/components/shared/dialogs/add-payment-dialog";
 import { useToast } from "@/hooks/use-toast";
 import { useTenant } from "@/contexts/TenantContext";
@@ -285,6 +285,64 @@ const RentalDetail = () => {
       toast({
         title: "Error",
         description: "Failed to link insurance document.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  // Mutation for retrying AI scan on stuck documents
+  const retryScanMutation = useMutation({
+    mutationFn: async (documentId: string) => {
+      // First, get the document to get the file_url
+      const { data: doc, error: fetchError } = await supabase
+        .from("customer_documents")
+        .select("file_url")
+        .eq("id", documentId)
+        .single();
+
+      if (fetchError || !doc) {
+        throw new Error("Failed to fetch document");
+      }
+
+      // Reset the scan status to pending
+      const { error: updateError } = await supabase
+        .from("customer_documents")
+        .update({
+          ai_scan_status: 'pending',
+          ai_scan_errors: null,
+          ai_extracted_data: null,
+          ai_validation_score: null,
+          ai_confidence_score: null,
+          updated_at: new Date().toISOString()
+        })
+        .eq("id", documentId);
+
+      if (updateError) throw updateError;
+
+      // Trigger the scan edge function
+      const { error: scanError } = await supabase.functions.invoke('scan-insurance-document', {
+        body: { documentId, fileUrl: doc.file_url }
+      });
+
+      if (scanError) {
+        console.error("Scan function error:", scanError);
+        // Don't throw - the function might still process
+      }
+
+      return documentId;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["rental-insurance-docs", id] });
+      toast({
+        title: "Scan Restarted",
+        description: "The document scan has been restarted.",
+      });
+    },
+    onError: (error: any) => {
+      console.error("Retry scan error:", error);
+      toast({
+        title: "Error",
+        description: "Failed to restart document scan.",
         variant: "destructive",
       });
     },
@@ -796,13 +854,35 @@ const RentalDetail = () => {
                           <Badge variant="outline">Pending Scan</Badge>
                         )}
                         {doc.ai_scan_status === 'processing' && (
-                          <Badge variant="outline">
-                            <Loader2 className="h-3 w-3 animate-spin mr-1" />
-                            Scanning...
-                          </Badge>
+                          <div className="flex items-center gap-2">
+                            <Badge variant="outline">
+                              <Loader2 className="h-3 w-3 animate-spin mr-1" />
+                              Scanning...
+                            </Badge>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => retryScanMutation.mutate(doc.id)}
+                              disabled={retryScanMutation.isPending}
+                              title="Retry scan if stuck"
+                            >
+                              <RefreshCw className={`h-3 w-3 ${retryScanMutation.isPending ? 'animate-spin' : ''}`} />
+                            </Button>
+                          </div>
                         )}
                         {doc.ai_scan_status === 'failed' && (
-                          <Badge variant="destructive">Scan Failed</Badge>
+                          <div className="flex items-center gap-2">
+                            <Badge variant="destructive">Scan Failed</Badge>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => retryScanMutation.mutate(doc.id)}
+                              disabled={retryScanMutation.isPending}
+                              title="Retry scan"
+                            >
+                              <RefreshCw className={`h-3 w-3 ${retryScanMutation.isPending ? 'animate-spin' : ''}`} />
+                            </Button>
+                          </div>
                         )}
                       </div>
                     </div>
