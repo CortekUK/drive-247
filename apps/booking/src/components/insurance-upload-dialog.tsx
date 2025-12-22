@@ -17,8 +17,8 @@ interface Props {
   onUploadComplete: (documentId: string, fileUrl: string) => void;
 }
 
-const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB
-const ALLOWED_TYPES = ['application/pdf', 'image/jpeg', 'image/jpg', 'image/png'];
+const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
+const ALLOWED_TYPES = ['application/pdf'];
 
 export default function InsuranceUploadDialog({ open, onOpenChange, onUploadComplete }: Props) {
   const { tenant } = useTenant();
@@ -28,10 +28,10 @@ export default function InsuranceUploadDialog({ open, onOpenChange, onUploadComp
 
   const validateFile = (file: File): string | null => {
     if (!ALLOWED_TYPES.includes(file.type)) {
-      return `${file.name}: Only PDF, JPG, and PNG files are allowed`;
+      return `${file.name}: Only PDF files are allowed`;
     }
     if (file.size > MAX_FILE_SIZE) {
-      return `${file.name}: File size must be less than 5MB`;
+      return `${file.name}: File size must be less than 10MB`;
     }
     return null;
   };
@@ -230,7 +230,7 @@ export default function InsuranceUploadDialog({ open, onOpenChange, onUploadComp
         <DialogHeader>
           <DialogTitle>Upload Insurance Certificate</DialogTitle>
           <DialogDescription>
-            Upload your insurance document (PDF, JPG, or PNG). We'll verify it using AI.
+            Upload your insurance document (PDF only). We'll verify it using AI.
           </DialogDescription>
         </DialogHeader>
 
@@ -239,7 +239,7 @@ export default function InsuranceUploadDialog({ open, onOpenChange, onUploadComp
           <Alert>
             <AlertCircle className="h-4 w-4" />
             <AlertDescription>
-              Accepted formats: PDF, JPG, PNG • Max size: 5MB per file • You can upload multiple documents
+              Accepted format: PDF only • Max size: 10MB per file
             </AlertDescription>
           </Alert>
 
@@ -260,7 +260,7 @@ export default function InsuranceUploadDialog({ open, onOpenChange, onUploadComp
             <Input
               id="file-upload"
               type="file"
-              accept=".pdf,.jpg,.jpeg,.png"
+              accept=".pdf"
               multiple
               onChange={handleFileChange}
               className="hidden"

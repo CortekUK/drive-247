@@ -306,6 +306,7 @@ export const CustomerFormModal = ({ open, onOpenChange, customer }: CustomerForm
 
       const payload: any = {
         customer_type: data.customer_type,
+        type: data.customer_type, // Required field in database
         name: data.name,
         email: data.email || null,
         phone: data.phone || null,

@@ -949,8 +949,8 @@ const RentalDetail = () => {
         </CardContent>
       </Card>
 
-      {/* Identity Verification Section - Only show for rentals from booking flow that have verification */}
-      {identityVerification && rental?.source === 'booking' && (
+      {/* Identity Verification Section - Show if verification data exists */}
+      {identityVerification && (
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">

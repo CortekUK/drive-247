@@ -1,6 +1,6 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { encode as base64Encode } from "https://deno.land/std@0.190.0/encoding/base64.ts";
+import pdfParse from "https://esm.sh/pdf-parse@1.1.1";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -85,28 +85,29 @@ serve(async (req) => {
 
     console.log('Document downloaded successfully, size:', fileData.size);
 
-    // Determine MIME type from file extension
-    const extension = actualFileUrl.split('.').pop()?.toLowerCase();
-    let mimeType = 'image/jpeg';
-    if (extension === 'pdf') {
-      mimeType = 'application/pdf';
-    } else if (extension === 'png') {
-      mimeType = 'image/png';
-    } else if (extension === 'jpg' || extension === 'jpeg') {
-      mimeType = 'image/jpeg';
+    // Extract text from PDF
+    console.log('Extracting text from PDF...');
+    const arrayBuffer = await fileData.arrayBuffer();
+    const uint8Array = new Uint8Array(arrayBuffer);
+
+    let extractedText = '';
+    try {
+      const pdfData = await pdfParse(uint8Array);
+      extractedText = pdfData.text;
+      console.log('PDF text extracted, length:', extractedText.length);
+    } catch (pdfError: any) {
+      console.error('PDF parsing error:', pdfError);
+      throw new Error(`Failed to parse PDF: ${pdfError.message}`);
     }
 
-    console.log('Detected MIME type:', mimeType);
-
-    // OpenAI Vision API doesn't support PDFs - mark for manual review
-    if (mimeType === 'application/pdf') {
-      console.log('PDF detected - marking for manual review (OpenAI Vision does not support PDFs)');
+    if (!extractedText || extractedText.trim().length < 50) {
+      console.log('PDF has insufficient text content - may be scanned/image-based');
 
       await supabase
         .from('customer_documents')
         .update({
-          ai_scan_status: 'pending_manual_review',
-          ai_extracted_data: { note: 'PDF documents require manual review' },
+          ai_scan_status: 'needs_review',
+          ai_extracted_data: { note: 'PDF appears to be scanned/image-based with insufficient extractable text' },
           ai_validation_score: 0,
           scanned_at: new Date().toISOString()
         })
@@ -116,7 +117,7 @@ serve(async (req) => {
         JSON.stringify({
           success: true,
           data: {
-            extractedData: { note: 'PDF documents require manual review' },
+            extractedData: { note: 'PDF requires manual review - insufficient extractable text' },
             validationScore: 0,
             confidenceScore: 0,
             requiresManualReview: true
@@ -129,20 +130,13 @@ serve(async (req) => {
       );
     }
 
-    // Convert to base64 properly (handles large files)
-    const arrayBuffer = await fileData.arrayBuffer();
-    const uint8Array = new Uint8Array(arrayBuffer);
-    const base64Image = base64Encode(uint8Array);
-
-    console.log('Image converted to base64, length:', base64Image.length);
-
-    // Call OpenAI Vision API
+    // Call OpenAI GPT-4 Text API
     const openaiApiKey = Deno.env.get('OPENAI_API_KEY');
     if (!openaiApiKey) {
       throw new Error('OPENAI_API_KEY not configured');
     }
 
-    console.log('Calling OpenAI Vision API...');
+    console.log('Calling OpenAI GPT-4 API with extracted text...');
 
     const openaiResponse = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
@@ -154,11 +148,12 @@ serve(async (req) => {
         model: 'gpt-4o',
         messages: [
           {
+            role: 'system',
+            content: 'You are an expert at analyzing insurance documents. Extract structured information from the provided text accurately.'
+          },
+          {
             role: 'user',
-            content: [
-              {
-                type: 'text',
-                text: `Analyze this insurance document and extract the following information. Return ONLY valid JSON without any markdown formatting or code blocks:
+            content: `Analyze this insurance document text and extract the following information. Return ONLY valid JSON without any markdown formatting or code blocks:
 {
   "policyNumber": "string or null",
   "provider": "string or null",
@@ -169,15 +164,10 @@ serve(async (req) => {
   "validationNotes": "string describing any issues or confirmations"
 }
 
-If any field cannot be determined, use null. Be strict and only extract data you are confident about.`
-              },
-              {
-                type: 'image_url',
-                image_url: {
-                  url: `data:${mimeType};base64,${base64Image}`
-                }
-              }
-            ]
+If any field cannot be determined, use null. Be strict and only extract data you are confident about.
+
+DOCUMENT TEXT:
+${extractedText.substring(0, 15000)}`
           }
         ],
         max_tokens: 1000,

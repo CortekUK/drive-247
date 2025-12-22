@@ -96,10 +96,6 @@ export function AppSidebar() {
     href: "/insurance",
     icon: Shield
   }, {
-    name: "Plates",
-    href: "/plates",
-    icon: Bookmark
-  }, {
     name: "Blocked Dates",
     href: "/blocked-dates",
     icon: Ban
@@ -130,8 +126,7 @@ export function AppSidebar() {
   }, {
     name: "Website Content",
     href: "/cms",
-    icon: Globe,
-    superAdminOnly: true
+    icon: Globe
   }, {
     name: "Settings",
     href: "/settings",

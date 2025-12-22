@@ -14,7 +14,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { ArrowLeft, CreditCard, FileText, Plus, Upload, Car, AlertTriangle, Eye, Download, Edit, Trash2, User, Mail, Phone, CalendarPlus, DollarSign, FolderOpen, Receipt, CreditCard as PaymentIcon, Shield, Ban, CheckCircle, Users } from "lucide-react";
+import { ArrowLeft, CreditCard, FileText, Plus, Upload, Car, AlertTriangle, Eye, Download, Edit, Trash2, User, Mail, Phone, CalendarPlus, DollarSign, FolderOpen, Receipt, CreditCard as PaymentIcon, Ban, CheckCircle, Users } from "lucide-react";
 import { MetricItem, MetricDivider } from "@/components/vehicles/metric-card";
 import { useCustomerBlockingActions } from "@/hooks/use-customer-blocking";
 import { TruncatedCell } from "@/components/shared/data-display/truncated-cell";
@@ -36,7 +36,6 @@ import { DocumentSigningStatusBadge } from "@/components/customers/document-sign
 import { NextOfKinCard } from "@/components/customers/next-of-kin-card";
 import { PaymentStatusBadge } from "@/components/customers/payment-status-badge";
 import { FineStatusBadge } from "@/components/shared/status/fine-status-badge";
-import { IdentityVerificationTab } from "@/components/customers/identity-verification-tab";
 import { format } from "date-fns";
 
 interface Customer {
@@ -198,7 +197,7 @@ const CustomerDetail = () => {
   }
 
   return (
-    <div className="space-y-8 max-w-7xl mx-auto p-6 pt-8">
+    <div className="space-y-8 pt-4">
       {/* Blocked Customer Alert */}
       {customer.is_blocked && (
         <Alert variant="destructive" className="border-destructive/50 bg-destructive/10">
@@ -425,12 +424,6 @@ const CustomerDetail = () => {
                 <span className="hidden xs:inline sm:hidden">Documents</span>
                 <span className="xs:hidden sm:inline">Documents</span>
                 <span className="sm:hidden">D</span>
-              </TabsTrigger>
-              <TabsTrigger value="identity" variant="evenly-spaced" className="min-w-0">
-                <Shield className="h-4 w-4 mr-1 sm:mr-2" />
-                <span className="hidden xs:inline sm:hidden">Identity</span>
-                <span className="xs:hidden sm:inline">Identity Verification</span>
-                <span className="sm:hidden">ID</span>
               </TabsTrigger>
             </TabsList>
           </div>
@@ -882,9 +875,6 @@ const CustomerDetail = () => {
           </Card>
         </TabsContent>
 
-        <TabsContent value="identity" className="mt-6">
-          <IdentityVerificationTab customerId={id!} />
-        </TabsContent>
         </Tabs>
       </div>
 

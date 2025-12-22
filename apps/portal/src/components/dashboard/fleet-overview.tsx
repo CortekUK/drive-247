@@ -6,6 +6,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useTenant } from "@/contexts/TenantContext";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Car, TrendingUp, TrendingDown } from "lucide-react";
 import { VehiclePhotoThumbnail } from "@/components/vehicles/vehicle-photo-thumbnail";
 
@@ -40,7 +41,7 @@ const StatusBadge = ({ status }: { status: string }) => {
     Sold: "badge-status bg-muted text-muted-foreground border-border",
     Disposed: "badge-status bg-muted text-muted-foreground border-border"
   };
-  
+
   return (
     <Badge variant="outline" className={variants[status as keyof typeof variants] || variants.Available}>
       {status}
@@ -48,107 +49,9 @@ const StatusBadge = ({ status }: { status: string }) => {
   );
 };
 
-const VehicleCard = ({ vehicle, pl }: { vehicle: Vehicle; pl?: VehiclePL }) => {
-  const router = useRouter();
-
-  // Calculate operational profit (revenue minus operational costs, excluding acquisition)
-  const operationalCosts = pl ? (Number(pl.cost_service) + Number(pl.cost_fines) + Number(pl.cost_other) + Number(pl.cost_finance)) : 0;
-  const operationalProfit = pl ? Number(pl.total_revenue) - operationalCosts : 0;
-  const isOperationalProfit = operationalProfit > 0;
-
-  // Total P&L is already calculated in the view as net_profit
-  const totalPL = pl ? Number(pl.net_profit) : -(vehicle.purchase_price || 0);
-  const isTotalProfit = totalPL > 0;
-
-  const handleClick = () => {
-    router.push(`/vehicles/${vehicle.id}`);
-  };
-
-  // Get the first photo from vehicle_photos array, sorted by display_order, fallback to photo_url
-  const primaryPhoto = vehicle.vehicle_photos && vehicle.vehicle_photos.length > 0
-    ? [...vehicle.vehicle_photos].sort((a, b) => a.display_order - b.display_order)[0]?.photo_url
-    : vehicle.photo_url;
-
-  return (
-    <Card className="card-hover shadow-card transition-all duration-300 hover:scale-102 cursor-pointer" onClick={handleClick}>
-      <CardHeader className="pb-2">
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex items-center gap-2 min-w-0 flex-[2]">
-            <VehiclePhotoThumbnail
-              photoUrl={primaryPhoto}
-              vehicleReg={vehicle.reg}
-              size="sm"
-              className="shrink-0"
-            />
-            <div className="min-w-0 flex-1">
-              <CardTitle className="text-sm sm:text-base font-semibold truncate sm:truncate-none" title={vehicle.reg}>
-                {vehicle.reg || 'No Registration'}
-              </CardTitle>
-              <CardDescription className="text-xs sm:text-sm truncate" title={`${vehicle.make} ${vehicle.model}`}>
-                {vehicle.make} {vehicle.model}
-              </CardDescription>
-            </div>
-          </div>
-          <div className="shrink-0">
-            <StatusBadge status={vehicle.status} />
-          </div>
-        </div>
-      </CardHeader>
-      <CardContent className="space-y-2 text-xs sm:text-sm">
-        <div className="flex justify-between items-center">
-          <span className="text-muted-foreground">Acquisition</span>
-          <span className="font-medium">${(vehicle.purchase_price || 0).toLocaleString()}</span>
-        </div>
-        {pl ? (
-          <>
-            <div className="flex justify-between items-center">
-              <span className="text-muted-foreground">Revenue</span>
-              <span className="font-medium text-emerald-600">${Number(pl.total_revenue).toLocaleString()}</span>
-            </div>
-            <div className="flex justify-between items-center">
-              <span className="text-muted-foreground">Op. Costs</span>
-              <span className="font-medium text-orange-600">${operationalCosts.toLocaleString()}</span>
-            </div>
-            <div className="flex justify-between items-center">
-              <span className="text-muted-foreground">Op. Profit</span>
-              <div className="flex items-center gap-1">
-                {isOperationalProfit ? (
-                  <TrendingUp className="h-3 w-3 text-emerald-600" />
-                ) : (
-                  <TrendingDown className="h-3 w-3 text-red-600" />
-                )}
-                <span className={`font-medium ${isOperationalProfit ? 'text-emerald-600' : 'text-red-600'}`}>
-                  ${Math.abs(operationalProfit).toLocaleString()}
-                </span>
-              </div>
-            </div>
-            <hr className="border-border/50" />
-            <div className="flex justify-between items-center">
-              <span className="text-muted-foreground font-medium">Total P&L</span>
-              <div className="flex items-center gap-1">
-                {isTotalProfit ? (
-                  <TrendingUp className="h-4 w-4 text-emerald-600" />
-                ) : (
-                  <TrendingDown className="h-4 w-4 text-red-600" />
-                )}
-                <span className={`font-semibold ${isTotalProfit ? 'text-emerald-600' : 'text-red-600'}`}>
-                  ${Math.abs(totalPL).toLocaleString()}
-                </span>
-              </div>
-            </div>
-          </>
-        ) : (
-          <div className="text-center py-2">
-            <span className="text-muted-foreground text-xs">No P&L data available</span>
-          </div>
-        )}
-      </CardContent>
-    </Card>
-  );
-};
-
 export const FleetOverview = () => {
   const { tenant } = useTenant();
+  const router = useRouter();
 
   const { data: vehicles, isLoading } = useQuery({
     queryKey: ["vehicles", tenant?.id],
@@ -210,6 +113,26 @@ export const FleetOverview = () => {
     enabled: !!tenant,
   });
 
+  const getVehiclePhoto = (vehicle: Vehicle) => {
+    return vehicle.vehicle_photos && vehicle.vehicle_photos.length > 0
+      ? [...vehicle.vehicle_photos].sort((a, b) => a.display_order - b.display_order)[0]?.photo_url
+      : vehicle.photo_url;
+  };
+
+  const getOperationalCosts = (pl?: VehiclePL) => {
+    if (!pl) return 0;
+    return Number(pl.cost_service) + Number(pl.cost_fines) + Number(pl.cost_other) + Number(pl.cost_finance);
+  };
+
+  const getOperationalProfit = (pl?: VehiclePL) => {
+    if (!pl) return 0;
+    return Number(pl.total_revenue) - getOperationalCosts(pl);
+  };
+
+  const getTotalPL = (vehicle: Vehicle, pl?: VehiclePL) => {
+    return pl ? Number(pl.net_profit) : -(vehicle.purchase_price || 0);
+  };
+
   if (isLoading) {
     return <div>Loading vehicles...</div>;
   }
@@ -224,14 +147,89 @@ export const FleetOverview = () => {
       </CardHeader>
       <CardContent>
         {vehicles && vehicles.length > 0 ? (
-          <div className="grid gap-3 sm:gap-4 sm:grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
-            {vehicles.map((vehicle) => (
-              <VehicleCard 
-                key={vehicle.id} 
-                vehicle={vehicle} 
-                pl={vehiclePL?.[vehicle.id]}
-              />
-            ))}
+          <div className="overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="w-[50px]">Photo</TableHead>
+                  <TableHead>Vehicle</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead className="text-right">Acquisition</TableHead>
+                  <TableHead className="text-right">Revenue</TableHead>
+                  <TableHead className="text-right">Op. Costs</TableHead>
+                  <TableHead className="text-right">Op. Profit</TableHead>
+                  <TableHead className="text-right">Total P&L</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {vehicles.map((vehicle) => {
+                  const pl = vehiclePL?.[vehicle.id];
+                  const opCosts = getOperationalCosts(pl);
+                  const opProfit = getOperationalProfit(pl);
+                  const totalPL = getTotalPL(vehicle, pl);
+
+                  return (
+                    <TableRow
+                      key={vehicle.id}
+                      className="cursor-pointer hover:bg-muted/50"
+                      onClick={() => router.push(`/vehicles/${vehicle.id}`)}
+                    >
+                      <TableCell>
+                        <VehiclePhotoThumbnail
+                          photoUrl={getVehiclePhoto(vehicle)}
+                          vehicleReg={vehicle.reg}
+                          size="sm"
+                        />
+                      </TableCell>
+                      <TableCell>
+                        <div>
+                          <div className="font-medium">{vehicle.reg}</div>
+                          <div className="text-sm text-muted-foreground">
+                            {vehicle.make} {vehicle.model}
+                          </div>
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <StatusBadge status={vehicle.status} />
+                      </TableCell>
+                      <TableCell className="text-right">
+                        ${(vehicle.purchase_price || 0).toLocaleString()}
+                      </TableCell>
+                      <TableCell className="text-right text-emerald-600">
+                        ${(pl?.total_revenue || 0).toLocaleString()}
+                      </TableCell>
+                      <TableCell className="text-right text-orange-600">
+                        ${opCosts.toLocaleString()}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <div className="flex items-center justify-end gap-1">
+                          {opProfit >= 0 ? (
+                            <TrendingUp className="h-3 w-3 text-emerald-600" />
+                          ) : (
+                            <TrendingDown className="h-3 w-3 text-red-600" />
+                          )}
+                          <span className={opProfit >= 0 ? 'text-emerald-600' : 'text-red-600'}>
+                            ${Math.abs(opProfit).toLocaleString()}
+                          </span>
+                        </div>
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <div className="flex items-center justify-end gap-1 font-semibold">
+                          {totalPL >= 0 ? (
+                            <TrendingUp className="h-4 w-4 text-emerald-600" />
+                          ) : (
+                            <TrendingDown className="h-4 w-4 text-red-600" />
+                          )}
+                          <span className={totalPL >= 0 ? 'text-emerald-600' : 'text-red-600'}>
+                            ${Math.abs(totalPL).toLocaleString()}
+                          </span>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
+              </TableBody>
+            </Table>
           </div>
         ) : (
           <div className="text-center py-8">
