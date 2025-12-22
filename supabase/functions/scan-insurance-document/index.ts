@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { getDocumentProxy } from "npm:unpdf";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -81,78 +82,137 @@ serve(async (req) => {
 
     console.log('Document downloaded successfully, size:', fileData.size);
 
-    // Convert file to base64 for OpenAI Vision API
     const arrayBuffer = await fileData.arrayBuffer();
-    const base64Data = btoa(String.fromCharCode(...new Uint8Array(arrayBuffer)));
-
-    // Check if it's a PDF - OpenAI Vision doesn't support PDFs directly
     const isPdf = mimeType === 'application/pdf' || actualFileUrl.toLowerCase().endsWith('.pdf');
 
+    let textContent = '';
+
     if (isPdf) {
-      // For PDFs, mark as needs_review since we can't process them directly
-      console.log('PDF detected - marking as needs_review for manual verification');
+      // Extract text from PDF using unpdf
+      console.log('Extracting text from PDF...');
+      try {
+        const uint8Array = new Uint8Array(arrayBuffer);
+        const pdf = await getDocumentProxy(uint8Array);
 
-      await supabase
-        .from('customer_documents')
-        .update({
-          ai_scan_status: 'needs_review',
-          ai_extracted_data: {
-            note: 'PDF documents require manual review. Please verify the insurance details.',
-            provider: null,
-            policyNumber: null,
-            startDate: null,
-            endDate: null
-          },
-          ai_validation_score: 0.5,
-          ai_confidence_score: 0.5,
-          scanned_at: new Date().toISOString()
-        })
-        .eq('id', documentId);
-
-      return new Response(
-        JSON.stringify({
-          success: true,
-          data: {
-            extractedData: { note: 'PDF requires manual review' },
-            validationScore: 0.5,
-            confidenceScore: 0.5,
-            requiresManualReview: true
-          }
-        }),
-        {
-          status: 200,
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        // Extract text from all pages
+        const textPages: string[] = [];
+        for (let i = 1; i <= pdf.numPages; i++) {
+          const page = await pdf.getPage(i);
+          const textContent = await page.getTextContent();
+          const pageText = textContent.items
+            .map((item: any) => item.str)
+            .join(' ');
+          textPages.push(pageText);
         }
-      );
+        textContent = textPages.join('\n\n');
+        console.log('PDF text extracted, length:', textContent.length);
+      } catch (pdfError: any) {
+        console.error('PDF extraction error:', pdfError);
+        // If PDF extraction fails, mark for manual review
+        await supabase
+          .from('customer_documents')
+          .update({
+            ai_scan_status: 'needs_review',
+            ai_extracted_data: {
+              note: 'Could not extract text from PDF. Please verify manually.',
+              error: pdfError.message
+            },
+            ai_validation_score: 0.5,
+            ai_confidence_score: 0.5,
+            scanned_at: new Date().toISOString()
+          })
+          .eq('id', documentId);
+
+        return new Response(
+          JSON.stringify({
+            success: true,
+            data: {
+              extractedData: { note: 'PDF extraction failed - manual review required' },
+              validationScore: 0.5,
+              confidenceScore: 0.5,
+              requiresManualReview: true
+            }
+          }),
+          {
+            status: 200,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+          }
+        );
+      }
     }
 
-    // For images, use OpenAI Vision API
+    // Get OpenAI API key
     const openaiApiKey = Deno.env.get('OPENAI_API_KEY');
     if (!openaiApiKey) {
       throw new Error('OPENAI_API_KEY not configured');
     }
 
-    console.log('Calling OpenAI Vision API...');
+    let openaiResponse;
 
-    const openaiResponse = await fetch('https://api.openai.com/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${openaiApiKey}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        model: 'gpt-4o',
-        messages: [
-          {
-            role: 'system',
-            content: 'You are an expert at analyzing insurance documents. Extract structured information from the provided document image accurately.'
-          },
-          {
-            role: 'user',
-            content: [
-              {
-                type: 'text',
-                text: `Analyze this insurance document image and extract the following information. Return ONLY valid JSON without any markdown formatting or code blocks:
+    if (isPdf && textContent.length > 50) {
+      // For PDFs with extracted text, use text-based analysis
+      console.log('Calling OpenAI with extracted PDF text...');
+
+      openaiResponse = await fetch('https://api.openai.com/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${openaiApiKey}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          model: 'gpt-4o',
+          messages: [
+            {
+              role: 'system',
+              content: 'You are an expert at analyzing insurance documents. Extract structured information from the provided text accurately.'
+            },
+            {
+              role: 'user',
+              content: `Analyze this insurance document text and extract the following information. Return ONLY valid JSON without any markdown formatting or code blocks:
+{
+  "policyNumber": "string or null",
+  "provider": "string or null",
+  "startDate": "YYYY-MM-DD or null",
+  "endDate": "YYYY-MM-DD or null",
+  "coverageAmount": number or null,
+  "isValid": boolean,
+  "validationNotes": "string describing any issues or confirmations"
+}
+
+If any field cannot be determined, use null. Be strict and only extract data you are confident about.
+
+DOCUMENT TEXT:
+${textContent.substring(0, 15000)}`
+            }
+          ],
+          max_tokens: 1000,
+          temperature: 0.2
+        })
+      });
+    } else {
+      // For images, use Vision API
+      console.log('Calling OpenAI Vision API with image...');
+      const base64Data = btoa(String.fromCharCode(...new Uint8Array(arrayBuffer)));
+
+      openaiResponse = await fetch('https://api.openai.com/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${openaiApiKey}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          model: 'gpt-4o',
+          messages: [
+            {
+              role: 'system',
+              content: 'You are an expert at analyzing insurance documents. Extract structured information from the provided document image accurately.'
+            },
+            {
+              role: 'user',
+              content: [
+                {
+                  type: 'text',
+                  text: `Analyze this insurance document and extract the following information. Return ONLY valid JSON without any markdown formatting or code blocks:
 {
   "policyNumber": "string or null",
   "provider": "string or null",
@@ -164,20 +224,21 @@ serve(async (req) => {
 }
 
 If any field cannot be determined, use null. Be strict and only extract data you are confident about.`
-              },
-              {
-                type: 'image_url',
-                image_url: {
-                  url: `data:${mimeType};base64,${base64Data}`
+                },
+                {
+                  type: 'image_url',
+                  image_url: {
+                    url: `data:${mimeType};base64,${base64Data}`
+                  }
                 }
-              }
-            ]
-          }
-        ],
-        max_tokens: 1000,
-        temperature: 0.2
-      })
-    });
+              ]
+            }
+          ],
+          max_tokens: 1000,
+          temperature: 0.2
+        })
+      });
+    }
 
     if (!openaiResponse.ok) {
       const errorText = await openaiResponse.text();
