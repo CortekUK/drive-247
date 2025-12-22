@@ -10,13 +10,14 @@ const Footer = () => {
   // Format phone for tel: link
   const phoneLink = settings.phone.replace(/[^\d+]/g, '');
 
-  // Build address display
+  // Build address display - only include city/state/zip if they have values
+  const cityStateZip = [settings.city, settings.state, settings.zip].filter(Boolean).join(', ').replace(/, $/, '');
   const addressParts = [
     settings.address_line1,
     settings.address_line2,
-    `${settings.city}, ${settings.state} ${settings.zip}`
+    cityStateZip
   ].filter(Boolean);
-  const addressDisplay = addressParts.join(", ") || settings.office_address;
+  const addressDisplay = addressParts.length > 0 ? addressParts.join(", ") : settings.office_address;
 
   // Build Google Maps URL
   const mapsUrl = settings.google_maps_url ||
@@ -31,7 +32,7 @@ const Footer = () => {
               <img
                 src={settings.logo_url}
                 alt={settings.logo_alt || "Drive917"}
-                className="h-10 mb-4 object-contain"
+                className="h-20 w-32 mb-4 object-cover"
               />
             ) : (
               <>
@@ -94,29 +95,35 @@ const Footer = () => {
             <h4 className="font-semibold text-white mb-2">Contact</h4>
             <div className="w-12 h-[2px] mb-4" style={{ backgroundColor: 'hsl(var(--accent))' }}></div>
             <ul className="space-y-2">
-              <li className="flex items-center gap-2 text-sm text-[#EAEAEA]">
-                <Phone className="w-4 h-4 flex-shrink-0" />
-                <a href={`tel:${phoneLink}`} className="footer-link">
-                  {settings.phone_display || settings.phone}
-                </a>
-              </li>
-              <li className="flex items-center gap-2 text-sm text-[#EAEAEA]">
-                <Mail className="w-4 h-4 flex-shrink-0" />
-                <a href={`mailto:${settings.email}`} className="footer-link">
-                  {settings.email}
-                </a>
-              </li>
-              <li className="flex items-start gap-2 text-sm text-[#EAEAEA]">
-                <MapPin className="w-4 h-4 flex-shrink-0 mt-0.5" />
-                <a
-                  href={mapsUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="footer-link"
-                >
-                  {addressDisplay}
-                </a>
-              </li>
+              {settings.phone && (
+                <li className="flex items-center gap-2 text-sm text-[#EAEAEA]">
+                  <Phone className="w-4 h-4 flex-shrink-0" />
+                  <a href={`tel:${phoneLink}`} className="footer-link">
+                    {settings.phone_display || settings.phone}
+                  </a>
+                </li>
+              )}
+              {settings.email && (
+                <li className="flex items-center gap-2 text-sm text-[#EAEAEA]">
+                  <Mail className="w-4 h-4 flex-shrink-0" />
+                  <a href={`mailto:${settings.email}`} className="footer-link">
+                    {settings.email}
+                  </a>
+                </li>
+              )}
+              {addressDisplay && (
+                <li className="flex items-start gap-2 text-sm text-[#EAEAEA]">
+                  <MapPin className="w-4 h-4 flex-shrink-0 mt-0.5" />
+                  <a
+                    href={mapsUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="footer-link"
+                  >
+                    {addressDisplay}
+                  </a>
+                </li>
+              )}
             </ul>
           </div>
         </div>

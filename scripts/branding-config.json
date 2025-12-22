@@ -1,0 +1,14 @@
+{
+  "tenants": [
+    {
+      "slug": "amgroadside",
+      "app_name": "AMG Roadside",
+      "logo_path": "./logos/amg.png",
+      "favicon_path": "./logos/amg.png",
+      "seo": {
+        "meta_title": "AMG Roadside - Economy & Hybrid Car Rentals in Maryland",
+        "meta_description": "Affordable economy and hybrid car rentals in Maryland. AMG Roadside offers Prius, SUVs and more at competitive rates. Going beyond city limits."
+      }
+    }
+  ]
+}

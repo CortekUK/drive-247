@@ -7,7 +7,20 @@
       "Bash(cat:*)",
       "Bash(lsof:*)",
       "Bash(xargs kill:*)",
-      "Bash(npm run dev:*)"
+      "Bash(npm run dev:*)",
+      "Bash(npm run dev:booking:*)",
+      "Bash(netstat:*)",
+      "Bash(curl:*)",
+      "Bash(taskkill //F //PID 15596)",
+      "Bash(ls:*)",
+      "Bash(npm install:*)",
+      "Bash(npm run update-branding:*)",
+      "Bash(findstr:*)",
+      "Bash(taskkill //F //PID 12224)",
+      "Bash(taskkill //F //PID 17996)",
+      "Bash(npm run update-cms:*)",
+      "Bash(cd:*)",
+      "Bash(node -e:*)"
     ],
     "deny": [],
     "ask": []

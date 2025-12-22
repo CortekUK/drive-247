@@ -31,7 +31,7 @@ import { toast } from "@/hooks/use-toast";
 import { useRateLimiting } from "@/hooks/use-rate-limiting";
 import { supabase } from "@/integrations/supabase/client";
 import { ThemeToggle } from "@/components/shared/layout/theme-toggle";
-import { useOrgSettings } from "@/hooks/use-org-settings";
+import { useTenantBranding } from "@/hooks/use-tenant-branding";
 
 const loginSchema = z.object({
   email: z.string().min(1, "Email is required").email("Please enter a valid email address"),
@@ -45,7 +45,7 @@ function LoginPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { user, signIn, loading, appUser } = useAuth();
-  const { settings } = useOrgSettings();
+  const { branding } = useTenantBranding();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState("");
   const [showForgotPassword, setShowForgotPassword] = useState(false);
@@ -67,9 +67,9 @@ function LoginPageContent() {
     isLocked,
   } = useRateLimiting();
 
-  // Get logo from settings or use default
-  const logoUrl = settings?.logo_url || "/logo.png";
-  const appName = settings?.app_name || "Drive917";
+  // Get logo from tenant branding or use default
+  const logoUrl = branding?.logo_url || "/logo.png";
+  const appName = branding?.app_name || "Drive917";
 
   // Role-based redirect logic
   const getRedirectPath = (): string => {
@@ -270,7 +270,7 @@ function LoginPageContent() {
               <img
                 src={logoUrl}
                 alt={appName}
-                className="h-32 w-auto object-contain transition-transform duration-300 hover:scale-105"
+                className="h-32 w-32 object-cover transition-transform duration-300 hover:scale-105"
                 style={{
                   filter: "drop-shadow(0 2px 8px rgba(198, 162, 86, 0.2))",
                   imageRendering: "crisp-edges",

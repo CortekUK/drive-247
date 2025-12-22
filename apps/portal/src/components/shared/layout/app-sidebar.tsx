@@ -6,6 +6,7 @@ import { Car, Users, FileText, CreditCard, LayoutDashboard, Bell, BarChart3, Ale
 import { Sidebar, SidebarContent, SidebarGroup, SidebarGroupContent, SidebarGroupLabel, SidebarHeader, SidebarMenu, SidebarMenuButton, SidebarMenuItem, SidebarFooter, useSidebar } from "@/components/ui/sidebar";
 import { useReminderStats } from "@/hooks/use-reminders";
 import { useOrgSettings } from "@/hooks/use-org-settings";
+import { useTenantBranding } from "@/hooks/use-tenant-branding";
 import { usePendingBookingsCount } from "@/hooks/use-pending-bookings";
 import { useAuthStore } from "@/stores/auth-store";
 
@@ -18,13 +19,14 @@ export function AppSidebar() {
     data: reminderStats
   } = useReminderStats();
   const { settings } = useOrgSettings();
+  const { branding } = useTenantBranding();
   const { data: pendingBookingsCount } = usePendingBookingsCount();
   const { appUser } = useAuthStore();
 
-  // Get app name from settings or fallback to default
-  const appName = settings?.app_name || 'DRIVE917';
+  // Get app name and logo from tenant branding or fallback to defaults
+  const appName = branding?.app_name || 'DRIVE917';
   const shortName = appName.length > 4 ? appName.substring(0, 4) : appName;
-  const logoUrl = settings?.logo_url;
+  const logoUrl = branding?.logo_url;
 
   // Hide pending bookings when automated payment mode is enabled
   const showPendingBookings = settings?.payment_mode === 'manual';
@@ -153,7 +155,7 @@ export function AppSidebar() {
             <img
               src={logoUrl}
               alt={appName}
-              className={`object-contain transition-all duration-300 ease-in-out ${collapsed ? "h-10 w-10" : "h-12 max-w-[180px]"}`}
+              className={`object-cover transition-all duration-300 ease-in-out ${collapsed ? "h-20 w-32" : "h-20 w-32 max-w-[380px]"}`}
               style={{ imageRendering: 'crisp-edges' }}
             />
           ) : (

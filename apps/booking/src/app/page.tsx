@@ -149,8 +149,8 @@ export default function Home() {
           </div>
         </div>
 
-        {/* Promotional Badge - Bottom Right */}
-        {content.promo_badge?.enabled !== false && (
+        {/* Promotional Badge - Bottom Right (only shows if explicitly enabled in CMS) */}
+        {content.promo_badge?.enabled === true && (
           <a
             href="#booking"
             className="absolute bottom-12 right-8 md:bottom-16 md:right-16 z-20 group cursor-pointer animate-fade-in"

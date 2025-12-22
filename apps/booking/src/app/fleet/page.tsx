@@ -618,7 +618,7 @@ const Pricing = () => {
                 <Separator orientation="vertical" className="h-16 hidden md:block bg-accent/30" />
               </div>
               <p className="text-base md:text-lg text-muted-foreground max-w-3xl leading-relaxed">
-                Every Drive917 rental includes comprehensive insurance, roadside assistance, and premium support for
+                Every rental includes comprehensive insurance, roadside assistance, and premium support for
                 complete peace of mind.
               </p>
               <div className="flex items-center gap-6">

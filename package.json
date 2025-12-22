@@ -14,9 +14,15 @@
     "dev:web": "turbo run dev --filter=web",
     "dev:admin": "turbo run dev --filter=admin",
     "build": "turbo run build",
-    "lint": "turbo run lint"
+    "lint": "turbo run lint",
+    "update-branding": "node scripts/bulk-update-branding.js",
+    "update-cms": "node scripts/update-cms-content.js"
   },
   "devDependencies": {
     "turbo": "^2.6.3"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.87.3",
+    "dotenv": "^16.3.1"
   }
 }
