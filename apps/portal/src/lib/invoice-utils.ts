@@ -36,12 +36,16 @@ export const generateInvoiceNumber = async (tenantId?: string): Promise<string> 
   const year = format(now, 'yyyy');
   const month = format(now, 'MM');
 
+  // Calculate next month (handle December -> January rollover)
+  const nextMonth = Number(month) === 12 ? 1 : Number(month) + 1;
+  const nextYear = Number(month) === 12 ? Number(year) + 1 : Number(year);
+
   // Get count of invoices this month
   let query = supabase
     .from('invoices')
     .select('*', { count: 'exact', head: true })
     .gte('invoice_date', `${year}-${month}-01`)
-    .lt('invoice_date', `${year}-${String(Number(month) + 1).padStart(2, '0')}-01`);
+    .lt('invoice_date', `${nextYear}-${String(nextMonth).padStart(2, '0')}-01`);
 
   if (tenantId) {
     query = query.eq('tenant_id', tenantId);

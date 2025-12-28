@@ -90,11 +90,14 @@ const RentalDetail = () => {
 
   // Fetch payment information for pending bookings
   const { data: payment } = useQuery({
-    queryKey: ["rental-payment", id],
+    queryKey: ["rental-payment", id, tenant?.id],
     queryFn: async () => {
+      if (!tenant?.id) return null;
+
       const { data, error } = await supabase
         .from("payments")
         .select("*")
+        .eq("tenant_id", tenant.id)
         .eq("rental_id", id)
         .order("created_at", { ascending: false })
         .limit(1)
@@ -103,7 +106,7 @@ const RentalDetail = () => {
       if (error && error.code !== 'PGRST116') throw error;
       return data;
     },
-    enabled: !!id,
+    enabled: !!id && !!tenant?.id,
   });
 
   // Fetch signed document if available

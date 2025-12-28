@@ -146,6 +146,7 @@ export const useEnhancedRentals = (filters: RentalFilters = {}) => {
       const { data: initialPayments } = await supabase
         .from("payments")
         .select("rental_id, amount")
+        .eq("tenant_id", tenant.id)
         .in("rental_id", rentalIds)
         .eq("payment_type", "InitialFee");
 

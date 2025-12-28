@@ -29,12 +29,12 @@ serve(async (req) => {
   try {
     const body = await req.json();
     documentId = body.documentId;
-    const fileUrl = body.fileUrl;
+    const fileUrl = body.fileUrl; // Optional - will be looked up from database if not provided
 
     console.log('Starting AI scan for document:', documentId, 'fileUrl:', fileUrl);
 
-    if (!documentId || !fileUrl) {
-      throw new Error('Missing documentId or fileUrl');
+    if (!documentId) {
+      throw new Error('Missing documentId');
     }
 
     // Initialize Supabase client
