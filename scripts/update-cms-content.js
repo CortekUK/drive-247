@@ -82,6 +82,20 @@ const TENANT_CONTENT = {
     hours: "8AM - 10PM (Pickup) • 24/7 Requests",
     specialty: "Reliable car rentals with flexible booking options",
     region: "Las Vegas"
+  },
+
+  // SAN DIEGO WEEKLY CAR RENTALS
+  sdrentals: {
+    name: "San Diego Weekly Car Rentals",
+    shortName: "SD Rentals",
+    tagline: "Weekly & Monthly Car Rentals in San Diego",
+    phone: "+1 (619) 555-0100",
+    phoneDisplay: "(619) 555-0100",
+    email: "info@sdrentals.com",
+    location: "San Diego, California",
+    hours: "8AM - 8PM Daily",
+    specialty: "Weekly and monthly rental specialists - Economy cars, SUVs & more",
+    region: "San Diego"
   }
 };
 
