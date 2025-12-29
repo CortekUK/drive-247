@@ -9,6 +9,31 @@
         "meta_title": "AMG Roadside - Economy & Hybrid Car Rentals in Maryland",
         "meta_description": "Affordable economy and hybrid car rentals in Maryland. AMG Roadside offers Prius, SUVs and more at competitive rates. Going beyond city limits."
       }
+    },
+    {
+      "slug": "sdrentals",
+      "app_name": "San Diego Weekly Car Rentals",
+      "logo_path": "./logos/san-diego.png",
+      "favicon_path": "./logos/san-diego.png",
+      "colors": {
+        "primary_color": "#1A4E7F",
+        "secondary_color": "#1A4E7F",
+        "accent_color": "#2D8BD4",
+        "light_primary_color": "#1A4E7F",
+        "light_secondary_color": "#1A4E7F",
+        "light_accent_color": "#2D8BD4",
+        "light_background_color": "#FFFFFF",
+        "light_header_footer_color": "#1A4E7F",
+        "dark_primary_color": "#2D8BD4",
+        "dark_secondary_color": "#2D8BD4",
+        "dark_accent_color": "#4AA3E8",
+        "dark_background_color": "#0F172A",
+        "dark_header_footer_color": "#1E293B"
+      },
+      "seo": {
+        "meta_title": "San Diego Weekly Car Rentals - Affordable Weekly & Monthly Rentals",
+        "meta_description": "Affordable weekly and monthly car rentals in San Diego. Quality vehicles at competitive rates for extended rentals. Book your ride today!"
+      }
     }
   ]
 }
