@@ -129,6 +129,7 @@ export const TipTapEditor: React.FC<TipTapEditorProps> = ({
       TableCell,
     ],
     content,
+    immediatelyRender: false,
     editorProps: {
       attributes: {
         class: 'prose prose-sm max-w-none focus:outline-none min-h-[500px] px-6 py-4',
