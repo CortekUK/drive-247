@@ -146,7 +146,7 @@ export function AppSidebar() {
             <img
               src={logoUrl}
               alt={appName}
-              className={`object-cover transition-all duration-300 ease-in-out ${collapsed ? "h-20 w-32" : "h-20 w-32 max-w-[380px]"}`}
+              className={`object-cover transition-all duration-300 ease-in-out mt-2 ${collapsed ? "h-20 w-32" : "h-20 w-32 max-w-[380px]"}`}
               style={{ imageRendering: 'crisp-edges' }}
             />
           ) : (

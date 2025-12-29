@@ -25,16 +25,24 @@ async function downloadAndStoreImage(
   const VERIFF_API_SECRET = Deno.env.get('VERIFF_API_SECRET');
 
   if (!VERIFF_API_KEY || !VERIFF_API_SECRET) {
+    console.error('Veriff API credentials not configured for media download');
     return null;
   }
 
   try {
-    // Extract media ID from URL for signature
-    const mediaId = imageUrl.split('/').pop();
-    if (!mediaId) return null;
+    console.log(`Downloading ${imageType} from:`, imageUrl);
 
-    // Generate signature for the media ID
+    // Extract media ID from URL for signature (last segment of URL path)
+    const urlParts = imageUrl.split('/');
+    const mediaId = urlParts[urlParts.length - 1];
+    if (!mediaId) {
+      console.error(`Failed to extract media ID from URL: ${imageUrl}`);
+      return null;
+    }
+
+    // Generate signature for the media ID (lowercase hex HMAC-SHA256)
     const signature = generateVeriffSignature(mediaId, VERIFF_API_SECRET);
+    console.log(`Generated signature for mediaId ${mediaId}`);
 
     // Download image from Veriff
     const response = await fetch(imageUrl, {
@@ -46,18 +54,24 @@ async function downloadAndStoreImage(
     });
 
     if (!response.ok) {
-      console.error(`Failed to download ${imageType}:`, response.status);
+      const errorText = await response.text();
+      console.error(`Failed to download ${imageType}: ${response.status} - ${errorText}`);
       return null;
     }
 
+    const contentType = response.headers.get('content-type') || 'image/jpeg';
     const imageBlob = await response.blob();
-    const fileName = `veriff/${sessionId}/${imageType}.jpg`;
+    console.log(`Downloaded ${imageType}: ${imageBlob.size} bytes, type: ${contentType}`);
+
+    // Determine file extension from content type
+    const extension = contentType.includes('png') ? 'png' : 'jpg';
+    const fileName = `veriff/${sessionId}/${imageType}.${extension}`;
 
     // Upload to Supabase Storage
     const { data, error } = await supabaseClient.storage
       .from('customer-documents')
       .upload(fileName, imageBlob, {
-        contentType: 'image/jpeg',
+        contentType: contentType,
         upsert: true,
       });
 
@@ -71,7 +85,7 @@ async function downloadAndStoreImage(
       .from('customer-documents')
       .getPublicUrl(fileName);
 
-    console.log(`Stored ${imageType}:`, urlData.publicUrl);
+    console.log(`Successfully stored ${imageType}:`, urlData.publicUrl);
     return urlData.publicUrl;
 
   } catch (error) {

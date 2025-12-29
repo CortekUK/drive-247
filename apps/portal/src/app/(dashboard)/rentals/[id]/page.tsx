@@ -9,7 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { FileText, ArrowLeft, PoundSterling, Plus, X, Send, Download, Ban, Check, AlertTriangle, Loader2, Shield, CheckCircle, XCircle, ExternalLink, UserCheck, IdCard, Camera, FileSignature, Clock, Mail, RefreshCw } from "lucide-react";
+import { FileText, ArrowLeft, PoundSterling, Plus, X, Send, Download, Ban, Check, AlertTriangle, Loader2, Shield, CheckCircle, XCircle, ExternalLink, UserCheck, IdCard, Camera, FileSignature, Clock, Mail, RefreshCw, Trash2 } from "lucide-react";
 import { AddPaymentDialog } from "@/components/shared/dialogs/add-payment-dialog";
 import { useToast } from "@/hooks/use-toast";
 import { useTenant } from "@/contexts/TenantContext";
@@ -90,11 +90,14 @@ const RentalDetail = () => {
 
   // Fetch payment information for pending bookings
   const { data: payment } = useQuery({
-    queryKey: ["rental-payment", id],
+    queryKey: ["rental-payment", id, tenant?.id],
     queryFn: async () => {
+      if (!tenant?.id) return null;
+
       const { data, error } = await supabase
         .from("payments")
         .select("*")
+        .eq("tenant_id", tenant.id)
         .eq("rental_id", id)
         .order("created_at", { ascending: false })
         .limit(1)
@@ -103,7 +106,7 @@ const RentalDetail = () => {
       if (error && error.code !== 'PGRST116') throw error;
       return data;
     },
-    enabled: !!id,
+    enabled: !!id && !!tenant?.id,
   });
 
   // Fetch signed document if available
@@ -197,14 +200,13 @@ const RentalDetail = () => {
       console.log('Fetching identity verification for customer:', rental.customers.id);
 
       // First try to find by customer_id
-      let query = supabase
+      const { data, error } = await supabase
         .from("identity_verifications")
         .select("*")
         .eq("customer_id", rental.customers.id)
         .order("created_at", { ascending: false })
-        .limit(1);
-
-      const { data, error } = await query.maybeSingle();
+        .limit(1)
+        .maybeSingle();
 
       if (error) {
         console.error("Error fetching identity verification:", error);
@@ -212,32 +214,111 @@ const RentalDetail = () => {
       }
 
       if (data) {
-        console.log('Found identity verification:', data.id, 'status:', data.review_result);
+        console.log('Found identity verification by customer_id:', data.id, 'status:', data.review_result);
         return data;
       }
 
-      // If not found by customer_id, try by tenant_id (for unlinked records)
-      if (tenant?.id) {
-        console.log('No verification by customer_id, checking tenant records...');
-        const { data: tenantData } = await supabase
-          .from("identity_verifications")
-          .select("*")
-          .eq("tenant_id", tenant.id)
-          .is("customer_id", null)
-          .order("created_at", { ascending: false })
-          .limit(5);
+      console.log('No verification by customer_id, checking ALL unlinked records...');
 
-        if (tenantData && tenantData.length > 0) {
-          console.log('Found unlinked verifications:', tenantData.length);
-          // Return the most recent one for now
-          return tenantData[0];
+      // Check ALL unlinked verifications (might not have tenant_id either)
+      const { data: unlinkedData } = await supabase
+        .from("identity_verifications")
+        .select("*")
+        .is("customer_id", null)
+        .order("created_at", { ascending: false })
+        .limit(10);
+
+      if (unlinkedData && unlinkedData.length > 0) {
+        console.log('Found unlinked verifications:', unlinkedData.length);
+        // Try to match by name if available
+        const customerName = rental?.customers?.name?.toLowerCase() || '';
+        const match = unlinkedData.find((v: any) => {
+          const veriffName = `${v.first_name || ''} ${v.last_name || ''}`.toLowerCase().trim();
+          return veriffName && customerName && (
+            customerName.includes(veriffName) ||
+            veriffName.includes(customerName) ||
+            (v.first_name && customerName.includes(v.first_name.toLowerCase())) ||
+            (v.last_name && customerName.includes(v.last_name.toLowerCase()))
+          );
+        });
+
+        if (match) {
+          console.log('Found matching unlinked verification by name:', match.id);
+          return { ...match, needsLinking: true };
         }
+
+        // Return all unlinked for selection
+        console.log('No name match, returning first unlinked for review');
+        return { ...unlinkedData[0], needsLinking: true, allUnlinked: unlinkedData };
       }
 
       console.log('No identity verification found for customer');
       return null;
     },
     enabled: !!rental?.customers?.id,
+  });
+
+  // Fetch all recent unlinked verifications for manual linking
+  const { data: unlinkedVerifications } = useQuery({
+    queryKey: ["unlinked-verifications", tenant?.id],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("identity_verifications")
+        .select("*")
+        .is("customer_id", null)
+        .order("created_at", { ascending: false })
+        .limit(10);
+      return data || [];
+    },
+    enabled: !identityVerification && !!rental?.customers?.id,
+  });
+
+  // Mutation to link a verification to this customer
+  const linkVerificationMutation = useMutation({
+    mutationFn: async (verificationId: string) => {
+      const { error } = await supabase
+        .from("identity_verifications")
+        .update({
+          customer_id: rental?.customers?.id,
+          tenant_id: tenant?.id
+        })
+        .eq("id", verificationId);
+
+      if (error) throw error;
+
+      // Also update customer's verification status
+      const { data: verif } = await supabase
+        .from("identity_verifications")
+        .select("review_result")
+        .eq("id", verificationId)
+        .single();
+
+      if (verif) {
+        const status = verif.review_result === 'GREEN' ? 'verified' :
+                       verif.review_result === 'RED' ? 'rejected' : 'pending';
+        await supabase
+          .from("customers")
+          .update({ identity_verification_status: status })
+          .eq("id", rental?.customers?.id);
+      }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["customer-identity-verification"] });
+      queryClient.invalidateQueries({ queryKey: ["unlinked-verifications"] });
+      queryClient.invalidateQueries({ queryKey: ["rental", id] });
+      toast({
+        title: "Verification Linked",
+        description: "Identity verification has been linked to this customer.",
+      });
+    },
+    onError: (error: any) => {
+      console.error("Link verification error:", error);
+      toast({
+        title: "Error",
+        description: "Failed to link verification: " + error.message,
+        variant: "destructive",
+      });
+    },
   });
 
   // Mutation for approving insurance document
@@ -371,6 +452,49 @@ const RentalDetail = () => {
       toast({
         title: "Error",
         description: "Failed to restart document scan.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  // Mutation for deleting insurance documents
+  const deleteDocumentMutation = useMutation({
+    mutationFn: async (doc: { id: string; file_url: string }) => {
+      // Delete file from storage
+      if (doc.file_url) {
+        const { error: storageError } = await supabase.storage
+          .from('customer-documents')
+          .remove([doc.file_url]);
+        if (storageError) {
+          console.error("Storage delete error:", storageError);
+        }
+      }
+
+      // Delete record from database
+      let query = supabase
+        .from("customer_documents")
+        .delete()
+        .eq("id", doc.id);
+
+      if (tenant?.id) {
+        query = query.eq("tenant_id", tenant.id);
+      }
+
+      const { error } = await query;
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["rental-insurance-docs", id] });
+      toast({
+        title: "Document Deleted",
+        description: "The insurance document has been deleted.",
+      });
+    },
+    onError: (error: any) => {
+      console.error("Delete error:", error);
+      toast({
+        title: "Error",
+        description: "Failed to delete document.",
         variant: "destructive",
       });
     },
@@ -815,8 +939,7 @@ const RentalDetail = () => {
                         });
 
                         toast({ title: "Success", description: "Insurance document uploaded and AI scan initiated" });
-                        queryClient.invalidateQueries({ queryKey: ["rental", id] });
-                        queryClient.invalidateQueries({ queryKey: ["insurance-documents"] });
+                        queryClient.invalidateQueries({ queryKey: ["rental-insurance-docs", id] });
                       } catch (error: any) {
                         toast({
                           title: "Upload Failed",
@@ -1000,6 +1123,24 @@ const RentalDetail = () => {
                           <ExternalLink className="h-3 w-3 mr-1" />
                           View Document
                         </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="text-red-600 hover:text-red-700 hover:bg-red-50 border-red-300"
+                          onClick={() => {
+                            if (confirm('Are you sure you want to delete this document?')) {
+                              deleteDocumentMutation.mutate({ id: doc.id, file_url: doc.file_url });
+                            }
+                          }}
+                          disabled={deleteDocumentMutation.isPending}
+                        >
+                          {deleteDocumentMutation.isPending ? (
+                            <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+                          ) : (
+                            <Trash2 className="h-3 w-3 mr-1" />
+                          )}
+                          Delete
+                        </Button>
                         {/* Link to Rental button for unlinked documents */}
                         {doc.isUnlinked && (
                           <Button
@@ -1086,6 +1227,34 @@ const RentalDetail = () => {
         <CardContent>
           {identityVerification && (
             <div className="space-y-4">
+              {/* Needs Linking Alert */}
+              {identityVerification.needsLinking && (
+                <Alert className="border-blue-500/50 bg-blue-500/10">
+                  <AlertTriangle className="h-4 w-4 text-blue-600" />
+                  <AlertDescription className="flex items-center justify-between">
+                    <span className="text-sm">
+                      Found a verification that appears to match this customer but is not linked.
+                      <strong className="ml-1">
+                        {identityVerification.first_name} {identityVerification.last_name}
+                      </strong>
+                    </span>
+                    <Button
+                      size="sm"
+                      onClick={() => linkVerificationMutation.mutate(identityVerification.id)}
+                      disabled={linkVerificationMutation.isPending}
+                      className="ml-4"
+                    >
+                      {linkVerificationMutation.isPending ? (
+                        <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+                      ) : (
+                        <CheckCircle className="h-3 w-3 mr-1" />
+                      )}
+                      Link to Customer
+                    </Button>
+                  </AlertDescription>
+                </Alert>
+              )}
+
               {/* Status Row */}
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
@@ -1272,12 +1441,78 @@ const RentalDetail = () => {
 
           {/* Empty state when no verification data */}
           {!identityVerification && !isLoadingVerification && (
-            <div className="text-center py-8 text-muted-foreground">
-              <UserCheck className="h-12 w-12 mx-auto mb-3 opacity-50" />
-              <p className="font-medium">No identity verification found</p>
-              <p className="text-sm mt-1">
-                This customer hasn't completed Veriff identity verification yet, or the verification is not linked to this customer.
-              </p>
+            <div className="space-y-4">
+              <div className="text-center py-4 text-muted-foreground">
+                <UserCheck className="h-12 w-12 mx-auto mb-3 opacity-50" />
+                <p className="font-medium">No identity verification linked</p>
+                <p className="text-sm mt-1">
+                  This customer hasn't completed Veriff identity verification yet, or the verification is not linked to this customer.
+                </p>
+              </div>
+
+              {/* Show unlinked verifications if available */}
+              {unlinkedVerifications && unlinkedVerifications.length > 0 && (
+                <div className="border-t pt-4">
+                  <h4 className="text-sm font-semibold mb-3 flex items-center gap-2">
+                    <AlertTriangle className="h-4 w-4 text-yellow-600" />
+                    Unlinked Verifications Found ({unlinkedVerifications.length})
+                  </h4>
+                  <p className="text-sm text-muted-foreground mb-3">
+                    The following verifications are not linked to any customer. If one belongs to <strong>{rental?.customers?.name}</strong>, click "Link" to connect it.
+                  </p>
+                  <div className="space-y-2">
+                    {unlinkedVerifications.map((verif: any) => (
+                      <div
+                        key={verif.id}
+                        className="flex items-center justify-between p-3 bg-muted/50 rounded-lg border"
+                      >
+                        <div className="flex items-center gap-4">
+                          <div>
+                            {verif.review_result === 'GREEN' ? (
+                              <Badge className="bg-green-600" variant="default">
+                                <CheckCircle className="h-3 w-3 mr-1" />
+                                Verified
+                              </Badge>
+                            ) : verif.review_result === 'RED' ? (
+                              <Badge variant="destructive">
+                                <XCircle className="h-3 w-3 mr-1" />
+                                Declined
+                              </Badge>
+                            ) : (
+                              <Badge variant="outline">Pending</Badge>
+                            )}
+                          </div>
+                          <div>
+                            <p className="font-medium">
+                              {verif.first_name || ''} {verif.last_name || ''}
+                              {!verif.first_name && !verif.last_name && <span className="text-muted-foreground italic">Name not extracted</span>}
+                            </p>
+                            <p className="text-xs text-muted-foreground">
+                              {verif.document_type ? verif.document_type.replace(/_/g, ' ') : 'Document type unknown'}
+                              {verif.document_country && ` • ${verif.document_country}`}
+                              {verif.created_at && ` • ${new Date(verif.created_at).toLocaleDateString()}`}
+                            </p>
+                          </div>
+                        </div>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => linkVerificationMutation.mutate(verif.id)}
+                          disabled={linkVerificationMutation.isPending}
+                          className="border-blue-300 text-blue-600 hover:bg-blue-50"
+                        >
+                          {linkVerificationMutation.isPending ? (
+                            <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+                          ) : (
+                            <CheckCircle className="h-3 w-3 mr-1" />
+                          )}
+                          Link
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           )}
 

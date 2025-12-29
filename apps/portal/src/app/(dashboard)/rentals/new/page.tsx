@@ -261,15 +261,6 @@ const CreateRental = () => {
           monthly_amount: data.monthly_amount,
           status: "Pending",
           tenant_id: tenant?.id,
-          source: "portal", // Mark as created from portal/CRM
-          // New booking-aligned fields
-          pickup_location: data.pickup_location || null,
-          return_location: sameAsPickup ? data.pickup_location : data.return_location || null,
-          pickup_time: data.pickup_time || null,
-          return_time: data.return_time || null,
-          driver_age_range: data.driver_age_range || null,
-          promo_code: data.promo_code || null,
-          insurance_status: data.insurance_status || "pending",
         })
         .select()
         .single();

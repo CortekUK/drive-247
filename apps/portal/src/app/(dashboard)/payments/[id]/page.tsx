@@ -3,6 +3,7 @@
 import { useParams, useRouter } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { useTenant } from "@/contexts/TenantContext";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -39,11 +40,13 @@ export default function PaymentDetail() {
   const params = useParams();
   const id = params?.id as string;
   const router = useRouter();
+  const { tenant } = useTenant();
 
   const { data: payment, isLoading, error } = useQuery({
-    queryKey: ["payment-detail", id],
+    queryKey: ["payment-detail", id, tenant?.id],
     queryFn: async () => {
       if (!id) throw new Error("Payment ID is required");
+      if (!tenant?.id) throw new Error("No tenant context");
 
       const { data, error } = await supabase
         .from("payments")
@@ -72,13 +75,14 @@ export default function PaymentDetail() {
             rental_number
           )
         `)
+        .eq("tenant_id", tenant.id)
         .eq("id", id)
         .single();
 
       if (error) throw error;
       return data as PaymentDetailData;
     },
-    enabled: !!id,
+    enabled: !!id && !!tenant?.id,
   });
 
   if (isLoading) {

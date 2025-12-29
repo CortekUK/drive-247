@@ -1,5 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { useTenant } from "@/contexts/TenantContext";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -49,15 +50,17 @@ interface PaymentDetail {
   } | null;
 }
 
-export const PaymentAllocationDrawer = ({ 
-  open, 
-  onOpenChange, 
-  paymentId 
+export const PaymentAllocationDrawer = ({
+  open,
+  onOpenChange,
+  paymentId
 }: PaymentAllocationDrawerProps) => {
+  const { tenant } = useTenant();
+
   const { data: paymentDetail } = useQuery({
-    queryKey: ["payment-detail", paymentId],
+    queryKey: ["payment-detail", paymentId, tenant?.id],
     queryFn: async () => {
-      if (!paymentId) return null;
+      if (!paymentId || !tenant?.id) return null;
 
       const { data, error } = await supabase
         .from("payments")
@@ -67,13 +70,14 @@ export const PaymentAllocationDrawer = ({
           vehicles(id, reg, make, model),
           rentals(id, rental_number)
         `)
+        .eq("tenant_id", tenant.id)
         .eq("id", paymentId)
         .single();
 
       if (error) throw error;
       return data as PaymentDetail;
     },
-    enabled: !!paymentId && open,
+    enabled: !!paymentId && !!tenant?.id && open,
   });
 
   const { data: allocations } = useQuery({
