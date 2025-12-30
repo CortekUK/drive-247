@@ -2100,11 +2100,11 @@ const MultiStepBookingWidget = () => {
                       {/* Price Range */}
                       <div className="space-y-2">
                         <Label className="text-sm font-medium">
-                          Price per month: ${filters.priceRange[0]} - ${filters.priceRange[1]}
+                          Price Range: ${filters.priceRange[0]} - ${filters.priceRange[1]}
                         </Label>
                         <div className="flex justify-between text-xs text-muted-foreground mb-1">
-                          <span>Min: ${originalPriceRange[0]}</span>
-                          <span>Max: ${originalPriceRange[1]}</span>
+                          <span>Budget</span>
+                          <span>Premium</span>
                         </div>
                         <Slider value={filters.priceRange} onValueChange={value => setFilters(prev => ({
                           ...prev,
