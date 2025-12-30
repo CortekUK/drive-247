@@ -956,12 +956,68 @@ const MultiStepBookingWidget = () => {
     const hours = differenceInHours(dropoff, pickup);
     const days = Math.floor(hours / 24);
     const remainingHours = hours % 24;
+
+    // Format duration with proper grammar
+    const formatDuration = () => {
+      // Helper for singular/plural
+      const pluralize = (count: number, singular: string, plural: string) =>
+        count === 1 ? `${count} ${singular}` : `${count} ${plural}`;
+
+      // If less than 1 day, show hours
+      if (days === 0) {
+        return pluralize(remainingHours, 'hour', 'hours');
+      }
+
+      // Calculate months, weeks, and remaining days
+      const months = Math.floor(days / 30);
+      const afterMonthsDays = days % 30;
+      const weeks = Math.floor(afterMonthsDays / 7);
+      const finalDays = afterMonthsDays % 7;
+
+      const parts: string[] = [];
+
+      // Add months if any
+      if (months > 0) {
+        parts.push(pluralize(months, 'month', 'months'));
+      }
+
+      // Add weeks if any (only show if we have some remaining after months)
+      if (weeks > 0) {
+        parts.push(pluralize(weeks, 'week', 'weeks'));
+      }
+
+      // Add remaining days if any
+      if (finalDays > 0) {
+        parts.push(pluralize(finalDays, 'day', 'days'));
+      }
+
+      // Add hours if there are remaining hours and we have days
+      if (remainingHours > 0 && days > 0) {
+        parts.push(pluralize(remainingHours, 'hour', 'hours'));
+      }
+
+      // If no parts (shouldn't happen), fallback to days
+      if (parts.length === 0) {
+        return pluralize(days, 'day', 'days');
+      }
+
+      // Join parts with "and" for last item, ", " for others
+      if (parts.length === 1) {
+        return parts[0];
+      } else if (parts.length === 2) {
+        return `${parts[0]} and ${parts[1]}`;
+      } else {
+        const last = parts.pop();
+        return `${parts.join(', ')} and ${last}`;
+      }
+    };
+
     return {
       hours,
       days,
       remainingHours,
       isValid: hours >= 24 && days <= 365,
-      formatted: remainingHours > 0 ? `${days}d ${remainingHours}h` : `${days} day${days !== 1 ? 's' : ''}`
+      formatted: formatDuration()
     };
   };
   const calculateEstimatedTotal = (vehicle: Vehicle) => {
@@ -1911,7 +1967,7 @@ const MultiStepBookingWidget = () => {
               <span>•</span>
               <span>{formData.pickupLocation.split(',')[0] || 'Selected location'}</span>
               <span>•</span>
-              <span>{calculateRentalDuration()?.days || 0} days</span>
+              <span>{calculateRentalDuration()?.formatted || '0 days'}</span>
             </div>}
           </div>
 
