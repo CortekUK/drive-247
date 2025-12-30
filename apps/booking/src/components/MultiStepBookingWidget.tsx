@@ -2270,18 +2270,19 @@ const MultiStepBookingWidget = () => {
                                 onClick={e => {
                                   if (isBlocked) return;
                                   e.stopPropagation();
+                                  // Toggle: if already selected, deselect; otherwise select
                                   setFormData({
                                     ...formData,
-                                    vehicleId: vehicle.id
+                                    vehicleId: isSelected ? '' : vehicle.id
                                   });
-                                  if ((window as any).gtag) {
+                                  if ((window as any).gtag && !isSelected) {
                                     (window as any).gtag('event', 'vehicle_selected', {
                                       vehicle_id: vehicle.id,
                                       est_total: estimation?.total || 0
                                     });
                                   }
                                 }}>
-                                {isBlocked ? "Unavailable" : isSelected ? "Selected" : "Select This Vehicle"}
+                                {isBlocked ? "Unavailable" : isSelected ? "Selected" : "Select"}
                               </Button>
                             </div>
                           </div>
@@ -2412,18 +2413,19 @@ const MultiStepBookingWidget = () => {
                           onClick={e => {
                             if (isBlocked) return;
                             e.stopPropagation();
+                            // Toggle: if already selected, deselect; otherwise select
                             setFormData({
                               ...formData,
-                              vehicleId: vehicle.id
+                              vehicleId: isSelected ? '' : vehicle.id
                             });
-                            if ((window as any).gtag) {
+                            if ((window as any).gtag && !isSelected) {
                               (window as any).gtag('event', 'vehicle_selected', {
                                 vehicle_id: vehicle.id,
                                 est_total: estimation?.total || 0
                               });
                             }
                           }}>
-                          {isBlocked ? "Unavailable" : isSelected ? "Selected" : "Select This Vehicle"}
+                          {isBlocked ? "Unavailable" : isSelected ? "Selected" : "Select"}
                         </Button>
                       </div>
                     </Card>;
