@@ -1999,8 +1999,6 @@ const MultiStepBookingWidget = () => {
                     <SelectItem value="recommended">Recommended</SelectItem>
                     <SelectItem value="price_low">Price: Low → High</SelectItem>
                     <SelectItem value="price_high">Price: High → Low</SelectItem>
-                    <SelectItem value="seats_most">Seats: Most → Fewest</SelectItem>
-                    <SelectItem value="newest">Newest Models</SelectItem>
                   </SelectContent>
                 </Select>
 
