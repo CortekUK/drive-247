@@ -1219,6 +1219,16 @@ const MultiStepBookingWidget = () => {
       }
     }, 250);
   };
+
+  // Format time to 12-hour format with AM/PM
+  const formatTimeWithPeriod = (time: string): string => {
+    if (!time) return "—";
+    const [hours, minutes] = time.split(':').map(Number);
+    const period = hours >= 12 ? 'PM' : 'AM';
+    const displayHours = hours % 12 || 12; // Convert 0 to 12 for midnight
+    return `${displayHours}:${minutes.toString().padStart(2, '0')} ${period}`;
+  };
+
   const handleViewModeChange = (mode: "grid" | "list") => {
     setViewMode(mode);
     localStorage.setItem('viewMode', mode);
@@ -2493,13 +2503,13 @@ const MultiStepBookingWidget = () => {
                   <div>
                     <p className="text-muted-foreground text-xs uppercase tracking-wide mb-1">Pickup</p>
                     <p className="font-medium">{formData.pickupDate ? format(new Date(formData.pickupDate), "MMM dd, yyyy") : "—"}</p>
-                    <p className="text-muted-foreground text-xs">{formData.pickupTime || "—"}</p>
+                    <p className="text-muted-foreground text-xs">{formatTimeWithPeriod(formData.pickupTime)}</p>
                   </div>
 
                   <div>
                     <p className="text-muted-foreground text-xs uppercase tracking-wide mb-1">Return</p>
                     <p className="font-medium">{formData.dropoffDate ? format(new Date(formData.dropoffDate), "MMM dd, yyyy") : "—"}</p>
-                    <p className="text-muted-foreground text-xs">{formData.dropoffTime || "—"}</p>
+                    <p className="text-muted-foreground text-xs">{formatTimeWithPeriod(formData.dropoffTime)}</p>
                   </div>
 
                   <div className="pt-3 border-t border-border/50">
