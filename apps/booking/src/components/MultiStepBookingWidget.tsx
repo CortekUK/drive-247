@@ -2192,10 +2192,16 @@ const MultiStepBookingWidget = () => {
                               <Car className="w-16 h-16 opacity-20 text-muted-foreground" />
                             </div>
 
-                            {/* Registration Chip */}
-                            <div className="absolute top-3 right-3 px-3 py-1 bg-primary text-primary-foreground text-xs font-semibold rounded-full">
-                              {vehicle.reg}
-                            </div>
+                            {/* Registration Chip - hide when selected, show tick instead */}
+                            {!isSelected ? (
+                              <div className="absolute top-3 right-3 px-3 py-1 bg-primary text-primary-foreground text-xs font-semibold rounded-full">
+                                {vehicle.reg}
+                              </div>
+                            ) : (
+                              <div className="absolute top-3 right-3 w-8 h-8 bg-primary rounded-full flex items-center justify-center shadow-lg">
+                                <Check className="w-5 h-5 text-black" />
+                              </div>
+                            )}
 
                             {/* Blocked Badge */}
                             {isBlocked && blockStatus.blockedRange && (
@@ -2313,14 +2319,16 @@ const MultiStepBookingWidget = () => {
                           });
                         }
                       }}>
-                      {/* Registration Chip */}
-                      <div className="absolute top-3 right-3 z-10 px-3 py-1 bg-primary text-primary-foreground text-xs font-semibold rounded-full">
-                        {vehicle.reg}
-                      </div>
+                      {/* Registration Chip - hide when selected, show tick instead */}
+                      {!isSelected && (
+                        <div className="absolute top-3 right-3 z-10 px-3 py-1 bg-primary text-primary-foreground text-xs font-semibold rounded-full">
+                          {vehicle.reg}
+                        </div>
+                      )}
 
-                      {/* Selected Tick */}
-                      {isSelected && <div className="absolute top-3 right-3 z-20 w-6 h-6 bg-primary rounded-full flex items-center justify-center">
-                        <Check className="w-4 h-4 text-black" />
+                      {/* Selected Tick Icon */}
+                      {isSelected && <div className="absolute top-3 right-3 z-20 w-8 h-8 bg-primary rounded-full flex items-center justify-center shadow-lg">
+                        <Check className="w-5 h-5 text-black" />
                       </div>}
 
                       {/* Image Block */}
