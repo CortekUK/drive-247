@@ -1105,13 +1105,14 @@ const MultiStepBookingWidget = () => {
   const getFilteredAndSortedVehicles = () => {
     let filtered = [...vehicles];
 
-    // Search filter - search in make, model, and reg
+    // Search filter - search in make, model, reg, and color
     if (searchTerm.trim()) {
       const term = searchTerm.toLowerCase();
       filtered = filtered.filter(v =>
         (v.make && v.make.toLowerCase().includes(term)) ||
         (v.model && v.model.toLowerCase().includes(term)) ||
-        v.reg.toLowerCase().includes(term)
+        v.reg.toLowerCase().includes(term) ||
+        (v.colour && v.colour.toLowerCase().includes(term))
       );
     }
 
@@ -1979,7 +1980,7 @@ const MultiStepBookingWidget = () => {
                 {/* Search */}
                 <div className="relative flex-1">
                   <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                  <Input value={searchTerm} onChange={e => handleSearchChange(e.target.value)} placeholder="Search model or brand…" className="pl-10 h-10 bg-background focus-visible:ring-primary" aria-label="Search vehicles" />
+                  <Input value={searchTerm} onChange={e => handleSearchChange(e.target.value)} placeholder="Search brand, model, or color…" className="pl-10 h-10 bg-background focus-visible:ring-primary" aria-label="Search vehicles" />
                 </div>
 
                 {/* Sort */}
