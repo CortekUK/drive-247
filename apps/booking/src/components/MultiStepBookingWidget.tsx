@@ -1050,7 +1050,41 @@ const MultiStepBookingWidget = () => {
     };
   };
 
-  // Check if a vehicle is blocked during the selected rental period
+  // Get the appropriate price display based on rental duration
+  const getDynamicPriceDisplay = (vehicle: Vehicle): { price: number; label: string; secondaryPrices: string[] } => {
+    const duration = calculateRentalDuration();
+    const days = duration?.days || 0;
+
+    const dailyRent = vehicle.daily_rent || 0;
+    const weeklyRent = vehicle.weekly_rent || 0;
+    const monthlyRent = vehicle.monthly_rent || 0;
+
+    // Determine primary price based on duration
+    if (days >= 28 && monthlyRent > 0) {
+      // Monthly rental - show monthly price as primary
+      const secondaryPrices: string[] = [];
+      if (weeklyRent > 0) secondaryPrices.push(`$${weeklyRent} / week`);
+      if (dailyRent > 0) secondaryPrices.push(`$${dailyRent} / day`);
+      return { price: monthlyRent, label: '/ month', secondaryPrices };
+    } else if (days >= 7 && weeklyRent > 0) {
+      // Weekly rental - show weekly price as primary
+      const secondaryPrices: string[] = [];
+      if (dailyRent > 0) secondaryPrices.push(`$${dailyRent} / day`);
+      if (monthlyRent > 0) secondaryPrices.push(`$${monthlyRent} / month`);
+      return { price: weeklyRent, label: '/ week', secondaryPrices };
+    } else if (dailyRent > 0) {
+      // Daily rental - show daily price as primary
+      const secondaryPrices: string[] = [];
+      if (weeklyRent > 0) secondaryPrices.push(`$${weeklyRent} / week`);
+      if (monthlyRent > 0) secondaryPrices.push(`$${monthlyRent} / month`);
+      return { price: dailyRent, label: '/ day', secondaryPrices };
+    } else {
+      // Fallback to monthly or whatever is available
+      const primaryPrice = monthlyRent || weeklyRent || dailyRent || 0;
+      const primaryLabel = monthlyRent ? '/ month' : weeklyRent ? '/ week' : '/ day';
+      return { price: primaryPrice, label: primaryLabel, secondaryPrices: [] };
+    }
+  };
   const isVehicleBlockedForPeriod = (vehicleId: string): { blocked: boolean; blockedRange?: { start: string; end: string } } => {
     if (!formData.pickupDate || !formData.dropoffDate) {
       return { blocked: false };
@@ -2251,45 +2285,50 @@ const MultiStepBookingWidget = () => {
                             </div>
 
                             {/* Pricing & CTA */}
-                            <div className="flex items-end justify-between gap-4 mt-4">
-                              <div className="space-y-1">
-                                <div className="flex items-baseline gap-2">
-                                  <span className="text-3xl font-bold text-primary">
-                                    ${vehicle.monthly_rent || vehicle.daily_rent || 0}
-                                  </span>
-                                  <span className="text-sm text-muted-foreground">/ month</span>
-                                </div>
-                                {(vehicle.daily_rent || vehicle.weekly_rent) && <p className="text-xs text-muted-foreground">
-                                  {vehicle.daily_rent && `$${vehicle.daily_rent} / day`}
-                                  {vehicle.daily_rent && vehicle.weekly_rent && ' • '}
-                                  {vehicle.weekly_rent && `$${vehicle.weekly_rent} / week`}
-                                </p>}
-                              </div>
+                            {(() => {
+                              const priceDisplay = getDynamicPriceDisplay(vehicle);
+                              return (
+                                <div className="flex items-end justify-between gap-4 mt-4">
+                                  <div className="space-y-1">
+                                    <div className="flex items-baseline gap-2">
+                                      <span className="text-3xl font-bold text-primary">
+                                        ${priceDisplay.price}
+                                      </span>
+                                      <span className="text-sm text-muted-foreground">{priceDisplay.label}</span>
+                                    </div>
+                                    {priceDisplay.secondaryPrices.length > 0 && (
+                                      <p className="text-xs text-muted-foreground">
+                                        {priceDisplay.secondaryPrices.join(' • ')}
+                                      </p>
+                                    )}
+                                  </div>
 
-                              <Button
-                                className={cn("w-40 h-11 font-medium transition-colors",
-                                  isBlocked ? "bg-muted text-muted-foreground cursor-not-allowed" :
-                                    isSelected ? "bg-primary text-primary-foreground hover:bg-primary/90" :
-                                      "bg-background border-2 border-primary text-primary hover:bg-primary hover:text-primary-foreground")}
-                                disabled={isBlocked}
-                                onClick={e => {
-                                  if (isBlocked) return;
-                                  e.stopPropagation();
-                                  // Toggle: if already selected, deselect; otherwise select
-                                  setFormData({
-                                    ...formData,
-                                    vehicleId: isSelected ? '' : vehicle.id
-                                  });
-                                  if ((window as any).gtag && !isSelected) {
-                                    (window as any).gtag('event', 'vehicle_selected', {
-                                      vehicle_id: vehicle.id,
-                                      est_total: estimation?.total || 0
-                                    });
-                                  }
-                                }}>
-                                {isBlocked ? "Unavailable" : isSelected ? "Selected" : "Select"}
-                              </Button>
-                            </div>
+                                  <Button
+                                    className={cn("w-40 h-11 font-medium transition-colors",
+                                      isBlocked ? "bg-muted text-muted-foreground cursor-not-allowed" :
+                                        isSelected ? "bg-primary text-primary-foreground hover:bg-primary/90" :
+                                          "bg-background border-2 border-primary text-primary hover:bg-primary hover:text-primary-foreground")}
+                                    disabled={isBlocked}
+                                    onClick={e => {
+                                      if (isBlocked) return;
+                                      e.stopPropagation();
+                                      // Toggle: if already selected, deselect; otherwise select
+                                      setFormData({
+                                        ...formData,
+                                        vehicleId: isSelected ? '' : vehicle.id
+                                      });
+                                      if ((window as any).gtag && !isSelected) {
+                                        (window as any).gtag('event', 'vehicle_selected', {
+                                          vehicle_id: vehicle.id,
+                                          est_total: estimation?.total || 0
+                                        });
+                                      }
+                                    }}>
+                                    {isBlocked ? "Unavailable" : isSelected ? "Selected" : "Select"}
+                                  </Button>
+                                </div>
+                              );
+                            })()}
                           </div>
                         </div>
                       </Card>;
@@ -2396,19 +2435,24 @@ const MultiStepBookingWidget = () => {
                         </div>
 
                         {/* Price Section */}
-                        <div className="space-y-1">
-                          <div className="flex items-baseline justify-between">
-                            <span className="text-2xl font-bold text-primary">
-                              ${vehicle.monthly_rent || vehicle.daily_rent || 0}
-                            </span>
-                            <span className="text-sm text-muted-foreground">/ month</span>
-                          </div>
-                          {(vehicle.daily_rent || vehicle.weekly_rent) && <p className="text-xs text-muted-foreground">
-                            {vehicle.daily_rent && `$${vehicle.daily_rent} / day`}
-                            {vehicle.daily_rent && vehicle.weekly_rent && ' • '}
-                            {vehicle.weekly_rent && `$${vehicle.weekly_rent} / week`}
-                          </p>}
-                        </div>
+                        {(() => {
+                          const priceDisplay = getDynamicPriceDisplay(vehicle);
+                          return (
+                            <div className="space-y-1">
+                              <div className="flex items-baseline justify-between">
+                                <span className="text-2xl font-bold text-primary">
+                                  ${priceDisplay.price}
+                                </span>
+                                <span className="text-sm text-muted-foreground">{priceDisplay.label}</span>
+                              </div>
+                              {priceDisplay.secondaryPrices.length > 0 && (
+                                <p className="text-xs text-muted-foreground">
+                                  {priceDisplay.secondaryPrices.join(' • ')}
+                                </p>
+                              )}
+                            </div>
+                          );
+                        })()}
 
                         {/* CTA */}
                         <Button
