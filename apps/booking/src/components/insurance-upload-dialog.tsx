@@ -18,7 +18,7 @@ interface Props {
 }
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
-const ALLOWED_TYPES = ['application/pdf'];
+const ALLOWED_TYPES = ['application/pdf', 'image/jpeg', 'image/jpg', 'image/png'];
 
 export default function InsuranceUploadDialog({ open, onOpenChange, onUploadComplete }: Props) {
   const { tenant } = useTenant();
@@ -28,7 +28,7 @@ export default function InsuranceUploadDialog({ open, onOpenChange, onUploadComp
 
   const validateFile = (file: File): string | null => {
     if (!ALLOWED_TYPES.includes(file.type)) {
-      return `${file.name}: Only PDF files are allowed`;
+      return `${file.name}: Only PDF, JPG, and PNG files are allowed`;
     }
     if (file.size > MAX_FILE_SIZE) {
       return `${file.name}: File size must be less than 10MB`;
@@ -230,7 +230,7 @@ export default function InsuranceUploadDialog({ open, onOpenChange, onUploadComp
         <DialogHeader>
           <DialogTitle>Upload Insurance Certificate</DialogTitle>
           <DialogDescription>
-            Upload your insurance document (PDF only). We'll verify it using AI.
+            Upload your insurance document (PDF, JPG, or PNG). We'll verify it using AI.
           </DialogDescription>
         </DialogHeader>
 
@@ -239,7 +239,7 @@ export default function InsuranceUploadDialog({ open, onOpenChange, onUploadComp
           <Alert>
             <AlertCircle className="h-4 w-4" />
             <AlertDescription>
-              Accepted format: PDF only • Max size: 10MB per file
+              Accepted formats: PDF, JPG, PNG • Max size: 10MB per file
             </AlertDescription>
           </Alert>
 
@@ -249,9 +249,8 @@ export default function InsuranceUploadDialog({ open, onOpenChange, onUploadComp
             onDragLeave={handleDrag}
             onDragOver={handleDrag}
             onDrop={handleDrop}
-            className={`border-2 border-dashed rounded-lg p-8 text-center transition-colors ${
-              dragActive ? 'border-primary bg-primary/5' : 'border-muted-foreground/25'
-            }`}
+            className={`border-2 border-dashed rounded-lg p-8 text-center transition-colors ${dragActive ? 'border-primary bg-primary/5' : 'border-muted-foreground/25'
+              }`}
           >
             <Upload className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
             <p className="text-sm font-medium mb-2">
@@ -260,7 +259,7 @@ export default function InsuranceUploadDialog({ open, onOpenChange, onUploadComp
             <Input
               id="file-upload"
               type="file"
-              accept=".pdf"
+              accept=".pdf,.jpg,.jpeg,.png"
               multiple
               onChange={handleFileChange}
               className="hidden"

@@ -2788,7 +2788,7 @@ const MultiStepBookingWidget = () => {
                       </div>
                       <div className="text-center space-y-1">
                         <Shield className="w-5 h-5 mx-auto text-muted-foreground" />
-                        <p className="text-xs text-muted-foreground">Max 5MB</p>
+                        <p className="text-xs text-muted-foreground">Max 10MB</p>
                       </div>
                       <div className="text-center space-y-1">
                         <CheckCircle className="w-5 h-5 mx-auto text-muted-foreground" />
