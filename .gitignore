@@ -31,3 +31,6 @@ out/
 *.sw?
 .vercel
 .env*.local
+
+
+helper-folder
