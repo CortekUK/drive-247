@@ -2638,7 +2638,7 @@ const MultiStepBookingWidget = () => {
                           <p className="text-xs text-muted-foreground">
                             ✓ Instant AI verification<br />
                             ✓ Accepted formats: PDF, JPG, PNG<br />
-                            ✓ Max file size: 5MB
+                            ✓ Max file size: 10MB
                           </p>
                         </div>
                       </div>

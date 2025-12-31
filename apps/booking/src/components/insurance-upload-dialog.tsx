@@ -206,6 +206,46 @@ export default function InsuranceUploadDialog({ open, onOpenChange, onUploadComp
 
         uploadedDocIds.push(docData.id);
         uploadedFilePaths.push(filePath);
+
+        // Trigger AI verification for this document
+        console.log('[INSURANCE-UPLOAD] Triggering AI verification for document:', docData.id);
+        try {
+          const verifyResponse = await fetch('/api/verify-insurance', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              documentId: docData.id,
+              fileUrl: filePath,
+              fileName: file.name,
+              mimeType: file.type
+            })
+          });
+
+          const verifyResult = await verifyResponse.json();
+          console.log('[INSURANCE-UPLOAD] AI Verification Result:', verifyResult);
+
+          if (verifyResult.status === 'rejected') {
+            console.log('[INSURANCE-UPLOAD] Document REJECTED:', verifyResult.rejectionReason);
+            toast.error(
+              verifyResult.message || 'This document is not a valid insurance certificate. Please re-upload.',
+              {
+                duration: 8000,
+                description: verifyResult.suggestion || 'Upload a valid insurance certificate'
+              }
+            );
+            setFiles([]);
+            return; // Don't proceed with rejected documents
+          } else if (verifyResult.status === 'approved') {
+            console.log('[INSURANCE-UPLOAD] Document APPROVED');
+            toast.success('Insurance document verified successfully!');
+          } else {
+            console.log('[INSURANCE-UPLOAD] Document pending review');
+            toast.info('Document uploaded. Verification in progress...');
+          }
+        } catch (verifyError: any) {
+          console.error('[INSURANCE-UPLOAD] Verification API error:', verifyError);
+          // Continue anyway - manual review will be needed
+        }
       }
 
       toast.success(`${files.length} document(s) uploaded successfully!`);

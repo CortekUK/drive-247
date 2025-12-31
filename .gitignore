@@ -30,7 +30,5 @@ out/
 *.sln
 *.sw?
 .vercel
-.env*.local
 
 
-helper-folder
