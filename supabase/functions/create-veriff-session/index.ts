@@ -104,7 +104,7 @@ async function createVerificationSession(
     }
 
     // Get Veriff credentials from environment
-    const VERIFF_API_KEY = Deno.env.get('VERIFF_API_KEY');
+    const VERIFF_API_KEY = Deno.env.get('VERIFF_API_KEY') || Deno.env.get('NEXT_PUBLIC_VERIFF_API_KEY');
     const VERIFF_API_SECRET = Deno.env.get('VERIFF_API_SECRET');
     const VERIFF_BASE_URL = Deno.env.get('VERIFF_BASE_URL') || 'https://stationapi.veriff.com';
 
@@ -198,7 +198,7 @@ async function createBookingVerificationSession(
     console.log('Creating Veriff verification session for booking:', customerEmail);
 
     // Get Veriff credentials from environment
-    const VERIFF_API_KEY = Deno.env.get('VERIFF_API_KEY');
+    const VERIFF_API_KEY = Deno.env.get('VERIFF_API_KEY') || Deno.env.get('NEXT_PUBLIC_VERIFF_API_KEY');
     const VERIFF_API_SECRET = Deno.env.get('VERIFF_API_SECRET');
     const VERIFF_BASE_URL = Deno.env.get('VERIFF_BASE_URL') || 'https://stationapi.veriff.com';
 

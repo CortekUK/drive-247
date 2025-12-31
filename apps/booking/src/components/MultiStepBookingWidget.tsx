@@ -27,6 +27,7 @@ import { stripePromise } from "@/config/stripe";
 import { usePageContent, defaultHomeContent, mergeWithDefaults } from "@/hooks/usePageContent";
 import { canCustomerBook } from "@/lib/tenantQueries";
 import { sanitizeName, sanitizeEmail, sanitizePhone, sanitizeLocation, sanitizeTextArea, isInputSafe } from "@/lib/sanitize";
+import { createVeriffFrame, MESSAGES } from "@veriff/incontext-sdk";
 interface VehiclePhoto {
   photo_url: string;
 }
@@ -535,7 +536,7 @@ const MultiStepBookingWidget = () => {
     toast.info("Verification cleared. You can verify again.");
   };
 
-  // Handle identity verification
+  // Handle identity verification using Veriff SDK
   const handleStartVerification = async () => {
     // Validate customer details first
     if (!formData.customerName || !formData.customerEmail || !formData.customerPhone) {
@@ -545,102 +546,110 @@ const MultiStepBookingWidget = () => {
 
     setIsVerifying(true);
 
-    // Open window BEFORE async call to avoid Safari popup blocker
-    const veriffWindow = window.open('about:blank', '_blank', 'width=800,height=600');
-
     try {
-      const { data, error } = await supabase.functions.invoke('create-veriff-session', {
-        body: {
-          customerDetails: {
-            name: formData.customerName,
-            email: formData.customerEmail,
-            phone: formData.customerPhone,
-          }
+      // Get Veriff API key from environment
+      const VERIFF_API_KEY = process.env.NEXT_PUBLIC_VERIFF_API_KEY;
+      if (!VERIFF_API_KEY) {
+        throw new Error('Veriff API key not configured. Please contact support.');
+      }
+
+      console.log('🔐 Initializing Veriff SDK...');
+
+      // Create Veriff session directly using their API
+      const vendorData = `booking_${formData.customerEmail}_${Date.now()}`;
+      const sessionResponse = await fetch('https://stationapi.veriff.com/v1/sessions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-AUTH-CLIENT': VERIFF_API_KEY,
         },
+        body: JSON.stringify({
+          verification: {
+            person: {
+              firstName: formData.customerName.split(' ')[0] || 'Unknown',
+              lastName: formData.customerName.split(' ').slice(1).join(' ') || 'Customer',
+            },
+            vendorData: vendorData,
+          }
+        }),
       });
 
-      if (error) throw error;
+      if (!sessionResponse.ok) {
+        const errorText = await sessionResponse.text();
+        console.error('Veriff session creation error:', sessionResponse.status, errorText);
+        throw new Error(`Failed to create Veriff session: ${sessionResponse.statusText}`);
+      }
 
-      if (data?.ok && data?.sessionUrl) {
-        setVerificationSessionId(data.verificationId);
-        setVerificationStatus('pending');
+      const sessionData = await sessionResponse.json();
+      const sessionId = sessionData.verification.id;
+      const sessionUrl = sessionData.verification.url;
 
-        // Store verification session ID in formData to link after customer creation
-        setFormData(prev => ({
-          ...prev,
-          verificationSessionId: data.verificationId
-        }));
+      console.log('✅ Veriff session created:', sessionId);
 
-        // DEBUG: Confirm session ID is stored
-        console.log('✅ Stored verification session ID in formData:', data.verificationId);
+      // Store session ID
+      setVerificationSessionId(sessionId);
+      setVerificationStatus('pending');
+      setFormData(prev => ({ ...prev, verificationSessionId: sessionId }));
 
-        // Store verification session in localStorage for later use
-        localStorage.setItem('verificationSessionId', data.verificationId);
-        localStorage.setItem('verificationToken', data.sessionToken);
-        localStorage.setItem('verificationStatus', 'pending');
+      // Persist to localStorage
+      localStorage.setItem('verificationSessionId', sessionId);
+      localStorage.setItem('verificationStatus', 'pending');
 
-        // Navigate the already-opened window to Veriff URL
-        if (veriffWindow) {
-          veriffWindow.location.href = data.sessionUrl;
-        }
+      // Open Veriff in a popup window
+      const veriffWindow = window.open(sessionUrl, '_blank', 'width=800,height=600');
 
-        toast.success("Verification window opened. Please complete the identity verification.");
+      if (!veriffWindow) {
+        throw new Error('Popup blocked. Please allow popups for this site.');
+      }
 
-        // Start polling for verification status
-        // More frequent checks initially (3s) to catch quick verifications before Safari throttles
-        const pollInterval = setInterval(async () => {
-          const status = await checkVerificationStatus(data.verificationId);
-          if (status) {
-            if (status.review_result === 'GREEN') {
-              setVerificationStatus('verified');
-              localStorage.setItem('verificationStatus', 'verified');
-              clearInterval(pollInterval);
+      toast.success("Verification window opened. Please complete the identity verification.");
 
-              // Auto-populate form with verified data
-              populateFormWithVerifiedData(status);
+      // Start polling for verification status
+      const pollInterval = setInterval(async () => {
+        const status = await checkVerificationStatus(sessionId);
+        if (status) {
+          if (status.review_result === 'GREEN') {
+            setVerificationStatus('verified');
+            localStorage.setItem('verificationStatus', 'verified');
+            clearInterval(pollInterval);
 
-              if (typeof window !== 'undefined' && (window as any).gtag) {
-                (window as any).gtag('event', 'verification_completed', {
-                  email: formData.customerEmail,
-                  result: 'verified',
-                });
-              }
-            } else if (status.review_result === 'RED') {
-              setVerificationStatus('rejected');
-              localStorage.setItem('verificationStatus', 'rejected');
-              toast.error("Identity verification failed. Please try again.");
-              clearInterval(pollInterval);
+            // Auto-populate form with verified data
+            populateFormWithVerifiedData(status);
 
-              if (typeof window !== 'undefined' && (window as any).gtag) {
-                (window as any).gtag('event', 'verification_completed', {
-                  email: formData.customerEmail,
-                  result: 'rejected',
-                });
-              }
+            if (typeof window !== 'undefined' && (window as any).gtag) {
+              (window as any).gtag('event', 'verification_completed', {
+                email: formData.customerEmail,
+                result: 'verified',
+              });
+            }
+          } else if (status.review_result === 'RED') {
+            setVerificationStatus('rejected');
+            localStorage.setItem('verificationStatus', 'rejected');
+            toast.error("Identity verification failed. Please try again.");
+            clearInterval(pollInterval);
+
+            if (typeof window !== 'undefined' && (window as any).gtag) {
+              (window as any).gtag('event', 'verification_completed', {
+                email: formData.customerEmail,
+                result: 'rejected',
+              });
             }
           }
-        }, 3000); // Check every 3 seconds (faster for iOS Safari compatibility)
-
-        // Stop polling after 5 minutes
-        setTimeout(() => clearInterval(pollInterval), 5 * 60 * 1000);
-
-        // Track analytics
-        if (typeof window !== 'undefined' && (window as any).gtag) {
-          (window as any).gtag('event', 'verification_started', {
-            email: formData.customerEmail,
-          });
         }
-      } else {
-        throw new Error(data?.error || 'Failed to create verification session');
+      }, 3000);
+
+      // Stop polling after 5 minutes
+      setTimeout(() => clearInterval(pollInterval), 5 * 60 * 1000);
+
+      // Track analytics
+      if (typeof window !== 'undefined' && (window as any).gtag) {
+        (window as any).gtag('event', 'verification_started', {
+          email: formData.customerEmail,
+        });
       }
     } catch (error: any) {
       console.error("Verification error:", error);
-      toast.error(error.message || "Failed to start verification");
-
-      // Close the blank window if API call failed
-      if (veriffWindow) {
-        veriffWindow.close();
-      }
+      toast.error(error.message || "Failed to start verification. Please try again or contact support.");
 
       if (typeof window !== 'undefined' && (window as any).gtag) {
         (window as any).gtag('event', 'verification_failed', {
