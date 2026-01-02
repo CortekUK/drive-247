@@ -30,6 +30,8 @@ type FormValues = z.infer<typeof formSchema>;
 
 export function ExtrasEditor({ content, onSave, isSaving }: ExtrasEditorProps) {
   const [items, setItems] = useState<PricingExtra[]>(content.items || []);
+  // Track display values for price inputs (allows empty strings)
+  const [priceDisplayValues, setPriceDisplayValues] = useState<Record<number, string>>({});
 
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
@@ -43,6 +45,7 @@ export function ExtrasEditor({ content, onSave, isSaving }: ExtrasEditorProps) {
       footer_text: content.footer_text || "",
     });
     setItems(content.items || []);
+    setPriceDisplayValues({});
   }, [content, form]);
 
   const onSubmit = (data: FormValues) => {
@@ -58,6 +61,9 @@ export function ExtrasEditor({ content, onSave, isSaving }: ExtrasEditorProps) {
 
   const removeExtra = (index: number) => {
     setItems(items.filter((_, i) => i !== index));
+    const newDisplayValues = { ...priceDisplayValues };
+    delete newDisplayValues[index];
+    setPriceDisplayValues(newDisplayValues);
   };
 
   const updateExtra = (index: number, field: keyof PricingExtra, value: string | number) => {
@@ -124,14 +130,76 @@ export function ExtrasEditor({ content, onSave, isSaving }: ExtrasEditorProps) {
                         </div>
                         <div className="space-y-1">
                           <FormLabel className="text-xs">Price ($)</FormLabel>
-                          <Input
-                            type="number"
-                            min="0"
-                            step="0.01"
-                            value={extra.price}
-                            onChange={(e) => updateExtra(index, "price", parseFloat(e.target.value) || 0)}
-                            placeholder="15"
-                          />
+                          <div className="flex gap-1">
+                            <Input
+                              type="text"
+                              inputMode="decimal"
+                              value={priceDisplayValues[index] ?? extra.price.toString()}
+                              onChange={(e) => {
+                                const value = e.target.value;
+
+                                // Allow only numbers, dots, and empty string
+                                if (value !== '' && !/^\d*\.?\d*$/.test(value)) {
+                                  return;
+                                }
+
+                                // Update display value
+                                setPriceDisplayValues({ ...priceDisplayValues, [index]: value });
+                              }}
+                              onBlur={(e) => {
+                                const value = e.target.value;
+
+                                // Convert to number on blur
+                                if (value === '' || value === '.') {
+                                  updateExtra(index, "price", 0);
+                                  setPriceDisplayValues({ ...priceDisplayValues, [index]: '0' });
+                                } else {
+                                  const numValue = parseFloat(value);
+                                  if (!isNaN(numValue)) {
+                                    updateExtra(index, "price", numValue);
+                                  }
+                                }
+                              }}
+                              onFocus={(e) => {
+                                // Select all on focus for easy replacement
+                                e.target.select();
+                                // Clear display value so user sees actual value
+                                if (extra.price === 0) {
+                                  setPriceDisplayValues({ ...priceDisplayValues, [index]: '' });
+                                }
+                              }}
+                              placeholder="15"
+                              className="flex-1"
+                            />
+                            <div className="flex flex-col gap-0.5">
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="icon"
+                                className="h-[18px] w-7 p-0"
+                                onClick={() => {
+                                  const newValue = (extra.price || 0) + 1;
+                                  updateExtra(index, "price", newValue);
+                                  setPriceDisplayValues({ ...priceDisplayValues, [index]: newValue.toString() });
+                                }}
+                              >
+                                <ChevronUp className="h-3 w-3" />
+                              </Button>
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="icon"
+                                className="h-[18px] w-7 p-0"
+                                onClick={() => {
+                                  const newValue = Math.max(0, (extra.price || 0) - 1);
+                                  updateExtra(index, "price", newValue);
+                                  setPriceDisplayValues({ ...priceDisplayValues, [index]: newValue.toString() });
+                                }}
+                              >
+                                <ChevronDown className="h-3 w-3" />
+                              </Button>
+                            </div>
+                          </div>
                         </div>
                         <div className="space-y-1">
                           <FormLabel className="text-xs">Description</FormLabel>
