@@ -1,109 +1,27 @@
 'use client';
 
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import ReactMarkdown from 'react-markdown';
-import remarkGfm from 'remark-gfm';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
-import { Textarea } from '@/components/ui/textarea';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Separator } from '@/components/ui/separator';
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from '@/components/ui/tooltip';
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from '@/components/ui/popover';
-import {
-  Collapsible,
-  CollapsibleContent,
-  CollapsibleTrigger,
-} from '@/components/ui/collapsible';
 import {
   ArrowLeft,
   Save,
   Loader2,
-  Bold,
-  Italic,
-  Underline,
-  Heading1,
-  Heading2,
-  Heading3,
-  List,
-  ListOrdered,
-  Quote,
-  Minus,
-  Table,
-  Link,
-  Variable,
-  ChevronDown,
-  Copy,
-  User,
-  Car,
-  FileText,
-  Building2,
   Eye,
   Edit3,
 } from 'lucide-react';
-import { useAgreementTemplates, type AgreementTemplate } from '@/hooks/use-agreement-templates';
+import { useAgreementTemplates } from '@/hooks/use-agreement-templates';
 import { DEFAULT_AGREEMENT_TEMPLATE, DEFAULT_TEMPLATE_NAME } from '@/lib/default-agreement-template';
 import {
-  getVariablesByCategory,
   getSampleData,
   replaceVariables,
-  type TemplateVariable,
 } from '@/lib/template-variables';
 import { toast } from '@/hooks/use-toast';
-
-const categoryIcons: Record<string, React.ReactNode> = {
-  customer: <User className="h-4 w-4" />,
-  vehicle: <Car className="h-4 w-4" />,
-  rental: <FileText className="h-4 w-4" />,
-  company: <Building2 className="h-4 w-4" />,
-};
-
-const categoryLabels: Record<string, string> = {
-  customer: 'Customer',
-  vehicle: 'Vehicle',
-  rental: 'Rental',
-  company: 'Company',
-};
-
-interface ToolbarButtonProps {
-  icon: React.ReactNode;
-  label: string;
-  onClick: () => void;
-}
-
-const ToolbarButton: React.FC<ToolbarButtonProps> = ({ icon, label, onClick }) => (
-  <TooltipProvider>
-    <Tooltip>
-      <TooltipTrigger asChild>
-        <Button
-          type="button"
-          variant="ghost"
-          size="sm"
-          className="h-8 w-8 p-0"
-          onClick={onClick}
-        >
-          {icon}
-        </Button>
-      </TooltipTrigger>
-      <TooltipContent>
-        <p>{label}</p>
-      </TooltipContent>
-    </Tooltip>
-  </TooltipProvider>
-);
+import { TipTapEditor } from '@/components/settings/tiptap-editor';
 
 export default function EditAgreementTemplatePage() {
   const router = useRouter();
@@ -123,11 +41,8 @@ export default function EditAgreementTemplatePage() {
   // Initialize with defaults for new templates
   const [templateName, setTemplateName] = useState(isNew ? DEFAULT_TEMPLATE_NAME : '');
   const [templateContent, setTemplateContent] = useState(isNew ? DEFAULT_AGREEMENT_TEMPLATE : '');
-  const [variablesOpen, setVariablesOpen] = useState(false);
   const [loaded, setLoaded] = useState(false);
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
-  const variablesByCategory = getVariablesByCategory();
   const sampleData = getSampleData();
 
   // Load template data if editing existing template
@@ -141,80 +56,6 @@ export default function EditAgreementTemplatePage() {
       }
     }
   }, [templateId, templates, loaded]);
-
-  // Get selection helper
-  const getSelection = useCallback(() => {
-    const textarea = textareaRef.current;
-    if (!textarea) return { start: 0, end: 0, text: '' };
-    return {
-      start: textarea.selectionStart,
-      end: textarea.selectionEnd,
-      text: templateContent.substring(textarea.selectionStart, textarea.selectionEnd),
-    };
-  }, [templateContent]);
-
-  // Insert text at cursor
-  const insertText = useCallback(
-    (before: string, after: string = '', placeholder: string = '') => {
-      const textarea = textareaRef.current;
-      if (!textarea) return;
-
-      const { start, end, text } = getSelection();
-      const selectedText = text || placeholder;
-      const newText =
-        templateContent.substring(0, start) +
-        before +
-        selectedText +
-        after +
-        templateContent.substring(end);
-
-      setTemplateContent(newText);
-
-      setTimeout(() => {
-        textarea.focus();
-        const newCursorPos = start + before.length + selectedText.length;
-        textarea.setSelectionRange(
-          start + before.length,
-          text ? newCursorPos : start + before.length + placeholder.length
-        );
-      }, 0);
-    },
-    [templateContent, getSelection]
-  );
-
-  // Formatting functions
-  const formatBold = () => insertText('**', '**', 'bold text');
-  const formatItalic = () => insertText('*', '*', 'italic text');
-  const formatUnderline = () => insertText('<u>', '</u>', 'underlined text');
-  const formatH1 = () => insertText('\n# ', '\n', 'Heading 1');
-  const formatH2 = () => insertText('\n## ', '\n', 'Heading 2');
-  const formatH3 = () => insertText('\n### ', '\n', 'Heading 3');
-  const formatBulletList = () => insertText('\n- ', '\n', 'List item');
-  const formatNumberedList = () => insertText('\n1. ', '\n', 'List item');
-  const formatQuote = () => insertText('\n> ', '\n', 'Quote');
-  const formatHorizontalRule = () => insertText('\n\n---\n\n', '', '');
-  const formatLink = () => insertText('[', '](url)', 'link text');
-  const formatTable = () =>
-    insertText(
-      '\n| Column 1 | Column 2 |\n|----------|----------|\n| Cell 1   | Cell 2   |\n',
-      '',
-      ''
-    );
-
-  const handleCopyVariable = useCallback((variable: TemplateVariable) => {
-    const placeholder = `{{${variable.key}}}`;
-    navigator.clipboard.writeText(placeholder);
-    toast({ title: 'Copied', description: `${placeholder} copied to clipboard` });
-  }, []);
-
-  const handleInsertVariable = useCallback(
-    (variable: TemplateVariable) => {
-      const placeholder = `{{${variable.key}}}`;
-      insertText(placeholder, '', '');
-      setVariablesOpen(false);
-    },
-    [insertText]
-  );
 
   const handleSave = async () => {
     if (!templateName.trim()) {
@@ -270,7 +111,7 @@ export default function EditAgreementTemplatePage() {
               {isNew ? 'Create Agreement Template' : 'Edit Agreement Template'}
             </h1>
             <p className="text-sm text-muted-foreground">
-              Use formatting tools and variables to create your rental agreement
+              Use the rich text editor to customize your rental agreement
             </p>
           </div>
         </div>
@@ -310,103 +151,25 @@ export default function EditAgreementTemplatePage() {
         </div>
       </div>
 
-      {/* Toolbar */}
-      <div className="flex items-center gap-1 px-6 py-2 border-b bg-background flex-wrap">
-        <div className="flex items-center gap-0.5">
-          <ToolbarButton icon={<Bold className="h-4 w-4" />} label="Bold" onClick={formatBold} />
-          <ToolbarButton icon={<Italic className="h-4 w-4" />} label="Italic" onClick={formatItalic} />
-          <ToolbarButton icon={<Underline className="h-4 w-4" />} label="Underline" onClick={formatUnderline} />
-        </div>
-        <Separator orientation="vertical" className="h-6 mx-2" />
-        <div className="flex items-center gap-0.5">
-          <ToolbarButton icon={<Heading1 className="h-4 w-4" />} label="Heading 1" onClick={formatH1} />
-          <ToolbarButton icon={<Heading2 className="h-4 w-4" />} label="Heading 2" onClick={formatH2} />
-          <ToolbarButton icon={<Heading3 className="h-4 w-4" />} label="Heading 3" onClick={formatH3} />
-        </div>
-        <Separator orientation="vertical" className="h-6 mx-2" />
-        <div className="flex items-center gap-0.5">
-          <ToolbarButton icon={<List className="h-4 w-4" />} label="Bullet List" onClick={formatBulletList} />
-          <ToolbarButton icon={<ListOrdered className="h-4 w-4" />} label="Numbered List" onClick={formatNumberedList} />
-          <ToolbarButton icon={<Quote className="h-4 w-4" />} label="Quote" onClick={formatQuote} />
-        </div>
-        <Separator orientation="vertical" className="h-6 mx-2" />
-        <div className="flex items-center gap-0.5">
-          <ToolbarButton icon={<Minus className="h-4 w-4" />} label="Horizontal Rule" onClick={formatHorizontalRule} />
-          <ToolbarButton icon={<Table className="h-4 w-4" />} label="Table" onClick={formatTable} />
-          <ToolbarButton icon={<Link className="h-4 w-4" />} label="Link" onClick={formatLink} />
-        </div>
-        <Separator orientation="vertical" className="h-6 mx-2" />
-        <Popover open={variablesOpen} onOpenChange={setVariablesOpen}>
-          <PopoverTrigger asChild>
-            <Button variant="outline" size="sm" className="h-8 gap-1">
-              <Variable className="h-4 w-4" />
-              Insert Variable
-              <ChevronDown className="h-3 w-3" />
-            </Button>
-          </PopoverTrigger>
-          <PopoverContent className="w-72 p-0" align="start">
-            <ScrollArea className="h-[280px]">
-              <div className="p-2 space-y-1">
-                {Object.entries(variablesByCategory).map(([category, variables]) => (
-                  <Collapsible key={category} defaultOpen>
-                    <CollapsibleTrigger className="flex items-center justify-between w-full p-2 hover:bg-muted rounded-md">
-                      <div className="flex items-center gap-2">
-                        {categoryIcons[category]}
-                        <span className="font-medium text-sm">{categoryLabels[category]}</span>
-                      </div>
-                      <ChevronDown className="h-4 w-4" />
-                    </CollapsibleTrigger>
-                    <CollapsibleContent className="pl-2">
-                      {variables.map((variable) => (
-                        <div
-                          key={variable.key}
-                          className="flex items-center justify-between p-2 hover:bg-muted rounded cursor-pointer group"
-                          onClick={() => handleInsertVariable(variable)}
-                        >
-                          <div>
-                            <code className="text-xs bg-muted px-1 py-0.5 rounded font-mono">
-                              {`{{${variable.key}}}`}
-                            </code>
-                            <p className="text-xs text-muted-foreground">{variable.label}</p>
-                          </div>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-6 w-6 opacity-0 group-hover:opacity-100"
-                            onClick={(e) => { e.stopPropagation(); handleCopyVariable(variable); }}
-                          >
-                            <Copy className="h-3 w-3" />
-                          </Button>
-                        </div>
-                      ))}
-                    </CollapsibleContent>
-                  </Collapsible>
-                ))}
-              </div>
-            </ScrollArea>
-          </PopoverContent>
-        </Popover>
-      </div>
-
       {/* Editor and Preview - Side by Side */}
-      <div className="flex-1 grid grid-cols-2 min-h-0">
+      <div className="flex-1 grid grid-cols-2 min-h-0 overflow-hidden">
         {/* Editor */}
-        <div className="flex flex-col border-r">
+        <div className="flex flex-col border-r overflow-hidden">
           <div className="px-4 py-2 border-b bg-muted/30 flex items-center gap-2">
             <Edit3 className="h-4 w-4 text-muted-foreground" />
             <span className="text-sm font-medium">Editor</span>
           </div>
-          <Textarea
-            ref={textareaRef}
-            value={templateContent}
-            onChange={(e) => setTemplateContent(e.target.value)}
-            placeholder="Start typing your agreement template..."
-            className="flex-1 resize-none border-0 rounded-none focus-visible:ring-0 font-mono text-sm p-4"
-          />
+          <div className="flex-1 overflow-hidden">
+            <TipTapEditor
+              content={templateContent}
+              onChange={setTemplateContent}
+              placeholder="Start typing your agreement template..."
+            />
+          </div>
         </div>
 
         {/* Preview */}
-        <div className="flex flex-col">
+        <div className="flex flex-col overflow-hidden">
           <div className="px-4 py-2 border-b bg-muted/30 flex items-center gap-2">
             <Eye className="h-4 w-4 text-muted-foreground" />
             <span className="text-sm font-medium">Preview</span>
@@ -415,25 +178,10 @@ export default function EditAgreementTemplatePage() {
           <ScrollArea className="flex-1">
             <div className="p-6 preview-content">
               {templateContent ? (
-                <ReactMarkdown
-                  remarkPlugins={[remarkGfm]}
-                  components={{
-                    h1: ({children}) => <h1 className="text-2xl font-bold mb-3 mt-0">{children}</h1>,
-                    h2: ({children}) => <h2 className="text-xl font-semibold mb-2 mt-4 pb-1 border-b">{children}</h2>,
-                    h3: ({children}) => <h3 className="text-lg font-medium mb-2 mt-3">{children}</h3>,
-                    p: ({children}) => <p className="mb-2 leading-relaxed">{children}</p>,
-                    ul: ({children}) => <ul className="mb-3 ml-4 list-disc">{children}</ul>,
-                    ol: ({children}) => <ol className="mb-3 ml-4 list-decimal">{children}</ol>,
-                    li: ({children}) => <li className="mb-1">{children}</li>,
-                    hr: () => <hr className="my-4 border-border" />,
-                    strong: ({children}) => <strong className="font-semibold">{children}</strong>,
-                    table: ({children}) => <table className="w-full mb-3 border-collapse">{children}</table>,
-                    th: ({children}) => <th className="border border-border px-3 py-2 bg-muted text-left font-medium">{children}</th>,
-                    td: ({children}) => <td className="border border-border px-3 py-2">{children}</td>,
-                  }}
-                >
-                  {previewContent}
-                </ReactMarkdown>
+                <div
+                  className="prose prose-sm max-w-none dark:prose-invert"
+                  dangerouslySetInnerHTML={{ __html: previewContent }}
+                />
               ) : (
                 <p className="text-muted-foreground italic">Start typing to see preview...</p>
               )}
@@ -441,6 +189,59 @@ export default function EditAgreementTemplatePage() {
           </ScrollArea>
         </div>
       </div>
+
+      {/* Preview Styles */}
+      <style jsx global>{`
+        .preview-content h1 {
+          font-size: 1.75rem;
+          font-weight: 700;
+          margin-bottom: 0.75rem;
+          margin-top: 0;
+        }
+        .preview-content h2 {
+          font-size: 1.375rem;
+          font-weight: 600;
+          margin-bottom: 0.5rem;
+          margin-top: 1.25rem;
+          padding-bottom: 0.25rem;
+          border-bottom: 1px solid hsl(var(--border));
+        }
+        .preview-content h3 {
+          font-size: 1.125rem;
+          font-weight: 600;
+          margin-bottom: 0.5rem;
+          margin-top: 1rem;
+        }
+        .preview-content p {
+          margin-bottom: 0.5rem;
+        }
+        .preview-content ul, .preview-content ol {
+          padding-left: 1.5rem;
+          margin-bottom: 0.75rem;
+        }
+        .preview-content li {
+          margin-bottom: 0.25rem;
+        }
+        .preview-content hr {
+          border: none;
+          border-top: 1px solid hsl(var(--border));
+          margin: 1rem 0;
+        }
+        .preview-content table {
+          border-collapse: collapse;
+          margin: 0.75rem 0;
+          width: 100%;
+        }
+        .preview-content th, .preview-content td {
+          border: 1px solid hsl(var(--border));
+          padding: 0.5rem 0.75rem;
+          text-align: left;
+        }
+        .preview-content th {
+          background-color: hsl(var(--muted));
+          font-weight: 600;
+        }
+      `}</style>
     </div>
   );
 }
