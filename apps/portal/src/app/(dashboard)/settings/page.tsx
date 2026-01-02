@@ -357,7 +357,7 @@ const Settings = () => {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-            <h1 className="text-3xl font-bold">Settings</h1>
+          <h1 className="text-3xl font-bold">Settings</h1>
           <p className="text-muted-foreground mt-1">
             Configure your fleet management system
           </p>
@@ -818,7 +818,7 @@ const Settings = () => {
               <AlertDialogContent>
                 <AlertDialogHeader>
                   <AlertDialogTitle>Reset Branding to Defaults?</AlertDialogTitle>
-                  <AlertDialogDescription>
+                  <div className="text-sm text-muted-foreground">
                     This will reset all branding settings to their original values:
                     <ul className="mt-2 text-sm list-disc list-inside space-y-1">
                       <li>App Name: "Drive 917"</li>
@@ -827,7 +827,7 @@ const Settings = () => {
                       <li>Background Colors: Theme defaults</li>
                       <li>SEO settings: Default values</li>
                     </ul>
-                  </AlertDialogDescription>
+                  </div>
                 </AlertDialogHeader>
                 <AlertDialogFooter>
                   <AlertDialogCancel>Cancel</AlertDialogCancel>
@@ -1014,19 +1014,17 @@ const Settings = () => {
                 <div className="flex flex-col sm:flex-row gap-4">
                   {/* Automated Mode Card */}
                   <div
-                    className={`flex-1 p-4 border-2 rounded-lg cursor-pointer transition-all ${
-                      settings?.payment_mode === 'automated'
+                    className={`flex-1 p-4 border-2 rounded-lg cursor-pointer transition-all ${settings?.payment_mode === 'automated'
                         ? 'border-primary bg-primary/5'
                         : 'border-border hover:border-primary/50'
-                    }`}
+                      }`}
                     onClick={() => setPaymentMode('automated')}
                   >
                     <div className="flex items-start gap-3">
-                      <div className={`w-4 h-4 rounded-full border-2 mt-0.5 flex items-center justify-center ${
-                        settings?.payment_mode === 'automated'
+                      <div className={`w-4 h-4 rounded-full border-2 mt-0.5 flex items-center justify-center ${settings?.payment_mode === 'automated'
                           ? 'border-primary'
                           : 'border-muted-foreground'
-                      }`}>
+                        }`}>
                         {settings?.payment_mode === 'automated' && (
                           <div className="w-2 h-2 rounded-full bg-primary" />
                         )}
@@ -1045,19 +1043,17 @@ const Settings = () => {
 
                   {/* Manual Mode Card */}
                   <div
-                    className={`flex-1 p-4 border-2 rounded-lg cursor-pointer transition-all ${
-                      settings?.payment_mode === 'manual'
+                    className={`flex-1 p-4 border-2 rounded-lg cursor-pointer transition-all ${settings?.payment_mode === 'manual'
                         ? 'border-primary bg-primary/5'
                         : 'border-border hover:border-primary/50'
-                    }`}
+                      }`}
                     onClick={() => setPaymentMode('manual')}
                   >
                     <div className="flex items-start gap-3">
-                      <div className={`w-4 h-4 rounded-full border-2 mt-0.5 flex items-center justify-center ${
-                        settings?.payment_mode === 'manual'
+                      <div className={`w-4 h-4 rounded-full border-2 mt-0.5 flex items-center justify-center ${settings?.payment_mode === 'manual'
                           ? 'border-primary'
                           : 'border-muted-foreground'
-                      }`}>
+                        }`}>
                         {settings?.payment_mode === 'manual' && (
                           <div className="w-2 h-2 rounded-full bg-primary" />
                         )}
@@ -1076,35 +1072,31 @@ const Settings = () => {
                 </div>
 
                 {/* Current Mode Info */}
-                <div className={`p-4 rounded-lg ${
-                  settings?.payment_mode === 'manual'
+                <div className={`p-4 rounded-lg ${settings?.payment_mode === 'manual'
                     ? 'bg-orange-50 border border-orange-200'
                     : 'bg-green-50 border border-green-200'
-                }`}>
+                  }`}>
                   <div className="flex items-start gap-3">
-                    <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
-                      settings?.payment_mode === 'manual'
+                    <div className={`w-8 h-8 rounded-full flex items-center justify-center ${settings?.payment_mode === 'manual'
                         ? 'bg-orange-100 text-orange-600'
                         : 'bg-green-100 text-green-600'
-                    }`}>
+                      }`}>
                       <CreditCard className="h-4 w-4" />
                     </div>
                     <div>
-                      <h4 className={`font-medium ${
-                        settings?.payment_mode === 'manual'
+                      <h4 className={`font-medium ${settings?.payment_mode === 'manual'
                           ? 'text-orange-800'
                           : 'text-green-800'
-                      }`}>
+                        }`}>
                         {settings?.payment_mode === 'manual'
                           ? 'Manual Approval is Active'
                           : 'Automated Processing is Active'
                         }
                       </h4>
-                      <p className={`text-sm mt-1 ${
-                        settings?.payment_mode === 'manual'
+                      <p className={`text-sm mt-1 ${settings?.payment_mode === 'manual'
                           ? 'text-orange-700'
                           : 'text-green-700'
-                      }`}>
+                        }`}>
                         {settings?.payment_mode === 'manual'
                           ? 'New payments will appear in the Payments page with "Pending Review" status. Accept or reject each payment to proceed with the rental.'
                           : 'Payments are processed automatically. Rentals will proceed as soon as Stripe confirms the payment.'
