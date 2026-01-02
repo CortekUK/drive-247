@@ -96,6 +96,62 @@ const TENANT_CONTENT = {
     hours: "8AM - 8PM Daily",
     specialty: "Weekly and monthly rental specialists - Economy cars, SUVs & more",
     region: "San Diego"
+  },
+
+  // THOMCELL
+  thomcell: {
+    name: "Thomcell",
+    shortName: "Thomcell",
+    tagline: "Premium Car Rentals in Houston",
+    phone: "+1 (833) 846-6235",
+    phoneDisplay: "(833) 846-6235",
+    email: "lexx@thomcellconsulting.com",
+    location: "Houston, Texas",
+    hours: "24/7",
+    specialty: "Premium vehicles - Mercedes EQE, SUVs, Ford Bronco & more",
+    region: "Houston"
+  },
+
+  // ALL IN ONE CONNECTIONS
+  allinoneconnections: {
+    name: "All in One Connections",
+    shortName: "All in One",
+    tagline: "Car Rentals in Atlanta",
+    phone: "+1 (470) 474-3020",
+    phoneDisplay: "(470) 474-3020",
+    email: "all_in_1connections@yahoo.com",
+    location: "Atlanta, Georgia",
+    hours: "24/7",
+    specialty: "Economy cars and select premium vehicles like Mustang",
+    region: "Atlanta"
+  },
+
+  // AIN CONNECTIONS (same as allinoneconnections)
+  ainconnections: {
+    name: "All in One Connections",
+    shortName: "All in One",
+    tagline: "Car Rentals in Atlanta",
+    phone: "+1 (470) 474-3020",
+    phoneDisplay: "(470) 474-3020",
+    email: "all_in_1connections@yahoo.com",
+    location: "Atlanta, Georgia",
+    hours: "24/7",
+    specialty: "Economy cars and select premium vehicles like Mustang",
+    region: "Atlanta"
+  },
+
+  // DB CAR RENTALS
+  dbcarrentals: {
+    name: "DB Car Rentals",
+    shortName: "DB Rentals",
+    tagline: "Premium Car Rentals in Miami",
+    phone: "+1 (786) 301-3621",
+    phoneDisplay: "(786) 301-3621",
+    email: "dbcargosolutionscorp@gmail.com",
+    location: "Miami, Florida",
+    hours: "24/7",
+    specialty: "Full fleet - Economy, SUV, Minivan & Luxury vehicles including Audi & BMW",
+    region: "Miami"
   }
 };
 
@@ -431,20 +487,20 @@ const generateContent = (t) => ({
       logo_alt: t.name,
       favicon_url: ""
     },
-    site_contact: {
+    contact: {
       phone: t.phone.replace(/[^0-9+]/g, ''),
       phone_display: t.phoneDisplay,
       email: t.email,
-      address_line1: t.location,
+      address_line1: "",
       address_line2: "",
-      city: t.location,
-      state: "",
+      city: t.location.split(',')[0]?.trim() || t.location,
+      state: t.location.split(',')[1]?.trim() || "",
       zip: "",
       country: "USA",
       google_maps_url: ""
     },
     social: {},
-    footer_settings: {
+    footer: {
       copyright_text: `© ${new Date().getFullYear()} ${t.name}. All rights reserved.`,
       tagline: t.tagline
     },
