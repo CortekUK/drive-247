@@ -196,23 +196,34 @@ function processTemplate(
   return result;
 }
 
-// Convert markdown to plain text for DocuSign
-function markdownToPlainText(markdown: string): string {
-  return markdown
-    // Remove headers but keep text
-    .replace(/^#{1,6}\s+(.*)$/gm, '$1\n')
-    // Remove bold/italic markers
-    .replace(/\*\*(.+?)\*\*/g, '$1')
-    .replace(/\*(.+?)\*/g, '$1')
-    .replace(/__(.+?)__/g, '$1')
-    .replace(/_(.+?)_/g, '$1')
-    // Convert markdown tables to simple format
-    .replace(/\|/g, ' | ')
-    .replace(/^[-:]+\|[-:|]+$/gm, '')
-    // Remove horizontal rules
-    .replace(/^[-*_]{3,}$/gm, '===============================================================================')
+// Convert HTML to plain text for DocuSign
+function htmlToPlainText(html: string): string {
+  return html
+    // Replace <br> and <br/> with newlines
+    .replace(/<br\s*\/?>/gi, '\n')
+    // Replace closing block tags with newlines
+    .replace(/<\/(p|div|h[1-6]|li|tr)>/gi, '\n')
+    // Replace <hr> with separator
+    .replace(/<hr\s*\/?>/gi, '\n===============================================================================\n')
+    // Handle table cells
+    .replace(/<\/td>/gi, ' | ')
+    .replace(/<\/th>/gi, ' | ')
+    .replace(/<tr>/gi, '')
+    // Handle list items
+    .replace(/<li>/gi, '- ')
+    // Remove remaining HTML tags
+    .replace(/<[^>]+>/g, '')
+    // Decode HTML entities
+    .replace(/&nbsp;/gi, ' ')
+    .replace(/&amp;/gi, '&')
+    .replace(/&lt;/gi, '<')
+    .replace(/&gt;/gi, '>')
+    .replace(/&quot;/gi, '"')
+    .replace(/&#39;/gi, "'")
+    .replace(/&middot;/gi, '·')
     // Clean up extra whitespace
     .replace(/\n{3,}/g, '\n\n')
+    .replace(/[ \t]+/g, ' ')
     .trim();
 }
 
@@ -237,7 +248,7 @@ async function generateDocument(
 
     console.log('Using custom template for tenant');
     const processedContent = processTemplate(template, rental, customer, vehicle, tenant);
-    const plainText = markdownToPlainText(processedContent);
+    const plainText = htmlToPlainText(processedContent);
     return btoa(plainText);
   }
 
