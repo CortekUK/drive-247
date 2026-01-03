@@ -68,7 +68,7 @@ serve(async (req) => {
         data = paymentsData || [];
         headers = [
           'Payment Date', 'Customer', 'Vehicle Reg', 'Payment Type', 'Method',
-          'Amount (£)', 'Applied (£)', 'Unapplied (£)', 'Customer Email', 'Vehicle Make', 'Vehicle Model'
+          'Amount ($)', 'Applied ($)', 'Unapplied ($)', 'Customer Email', 'Vehicle Make', 'Vehicle Model'
         ];
         break;
       }
@@ -81,9 +81,9 @@ serve(async (req) => {
 
         data = plData || [];
         headers = [
-          'Vehicle Reg', 'Make/Model', 'Rental Revenue (£)', 'Fee Revenue (£)', 'Other Revenue (£)',
-          'Acquisition Cost (£)', 'Finance Cost (£)', 'Service Cost (£)', 'Other Costs (£)',
-          'Total Revenue (£)', 'Total Costs (£)', 'Net Profit (£)'
+          'Vehicle Reg', 'Make/Model', 'Rental Revenue ($)', 'Fee Revenue ($)', 'Other Revenue ($)',
+          'Acquisition Cost ($)', 'Finance Cost ($)', 'Service Cost ($)', 'Other Costs ($)',
+          'Total Revenue ($)', 'Total Costs ($)', 'Net Profit ($)'
         ];
         break;
       }
@@ -101,7 +101,7 @@ serve(async (req) => {
         data = rentalsData || [];
         headers = [
           'Customer', 'Vehicle Reg', 'Start Date', 'End Date', 'Schedule',
-          'Monthly Amount (£)', 'Status', 'Initial Fee (£)', 'Balance (£)'
+          'Monthly Amount ($)', 'Status', 'Initial Fee ($)', 'Balance ($)'
         ];
         break;
       }
@@ -122,8 +122,8 @@ serve(async (req) => {
 
         data = statementsData || [];
         headers = [
-          'Customer', 'Entry Date', 'Type', 'Category', 'Vehicle Reg', 
-          'Transaction Amount (£)', 'Running Balance (£)', 'Customer Email', 'Customer Phone'
+          'Customer', 'Entry Date', 'Type', 'Category', 'Vehicle Reg',
+          'Transaction Amount ($)', 'Running Balance ($)', 'Customer Email', 'Customer Phone'
         ];
         break;
       }
@@ -141,7 +141,7 @@ serve(async (req) => {
         data = finesData || [];
         headers = [
           'Reference No', 'Type', 'Customer', 'Vehicle Reg', 'Issue Date', 'Due Date',
-          'Amount (£)', 'Remaining (£)', 'Liability', 'Status', 'Appeal Status', 'Notes'
+          'Amount ($)', 'Remaining ($)', 'Liability', 'Status', 'Appeal Status', 'Notes'
         ];
         break;
       }
@@ -154,7 +154,7 @@ serve(async (req) => {
 
         data = agingData || [];
         headers = [
-          'Customer', '0-30 Days (£)', '31-60 Days (£)', '61-90 Days (£)', '90+ Days (£)', 'Total Due (£)'
+          'Customer', '0-30 Days ($)', '31-60 Days ($)', '61-90 Days ($)', '90+ Days ($)', 'Total Due ($)'
         ];
         break;
       }
@@ -336,9 +336,9 @@ serve(async (req) => {
             excelRow['Vehicle Reg'] = row.vehicle_reg || '';
             excelRow['Payment Type'] = row.payment_type || '';
             excelRow['Method'] = row.method || '';
-            excelRow['Amount (£)'] = formatCurrency(row.amount);
-            excelRow['Applied (£)'] = formatCurrency(row.applied_amount);
-            excelRow['Unapplied (£)'] = formatCurrency(row.unapplied_amount);
+            excelRow['Amount ($)'] = formatCurrency(row.amount);
+            excelRow['Applied ($)'] = formatCurrency(row.applied_amount);
+            excelRow['Unapplied ($)'] = formatCurrency(row.unapplied_amount);
             excelRow['Customer Email'] = row.customer_email || '';
             excelRow['Vehicle Make'] = row.vehicle_make || '';
             excelRow['Vehicle Model'] = row.vehicle_model || '';
@@ -346,16 +346,16 @@ serve(async (req) => {
           case 'pl-report':
             excelRow['Vehicle Reg'] = row.vehicle_reg || '';
             excelRow['Make/Model'] = row.make_model || '';
-            excelRow['Rental Revenue (£)'] = formatCurrency(row.revenue_rental);
-            excelRow['Fee Revenue (£)'] = formatCurrency(row.revenue_fees);
-            excelRow['Other Revenue (£)'] = formatCurrency(row.revenue_other);
-            excelRow['Acquisition Cost (£)'] = formatCurrency(row.cost_acquisition);
-            excelRow['Finance Cost (£)'] = formatCurrency(row.cost_finance);
-            excelRow['Service Cost (£)'] = formatCurrency(row.cost_service);
-            excelRow['Other Costs (£)'] = formatCurrency(row.cost_other);
-            excelRow['Total Revenue (£)'] = formatCurrency(row.total_revenue);
-            excelRow['Total Costs (£)'] = formatCurrency(row.total_costs);
-            excelRow['Net Profit (£)'] = formatCurrency(row.net_profit);
+            excelRow['Rental Revenue ($)'] = formatCurrency(row.revenue_rental);
+            excelRow['Fee Revenue ($)'] = formatCurrency(row.revenue_fees);
+            excelRow['Other Revenue ($)'] = formatCurrency(row.revenue_other);
+            excelRow['Acquisition Cost ($)'] = formatCurrency(row.cost_acquisition);
+            excelRow['Finance Cost ($)'] = formatCurrency(row.cost_finance);
+            excelRow['Service Cost ($)'] = formatCurrency(row.cost_service);
+            excelRow['Other Costs ($)'] = formatCurrency(row.cost_other);
+            excelRow['Total Revenue ($)'] = formatCurrency(row.total_revenue);
+            excelRow['Total Costs ($)'] = formatCurrency(row.total_costs);
+            excelRow['Net Profit ($)'] = formatCurrency(row.net_profit);
             break;
           case 'rentals':
             excelRow['Customer'] = row.customer_name || '';
@@ -363,10 +363,10 @@ serve(async (req) => {
             excelRow['Start Date'] = formatDate(row.start_date);
             excelRow['End Date'] = formatDate(row.end_date);
             excelRow['Schedule'] = row.schedule || '';
-            excelRow['Monthly Amount (£)'] = formatCurrency(row.monthly_amount);
+            excelRow['Monthly Amount ($)'] = formatCurrency(row.monthly_amount);
             excelRow['Status'] = row.status || '';
-            excelRow['Initial Fee (£)'] = formatCurrency(row.initial_fee_amount);
-            excelRow['Balance (£)'] = formatCurrency(row.balance);
+            excelRow['Initial Fee ($)'] = formatCurrency(row.initial_fee_amount);
+            excelRow['Balance ($)'] = formatCurrency(row.balance);
             break;
           case 'customer-statements':
             excelRow['Customer'] = row.customer_name || '';
@@ -374,8 +374,8 @@ serve(async (req) => {
             excelRow['Type'] = row.type || '';
             excelRow['Category'] = row.category || '';
             excelRow['Vehicle Reg'] = row.vehicle_reg || '';
-            excelRow['Transaction Amount (£)'] = formatCurrency(row.transaction_amount);
-            excelRow['Running Balance (£)'] = formatCurrency(row.running_balance);
+            excelRow['Transaction Amount ($)'] = formatCurrency(row.transaction_amount);
+            excelRow['Running Balance ($)'] = formatCurrency(row.running_balance);
             excelRow['Customer Email'] = row.customer_email || '';
             excelRow['Customer Phone'] = row.customer_phone || '';
             break;
@@ -386,8 +386,8 @@ serve(async (req) => {
             excelRow['Vehicle Reg'] = row.vehicle_reg || '';
             excelRow['Issue Date'] = formatDate(row.issue_date);
             excelRow['Due Date'] = formatDate(row.due_date);
-            excelRow['Amount (£)'] = formatCurrency(row.amount);
-            excelRow['Remaining (£)'] = formatCurrency(row.remaining_amount);
+            excelRow['Amount ($)'] = formatCurrency(row.amount);
+            excelRow['Remaining ($)'] = formatCurrency(row.remaining_amount);
             excelRow['Liability'] = row.liability || '';
             excelRow['Status'] = row.status || '';
             excelRow['Appeal Status'] = row.appeal_status || '';
@@ -395,11 +395,11 @@ serve(async (req) => {
             break;
           case 'aging':
             excelRow['Customer'] = row.customer_name || '';
-            excelRow['0-30 Days (£)'] = formatCurrency(row.bucket_0_30);
-            excelRow['31-60 Days (£)'] = formatCurrency(row.bucket_31_60);
-            excelRow['61-90 Days (£)'] = formatCurrency(row.bucket_61_90);
-            excelRow['90+ Days (£)'] = formatCurrency(row.bucket_90_plus);
-            excelRow['Total Due (£)'] = formatCurrency(row.total_due);
+            excelRow['0-30 Days ($)'] = formatCurrency(row.bucket_0_30);
+            excelRow['31-60 Days ($)'] = formatCurrency(row.bucket_31_60);
+            excelRow['61-90 Days ($)'] = formatCurrency(row.bucket_61_90);
+            excelRow['90+ Days ($)'] = formatCurrency(row.bucket_90_plus);
+            excelRow['Total Due ($)'] = formatCurrency(row.total_due);
             break;
         }
 

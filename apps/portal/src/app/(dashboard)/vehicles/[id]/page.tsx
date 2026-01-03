@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { ChevronLeft, Car, FileText, PoundSterling, Wrench, Calendar, TrendingUp, TrendingDown, Plus, Shield, Clock, Trash2, Receipt, Users, Eye, EyeOff, Pencil, Ban } from "lucide-react";
+import { ChevronLeft, Car, FileText, DollarSign, Wrench, Calendar, TrendingUp, TrendingDown, Plus, Shield, Clock, Trash2, Receipt, Users, Eye, EyeOff, Pencil, Ban } from "lucide-react";
 import { getContractTotal } from "@/lib/vehicle-utils";
 import { format } from "date-fns";
 import { startOfMonth, endOfMonth, parseISO } from "date-fns";
@@ -479,7 +479,7 @@ export default function VehicleDetail() {
                 <MetricItem label="Model" value={vehicle.model} />
                 {vehicle.year && <MetricItem label="Year" value={vehicle.year} />}
                 <MetricItem label="Color" value={vehicle.colour} />
-                {vehicle.fuel_type && <MetricItem label="Fuel Type" value={vehicle.fuel_type} />}
+                {vehicle.fuel_type && <MetricItem label="Fuel Type" value={vehicle.fuel_type === 'Petrol' ? 'Gas' : vehicle.fuel_type} />}
                 <div className="flex items-center gap-2">
                   <span className="text-xs text-muted-foreground">Acquisition:</span>
                   <AcquisitionBadge acquisitionType={vehicle.acquisition_type} />
@@ -529,7 +529,7 @@ export default function VehicleDetail() {
                 <MetricDivider />
                 <div>
                   <h3 className="text-sm font-semibold text-muted-foreground mb-3 flex items-center gap-2">
-                    <PoundSterling className="h-4 w-4" />
+                    <DollarSign className="h-4 w-4" />
                     Finance Information
                   </h3>
                   <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-x-8 gap-y-3">

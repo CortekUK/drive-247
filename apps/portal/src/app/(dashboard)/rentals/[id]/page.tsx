@@ -9,7 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { FileText, ArrowLeft, PoundSterling, Plus, X, Send, Download, Ban, Check, AlertTriangle, Loader2, Shield, CheckCircle, XCircle, ExternalLink, UserCheck, IdCard, Camera, FileSignature, Clock, Mail, RefreshCw, Trash2 } from "lucide-react";
+import { FileText, ArrowLeft, DollarSign, Plus, X, Send, Download, Ban, Check, AlertTriangle, Loader2, Shield, CheckCircle, XCircle, ExternalLink, UserCheck, IdCard, Camera, FileSignature, Clock, Mail, RefreshCw, Trash2 } from "lucide-react";
 import { AddPaymentDialog } from "@/components/shared/dialogs/add-payment-dialog";
 import { useToast } from "@/hooks/use-toast";
 import { useTenant } from "@/contexts/TenantContext";
