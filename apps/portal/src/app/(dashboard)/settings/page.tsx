@@ -14,10 +14,11 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
-import { Settings as SettingsIcon, Building2, Bell, Zap, Upload, Save, Loader2, Database, AlertTriangle, Trash2, CreditCard, Palette, Link2, CheckCircle2, AlertCircle, ExternalLink, MapPin, FileText } from 'lucide-react';
+import { Settings as SettingsIcon, Building2, Bell, Zap, Upload, Save, Loader2, Database, AlertTriangle, Trash2, CreditCard, Palette, Link2, CheckCircle2, AlertCircle, ExternalLink, MapPin, FileText, Car } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
 import { useOrgSettings } from '@/hooks/use-org-settings';
 import { useTenantBranding } from '@/hooks/use-tenant-branding';
+import { useRentalSettings } from '@/hooks/use-rental-settings';
 import { LogoUploadWithResize } from '@/components/settings/logo-upload-with-resize';
 import { FaviconUpload } from '@/components/settings/favicon-upload';
 import { DataCleanupDialog } from '@/components/settings/data-cleanup-dialog';
@@ -56,10 +57,31 @@ const Settings = () => {
     isUpdating: isUpdatingTenantBranding
   } = useTenantBranding();
 
+  // Use rental settings hook for rental configuration
+  const {
+    settings: rentalSettings,
+    updateSettings: updateRentalSettings,
+    isUpdating: isUpdatingRentalSettings
+  } = useRentalSettings();
+
+  // Rental settings form state
+  const [rentalForm, setRentalForm] = useState({
+    minimum_rental_age: 18,
+  });
+
+  // Sync rental form with loaded settings
+  useEffect(() => {
+    if (rentalSettings) {
+      setRentalForm({
+        minimum_rental_age: rentalSettings.minimum_rental_age ?? 18,
+      });
+    }
+  }, [rentalSettings]);
+
   // Handle URL tab parameter
   useEffect(() => {
     const tabParam = searchParams.get('tab');
-    if (tabParam && ['branding', 'reminders', 'payments', 'stripe-connect', 'locations', 'agreement'].includes(tabParam)) {
+    if (tabParam && ['branding', 'reminders', 'payments', 'stripe-connect', 'locations', 'agreement', 'rental'].includes(tabParam)) {
       setActiveTab(tabParam);
     }
   }, [searchParams]);
@@ -366,7 +388,7 @@ const Settings = () => {
 
       {/* Settings Tabs */}
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-        <TabsList className="grid w-full grid-cols-6">
+        <TabsList className="grid w-full grid-cols-7">
           <TabsTrigger value="branding" className="flex items-center gap-2">
             <Palette className="h-4 w-4" />
             <span className="hidden sm:inline">Branding</span>
@@ -386,6 +408,10 @@ const Settings = () => {
           <TabsTrigger value="locations" className="flex items-center gap-2">
             <MapPin className="h-4 w-4" />
             <span className="hidden sm:inline">Locations</span>
+          </TabsTrigger>
+          <TabsTrigger value="rental" className="flex items-center gap-2">
+            <Car className="h-4 w-4" />
+            <span className="hidden sm:inline">Bookings</span>
           </TabsTrigger>
           <TabsTrigger value="agreement" className="flex items-center gap-2">
             <FileText className="h-4 w-4" />
@@ -1147,6 +1173,67 @@ const Settings = () => {
         {/* Locations Tab */}
         <TabsContent value="locations" className="space-y-6">
           <LocationSettings />
+        </TabsContent>
+
+        {/* Rental Tab */}
+        <TabsContent value="rental" className="space-y-6">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Car className="h-5 w-5 text-primary" />
+                Rental Requirements
+              </CardTitle>
+              <CardDescription>
+                Configure the minimum age requirement for drivers
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              {/* Minimum Rental Age */}
+              <div className="space-y-2">
+                <Label htmlFor="minimum_rental_age">Minimum Driver Age</Label>
+                <div className="flex items-center gap-4">
+                  <Input
+                    id="minimum_rental_age"
+                    type="number"
+                    min="16"
+                    max="100"
+                    value={rentalForm.minimum_rental_age}
+                    onChange={(e) => {
+                      const value = parseInt(e.target.value) || 16;
+                      setRentalForm(prev => ({
+                        ...prev,
+                        minimum_rental_age: Math.max(16, Math.min(100, value))
+                      }));
+                    }}
+                    className="w-32"
+                  />
+                  <span className="text-sm text-muted-foreground">years old</span>
+                </div>
+              </div>
+
+              {/* Save Button */}
+              <Button
+                onClick={async () => {
+                  try {
+                    await updateRentalSettings({
+                      minimum_rental_age: rentalForm.minimum_rental_age,
+                    });
+                  } catch (error) {
+                    console.error('Failed to update rental settings:', error);
+                  }
+                }}
+                disabled={isUpdatingRentalSettings}
+                className="flex items-center gap-2"
+              >
+                {isUpdatingRentalSettings ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Save className="h-4 w-4" />
+                )}
+                Save
+              </Button>
+            </CardContent>
+          </Card>
         </TabsContent>
 
         {/* Agreement Tab */}
