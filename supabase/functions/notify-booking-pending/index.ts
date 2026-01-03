@@ -7,6 +7,7 @@ import {
   isAWSConfigured
 } from "../_shared/aws-config.ts";
 import { sendEmail } from "../_shared/resend-service.ts";
+import { renderEmail, EmailTemplateData } from "../_shared/email-template-service.ts";
 
 interface NotifyRequest {
   paymentId: string;
@@ -17,10 +18,14 @@ interface NotifyRequest {
   customerPhone?: string;
   vehicleName: string;
   vehicleReg: string;
+  vehicleMake?: string;
+  vehicleModel?: string;
+  vehicleYear?: string;
   pickupDate: string;
   returnDate: string;
   amount: number;
   bookingRef: string;
+  tenantId?: string;
 }
 
 // Email template for customer
@@ -204,11 +209,48 @@ serve(async (req) => {
       adminSMS: null as any,
     };
 
+    // Build customer email using template service if tenantId is provided
+    let customerSubject = `Booking Received - Reference: ${data.bookingRef} | DRIVE 247`;
+    let customerHtml = getCustomerEmailHtml(data);
+
+    if (data.tenantId) {
+      try {
+        // Create supabase admin client
+        const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+        const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+        const supabase = createClient(supabaseUrl, supabaseServiceKey);
+
+        // Prepare template data
+        const templateData: EmailTemplateData = {
+          customer_name: data.customerName,
+          customer_email: data.customerEmail,
+          customer_phone: data.customerPhone || '',
+          vehicle_make: data.vehicleMake || data.vehicleName.split(' ')[0] || '',
+          vehicle_model: data.vehicleModel || data.vehicleName.split(' ').slice(1).join(' ') || '',
+          vehicle_reg: data.vehicleReg,
+          vehicle_year: data.vehicleYear || '',
+          rental_number: data.bookingRef,
+          rental_start_date: data.pickupDate,
+          rental_end_date: data.returnDate,
+          rental_amount: `$${data.amount.toLocaleString()}`,
+        };
+
+        // Render email from custom or default template
+        const rendered = await renderEmail(supabase, data.tenantId, 'booking_pending', templateData);
+        customerSubject = rendered.subject;
+        customerHtml = rendered.html;
+        console.log('Using custom/default email template for customer');
+      } catch (templateError) {
+        console.warn('Error rendering email template, using fallback:', templateError);
+        // Fall back to hardcoded template
+      }
+    }
+
     // Send customer email
     results.customerEmail = await sendEmail(
       data.customerEmail,
-      `Booking Received - Reference: ${data.bookingRef} | DRIVE 247`,
-      getCustomerEmailHtml(data)
+      customerSubject,
+      customerHtml
     );
     console.log('Customer email result:', results.customerEmail);
 
