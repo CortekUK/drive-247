@@ -149,13 +149,20 @@ const MultiStepBookingWidget = () => {
     }
 
     // Load verification data from localStorage (persist across refreshes)
+    // But expire after 30 minutes to prevent stale verified state on new visits
     const savedVerificationSessionId = localStorage.getItem('verificationSessionId');
     const savedVerificationStatus = localStorage.getItem('verificationStatus') as 'init' | 'pending' | 'verified' | 'rejected' | null;
-    const savedVerificationToken = localStorage.getItem('verificationToken');
+    const savedVerificationTimestamp = localStorage.getItem('verificationTimestamp');
     const savedVerifiedName = localStorage.getItem('verifiedCustomerName');
     const savedLicenseNumber = localStorage.getItem('verifiedLicenseNumber');
 
-    if (savedVerificationSessionId && savedVerificationStatus) {
+    // Check if verification data is expired (10 minutes = 600000 ms)
+    const VERIFICATION_EXPIRY_MS = 10 * 60 * 1000; // 10 minutes
+    const isExpired = savedVerificationTimestamp
+      ? (Date.now() - parseInt(savedVerificationTimestamp, 10)) > VERIFICATION_EXPIRY_MS
+      : true; // If no timestamp, consider it expired
+
+    if (savedVerificationSessionId && savedVerificationStatus && !isExpired) {
       setVerificationSessionId(savedVerificationSessionId);
       setVerificationStatus(savedVerificationStatus);
       setFormData(prev => ({
@@ -166,6 +173,16 @@ const MultiStepBookingWidget = () => {
         ...(savedLicenseNumber && { licenseNumber: savedLicenseNumber }),
       }));
       console.log('✅ Loaded verification from localStorage:', savedVerificationSessionId, savedVerificationStatus, savedVerifiedName);
+    } else if (isExpired && savedVerificationSessionId) {
+      // Clear expired verification data
+      console.log('🕐 Verification data expired, clearing...');
+      localStorage.removeItem('verificationSessionId');
+      localStorage.removeItem('verificationStatus');
+      localStorage.removeItem('verificationTimestamp');
+      localStorage.removeItem('verificationToken');
+      localStorage.removeItem('verifiedCustomerName');
+      localStorage.removeItem('verifiedLicenseNumber');
+      localStorage.removeItem('verificationVendorData');
     }
 
     // Handle window focus - check verification when user returns from Veriff popup
@@ -182,6 +199,7 @@ const MultiStepBookingWidget = () => {
           if (status.review_result === 'GREEN') {
             setVerificationStatus('verified');
             localStorage.setItem('verificationStatus', 'verified');
+            localStorage.setItem('verificationTimestamp', Date.now().toString());
             console.log('✅ Verification updated on window focus');
             // Auto-populate form with verified data
             populateFormWithVerifiedData(status);
@@ -220,6 +238,7 @@ const MultiStepBookingWidget = () => {
             if (status?.review_result === 'GREEN') {
               setVerificationStatus('verified');
               localStorage.setItem('verificationStatus', 'verified');
+              localStorage.setItem('verificationTimestamp', Date.now().toString());
               console.log('✅ Verification confirmed via popup message');
               // Auto-populate form with verified data
               populateFormWithVerifiedData(status);
@@ -555,6 +574,7 @@ const MultiStepBookingWidget = () => {
     setFormData(prev => ({ ...prev, verificationSessionId: mockSessionId }));
     localStorage.setItem('verificationSessionId', mockSessionId);
     localStorage.setItem('verificationStatus', 'verified');
+    localStorage.setItem('verificationTimestamp', Date.now().toString());
 
     populateFormWithVerifiedData(mockVerificationData);
     console.log('🔓 DEV MODE: Mock verification completed with data:', mockVerificationData);
@@ -667,6 +687,7 @@ const MultiStepBookingWidget = () => {
         if (status?.review_result === 'GREEN') {
           setVerificationStatus('verified');
           localStorage.setItem('verificationStatus', 'verified');
+          localStorage.setItem('verificationTimestamp', Date.now().toString());
           toast.success('Identity verified successfully!');
           // Auto-populate form with verified data
           populateFormWithVerifiedData(status);
@@ -726,6 +747,7 @@ const MultiStepBookingWidget = () => {
               console.log('✅ Setting verification status to VERIFIED based on FINISHED event');
               setVerificationStatus('verified');
               localStorage.setItem('verificationStatus', 'verified');
+              localStorage.setItem('verificationTimestamp', Date.now().toString());
               toast.success('Identity verified successfully! You can now continue with your booking.');
 
               // Track analytics
@@ -3251,6 +3273,7 @@ const MultiStepBookingWidget = () => {
                             console.log('✅ User confirmed verification complete');
                             setVerificationStatus('verified');
                             localStorage.setItem('verificationStatus', 'verified');
+                            localStorage.setItem('verificationTimestamp', Date.now().toString());
                             toast.success('Identity verified! You can now continue with your booking.');
                           }}
                           variant="outline"
