@@ -56,6 +56,9 @@ export default function EditEmailTemplatePage() {
 
   const templateType = getEmailTemplateType(templateKey);
 
+  // Always get the default template directly as a fallback
+  const fallbackDefault = getDefaultEmailTemplate(templateKey);
+
   const [subject, setSubject] = useState('');
   const [templateContent, setTemplateContent] = useState('');
   const [loaded, setLoaded] = useState(false);
@@ -63,21 +66,24 @@ export default function EditEmailTemplatePage() {
 
   const sampleData = getEmailSampleData();
 
-  // Load template data
+  // Load template data - always prefer custom, then default from hook, then fallback default
   useEffect(() => {
     if (!loaded && !isLoading) {
       if (customTemplate) {
         // Load custom template
         setSubject(customTemplate.subject);
         setTemplateContent(customTemplate.template_content);
-      } else if (defaultTemplate) {
-        // Load default template
-        setSubject(defaultTemplate.subject);
-        setTemplateContent(defaultTemplate.content);
+      } else {
+        // Load default template (from hook or fallback)
+        const defaultToUse = defaultTemplate || fallbackDefault;
+        if (defaultToUse) {
+          setSubject(defaultToUse.subject);
+          setTemplateContent(defaultToUse.content);
+        }
       }
       setLoaded(true);
     }
-  }, [customTemplate, defaultTemplate, isLoading, loaded]);
+  }, [customTemplate, defaultTemplate, fallbackDefault, isLoading, loaded]);
 
   const handleSave = async () => {
     if (!subject.trim()) {
@@ -106,9 +112,10 @@ export default function EditEmailTemplatePage() {
     try {
       await resetTemplateAsync(templateKey);
       // Reset form to defaults
-      if (defaultTemplate) {
-        setSubject(defaultTemplate.subject);
-        setTemplateContent(defaultTemplate.content);
+      const defaultToUse = defaultTemplate || fallbackDefault;
+      if (defaultToUse) {
+        setSubject(defaultToUse.subject);
+        setTemplateContent(defaultToUse.content);
       }
       setShowResetDialog(false);
     } catch (error) {

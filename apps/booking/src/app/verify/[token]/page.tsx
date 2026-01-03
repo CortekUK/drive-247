@@ -50,9 +50,11 @@ export default function VerifyPage() {
 
   // Camera state
   const [isCameraActive, setIsCameraActive] = useState(false);
+  const [cameraError, setCameraError] = useState<string | null>(null);
   const [facingMode, setFacingMode] = useState<'environment' | 'user'>('environment');
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Processing state
   const [processingMessage, setProcessingMessage] = useState('');
@@ -93,10 +95,21 @@ export default function VerifyPage() {
     }
   };
 
-  const startCamera = async (mode: 'environment' | 'user') => {
+  const startCamera = useCallback(async (mode: 'environment' | 'user') => {
     try {
-      // Stop any existing stream
-      stopCamera();
+      console.log('[Camera] Starting camera with mode:', mode);
+      setCameraError(null);
+
+      // Stop any existing stream first
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach(track => track.stop());
+        streamRef.current = null;
+      }
+
+      // Check if getUserMedia is available
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        throw new Error('Camera not supported on this browser. Please use file upload instead.');
+      }
 
       const constraints: MediaStreamConstraints = {
         video: {
@@ -106,21 +119,37 @@ export default function VerifyPage() {
         }
       };
 
+      console.log('[Camera] Requesting user media...');
       const stream = await navigator.mediaDevices.getUserMedia(constraints);
+      console.log('[Camera] Got stream:', stream.id);
       streamRef.current = stream;
 
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
-        await videoRef.current.play();
+        try {
+          await videoRef.current.play();
+          console.log('[Camera] Video playing');
+        } catch (playErr) {
+          console.error('[Camera] Play error:', playErr);
+        }
       }
 
       setFacingMode(mode);
       setIsCameraActive(true);
-    } catch (err) {
-      console.error('Camera error:', err);
-      toast.error('Unable to access camera. Please check permissions.');
+    } catch (err: any) {
+      console.error('[Camera] Error:', err);
+      let errorMsg = 'Unable to access camera';
+      if (err.name === 'NotAllowedError') {
+        errorMsg = 'Camera permission denied. Use file upload instead.';
+      } else if (err.name === 'NotFoundError') {
+        errorMsg = 'No camera found. Use file upload instead.';
+      } else if (err.message) {
+        errorMsg = err.message;
+      }
+      setCameraError(errorMsg);
+      toast.error(errorMsg);
     }
-  };
+  }, []);
 
   const stopCamera = () => {
     if (streamRef.current) {
@@ -214,6 +243,48 @@ export default function VerifyPage() {
     setStep('selfie');
   };
 
+  // Handle file upload as fallback for camera
+  const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    // Validate file type
+    if (!file.type.startsWith('image/')) {
+      toast.error('Please select an image file');
+      return;
+    }
+
+    // Validate file size (max 10MB)
+    if (file.size > 10 * 1024 * 1024) {
+      toast.error('File too large. Maximum 10MB allowed.');
+      return;
+    }
+
+    const previewUrl = URL.createObjectURL(file);
+
+    if (step === 'document-front') {
+      setDocumentFrontImage(file);
+      setDocumentFrontPreview(previewUrl);
+    } else if (step === 'document-back') {
+      setDocumentBackImage(file);
+      setDocumentBackPreview(previewUrl);
+    } else if (step === 'selfie') {
+      setSelfieImage(file);
+      setSelfiePreview(previewUrl);
+    }
+
+    stopCamera();
+
+    // Reset input
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  };
+
+  const triggerFileUpload = () => {
+    fileInputRef.current?.click();
+  };
+
   const uploadImage = async (blob: Blob, type: string): Promise<string | null> => {
     try {
       const fileName = `ai-verification/${sessionData?.sessionId}/${type}.jpg`;
@@ -300,14 +371,24 @@ export default function VerifyPage() {
 
   // Start camera when entering a capture step
   useEffect(() => {
-    if (step === 'document-front' && !documentFrontImage) {
-      startCamera('environment');
-    } else if (step === 'document-back' && !documentBackImage) {
-      startCamera('environment');
-    } else if (step === 'selfie' && !selfieImage) {
-      startCamera('user');
-    }
-  }, [step]);
+    console.log('[Camera Effect] Step changed to:', step);
+
+    // Small delay to ensure DOM is ready
+    const timeoutId = setTimeout(() => {
+      if (step === 'document-front' && !documentFrontImage) {
+        console.log('[Camera Effect] Starting camera for document-front');
+        startCamera('environment');
+      } else if (step === 'document-back' && !documentBackImage) {
+        console.log('[Camera Effect] Starting camera for document-back');
+        startCamera('environment');
+      } else if (step === 'selfie' && !selfieImage) {
+        console.log('[Camera Effect] Starting camera for selfie');
+        startCamera('user');
+      }
+    }, 100);
+
+    return () => clearTimeout(timeoutId);
+  }, [step, documentFrontImage, documentBackImage, selfieImage, startCamera]);
 
   // Get current preview based on step
   const getCurrentPreview = () => {
@@ -519,8 +600,23 @@ export default function VerifyPage() {
         ) : (
           <div className="w-full h-full flex items-center justify-center text-white">
             <div className="text-center p-4">
-              <Camera className="h-12 w-12 mx-auto mb-4 opacity-50" />
-              <p>Preparing camera...</p>
+              {cameraError ? (
+                <>
+                  <AlertCircle className="h-12 w-12 mx-auto mb-4 text-yellow-500" />
+                  <p className="mb-2">Camera unavailable</p>
+                  <p className="text-sm text-gray-400 mb-4">{cameraError}</p>
+                  <Button onClick={triggerFileUpload} variant="secondary">
+                    <Upload className="mr-2 h-4 w-4" />
+                    Upload from device
+                  </Button>
+                </>
+              ) : (
+                <>
+                  <Loader2 className="h-12 w-12 mx-auto mb-4 animate-spin opacity-50" />
+                  <p>Starting camera...</p>
+                  <p className="text-sm text-gray-400 mt-2">Please allow camera access when prompted</p>
+                </>
+              )}
             </div>
           </div>
         )}
@@ -558,18 +654,57 @@ export default function VerifyPage() {
           {step === 'selfie' && 'Take a selfie matching the photo on your ID'}
         </p>
 
+        {/* Hidden file input */}
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/*"
+          capture={step === 'selfie' ? 'user' : 'environment'}
+          onChange={handleFileUpload}
+          className="hidden"
+        />
+
         {/* Action buttons */}
-        <div className="flex gap-3 justify-center">
+        <div className="flex flex-col gap-3 items-center">
           {!hasCapture ? (
-            <Button
-              size="lg"
-              onClick={handleCapture}
-              disabled={!isCameraActive}
-              className="w-full max-w-xs"
-            >
-              <Camera className="mr-2 h-5 w-5" />
-              Capture Photo
-            </Button>
+            <>
+              {isCameraActive ? (
+                <Button
+                  size="lg"
+                  onClick={handleCapture}
+                  className="w-full max-w-xs"
+                >
+                  <Camera className="mr-2 h-5 w-5" />
+                  Capture Photo
+                </Button>
+              ) : (
+                <Button
+                  size="lg"
+                  onClick={triggerFileUpload}
+                  className="w-full max-w-xs"
+                >
+                  <Upload className="mr-2 h-5 w-5" />
+                  {step === 'selfie' ? 'Upload Selfie' : 'Upload Photo'}
+                </Button>
+              )}
+              {/* Show both options */}
+              {isCameraActive && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={triggerFileUpload}
+                  className="text-muted-foreground"
+                >
+                  <Upload className="mr-2 h-4 w-4" />
+                  Or upload from gallery
+                </Button>
+              )}
+              {cameraError && !isCameraActive && (
+                <p className="text-xs text-muted-foreground text-center">
+                  {cameraError}
+                </p>
+              )}
+            </>
           ) : (
             <>
               <Button variant="outline" size="lg" onClick={handleRetake}>
