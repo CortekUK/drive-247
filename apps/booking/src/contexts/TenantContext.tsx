@@ -56,6 +56,7 @@ export interface Tenant {
   min_rental_days: number | null;
   max_rental_days: number | null;
   booking_lead_time_hours: number | null;
+  minimum_rental_age: number | null;
   require_identity_verification: boolean | null;
   require_insurance_upload: boolean | null;
   payment_mode: string | null;
@@ -162,7 +163,7 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
                 phone, address, business_hours, google_maps_url,
                 facebook_url, instagram_url, twitter_url, linkedin_url,
                 currency_code, timezone, date_format,
-                min_rental_days, max_rental_days, booking_lead_time_hours,
+                min_rental_days, max_rental_days, booking_lead_time_hours, minimum_rental_age,
                 require_identity_verification, require_insurance_upload, payment_mode,
                 pickup_location_mode, return_location_mode, fixed_pickup_address, fixed_return_address
               `)
@@ -235,6 +236,7 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
           min_rental_days,
           max_rental_days,
           booking_lead_time_hours,
+          minimum_rental_age,
           require_identity_verification,
           require_insurance_upload,
           payment_mode,
