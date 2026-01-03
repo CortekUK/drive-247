@@ -2046,7 +2046,7 @@ const MultiStepBookingWidget = () => {
                       <SelectValue placeholder="Year" />
                     </SelectTrigger>
                     <SelectContent>
-                      {Array.from({ length: 100 }, (_, i) => new Date().getFullYear() - i).map((year) => (
+                      {Array.from({ length: 100 }, (_, i) => new Date().getFullYear() - (tenant?.minimum_rental_age || 18) - i).map((year) => (
                         <SelectItem key={year} value={year.toString()}>{year}</SelectItem>
                       ))}
                     </SelectContent>
