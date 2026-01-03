@@ -266,50 +266,51 @@ export default function BookingCheckoutStep({
     console.log('🔍 Verification Session ID:', formData.verificationSessionId);
 
     try {
-      // Step 1: Find existing customer or create new one
-      console.log('📝 Finding or creating customer...');
+      // Step 1: Find existing customer by email GLOBALLY (without tenant filter)
+      // This prevents duplicate key errors when email exists with different tenant_id
+      console.log('📝 Checking for existing customer by email (globally)...');
 
-      // First, check if customer exists by email within this tenant
-      let customerQuery = supabase
+      const { data: existingCustomer } = await supabase
         .from("customers")
         .select("*")
-        .eq("email", formData.customerEmail);
-
-      if (tenant?.id) {
-        customerQuery = customerQuery.eq("tenant_id", tenant.id);
-      }
-
-      const { data: existingCustomer } = await customerQuery.maybeSingle();
+        .eq("email", formData.customerEmail)
+        .maybeSingle();
 
       let customer;
 
       if (existingCustomer) {
-        // Update existing customer
-        console.log('👤 Found existing customer, updating...');
-        let updateQuery = supabase
-          .from("customers")
-          .update({
-            type: formData.customerType,
-            name: formData.customerName,
-            phone: formData.customerPhone,
-            status: "Active",
-          })
-          .eq("id", existingCustomer.id);
+        // Customer exists - update their details and optionally assign to tenant
+        console.log('👤 Found existing customer, updating...', existingCustomer.id);
 
-        if (tenant?.id) {
-          updateQuery = updateQuery.eq("tenant_id", tenant.id);
+        const updateData: Record<string, unknown> = {
+          type: formData.customerType,
+          name: formData.customerName,
+          phone: formData.customerPhone,
+          status: "Active",
+        };
+
+        // Also update tenant_id if not already set
+        if (tenant?.id && !existingCustomer.tenant_id) {
+          updateData.tenant_id = tenant.id;
         }
 
-        const { data: updatedCustomer, error: updateError } = await updateQuery
+        const { data: updatedCustomer, error: updateError } = await supabase
+          .from("customers")
+          .update(updateData)
+          .eq("id", existingCustomer.id)
           .select()
           .single();
 
-        if (updateError) throw updateError;
+        if (updateError) {
+          console.error('❌ Customer update error:', updateError);
+          throw updateError;
+        }
         customer = updatedCustomer;
       } else {
-        // Create new customer
+        // No existing customer - create new one
         console.log('🆕 Creating new customer...');
-        const customerData: any = {
+
+        const customerData: Record<string, unknown> = {
           type: formData.customerType,
           name: formData.customerName,
           email: formData.customerEmail,
@@ -328,7 +329,10 @@ export default function BookingCheckoutStep({
           .select()
           .single();
 
-        if (createError) throw createError;
+        if (createError) {
+          console.error('❌ Customer create error:', createError);
+          throw createError;
+        }
         customer = newCustomer;
       }
 
@@ -607,6 +611,18 @@ export default function BookingCheckoutStep({
       setIsProcessing(false);
     }
   };
+
+  // Show loading state if vehicle is not yet loaded
+  if (!selectedVehicle) {
+    return (
+      <div className="space-y-6">
+        <div>
+          <h2 className="text-3xl font-display font-bold text-gradient-metal mb-2">Review & Payment</h2>
+          <p className="text-muted-foreground">Loading vehicle details...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
