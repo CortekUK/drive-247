@@ -10,7 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { AlertTriangle, ArrowLeft, FileText, PoundSterling, CheckCircle, Scale, CreditCard, Clock, Ban, Receipt, AlertCircle, Upload, User } from "lucide-react";
+import { AlertTriangle, ArrowLeft, FileText, DollarSign, CheckCircle, Scale, CreditCard, Clock, Ban, Receipt, AlertCircle, Upload, User } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { FineAppealDialog } from "@/components/fines/fine-appeal-dialog";
 import { FineStatusBadge } from "@/components/shared/status/fine-status-badge";
@@ -349,7 +349,7 @@ const FineDetail = () => {
             title="Fine Amount"
             value={`$${Number(fine.amount).toLocaleString()}`}
             valueClassName="text-destructive dark:text-destructive"
-            icon={<PoundSterling className="h-4 w-4" />}
+            icon={<DollarSign className="h-4 w-4" />}
             className="bg-destructive/10 border-destructive/20"
           />
 
@@ -475,7 +475,7 @@ const FineDetail = () => {
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
-                  <PoundSterling className="h-5 w-5 text-primary" />
+                  <DollarSign className="h-5 w-5 text-primary" />
                   Authority Payments
                 </CardTitle>
               </CardHeader>

@@ -7,7 +7,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, TableFooter } from '@/components/ui/table';
-import { CalendarIcon, TrendingUp, TrendingDown, PoundSterling, Car, Calendar, Download, ArrowUpDown, ArrowUp, ArrowDown, BarChart3 } from 'lucide-react';
+import { CalendarIcon, TrendingUp, TrendingDown, DollarSign, Car, Calendar, Download, ArrowUpDown, ArrowUp, ArrowDown, BarChart3 } from 'lucide-react';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar as CalendarComponent } from '@/components/ui/calendar';
 import { cn } from '@/lib/utils';
@@ -527,7 +527,7 @@ const PLDashboard: React.FC = () => {
     {
       title: 'Net Profit',
       value: formatCurrency(plSummary?.net_profit || 0),
-      icon: PoundSterling,
+      icon: DollarSign,
       trend: (plSummary?.net_profit || 0) > 0 ? 'positive' : (plSummary?.net_profit || 0) < 0 ? 'negative' : 'neutral' as const,
     },
     {
