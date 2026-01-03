@@ -742,6 +742,13 @@ const MultiStepBookingWidget = () => {
 
       if (existingCustomer) {
         customerId = existingCustomer.id;
+        // Update existing customer with DOB if provided
+        if (formData.driverDOB) {
+          await supabase
+            .from("customers")
+            .update({ date_of_birth: formData.driverDOB })
+            .eq("id", existingCustomer.id);
+        }
       } else {
         // Create new customer with sanitized data
         const customerData: any = {
@@ -749,7 +756,8 @@ const MultiStepBookingWidget = () => {
           email: sanitizeEmail(formData.customerEmail),
           phone: sanitizePhone(formData.customerPhone),
           customer_type: formData.customerType || "Individual",
-          status: "Active"
+          status: "Active",
+          date_of_birth: formData.driverDOB || null
         };
 
         if (tenant?.id) {
