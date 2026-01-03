@@ -50,9 +50,11 @@ export const useEmailTemplates = () => {
         .eq('tenant_id', tenant.id)
         .order('template_key', { ascending: true });
 
+      // Don't throw on RLS/permission errors - just return empty array
+      // This handles the case where the table has no custom templates
       if (error) {
-        console.error('[EmailTemplates] Error fetching templates:', error);
-        throw error;
+        console.warn('[EmailTemplates] Could not fetch templates (may be empty):', error.message || error);
+        return [];
       }
 
       return data || [];
@@ -232,18 +234,18 @@ export const useEmailTemplate = (templateKey: string) => {
         .eq('template_key', templateKey)
         .maybeSingle();
 
+      // Don't throw on errors - just return default template
       if (error) {
-        console.error('[EmailTemplate] Error fetching template:', error);
-        throw error;
+        console.warn('[EmailTemplate] Could not fetch template (using default):', error.message || error);
       }
 
       // Get default template
       const defaultTemplate = getDefaultEmailTemplate(templateKey);
 
       return {
-        customTemplate,
+        customTemplate: error ? null : customTemplate,
         defaultTemplate,
-        isCustomized: !!customTemplate,
+        isCustomized: !error && !!customTemplate,
       };
     },
     enabled: !!tenant?.id && !!templateKey,
