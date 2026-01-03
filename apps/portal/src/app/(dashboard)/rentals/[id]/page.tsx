@@ -50,9 +50,11 @@ const RentalDetail = () => {
   const [showRejectionDialog, setShowRejectionDialog] = useState(false);
 
 
-  const { data: rental, isLoading } = useQuery({
-    queryKey: ["rental", id],
+  const { data: rental, isLoading, error: rentalError } = useQuery({
+    queryKey: ["rental", id, tenant?.id],
     queryFn: async () => {
+      if (!tenant?.id) throw new Error("No tenant context");
+
       const { data, error } = await supabase
         .from("rentals")
         .select(`
@@ -61,12 +63,15 @@ const RentalDetail = () => {
           vehicles(id, reg, make, model)
         `)
         .eq("id", id)
-        .single();
+        .eq("tenant_id", tenant.id)
+        .maybeSingle();
 
       if (error) throw error;
+      if (!data) throw new Error("Rental not found");
+      if (!data.customers) throw new Error("Rental customer not found");
       return data as Rental;
     },
-    enabled: !!id,
+    enabled: !!id && !!tenant?.id,
   });
 
   const { data: rentalTotals } = useRentalTotals(id);
@@ -101,9 +106,12 @@ const RentalDetail = () => {
         .eq("rental_id", id)
         .order("created_at", { ascending: false })
         .limit(1)
-        .single();
+        .maybeSingle();
 
-      if (error && error.code !== 'PGRST116') throw error;
+      if (error) {
+        console.error("Error fetching rental payment:", error);
+        return null;
+      }
       return data;
     },
     enabled: !!id && !!tenant?.id,
