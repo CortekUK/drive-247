@@ -98,7 +98,7 @@ function getContentType(filePath) {
  * Update a single tenant's branding
  */
 async function updateTenantBranding(tenantConfig) {
-  const { slug, app_name, logo_path, favicon_path, colors, seo } = tenantConfig;
+  const { slug, app_name, logo_path, favicon_path, colors, seo, contact } = tenantConfig;
 
   console.log(`\nProcessing tenant: ${slug}`);
 
@@ -121,6 +121,8 @@ async function updateTenantBranding(tenantConfig) {
     app_name: app_name || undefined,
     meta_title: seo?.meta_title || undefined,
     meta_description: seo?.meta_description || undefined,
+    phone: contact?.phone || undefined,
+    address: contact?.address || undefined,
     ...colors
   };
 
