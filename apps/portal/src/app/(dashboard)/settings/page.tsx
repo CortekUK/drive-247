@@ -14,10 +14,11 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
-import { Settings as SettingsIcon, Building2, Bell, Zap, Upload, Save, Loader2, Database, AlertTriangle, Trash2, CreditCard, Palette, Link2, CheckCircle2, AlertCircle, ExternalLink, MapPin } from 'lucide-react';
+import { Settings as SettingsIcon, Building2, Bell, Zap, Upload, Save, Loader2, Database, AlertTriangle, Trash2, CreditCard, Palette, Link2, CheckCircle2, AlertCircle, ExternalLink, MapPin, FileText, Car } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
 import { useOrgSettings } from '@/hooks/use-org-settings';
 import { useTenantBranding } from '@/hooks/use-tenant-branding';
+import { useRentalSettings } from '@/hooks/use-rental-settings';
 import { LogoUploadWithResize } from '@/components/settings/logo-upload-with-resize';
 import { FaviconUpload } from '@/components/settings/favicon-upload';
 import { DataCleanupDialog } from '@/components/settings/data-cleanup-dialog';
@@ -56,10 +57,31 @@ const Settings = () => {
     isUpdating: isUpdatingTenantBranding
   } = useTenantBranding();
 
+  // Use rental settings hook for rental configuration
+  const {
+    settings: rentalSettings,
+    updateSettings: updateRentalSettings,
+    isUpdating: isUpdatingRentalSettings
+  } = useRentalSettings();
+
+  // Rental settings form state
+  const [rentalForm, setRentalForm] = useState({
+    minimum_rental_age: 18,
+  });
+
+  // Sync rental form with loaded settings
+  useEffect(() => {
+    if (rentalSettings) {
+      setRentalForm({
+        minimum_rental_age: rentalSettings.minimum_rental_age ?? 18,
+      });
+    }
+  }, [rentalSettings]);
+
   // Handle URL tab parameter
   useEffect(() => {
     const tabParam = searchParams.get('tab');
-    if (tabParam && ['branding', 'reminders', 'payments', 'stripe-connect', 'locations'].includes(tabParam)) {
+    if (tabParam && ['branding', 'reminders', 'payments', 'stripe-connect', 'locations', 'agreement', 'rental'].includes(tabParam)) {
       setActiveTab(tabParam);
     }
   }, [searchParams]);
@@ -357,7 +379,7 @@ const Settings = () => {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-            <h1 className="text-3xl font-bold">Settings</h1>
+          <h1 className="text-3xl font-bold">Settings</h1>
           <p className="text-muted-foreground mt-1">
             Configure your fleet management system
           </p>
@@ -366,7 +388,7 @@ const Settings = () => {
 
       {/* Settings Tabs */}
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-        <TabsList className="grid w-full grid-cols-5">
+        <TabsList className="grid w-full grid-cols-7">
           <TabsTrigger value="branding" className="flex items-center gap-2">
             <Palette className="h-4 w-4" />
             <span className="hidden sm:inline">Branding</span>
@@ -386,6 +408,14 @@ const Settings = () => {
           <TabsTrigger value="locations" className="flex items-center gap-2">
             <MapPin className="h-4 w-4" />
             <span className="hidden sm:inline">Locations</span>
+          </TabsTrigger>
+          <TabsTrigger value="rental" className="flex items-center gap-2">
+            <Car className="h-4 w-4" />
+            <span className="hidden sm:inline">Bookings</span>
+          </TabsTrigger>
+          <TabsTrigger value="agreement" className="flex items-center gap-2">
+            <FileText className="h-4 w-4" />
+            <span className="hidden sm:inline">Agreement</span>
           </TabsTrigger>
         </TabsList>
 
@@ -814,7 +844,7 @@ const Settings = () => {
               <AlertDialogContent>
                 <AlertDialogHeader>
                   <AlertDialogTitle>Reset Branding to Defaults?</AlertDialogTitle>
-                  <AlertDialogDescription>
+                  <div className="text-sm text-muted-foreground">
                     This will reset all branding settings to their original values:
                     <ul className="mt-2 text-sm list-disc list-inside space-y-1">
                       <li>App Name: "Drive 917"</li>
@@ -823,7 +853,7 @@ const Settings = () => {
                       <li>Background Colors: Theme defaults</li>
                       <li>SEO settings: Default values</li>
                     </ul>
-                  </AlertDialogDescription>
+                  </div>
                 </AlertDialogHeader>
                 <AlertDialogFooter>
                   <AlertDialogCancel>Cancel</AlertDialogCancel>
@@ -1010,19 +1040,17 @@ const Settings = () => {
                 <div className="flex flex-col sm:flex-row gap-4">
                   {/* Automated Mode Card */}
                   <div
-                    className={`flex-1 p-4 border-2 rounded-lg cursor-pointer transition-all ${
-                      settings?.payment_mode === 'automated'
+                    className={`flex-1 p-4 border-2 rounded-lg cursor-pointer transition-all ${settings?.payment_mode === 'automated'
                         ? 'border-primary bg-primary/5'
                         : 'border-border hover:border-primary/50'
-                    }`}
+                      }`}
                     onClick={() => setPaymentMode('automated')}
                   >
                     <div className="flex items-start gap-3">
-                      <div className={`w-4 h-4 rounded-full border-2 mt-0.5 flex items-center justify-center ${
-                        settings?.payment_mode === 'automated'
+                      <div className={`w-4 h-4 rounded-full border-2 mt-0.5 flex items-center justify-center ${settings?.payment_mode === 'automated'
                           ? 'border-primary'
                           : 'border-muted-foreground'
-                      }`}>
+                        }`}>
                         {settings?.payment_mode === 'automated' && (
                           <div className="w-2 h-2 rounded-full bg-primary" />
                         )}
@@ -1041,19 +1069,17 @@ const Settings = () => {
 
                   {/* Manual Mode Card */}
                   <div
-                    className={`flex-1 p-4 border-2 rounded-lg cursor-pointer transition-all ${
-                      settings?.payment_mode === 'manual'
+                    className={`flex-1 p-4 border-2 rounded-lg cursor-pointer transition-all ${settings?.payment_mode === 'manual'
                         ? 'border-primary bg-primary/5'
                         : 'border-border hover:border-primary/50'
-                    }`}
+                      }`}
                     onClick={() => setPaymentMode('manual')}
                   >
                     <div className="flex items-start gap-3">
-                      <div className={`w-4 h-4 rounded-full border-2 mt-0.5 flex items-center justify-center ${
-                        settings?.payment_mode === 'manual'
+                      <div className={`w-4 h-4 rounded-full border-2 mt-0.5 flex items-center justify-center ${settings?.payment_mode === 'manual'
                           ? 'border-primary'
                           : 'border-muted-foreground'
-                      }`}>
+                        }`}>
                         {settings?.payment_mode === 'manual' && (
                           <div className="w-2 h-2 rounded-full bg-primary" />
                         )}
@@ -1072,35 +1098,31 @@ const Settings = () => {
                 </div>
 
                 {/* Current Mode Info */}
-                <div className={`p-4 rounded-lg ${
-                  settings?.payment_mode === 'manual'
+                <div className={`p-4 rounded-lg ${settings?.payment_mode === 'manual'
                     ? 'bg-orange-50 border border-orange-200'
                     : 'bg-green-50 border border-green-200'
-                }`}>
+                  }`}>
                   <div className="flex items-start gap-3">
-                    <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
-                      settings?.payment_mode === 'manual'
+                    <div className={`w-8 h-8 rounded-full flex items-center justify-center ${settings?.payment_mode === 'manual'
                         ? 'bg-orange-100 text-orange-600'
                         : 'bg-green-100 text-green-600'
-                    }`}>
+                      }`}>
                       <CreditCard className="h-4 w-4" />
                     </div>
                     <div>
-                      <h4 className={`font-medium ${
-                        settings?.payment_mode === 'manual'
+                      <h4 className={`font-medium ${settings?.payment_mode === 'manual'
                           ? 'text-orange-800'
                           : 'text-green-800'
-                      }`}>
+                        }`}>
                         {settings?.payment_mode === 'manual'
                           ? 'Manual Approval is Active'
                           : 'Automated Processing is Active'
                         }
                       </h4>
-                      <p className={`text-sm mt-1 ${
-                        settings?.payment_mode === 'manual'
+                      <p className={`text-sm mt-1 ${settings?.payment_mode === 'manual'
                           ? 'text-orange-700'
                           : 'text-green-700'
-                      }`}>
+                        }`}>
                         {settings?.payment_mode === 'manual'
                           ? 'New payments will appear in the Payments page with "Pending Review" status. Accept or reject each payment to proceed with the rental.'
                           : 'Payments are processed automatically. Rentals will proceed as soon as Stripe confirms the payment.'
@@ -1151,6 +1173,95 @@ const Settings = () => {
         {/* Locations Tab */}
         <TabsContent value="locations" className="space-y-6">
           <LocationSettings />
+        </TabsContent>
+
+        {/* Rental Tab */}
+        <TabsContent value="rental" className="space-y-6">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Car className="h-5 w-5 text-primary" />
+                Rental Requirements
+              </CardTitle>
+              <CardDescription>
+                Configure the minimum age requirement for drivers
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              {/* Minimum Rental Age */}
+              <div className="space-y-2">
+                <Label htmlFor="minimum_rental_age">Minimum Driver Age</Label>
+                <div className="flex items-center gap-4">
+                  <Input
+                    id="minimum_rental_age"
+                    type="number"
+                    min="16"
+                    max="100"
+                    value={rentalForm.minimum_rental_age}
+                    onChange={(e) => {
+                      const value = parseInt(e.target.value) || 16;
+                      setRentalForm(prev => ({
+                        ...prev,
+                        minimum_rental_age: Math.max(16, Math.min(100, value))
+                      }));
+                    }}
+                    className="w-32"
+                  />
+                  <span className="text-sm text-muted-foreground">years old</span>
+                </div>
+              </div>
+
+              {/* Save Button */}
+              <Button
+                onClick={async () => {
+                  try {
+                    await updateRentalSettings({
+                      minimum_rental_age: rentalForm.minimum_rental_age,
+                    });
+                  } catch (error) {
+                    console.error('Failed to update rental settings:', error);
+                  }
+                }}
+                disabled={isUpdatingRentalSettings}
+                className="flex items-center gap-2"
+              >
+                {isUpdatingRentalSettings ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Save className="h-4 w-4" />
+                )}
+                Save
+              </Button>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* Agreement Tab */}
+        <TabsContent value="agreement" className="space-y-6">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <FileText className="h-5 w-5 text-primary" />
+                Agreement Templates
+              </CardTitle>
+              <CardDescription>
+                Customize the rental agreement template used for DocuSign contracts
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <p className="text-sm text-muted-foreground mb-4">
+                Create and manage agreement templates that will be used when sending rental contracts via DocuSign.
+                Each tenant can have their own customized template with variable placeholders for customer, vehicle, and rental information.
+              </p>
+              <Button
+                onClick={() => router.push('/settings/agreement-templates')}
+                className="flex items-center gap-2"
+              >
+                <FileText className="h-4 w-4" />
+                Manage Agreement Templates
+              </Button>
+            </CardContent>
+          </Card>
         </TabsContent>
       </Tabs>
 

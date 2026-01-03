@@ -113,7 +113,7 @@ const MultiStepBookingWidget = () => {
     dropoffTime: "",
     specialRequests: "",
     vehicleId: "",
-    driverAge: "",
+    driverDOB: "",
     promoCode: "",
     customerName: "",
     customerEmail: "",
@@ -854,6 +854,13 @@ const MultiStepBookingWidget = () => {
 
       if (existingCustomer) {
         customerId = existingCustomer.id;
+        // Update existing customer with DOB if provided
+        if (formData.driverDOB) {
+          await supabase
+            .from("customers")
+            .update({ date_of_birth: formData.driverDOB })
+            .eq("id", existingCustomer.id);
+        }
       } else {
         // Create new customer with sanitized data
         const customerData: any = {
@@ -861,7 +868,8 @@ const MultiStepBookingWidget = () => {
           email: sanitizeEmail(formData.customerEmail),
           phone: sanitizePhone(formData.customerPhone),
           customer_type: formData.customerType || "Individual",
-          status: "Active"
+          status: "Active",
+          date_of_birth: formData.driverDOB || null
         };
 
         if (tenant?.id) {
@@ -934,7 +942,7 @@ const MultiStepBookingWidget = () => {
       dropoffTime: "",
       specialRequests: "",
       vehicleId: "",
-      driverAge: "",
+      driverDOB: "",
       promoCode: "",
       customerName: "",
       customerEmail: "",
@@ -1438,6 +1446,18 @@ const MultiStepBookingWidget = () => {
       });
     }
   };
+
+  // Calculate age from date of birth
+  const calculateAge = (dob: Date): number => {
+    const today = new Date();
+    let age = today.getFullYear() - dob.getFullYear();
+    const monthDiff = today.getMonth() - dob.getMonth();
+    if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < dob.getDate())) {
+      age--;
+    }
+    return age;
+  };
+
   const validateStep1 = () => {
     const newErrors: {
       [key: string]: string;
@@ -1515,11 +1535,20 @@ const MultiStepBookingWidget = () => {
       }
     }
 
-    // Validate driver age - now required
-    if (!formData.driverAge || formData.driverAge.trim() === "") {
-      newErrors.driverAge = "Please select driver age range.";
-    } else if (!["under_25", "25_70", "over_70"].includes(formData.driverAge)) {
-      newErrors.driverAge = "Please select a valid driver age range.";
+    // Validate driver date of birth - must be 18+
+    if (!formData.driverDOB || formData.driverDOB.trim() === "") {
+      newErrors.driverDOB = "Date of birth is required.";
+    } else {
+      const dob = new Date(formData.driverDOB);
+      if (isNaN(dob.getTime())) {
+        newErrors.driverDOB = "Please enter a valid date of birth.";
+      } else {
+        const age = calculateAge(dob);
+        const minAge = tenant?.minimum_rental_age || 18;
+        if (age < minAge) {
+          newErrors.driverDOB = `You must be at least ${minAge} years old to rent a vehicle.`;
+        }
+      }
     }
 
     setErrors(newErrors);
@@ -1628,11 +1657,20 @@ const MultiStepBookingWidget = () => {
         }
         break;
 
-      case 'driverAge':
+      case 'driverDOB':
         if (!value || value.trim() === "") {
-          newErrors.driverAge = "Please select driver age range.";
-        } else if (!["under_25", "25_70", "over_70"].includes(value)) {
-          newErrors.driverAge = "Please select a valid driver age range.";
+          newErrors.driverDOB = "Date of birth is required.";
+        } else {
+          const dob = new Date(value);
+          if (isNaN(dob.getTime())) {
+            newErrors.driverDOB = "Please enter a valid date of birth.";
+          } else {
+            const age = calculateAge(dob);
+            const minAge = tenant?.minimum_rental_age || 18;
+            if (age < minAge) {
+              newErrors.driverDOB = `You must be at least ${minAge} years old to rent a vehicle.`;
+            }
+          }
         }
         break;
 
@@ -1648,6 +1686,10 @@ const MultiStepBookingWidget = () => {
 
   const handleStep1Continue = () => {
     if (validateStep1()) {
+      // Calculate age from DOB for young driver check
+      const driverAge = formData.driverDOB ? calculateAge(new Date(formData.driverDOB)) : 0;
+      const isYoungDriver = driverAge < 25;
+
       // Store in localStorage
       const bookingContext = {
         pickupLocation: formData.pickupLocation,
@@ -1656,9 +1698,10 @@ const MultiStepBookingWidget = () => {
         pickupTime: formData.pickupTime,
         dropoffDate: formData.dropoffDate,
         dropoffTime: formData.dropoffTime,
-        driverAge: formData.driverAge,
+        driverDOB: formData.driverDOB,
+        driverAge: driverAge,
         promoCode: formData.promoCode,
-        young_driver: formData.driverAge === 'under_25'
+        young_driver: isYoungDriver
       };
       localStorage.setItem('booking_context', JSON.stringify(bookingContext));
 
@@ -1675,9 +1718,9 @@ const MultiStepBookingWidget = () => {
           pickup_location: formData.pickupLocation,
           return_location: formData.dropoffLocation,
           rental_days: duration?.days || 0,
-          driver_age: formData.driverAge,
+          driver_age: driverAge,
           has_promo: !!formData.promoCode,
-          young_driver: formData.driverAge === 'under_25'
+          young_driver: isYoungDriver
         });
       }
       setCurrentStep(2);
@@ -2063,29 +2106,76 @@ const MultiStepBookingWidget = () => {
               </div>
             </div>
 
-            {/* Row 3: Driver Age & Promo Code */}
+            {/* Row 3: Driver DOB & Promo Code */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
               <div className="space-y-2">
-                <Label htmlFor="driverAge" className="font-medium">Driver's Age *</Label>
-                <Select value={formData.driverAge} onValueChange={value => {
-                  setFormData({
-                    ...formData,
-                    driverAge: value
-                  });
-                  // Instant validation
-                  validateField('driverAge', value);
-                }}>
-                  <SelectTrigger id="driverAge" className="h-12 focus-visible:ring-primary">
-                    <SelectValue placeholder="Select age range" />
-                  </SelectTrigger>
-                  <SelectContent position="popper" sideOffset={4}>
-                    <SelectItem value="under_25">Under 25</SelectItem>
-                    <SelectItem value="25_70">25–70</SelectItem>
-                    <SelectItem value="over_70">70+</SelectItem>
-                  </SelectContent>
-                </Select>
-                {errors.driverAge && <p className="text-sm text-destructive">{errors.driverAge}</p>}
-                {formData.driverAge === 'under_25' && <p className="text-xs text-primary">Young Driver Fee will apply</p>}
+                <Label className="font-medium">Date of Birth *</Label>
+                <div className="grid grid-cols-3 gap-2">
+                  {/* Month Select */}
+                  <Select
+                    value={formData.driverDOB ? (new Date(formData.driverDOB).getMonth() + 1).toString().padStart(2, '0') : ""}
+                    onValueChange={(month) => {
+                      const currentDate = formData.driverDOB ? new Date(formData.driverDOB) : new Date(2000, 0, 1);
+                      const newDate = new Date(currentDate.getFullYear(), parseInt(month) - 1, Math.min(currentDate.getDate(), new Date(currentDate.getFullYear(), parseInt(month), 0).getDate()));
+                      const dateStr = format(newDate, "yyyy-MM-dd");
+                      setFormData({ ...formData, driverDOB: dateStr });
+                      validateField('driverDOB', dateStr);
+                    }}
+                  >
+                    <SelectTrigger className={cn("h-12", errors.driverDOB && "border-destructive")}>
+                      <SelectValue placeholder="Month" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'].map((month, i) => (
+                        <SelectItem key={i} value={(i + 1).toString().padStart(2, '0')}>{month}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  {/* Day Select */}
+                  <Select
+                    value={formData.driverDOB ? new Date(formData.driverDOB).getDate().toString() : ""}
+                    onValueChange={(day) => {
+                      const currentDate = formData.driverDOB ? new Date(formData.driverDOB) : new Date(2000, 0, 1);
+                      const newDate = new Date(currentDate.getFullYear(), currentDate.getMonth(), parseInt(day));
+                      const dateStr = format(newDate, "yyyy-MM-dd");
+                      setFormData({ ...formData, driverDOB: dateStr });
+                      validateField('driverDOB', dateStr);
+                    }}
+                  >
+                    <SelectTrigger className={cn("h-12", errors.driverDOB && "border-destructive")}>
+                      <SelectValue placeholder="Day" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {Array.from({ length: 31 }, (_, i) => (
+                        <SelectItem key={i + 1} value={(i + 1).toString()}>{i + 1}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  {/* Year Select */}
+                  <Select
+                    value={formData.driverDOB ? new Date(formData.driverDOB).getFullYear().toString() : ""}
+                    onValueChange={(year) => {
+                      const currentDate = formData.driverDOB ? new Date(formData.driverDOB) : new Date(2000, 0, 1);
+                      const newDate = new Date(parseInt(year), currentDate.getMonth(), Math.min(currentDate.getDate(), new Date(parseInt(year), currentDate.getMonth() + 1, 0).getDate()));
+                      const dateStr = format(newDate, "yyyy-MM-dd");
+                      setFormData({ ...formData, driverDOB: dateStr });
+                      validateField('driverDOB', dateStr);
+                    }}
+                  >
+                    <SelectTrigger className={cn("h-12", errors.driverDOB && "border-destructive")}>
+                      <SelectValue placeholder="Year" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {Array.from({ length: 100 }, (_, i) => new Date().getFullYear() - (tenant?.minimum_rental_age || 18) - i).map((year) => (
+                        <SelectItem key={year} value={year.toString()}>{year}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                {formData.driverDOB && (
+                  <p className="text-sm text-muted-foreground">Age: <span className={cn("font-medium", errors.driverDOB ? "text-destructive" : "text-foreground")}>{calculateAge(new Date(formData.driverDOB))} years old</span></p>
+                )}
+                {errors.driverDOB && <p className="text-sm text-destructive">{errors.driverDOB}</p>}
               </div>
 
               <div className="space-y-2">

@@ -1,6 +1,128 @@
 {
   "tenants": [
     {
+      "slug": "dbcarrentals",
+      "app_name": "DB Car Rentals",
+      "logo_path": "./logos/DB-rental.png",
+      "favicon_path": "./logos/DB-rental.png",
+      "colors": {
+        "primary_color": "#2563EB",
+        "secondary_color": "#1F2937",
+        "accent_color": "#F97316",
+        "light_primary_color": "#2563EB",
+        "light_secondary_color": "#1F2937",
+        "light_accent_color": "#F97316",
+        "light_background_color": "#FFFFFF",
+        "light_header_footer_color": "#1F2937",
+        "dark_primary_color": "#3B82F6",
+        "dark_secondary_color": "#2563EB",
+        "dark_accent_color": "#FB923C",
+        "dark_background_color": "#0F172A",
+        "dark_header_footer_color": "#1E293B"
+      },
+      "seo": {
+        "meta_title": "DB Car Rentals - Premium Car Rentals in Miami",
+        "meta_description": "Premium car rentals in Miami. Economy, SUV, minivan, and luxury vehicles including Audi & BMW. Available 24/7. Where renting is a great experience!"
+      },
+      "contact": {
+        "phone": "+17863013621",
+        "address": "Miami, Florida"
+      }
+    },
+    {
+      "slug": "ainconnections",
+      "app_name": "All in One Connections",
+      "logo_path": "./logos/allinone.png",
+      "favicon_path": "./logos/allinone.png",
+      "colors": {
+        "primary_color": "#223331",
+        "secondary_color": "#223331",
+        "accent_color": "#E9B63E",
+        "light_primary_color": null,
+        "light_secondary_color": null,
+        "light_accent_color": null,
+        "light_background_color": null,
+        "light_header_footer_color": null,
+        "dark_primary_color": null,
+        "dark_secondary_color": null,
+        "dark_accent_color": null,
+        "dark_background_color": null,
+        "dark_header_footer_color": null
+      },
+      "seo": {
+        "meta_title": "All in One Connections - Car Rentals in Atlanta",
+        "meta_description": "Affordable economy car rentals in Atlanta, Georgia. Quality vehicles including Mustang and more. Available 24/7. Book your ride today!"
+      },
+      "contact": {
+        "phone": "+14704743020",
+        "address": "Atlanta, Georgia"
+      }
+    },
+    {
+      "slug": "allinoneconnections",
+      "app_name": "All in One Connections",
+      "logo_path": "./logos/allinone.png",
+      "favicon_path": "./logos/allinone.png",
+      "colors": {
+        "primary_color": "#223331",
+        "secondary_color": "#223331",
+        "accent_color": "#E9B63E",
+        "light_primary_color": null,
+        "light_secondary_color": null,
+        "light_accent_color": null,
+        "light_background_color": null,
+        "light_header_footer_color": null,
+        "dark_primary_color": null,
+        "dark_secondary_color": null,
+        "dark_accent_color": null,
+        "dark_background_color": null,
+        "dark_header_footer_color": null
+      },
+      "seo": {
+        "meta_title": "All in One Connections - Car Rentals in Atlanta",
+        "meta_description": "Affordable economy car rentals in Atlanta, Georgia. Quality vehicles including Mustang and more. Available 24/7. Book your ride today!"
+      },
+      "contact": {
+        "phone": "+14704743020",
+        "address": "Atlanta, Georgia"
+      }
+    },
+    {
+      "slug": "thomcell",
+      "app_name": "Thomcell",
+      "logo_path": "./logos/thomcell.png",
+      "favicon_path": "./logos/thomcell.png",
+      "colors": {
+        "primary_color": "#C41E3A",
+        "secondary_color": "#1E293B",
+        "accent_color": "#E31837",
+        "light_primary_color": "#C41E3A",
+        "light_secondary_color": "#334155",
+        "light_accent_color": "#E31837",
+        "light_background_color": "#FFFFFF",
+        "light_header_footer_color": "#1E293B",
+        "dark_primary_color": "#E31837",
+        "dark_secondary_color": "#C41E3A",
+        "dark_accent_color": "#E31837",
+        "dark_background_color": "#0F172A",
+        "dark_header_footer_color": "#1E293B"
+      },
+      "seo": {
+        "meta_title": "Thomcell - Premium Car Rentals in Houston",
+        "meta_description": "Premium car rentals in Houston. Mercedes EQE, SUVs, Ford Bronco and more. Quality vehicles available 24/7. Book your ride today!"
+      },
+      "contact": {
+        "phone": "+18338466235",
+        "address": "Houston, Texas"
+      }
+    },
+    {
+      "slug": "globalmotiontransport",
+      "app_name": "Global Motion Transport",
+      "logo_path": "./logos/global-motion.png",
+      "favicon_path": "./logos/global-motion.png"
+    },
+    {
       "slug": "amgroadside",
       "app_name": "AMG Roadside",
       "logo_path": "./logos/amg.png",
@@ -8,6 +130,31 @@
       "seo": {
         "meta_title": "AMG Roadside - Economy & Hybrid Car Rentals in Maryland",
         "meta_description": "Affordable economy and hybrid car rentals in Maryland. AMG Roadside offers Prius, SUVs and more at competitive rates. Going beyond city limits."
+      }
+    },
+    {
+      "slug": "sdrentals",
+      "app_name": "San Diego Weekly Car Rentals",
+      "logo_path": "./logos/san-diego.png",
+      "favicon_path": "./logos/san-diego.png",
+      "colors": {
+        "primary_color": "#1A4E7F",
+        "secondary_color": "#1A4E7F",
+        "accent_color": "#2D8BD4",
+        "light_primary_color": "#1A4E7F",
+        "light_secondary_color": "#1A4E7F",
+        "light_accent_color": "#2D8BD4",
+        "light_background_color": "#FFFFFF",
+        "light_header_footer_color": "#1A4E7F",
+        "dark_primary_color": "#2D8BD4",
+        "dark_secondary_color": "#2D8BD4",
+        "dark_accent_color": "#4AA3E8",
+        "dark_background_color": "#0F172A",
+        "dark_header_footer_color": "#1E293B"
+      },
+      "seo": {
+        "meta_title": "San Diego Weekly Car Rentals - Affordable Weekly & Monthly Rentals",
+        "meta_description": "Affordable weekly and monthly car rentals in San Diego. Quality vehicles at competitive rates for extended rentals. Book your ride today!"
       }
     }
   ]
