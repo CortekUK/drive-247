@@ -34,11 +34,13 @@ import {
 } from '@/lib/email-template-variables';
 import { toast } from '@/hooks/use-toast';
 import { TipTapEditor } from '@/components/settings/tiptap-editor';
+import { useTenant } from '@/contexts/TenantContext';
 
 export default function EditEmailTemplatePage() {
   const router = useRouter();
   const params = useParams();
   const templateKey = params?.key as string;
+  const { tenant } = useTenant();
 
   const {
     saveTemplateAsync,
@@ -64,7 +66,14 @@ export default function EditEmailTemplatePage() {
   const [loaded, setLoaded] = useState(false);
   const [showResetDialog, setShowResetDialog] = useState(false);
 
-  const sampleData = getEmailSampleData();
+  // Get sample data and override with actual tenant info
+  const sampleData = {
+    ...getEmailSampleData(),
+    // Use actual tenant info for company variables
+    company_name: tenant?.company_name || 'Your Company Name',
+    company_email: tenant?.email || 'contact@yourcompany.com',
+    company_phone: tenant?.phone || '+1 800 000 0000',
+  };
 
   // Load template data - always prefer custom, then default from hook, then fallback default
   useEffect(() => {
