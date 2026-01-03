@@ -1,5 +1,9 @@
 import type { NextConfig } from 'next';
 import path from 'path';
+import { config } from 'dotenv';
+
+// Load environment variables from workspace root .env file
+config({ path: path.resolve(__dirname, '../../.env') });
 
 const nextConfig: NextConfig = {
   typescript: {

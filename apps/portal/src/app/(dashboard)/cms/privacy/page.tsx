@@ -18,11 +18,24 @@ import {
   Loader2,
   FileText,
   Search,
+  RotateCcw,
 } from "lucide-react";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 import { LegalPageEditor } from "@/components/website-content/legal-page-editor";
 import { SEOEditor } from "@/components/website-content/seo-editor";
 import { VersionHistoryDialog } from "@/components/website-content/version-history-dialog";
 import type { PrivacyPolicyContent, SEOContent } from "@/types/cms";
+import { CMS_DEFAULTS } from "@/constants/website-content";
 
 export default function CMSPrivacyEditor() {
   const router = useRouter();
@@ -31,6 +44,20 @@ export default function CMSPrivacyEditor() {
   const { updateSection, isUpdating } = useCMSPageSections("privacy");
   const [activeTab, setActiveTab] = useState("content");
   const [versionHistoryOpen, setVersionHistoryOpen] = useState(false);
+  const [isResetting, setIsResetting] = useState(false);
+
+  const handleResetToDefaults = async () => {
+    setIsResetting(true);
+    try {
+      const defaults = CMS_DEFAULTS.privacy;
+      await Promise.all([
+        updateSection({ sectionKey: "privacy_content", content: defaults }),
+        updateSection({ sectionKey: "seo", content: { title: "", description: "", keywords: "" } }),
+      ]);
+    } finally {
+      setIsResetting(false);
+    }
+  };
 
   if (isLoading) {
     return (
@@ -107,6 +134,29 @@ export default function CMSPrivacyEditor() {
           </div>
         </div>
         <div className="flex items-center gap-2">
+          <AlertDialog>
+            <AlertDialogTrigger asChild>
+              <Button variant="outline" disabled={isResetting}>
+                {isResetting ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <RotateCcw className="h-4 w-4 mr-2" />}
+                Set to Default
+              </Button>
+            </AlertDialogTrigger>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Reset to Default Content?</AlertDialogTitle>
+                <AlertDialogDescription>
+                  This will replace all Privacy Policy content with Drive 917 default content.
+                  This action cannot be undone, but you can restore previous versions from the History.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                <AlertDialogAction onClick={handleResetToDefaults}>
+                  Reset to Defaults
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
           <Button variant="outline" onClick={() => setVersionHistoryOpen(true)}>
             <History className="h-4 w-4 mr-2" />
             History

@@ -9,6 +9,7 @@ interface Tenant {
   company_name: string;
   status: string;
   contact_email: string;
+  admin_name: string | null;
 }
 
 interface TenantContextType {
@@ -97,7 +98,7 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
       // Query the tenants table by slug
       const { data, error: queryError } = await supabase
         .from('tenants')
-        .select('id, slug, company_name, status, contact_email')
+        .select('id, slug, company_name, status, contact_email, admin_name')
         .eq('slug', slug)
         .eq('status', 'active')
         .single();

@@ -1,0 +1,254 @@
+﻿AI-Powered Insurance Document Verification
+Strategy Document & US Compliance Data
+1. The Problem Statement
+When implementing AI-assisted insurance verification, a critical gap exists: what criteria does the AI use to validate documents? Without proper validation logic, several issues arise:
+    • Users could upload irrelevant documents (receipts, random PDFs, images)
+    • Valid insurance documents might be incorrectly rejected
+    • Fraudulent or tampered documents could pass verification
+    • Coverage requirements may not meet state-specific minimums
+2. Multi-Layer Verification Strategy
+The AI verification system should implement four distinct validation layers, each performing specific checks before allowing a document to proceed.
+Layer 1: Document Type Recognition
+Determines whether the uploaded file is actually an insurance document.
+    1. Standard Insurance Markers: Look for phrases like "Certificate of Insurance," "Declarations Page," "Insurance Policy," "Evidence of Coverage"
+    2. Company Identification: Detect insurance company letterhead, logo, or NAIC (National Association of Insurance Commissioners) number
+    3. Form Identifiers: Recognize ACORD forms (industry-standard), state-specific forms, or carrier-specific declaration formats
+    4. File Format Validation: Accept PDF, JPG, PNG; reject executables, zip files, or corrupted files
+Layer 2: Required Field Extraction & Validation
+Extract and validate all mandatory fields using OCR and pattern matching.
+Field
+Validation Rule
+Example Pattern
+Policy Number
+Alphanumeric, 8-20 characters
+PAP-2024-789456123
+Policyholder Name
+Must match renter's name (fuzzy match)
+John A. Smith / John Smith
+Effective Date
+Valid date, must be ≤ today
+01/15/2024 or 2024-01-15
+Expiration Date
+Valid date, must be > today
+01/15/2025 or 2025-01-15
+Insurance Company
+Match against known carriers list
+State Farm, GEICO, Progressive
+Coverage Limits
+Must meet state minimums
+$25,000/$50,000/$25,000
+
+Layer 3: Business Rule Validation
+Apply business logic to ensure the policy meets rental requirements.
+    • Policy Status: Verify policy is active (not expired, cancelled, or suspended)
+    • Coverage Adequacy: Liability limits meet or exceed state minimums and rental company requirements
+    • Recognized Provider: Insurance company is licensed in the rental state
+    • Rental Coverage: Policy extends to rental vehicles (check for rental exclusions)
+Layer 4: Fraud Detection
+Detect potential document manipulation or fraud.
+    • Tampering Detection: Check for image editing artifacts, inconsistent fonts, or pixel anomalies
+    • Data Consistency: Cross-validate all fields (dates align, policy number format matches carrier)
+    • API Verification (Optional): Query insurance company databases via ACORD XML or carrier APIs
+3. US State Minimum Liability Requirements
+Each US state mandates minimum auto insurance coverage. The format shown is Bodily Injury per Person / Bodily Injury per Accident / Property Damage (in thousands of dollars).
+State
+Liability Minimum
+Additional Requirements
+No-Fault?
+Alabama
+25/50/25
+—
+No
+Alaska
+50/100/25
+—
+No
+Arizona
+25/50/15
+—
+No
+California
+15/30/5
+UM/UIM optional
+No
+Colorado
+25/50/15
+—
+No
+Florida
+10/20/10
+PIP $10,000 required
+Yes
+Michigan
+50/100/10
+PIP required (unlimited or selected)
+Yes
+New Jersey
+25/50/25
+PIP $15,000 required
+Yes
+New York
+25/50/10
+PIP $50,000, UM $25/50
+Yes
+Texas
+30/60/25
+—
+No
+Note: UM = Uninsured Motorist, UIM = Underinsured Motorist, PIP = Personal Injury Protection
+4. Sample Insurance Document Data (Test Cases)
+Use these test cases to validate the verification system. Each represents a different scenario the AI should handle.
+Test Case 1: Valid Personal Auto Policy
+Expected Result: APPROVED
+Document Type
+Personal Auto Policy - Declarations Page
+Insurance Company
+State Farm Mutual Automobile Insurance Company
+NAIC Number
+25178
+Policy Number
+987 6543-E21-45F
+Named Insured
+JOHNSON, MICHAEL DAVID
+Policy Address
+1234 Oak Street, Austin, TX 78701
+Policy Period
+06/15/2024 to 12/15/2024 (12:01 AM)
+Bodily Injury Liability
+$100,000 per person / $300,000 per accident
+Property Damage Liability
+$50,000 per accident
+Uninsured Motorist
+$100,000/$300,000
+Comprehensive Deductible
+$500
+Collision Deductible
+$500
+Rental Reimbursement
+$30/day, $900 maximum
+
+Test Case 2: Expired Policy
+Expected Result: REJECTED - Policy Expired
+Insurance Company
+GEICO General Insurance Company
+Policy Number
+4235-67-89-01
+Named Insured
+WILLIAMS, SARAH ANN
+Policy Period
+01/01/2023 to 07/01/2023
+Failure Reason
+Expiration date (07/01/2023) is in the past
+
+Test Case 3: Below State Minimum Coverage
+Expected Result: REJECTED - Insufficient Coverage
+Insurance Company
+Progressive Casualty Insurance Company
+State
+Texas
+Bodily Injury Liability
+$15,000/$30,000 (TX requires $30,000/$60,000)
+Property Damage
+$25,000 (meets minimum)
+Failure Reason
+Bodily Injury limits below Texas state minimum
+
+Test Case 4: Non-Insurance Document
+Expected Result: REJECTED - Invalid Document Type
+Uploaded File
+car_registration_2024.pdf
+Detected Content
+Vehicle Registration Certificate - DMV Document
+Missing Indicators
+No policy number, no coverage limits, no insurance company, no NAIC number
+Failure Reason
+Document is not an insurance certificate or policy declaration
+5. Major US Auto Insurance Carriers Reference
+Use this reference to validate insurance company names and NAIC numbers.
+Company Name
+NAIC #
+Policy # Format
+State Farm Mutual Auto Ins Co
+25178
+XXX XXXX-XXX-XXX
+GEICO General Insurance Co
+35882
+XXXX-XX-XX-XX
+Progressive Casualty Ins Co
+24260
+XXXXXXXXXX
+Allstate Fire and Casualty Ins Co
+29688
+XXX XXX XXX
+USAA Casualty Insurance Co
+25941
+XXXXXXXX
+Liberty Mutual Insurance Co
+23043
+XXX-XXXXXX-XX
+Farmers Insurance Exchange
+21652
+XXXXXXXX-X
+Nationwide Mutual Insurance Co
+23787
+XX XX XXXXXX
+Travelers Indemnity Co
+25658
+XXXXXXXXXX
+American Family Insurance Co
+19275
+XXX XXXXXXX XX
+6. ACORD Form Reference
+ACORD (Association for Cooperative Operations Research and Development) forms are industry-standard documents used across the US insurance industry.
+Common Auto Insurance ACORD Forms
+    • ACORD 25 - Certificate of Liability Insurance (most common for rental verification)
+    • ACORD 24 - Certificate of Property Insurance
+    • ACORD 27 - Evidence of Property Insurance
+    • ACORD 28 - Evidence of Commercial Property Insurance
+7. Validation Rules Configuration
+Below is a sample JSON configuration that can be used to implement the validation rules programmatically.
+// validation-rules.json
+{
+  "documentTypeIndicators": [
+    "Certificate of Insurance",
+    "Declarations Page",
+    "Insurance Policy",
+    "Evidence of Coverage",
+    "ACORD 25"
+  ],
+  "requiredFields": [
+    "policyNumber", "namedInsured", "effectiveDate",
+    "expirationDate", "insuranceCompany", "bodilyInjuryLimit",
+    "propertyDamageLimit"
+  ],
+  "acceptedFormats": ["pdf", "jpg", "jpeg", "png"],
+  "maxFileSizeMB": 10,
+  "nameMatchThreshold": 0.85
+}
+8. Suggested API Response Structure
+When the AI verification completes, return a structured response that the frontend can display to the user.
+// Success Response
+{
+  "status": "APPROVED",
+  "confidence": 0.94,
+  "extractedData": {
+    "policyNumber": "987 6543-E21-45F",
+    "insurer": "State Farm",
+    "expirationDate": "2024-12-15",
+    "coverageLimits": "100/300/50"
+  },
+  "validationChecks": {
+    "documentType": "PASS",
+    "policyActive": "PASS",
+    "coverageAdequate": "PASS",
+    "nameMatch": "PASS"
+  }
+}
+// Failure Response
+{
+  "status": "REJECTED",
+  "reason": "POLICY_EXPIRED",
+  "message": "Your policy expired on 07/01/2023",
+  "suggestion": "Please upload a current policy"
+}
+Document Version: 1.0 | Last Updated: December 2024
