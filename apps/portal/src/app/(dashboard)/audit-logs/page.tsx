@@ -163,7 +163,7 @@ const AuditLogs = () => {
                   }))
                 }
               >
-                <SelectTrigger className="w-48">
+                <SelectTrigger className="w-full sm:w-48">
                   <SelectValue placeholder="Entity type" />
                 </SelectTrigger>
                 <SelectContent>
@@ -185,7 +185,7 @@ const AuditLogs = () => {
                   }))
                 }
               >
-                <SelectTrigger className="w-48">
+                <SelectTrigger className="w-full sm:w-48">
                   <SelectValue placeholder="Action type" />
                 </SelectTrigger>
                 <SelectContent>
@@ -207,7 +207,7 @@ const AuditLogs = () => {
                   }))
                 }
               >
-                <SelectTrigger className="w-48">
+                <SelectTrigger className="w-full sm:w-48">
                   <SelectValue placeholder="Performed by" />
                 </SelectTrigger>
                 <SelectContent>
@@ -219,87 +219,96 @@ const AuditLogs = () => {
                   ))}
                 </SelectContent>
               </Select>
+            </div>
 
-              <div className="flex items-center gap-2">
-                <Popover>
-                  <PopoverTrigger asChild>
-                    <Button
-                      variant="outline"
-                      className={cn(
-                        "w-[180px] justify-start text-left font-normal",
-                        !filters.dateFrom && "text-muted-foreground"
-                      )}
-                    >
-                      <CalendarIcon className="mr-2 h-4 w-4" />
-                      {filters.dateFrom ? (
-                        format(new Date(filters.dateFrom), "MMM dd, yyyy")
-                      ) : (
-                        <span>From date</span>
-                      )}
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-auto p-0" align="start">
-                    <CalendarComponent
-                      mode="single"
-                      selected={
-                        filters.dateFrom
-                          ? new Date(filters.dateFrom)
-                          : undefined
-                      }
-                      onSelect={(date) =>
-                        setFilters((prev) => ({
-                          ...prev,
-                          dateFrom: date ? format(date, "yyyy-MM-dd") : undefined,
-                        }))
-                      }
-                      initialFocus
-                    />
-                  </PopoverContent>
-                </Popover>
+            {/* Date Range Section - Separated */}
+            <div className="pt-4 border-t">
+              <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+                <span className="text-sm font-medium text-muted-foreground">
+                  Date Range:
+                </span>
+                
+                <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 flex-1">
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <Button
+                        variant="outline"
+                        className={cn(
+                          "w-full sm:w-[160px] justify-between text-left font-normal",
+                          !filters.dateFrom && "text-muted-foreground"
+                        )}
+                      >
+                        {filters.dateFrom ? (
+                          format(new Date(filters.dateFrom), "MMM dd, yyyy")
+                        ) : (
+                          <span>From date</span>
+                        )}
+                        <CalendarIcon className="ml-2 h-4 w-4" />
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-auto p-0" align="start">
+                      <CalendarComponent
+                        mode="single"
+                        selected={
+                          filters.dateFrom
+                            ? new Date(filters.dateFrom)
+                            : undefined
+                        }
+                        onSelect={(date) =>
+                          setFilters((prev) => ({
+                            ...prev,
+                            dateFrom: date ? format(date, "yyyy-MM-dd") : undefined,
+                          }))
+                        }
+                        initialFocus
+                      />
+                    </PopoverContent>
+                  </Popover>
 
-                <span className="text-muted-foreground">to</span>
+                  <span className="text-muted-foreground text-center sm:text-left">to</span>
 
-                <Popover>
-                  <PopoverTrigger asChild>
-                    <Button
-                      variant="outline"
-                      className={cn(
-                        "w-[180px] justify-start text-left font-normal",
-                        !filters.dateTo && "text-muted-foreground"
-                      )}
-                    >
-                      <CalendarIcon className="mr-2 h-4 w-4" />
-                      {filters.dateTo ? (
-                        format(new Date(filters.dateTo), "MMM dd, yyyy")
-                      ) : (
-                        <span>To date</span>
-                      )}
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-auto p-0" align="start">
-                    <CalendarComponent
-                      mode="single"
-                      selected={
-                        filters.dateTo ? new Date(filters.dateTo) : undefined
-                      }
-                      onSelect={(date) =>
-                        setFilters((prev) => ({
-                          ...prev,
-                          dateTo: date ? format(date, "yyyy-MM-dd") : undefined,
-                        }))
-                      }
-                      initialFocus
-                    />
-                  </PopoverContent>
-                </Popover>
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <Button
+                        variant="outline"
+                        className={cn(
+                          "w-full sm:w-[160px] justify-between text-left font-normal",
+                          !filters.dateTo && "text-muted-foreground"
+                        )}
+                      >
+                        {filters.dateTo ? (
+                          format(new Date(filters.dateTo), "MMM dd, yyyy")
+                        ) : (
+                          <span>To date</span>
+                        )}
+                        <CalendarIcon className="ml-2 h-4 w-4" />
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-auto p-0" align="start">
+                      <CalendarComponent
+                        mode="single"
+                        selected={
+                          filters.dateTo ? new Date(filters.dateTo) : undefined
+                        }
+                        onSelect={(date) =>
+                          setFilters((prev) => ({
+                            ...prev,
+                            dateTo: date ? format(date, "yyyy-MM-dd") : undefined,
+                          }))
+                        }
+                        initialFocus
+                      />
+                    </PopoverContent>
+                  </Popover>
+                </div>
+
+                {hasActiveFilters && (
+                  <Button variant="outline" size="sm" onClick={clearFilters} className="w-full sm:w-auto">
+                    <X className="h-4 w-4 mr-1" />
+                    Clear Filters
+                  </Button>
+                )}
               </div>
-
-              {hasActiveFilters && (
-                <Button variant="outline" size="sm" onClick={clearFilters}>
-                  <X className="h-4 w-4 mr-1" />
-                  Clear Filters
-                </Button>
-              )}
             </div>
           </div>
 
