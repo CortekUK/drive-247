@@ -72,25 +72,30 @@ export default function AIScanProgress({ documentId }: Props) {
       case 'processing':
         return {
           icon: <Loader2 className="h-16 w-16 mx-auto text-primary animate-spin" />,
-          title: 'Reviewing Insurance Document...',
-          description: 'Our team is verifying your policy details',
+          title: 'AI Verification in Progress...',
+          description: 'Analyzing your document using our AI verification system',
           color: 'text-primary'
         };
       case 'completed':
         return {
           icon: <CheckCircle className="h-16 w-16 mx-auto text-primary" />,
-          title: 'Review Complete!',
+          title: 'Verification Complete!',
           description: extractedData
-            ? `Policy verified: ${extractedData.provider || 'Insurance provider'} - ${extractedData.policyNumber || 'Policy number detected'}`
+            ? `Policy verified: ${extractedData.provider || 'Insurance provider'} - ${extractedData.policyNumber || 'Policy detected'}`
             : 'Your insurance document has been verified successfully',
           color: 'text-primary'
         };
       case 'failed':
+        // Check if this is a rejection due to invalid document
+        const isInvalidDocument = extractedData?.verification_status === 'rejected';
+        const rejectionMessage = extractedData?.message || 'Document verification failed';
+
         return {
           icon: <AlertCircle className="h-16 w-16 mx-auto text-destructive" />,
-          title: 'Review Completed with Warnings',
-          description: 'We couldn\'t automatically verify all details, but you can proceed. Our team will review manually.',
-          color: 'text-destructive'
+          title: isInvalidDocument ? 'Document Rejected' : 'Verification Issue',
+          description: rejectionMessage,
+          color: 'text-destructive',
+          showReupload: true
         };
       default:
         return {

@@ -2,6 +2,8 @@
 
 import { useState } from 'react';
 import { useAuth } from '@/stores/auth-store';
+import { useTenant } from '@/contexts/TenantContext';
+import { supabase } from '@/integrations/supabase/client';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -15,15 +17,19 @@ import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { User, Settings, LogOut, Key, Shield } from 'lucide-react';
+import { User, Settings, LogOut, Key, Shield, Pencil } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
 
 export const UserMenu = () => {
   const { appUser, signOut, updatePassword } = useAuth();
+  const { tenant, refetchTenant } = useTenant();
   const [showPasswordDialog, setShowPasswordDialog] = useState(false);
+  const [showNameDialog, setShowNameDialog] = useState(false);
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [adminName, setAdminName] = useState('');
   const [isUpdating, setIsUpdating] = useState(false);
+  const [isUpdatingName, setIsUpdatingName] = useState(false);
 
   if (!appUser) return null;
 
@@ -128,6 +134,62 @@ export const UserMenu = () => {
     }
   };
 
+  const handleOpenNameDialog = () => {
+    setAdminName(tenant?.admin_name || '');
+    setShowNameDialog(true);
+  };
+
+  const handleNameChange = async () => {
+    if (!tenant?.id) {
+      toast({
+        title: "Error",
+        description: "Tenant not found",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (!adminName.trim()) {
+      toast({
+        title: "Error",
+        description: "Name cannot be empty",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setIsUpdatingName(true);
+    try {
+      const { error } = await supabase
+        .from('tenants')
+        .update({ admin_name: adminName.trim() })
+        .eq('id', tenant.id);
+
+      if (error) {
+        toast({
+          title: "Error",
+          description: error.message || "Failed to update name",
+          variant: "destructive",
+        });
+      } else {
+        toast({
+          title: "Success",
+          description: "Name updated successfully",
+        });
+        setShowNameDialog(false);
+        refetchTenant();
+      }
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "An unexpected error occurred",
+        variant: "destructive",
+      });
+    } finally {
+      setIsUpdatingName(false);
+    }
+  };
+
   return (
     <>
       <DropdownMenu>
@@ -162,6 +224,10 @@ export const UserMenu = () => {
             {appUser.must_change_password && (
               <Badge variant="destructive" className="ml-auto text-xs">Required</Badge>
             )}
+          </DropdownMenuItem>
+          <DropdownMenuItem onClick={handleOpenNameDialog} className="cursor-pointer">
+            <Pencil className="mr-2 h-4 w-4" />
+            <span>Change Name</span>
           </DropdownMenuItem>
           <DropdownMenuItem asChild>
             <a href="/settings" className="cursor-pointer">
@@ -227,6 +293,44 @@ export const UserMenu = () => {
               disabled={!newPassword || !confirmPassword || isUpdating}
             >
               {isUpdating ? 'Updating...' : 'Update Password'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={showNameDialog} onOpenChange={setShowNameDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Change Name</DialogTitle>
+            <DialogDescription>
+              Update the display name shown in the dashboard greeting.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="admin-name">Name</Label>
+              <Input
+                id="admin-name"
+                type="text"
+                value={adminName}
+                onChange={(e) => setAdminName(e.target.value)}
+                placeholder="Enter your name"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setShowNameDialog(false)}
+              disabled={isUpdatingName}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleNameChange}
+              disabled={!adminName.trim() || isUpdatingName}
+            >
+              {isUpdatingName ? 'Saving...' : 'Save Name'}
             </Button>
           </DialogFooter>
         </DialogContent>

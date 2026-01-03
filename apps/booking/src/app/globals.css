@@ -399,6 +399,32 @@ All colors MUST be HSL.
     display: none;
   }
 
+  /* Vehicle List Scroll Container - Premium styled scrollbar */
+  .vehicle-list-scroll {
+    scrollbar-width: thin;
+    scrollbar-color: hsl(var(--primary) / 0.4) hsl(var(--muted) / 0.3);
+  }
+
+  .vehicle-list-scroll::-webkit-scrollbar {
+    width: 8px;
+  }
+
+  .vehicle-list-scroll::-webkit-scrollbar-track {
+    background: hsl(var(--muted) / 0.3);
+    border-radius: 4px;
+  }
+
+  .vehicle-list-scroll::-webkit-scrollbar-thumb {
+    background: hsl(var(--primary) / 0.4);
+    border-radius: 4px;
+    border: 2px solid transparent;
+    background-clip: padding-box;
+  }
+
+  .vehicle-list-scroll::-webkit-scrollbar-thumb:hover {
+    background: hsl(var(--primary) / 0.6);
+  }
+
   /* Footer link hover - uses dynamic accent color */
   .footer-link {
     color: #EAEAEA;
