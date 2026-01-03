@@ -29,13 +29,20 @@ function Calendar({ className, classNames, showOutsideDays = true, ...props }: C
         head_cell: "text-muted-foreground rounded-md w-9 font-normal text-[0.8rem]",
         row: "flex w-full mt-2",
         cell: "h-9 w-9 text-center text-sm p-0 relative focus-within:relative focus-within:z-20",
-        day: cn(buttonVariants({ variant: "ghost" }), "h-9 w-9 p-0 font-normal aria-selected:opacity-100 hover:!bg-transparent hover:!text-foreground !rounded-lg !transition-none"),
+        // Base day style - no hover effect on selected dates
+        day: cn(
+          buttonVariants({ variant: "ghost" }),
+          "h-9 w-9 p-0 font-normal !rounded-lg !transition-none",
+          // Hover only for non-selected dates
+          "hover:bg-accent/50 hover:text-foreground",
+          // Selected dates override hover
+          "aria-selected:hover:bg-primary aria-selected:hover:text-primary-foreground aria-selected:opacity-100"
+        ),
         day_range_end: "day-range-end",
-        // Added !rounded-lg for guaranteed rounded corners on selected dates
+        // Selected date - solid background with round corners, NO hover change
         day_selected:
-          "bg-primary text-primary-foreground hover:bg-primary hover:text-primary-foreground focus:bg-primary focus:text-primary-foreground !rounded-lg !transition-none",
-        // Today styling: subtle ring instead of full background, so selected date stands out
-        // When today is selected, selected style takes priority
+          "!bg-primary !text-primary-foreground !rounded-lg !shadow-sm focus:!bg-primary focus:!text-primary-foreground hover:!bg-primary hover:!text-primary-foreground",
+        // Today styling: subtle ring, selected style takes priority
         day_today: "ring-1 ring-primary/50 text-foreground aria-selected:ring-0 aria-selected:bg-primary aria-selected:text-primary-foreground",
         day_outside:
           "day-outside text-muted-foreground opacity-50 aria-selected:bg-accent/50 aria-selected:text-muted-foreground aria-selected:opacity-30",
