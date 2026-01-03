@@ -1,10 +1,11 @@
 'use client';
 
-import React from 'react';
+import React, { useState, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Input } from '@/components/ui/input';
 import {
   Mail,
   Pencil,
@@ -12,6 +13,7 @@ import {
   Loader2,
   Check,
   FileText,
+  Search,
 } from 'lucide-react';
 import { useEmailTemplates } from '@/hooks/use-email-templates';
 import { EMAIL_TEMPLATE_TYPES } from '@/lib/email-template-variables';
@@ -19,6 +21,19 @@ import { EMAIL_TEMPLATE_TYPES } from '@/lib/email-template-variables';
 export default function EmailTemplatesPage() {
   const router = useRouter();
   const { customTemplates, isLoading, isCustomized } = useEmailTemplates();
+  const [searchQuery, setSearchQuery] = useState('');
+
+  // Filter templates based on search query
+  const filteredTemplates = useMemo(() => {
+    if (!searchQuery.trim()) return EMAIL_TEMPLATE_TYPES;
+    const query = searchQuery.toLowerCase();
+    return EMAIL_TEMPLATE_TYPES.filter(
+      (t) =>
+        t.name.toLowerCase().includes(query) ||
+        t.description.toLowerCase().includes(query) ||
+        t.key.toLowerCase().includes(query)
+    );
+  }, [searchQuery]);
 
   if (isLoading) {
     return (
@@ -64,9 +79,25 @@ export default function EmailTemplatesPage() {
         </CardContent>
       </Card>
 
+      {/* Search Bar */}
+      <div className="relative">
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+        <Input
+          placeholder="Search templates..."
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          className="pl-10 max-w-md"
+        />
+      </div>
+
       {/* Templates List */}
       <div className="grid gap-4">
-        {EMAIL_TEMPLATE_TYPES.map((templateType) => {
+        {filteredTemplates.length === 0 && (
+          <Card className="p-8 text-center">
+            <p className="text-muted-foreground">No templates match your search.</p>
+          </Card>
+        )}
+        {filteredTemplates.map((templateType) => {
           const customized = isCustomized(templateType.key);
           const customTemplate = customTemplates.find(t => t.template_key === templateType.key);
 
