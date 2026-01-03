@@ -2,38 +2,41 @@
  * API Route: Insurance Document Verification
  * POST /api/verify-insurance
  * 
- * Receives document info and triggers AI verification
+ * Uses OpenAI GPT-4 Vision for image/PDF analysis with fallback support
  */
 
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 
-// OpenRouter API Configuration - loaded from environment
-const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY || '';
-const OPENROUTER_BASE_URL = 'https://openrouter.ai/api/v1';
+// OpenAI API Configuration
+const OPENAI_API_KEY = process.env.OPENAI_API_KEY || '';
+const OPENAI_API_KEY_FALLBACK = process.env.OPENAI_API_KEY_FALLBACK || '';
+const OPENAI_BASE_URL = 'https://api.openai.com/v1';
 
 // Supabase client for server-side operations
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://hviqoaokxvlancmftwuo.supabase.co';
-const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imh2aXFvYW9reHZsYW5jbWZ0d3VvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjIzNjM2NTcsImV4cCI6MjA3NzkzOTY1N30.jwpdtizfTxl3MeCNDu-mrLI7GNK4PYWYg5gsIZy0T_Q';
+const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
 const supabase = createClient(supabaseUrl, supabaseKey);
 
 export async function POST(request: NextRequest) {
     console.log('\n');
     console.log('╔══════════════════════════════════════════════════════════════╗');
-    console.log('║       AI INSURANCE VERIFICATION - API REQUEST               ║');
+    console.log('║       AI INSURANCE VERIFICATION - OpenAI GPT-4 Vision       ║');
     console.log('╚══════════════════════════════════════════════════════════════╝');
 
-    // Debug: Check if API key is loaded
-    const apiKeyLoaded = OPENROUTER_API_KEY && OPENROUTER_API_KEY.length > 0;
-    console.log('[AI-API] OpenRouter API Key loaded:', apiKeyLoaded ? 'YES (' + OPENROUTER_API_KEY.substring(0, 15) + '...)' : 'NO - KEY IS EMPTY!');
+    // Check if API key is loaded
+    const apiKeyLoaded = OPENAI_API_KEY && OPENAI_API_KEY.length > 0;
+    const fallbackKeyLoaded = OPENAI_API_KEY_FALLBACK && OPENAI_API_KEY_FALLBACK.length > 0;
 
-    if (!apiKeyLoaded) {
-        console.error('[AI-API] ERROR: OPENROUTER_API_KEY environment variable is not set!');
-        console.error('[AI-API] Make sure OPENROUTER_API_KEY is defined in your .env file');
+    console.log('[AI-API] OpenAI API Key loaded:', apiKeyLoaded ? 'YES' : 'NO');
+    console.log('[AI-API] Fallback API Key loaded:', fallbackKeyLoaded ? 'YES' : 'NO');
+
+    if (!apiKeyLoaded && !fallbackKeyLoaded) {
+        console.error('[AI-API] ERROR: No OpenAI API keys configured!');
         return NextResponse.json(
             {
                 error: 'API configuration error',
-                message: 'OpenRouter API key not configured',
+                message: 'OpenAI API key not configured',
                 status: 'pending_review'
             },
             { status: 500 }
@@ -71,9 +74,9 @@ export async function POST(request: NextRequest) {
 
         console.log('[AI-API] Public URL:', publicUrl);
 
-        // Perform AI verification
-        console.log('[AI-API] Starting AI verification...');
-        const verificationResult = await performAIVerification(publicUrl, fileName, mimeType);
+        // Perform AI verification with OpenAI
+        console.log('[AI-API] Starting OpenAI GPT-4 Vision verification...');
+        const verificationResult = await performOpenAIVerification(publicUrl, fileName, mimeType);
 
         // Update database with results
         console.log('[AI-API] Updating database with verification results...');
@@ -98,7 +101,7 @@ export async function POST(request: NextRequest) {
             endDate: null
         };
 
-        const updateData: any = {
+        const updateData: Record<string, unknown> = {
             ai_scan_status: verificationResult.status === 'approved' ? 'completed' :
                 verificationResult.status === 'rejected' ? 'failed' : 'pending',
             ai_extracted_data: extractedDataForDb
@@ -131,14 +134,16 @@ export async function POST(request: NextRequest) {
 
         return NextResponse.json(verificationResult);
 
-    } catch (error: any) {
-        console.error('[AI-API] Error:', error.message);
-        console.error('[AI-API] Stack:', error.stack);
+    } catch (error: unknown) {
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+        const errorStack = error instanceof Error ? error.stack : '';
+        console.error('[AI-API] Error:', errorMessage);
+        console.error('[AI-API] Stack:', errorStack);
 
         return NextResponse.json(
             {
                 error: 'Verification failed',
-                message: error.message,
+                message: errorMessage,
                 status: 'pending_review'
             },
             { status: 500 }
@@ -147,21 +152,24 @@ export async function POST(request: NextRequest) {
 }
 
 /**
- * Perform AI verification using OpenRouter with OCR text extraction
+ * Perform AI verification using OpenAI GPT-4 Vision
+ * Supports both images and PDFs
  */
-async function performAIVerification(documentUrl: string, fileName: string, mimeType: string) {
-    console.log('\n[AI-LAYER1] ═══ Document Type Recognition ═══');
-    console.log('[AI-LAYER1] Analyzing document type...');
-    console.log('[AI-LAYER1] MIME Type:', mimeType);
+async function performOpenAIVerification(documentUrl: string, fileName: string, mimeType: string) {
+    console.log('\n[AI-OPENAI] ═══ Starting OpenAI GPT-4 Vision Analysis ═══');
+    console.log('[AI-OPENAI] Document URL:', documentUrl);
+    console.log('[AI-OPENAI] MIME Type:', mimeType);
 
-    // Step 1: Extract text from the document using OCR
-    let extractedText = '';
+    const isPdf = mimeType === 'application/pdf';
+    const isImage = mimeType?.startsWith('image/');
+
+    // For PDFs, we need to extract text first since GPT-4 Vision works with images
+    let documentContent: string | null = null;
+    let base64Image: string | null = null;
 
     try {
-        console.log('[AI-OCR] ═══ Starting Text Extraction ═══');
-        console.log('[AI-OCR] Downloading document from:', documentUrl);
-
         // Download the document
+        console.log('[AI-OPENAI] Downloading document...');
         const docResponse = await fetch(documentUrl);
         if (!docResponse.ok) {
             throw new Error(`Failed to download document: ${docResponse.status}`);
@@ -169,229 +177,150 @@ async function performAIVerification(documentUrl: string, fileName: string, mime
 
         const contentBuffer = await docResponse.arrayBuffer();
         const buffer = Buffer.from(contentBuffer);
-        // Convert to Uint8Array for unpdf compatibility
-        const uint8Array = new Uint8Array(buffer);
-        console.log('[AI-OCR] Document downloaded, size:', buffer.length, 'bytes');
+        console.log('[AI-OPENAI] Document downloaded, size:', buffer.length, 'bytes');
 
-        if (mimeType === 'application/pdf') {
+        if (isPdf) {
             // Extract text from PDF using unpdf
-            console.log('[AI-OCR] Extracting text from PDF using unpdf...');
+            console.log('[AI-OPENAI] Extracting text from PDF...');
             try {
                 const { extractText } = await import('unpdf');
-                // unpdf requires Uint8Array, not Buffer
+                const uint8Array = new Uint8Array(buffer);
                 const result = await extractText(uint8Array);
-                // unpdf returns text as array of pages, join them
-                extractedText = Array.isArray(result.text) ? result.text.join('\n') : (result.text || '');
-                console.log('[AI-OCR] PDF text extracted successfully!');
-                console.log('[AI-OCR] Text length:', extractedText.length, 'characters');
-                console.log('[AI-OCR] Number of pages:', result.totalPages);
-            } catch (pdfError: any) {
-                console.error('[AI-OCR] PDF extraction error:', pdfError.message);
-                // Try alternative approach - read as text if extraction fails
-                try {
-                    extractedText = buffer.toString('utf8').replace(/[^\x20-\x7E\n]/g, ' ');
-                    console.log('[AI-OCR] Fallback text extraction, length:', extractedText.length);
-                } catch {
-                    console.error('[AI-OCR] All extraction methods failed');
-                }
+                documentContent = Array.isArray(result.text) ? result.text.join('\n') : (result.text || '');
+                console.log('[AI-OPENAI] PDF text extracted, length:', documentContent.length);
+                console.log('[AI-OPENAI] Number of pages:', result.totalPages);
+            } catch (pdfError: unknown) {
+                const errorMsg = pdfError instanceof Error ? pdfError.message : 'Unknown error';
+                console.error('[AI-OPENAI] PDF extraction error:', errorMsg);
+                documentContent = `[PDF FILE: ${fileName}] - Could not extract text`;
             }
-        } else if (mimeType?.startsWith('image/')) {
-            // Extract text from image using node-tesseract-ocr (CLI-based)
-            console.log('[AI-OCR] Image document detected');
-            console.log('[AI-OCR] Extracting text using Tesseract OCR...');
-
-            try {
-                // eslint-disable-next-line @typescript-eslint/no-require-imports
-                const tesseract = require('node-tesseract-ocr');
-                const fs = await import('fs');
-                const path = await import('path');
-                const os = await import('os');
-
-                // Write buffer to temp file for tesseract
-                const tempDir = os.tmpdir();
-                const tempFile = path.join(tempDir, `ocr-${Date.now()}.${mimeType.split('/')[1] || 'png'}`);
-                fs.writeFileSync(tempFile, buffer);
-                console.log('[AI-OCR] Temp file created:', tempFile);
-
-                // OCR config
-                const config = {
-                    lang: 'eng',
-                    oem: 1,
-                    psm: 3,
-                };
-
-                // Extract text
-                extractedText = await tesseract.recognize(tempFile, config);
-                console.log('[AI-OCR] Image OCR completed successfully!');
-                console.log('[AI-OCR] Text length:', extractedText.length, 'characters');
-
-                // Clean up temp file
-                fs.unlinkSync(tempFile);
-                console.log('[AI-OCR] Temp file cleaned up');
-
-            } catch (ocrError: any) {
-                console.error('[AI-OCR] Image OCR error:', ocrError.message);
-                // Fallback to filename analysis
-                const fileNameLower = fileName.toLowerCase();
-                const insuranceKeywords = ['insurance', 'policy', 'certificate', 'coverage', 'auto'];
-                const hasInsuranceKeyword = insuranceKeywords.some(k => fileNameLower.includes(k));
-
-                if (hasInsuranceKeyword) {
-                    extractedText = `[INSURANCE IMAGE - OCR FAILED]\nFilename: ${fileName}\nThis appears to be an insurance document based on filename.`;
-                } else {
-                    extractedText = `[IMAGE FILE: ${fileName}] - OCR failed, analyze based on filename.`;
-                }
-            }
-        } else {
-            console.log('[AI-OCR] Unknown document type, using filename analysis only');
+        } else if (isImage) {
+            // Convert image to base64 for GPT-4 Vision
+            console.log('[AI-OPENAI] Converting image to base64...');
+            base64Image = buffer.toString('base64');
+            console.log('[AI-OPENAI] Image converted, base64 length:', base64Image.length);
         }
-
-        // Log first 500 chars of extracted text
-        if (extractedText) {
-            console.log('[AI-OCR] Extracted text preview:');
-            console.log('┌─────────────────────────────────────────────────────────────┐');
-            console.log(extractedText.substring(0, 500).replace(/\n/g, ' ').trim() + (extractedText.length > 500 ? '...' : ''));
-            console.log('└─────────────────────────────────────────────────────────────┘');
-        }
-
-    } catch (ocrError: any) {
-        console.error('[AI-OCR] Text extraction failed:', ocrError.message);
-        // Continue with filename-based analysis
+    } catch (downloadError: unknown) {
+        const errorMsg = downloadError instanceof Error ? downloadError.message : 'Unknown error';
+        console.error('[AI-OPENAI] Document processing error:', errorMsg);
     }
 
-    // Step 2: Build prompt with extracted text
-    const prompt = buildVerificationPromptWithText(fileName, mimeType, extractedText);
+    // Build the verification prompt
+    const verificationPrompt = buildVerificationPrompt(fileName, mimeType, documentContent);
 
-    const messages = [{
-        role: 'user',
-        content: prompt
-    }];
+    // Try primary API key first, then fallback
+    let result = await callOpenAIAPI(verificationPrompt, base64Image, mimeType, OPENAI_API_KEY, 'PRIMARY');
 
-    console.log('[AI-LAYER2] ═══ Sending to OpenRouter API ═══');
-    console.log('[AI-LAYER2] Model: mistralai/mistral-7b-instruct:free');
+    if (!result && OPENAI_API_KEY_FALLBACK) {
+        console.log('[AI-OPENAI] Primary API failed, trying fallback key...');
+        result = await callOpenAIAPI(verificationPrompt, base64Image, mimeType, OPENAI_API_KEY_FALLBACK, 'FALLBACK');
+    }
+
+    if (result) {
+        return parseVerificationResponse(result, fileName, documentContent || '');
+    }
+
+    // Return pending review if all API calls fail
+    return {
+        status: 'pending_review',
+        confidence: 0,
+        message: 'Unable to verify document automatically. Manual review required.',
+        extractedData: null,
+        validationChecks: {
+            documentType: 'UNKNOWN',
+            policyActive: 'UNKNOWN',
+            coverageAdequate: 'UNKNOWN',
+            requiredFieldsPresent: 'UNKNOWN'
+        }
+    };
+}
+
+/**
+ * Call OpenAI API with GPT-4 Vision
+ */
+async function callOpenAIAPI(
+    prompt: string,
+    base64Image: string | null,
+    mimeType: string,
+    apiKey: string,
+    keyType: string
+): Promise<string | null> {
+    console.log(`[AI-OPENAI] ═══ Calling OpenAI API (${keyType}) ═══`);
+    console.log('[AI-OPENAI] Model: gpt-5-2025-08-07');
 
     try {
-        const response = await fetch(`${OPENROUTER_BASE_URL}/chat/completions`, {
+        // Build message content
+        const messageContent: Array<{ type: string; text?: string; image_url?: { url: string } }> = [];
+
+        // Add text prompt
+        messageContent.push({
+            type: 'text',
+            text: prompt
+        });
+
+        // Add image if available (for image files)
+        if (base64Image && mimeType?.startsWith('image/')) {
+            console.log('[AI-OPENAI] Including image in request...');
+            messageContent.push({
+                type: 'image_url',
+                image_url: {
+                    url: `data:${mimeType};base64,${base64Image}`
+                }
+            });
+        }
+
+        const requestBody = {
+            model: 'gpt-5-2025-08-07', // GPT-5 model with vision support
+            messages: [
+                {
+                    role: 'user',
+                    content: messageContent
+                }
+            ],
+            max_completion_tokens: 2000
+            // Note: GPT-5 does not support temperature parameter
+        };
+
+        const response = await fetch(`${OPENAI_BASE_URL}/chat/completions`, {
             method: 'POST',
             headers: {
-                'Authorization': `Bearer ${OPENROUTER_API_KEY}`,
-                'Content-Type': 'application/json',
-                'HTTP-Referer': 'https://drive247.com',
-                'X-Title': 'Drive247 Insurance Verification'
+                'Authorization': `Bearer ${apiKey}`,
+                'Content-Type': 'application/json'
             },
-            body: JSON.stringify({
-                model: 'mistralai/mistral-7b-instruct:free',
-                messages: messages,
-                temperature: 0.1,
-                max_tokens: 2000
-            })
+            body: JSON.stringify(requestBody)
         });
 
         if (!response.ok) {
             const errorText = await response.text();
-            console.error('[AI-LAYER2] API Error:', response.status, errorText);
-            throw new Error(`API error: ${response.status}`);
+            console.error(`[AI-OPENAI] API Error (${keyType}):`, response.status, errorText);
+            return null;
         }
 
         const data = await response.json();
         const aiResponse = data.choices?.[0]?.message?.content || '';
 
-        console.log('\n[AI-LAYER2] Raw AI Response:');
+        console.log(`\n[AI-OPENAI] Response received (${keyType}):`);
         console.log('┌─────────────────────────────────────────────────────────────┐');
         console.log(aiResponse.substring(0, 500) + (aiResponse.length > 500 ? '...' : ''));
         console.log('└─────────────────────────────────────────────────────────────┘\n');
 
-        console.log('[AI-LAYER3] ═══ Parsing Verification Results ═══');
-        return parseVerificationResponse(aiResponse, fileName, extractedText);
+        return aiResponse;
 
-    } catch (error: any) {
-        console.error('[AI-LAYER2] Request failed:', error.message);
-
-        // Return a pending review status on API failure
-        return {
-            status: 'pending_review',
-            confidence: 0,
-            message: 'Unable to verify document automatically. Manual review required.',
-            extractedData: null,
-            validationChecks: {
-                documentType: 'UNKNOWN',
-                policyActive: 'UNKNOWN',
-                coverageAdequate: 'UNKNOWN',
-                requiredFieldsPresent: 'UNKNOWN'
-            }
-        };
+    } catch (error: unknown) {
+        const errorMsg = error instanceof Error ? error.message : 'Unknown error';
+        console.error(`[AI-OPENAI] Request failed (${keyType}):`, errorMsg);
+        return null;
     }
 }
 
 /**
- * Build verification prompt
+ * Build verification prompt for OpenAI
  */
-function buildVerificationPrompt(fileName: string, mimeType: string): string {
-    return `You are an AI insurance document verification specialist. Your task is to analyze the uploaded document and determine if it's a VALID INSURANCE CERTIFICATE.
-
-DOCUMENT INFO:
-- Filename: ${fileName}
-- File type: ${mimeType}
-
-═══ VERIFICATION CHECKLIST ═══
-
-**1. DOCUMENT TYPE CHECK:**
-Is this an insurance document? Look for:
-- "Certificate of Insurance", "Declarations Page", "Insurance Policy"
-- Insurance company name/logo
-- Policy number format
-- Coverage limits
-
-**2. REQUIRED FIELDS:**
-- Policy Number
-- Named Insured
-- Insurance Company
-- Effective Date
-- Expiration Date
-- Liability Limits
-
-**3. VALIDITY CHECK:**
-- Is the policy currently active?
-- Are dates reasonable?
-- Is this from a real insurance provider?
-
-═══ CRITICAL RULES ═══
-- If this is NOT an insurance document (receipt, random photo, ID card, etc.), REJECT it
-- If essential insurance info is missing, REJECT it
-- Be strict - only approve clear insurance documents
-
-═══ RESPOND IN JSON FORMAT ═══
-{
-  "isInsuranceDocument": true/false,
-  "confidence": 0.0-1.0,
-  "documentType": "Insurance Certificate" | "Not Insurance",
-  "extractedData": {
-    "policyNumber": "value or null",
-    "insurer": "company name or null",
-    "namedInsured": "name or null",
-    "effectiveDate": "YYYY-MM-DD or null",
-    "expirationDate": "YYYY-MM-DD or null"
-  },
-  "validationResults": {
-    "isDocumentValid": true/false,
-    "isPolicyActive": true/false/null,
-    "hasRequiredFields": true/false
-  },
-  "recommendation": "APPROVE" | "REJECT" | "MANUAL_REVIEW",
-  "rejectionReason": "reason if rejected",
-  "message": "Brief explanation"
-}`;
-}
-
-/**
- * Build verification prompt with extracted text (OCR)
- */
-function buildVerificationPromptWithText(fileName: string, mimeType: string, extractedText: string): string {
-    const hasText = extractedText && extractedText.trim().length > 0;
+function buildVerificationPrompt(fileName: string, mimeType: string, extractedText: string | null): string {
+    const hasText = extractedText && extractedText.trim().length > 0 && !extractedText.startsWith('[');
     const isImage = mimeType?.startsWith('image/');
-    const filenameHasInsuranceKeywords = /insurance|policy|certificate|coverage|declaration|auto|car|vehicle|liability/i.test(fileName);
 
-    let prompt = `You are an AI insurance document verification specialist. Analyze the following document and determine if it's a VALID INSURANCE CERTIFICATE.
+    let prompt = `You are an expert insurance document verification specialist. Analyze the ${isImage ? 'uploaded image' : 'document'} and determine if it's a VALID INSURANCE CERTIFICATE.
 
 DOCUMENT INFO:
 - Filename: ${fileName}
@@ -401,44 +330,43 @@ DOCUMENT INFO:
     if (hasText) {
         prompt += `
 ═══ EXTRACTED DOCUMENT TEXT ═══
-${extractedText.substring(0, 3000)}
+${extractedText!.substring(0, 4000)}
 ═══ END OF DOCUMENT TEXT ═══
 `;
-    } else {
-        prompt += `
-Note: Could not extract text from this document. Analyze based on filename only.
-`;
-    }
-
-    // Special handling for image files with insurance-related filenames
-    if (isImage && filenameHasInsuranceKeywords) {
+    } else if (isImage) {
         prompt += `
 ═══ IMPORTANT ═══
-This is an IMAGE file with a filename that suggests it's an insurance document.
-Since we cannot read the actual image content, but the filename contains insurance-related keywords,
-you should recommend MANUAL_REVIEW (not REJECT) to allow human verification.
+Please analyze the image carefully to extract all insurance information.
+Look for: policy number, insurer name, coverage dates, named insured, liability limits.
 `;
     }
 
     prompt += `
 ═══ YOUR TASK ═══
-Based on the document text above, determine:
-1. Is this an insurance document? (Look for: policy number, coverage limits, effective/expiration dates, insurer name)
-2. If it IS insurance with readable content: APPROVE and extract the key fields
-3. If it appears to be insurance but content cannot be verified: MANUAL_REVIEW
-4. If it is clearly NOT insurance: REJECT
+Carefully analyze this document and determine:
+1. Is this a legitimate insurance document? (Look for: policy number, coverage limits, effective/expiration dates, insurer name)
+2. Extract all key insurance information you can find
+3. Note if the policy appears to be active (check dates) but DO NOT reject based on expiration alone
+
+═══ IMPORTANT RULES ═══
+- APPROVE if the document is a legitimate insurance certificate/declarations page, even if the policy dates are expired
+- Only REJECT if the document is clearly NOT an insurance document (receipt, random photo, unrelated document)
+- Use MANUAL_REVIEW only if you cannot determine the document type
+- Focus on DOCUMENT LEGITIMACY, not policy validity dates
 
 ═══ RESPOND IN THIS JSON FORMAT ONLY ═══
 {
   "isInsuranceDocument": true or false,
   "confidence": 0.0 to 1.0,
-  "documentType": "Insurance Certificate" or "Not Insurance",
+  "documentType": "Insurance Certificate" or "Insurance Card" or "Declarations Page" or "Not Insurance",
   "extractedData": {
-    "policyNumber": "value or null",
-    "insurer": "company name or null",
-    "namedInsured": "name or null",
+    "policyNumber": "extracted value or null",
+    "insurer": "insurance company name or null",
+    "namedInsured": "policyholder name or null",
     "effectiveDate": "YYYY-MM-DD or null",
-    "expirationDate": "YYYY-MM-DD or null"
+    "expirationDate": "YYYY-MM-DD or null",
+    "liabilityLimit": "amount or null",
+    "vehicleInfo": "make/model/VIN if visible or null"
   },
   "validationResults": {
     "isDocumentValid": true or false,
@@ -446,26 +374,51 @@ Based on the document text above, determine:
     "hasRequiredFields": true or false
   },
   "recommendation": "APPROVE" or "REJECT" or "MANUAL_REVIEW",
-  "rejectionReason": "reason if rejected, null otherwise",
-  "message": "Brief human-readable summary"
+  "rejectionReason": "detailed reason if rejected, null otherwise",
+  "message": "Brief human-readable summary of your findings"
 }`;
 
     return prompt;
 }
 
 /**
- * Parse AI response
+ * Parse AI response and extract verification result
  */
-function parseVerificationResponse(aiResponse: string, fileName: string, extractedText?: string) {
+interface ExtractedData {
+    policyNumber?: string | null;
+    insurer?: string | null;
+    namedInsured?: string | null;
+    effectiveDate?: string | null;
+    expirationDate?: string | null;
+}
+
+interface ValidationResults {
+    isDocumentValid?: boolean;
+    isPolicyActive?: boolean | null;
+    hasRequiredFields?: boolean;
+}
+
+interface ParsedResponse {
+    isInsuranceDocument?: boolean;
+    confidence?: number;
+    recommendation?: string;
+    message?: string;
+    rejectionReason?: string | null;
+    extractedData?: ExtractedData;
+    validationResults?: ValidationResults;
+}
+
+function parseVerificationResponse(aiResponse: string, fileName: string, extractedText: string) {
     try {
-        // Try to extract JSON
+        // Try to extract JSON from response
         const jsonMatch = aiResponse.match(/\{[\s\S]*\}/);
         if (jsonMatch) {
-            const parsed = JSON.parse(jsonMatch[0]);
+            const parsed: ParsedResponse = JSON.parse(jsonMatch[0]);
 
-            console.log('[AI-LAYER3] Parsed JSON successfully');
-            console.log('[AI-LAYER3] Is Insurance Document:', parsed.isInsuranceDocument);
-            console.log('[AI-LAYER3] Recommendation:', parsed.recommendation);
+            console.log('[AI-PARSE] Parsed JSON successfully');
+            console.log('[AI-PARSE] Is Insurance Document:', parsed.isInsuranceDocument);
+            console.log('[AI-PARSE] Recommendation:', parsed.recommendation);
+            console.log('[AI-PARSE] Confidence:', parsed.confidence);
 
             const status = parsed.recommendation === 'APPROVE' ? 'approved' :
                 parsed.recommendation === 'REJECT' ? 'rejected' : 'pending_review';
@@ -473,7 +426,7 @@ function parseVerificationResponse(aiResponse: string, fileName: string, extract
             return {
                 status,
                 confidence: parsed.confidence || 0.5,
-                message: parsed.message || (status === 'approved' ? 'Document verified' : 'Verification failed'),
+                message: parsed.message || (status === 'approved' ? 'Document verified successfully' : 'Verification failed'),
                 rejectionReason: parsed.rejectionReason,
                 suggestion: status === 'rejected' ? 'Please upload a valid insurance certificate' : undefined,
                 extractedData: parsed.extractedData ? {
@@ -484,7 +437,7 @@ function parseVerificationResponse(aiResponse: string, fileName: string, extract
                 } : null,
                 validationChecks: {
                     documentType: parsed.isInsuranceDocument ? 'PASS' : 'FAIL',
-                    policyActive: parsed.validationResults?.isPolicyActive ? 'PASS' :
+                    policyActive: parsed.validationResults?.isPolicyActive === true ? 'PASS' :
                         parsed.validationResults?.isPolicyActive === false ? 'FAIL' : 'UNKNOWN',
                     coverageAdequate: 'UNKNOWN',
                     requiredFieldsPresent: parsed.validationResults?.hasRequiredFields ? 'PASS' : 'FAIL'
@@ -492,15 +445,15 @@ function parseVerificationResponse(aiResponse: string, fileName: string, extract
             };
         }
     } catch (parseError) {
-        console.error('[AI-LAYER3] JSON parsing failed, analyzing text...');
+        console.error('[AI-PARSE] JSON parsing failed, using fallback analysis...');
     }
 
     // Fallback: text analysis
     const lower = aiResponse.toLowerCase();
     const fileNameLower = fileName.toLowerCase();
 
-    // Check for obvious rejection signals
-    const rejectSignals = ['not an insurance', 'reject', 'invalid', 'not valid', 'unrelated'];
+    // Check for rejection signals
+    const rejectSignals = ['not an insurance', 'reject', 'invalid', 'not valid', 'unrelated', 'not a valid'];
     const isRejected = rejectSignals.some(s => lower.includes(s));
 
     // Check filename for non-insurance indicators
@@ -508,7 +461,6 @@ function parseVerificationResponse(aiResponse: string, fileName: string, extract
     const badFilename = nonInsuranceNames.some(s => fileNameLower.includes(s));
 
     if (isRejected || badFilename) {
-        console.log('[AI-LAYER3] Document REJECTED based on analysis');
         return {
             status: 'rejected',
             confidence: 0.7,
@@ -526,14 +478,13 @@ function parseVerificationResponse(aiResponse: string, fileName: string, extract
     }
 
     // Check for approval signals
-    const approveSignals = ['valid', 'approved', 'insurance certificate', 'policy'];
+    const approveSignals = ['valid insurance', 'approved', 'insurance certificate', 'policy confirmed'];
     const isApproved = approveSignals.some(s => lower.includes(s)) && !isRejected;
 
     if (isApproved) {
-        console.log('[AI-LAYER3] Document APPROVED based on analysis');
         return {
             status: 'approved',
-            confidence: 0.7,
+            confidence: 0.75,
             message: 'Insurance document verified successfully',
             extractedData: null,
             validationChecks: {
@@ -546,7 +497,6 @@ function parseVerificationResponse(aiResponse: string, fileName: string, extract
     }
 
     // Default to pending review
-    console.log('[AI-LAYER3] Document requires MANUAL REVIEW');
     return {
         status: 'pending_review',
         confidence: 0.5,
