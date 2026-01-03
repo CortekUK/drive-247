@@ -66,17 +66,17 @@ const MonthlyPLDrilldown = () => {
           side,
           category,
           amount,
-          vehicles!inner(id, reg, make, model)
+          vehicles(id, reg, make, model)
         `)
         .gte("entry_date", monthStart.toISOString().split('T')[0])
         .lte("entry_date", monthEnd.toISOString().split('T')[0]);
 
       if (error) throw error;
 
-      // Group by vehicle and calculate totals
+      // Group by vehicle and calculate totals (filter out entries with missing vehicles)
       const groupedData: Record<string, VehicleMonthlyPL> = {};
 
-      data?.forEach((entry) => {
+      data?.filter(entry => entry.vehicles).forEach((entry) => {
         const vehicleId = entry.vehicle_id;
         const vehicle = entry.vehicles as any;
 
