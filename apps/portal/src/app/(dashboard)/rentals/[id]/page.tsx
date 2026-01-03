@@ -1229,7 +1229,7 @@ const RentalDetail = () => {
             Identity Verification
           </CardTitle>
           <CardDescription>
-            Veriff identity verification status and documents for this customer
+            Identity verification status and documents for this customer
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -1288,6 +1288,16 @@ const RentalDetail = () => {
                       Pending
                     </Badge>
                   )}
+                  {/* Provider Badge */}
+                  {identityVerification.verification_provider === 'ai' ? (
+                    <Badge variant="outline" className="border-purple-500 text-purple-600">
+                      AI Verified
+                    </Badge>
+                  ) : (
+                    <Badge variant="secondary">
+                      Veriff
+                    </Badge>
+                  )}
                 </div>
                 {identityVerification.verification_completed_at && (
                   <span className="text-sm text-muted-foreground">
@@ -1295,6 +1305,19 @@ const RentalDetail = () => {
                   </span>
                 )}
               </div>
+
+              {/* AI Face Match Score - only show for AI verifications */}
+              {identityVerification.verification_provider === 'ai' && identityVerification.ai_face_match_score && (
+                <div className="bg-purple-50 border border-purple-200 rounded-lg p-3">
+                  <div className="flex items-center gap-2 text-sm">
+                    <Camera className="h-4 w-4 text-purple-600" />
+                    <span className="text-muted-foreground">Face Match Score:</span>
+                    <span className="font-semibold text-purple-700">
+                      {(identityVerification.ai_face_match_score * 100).toFixed(1)}%
+                    </span>
+                  </div>
+                </div>
+              )}
 
               {/* Extracted Person Info */}
               {(identityVerification.first_name || identityVerification.last_name || identityVerification.date_of_birth) && (
@@ -1363,13 +1386,13 @@ const RentalDetail = () => {
               )}
 
               {/* Document Images */}
-              {(identityVerification.document_front_url || identityVerification.document_back_url) && (
+              {(identityVerification.document_front_url || identityVerification.document_back_url || identityVerification.selfie_image_url) && (
                 <div className="bg-muted/50 rounded-lg p-4">
                   <h4 className="text-sm font-semibold mb-3 flex items-center gap-2">
                     <Camera className="h-4 w-4" />
                     Verification Images
                   </h4>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                     {identityVerification.document_front_url && (
                       <div className="space-y-2">
                         <span className="text-sm text-muted-foreground">ID Front</span>
@@ -1426,7 +1449,35 @@ const RentalDetail = () => {
                         </Button>
                       </div>
                     )}
-                                      </div>
+                    {identityVerification.selfie_image_url && (
+                      <div className="space-y-2">
+                        <span className="text-sm text-muted-foreground">Selfie</span>
+                        <div className="relative aspect-[3/4] bg-black/5 rounded-lg overflow-hidden border">
+                          <img
+                            src={identityVerification.selfie_image_url}
+                            alt="Selfie"
+                            className="w-full h-full object-contain"
+                            onError={(e) => {
+                              (e.target as HTMLImageElement).style.display = 'none';
+                              (e.target as HTMLImageElement).nextElementSibling?.classList.remove('hidden');
+                            }}
+                          />
+                          <div className="hidden absolute inset-0 flex items-center justify-center text-muted-foreground text-sm">
+                            Image unavailable
+                          </div>
+                        </div>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="w-full"
+                          onClick={() => window.open(identityVerification.selfie_image_url, '_blank')}
+                        >
+                          <ExternalLink className="h-3 w-3 mr-1" />
+                          View Full Size
+                        </Button>
+                      </div>
+                    )}
+                  </div>
                   {identityVerification.media_fetched_at && (
                     <p className="text-xs text-muted-foreground mt-3">
                       Images fetched: {new Date(identityVerification.media_fetched_at).toLocaleString()}

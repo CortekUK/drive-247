@@ -66,6 +66,9 @@ export interface Tenant {
   return_location_mode: 'fixed' | 'custom' | 'multiple' | null;
   fixed_pickup_address: string | null;
   fixed_return_address: string | null;
+
+  // Integration settings
+  integration_veriff: boolean | null;
 }
 
 interface TenantContextType {
@@ -165,7 +168,8 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
                 currency_code, timezone, date_format,
                 min_rental_days, max_rental_days, booking_lead_time_hours, minimum_rental_age,
                 require_identity_verification, require_insurance_upload, payment_mode,
-                pickup_location_mode, return_location_mode, fixed_pickup_address, fixed_return_address
+                pickup_location_mode, return_location_mode, fixed_pickup_address, fixed_return_address,
+                integration_veriff
               `)
               .eq('slug', defaultSlug)
               .eq('status', 'active')
@@ -243,7 +247,8 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
           pickup_location_mode,
           return_location_mode,
           fixed_pickup_address,
-          fixed_return_address
+          fixed_return_address,
+          integration_veriff
         `)
         .eq('slug', slug)
         .eq('status', 'active')

@@ -1,0 +1,615 @@
+'use client';
+
+import { useState, useEffect, useRef, useCallback } from 'react';
+import { useParams } from 'next/navigation';
+import { supabase } from '@/integrations/supabase/client';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { toast } from 'sonner';
+import {
+  Camera,
+  CheckCircle,
+  XCircle,
+  Loader2,
+  RotateCcw,
+  Upload,
+  IdCard,
+  User,
+  AlertCircle,
+  ChevronRight
+} from 'lucide-react';
+
+type VerificationStep = 'loading' | 'error' | 'document-front' | 'document-back' | 'selfie' | 'processing' | 'success' | 'failed' | 'review';
+
+interface SessionData {
+  sessionId: string;
+  tenantSlug: string;
+  tenantName: string;
+  tenantLogo: string;
+  customerName: string;
+  expiresAt: string;
+}
+
+export default function VerifyPage() {
+  const params = useParams();
+  const token = params.token as string;
+
+  const [step, setStep] = useState<VerificationStep>('loading');
+  const [sessionData, setSessionData] = useState<SessionData | null>(null);
+  const [error, setError] = useState<string>('');
+
+  // Image data
+  const [documentFrontImage, setDocumentFrontImage] = useState<Blob | null>(null);
+  const [documentBackImage, setDocumentBackImage] = useState<Blob | null>(null);
+  const [selfieImage, setSelfieImage] = useState<Blob | null>(null);
+
+  // Preview URLs
+  const [documentFrontPreview, setDocumentFrontPreview] = useState<string>('');
+  const [documentBackPreview, setDocumentBackPreview] = useState<string>('');
+  const [selfiePreview, setSelfiePreview] = useState<string>('');
+
+  // Camera state
+  const [isCameraActive, setIsCameraActive] = useState(false);
+  const [facingMode, setFacingMode] = useState<'environment' | 'user'>('environment');
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const streamRef = useRef<MediaStream | null>(null);
+
+  // Processing state
+  const [processingMessage, setProcessingMessage] = useState('');
+  const [verificationResult, setVerificationResult] = useState<any>(null);
+
+  // Validate session on mount
+  useEffect(() => {
+    if (token) {
+      validateSession();
+    }
+  }, [token]);
+
+  // Cleanup camera on unmount
+  useEffect(() => {
+    return () => {
+      stopCamera();
+    };
+  }, []);
+
+  const validateSession = async () => {
+    try {
+      const { data, error } = await supabase.functions.invoke('validate-ai-session', {
+        body: { qrToken: token }
+      });
+
+      if (error || !data?.ok) {
+        setError(data?.detail || data?.error || 'Invalid or expired QR code');
+        setStep('error');
+        return;
+      }
+
+      setSessionData(data);
+      setStep('document-front');
+    } catch (err) {
+      console.error('Session validation error:', err);
+      setError('Failed to validate session. Please try again.');
+      setStep('error');
+    }
+  };
+
+  const startCamera = async (mode: 'environment' | 'user') => {
+    try {
+      // Stop any existing stream
+      stopCamera();
+
+      const constraints: MediaStreamConstraints = {
+        video: {
+          facingMode: mode,
+          width: { ideal: 1920 },
+          height: { ideal: 1080 }
+        }
+      };
+
+      const stream = await navigator.mediaDevices.getUserMedia(constraints);
+      streamRef.current = stream;
+
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+        await videoRef.current.play();
+      }
+
+      setFacingMode(mode);
+      setIsCameraActive(true);
+    } catch (err) {
+      console.error('Camera error:', err);
+      toast.error('Unable to access camera. Please check permissions.');
+    }
+  };
+
+  const stopCamera = () => {
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach(track => track.stop());
+      streamRef.current = null;
+    }
+    if (videoRef.current) {
+      videoRef.current.srcObject = null;
+    }
+    setIsCameraActive(false);
+  };
+
+  const capturePhoto = useCallback(async () => {
+    if (!videoRef.current) return null;
+
+    const video = videoRef.current;
+    const canvas = document.createElement('canvas');
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return null;
+
+    // Mirror the image if using front camera
+    if (facingMode === 'user') {
+      ctx.translate(canvas.width, 0);
+      ctx.scale(-1, 1);
+    }
+
+    ctx.drawImage(video, 0, 0);
+
+    return new Promise<Blob | null>((resolve) => {
+      canvas.toBlob((blob) => {
+        resolve(blob);
+      }, 'image/jpeg', 0.9);
+    });
+  }, [facingMode]);
+
+  const handleCapture = async () => {
+    const blob = await capturePhoto();
+    if (!blob) {
+      toast.error('Failed to capture photo');
+      return;
+    }
+
+    const previewUrl = URL.createObjectURL(blob);
+
+    if (step === 'document-front') {
+      setDocumentFrontImage(blob);
+      setDocumentFrontPreview(previewUrl);
+    } else if (step === 'document-back') {
+      setDocumentBackImage(blob);
+      setDocumentBackPreview(previewUrl);
+    } else if (step === 'selfie') {
+      setSelfieImage(blob);
+      setSelfiePreview(previewUrl);
+    }
+
+    stopCamera();
+  };
+
+  const handleRetake = () => {
+    if (step === 'document-front') {
+      setDocumentFrontImage(null);
+      setDocumentFrontPreview('');
+      startCamera('environment');
+    } else if (step === 'document-back') {
+      setDocumentBackImage(null);
+      setDocumentBackPreview('');
+      startCamera('environment');
+    } else if (step === 'selfie') {
+      setSelfieImage(null);
+      setSelfiePreview('');
+      startCamera('user');
+    }
+  };
+
+  const handleNext = () => {
+    stopCamera();
+    if (step === 'document-front' && documentFrontImage) {
+      setStep('document-back');
+    } else if (step === 'document-back') {
+      setStep('selfie');
+    } else if (step === 'selfie' && selfieImage) {
+      processVerification();
+    }
+  };
+
+  const handleSkipBack = () => {
+    stopCamera();
+    setStep('selfie');
+  };
+
+  const uploadImage = async (blob: Blob, type: string): Promise<string | null> => {
+    try {
+      const fileName = `ai-verification/${sessionData?.sessionId}/${type}.jpg`;
+      const { data, error } = await supabase.storage
+        .from('customer-documents')
+        .upload(fileName, blob, {
+          contentType: 'image/jpeg',
+          upsert: true
+        });
+
+      if (error) {
+        console.error('Upload error:', error);
+        return null;
+      }
+
+      return data.path;
+    } catch (err) {
+      console.error('Upload error:', err);
+      return null;
+    }
+  };
+
+  const processVerification = async () => {
+    if (!sessionData || !documentFrontImage || !selfieImage) {
+      toast.error('Missing required images');
+      return;
+    }
+
+    setStep('processing');
+    setProcessingMessage('Uploading document...');
+
+    try {
+      // Upload document front
+      const documentFrontPath = await uploadImage(documentFrontImage, 'document-front');
+      if (!documentFrontPath) {
+        throw new Error('Failed to upload document front');
+      }
+
+      // Upload document back if captured
+      let documentBackPath: string | undefined;
+      if (documentBackImage) {
+        setProcessingMessage('Uploading document back...');
+        documentBackPath = await uploadImage(documentBackImage, 'document-back') || undefined;
+      }
+
+      // Upload selfie
+      setProcessingMessage('Uploading selfie...');
+      const selfiePath = await uploadImage(selfieImage, 'selfie');
+      if (!selfiePath) {
+        throw new Error('Failed to upload selfie');
+      }
+
+      // Process verification
+      setProcessingMessage('Verifying identity...');
+      const { data, error } = await supabase.functions.invoke('process-ai-verification', {
+        body: {
+          sessionId: sessionData.sessionId,
+          documentFrontPath,
+          documentBackPath,
+          selfiePath
+        }
+      });
+
+      if (error) {
+        throw new Error(error.message);
+      }
+
+      setVerificationResult(data);
+
+      if (data.result === 'verified') {
+        setStep('success');
+      } else if (data.result === 'review_required') {
+        setStep('review');
+      } else {
+        setStep('failed');
+      }
+    } catch (err: any) {
+      console.error('Verification error:', err);
+      toast.error(err.message || 'Verification failed');
+      setError(err.message || 'Verification failed');
+      setStep('failed');
+    }
+  };
+
+  // Start camera when entering a capture step
+  useEffect(() => {
+    if (step === 'document-front' && !documentFrontImage) {
+      startCamera('environment');
+    } else if (step === 'document-back' && !documentBackImage) {
+      startCamera('environment');
+    } else if (step === 'selfie' && !selfieImage) {
+      startCamera('user');
+    }
+  }, [step]);
+
+  // Get current preview based on step
+  const getCurrentPreview = () => {
+    if (step === 'document-front') return documentFrontPreview;
+    if (step === 'document-back') return documentBackPreview;
+    if (step === 'selfie') return selfiePreview;
+    return '';
+  };
+
+  const getCurrentImage = () => {
+    if (step === 'document-front') return documentFrontImage;
+    if (step === 'document-back') return documentBackImage;
+    if (step === 'selfie') return selfieImage;
+    return null;
+  };
+
+  // Render loading state
+  if (step === 'loading') {
+    return (
+      <div className="min-h-screen bg-gradient-to-b from-background to-muted flex items-center justify-center p-4">
+        <Card className="w-full max-w-md">
+          <CardContent className="flex flex-col items-center justify-center py-12">
+            <Loader2 className="h-12 w-12 animate-spin text-primary mb-4" />
+            <p className="text-muted-foreground">Validating session...</p>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  // Render error state
+  if (step === 'error') {
+    return (
+      <div className="min-h-screen bg-gradient-to-b from-background to-muted flex items-center justify-center p-4">
+        <Card className="w-full max-w-md">
+          <CardHeader className="text-center">
+            <XCircle className="h-16 w-16 text-destructive mx-auto mb-4" />
+            <CardTitle>Verification Error</CardTitle>
+            <CardDescription>{error}</CardDescription>
+          </CardHeader>
+          <CardContent className="text-center">
+            <p className="text-sm text-muted-foreground mb-4">
+              Please request a new QR code and try again.
+            </p>
+            <Button variant="outline" onClick={() => window.close()}>
+              Close
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  // Render processing state
+  if (step === 'processing') {
+    return (
+      <div className="min-h-screen bg-gradient-to-b from-background to-muted flex items-center justify-center p-4">
+        <Card className="w-full max-w-md">
+          <CardContent className="flex flex-col items-center justify-center py-12">
+            <Loader2 className="h-12 w-12 animate-spin text-primary mb-4" />
+            <p className="text-lg font-medium mb-2">Processing Verification</p>
+            <p className="text-muted-foreground text-center">{processingMessage}</p>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  // Render success state
+  if (step === 'success') {
+    return (
+      <div className="min-h-screen bg-gradient-to-b from-background to-muted flex items-center justify-center p-4">
+        <Card className="w-full max-w-md">
+          <CardHeader className="text-center">
+            <CheckCircle className="h-16 w-16 text-green-500 mx-auto mb-4" />
+            <CardTitle className="text-green-600">Verification Successful!</CardTitle>
+            <CardDescription>Your identity has been verified.</CardDescription>
+          </CardHeader>
+          <CardContent className="text-center">
+            {verificationResult?.details?.ocrData && (
+              <div className="bg-muted rounded-lg p-4 mb-4 text-left">
+                <p className="text-sm font-medium mb-2">Verified Details:</p>
+                <p className="text-sm">
+                  Name: {verificationResult.details.ocrData.firstName} {verificationResult.details.ocrData.lastName}
+                </p>
+                {verificationResult.details.ocrData.documentNumber && (
+                  <p className="text-sm">
+                    Document: ****{verificationResult.details.ocrData.documentNumber.slice(-4)}
+                  </p>
+                )}
+              </div>
+            )}
+            <p className="text-sm text-muted-foreground mb-4">
+              You can now close this window and continue with your booking.
+            </p>
+            <Button onClick={() => window.close()}>Close Window</Button>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  // Render failed state
+  if (step === 'failed') {
+    return (
+      <div className="min-h-screen bg-gradient-to-b from-background to-muted flex items-center justify-center p-4">
+        <Card className="w-full max-w-md">
+          <CardHeader className="text-center">
+            <XCircle className="h-16 w-16 text-destructive mx-auto mb-4" />
+            <CardTitle className="text-destructive">Verification Failed</CardTitle>
+            <CardDescription>
+              {verificationResult?.detail || 'We could not verify your identity.'}
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="text-center">
+            <p className="text-sm text-muted-foreground mb-4">
+              Please ensure your photos are clear and your face matches your ID document.
+            </p>
+            <Button onClick={() => window.close()}>Close Window</Button>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  // Render review required state
+  if (step === 'review') {
+    return (
+      <div className="min-h-screen bg-gradient-to-b from-background to-muted flex items-center justify-center p-4">
+        <Card className="w-full max-w-md">
+          <CardHeader className="text-center">
+            <AlertCircle className="h-16 w-16 text-yellow-500 mx-auto mb-4" />
+            <CardTitle className="text-yellow-600">Manual Review Required</CardTitle>
+            <CardDescription>
+              Your verification needs additional review by our team.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="text-center">
+            <p className="text-sm text-muted-foreground mb-4">
+              This usually takes a few minutes. You will be notified once the review is complete.
+            </p>
+            <Button onClick={() => window.close()}>Close Window</Button>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  // Render capture steps
+  const isDocumentStep = step === 'document-front' || step === 'document-back';
+  const isSelfieStep = step === 'selfie';
+  const preview = getCurrentPreview();
+  const hasCapture = getCurrentImage() !== null;
+
+  return (
+    <div className="min-h-screen bg-gradient-to-b from-background to-muted flex flex-col">
+      {/* Header */}
+      <div className="p-4 text-center border-b bg-background">
+        {sessionData?.tenantLogo ? (
+          <img
+            src={sessionData.tenantLogo}
+            alt={sessionData.tenantName}
+            className="h-8 mx-auto mb-2"
+          />
+        ) : (
+          <h1 className="text-lg font-bold">{sessionData?.tenantName || 'Identity Verification'}</h1>
+        )}
+        <p className="text-sm text-muted-foreground">
+          {sessionData?.customerName ? `Verifying: ${sessionData.customerName}` : 'Secure Identity Verification'}
+        </p>
+      </div>
+
+      {/* Progress */}
+      <div className="p-4 bg-background border-b">
+        <div className="flex items-center justify-center gap-2 text-sm">
+          <div className={`flex items-center gap-1 ${step === 'document-front' ? 'text-primary font-medium' : documentFrontImage ? 'text-green-600' : 'text-muted-foreground'}`}>
+            <IdCard className="h-4 w-4" />
+            <span>Front</span>
+          </div>
+          <ChevronRight className="h-4 w-4 text-muted-foreground" />
+          <div className={`flex items-center gap-1 ${step === 'document-back' ? 'text-primary font-medium' : documentBackImage ? 'text-green-600' : 'text-muted-foreground'}`}>
+            <IdCard className="h-4 w-4" />
+            <span>Back</span>
+          </div>
+          <ChevronRight className="h-4 w-4 text-muted-foreground" />
+          <div className={`flex items-center gap-1 ${step === 'selfie' ? 'text-primary font-medium' : selfieImage ? 'text-green-600' : 'text-muted-foreground'}`}>
+            <User className="h-4 w-4" />
+            <span>Selfie</span>
+          </div>
+        </div>
+      </div>
+
+      {/* Camera / Preview Area */}
+      <div className="flex-1 relative bg-black">
+        {isCameraActive && !hasCapture ? (
+          <video
+            ref={videoRef}
+            autoPlay
+            playsInline
+            muted
+            className={`w-full h-full object-cover ${isSelfieStep ? 'scale-x-[-1]' : ''}`}
+          />
+        ) : hasCapture && preview ? (
+          <img
+            src={preview}
+            alt="Captured"
+            className="w-full h-full object-contain"
+          />
+        ) : (
+          <div className="w-full h-full flex items-center justify-center text-white">
+            <div className="text-center p-4">
+              <Camera className="h-12 w-12 mx-auto mb-4 opacity-50" />
+              <p>Preparing camera...</p>
+            </div>
+          </div>
+        )}
+
+        {/* Overlay guides */}
+        {isCameraActive && !hasCapture && (
+          <div className="absolute inset-0 pointer-events-none">
+            {isDocumentStep ? (
+              // Document guide overlay
+              <div className="absolute inset-8 border-2 border-white/50 rounded-lg">
+                <div className="absolute inset-0 flex items-center justify-center">
+                  <p className="text-white text-center text-sm bg-black/50 px-4 py-2 rounded">
+                    {step === 'document-front' ? 'Position front of ID document' : 'Position back of ID document'}
+                  </p>
+                </div>
+              </div>
+            ) : (
+              // Selfie guide overlay (oval)
+              <div className="absolute inset-0 flex items-center justify-center">
+                <div className="w-48 h-64 border-4 border-white/50 rounded-full" />
+                <p className="absolute bottom-20 text-white text-center text-sm bg-black/50 px-4 py-2 rounded">
+                  Position your face in the oval
+                </p>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* Instructions */}
+      <div className="p-4 bg-background border-t">
+        <p className="text-center text-sm text-muted-foreground mb-4">
+          {step === 'document-front' && 'Take a clear photo of the front of your ID document'}
+          {step === 'document-back' && 'Take a clear photo of the back of your ID document (optional)'}
+          {step === 'selfie' && 'Take a selfie matching the photo on your ID'}
+        </p>
+
+        {/* Action buttons */}
+        <div className="flex gap-3 justify-center">
+          {!hasCapture ? (
+            <Button
+              size="lg"
+              onClick={handleCapture}
+              disabled={!isCameraActive}
+              className="w-full max-w-xs"
+            >
+              <Camera className="mr-2 h-5 w-5" />
+              Capture Photo
+            </Button>
+          ) : (
+            <>
+              <Button variant="outline" size="lg" onClick={handleRetake}>
+                <RotateCcw className="mr-2 h-5 w-5" />
+                Retake
+              </Button>
+              {step === 'document-back' && !documentBackImage && (
+                <Button variant="outline" size="lg" onClick={handleSkipBack}>
+                  Skip
+                </Button>
+              )}
+              <Button size="lg" onClick={handleNext}>
+                {step === 'selfie' ? (
+                  <>
+                    <Upload className="mr-2 h-5 w-5" />
+                    Submit
+                  </>
+                ) : (
+                  <>
+                    Next
+                    <ChevronRight className="ml-2 h-5 w-5" />
+                  </>
+                )}
+              </Button>
+            </>
+          )}
+        </div>
+
+        {/* Skip option for document back */}
+        {step === 'document-back' && !hasCapture && (
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={handleSkipBack}
+            className="w-full mt-2"
+          >
+            Skip - my ID doesn't have a back
+          </Button>
+        )}
+      </div>
+    </div>
+  );
+}

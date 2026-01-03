@@ -23,6 +23,7 @@ import LocationPicker from "./LocationPicker";
 import BookingCheckoutStep from "./BookingCheckoutStep";
 import InsuranceUploadDialog from "./insurance-upload-dialog";
 import AIScanProgress from "./ai-scan-progress";
+import AIVerificationQR from "./AIVerificationQR";
 import { stripePromise } from "@/config/stripe";
 import { usePageContent, defaultHomeContent, mergeWithDefaults } from "@/hooks/usePageContent";
 import { canCustomerBook } from "@/lib/tenantQueries";
@@ -133,6 +134,14 @@ const MultiStepBookingWidget = () => {
   const [verificationSessionId, setVerificationSessionId] = useState<string | null>(null);
   const [verificationStatus, setVerificationStatus] = useState<'init' | 'pending' | 'verified' | 'rejected'>('init');
   const [isVerifying, setIsVerifying] = useState(false);
+
+  // AI verification state (when Veriff is disabled)
+  const [verificationMode, setVerificationMode] = useState<'veriff' | 'ai'>('veriff');
+  const [aiSessionData, setAiSessionData] = useState<{
+    sessionId: string;
+    qrUrl: string;
+    expiresAt: Date;
+  } | null>(null);
   const [locationCoords, setLocationCoords] = useState({
     pickupLat: null as number | null,
     pickupLon: null as number | null,
@@ -254,6 +263,19 @@ const MultiStepBookingWidget = () => {
       window.removeEventListener('message', handleMessage);
     };
   }, [tenant?.id]);
+
+  // Determine verification mode based on tenant's integration_veriff setting
+  useEffect(() => {
+    if (tenant) {
+      // If integration_veriff is false (or explicitly not true), use AI verification
+      const useVeriff = tenant.integration_veriff === true;
+      const newMode = useVeriff ? 'veriff' : 'ai';
+      setVerificationMode(newMode);
+      console.log(`[Verification] 🔐 Mode set to: ${newMode.toUpperCase()}`);
+      console.log(`[Verification] integration_veriff value: ${tenant.integration_veriff} (type: ${typeof tenant.integration_veriff})`);
+      console.log(`[Verification] Tenant ID: ${tenant.id}, Slug: ${tenant.slug}`);
+    }
+  }, [tenant]);
 
   // Note: Verification no longer resets when customer details change
   // Users can freely edit their details after verification
@@ -564,12 +586,14 @@ const MultiStepBookingWidget = () => {
   const handleClearVerification = () => {
     setVerificationSessionId(null);
     setVerificationStatus('init');
+    setAiSessionData(null); // Clear AI session data too
     setFormData(prev => ({ ...prev, verificationSessionId: "", licenseNumber: "" }));
     localStorage.removeItem('verificationSessionId');
     localStorage.removeItem('verificationToken');
     localStorage.removeItem('verificationStatus');
     localStorage.removeItem('verifiedCustomerName');
     localStorage.removeItem('verifiedLicenseNumber');
+    localStorage.removeItem('verificationMode'); // Clear mode too
     toast.info("Verification cleared. You can verify again.");
   };
 
@@ -770,6 +794,112 @@ const MultiStepBookingWidget = () => {
           error: error.message,
         });
       }
+    }
+  };
+
+  // Handle AI verification start (when Veriff is disabled)
+  const handleStartAIVerification = async () => {
+    // Validate customer details first
+    if (!formData.customerName || !formData.customerEmail || !formData.customerPhone) {
+      toast.error("Please fill in your name, email, and phone number first");
+      return;
+    }
+
+    if (!tenant) {
+      toast.error("Tenant not loaded. Please refresh the page.");
+      return;
+    }
+
+    setIsVerifying(true);
+
+    try {
+      console.log('🔐 Starting AI verification...');
+
+      const { data, error } = await supabase.functions.invoke('create-ai-verification-session', {
+        body: {
+          customerDetails: {
+            name: formData.customerName,
+            email: formData.customerEmail,
+            phone: formData.customerPhone
+          },
+          tenantId: tenant.id,
+          tenantSlug: tenant.slug
+        }
+      });
+
+      if (error || !data?.ok) {
+        throw new Error(data?.error || error?.message || 'Failed to create AI verification session');
+      }
+
+      console.log('✅ AI verification session created:', data.sessionId);
+
+      // Store session data
+      setVerificationSessionId(data.sessionId);
+      setVerificationStatus('pending');
+      setAiSessionData({
+        sessionId: data.sessionId,
+        qrUrl: data.qrUrl,
+        expiresAt: new Date(data.expiresAt)
+      });
+      setFormData(prev => ({ ...prev, verificationSessionId: data.sessionId }));
+
+      // Persist to localStorage
+      localStorage.setItem('verificationSessionId', data.sessionId);
+      localStorage.setItem('verificationStatus', 'pending');
+      localStorage.setItem('verificationMode', 'ai');
+
+      toast.success("Scan the QR code with your phone to verify your identity.");
+
+      // Track analytics
+      if (typeof window !== 'undefined' && (window as any).gtag) {
+        (window as any).gtag('event', 'ai_verification_started', {
+          email: formData.customerEmail,
+        });
+      }
+    } catch (error: any) {
+      console.error("AI verification error:", error);
+      toast.error(error.message || "Failed to start verification. Please try again.");
+    } finally {
+      setIsVerifying(false);
+    }
+  };
+
+  // Handle AI verification completion
+  const handleAIVerificationComplete = (data: any) => {
+    console.log('✅ AI verification completed:', data);
+    setVerificationStatus('verified');
+    localStorage.setItem('verificationStatus', 'verified');
+
+    // Populate form with verified data
+    if (data.first_name || data.last_name) {
+      populateFormWithVerifiedData(data);
+    }
+
+    // Track analytics
+    if (typeof window !== 'undefined' && (window as any).gtag) {
+      (window as any).gtag('event', 'ai_verification_completed', {
+        email: formData.customerEmail,
+        result: 'verified',
+      });
+    }
+  };
+
+  // Handle AI verification QR expiry
+  const handleAIVerificationExpired = () => {
+    console.log('⏰ AI verification session expired');
+    setAiSessionData(null);
+    setVerificationStatus('init');
+    localStorage.removeItem('verificationSessionId');
+    localStorage.removeItem('verificationStatus');
+    toast.info('Verification session expired. Please try again.');
+  };
+
+  // Unified verification start handler (routes to Veriff or AI based on mode)
+  const handleUnifiedVerificationStart = () => {
+    if (verificationMode === 'veriff') {
+      handleStartVerification();
+    } else {
+      handleStartAIVerification();
     }
   };
 
@@ -3286,7 +3416,7 @@ const MultiStepBookingWidget = () => {
                         <strong>You must verify your identity to continue.</strong> Please fill in your details above, then click the button below to start the verification process.
                       </p>
                       <Button
-                        onClick={handleStartVerification}
+                        onClick={handleUnifiedVerificationStart}
                         disabled={isVerifying || !formData.customerName || !formData.customerEmail || !formData.customerPhone}
                         variant="outline"
                         className="border-accent text-accent hover:bg-accent hover:text-white w-full sm:w-auto text-sm"
@@ -3322,69 +3452,86 @@ const MultiStepBookingWidget = () => {
               )}
 
               {verificationStatus === 'pending' && (
-                <div className="bg-yellow-500/10 border border-yellow-500/20 rounded-lg p-3 sm:p-4">
-                  <div className="flex items-start gap-2 sm:gap-3">
-                    <Clock className="w-5 h-5 text-yellow-500 mt-0.5 flex-shrink-0" />
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium mb-2 text-yellow-600 dark:text-yellow-500">Verification Pending</p>
-                      <p className="text-xs sm:text-sm text-muted-foreground mb-2">
-                        Your identity verification is in progress. Please complete the verification in the popup window.
-                      </p>
-                      <p className="text-xs text-muted-foreground mb-3">
-                        Once verified, you can proceed with your booking. This may take a few moments.
-                      </p>
-                      <div className="flex flex-col sm:flex-row gap-2">
-                        <Button
-                          onClick={() => {
-                            // Since Veriff API authentication isn't working, trust the user's
-                            // confirmation that they completed verification in Veriff
-                            console.log('✅ User confirmed verification complete');
-                            setVerificationStatus('verified');
-                            localStorage.setItem('verificationStatus', 'verified');
-                            toast.success('Identity verified! You can now continue with your booking.');
-                          }}
-                          variant="outline"
-                          className="border-green-500 text-green-600 hover:bg-green-500 hover:text-white w-full sm:w-auto"
-                          size="sm"
-                        >
-                          <CheckCircle className="w-4 h-4 mr-2 flex-shrink-0" />
-                          <span>I've Completed Verification</span>
-                        </Button>
-                        <Button
-                          onClick={handleStartVerification}
-                          disabled={isVerifying}
-                          variant="outline"
-                          className="border-yellow-500 text-yellow-600 hover:bg-yellow-500 hover:text-white w-full sm:w-auto"
-                          size="sm"
-                        >
-                          {isVerifying ? (
-                            <>
-                              <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin mr-2" />
-                              <span>Starting...</span>
-                            </>
-                          ) : (
-                            <>
-                              <RefreshCw className="w-4 h-4 mr-2 flex-shrink-0" />
-                              <span>Reopen Verification</span>
-                            </>
-                          )}
-                        </Button>
-                        <Button
-                          onClick={handleClearVerification}
-                          variant="ghost"
-                          className="text-muted-foreground hover:text-destructive hover:bg-destructive/10 w-full sm:w-auto"
-                          size="sm"
-                        >
-                          <X className="w-4 h-4 mr-2 flex-shrink-0" />
-                          Cancel & Start Over
-                        </Button>
+                <>
+                  {/* AI Verification - Show QR Code */}
+                  {verificationMode === 'ai' && aiSessionData && (
+                    <AIVerificationQR
+                      sessionId={aiSessionData.sessionId}
+                      qrUrl={aiSessionData.qrUrl}
+                      expiresAt={aiSessionData.expiresAt}
+                      onVerified={handleAIVerificationComplete}
+                      onExpired={handleAIVerificationExpired}
+                      onRetry={handleStartAIVerification}
+                    />
+                  )}
+
+                  {/* Veriff Verification - Show Pending UI */}
+                  {verificationMode === 'veriff' && (
+                    <div className="bg-yellow-500/10 border border-yellow-500/20 rounded-lg p-3 sm:p-4">
+                      <div className="flex items-start gap-2 sm:gap-3">
+                        <Clock className="w-5 h-5 text-yellow-500 mt-0.5 flex-shrink-0" />
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium mb-2 text-yellow-600 dark:text-yellow-500">Verification Pending</p>
+                          <p className="text-xs sm:text-sm text-muted-foreground mb-2">
+                            Your identity verification is in progress. Please complete the verification in the popup window.
+                          </p>
+                          <p className="text-xs text-muted-foreground mb-3">
+                            Once verified, you can proceed with your booking. This may take a few moments.
+                          </p>
+                          <div className="flex flex-col sm:flex-row gap-2">
+                            <Button
+                              onClick={() => {
+                                // Since Veriff API authentication isn't working, trust the user's
+                                // confirmation that they completed verification in Veriff
+                                console.log('✅ User confirmed verification complete');
+                                setVerificationStatus('verified');
+                                localStorage.setItem('verificationStatus', 'verified');
+                                toast.success('Identity verified! You can now continue with your booking.');
+                              }}
+                              variant="outline"
+                              className="border-green-500 text-green-600 hover:bg-green-500 hover:text-white w-full sm:w-auto"
+                              size="sm"
+                            >
+                              <CheckCircle className="w-4 h-4 mr-2 flex-shrink-0" />
+                              <span>I've Completed Verification</span>
+                            </Button>
+                            <Button
+                              onClick={handleStartVerification}
+                              disabled={isVerifying}
+                              variant="outline"
+                              className="border-yellow-500 text-yellow-600 hover:bg-yellow-500 hover:text-white w-full sm:w-auto"
+                              size="sm"
+                            >
+                              {isVerifying ? (
+                                <>
+                                  <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin mr-2" />
+                                  <span>Starting...</span>
+                                </>
+                              ) : (
+                                <>
+                                  <RefreshCw className="w-4 h-4 mr-2 flex-shrink-0" />
+                                  <span>Reopen Verification</span>
+                                </>
+                              )}
+                            </Button>
+                            <Button
+                              onClick={handleClearVerification}
+                              variant="ghost"
+                              className="text-muted-foreground hover:text-destructive hover:bg-destructive/10 w-full sm:w-auto"
+                              size="sm"
+                            >
+                              <X className="w-4 h-4 mr-2 flex-shrink-0" />
+                              Cancel & Start Over
+                            </Button>
+                          </div>
+                          <p className="text-xs text-muted-foreground mt-3">
+                            Already completed verification? Click "Check Status" to refresh. If still pending, the verification may take a few moments to process.
+                          </p>
+                        </div>
                       </div>
-                      <p className="text-xs text-muted-foreground mt-3">
-                        Already completed verification? Click "Check Status" to refresh. If still pending, the verification may take a few moments to process.
-                      </p>
                     </div>
-                  </div>
-                </div>
+                  )}
+                </>
               )}
 
               {verificationStatus === 'verified' && (
@@ -3428,7 +3575,7 @@ const MultiStepBookingWidget = () => {
                         Your identity verification was not successful. Please try again or contact support.
                       </p>
                       <Button
-                        onClick={handleStartVerification}
+                        onClick={handleUnifiedVerificationStart}
                         disabled={isVerifying}
                         variant="outline"
                         className="border-accent text-accent hover:bg-accent hover:text-white w-full sm:w-auto"
