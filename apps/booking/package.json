@@ -47,6 +47,7 @@
     "@supabase/supabase-js": "^2.87.3",
     "@tanstack/react-query": "^5.83.0",
     "@types/qrcode": "^1.5.5",
+    "@veriff/incontext-sdk": "^2.5.0",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "cmdk": "^1.1.1",
@@ -57,6 +58,7 @@
     "lucide-react": "^0.462.0",
     "next": "^15.1.3",
     "next-themes": "^0.3.0",
+    "node-tesseract-ocr": "^2.2.1",
     "qrcode": "^1.5.4",
     "react": "^18.3.1",
     "react-day-picker": "^8.10.1",
@@ -70,10 +72,12 @@
     "stripe": "^19.1.0",
     "tailwind-merge": "^2.6.0",
     "tailwindcss-animate": "^1.0.7",
+    "unpdf": "^1.4.0",
     "vaul": "^0.9.9",
     "zod": "^3.25.76"
   },
   "devDependencies": {
+    "@playwright/test": "^1.57.0",
     "@tailwindcss/typography": "^0.5.16",
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.1",

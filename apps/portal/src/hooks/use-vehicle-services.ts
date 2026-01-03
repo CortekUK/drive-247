@@ -66,7 +66,7 @@ export function useVehicleServices(vehicleId: string) {
       return data;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['serviceRecords', vehicleId] });
+      queryClient.invalidateQueries({ queryKey: ['serviceRecords', tenant?.id, vehicleId] });
       queryClient.invalidateQueries({ queryKey: ['vehicles'] });
       queryClient.invalidateQueries({ queryKey: ['vehicle', vehicleId] });
       queryClient.invalidateQueries({ queryKey: ['plEntries', vehicleId] });
@@ -107,7 +107,7 @@ export function useVehicleServices(vehicleId: string) {
       return data;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['serviceRecords', vehicleId] });
+      queryClient.invalidateQueries({ queryKey: ['serviceRecords', tenant?.id, vehicleId] });
       queryClient.invalidateQueries({ queryKey: ['vehicles'] });
       queryClient.invalidateQueries({ queryKey: ['vehicle', vehicleId] });
       queryClient.invalidateQueries({ queryKey: ['plEntries', vehicleId] });
@@ -142,7 +142,7 @@ export function useVehicleServices(vehicleId: string) {
       if (error) throw error;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['serviceRecords', vehicleId] });
+      queryClient.invalidateQueries({ queryKey: ['serviceRecords', tenant?.id, vehicleId] });
       queryClient.invalidateQueries({ queryKey: ['vehicles'] });
       queryClient.invalidateQueries({ queryKey: ['vehicle', vehicleId] });
       queryClient.invalidateQueries({ queryKey: ['plEntries', vehicleId] });

@@ -31,3 +31,8 @@ out/
 *.sw?
 .vercel
 .env*.local
+
+
+helper-folder
+quality-assurance
+testing-qa
