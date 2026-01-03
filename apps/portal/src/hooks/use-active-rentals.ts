@@ -26,24 +26,27 @@ export const useActiveRentals = () => {
           id,
           customer_id,
           vehicle_id,
-          customers!inner(id, name),
-          vehicles!inner(id, reg, make, model)
+          customers(id, name),
+          vehicles(id, reg, make, model)
         `)
         .eq("tenant_id", tenant.id)
         .eq("status", "Active")
-        .order("customers(name)");
+        .order("created_at", { ascending: false });
 
       if (error) throw error;
 
-      return data.map(rental => ({
-        rental_id: rental.id,
-        customer_id: rental.customer_id,
-        customer_name: (rental.customers as any).name,
-        vehicle_id: rental.vehicle_id,
-        vehicle_reg: (rental.vehicles as any).reg,
-        vehicle_make: (rental.vehicles as any).make,
-        vehicle_model: (rental.vehicles as any).model,
-      })) as ActiveRental[];
+      // Filter out rentals with missing customer or vehicle
+      return data
+        .filter(rental => rental.customers && rental.vehicles)
+        .map(rental => ({
+          rental_id: rental.id,
+          customer_id: rental.customer_id,
+          customer_name: (rental.customers as any).name,
+          vehicle_id: rental.vehicle_id,
+          vehicle_reg: (rental.vehicles as any).reg,
+          vehicle_make: (rental.vehicles as any).make,
+          vehicle_model: (rental.vehicles as any).model,
+        })) as ActiveRental[];
     },
     enabled: !!tenant,
   });

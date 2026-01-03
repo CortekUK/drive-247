@@ -154,10 +154,10 @@ export const searchService = {
             start_date,
             end_date,
             status,
-            customers!inner(name),
-            vehicles!inner(reg, make, model)
+            customers(name),
+            vehicles(reg, make, model)
           `)
-          .or(`rental_number.ilike.${searchTerm},customers.name.ilike.${searchTerm},vehicles.reg.ilike.${searchTerm}`);
+          .or(`rental_number.ilike.${searchTerm}`);
 
         if (tenantId) {
           rentalQuery = rentalQuery.eq("tenant_id", tenantId);
@@ -167,14 +167,16 @@ export const searchService = {
           .order('start_date', { ascending: false })
           .limit(10);
 
-        const rentalResults = (rentals || []).map(rental => ({
-          id: rental.id,
-          title: rental.rental_number || `${(rental.customers as any)?.name} Rental`,
-          subtitle: `${(rental.customers as any)?.name} • ${(rental.vehicles as any)?.reg} • ${rental.status}`,
-          category: "Rentals",
-          url: `/rentals/${rental.id}`,
-          icon: "calendar",
-        }));
+        const rentalResults = (rentals || [])
+          .filter(rental => rental.customers && rental.vehicles)
+          .map(rental => ({
+            id: rental.id,
+            title: rental.rental_number || `${(rental.customers as any)?.name} Rental`,
+            subtitle: `${(rental.customers as any)?.name} • ${(rental.vehicles as any)?.reg} • ${rental.status}`,
+            category: "Rentals",
+            url: `/rentals/${rental.id}`,
+            icon: "calendar",
+          }));
 
         results.rentals = rankResults(rentalResults, query);
       }
@@ -190,9 +192,9 @@ export const searchService = {
             amount,
             status,
             customers(name),
-            vehicles!inner(reg)
+            vehicles(reg)
           `)
-          .or(`reference_no.ilike.${searchTerm},type.ilike.${searchTerm},vehicles.reg.ilike.${searchTerm}`);
+          .or(`reference_no.ilike.${searchTerm},type.ilike.${searchTerm}`);
 
         if (tenantId) {
           fineQuery = fineQuery.eq("tenant_id", tenantId);
@@ -224,9 +226,9 @@ export const searchService = {
             payment_date,
             method,
             payment_type,
-            customers!inner(name)
+            customers(name)
           `)
-          .or(`customers.name.ilike.${searchTerm},method.ilike.${searchTerm},payment_type.ilike.${searchTerm}`);
+          .or(`method.ilike.${searchTerm},payment_type.ilike.${searchTerm}`);
 
         if (tenantId) {
           paymentQuery = paymentQuery.eq("tenant_id", tenantId);
@@ -236,14 +238,16 @@ export const searchService = {
           .order('payment_date', { ascending: false })
           .limit(10);
 
-        const paymentResults = (payments || []).map(payment => ({
-          id: payment.id,
-          title: `$${payment.amount} ${payment.payment_type}`,
-          subtitle: `${(payment.customers as any)?.name} • ${payment.method || 'Unknown method'} • ${payment.payment_date}`,
-          category: "Payments",
-          url: `/payments/${payment.id}`,
-          icon: "credit-card",
-        }));
+        const paymentResults = (payments || [])
+          .filter(payment => payment.customers)
+          .map(payment => ({
+            id: payment.id,
+            title: `$${payment.amount} ${payment.payment_type}`,
+            subtitle: `${(payment.customers as any)?.name} • ${payment.method || 'Unknown method'} • ${payment.payment_date}`,
+            category: "Payments",
+            url: `/payments/${payment.id}`,
+            icon: "credit-card",
+          }));
 
         results.payments = rankResults(paymentResults, query);
       }
@@ -292,10 +296,10 @@ export const searchService = {
             provider,
             status,
             expiry_date,
-            customers!inner(name),
+            customers(name),
             vehicles(reg, make, model)
           `)
-          .or(`policy_number.ilike.${searchTerm},provider.ilike.${searchTerm},customers.name.ilike.${searchTerm}`);
+          .or(`policy_number.ilike.${searchTerm},provider.ilike.${searchTerm}`);
 
         if (tenantId) {
           insuranceQuery = insuranceQuery.eq("tenant_id", tenantId);
@@ -305,14 +309,16 @@ export const searchService = {
           .order('expiry_date', { ascending: false })
           .limit(10);
 
-        const insuranceResults = (insurance || []).map(policy => ({
-          id: policy.id,
-          title: `Policy ${policy.policy_number}`,
-          subtitle: `${(policy.customers as any)?.name} • ${policy.provider || 'Unknown provider'} • ${policy.status} • Expires ${policy.expiry_date}`,
-          category: "Insurance",
-          url: `/insurance?policy=${policy.id}`,
-          icon: "shield",
-        }));
+        const insuranceResults = (insurance || [])
+          .filter(policy => policy.customers)
+          .map(policy => ({
+            id: policy.id,
+            title: `Policy ${policy.policy_number}`,
+            subtitle: `${(policy.customers as any)?.name} • ${policy.provider || 'Unknown provider'} • ${policy.status} • Expires ${policy.expiry_date}`,
+            category: "Insurance",
+            url: `/insurance?policy=${policy.id}`,
+            icon: "shield",
+          }));
 
         results.insurance = rankResults(insuranceResults, query);
       }

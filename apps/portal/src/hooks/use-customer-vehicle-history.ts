@@ -29,7 +29,7 @@ export const useCustomerVehicleHistory = (customerId: string) => {
           end_date,
           status,
           monthly_amount,
-          vehicles!inner(id, reg, make, model)
+          vehicles(id, reg, make, model)
         `)
         .eq("customer_id", customerId)
         .order("start_date", { ascending: false });
@@ -42,17 +42,20 @@ export const useCustomerVehicleHistory = (customerId: string) => {
 
       if (error) throw error;
 
-      return data.map(rental => ({
-        rental_id: rental.id,
-        vehicle_id: rental.vehicle_id,
-        vehicle_reg: (rental.vehicles as any).reg,
-        vehicle_make: (rental.vehicles as any).make,
-        vehicle_model: (rental.vehicles as any).model,
-        start_date: rental.start_date,
-        end_date: rental.end_date,
-        status: rental.status,
-        monthly_amount: rental.monthly_amount
-      })) as CustomerVehicleHistory[];
+      // Filter out rentals with missing vehicle
+      return data
+        .filter(rental => rental.vehicles)
+        .map(rental => ({
+          rental_id: rental.id,
+          vehicle_id: rental.vehicle_id,
+          vehicle_reg: (rental.vehicles as any).reg,
+          vehicle_make: (rental.vehicles as any).make,
+          vehicle_model: (rental.vehicles as any).model,
+          start_date: rental.start_date,
+          end_date: rental.end_date,
+          status: rental.status,
+          monthly_amount: rental.monthly_amount
+        })) as CustomerVehicleHistory[];
     },
     enabled: !!tenant && !!customerId,
   });

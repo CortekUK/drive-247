@@ -107,7 +107,7 @@ export const usePaymentsData = ({
         .from("payments")
         .select(`
           *,
-          customers!inner(id, name),
+          customers(id, name),
           vehicles(id, reg, make, model),
           rentals(id, rental_number)
         `, { count: 'exact' })
@@ -168,8 +168,11 @@ export const usePaymentsData = ({
 
       if (error) throw error;
 
+      // Filter out payments with missing customer
+      const filteredPayments = (data || []).filter(payment => payment.customers);
+
       return {
-        payments: data as PaymentRow[],
+        payments: filteredPayments as PaymentRow[],
         totalCount: count || 0,
         totalPages: Math.ceil((count || 0) / pageSize)
       };
