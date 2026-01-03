@@ -106,7 +106,7 @@ const CreateFine = () => {
         .from("rentals")
         .select(`
           vehicle_id,
-          vehicles!inner (
+          vehicles(
             id,
             reg,
             make,
@@ -114,7 +114,7 @@ const CreateFine = () => {
             status
           )
         `)
-        .order("vehicles(reg)");
+        .order("created_at", { ascending: false });
 
       if (tenant?.id) {
         query = query.eq("tenant_id", tenant.id);
@@ -124,7 +124,7 @@ const CreateFine = () => {
 
       if (error) throw error;
 
-      // Extract unique vehicles from the rentals
+      // Extract unique vehicles from the rentals (filter out null vehicles)
       const uniqueVehiclesMap = new Map();
       data?.forEach((rental: any) => {
         if (rental.vehicles && !uniqueVehiclesMap.has(rental.vehicles.id)) {

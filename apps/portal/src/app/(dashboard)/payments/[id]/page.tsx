@@ -58,7 +58,7 @@ export default function PaymentDetail() {
           payment_type,
           status,
           remaining_amount,
-          customers!inner(
+          customers(
             id,
             name,
             email,
@@ -80,6 +80,7 @@ export default function PaymentDetail() {
         .single();
 
       if (error) throw error;
+      if (!data.customers) throw new Error("Payment customer not found");
       return data as PaymentDetailData;
     },
     enabled: !!id && !!tenant?.id,
