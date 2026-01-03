@@ -140,6 +140,14 @@ export const TipTapEditor: React.FC<TipTapEditorProps> = ({
     },
   });
 
+  // Sync content when it changes externally (e.g., loading default template)
+  React.useEffect(() => {
+    if (editor && content && editor.getHTML() !== content) {
+      // Only update if content is different to avoid cursor jumping
+      editor.commands.setContent(content, false);
+    }
+  }, [editor, content]);
+
   const insertVariable = useCallback(
     (variable: TemplateVariable) => {
       if (!editor) return;
