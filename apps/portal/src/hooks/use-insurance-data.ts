@@ -60,14 +60,15 @@ export function useInsuranceData(filters: InsuranceFilters) {
         .from("insurance_policies")
         .select(`
           *,
-          customers!inner(id, name, email, phone),
+          customers(id, name, email, phone),
           vehicles(id, reg, make, model)
         `)
         .eq("tenant_id", tenant.id)
         .order("expiry_date", { ascending: true });
 
       if (error) throw error;
-      return data as InsurancePolicy[];
+      // Filter out policies with missing customer
+      return (data || []).filter(policy => policy.customers) as InsurancePolicy[];
     },
     enabled: !!tenant,
   });
