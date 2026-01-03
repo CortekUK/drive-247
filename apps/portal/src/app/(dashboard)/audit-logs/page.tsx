@@ -35,14 +35,21 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import { Calendar as CalendarComponent } from "@/components/ui/calendar";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import {
   History,
   X,
   User,
-  Calendar,
+  Calendar as CalendarIcon,
   ExternalLink,
   FileText,
 } from "lucide-react";
+import { cn } from "@/lib/utils";
 import {
   useAuditLogs,
   useAuditLogActions,
@@ -214,31 +221,77 @@ const AuditLogs = () => {
               </Select>
 
               <div className="flex items-center gap-2">
-                <Input
-                  type="date"
-                  value={filters.dateFrom || ""}
-                  onChange={(e) =>
-                    setFilters((prev) => ({
-                      ...prev,
-                      dateFrom: e.target.value || undefined,
-                    }))
-                  }
-                  className="w-40"
-                  placeholder="From date"
-                />
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="outline"
+                      className={cn(
+                        "w-[180px] justify-start text-left font-normal",
+                        !filters.dateFrom && "text-muted-foreground"
+                      )}
+                    >
+                      <CalendarIcon className="mr-2 h-4 w-4" />
+                      {filters.dateFrom ? (
+                        format(new Date(filters.dateFrom), "MMM dd, yyyy")
+                      ) : (
+                        <span>From date</span>
+                      )}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0" align="start">
+                    <CalendarComponent
+                      mode="single"
+                      selected={
+                        filters.dateFrom
+                          ? new Date(filters.dateFrom)
+                          : undefined
+                      }
+                      onSelect={(date) =>
+                        setFilters((prev) => ({
+                          ...prev,
+                          dateFrom: date ? format(date, "yyyy-MM-dd") : undefined,
+                        }))
+                      }
+                      initialFocus
+                    />
+                  </PopoverContent>
+                </Popover>
+
                 <span className="text-muted-foreground">to</span>
-                <Input
-                  type="date"
-                  value={filters.dateTo || ""}
-                  onChange={(e) =>
-                    setFilters((prev) => ({
-                      ...prev,
-                      dateTo: e.target.value || undefined,
-                    }))
-                  }
-                  className="w-40"
-                  placeholder="To date"
-                />
+
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="outline"
+                      className={cn(
+                        "w-[180px] justify-start text-left font-normal",
+                        !filters.dateTo && "text-muted-foreground"
+                      )}
+                    >
+                      <CalendarIcon className="mr-2 h-4 w-4" />
+                      {filters.dateTo ? (
+                        format(new Date(filters.dateTo), "MMM dd, yyyy")
+                      ) : (
+                        <span>To date</span>
+                      )}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0" align="start">
+                    <CalendarComponent
+                      mode="single"
+                      selected={
+                        filters.dateTo ? new Date(filters.dateTo) : undefined
+                      }
+                      onSelect={(date) =>
+                        setFilters((prev) => ({
+                          ...prev,
+                          dateTo: date ? format(date, "yyyy-MM-dd") : undefined,
+                        }))
+                      }
+                      initialFocus
+                    />
+                  </PopoverContent>
+                </Popover>
               </div>
 
               {hasActiveFilters && (
@@ -275,7 +328,7 @@ const AuditLogs = () => {
                     <TableRow key={log.id}>
                       <TableCell className="whitespace-nowrap">
                         <div className="flex items-center gap-2">
-                          <Calendar className="h-4 w-4 text-muted-foreground" />
+                          <CalendarIcon className="h-4 w-4 text-muted-foreground" />
                           <div>
                             <div className="font-medium">
                               {format(new Date(log.created_at), "dd MMM yyyy")}
