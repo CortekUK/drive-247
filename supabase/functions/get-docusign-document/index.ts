@@ -262,9 +262,18 @@ serve(async (req) => {
       );
     }
 
-    // Get the PDF as base64
+    // Get the PDF as base64 (handle large files properly)
     const pdfBuffer = await docResponse.arrayBuffer();
-    const pdfBase64 = btoa(String.fromCharCode(...new Uint8Array(pdfBuffer)));
+    const uint8Array = new Uint8Array(pdfBuffer);
+
+    // Convert to base64 in chunks to avoid stack overflow
+    let binary = '';
+    const chunkSize = 0x8000; // 32KB chunks
+    for (let i = 0; i < uint8Array.length; i += chunkSize) {
+      const chunk = uint8Array.subarray(i, Math.min(i + chunkSize, uint8Array.length));
+      binary += String.fromCharCode.apply(null, Array.from(chunk));
+    }
+    const pdfBase64 = btoa(binary);
 
     return new Response(
       JSON.stringify({
