@@ -139,6 +139,21 @@ export function useAdminUsers() {
 
 // Helper to format action names for display
 export function formatActionName(action: string): string {
+  // Special cases for better formatting
+  const actionMap: Record<string, string> = {
+    update_settings: "Update Settings",
+    create_user: "Create User",
+    update_user: "Update User",
+    delete_user: "Delete User",
+    blocked_customer: "Block Customer",
+    unblocked_customer: "Unblock Customer",
+  };
+
+  if (actionMap[action]) {
+    return actionMap[action];
+  }
+
+  // Default: capitalize each word
   return action
     .split("_")
     .map((word) => word.charAt(0).toUpperCase() + word.slice(1))

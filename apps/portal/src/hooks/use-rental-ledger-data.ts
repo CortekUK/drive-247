@@ -53,7 +53,7 @@ export const useRentalCharges = (rentalId: string | undefined) => {
         .select("*")
         .eq("rental_id", rentalId)
         .eq("type", "Charge")
-        .order("due_date", { ascending: true });
+        .order("due_date", { ascending: false });
 
       if (tenant?.id) {
         chargesQuery = chargesQuery.eq("tenant_id", tenant.id);

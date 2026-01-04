@@ -44,7 +44,7 @@ export function useKeyHandover(rentalId: string | undefined) {
           photos:rental_handover_photos(*)
         `)
         .eq("rental_id", rentalId)
-        .order("created_at", { ascending: true });
+        .order("created_at", { ascending: false });
 
       if (error) throw error;
       return data as KeyHandover[];

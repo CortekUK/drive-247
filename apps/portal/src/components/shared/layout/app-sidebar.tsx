@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Car, Users, FileText, CreditCard, LayoutDashboard, Bell, BarChart3, AlertCircle, Bookmark, TrendingUp, Settings, Shield, Ban, Receipt, FolderOpen, UserX, Globe, Crown, History, Clock, Star } from "lucide-react";
+import { Car, Users, FileText, CreditCard, LayoutDashboard, Bell, BarChart3, AlertCircle, TrendingUp, Settings, Ban, Receipt, FolderOpen, UserX, Globe, History, Clock } from "lucide-react";
 import { Sidebar, SidebarContent, SidebarGroup, SidebarGroupContent, SidebarGroupLabel, SidebarHeader, SidebarMenu, SidebarMenuButton, SidebarMenuItem, SidebarFooter, useSidebar } from "@/components/ui/sidebar";
 import { useReminderStats } from "@/hooks/use-reminders";
 import { useOrgSettings } from "@/hooks/use-org-settings";
@@ -88,10 +88,6 @@ export function AppSidebar() {
 
   // Operations navigation items
   const operationsNavigation = [{
-    name: "Promotions",
-    href: "/promotions",
-    icon: Crown
-  },  {
     name: "Blocked Dates",
     href: "/blocked-dates",
     icon: Ban
@@ -112,10 +108,6 @@ export function AppSidebar() {
 
   // Settings navigation - filter based on super admin status
   const allSettingsNavigation = [{
-    name: "Testimonials",
-    href: "/testimonials",
-    icon: Star
-  }, {
     name: "Audit Logs",
     href: "/audit-logs",
     icon: History
