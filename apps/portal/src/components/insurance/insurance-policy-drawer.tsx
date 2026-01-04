@@ -70,8 +70,8 @@ export function InsurancePolicyDrawer({
         .from("insurance_policies")
         .select(`
           *,
-          customers(id, name, email, phone),
-          vehicles(id, reg, make, model),
+          customers!insurance_policies_customer_id_fkey(id, name, email, phone),
+          vehicles!insurance_policies_vehicle_id_fkey(id, reg, make, model),
           insurance_documents(id, doc_type, file_url, file_name, uploaded_at)
         `)
         .eq("id", policyId)

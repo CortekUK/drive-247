@@ -36,7 +36,7 @@ export const useCustomerRentals = (customerId: string) => {
           status,
           schedule,
           created_at,
-          vehicles(id, reg, make, model)
+          vehicles!rentals_vehicle_id_fkey(id, reg, make, model)
         `)
         .eq("tenant_id", tenant.id)
         .eq("customer_id", customerId)

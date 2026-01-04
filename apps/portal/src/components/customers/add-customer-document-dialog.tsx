@@ -77,7 +77,7 @@ export default function AddCustomerDocumentDialog({
       const { data, error } = await supabase
         .from("rentals")
         .select(`
-          vehicles(id, reg, make, model)
+          vehicles!rentals_vehicle_id_fkey(id, reg, make, model)
         `)
         .eq("customer_id", customerId)
         .eq("status", "Active");

@@ -236,7 +236,7 @@ export default function VehicleDetail() {
         .from("rentals")
         .select(`
           *,
-          customers(name)
+          customers!rentals_customer_id_fkey(name)
         `)
         .eq("vehicle_id", id)
         .order("created_at", { ascending: false });
@@ -256,7 +256,7 @@ export default function VehicleDetail() {
         .from("fines")
         .select(`
           *,
-          customers(name)
+          customers!fines_customer_id_fkey(name)
         `)
         .eq("vehicle_id", id)
         .order("issue_date", { ascending: false });
@@ -670,7 +670,7 @@ export default function VehicleDetail() {
                               ${service.cost.toLocaleString()}
                             </TableCell>
                             <TableCell className="max-w-[200px]">
-                              <TruncatedCell content={service.notes || '-'} maxLength={30} />
+                              <TruncatedCell content={service.description || '-'} maxLength={30} />
                             </TableCell>
                           </TableRow>
                         ))}

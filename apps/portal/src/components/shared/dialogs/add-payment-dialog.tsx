@@ -109,7 +109,7 @@ export const AddPaymentDialog = ({
 
       let query = supabase
         .from("rentals")
-        .select("vehicle_id, vehicles(id, reg, make, model)")
+        .select("vehicle_id, vehicles!rentals_vehicle_id_fkey(id, reg, make, model)")
         .eq("status", "Active")
         .eq("customer_id", selectedCustomerId);
 
