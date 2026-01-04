@@ -103,6 +103,7 @@ const MultiStepBookingWidget = () => {
   });
   const searchDebounceTimer = useRef<NodeJS.Timeout>();
   const [expandedDescriptions, setExpandedDescriptions] = useState<Set<string>>(new Set());
+  const [vehicleImageIndex, setVehicleImageIndex] = useState<Record<string, number>>({});
   const [formData, setFormData] = useState({
     pickupLocation: "",
     dropoffLocation: "",
@@ -1215,6 +1216,25 @@ const MultiStepBookingWidget = () => {
       }
       return newSet;
     });
+  };
+
+  // Image carousel navigation
+  const getVehicleImageIndex = (vehicleId: string) => vehicleImageIndex[vehicleId] || 0;
+
+  const nextVehicleImage = (e: React.MouseEvent, vehicleId: string, totalImages: number) => {
+    e.stopPropagation();
+    setVehicleImageIndex(prev => ({
+      ...prev,
+      [vehicleId]: ((prev[vehicleId] || 0) + 1) % totalImages
+    }));
+  };
+
+  const prevVehicleImage = (e: React.MouseEvent, vehicleId: string, totalImages: number) => {
+    e.stopPropagation();
+    setVehicleImageIndex(prev => ({
+      ...prev,
+      [vehicleId]: ((prev[vehicleId] || 0) - 1 + totalImages) % totalImages
+    }));
   };
 
   const getDisplayDescription = (vehicle: Vehicle) => {
@@ -2555,12 +2575,14 @@ const MultiStepBookingWidget = () => {
                     const blockStatus = isVehicleBlockedForPeriod(vehicle.id);
                     const isBlocked = blockStatus.blocked;
 
+                    // Hide blocked/unavailable vehicles completely
+                    if (isBlocked) return null;
+
                     if (viewMode === "list") {
                       // List View Card
                       return <Card key={vehicle.id} className={cn("group transition-all duration-300 overflow-hidden border-2 relative",
-                        isBlocked ? "opacity-60 cursor-not-allowed border-destructive/30" : "cursor-pointer hover:shadow-2xl",
-                        !isBlocked && isSelected ? "border-primary bg-primary/5 shadow-glow" : "border-border/30 hover:border-primary/40")} onClick={() => {
-                          if (isBlocked) return; // Prevent selection if blocked
+                        "cursor-pointer hover:shadow-2xl",
+                        isSelected ? "border-primary bg-primary/5 shadow-glow" : "border-border/30 hover:border-primary/40")} onClick={() => {
                           setFormData({
                             ...formData,
                             vehicleId: vehicle.id
@@ -2578,45 +2600,65 @@ const MultiStepBookingWidget = () => {
                           }
                         }}>
                         <div className="flex flex-col sm:flex-row">
-                          {/* Image */}
+                          {/* Image with Carousel */}
                           <div className="relative w-full sm:w-64 aspect-video sm:aspect-square overflow-hidden bg-gradient-to-br from-muted/30 to-muted/5">
-                            {vehicle.vehicle_photos?.[0]?.photo_url ? (
-                              <img
-                                src={vehicle.vehicle_photos[0].photo_url}
-                                alt={vehicleName}
-                                className="w-full h-full object-cover"
-                                loading="lazy"
-                                onError={(e) => {
-                                  e.currentTarget.style.display = 'none';
-                                  const fallback = e.currentTarget.nextElementSibling as HTMLElement;
-                                  if (fallback) fallback.style.display = 'flex';
-                                }}
-                              />
+                            {vehicle.vehicle_photos && vehicle.vehicle_photos.length > 0 ? (
+                              <>
+                                <img
+                                  src={vehicle.vehicle_photos[getVehicleImageIndex(vehicle.id)]?.photo_url || vehicle.vehicle_photos[0].photo_url}
+                                  alt={vehicleName}
+                                  className="w-full h-full object-cover"
+                                  loading="lazy"
+                                  onError={(e) => {
+                                    e.currentTarget.style.display = 'none';
+                                  }}
+                                />
+                                {/* Carousel Navigation - only show if more than 1 image */}
+                                {vehicle.vehicle_photos.length > 1 && (
+                                  <>
+                                    <button
+                                      onClick={(e) => prevVehicleImage(e, vehicle.id, vehicle.vehicle_photos!.length)}
+                                      className="absolute left-2 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full bg-black/50 hover:bg-black/70 flex items-center justify-center text-white transition-colors z-10"
+                                    >
+                                      <ChevronLeft className="w-5 h-5" />
+                                    </button>
+                                    <button
+                                      onClick={(e) => nextVehicleImage(e, vehicle.id, vehicle.vehicle_photos!.length)}
+                                      className="absolute right-2 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full bg-black/50 hover:bg-black/70 flex items-center justify-center text-white transition-colors z-10"
+                                    >
+                                      <ChevronRight className="w-5 h-5" />
+                                    </button>
+                                    {/* Dots indicator */}
+                                    <div className="absolute bottom-2 left-1/2 -translate-x-1/2 flex gap-1.5 z-10">
+                                      {vehicle.vehicle_photos.map((_, idx) => (
+                                        <div
+                                          key={idx}
+                                          className={cn(
+                                            "w-2 h-2 rounded-full transition-colors",
+                                            idx === getVehicleImageIndex(vehicle.id) ? "bg-white" : "bg-white/50"
+                                          )}
+                                        />
+                                      ))}
+                                    </div>
+                                  </>
+                                )}
+                              </>
                             ) : null}
-                            <div className={`${vehicle.vehicle_photos?.[0]?.photo_url ? 'hidden' : 'flex'} items-center justify-center h-full w-full absolute inset-0`}>
+                            <div className={`${vehicle.vehicle_photos && vehicle.vehicle_photos.length > 0 ? 'hidden' : 'flex'} items-center justify-center h-full w-full absolute inset-0`}>
                               <Car className="w-16 h-16 opacity-20 text-muted-foreground" />
                             </div>
 
                             {/* Registration Chip - hide when selected, show tick instead */}
                             {!isSelected ? (
-                              <div className="absolute top-3 right-3 px-3 py-1 bg-primary text-primary-foreground text-xs font-semibold rounded-full">
+                              <div className="absolute top-3 right-3 px-3 py-1 bg-primary text-primary-foreground text-xs font-semibold rounded-full z-20">
                                 {vehicle.reg}
                               </div>
                             ) : (
-                              <div className="absolute top-3 right-3 w-8 h-8 bg-primary rounded-full flex items-center justify-center shadow-lg">
+                              <div className="absolute top-3 right-3 w-8 h-8 bg-primary rounded-full flex items-center justify-center shadow-lg z-20">
                                 <Check className="w-5 h-5 text-black" />
                               </div>
                             )}
 
-                            {/* Blocked Badge */}
-                            {isBlocked && blockStatus.blockedRange && (
-                              <div className="absolute bottom-3 left-3 right-3 px-3 py-2 bg-destructive/90 text-white text-xs font-medium rounded-lg backdrop-blur">
-                                <p className="font-semibold mb-1">Unavailable</p>
-                                <p className="text-[10px] opacity-90">
-                                  {format(new Date(blockStatus.blockedRange.start), "MMM dd")} - {format(new Date(blockStatus.blockedRange.end), "MMM dd")}
-                                </p>
-                              </div>
-                            )}
                           </div>
 
                           {/* Content */}
@@ -2678,12 +2720,9 @@ const MultiStepBookingWidget = () => {
 
                                   <Button
                                     className={cn("w-40 h-11 font-medium transition-colors",
-                                      isBlocked ? "bg-muted text-muted-foreground cursor-not-allowed" :
-                                        isSelected ? "bg-primary text-primary-foreground hover:bg-primary/90" :
-                                          "bg-background border-2 border-primary text-primary hover:bg-primary hover:text-primary-foreground")}
-                                    disabled={isBlocked}
+                                      isSelected ? "bg-primary text-primary-foreground hover:bg-primary/90" :
+                                        "bg-background border-2 border-primary text-primary hover:bg-primary hover:text-primary-foreground")}
                                     onClick={e => {
-                                      if (isBlocked) return;
                                       e.stopPropagation();
                                       // Toggle: if already selected, deselect; otherwise select
                                       setFormData({
@@ -2697,7 +2736,7 @@ const MultiStepBookingWidget = () => {
                                         });
                                       }
                                     }}>
-                                    {isBlocked ? "Unavailable" : isSelected ? "Selected" : "Select"}
+                                    {isSelected ? "Selected" : "Select"}
                                   </Button>
                                 </div>
                               );
@@ -2709,10 +2748,9 @@ const MultiStepBookingWidget = () => {
 
                     // Grid View Card (existing design)
                     return <Card key={vehicle.id} className={cn("group transition-all duration-300 overflow-hidden border-2 relative",
-                      isBlocked ? "opacity-60 cursor-not-allowed border-destructive/30" : "cursor-pointer hover:shadow-2xl hover:scale-[1.02]",
-                      !isBlocked && isSelected ? "border-primary bg-primary/5 shadow-glow" : "border-border/30 hover:border-primary/40",
-                      !isBlocked && isRollsRoyce && "shadow-glow")} onClick={() => {
-                        if (isBlocked) return; // Prevent selection if blocked
+                      "cursor-pointer hover:shadow-2xl hover:scale-[1.02]",
+                      isSelected ? "border-primary bg-primary/5 shadow-glow" : "border-border/30 hover:border-primary/40",
+                      isRollsRoyce && "shadow-glow")} onClick={() => {
                         setFormData({
                           ...formData,
                           vehicleId: vehicle.id
@@ -2741,34 +2779,54 @@ const MultiStepBookingWidget = () => {
                         <Check className="w-5 h-5 text-black" />
                       </div>}
 
-                      {/* Image Block */}
+                      {/* Image Block with Carousel */}
                       <div className={cn("relative aspect-video overflow-hidden bg-gradient-to-br", isRollsRoyce ? "from-primary/10 to-primary/20" : "from-muted/30 to-muted/5")}>
-                        {vehicle.vehicle_photos?.[0]?.photo_url ? (
-                          <img
-                            src={vehicle.vehicle_photos[0].photo_url}
-                            alt={vehicleName}
-                            className="w-full h-full object-cover"
-                            loading="lazy"
-                            onError={(e) => {
-                              e.currentTarget.style.display = 'none';
-                              const fallback = e.currentTarget.nextElementSibling as HTMLElement;
-                              if (fallback) fallback.style.display = 'flex';
-                            }}
-                          />
+                        {vehicle.vehicle_photos && vehicle.vehicle_photos.length > 0 ? (
+                          <>
+                            <img
+                              src={vehicle.vehicle_photos[getVehicleImageIndex(vehicle.id)]?.photo_url || vehicle.vehicle_photos[0].photo_url}
+                              alt={vehicleName}
+                              className="w-full h-full object-cover"
+                              loading="lazy"
+                              onError={(e) => {
+                                e.currentTarget.style.display = 'none';
+                              }}
+                            />
+                            {/* Carousel Navigation - only show if more than 1 image */}
+                            {vehicle.vehicle_photos.length > 1 && (
+                              <>
+                                <button
+                                  onClick={(e) => prevVehicleImage(e, vehicle.id, vehicle.vehicle_photos!.length)}
+                                  className="absolute left-2 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full bg-black/50 hover:bg-black/70 flex items-center justify-center text-white transition-colors z-10"
+                                >
+                                  <ChevronLeft className="w-5 h-5" />
+                                </button>
+                                <button
+                                  onClick={(e) => nextVehicleImage(e, vehicle.id, vehicle.vehicle_photos!.length)}
+                                  className="absolute right-2 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full bg-black/50 hover:bg-black/70 flex items-center justify-center text-white transition-colors z-10"
+                                >
+                                  <ChevronRight className="w-5 h-5" />
+                                </button>
+                                {/* Dots indicator */}
+                                <div className="absolute bottom-2 left-1/2 -translate-x-1/2 flex gap-1.5 z-10">
+                                  {vehicle.vehicle_photos.map((_, idx) => (
+                                    <div
+                                      key={idx}
+                                      className={cn(
+                                        "w-2 h-2 rounded-full transition-colors",
+                                        idx === getVehicleImageIndex(vehicle.id) ? "bg-white" : "bg-white/50"
+                                      )}
+                                    />
+                                  ))}
+                                </div>
+                              </>
+                            )}
+                          </>
                         ) : null}
-                        <div className={`${vehicle.vehicle_photos?.[0]?.photo_url ? 'hidden' : 'flex'} flex-col items-center justify-center h-full w-full absolute inset-0`}>
+                        <div className={`${vehicle.vehicle_photos && vehicle.vehicle_photos.length > 0 ? 'hidden' : 'flex'} flex-col items-center justify-center h-full w-full absolute inset-0`}>
                           <Car className={cn("w-16 h-16 mb-2 opacity-20", isRollsRoyce ? "text-primary" : "text-muted-foreground")} />
                         </div>
 
-                        {/* Blocked Badge */}
-                        {isBlocked && blockStatus.blockedRange && (
-                          <div className="absolute bottom-3 left-3 right-3 px-3 py-2 bg-destructive/90 text-white text-xs font-medium rounded-lg backdrop-blur">
-                            <p className="font-semibold mb-1">Unavailable</p>
-                            <p className="text-[10px] opacity-90">
-                              {format(new Date(blockStatus.blockedRange.start), "MMM dd")} - {format(new Date(blockStatus.blockedRange.end), "MMM dd")}
-                            </p>
-                          </div>
-                        )}
                       </div>
 
                       {/* Content */}
@@ -2830,12 +2888,9 @@ const MultiStepBookingWidget = () => {
                         {/* CTA */}
                         <Button
                           className={cn("w-full h-11 font-medium transition-colors",
-                            isBlocked ? "bg-muted text-muted-foreground cursor-not-allowed" :
-                              isSelected ? "bg-primary text-primary-foreground hover:bg-primary/90" :
-                                "bg-background border-2 border-primary text-primary hover:bg-primary hover:text-primary-foreground")}
-                          disabled={isBlocked}
+                            isSelected ? "bg-primary text-primary-foreground hover:bg-primary/90" :
+                              "bg-background border-2 border-primary text-primary hover:bg-primary hover:text-primary-foreground")}
                           onClick={e => {
-                            if (isBlocked) return;
                             e.stopPropagation();
                             // Toggle: if already selected, deselect; otherwise select
                             setFormData({
@@ -2849,7 +2904,7 @@ const MultiStepBookingWidget = () => {
                               });
                             }
                           }}>
-                          {isBlocked ? "Unavailable" : isSelected ? "Selected" : "Select"}
+                          {isSelected ? "Selected" : "Select"}
                         </Button>
                       </div>
                     </Card>;
