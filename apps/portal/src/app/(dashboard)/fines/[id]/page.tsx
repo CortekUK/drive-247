@@ -144,8 +144,8 @@ const FineDetail = () => {
         .from("fines")
         .select(`
           *,
-          customers(name),
-          vehicles(reg, make, model)
+          customers!fines_customer_id_fkey(name),
+          vehicles!fines_vehicle_id_fkey(reg, make, model)
         `)
         .eq("id", id)
         .single();

@@ -31,7 +31,8 @@ out/
 *.sw?
 .vercel
 .env*.local
-
+.env
+.claude/
 
 helper-folder
 quality-assurance

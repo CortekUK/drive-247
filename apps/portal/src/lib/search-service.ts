@@ -154,8 +154,8 @@ export const searchService = {
             start_date,
             end_date,
             status,
-            customers(name),
-            vehicles(reg, make, model)
+            customers!rentals_customer_id_fkey(name),
+            vehicles!rentals_vehicle_id_fkey(reg, make, model)
           `)
           .or(`rental_number.ilike.${searchTerm}`);
 
@@ -191,8 +191,8 @@ export const searchService = {
             type,
             amount,
             status,
-            customers(name),
-            vehicles(reg)
+            customers!fines_customer_id_fkey(name),
+            vehicles!fines_vehicle_id_fkey(reg)
           `)
           .or(`reference_no.ilike.${searchTerm},type.ilike.${searchTerm}`);
 
@@ -226,7 +226,7 @@ export const searchService = {
             payment_date,
             method,
             payment_type,
-            customers(name)
+            customers!payments_customer_id_fkey(name)
           `)
           .or(`method.ilike.${searchTerm},payment_type.ilike.${searchTerm}`);
 
@@ -262,7 +262,7 @@ export const searchService = {
             status,
             supplier,
             notes,
-            vehicles(reg, make, model)
+            vehicles!plates_vehicle_id_fkey(reg, make, model)
           `)
           .or(`plate_number.ilike.${searchTerm},supplier.ilike.${searchTerm}`);
 
@@ -296,8 +296,8 @@ export const searchService = {
             provider,
             status,
             expiry_date,
-            customers(name),
-            vehicles(reg, make, model)
+            customers!insurance_policies_customer_id_fkey(name),
+            vehicles!insurance_policies_vehicle_id_fkey(reg, make, model)
           `)
           .or(`policy_number.ilike.${searchTerm},provider.ilike.${searchTerm}`);
 

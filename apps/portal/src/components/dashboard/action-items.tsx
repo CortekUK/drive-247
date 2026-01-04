@@ -57,8 +57,8 @@ export const ActionItems = () => {
           total_price,
           created_at,
           status,
-          customers(name),
-          vehicles(reg)
+          customers!rentals_customer_id_fkey(name),
+          vehicles!rentals_vehicle_id_fkey(reg)
         `)
         .gte("created_at", threeDaysAgo.toISOString())
         .order("created_at", { ascending: false });
@@ -95,8 +95,8 @@ export const ActionItems = () => {
           start_date,
           total_price,
           created_at,
-          customers(name),
-          vehicles(reg)
+          customers!rentals_customer_id_fkey(name),
+          vehicles!rentals_vehicle_id_fkey(reg)
         `)
         .eq("status", "Pending")
         .order("created_at", { ascending: false });

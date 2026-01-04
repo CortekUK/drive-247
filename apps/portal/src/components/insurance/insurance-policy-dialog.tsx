@@ -113,7 +113,7 @@ export function InsurancePolicyDialog({
         .from("rentals")
         .select(`
           vehicle_id,
-          vehicles(
+          vehicles!rentals_vehicle_id_fkey(
             id,
             reg,
             make,
