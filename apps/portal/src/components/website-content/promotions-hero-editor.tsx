@@ -18,6 +18,7 @@ import {
 } from "@/components/ui/form";
 import { Loader2, Save, LayoutTemplate } from "lucide-react";
 import { HeroImageUpload } from "@/components/website-content/hero-image-upload";
+import { CarouselImagesEditor } from "@/components/website-content/carousel-images-editor";
 import type { PromotionsHeroContent } from "@/types/cms";
 
 interface PromotionsHeroEditorProps {
@@ -36,35 +37,47 @@ const formSchema = z.object({
 
 type FormValues = z.infer<typeof formSchema>;
 
+// Default values for pre-filling
+const defaults = {
+  headline: "Promotions & Offers",
+  subheading: "Exclusive rental offers with transparent savings.",
+  primary_cta_text: "View Fleet & Pricing",
+  primary_cta_href: "/fleet",
+  secondary_cta_text: "Book Now",
+};
+
 export function PromotionsHeroEditor({ content, onSave, isSaving }: PromotionsHeroEditorProps) {
   const [backgroundImage, setBackgroundImage] = useState(content.background_image || "");
+  const [carouselImages, setCarouselImages] = useState<string[]>(content.carousel_images || []);
 
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
     defaultValues: {
-      headline: content.headline || "",
-      subheading: content.subheading || "",
-      primary_cta_text: content.primary_cta_text || "",
-      primary_cta_href: content.primary_cta_href || "",
-      secondary_cta_text: content.secondary_cta_text || "",
+      headline: content.headline || defaults.headline,
+      subheading: content.subheading || defaults.subheading,
+      primary_cta_text: content.primary_cta_text || defaults.primary_cta_text,
+      primary_cta_href: content.primary_cta_href || defaults.primary_cta_href,
+      secondary_cta_text: content.secondary_cta_text || defaults.secondary_cta_text,
     },
   });
 
   useEffect(() => {
     form.reset({
-      headline: content.headline || "",
-      subheading: content.subheading || "",
-      primary_cta_text: content.primary_cta_text || "",
-      primary_cta_href: content.primary_cta_href || "",
-      secondary_cta_text: content.secondary_cta_text || "",
+      headline: content.headline || defaults.headline,
+      subheading: content.subheading || defaults.subheading,
+      primary_cta_text: content.primary_cta_text || defaults.primary_cta_text,
+      primary_cta_href: content.primary_cta_href || defaults.primary_cta_href,
+      secondary_cta_text: content.secondary_cta_text || defaults.secondary_cta_text,
     });
     setBackgroundImage(content.background_image || "");
+    setCarouselImages(content.carousel_images || []);
   }, [content, form]);
 
   const onSubmit = (data: FormValues) => {
     onSave({
       ...data,
       background_image: backgroundImage,
+      carousel_images: carouselImages.length > 0 ? carouselImages : undefined,
     } as PromotionsHeroContent);
   };
 
@@ -82,12 +95,24 @@ export function PromotionsHeroEditor({ content, onSave, isSaving }: PromotionsHe
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-6">
-            {/* Hero Background Image */}
+            {/* Hero Carousel Images */}
+            <CarouselImagesEditor
+              images={carouselImages}
+              onImagesChange={setCarouselImages}
+              label="Hero Carousel Images"
+              description="Images that rotate in the hero background. Leave empty to use default images."
+              bucket="cms-media"
+              maxImages={10}
+            />
+
+            <Separator />
+
+            {/* Hero Background Image (fallback) */}
             <HeroImageUpload
               currentImageUrl={backgroundImage}
               onImageChange={(url) => setBackgroundImage(url || "")}
-              label="Hero Background Image"
-              description="The background image displayed in the hero banner section"
+              label="Static Background Image (Optional)"
+              description="A single static background image. Carousel images above will take priority if set."
               bucket="cms-media"
               recommendedSize="1920x1080px"
             />

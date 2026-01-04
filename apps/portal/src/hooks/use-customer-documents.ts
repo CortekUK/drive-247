@@ -42,7 +42,7 @@ export function useCustomerDocuments(customerId: string) {
         .from("customer_documents")
         .select(`
           *,
-          vehicles(id, reg, make, model)
+          vehicles!customer_documents_vehicle_id_fkey(id, reg, make, model)
         `)
         .eq("tenant_id", tenant.id)
         .eq("customer_id", customerId)

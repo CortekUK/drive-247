@@ -33,6 +33,19 @@ interface OCRResponse {
 }
 
 /**
+ * Convert Uint8Array to base64 string (handles large arrays safely)
+ */
+function uint8ArrayToBase64(bytes: Uint8Array): string {
+  let binary = '';
+  const chunkSize = 8192; // Process in chunks to avoid stack overflow
+  for (let i = 0; i < bytes.length; i += chunkSize) {
+    const chunk = bytes.subarray(i, Math.min(i + chunkSize, bytes.length));
+    binary += String.fromCharCode.apply(null, Array.from(chunk));
+  }
+  return btoa(binary);
+}
+
+/**
  * Download image from URL and convert to base64
  */
 async function downloadImageAsBase64(url: string, supabase?: any): Promise<string | null> {
@@ -46,6 +59,8 @@ async function downloadImageAsBase64(url: string, supabase?: any): Promise<strin
         const [bucket, ...pathParts] = fullPath.split('/');
         const filePath = pathParts.join('/');
 
+        console.log('Downloading from Supabase storage:', bucket, filePath);
+
         const { data, error } = await supabase.storage
           .from(bucket)
           .download(filePath);
@@ -56,12 +71,14 @@ async function downloadImageAsBase64(url: string, supabase?: any): Promise<strin
         }
 
         const arrayBuffer = await data.arrayBuffer();
-        const base64 = btoa(String.fromCharCode(...new Uint8Array(arrayBuffer)));
+        const base64 = uint8ArrayToBase64(new Uint8Array(arrayBuffer));
+        console.log('Successfully downloaded and encoded image, size:', arrayBuffer.byteLength);
         return base64;
       }
     }
 
-    // Regular URL download
+    // Regular URL download (fallback for non-Supabase URLs)
+    console.log('Downloading from URL:', url);
     const response = await fetch(url);
     if (!response.ok) {
       console.error('Image download failed:', response.status);
@@ -69,7 +86,8 @@ async function downloadImageAsBase64(url: string, supabase?: any): Promise<strin
     }
 
     const arrayBuffer = await response.arrayBuffer();
-    const base64 = btoa(String.fromCharCode(...new Uint8Array(arrayBuffer)));
+    const base64 = uint8ArrayToBase64(new Uint8Array(arrayBuffer));
+    console.log('Successfully downloaded and encoded image, size:', arrayBuffer.byteLength);
     return base64;
 
   } catch (error) {

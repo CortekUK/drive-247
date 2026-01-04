@@ -107,8 +107,8 @@ export const useEnhancedRentals = (filters: RentalFilters = {}) => {
           end_date,
           monthly_amount,
           status,
-          customers(id, name, customer_type),
-          vehicles(id, reg, make, model)
+          customers!rentals_customer_id_fkey(id, name, customer_type),
+          vehicles!rentals_vehicle_id_fkey(id, reg, make, model)
         `, { count: 'exact' })
         .eq("tenant_id", tenant.id) as any;
 

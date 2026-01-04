@@ -192,8 +192,8 @@ export const AddFineDialog = ({ open, onOpenChange, vehicle_id, customer_id }: A
           id,
           customer_id,
           vehicle_id,
-          customers(id, name),
-          vehicles(id, reg, make, model)
+          customers!rentals_customer_id_fkey(id, name),
+          vehicles!rentals_vehicle_id_fkey(id, reg, make, model)
         `)
         .eq("status", "Active")
         .order("created_at", { ascending: false });
