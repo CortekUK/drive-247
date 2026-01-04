@@ -29,7 +29,7 @@ export const useCustomerVehicleHistory = (customerId: string) => {
           end_date,
           status,
           monthly_amount,
-          vehicles(id, reg, make, model)
+          vehicles!rentals_vehicle_id_fkey(id, reg, make, model)
         `)
         .eq("customer_id", customerId)
         .order("start_date", { ascending: false });

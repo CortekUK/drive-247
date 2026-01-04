@@ -33,7 +33,7 @@ interface Rental {
   signed_document_id?: string;
   insurance_status?: string;
   customer_id?: string;
-  customers: { id: string; name: string; email?: string; date_of_birth?: string | null };
+  customers: { id: string; name: string; email?: string; phone?: string | null };
   vehicles: { id: string; reg: string; make: string; model: string };
 }
 
@@ -59,8 +59,8 @@ const RentalDetail = () => {
         .from("rentals")
         .select(`
           *,
-          customers(id, name, email, date_of_birth),
-          vehicles(id, reg, make, model)
+          customers!rentals_customer_id_fkey(id, name, email, phone),
+          vehicles!rentals_vehicle_id_fkey(id, reg, make, model)
         `)
         .eq("id", id)
         .eq("tenant_id", tenant.id)
@@ -181,7 +181,7 @@ const RentalDetail = () => {
       if (tenant?.id) {
         const { data: unlinkedDocs } = await supabase
           .from("customer_documents")
-          .select("*, customers:customer_id(email)")
+          .select("*, customers!customer_documents_customer_id_fkey(email)")
           .eq("document_type", "Insurance Certificate")
           .eq("tenant_id", tenant.id)
           .is("rental_id", null)
@@ -749,9 +749,9 @@ const RentalDetail = () => {
             <div>
               <p className="text-sm text-muted-foreground">Date of Birth</p>
               <p className="font-medium">
-                {rental.customers?.date_of_birth
-                  ? `${new Date(rental.customers.date_of_birth).toLocaleDateString()} (${Math.floor((Date.now() - new Date(rental.customers.date_of_birth).getTime()) / (365.25 * 24 * 60 * 60 * 1000))} yrs)`
-                  : 'Not provided'}
+                {identityVerification?.date_of_birth
+                  ? `${new Date(identityVerification.date_of_birth).toLocaleDateString()} (${Math.floor((Date.now() - new Date(identityVerification.date_of_birth).getTime()) / (365.25 * 24 * 60 * 60 * 1000))} yrs)`
+                  : 'No DOB'}
               </p>
             </div>
             <div>
