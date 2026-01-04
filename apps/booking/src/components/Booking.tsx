@@ -6,7 +6,6 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { format, addDays, differenceInHours, differenceInDays, parseISO } from "date-fns";
-import { toZonedTime, fromZonedTime } from "date-fns-tz";
 import { CalendarIcon, MapPin, Clock, ChevronRight, AlertCircle } from "lucide-react";
 import Navigation from "@/components/Navigation";
 import Footer from "@/components/Footer";
@@ -229,7 +228,7 @@ export default function Booking() {
 
   return (
     <div className="min-h-screen bg-background">
-      <SEO 
+      <SEO
         title="Rental Booking — Drive 917"
         description="Book your luxury vehicle rental with Drive 917. Choose pickup and return details for premium cars in Los Angeles."
         keywords="luxury car rental booking, Los Angeles car rental, premium vehicle booking"
