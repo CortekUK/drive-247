@@ -32,61 +32,9 @@ interface VerificationResult {
   ai_face_match_score?: number;
 }
 
-// Simple QR code generator using canvas
-async function generateQRCode(text: string, size: number = 256): Promise<string> {
-  // Use a simple QR code generation approach
-  // For production, you might want to use a library like qrcode
-  const canvas = document.createElement('canvas');
-  canvas.width = size;
-  canvas.height = size;
-  const ctx = canvas.getContext('2d');
-
-  if (!ctx) return '';
-
-  // Try to use the QRCode library if available
-  if (typeof window !== 'undefined' && (window as any).QRCode) {
-    return new Promise((resolve) => {
-      const qr = new (window as any).QRCode(canvas, {
-        text,
-        width: size,
-        height: size,
-        colorDark: '#000000',
-        colorLight: '#ffffff',
-      });
-      setTimeout(() => {
-        resolve(canvas.toDataURL('image/png'));
-      }, 100);
-    });
-  }
-
-  // Fallback: Create a simple placeholder with the URL
-  // In production, include qrcode library
-  ctx.fillStyle = '#ffffff';
-  ctx.fillRect(0, 0, size, size);
-  ctx.fillStyle = '#000000';
-
-  // Draw a simple QR-like pattern (not a real QR code)
-  const moduleSize = size / 25;
-  for (let y = 0; y < 25; y++) {
-    for (let x = 0; x < 25; x++) {
-      // Position detection patterns
-      if ((x < 7 && y < 7) || (x >= 18 && y < 7) || (x < 7 && y >= 18)) {
-        if (x === 0 || x === 6 || y === 0 || y === 6 || (x >= 2 && x <= 4 && y >= 2 && y <= 4) ||
-            (x >= 18 && (x === 18 || x === 24)) || (y >= 18 && (y === 18 || y === 24)) ||
-            (x >= 20 && x <= 22 && y >= 2 && y <= 4) || (x >= 2 && x <= 4 && y >= 20 && y <= 22)) {
-          ctx.fillRect(x * moduleSize, y * moduleSize, moduleSize, moduleSize);
-        }
-      } else {
-        // Random data pattern based on text hash
-        const hash = text.charCodeAt((x + y * 25) % text.length) + x * y;
-        if (hash % 3 === 0) {
-          ctx.fillRect(x * moduleSize, y * moduleSize, moduleSize, moduleSize);
-        }
-      }
-    }
-  }
-
-  return canvas.toDataURL('image/png');
+// Generate a real QR code URL using quickchart.io API
+function getQRCodeUrl(text: string, size: number = 300): string {
+  return `https://quickchart.io/qr?text=${encodeURIComponent(text)}&size=${size}&margin=3&dark=000000&light=ffffff&ecLevel=M&format=png`;
 }
 
 export default function AIVerificationQR({
@@ -97,16 +45,13 @@ export default function AIVerificationQR({
   onExpired,
   onRetry
 }: AIVerificationQRProps) {
-  const [qrCodeImage, setQrCodeImage] = useState<string>('');
   const [timeRemaining, setTimeRemaining] = useState<number>(0);
   const [status, setStatus] = useState<'pending' | 'checking' | 'verified' | 'expired' | 'failed'>('pending');
   const [isPolling, setIsPolling] = useState(true);
   const pollIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Generate QR code on mount
-  useEffect(() => {
-    generateQRCode(qrUrl, 256).then(setQrCodeImage);
-  }, [qrUrl]);
+  // Generate QR code URL using external API for reliable scanning
+  const qrCodeImageUrl = getQRCodeUrl(qrUrl, 300);
 
   // Calculate remaining time
   useEffect(() => {
@@ -274,17 +219,12 @@ export default function AIVerificationQR({
       <CardContent className="flex flex-col items-center">
         {/* QR Code */}
         <div className="relative bg-white p-4 rounded-lg shadow-sm mb-4">
-          {qrCodeImage ? (
-            <img
-              src={qrCodeImage}
-              alt="Verification QR Code"
-              className="w-64 h-64"
-            />
-          ) : (
-            <div className="w-64 h-64 flex items-center justify-center">
-              <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-            </div>
-          )}
+          <img
+            src={qrCodeImageUrl}
+            alt="Verification QR Code"
+            className="w-64 h-64"
+            style={{ imageRendering: 'pixelated' }}
+          />
 
           {/* Status overlay when checking */}
           {status === 'checking' && (
