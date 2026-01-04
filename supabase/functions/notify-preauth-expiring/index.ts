@@ -175,28 +175,47 @@ serve(async (req) => {
     const data: NotifyRequest = await req.json();
     console.log('Sending pre-auth expiring notification for:', data.bookingRef);
 
+    // Create supabase client for all email operations
+    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+    const supabase = createClient(supabaseUrl, supabaseServiceKey);
+
     const results = {
       adminEmail: null as any,
       adminSMS: null as any,
     };
 
-    const adminEmail = EMAIL_CONFIG.adminEmail;
+    // Get tenant-specific admin email, fall back to env variable
+    let adminEmail: string | null = null;
+    if (data.tenantId) {
+      adminEmail = await getTenantAdminEmail(data.tenantId, supabase);
+      console.log('Using tenant admin email:', adminEmail);
+    }
+    if (!adminEmail) {
+      adminEmail = Deno.env.get('ADMIN_EMAIL') || null;
+      console.log('Falling back to env ADMIN_EMAIL:', adminEmail);
+    }
+
     const urgencyPrefix = data.hoursRemaining <= 24 ? "URGENT: " : "";
 
     // Send admin email
-    results.adminEmail = await sendEmail(
-      adminEmail,
-      `${urgencyPrefix}Pre-Auth Expiring in ${data.hoursRemaining}h - ${data.bookingRef} | DRIVE 247`,
-      getEmailHtml(data)
-    );
-    console.log('Admin email result:', results.adminEmail);
+    if (adminEmail) {
+      results.adminEmail = await sendEmail(
+        adminEmail,
+        `${urgencyPrefix}Pre-Auth Expiring in ${data.hoursRemaining}h - ${data.bookingRef}`,
+        getEmailHtml(data),
+        supabase,
+        data.tenantId
+      );
+      console.log('Admin email result:', results.adminEmail);
+    }
 
-    // Send admin SMS if phone configured
-    const adminPhone = EMAIL_CONFIG.adminPhone;
+    // Send admin SMS if phone configured (using env variable for now)
+    const adminPhone = Deno.env.get('ADMIN_PHONE');
     if (adminPhone) {
       results.adminSMS = await sendSMS(
         adminPhone,
-        `DRIVE 247: Pre-auth for ${data.bookingRef} expires in ${data.hoursRemaining}h. Amount: $${data.amount}. Action required.`
+        `Pre-auth for ${data.bookingRef} expires in ${data.hoursRemaining}h. Amount: $${data.amount}. Action required.`
       );
       console.log('Admin SMS result:', results.adminSMS);
     }
