@@ -6,7 +6,13 @@ import {
   parseXMLValue,
   isAWSConfigured
 } from "../_shared/aws-config.ts";
-import { sendEmail, getTenantAdminEmail } from "../_shared/resend-service.ts";
+import {
+  sendEmail,
+  getTenantAdminEmail,
+  getTenantBranding,
+  TenantBranding,
+  wrapWithBrandedTemplate
+} from "../_shared/resend-service.ts";
 
 interface NotifyRequest {
   customerName: string;
@@ -25,24 +31,8 @@ interface NotifyRequest {
   tenantId?: string;
 }
 
-const getCustomerEmailHtml = (data: NotifyRequest) => {
+const getCustomerEmailContent = (data: NotifyRequest, branding: TenantBranding) => {
   return `
-<!DOCTYPE html>
-<html>
-<head>
-    <meta charset="utf-8">
-    <title>Traffic Fine Notice</title>
-</head>
-<body style="margin: 0; padding: 0; font-family: 'Segoe UI', Arial, sans-serif; background-color: #f5f5f5;">
-    <table role="presentation" style="width: 100%; border-collapse: collapse;">
-        <tr>
-            <td align="center" style="padding: 40px 0;">
-                <table role="presentation" style="width: 600px; max-width: 100%; border-collapse: collapse; background: white; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.1);">
-                    <tr>
-                        <td style="background: linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 100%); padding: 30px; border-radius: 12px 12px 0 0; text-align: center;">
-                            <h1 style="margin: 0; color: #C5A572; font-size: 28px; letter-spacing: 2px;">Traffic Fine Notice</h1>
-                        </td>
-                    </tr>
                     <tr>
                         <td style="padding: 30px 30px 0; text-align: center;">
                             <span style="display: inline-block; background: #fef2f2; color: #dc2626; padding: 8px 20px; border-radius: 20px; font-weight: 600; font-size: 14px;">
@@ -122,56 +112,30 @@ const getCustomerEmailHtml = (data: NotifyRequest) => {
                                 </tr>
                             </table>
                         </td>
-                    </tr>
-                    <tr>
-                        <td style="background: #f8f9fa; padding: 25px 30px; border-radius: 0 0 12px 12px; text-align: center;">
-                            <p style="margin: 0; color: #999; font-size: 12px;">&copy; 2024 All rights reserved.</p>
-                        </td>
-                    </tr>
-                </table>
-            </td>
-        </tr>
-    </table>
-</body>
-</html>
-`;
+                    </tr>`;
 };
 
-const getAdminEmailHtml = (data: NotifyRequest) => {
+const getAdminEmailContent = (data: NotifyRequest, branding: TenantBranding) => {
   return `
-<!DOCTYPE html>
-<html>
-<head><meta charset="utf-8"><title>New Fine Recorded</title></head>
-<body style="margin: 0; padding: 20px; font-family: Arial, sans-serif; background-color: #f5f5f5;">
-    <table style="width: 100%; max-width: 600px; margin: 0 auto; background: white; border-radius: 8px; overflow: hidden;">
-        <tr>
-            <td style="background: #1a1a1a; padding: 20px; text-align: center;">
-                <h1 style="margin: 0; color: #C5A572; font-size: 24px;">ADMIN NOTIFICATION</h1>
-            </td>
-        </tr>
-        <tr>
-            <td style="padding: 30px;">
-                <h2 style="margin: 0 0 20px; color: #dc2626;">New Traffic Fine Recorded</h2>
-                <p style="margin: 0 0 20px; color: #444;">A new traffic fine has been recorded against a rental.</p>
-                <table style="width: 100%; border-collapse: collapse; background: #f8f9fa; border-radius: 8px;">
-                    <tr><td style="padding: 12px; border-bottom: 1px solid #e5e7eb; color: #666;">Fine Reference:</td><td style="padding: 12px; border-bottom: 1px solid #e5e7eb; font-weight: 600;">${data.fineRef}</td></tr>
-                    <tr><td style="padding: 12px; border-bottom: 1px solid #e5e7eb; color: #666;">Type:</td><td style="padding: 12px; border-bottom: 1px solid #e5e7eb;">${data.fineType}</td></tr>
-                    <tr><td style="padding: 12px; border-bottom: 1px solid #e5e7eb; color: #666;">Amount:</td><td style="padding: 12px; border-bottom: 1px solid #e5e7eb; color: #dc2626; font-weight: 600;">$${data.fineAmount.toLocaleString()}</td></tr>
-                    <tr><td style="padding: 12px; border-bottom: 1px solid #e5e7eb; color: #666;">Customer:</td><td style="padding: 12px; border-bottom: 1px solid #e5e7eb;">${data.customerName}</td></tr>
-                    <tr><td style="padding: 12px; border-bottom: 1px solid #e5e7eb; color: #666;">Email:</td><td style="padding: 12px; border-bottom: 1px solid #e5e7eb;">${data.customerEmail}</td></tr>
-                    <tr><td style="padding: 12px; border-bottom: 1px solid #e5e7eb; color: #666;">Vehicle:</td><td style="padding: 12px; border-bottom: 1px solid #e5e7eb;">${data.vehicleName} (${data.vehicleReg})</td></tr>
-                    <tr><td style="padding: 12px; border-bottom: 1px solid #e5e7eb; color: #666;">Booking Ref:</td><td style="padding: 12px; border-bottom: 1px solid #e5e7eb;">${data.bookingRef}</td></tr>
-                    <tr><td style="padding: 12px; border-bottom: 1px solid #e5e7eb; color: #666;">Fine Date:</td><td style="padding: 12px; border-bottom: 1px solid #e5e7eb;">${data.fineDate}</td></tr>
-                    ${data.fineLocation ? `<tr><td style="padding: 12px; border-bottom: 1px solid #e5e7eb; color: #666;">Location:</td><td style="padding: 12px; border-bottom: 1px solid #e5e7eb;">${data.fineLocation}</td></tr>` : ''}
-                    ${data.dueDate ? `<tr><td style="padding: 12px; color: #666;">Due Date:</td><td style="padding: 12px; color: #dc2626;">${data.dueDate}</td></tr>` : ''}
-                </table>
-                <p style="margin: 20px 0 0; color: #666; font-size: 14px;">Customer has been notified via email.</p>
-            </td>
-        </tr>
-    </table>
-</body>
-</html>
-`;
+                    <tr>
+                        <td style="padding: 30px;">
+                            <h2 style="margin: 0 0 20px; color: #dc2626;">New Traffic Fine Recorded</h2>
+                            <p style="margin: 0 0 20px; color: #444;">A new traffic fine has been recorded against a rental.</p>
+                            <table style="width: 100%; border-collapse: collapse; background: #f8f9fa; border-radius: 8px;">
+                                <tr><td style="padding: 12px; border-bottom: 1px solid #e5e7eb; color: #666;">Fine Reference:</td><td style="padding: 12px; border-bottom: 1px solid #e5e7eb; font-weight: 600;">${data.fineRef}</td></tr>
+                                <tr><td style="padding: 12px; border-bottom: 1px solid #e5e7eb; color: #666;">Type:</td><td style="padding: 12px; border-bottom: 1px solid #e5e7eb;">${data.fineType}</td></tr>
+                                <tr><td style="padding: 12px; border-bottom: 1px solid #e5e7eb; color: #666;">Amount:</td><td style="padding: 12px; border-bottom: 1px solid #e5e7eb; color: #dc2626; font-weight: 600;">$${data.fineAmount.toLocaleString()}</td></tr>
+                                <tr><td style="padding: 12px; border-bottom: 1px solid #e5e7eb; color: #666;">Customer:</td><td style="padding: 12px; border-bottom: 1px solid #e5e7eb;">${data.customerName}</td></tr>
+                                <tr><td style="padding: 12px; border-bottom: 1px solid #e5e7eb; color: #666;">Email:</td><td style="padding: 12px; border-bottom: 1px solid #e5e7eb;">${data.customerEmail}</td></tr>
+                                <tr><td style="padding: 12px; border-bottom: 1px solid #e5e7eb; color: #666;">Vehicle:</td><td style="padding: 12px; border-bottom: 1px solid #e5e7eb;">${data.vehicleName} (${data.vehicleReg})</td></tr>
+                                <tr><td style="padding: 12px; border-bottom: 1px solid #e5e7eb; color: #666;">Booking Ref:</td><td style="padding: 12px; border-bottom: 1px solid #e5e7eb;">${data.bookingRef}</td></tr>
+                                <tr><td style="padding: 12px; border-bottom: 1px solid #e5e7eb; color: #666;">Fine Date:</td><td style="padding: 12px; border-bottom: 1px solid #e5e7eb;">${data.fineDate}</td></tr>
+                                ${data.fineLocation ? `<tr><td style="padding: 12px; border-bottom: 1px solid #e5e7eb; color: #666;">Location:</td><td style="padding: 12px; border-bottom: 1px solid #e5e7eb;">${data.fineLocation}</td></tr>` : ''}
+                                ${data.dueDate ? `<tr><td style="padding: 12px; color: #666;">Due Date:</td><td style="padding: 12px; color: #dc2626;">${data.dueDate}</td></tr>` : ''}
+                            </table>
+                            <p style="margin: 20px 0 0; color: #666; font-size: 14px;">Customer has been notified via email.</p>
+                        </td>
+                    </tr>`;
 };
 
 async function sendSMS(phoneNumber: string, message: string) {
@@ -228,17 +192,26 @@ serve(async (req) => {
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
+    // Get tenant branding
+    const branding = data.tenantId
+      ? await getTenantBranding(data.tenantId, supabase)
+      : { companyName: 'Drive 247', logoUrl: null, primaryColor: '#1a1a1a', accentColor: '#C5A572', contactEmail: 'support@drive-247.com', contactPhone: null, slug: 'drive247' };
+
     const results = {
       customerEmail: null as any,
       customerSMS: null as any,
       adminEmail: null as any,
     };
 
+    // Build branded customer email HTML
+    const customerEmailContent = getCustomerEmailContent(data, branding);
+    const customerEmailHtml = wrapWithBrandedTemplate(customerEmailContent, branding);
+
     // Send customer email (with tenant-specific from address)
     results.customerEmail = await sendEmail(
       data.customerEmail,
       `Traffic Fine Notice - $${data.fineAmount}`,
-      getCustomerEmailHtml(data),
+      customerEmailHtml,
       supabase,
       data.tenantId
     );
@@ -264,12 +237,16 @@ serve(async (req) => {
       console.log('Falling back to env ADMIN_EMAIL:', adminEmail);
     }
 
+    // Build branded admin email HTML
+    const adminEmailContent = getAdminEmailContent(data, branding);
+    const adminEmailHtml = wrapWithBrandedTemplate(adminEmailContent, branding);
+
     // Send admin email
     if (adminEmail) {
       results.adminEmail = await sendEmail(
         adminEmail,
         `New Fine Recorded - ${data.fineRef} - $${data.fineAmount}`,
-        getAdminEmailHtml(data),
+        adminEmailHtml,
         supabase,
         data.tenantId
       );

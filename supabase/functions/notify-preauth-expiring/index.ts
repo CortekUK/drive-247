@@ -6,7 +6,13 @@ import {
   parseXMLValue,
   isAWSConfigured
 } from "../_shared/aws-config.ts";
-import { sendEmail, getTenantAdminEmail } from "../_shared/resend-service.ts";
+import {
+  sendEmail,
+  getTenantAdminEmail,
+  getTenantBranding,
+  TenantBranding,
+  wrapWithBrandedTemplate
+} from "../_shared/resend-service.ts";
 
 interface NotifyRequest {
   bookingRef: string;
@@ -20,28 +26,12 @@ interface NotifyRequest {
   tenantId?: string;
 }
 
-const getEmailHtml = (data: NotifyRequest) => {
+const getEmailContent = (data: NotifyRequest, branding: TenantBranding) => {
   const urgencyColor = data.hoursRemaining <= 24 ? "#dc2626" : "#f59e0b";
   const urgencyBg = data.hoursRemaining <= 24 ? "#fef2f2" : "#fef3c7";
   const urgencyText = data.hoursRemaining <= 24 ? "URGENT" : "ACTION REQUIRED";
 
   return `
-<!DOCTYPE html>
-<html>
-<head>
-    <meta charset="utf-8">
-    <title>Pre-Authorization Expiring - DRIVE 247 Admin</title>
-</head>
-<body style="margin: 0; padding: 0; font-family: 'Segoe UI', Arial, sans-serif; background-color: #f5f5f5;">
-    <table role="presentation" style="width: 100%; border-collapse: collapse;">
-        <tr>
-            <td align="center" style="padding: 40px 0;">
-                <table role="presentation" style="width: 600px; max-width: 100%; border-collapse: collapse; background: white; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.1);">
-                    <tr>
-                        <td style="background: linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 100%); padding: 30px; border-radius: 12px 12px 0 0; text-align: center;">
-                            <h1 style="margin: 0; color: #C5A572; font-size: 28px; letter-spacing: 2px;">DRIVE 247 ADMIN</h1>
-                        </td>
-                    </tr>
                     <tr>
                         <td style="padding: 30px 30px 0; text-align: center;">
                             <span style="display: inline-block; background: ${urgencyBg}; color: ${urgencyColor}; padding: 8px 20px; border-radius: 20px; font-weight: 600; font-size: 14px;">
@@ -101,27 +91,8 @@ const getEmailHtml = (data: NotifyRequest) => {
                                     </td>
                                 </tr>
                             </table>
-                            <table role="presentation" style="width: 100%; border-collapse: collapse;">
-                                <tr>
-                                    <td style="text-align: center; padding: 20px 0;">
-                                        <a href="https://drive247-admin.vercel.app/pending-bookings" style="display: inline-block; background: #C5A572; color: white; padding: 14px 35px; border-radius: 6px; text-decoration: none; font-weight: 600; font-size: 16px;">Review Pending Bookings</a>
-                                    </td>
-                                </tr>
-                            </table>
                         </td>
-                    </tr>
-                    <tr>
-                        <td style="background: #f8f9fa; padding: 25px 30px; border-radius: 0 0 12px 12px; text-align: center;">
-                            <p style="margin: 0; color: #999; font-size: 12px;">&copy; 2024 DRIVE 247 Admin Portal. All rights reserved.</p>
-                        </td>
-                    </tr>
-                </table>
-            </td>
-        </tr>
-    </table>
-</body>
-</html>
-`;
+                    </tr>`;
 };
 
 // sendEmail is now imported from resend-service.ts
@@ -180,6 +151,11 @@ serve(async (req) => {
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
+    // Get tenant branding
+    const branding = data.tenantId
+      ? await getTenantBranding(data.tenantId, supabase)
+      : { companyName: 'Drive 247', logoUrl: null, primaryColor: '#1a1a1a', accentColor: '#C5A572', contactEmail: 'support@drive-247.com', contactPhone: null, slug: 'drive247' };
+
     const results = {
       adminEmail: null as any,
       adminSMS: null as any,
@@ -198,12 +174,16 @@ serve(async (req) => {
 
     const urgencyPrefix = data.hoursRemaining <= 24 ? "URGENT: " : "";
 
+    // Build branded admin email HTML
+    const adminEmailContent = getEmailContent(data, branding);
+    const adminEmailHtml = wrapWithBrandedTemplate(adminEmailContent, branding);
+
     // Send admin email
     if (adminEmail) {
       results.adminEmail = await sendEmail(
         adminEmail,
         `${urgencyPrefix}Pre-Auth Expiring in ${data.hoursRemaining}h - ${data.bookingRef}`,
-        getEmailHtml(data),
+        adminEmailHtml,
         supabase,
         data.tenantId
       );
@@ -215,7 +195,7 @@ serve(async (req) => {
     if (adminPhone) {
       results.adminSMS = await sendSMS(
         adminPhone,
-        `Pre-auth for ${data.bookingRef} expires in ${data.hoursRemaining}h. Amount: $${data.amount}. Action required.`
+        `${branding.companyName}: Pre-auth for ${data.bookingRef} expires in ${data.hoursRemaining}h. Amount: $${data.amount}. Action required.`
       );
       console.log('Admin SMS result:', results.adminSMS);
     }

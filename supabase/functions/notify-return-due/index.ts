@@ -6,7 +6,13 @@ import {
   parseXMLValue,
   isAWSConfigured
 } from "../_shared/aws-config.ts";
-import { sendEmail, getTenantAdminEmail } from "../_shared/resend-service.ts";
+import {
+  sendEmail,
+  getTenantAdminEmail,
+  getTenantBranding,
+  TenantBranding,
+  wrapWithBrandedTemplate
+} from "../_shared/resend-service.ts";
 
 interface RentalInfo {
   bookingRef: string;
@@ -27,7 +33,7 @@ interface NotifyRequest {
   tenantId?: string;
 }
 
-const getAdminEmailHtml = (rentals: RentalInfo[]) => {
+const getAdminEmailContent = (rentals: RentalInfo[], branding: TenantBranding) => {
   const dueToday = rentals.filter(r => r.status === "due_today");
   const overdue = rentals.filter(r => r.status === "overdue");
 
@@ -42,87 +48,64 @@ const getAdminEmailHtml = (rentals: RentalInfo[]) => {
   `;
 
   return `
-<!DOCTYPE html>
-<html>
-<head><meta charset="utf-8"><title>Returns Due - DRIVE 247 Admin</title></head>
-<body style="margin: 0; padding: 20px; font-family: Arial, sans-serif; background-color: #f5f5f5;">
-    <table style="width: 100%; max-width: 800px; margin: 0 auto; background: white; border-radius: 8px; overflow: hidden;">
-        <tr>
-            <td style="background: #1a1a1a; padding: 20px; text-align: center;">
-                <h1 style="margin: 0; color: #C5A572; font-size: 24px;">DRIVE 247 ADMIN</h1>
-            </td>
-        </tr>
-        <tr>
-            <td style="padding: 30px;">
-                <h2 style="margin: 0 0 20px; color: #1a1a1a;">Daily Returns Summary</h2>
-                <p style="margin: 0 0 25px; color: #444;">Here's your daily summary of vehicle returns that need attention.</p>
+                    <tr>
+                        <td style="padding: 30px;">
+                            <h2 style="margin: 0 0 20px; color: #1a1a1a;">Daily Returns Summary</h2>
+                            <p style="margin: 0 0 25px; color: #444;">Here's your daily summary of vehicle returns that need attention.</p>
 
-                ${overdue.length > 0 ? `
-                <div style="margin-bottom: 30px;">
-                    <h3 style="margin: 0 0 15px; color: #dc2626; display: flex; align-items: center;">
-                        <span style="display: inline-block; background: #fef2f2; color: #dc2626; padding: 4px 12px; border-radius: 12px; font-size: 12px; margin-right: 10px;">${overdue.length}</span>
-                        OVERDUE RETURNS
-                    </h3>
-                    <table style="width: 100%; border-collapse: collapse; background: #fef2f2; border-radius: 8px;">
-                        <thead>
-                            <tr style="background: #fee2e2;">
-                                <th style="padding: 12px; text-align: left; font-size: 12px; color: #991b1b;">REF</th>
-                                <th style="padding: 12px; text-align: left; font-size: 12px; color: #991b1b;">CUSTOMER</th>
-                                <th style="padding: 12px; text-align: left; font-size: 12px; color: #991b1b;">VEHICLE</th>
-                                <th style="padding: 12px; text-align: left; font-size: 12px; color: #991b1b;">DUE DATE</th>
-                                <th style="padding: 12px; text-align: left; font-size: 12px; color: #991b1b;">STATUS</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            ${overdue.map(renderRentalRow).join('')}
-                        </tbody>
-                    </table>
-                </div>
-                ` : ''}
+                            ${overdue.length > 0 ? `
+                            <div style="margin-bottom: 30px;">
+                                <h3 style="margin: 0 0 15px; color: #dc2626; display: flex; align-items: center;">
+                                    <span style="display: inline-block; background: #fef2f2; color: #dc2626; padding: 4px 12px; border-radius: 12px; font-size: 12px; margin-right: 10px;">${overdue.length}</span>
+                                    OVERDUE RETURNS
+                                </h3>
+                                <table style="width: 100%; border-collapse: collapse; background: #fef2f2; border-radius: 8px;">
+                                    <thead>
+                                        <tr style="background: #fee2e2;">
+                                            <th style="padding: 12px; text-align: left; font-size: 12px; color: #991b1b;">REF</th>
+                                            <th style="padding: 12px; text-align: left; font-size: 12px; color: #991b1b;">CUSTOMER</th>
+                                            <th style="padding: 12px; text-align: left; font-size: 12px; color: #991b1b;">VEHICLE</th>
+                                            <th style="padding: 12px; text-align: left; font-size: 12px; color: #991b1b;">DUE DATE</th>
+                                            <th style="padding: 12px; text-align: left; font-size: 12px; color: #991b1b;">STATUS</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        ${overdue.map(renderRentalRow).join('')}
+                                    </tbody>
+                                </table>
+                            </div>
+                            ` : ''}
 
-                ${dueToday.length > 0 ? `
-                <div style="margin-bottom: 30px;">
-                    <h3 style="margin: 0 0 15px; color: #f59e0b; display: flex; align-items: center;">
-                        <span style="display: inline-block; background: #fef3c7; color: #92400e; padding: 4px 12px; border-radius: 12px; font-size: 12px; margin-right: 10px;">${dueToday.length}</span>
-                        DUE TODAY
-                    </h3>
-                    <table style="width: 100%; border-collapse: collapse; background: #fef3c7; border-radius: 8px;">
-                        <thead>
-                            <tr style="background: #fde68a;">
-                                <th style="padding: 12px; text-align: left; font-size: 12px; color: #92400e;">REF</th>
-                                <th style="padding: 12px; text-align: left; font-size: 12px; color: #92400e;">CUSTOMER</th>
-                                <th style="padding: 12px; text-align: left; font-size: 12px; color: #92400e;">VEHICLE</th>
-                                <th style="padding: 12px; text-align: left; font-size: 12px; color: #92400e;">RETURN TIME</th>
-                                <th style="padding: 12px; text-align: left; font-size: 12px; color: #92400e;">STATUS</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            ${dueToday.map(renderRentalRow).join('')}
-                        </tbody>
-                    </table>
-                </div>
-                ` : ''}
+                            ${dueToday.length > 0 ? `
+                            <div style="margin-bottom: 30px;">
+                                <h3 style="margin: 0 0 15px; color: #f59e0b; display: flex; align-items: center;">
+                                    <span style="display: inline-block; background: #fef3c7; color: #92400e; padding: 4px 12px; border-radius: 12px; font-size: 12px; margin-right: 10px;">${dueToday.length}</span>
+                                    DUE TODAY
+                                </h3>
+                                <table style="width: 100%; border-collapse: collapse; background: #fef3c7; border-radius: 8px;">
+                                    <thead>
+                                        <tr style="background: #fde68a;">
+                                            <th style="padding: 12px; text-align: left; font-size: 12px; color: #92400e;">REF</th>
+                                            <th style="padding: 12px; text-align: left; font-size: 12px; color: #92400e;">CUSTOMER</th>
+                                            <th style="padding: 12px; text-align: left; font-size: 12px; color: #92400e;">VEHICLE</th>
+                                            <th style="padding: 12px; text-align: left; font-size: 12px; color: #92400e;">RETURN TIME</th>
+                                            <th style="padding: 12px; text-align: left; font-size: 12px; color: #92400e;">STATUS</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        ${dueToday.map(renderRentalRow).join('')}
+                                    </tbody>
+                                </table>
+                            </div>
+                            ` : ''}
 
-                ${rentals.length === 0 ? `
-                <div style="text-align: center; padding: 40px; background: #ecfdf5; border-radius: 8px;">
-                    <p style="margin: 0; color: #10b981; font-size: 18px;">All caught up! No returns due today.</p>
-                </div>
-                ` : ''}
-
-                <div style="text-align: center; margin-top: 25px;">
-                    <a href="https://drive247-admin.vercel.app/rentals" style="display: inline-block; background: #C5A572; color: white; padding: 12px 30px; border-radius: 6px; text-decoration: none; font-weight: 600;">View All Rentals</a>
-                </div>
-            </td>
-        </tr>
-        <tr>
-            <td style="background: #f8f9fa; padding: 20px; text-align: center;">
-                <p style="margin: 0; color: #999; font-size: 12px;">&copy; 2024 DRIVE 247 Admin Portal</p>
-            </td>
-        </tr>
-    </table>
-</body>
-</html>
-`;
+                            ${rentals.length === 0 ? `
+                            <div style="text-align: center; padding: 40px; background: #ecfdf5; border-radius: 8px;">
+                                <p style="margin: 0; color: #10b981; font-size: 18px;">All caught up! No returns due today.</p>
+                            </div>
+                            ` : ''}
+                        </td>
+                    </tr>`;
 };
 
 // sendEmail is now imported from resend-service.ts
@@ -181,6 +164,11 @@ serve(async (req) => {
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
+    // Get tenant branding
+    const branding = data.tenantId
+      ? await getTenantBranding(data.tenantId, supabase)
+      : { companyName: 'Drive 247', logoUrl: null, primaryColor: '#1a1a1a', accentColor: '#C5A572', contactEmail: 'support@drive-247.com', contactPhone: null, slug: 'drive247' };
+
     const results = {
       adminEmail: null as any,
       adminSMS: null as any,
@@ -208,12 +196,16 @@ serve(async (req) => {
       subject = `${dueToday.length} Return${dueToday.length > 1 ? 's' : ''} Due Today`;
     }
 
+    // Build branded admin email HTML
+    const adminEmailContent = getAdminEmailContent(data.rentals, branding);
+    const adminEmailHtml = wrapWithBrandedTemplate(adminEmailContent, branding);
+
     // Send admin email
     if (adminEmail) {
       results.adminEmail = await sendEmail(
         adminEmail,
         subject,
-        getAdminEmailHtml(data.rentals),
+        adminEmailHtml,
         supabase,
         data.tenantId
       );
@@ -225,7 +217,7 @@ serve(async (req) => {
     if (adminPhone && overdue.length > 0) {
       results.adminSMS = await sendSMS(
         adminPhone,
-        `URGENT: ${overdue.length} rental(s) overdue. Check admin portal for details.`
+        `${branding.companyName} URGENT: ${overdue.length} rental(s) overdue. Check admin portal for details.`
       );
       console.log('Admin SMS result:', results.adminSMS);
     }
