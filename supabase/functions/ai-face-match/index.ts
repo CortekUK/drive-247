@@ -28,6 +28,19 @@ const REVIEW_THRESHOLD = 70;     // 70-89% needs manual review
 // < 70% is no match
 
 /**
+ * Convert Uint8Array to base64 string (handles large arrays safely)
+ */
+function uint8ArrayToBase64(bytes: Uint8Array): string {
+  let binary = '';
+  const chunkSize = 8192; // Process in chunks to avoid stack overflow
+  for (let i = 0; i < bytes.length; i += chunkSize) {
+    const chunk = bytes.subarray(i, Math.min(i + chunkSize, bytes.length));
+    binary += String.fromCharCode.apply(null, Array.from(chunk));
+  }
+  return btoa(binary);
+}
+
+/**
  * Download image from URL and return as Uint8Array
  */
 async function downloadImage(url: string, supabase?: any): Promise<Uint8Array | null> {
@@ -40,6 +53,8 @@ async function downloadImage(url: string, supabase?: any): Promise<Uint8Array | 
         const [bucket, ...pathParts] = fullPath.split('/');
         const filePath = pathParts.join('/');
 
+        console.log('Downloading from Supabase storage:', bucket, filePath);
+
         const { data, error } = await supabase.storage
           .from(bucket)
           .download(filePath);
@@ -50,11 +65,13 @@ async function downloadImage(url: string, supabase?: any): Promise<Uint8Array | 
         }
 
         const arrayBuffer = await data.arrayBuffer();
+        console.log('Successfully downloaded image, size:', arrayBuffer.byteLength);
         return new Uint8Array(arrayBuffer);
       }
     }
 
     // Regular URL download
+    console.log('Downloading from URL:', url);
     const response = await fetch(url);
     if (!response.ok) {
       console.error('Image download failed:', response.status);
@@ -62,6 +79,7 @@ async function downloadImage(url: string, supabase?: any): Promise<Uint8Array | 
     }
 
     const arrayBuffer = await response.arrayBuffer();
+    console.log('Successfully downloaded image, size:', arrayBuffer.byteLength);
     return new Uint8Array(arrayBuffer);
 
   } catch (error) {
@@ -182,13 +200,13 @@ async function compareFaces(
   const endpoint = `https://rekognition.${region}.amazonaws.com`;
   const host = `rekognition.${region}.amazonaws.com`;
 
-  // Prepare request body
+  // Prepare request body (use safe base64 encoding)
   const requestBody = JSON.stringify({
     SourceImage: {
-      Bytes: btoa(String.fromCharCode(...sourceImage))
+      Bytes: uint8ArrayToBase64(sourceImage)
     },
     TargetImage: {
-      Bytes: btoa(String.fromCharCode(...targetImage))
+      Bytes: uint8ArrayToBase64(targetImage)
     },
     SimilarityThreshold: 0 // Get all results, we'll apply our own thresholds
   });
