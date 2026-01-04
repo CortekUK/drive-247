@@ -20,8 +20,12 @@ interface CreateEnvelopeResponse {
   detail?: string;
 }
 
-// Generate rental agreement document content
-function generateRentalAgreementPDF(rental: any, customer: any, vehicle: any): string {
+// Generate rental agreement document content (fallback/default)
+function generateRentalAgreementPDF(rental: any, customer: any, vehicle: any, tenant?: any): string {
+  const companyName = tenant?.company_name || 'Vexa';
+  const companyEmail = tenant?.contact_email || '[Company Email]';
+  const companyPhone = tenant?.contact_phone || '[Company Phone]';
+
   const agreementText = `
 RENTAL AGREEMENT
 
@@ -31,9 +35,9 @@ Agreement Reference: ${rental.id}
 ===============================================================================
 
 LANDLORD:
-Vexa
-[Company Address]
-[Company Contact Details]
+${companyName}
+Email: ${companyEmail}
+Phone: ${companyPhone}
 
 CUSTOMER:
 Name: ${customer.name}
@@ -59,11 +63,11 @@ Monthly Rental Amount: $${rental.monthly_amount.toLocaleString('en-US')}
 
 TERMS AND CONDITIONS:
 
-1. The Customer agrees to rent the above-described vehicle from Vexa.
+1. The Customer agrees to rent the above-described vehicle from ${companyName}.
 2. The Customer shall pay the specified monthly rental amount on time.
 3. The Customer agrees to maintain the vehicle in good condition.
 4. The Customer is responsible for any damage to the vehicle during the rental period.
-5. This agreement is subject to the full terms and conditions of Vexa.
+5. This agreement is subject to the full terms and conditions of ${companyName}.
 
 ===============================================================================
 
@@ -84,11 +88,181 @@ Landlord Date: ______________
 
 ===============================================================================
 
-Vexa - Rental Agreement
+${companyName} - Rental Agreement
 Generated: ${new Date().toISOString()}
 `;
 
   return btoa(agreementText);
+}
+
+// Fetch active agreement template for a tenant
+async function getActiveAgreementTemplate(supabase: any, tenantId: string): Promise<string | null> {
+  try {
+    console.log('Fetching active agreement template for tenant:', tenantId);
+
+    const { data, error } = await supabase
+      .from('agreement_templates')
+      .select('template_content')
+      .eq('tenant_id', tenantId)
+      .eq('is_active', true)
+      .single();
+
+    if (error) {
+      // No active template found is not an error
+      if (error.code === 'PGRST116') {
+        console.log('No active template found for tenant, will use default');
+        return null;
+      }
+      console.error('Error fetching agreement template:', error);
+      return null;
+    }
+
+    console.log('Found active template for tenant');
+    return data?.template_content || null;
+  } catch (error) {
+    console.error('Error in getActiveAgreementTemplate:', error);
+    return null;
+  }
+}
+
+// Format date for template
+function formatDateForTemplate(date: string | Date | null): string {
+  if (!date) return '';
+  const d = typeof date === 'string' ? new Date(date) : date;
+  return d.toLocaleDateString('en-US', {
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+  });
+}
+
+// Format currency for template
+function formatCurrencyForTemplate(amount: number | null): string {
+  if (amount === null || amount === undefined) return '';
+  return new Intl.NumberFormat('en-US', {
+    style: 'currency',
+    currency: 'USD',
+  }).format(amount);
+}
+
+// Process template by replacing variables with actual data
+function processTemplate(
+  template: string,
+  rental: any,
+  customer: any,
+  vehicle: any,
+  tenant: any
+): string {
+  const variables: Record<string, string> = {
+    // Customer
+    customer_name: customer.name || '',
+    customer_email: customer.email || '',
+    customer_phone: customer.phone || '',
+    customer_address: customer.address || '',
+    customer_type: customer.customer_type || customer.type || 'Individual',
+
+    // Vehicle
+    vehicle_make: vehicle.make || '',
+    vehicle_model: vehicle.model || '',
+    vehicle_year: vehicle.year?.toString() || '',
+    vehicle_reg: vehicle.reg || '',
+    vehicle_color: vehicle.color || '',
+    vehicle_vin: vehicle.vin || '',
+
+    // Rental
+    rental_number: rental.rental_number || rental.id.substring(0, 8).toUpperCase(),
+    rental_start_date: formatDateForTemplate(rental.start_date),
+    rental_end_date: rental.end_date ? formatDateForTemplate(rental.end_date) : 'Ongoing',
+    monthly_amount: formatCurrencyForTemplate(rental.monthly_amount),
+    rental_period_type: rental.rental_period_type || 'Monthly',
+
+    // Company
+    company_name: tenant?.company_name || '',
+    company_email: tenant?.contact_email || '',
+    company_phone: tenant?.contact_phone || '',
+
+    // Agreement
+    agreement_date: formatDateForTemplate(new Date()),
+  };
+
+  let result = template;
+
+  // Replace all variables
+  for (const [key, value] of Object.entries(variables)) {
+    const placeholder = `{{${key}}}`;
+    result = result.replace(new RegExp(placeholder.replace(/[{}]/g, '\\$&'), 'g'), value);
+  }
+
+  return result;
+}
+
+// Convert HTML to plain text for DocuSign
+function htmlToPlainText(html: string): string {
+  return html
+    // Replace <br> and <br/> with newlines
+    .replace(/<br\s*\/?>/gi, '\n')
+    // Replace closing block tags with newlines
+    .replace(/<\/(p|div|h[1-6]|li|tr)>/gi, '\n')
+    // Replace <hr> with separator
+    .replace(/<hr\s*\/?>/gi, '\n===============================================================================\n')
+    // Handle table cells
+    .replace(/<\/td>/gi, ' | ')
+    .replace(/<\/th>/gi, ' | ')
+    .replace(/<tr>/gi, '')
+    // Handle list items
+    .replace(/<li>/gi, '- ')
+    // Remove remaining HTML tags
+    .replace(/<[^>]+>/g, '')
+    // Decode HTML entities
+    .replace(/&nbsp;/gi, ' ')
+    .replace(/&amp;/gi, '&')
+    .replace(/&lt;/gi, '<')
+    .replace(/&gt;/gi, '>')
+    .replace(/&quot;/gi, '"')
+    .replace(/&#39;/gi, "'")
+    .replace(/&middot;/gi, '·')
+    // Clean up extra whitespace
+    .replace(/\n{3,}/g, '\n\n')
+    .replace(/[ \t]+/g, ' ')
+    .trim();
+}
+
+// Generate document from template or use default
+async function generateDocument(
+  supabase: any,
+  rental: any,
+  customer: any,
+  vehicle: any,
+  tenantId: string
+): Promise<string> {
+  // Try to get tenant-specific template
+  const template = await getActiveAgreementTemplate(supabase, tenantId);
+
+  if (template) {
+    // Get tenant info for company variables
+    const { data: tenant } = await supabase
+      .from('tenants')
+      .select('company_name, contact_email, contact_phone')
+      .eq('id', tenantId)
+      .single();
+
+    console.log('Using custom template for tenant');
+    const processedContent = processTemplate(template, rental, customer, vehicle, tenant);
+    const plainText = htmlToPlainText(processedContent);
+    return btoa(plainText);
+  }
+
+  // Fallback to default template
+  console.log('Using default template');
+
+  // Get tenant info for default template too
+  const { data: tenant } = await supabase
+    .from('tenants')
+    .select('company_name, contact_email, contact_phone')
+    .eq('id', tenantId)
+    .single();
+
+  return generateRentalAgreementPDF(rental, customer, vehicle, tenant);
 }
 
 // Helper function to convert PKCS#1 to PKCS#8 format
@@ -381,8 +555,8 @@ async function createDocuSignEnvelope(supabase: any, rentalId: string): Promise<
       .from('rentals')
       .select(`
         *,
-        customers:customer_id (id, name, email, phone, customer_type, type),
-        vehicles:vehicle_id (id, reg, make, model)
+        customers:customer_id (id, name, email, phone, address, customer_type, type),
+        vehicles:vehicle_id (id, reg, make, model, year, color, vin)
       `)
       .eq('id', rentalId)
       .single();
@@ -441,8 +615,8 @@ async function createDocuSignEnvelope(supabase: any, rentalId: string): Promise<
       };
     }
 
-    // Generate the rental agreement document
-    const documentBase64 = generateRentalAgreementPDF(rental, customer, vehicle);
+    // Generate the rental agreement document (uses tenant template if available)
+    const documentBase64 = await generateDocument(supabase, rental, customer, vehicle, rental.tenant_id);
 
     // Get JWT access token
     const authResult = await getDocuSignAccessToken(

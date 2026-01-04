@@ -158,6 +158,8 @@ const CustomerDetail = () => {
   const { data: fineStats } = useCustomerFineStats(id!);
   const { data: vehicleHistory } = useCustomerVehicleHistory(id!);
   const { data: documents } = useCustomerDocuments(id!);
+  const deleteDocument = useDeleteCustomerDocument();
+  const downloadDocument = useDownloadDocument();
 
   // Fetch rentals with DocuSign status for documents tab
   const { data: rentalAgreements } = useQuery({
@@ -351,11 +353,11 @@ const CustomerDetail = () => {
                 </div>
                 <MetricItem label="Active Rentals" value={activeRentalsCount || 0} />
                 <MetricItem label="Total Payments" value={paymentStats?.paymentCount || 0} />
-                {paymentStats?.totalPayments && paymentStats.totalPayments > 0 && (
+                {paymentStats?.totalPayments != null && paymentStats.totalPayments > 0 && (
                   <MetricItem label="Payment Amount" value={paymentStats.totalPayments} isAmount />
                 )}
                 <MetricItem label="Open Fines" value={fineStats?.openFines || 0} />
-                {fineStats?.openFineAmount && fineStats.openFineAmount > 0 && (
+                {fineStats?.openFineAmount != null && fineStats.openFineAmount > 0 && (
                   <MetricItem label="Fine Amount" value={fineStats.openFineAmount} isAmount />
                 )}
                 <MetricItem label="Documents" value={documents?.length || 0} />
@@ -775,6 +777,79 @@ const CustomerDetail = () => {
             <CardContent>
               {(documents && documents.length > 0) || (rentalAgreements && rentalAgreements.length > 0) ? (
                 <div className="space-y-6">
+                  {/* Customer Documents Section */}
+                  {documents && documents.length > 0 && (
+                    <div>
+                      <h3 className="text-sm font-semibold mb-3 text-muted-foreground">Uploaded Documents</h3>
+                      <div className="rounded-md border">
+                        <Table>
+                          <TableHeader>
+                            <TableRow className="hover:bg-transparent">
+                              <TableHead className="font-semibold">Document</TableHead>
+                              <TableHead className="font-semibold">Type</TableHead>
+                              <TableHead className="font-semibold">Vehicle</TableHead>
+                              <TableHead className="font-semibold">Created</TableHead>
+                              <TableHead className="font-semibold text-right">Actions</TableHead>
+                            </TableRow>
+                          </TableHeader>
+                          <TableBody>
+                            {documents.map((doc) => (
+                              <TableRow key={doc.id} className="hover:bg-muted/50 transition-colors">
+                                <TableCell>
+                                  <div className="font-semibold text-foreground">
+                                    {doc.document_name}
+                                  </div>
+                                  {doc.file_name && (
+                                    <div className="text-xs text-muted-foreground">{doc.file_name}</div>
+                                  )}
+                                </TableCell>
+                                <TableCell>{doc.document_type}</TableCell>
+                                <TableCell>
+                                  {doc.vehicles ? (
+                                    <TruncatedCell
+                                      content={`${doc.vehicles.reg} - ${doc.vehicles.make} ${doc.vehicles.model}`}
+                                      maxLength={25}
+                                      className="text-sm"
+                                    />
+                                  ) : (
+                                    <span className="text-muted-foreground">-</span>
+                                  )}
+                                </TableCell>
+                                <TableCell className="whitespace-nowrap">
+                                  {format(new Date(doc.created_at), "MM/dd/yyyy")}
+                                </TableCell>
+                                <TableCell>
+                                  <div className="flex items-center justify-end gap-1">
+                                    {doc.file_url && (
+                                      <Button
+                                        variant="outline"
+                                        size="sm"
+                                        className="h-8 w-8 p-0"
+                                        title="Download document"
+                                        onClick={() => downloadDocument.mutate(doc)}
+                                      >
+                                        <Download className="h-3 w-3" />
+                                      </Button>
+                                    )}
+                                    <Button
+                                      variant="outline"
+                                      size="sm"
+                                      className="h-8 w-8 p-0 text-destructive hover:text-destructive"
+                                      title="Delete document"
+                                      onClick={() => deleteDocument.mutate(doc.id)}
+                                    >
+                                      <Trash2 className="h-3 w-3" />
+                                    </Button>
+                                  </div>
+                                </TableCell>
+                              </TableRow>
+                            ))}
+                          </TableBody>
+                        </Table>
+                      </div>
+                    </div>
+                  )}
+
                   {/* Rental Agreements Section */}
                   {rentalAgreements && rentalAgreements.length > 0 && (
                     <div>

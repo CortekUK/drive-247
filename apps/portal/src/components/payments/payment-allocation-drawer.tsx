@@ -66,9 +66,9 @@ export const PaymentAllocationDrawer = ({
         .from("payments")
         .select(`
           *,
-          customers(id, name),
-          vehicles(id, reg, make, model),
-          rentals(id, rental_number)
+          customers!payments_customer_id_fkey(id, name),
+          vehicles!payments_vehicle_id_fkey(id, reg, make, model),
+          rentals!payments_rental_id_fkey(id, rental_number)
         `)
         .eq("tenant_id", tenant.id)
         .eq("id", paymentId)

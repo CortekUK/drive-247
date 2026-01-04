@@ -23,13 +23,25 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Calendar } from "@/components/ui/calendar";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
+import { useTenant } from "@/contexts/TenantContext";
 
 const TIMEZONE = "America/Los_Angeles";
 const MIN_RENTAL_DAYS = 30;
 const MAX_RENTAL_DAYS = 90;
 
-// Form schema with validation
-const rentalDetailsSchema = z.object({
+// Helper to calculate age from DOB
+const calculateAge = (dob: Date): number => {
+  const today = new Date();
+  let age = today.getFullYear() - dob.getFullYear();
+  const monthDiff = today.getMonth() - dob.getMonth();
+  if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < dob.getDate())) {
+    age--;
+  }
+  return age;
+};
+
+// Create form schema with dynamic minimum age
+const createRentalDetailsSchema = (minimumAge: number = 18) => z.object({
   pickupLocation: z.string().min(5, "Please enter a valid pickup location"),
   returnLocation: z.string().min(5, "Please enter a valid return location"),
   sameAsPickup: z.boolean(),
@@ -37,8 +49,12 @@ const rentalDetailsSchema = z.object({
   pickupTime: z.string().regex(/^\d{2}:\d{2}$/, "Invalid time format"),
   returnDate: z.date({ required_error: "Return date is required" }),
   returnTime: z.string().regex(/^\d{2}:\d{2}$/, "Invalid time format"),
-  driverAge: z.enum(["under_25", "25_70", "over_70"], {
-    required_error: "Please select driver age range"
+  driverDOB: z.date({
+    required_error: "Date of birth is required"
+  }).refine((date) => {
+    return calculateAge(date) >= minimumAge;
+  }, {
+    message: `You must be at least ${minimumAge} years old to rent a vehicle`
   }),
   promoCode: z.string().optional(),
   // Customer fields
@@ -67,12 +83,19 @@ const rentalDetailsSchema = z.object({
   path: ["returnDate"]
 });
 
-type RentalDetailsForm = z.infer<typeof rentalDetailsSchema>;
+// Default schema for type inference
+const defaultSchema = createRentalDetailsSchema(18);
+type RentalDetailsForm = z.infer<typeof defaultSchema>;
 
 export default function Booking() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const { tenant } = useTenant();
   const [sameAsPickup, setSameAsPickup] = useState(true);
+
+  // Create schema with tenant's minimum age
+  const minimumAge = tenant?.minimum_rental_age || 18;
+  const rentalDetailsSchema = createRentalDetailsSchema(minimumAge);
 
   const form = useForm<RentalDetailsForm>({
     resolver: zodResolver(rentalDetailsSchema),
@@ -84,7 +107,7 @@ export default function Booking() {
       pickupTime: "10:00",
       returnDate: addDays(new Date(), 2),
       returnTime: "10:00",
-      driverAge: "25_70",
+      driverDOB: undefined,
       promoCode: "",
       customerName: "",
       customerEmail: "",
@@ -136,6 +159,18 @@ export default function Booking() {
   }, [watchPickupLocation, sameAsPickup]);
 
   const onSubmit = (data: RentalDetailsForm) => {
+    // Calculate age from DOB
+    const calculateAge = (dob: Date): number => {
+      const today = new Date();
+      let age = today.getFullYear() - dob.getFullYear();
+      const monthDiff = today.getMonth() - dob.getMonth();
+      if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < dob.getDate())) {
+        age--;
+      }
+      return age;
+    };
+    const driverAge = data.driverDOB ? calculateAge(data.driverDOB) : 0;
+
     // Build query params
     const params = new URLSearchParams({
       pickup: format(data.pickupDate, "yyyy-MM-dd"),
@@ -144,7 +179,7 @@ export default function Booking() {
       returnTime: data.returnTime,
       pl: data.pickupLocation,
       rl: data.returnLocation,
-      age: data.driverAge,
+      dob: data.driverDOB ? format(data.driverDOB, "yyyy-MM-dd") : "",
     });
 
     if (data.promoCode) {
@@ -157,6 +192,8 @@ export default function Booking() {
         ...data,
         pickupDate: data.pickupDate.toISOString(),
         returnDate: data.returnDate.toISOString(),
+        driverDOB: data.driverDOB ? data.driverDOB.toISOString() : null,
+        driverAge: driverAge,
       };
       localStorage.setItem("booking_context", JSON.stringify(saveData));
 
@@ -165,7 +202,7 @@ export default function Booking() {
         (window as any).gtag("event", "booking_step1_submitted", {
           pickup_location: data.pickupLocation,
           return_location: data.returnLocation,
-          driver_age: data.driverAge,
+          driver_age: driverAge,
           has_promo: !!data.promoCode,
         });
       }
@@ -456,25 +493,44 @@ export default function Booking() {
                       />
                     </div>
 
-                    {/* Driver Age */}
+                    {/* Date of Birth */}
                     <FormField
                       control={form.control}
-                      name="driverAge"
+                      name="driverDOB"
                       render={({ field }) => (
-                        <FormItem>
-                          <FormLabel className="text-base">Driver's Age *</FormLabel>
-                          <Select onValueChange={field.onChange} defaultValue={field.value}>
-                            <FormControl>
-                              <SelectTrigger className="h-12">
-                                <SelectValue placeholder="Select driver age range" />
-                              </SelectTrigger>
-                            </FormControl>
-                            <SelectContent>
-                              <SelectItem value="under_25">Under 25 (additional fee may apply)</SelectItem>
-                              <SelectItem value="25_70">25 - 70</SelectItem>
-                              <SelectItem value="over_70">Over 70</SelectItem>
-                            </SelectContent>
-                          </Select>
+                        <FormItem className="flex flex-col">
+                          <FormLabel className="text-base">Date of Birth *</FormLabel>
+                          <Popover>
+                            <PopoverTrigger asChild>
+                              <FormControl>
+                                <Button
+                                  variant="outline"
+                                  className={cn(
+                                    "w-full h-12 justify-start text-left font-normal",
+                                    !field.value && "text-muted-foreground"
+                                  )}
+                                >
+                                  <CalendarIcon className="mr-2 h-4 w-4" />
+                                  {field.value ? format(field.value, "MMM dd, yyyy") : "Select date of birth"}
+                                </Button>
+                              </FormControl>
+                            </PopoverTrigger>
+                            <PopoverContent className="w-auto p-0" align="start">
+                              <Calendar
+                                mode="single"
+                                selected={field.value}
+                                onSelect={field.onChange}
+                                disabled={(date) => {
+                                  const today = new Date();
+                                  const minDate = new Date();
+                                  minDate.setFullYear(minDate.getFullYear() - 120);
+                                  return date > today || date < minDate;
+                                }}
+                                defaultMonth={new Date(new Date().getFullYear() - 25, 0)}
+                                initialFocus
+                              />
+                            </PopoverContent>
+                          </Popover>
                           <FormMessage />
                         </FormItem>
                       )}

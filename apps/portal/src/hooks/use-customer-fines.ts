@@ -42,18 +42,21 @@ export const useCustomerFines = (customerId: string) => {
           liability,
           notes,
           created_at,
-          vehicles!inner(id, reg, make, model)
+          vehicles!fines_vehicle_id_fkey(id, reg, make, model)
         `)
         .eq("tenant_id", tenant.id)
         .eq("customer_id", customerId)
         .order("issue_date", { ascending: false });
-      
+
       if (error) throw error;
-      
-      return data.map(fine => ({
-        ...fine,
-        vehicle: fine.vehicles as any
-      })) as CustomerFine[];
+
+      // Filter out fines with missing vehicle
+      return data
+        .filter(fine => fine.vehicles)
+        .map(fine => ({
+          ...fine,
+          vehicle: fine.vehicles as any
+        })) as CustomerFine[];
     },
     enabled: !!tenant && !!customerId,
   });

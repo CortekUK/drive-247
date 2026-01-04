@@ -259,7 +259,7 @@ const CreateRental = () => {
           end_date: data.end_date.toISOString().split('T')[0],
           rental_period_type: data.rental_period_type,
           monthly_amount: data.monthly_amount,
-          status: "Pending",
+          status: "Active",
           tenant_id: tenant?.id,
         })
         .select()

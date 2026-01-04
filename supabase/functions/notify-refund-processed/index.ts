@@ -1,4 +1,5 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.4";
 import {
   corsHeaders,
   signedAWSRequest,
@@ -6,6 +7,7 @@ import {
   isAWSConfigured
 } from "../_shared/aws-config.ts";
 import { sendEmail } from "../_shared/resend-service.ts";
+import { renderEmail, EmailTemplateData } from "../_shared/email-template-service.ts";
 
 interface NotifyRequest {
   customerName: string;
@@ -18,6 +20,7 @@ interface NotifyRequest {
   refundReason?: string;
   expectedDays?: number;
   last4?: string;
+  tenantId?: string;
 }
 
 const getEmailHtml = (data: NotifyRequest) => {
@@ -191,11 +194,38 @@ serve(async (req) => {
       customerSMS: null as any,
     };
 
+    // Build customer email using template service if tenantId is provided
+    let customerSubject = `Refund Processed - $${data.refundAmount.toLocaleString()} | DRIVE 247`;
+    let customerHtml = getEmailHtml(data);
+
+    if (data.tenantId) {
+      try {
+        const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+        const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+        const supabase = createClient(supabaseUrl, supabaseServiceKey);
+
+        const templateData: EmailTemplateData = {
+          customer_name: data.customerName,
+          customer_email: data.customerEmail,
+          customer_phone: data.customerPhone || '',
+          rental_number: data.bookingRef,
+          refund_amount: `$${data.refundAmount.toLocaleString()}`,
+        };
+
+        const rendered = await renderEmail(supabase, data.tenantId, 'refund_processed', templateData);
+        customerSubject = rendered.subject;
+        customerHtml = rendered.html;
+        console.log('Using custom/default email template for customer');
+      } catch (templateError) {
+        console.warn('Error rendering email template, using fallback:', templateError);
+      }
+    }
+
     // Send customer email
     results.customerEmail = await sendEmail(
       data.customerEmail,
-      `Refund Processed - $${data.refundAmount.toLocaleString()} | DRIVE 247`,
-      getEmailHtml(data)
+      customerSubject,
+      customerHtml
     );
     console.log('Customer email result:', results.customerEmail);
 

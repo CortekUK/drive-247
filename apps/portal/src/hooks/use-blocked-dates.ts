@@ -40,7 +40,7 @@ export const useBlockedDates = (vehicle_id?: string) => {
 
       let query = supabase
         .from("blocked_dates")
-        .select("*, vehicles(make, model, reg)")
+        .select("*, vehicles!blocked_dates_vehicle_id_fkey(make, model, reg)")
         .eq("tenant_id", tenant.id);
 
       // If vehicle_id is provided, get only vehicle-specific blocks

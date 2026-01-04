@@ -143,7 +143,7 @@ export function VehicleDisposalDialog({ vehicle, onDisposal, open: controlledOpe
           </Button>
         </DialogTrigger>
       )}
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="sm:max-w-md max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Dispose Vehicle</DialogTitle>
           <DialogDescription>

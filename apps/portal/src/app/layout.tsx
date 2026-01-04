@@ -64,7 +64,7 @@ export default function RootLayout({
           rel="stylesheet"
         />
       </head>
-      <body>
+      <body suppressHydrationWarning>
         <QueryClientProvider client={queryClient}>
           <TenantProvider>
             <AuthInitializer>

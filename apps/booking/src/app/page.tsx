@@ -15,18 +15,10 @@ import MultiStepBookingWidget from '@/components/MultiStepBookingWidget';
 import HeroCarousel from '@/components/HeroCarousel';
 import { Phone } from 'lucide-react';
 
-// Hero carousel images - hardcoded for all tenants
-const homeHeroImages = [
-  '/carousel-images/car1.jpeg',
-  '/carousel-images/car2.jpeg',
-  '/carousel-images/car3.jpeg',
-  '/carousel-images/car8.jpeg',
-  '/carousel-images/car6.jpeg',
-];
+import { usePageContent, defaultHomeContent, mergeWithDefaults, defaultHomeCarouselImages } from '@/hooks/usePageContent';
 import { Button } from '@/components/ui/button';
 import { useEffect, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
-import { usePageContent, defaultHomeContent, mergeWithDefaults } from '@/hooks/usePageContent';
 import { useTenant } from '@/contexts/TenantContext';
 
 export default function Home() {
@@ -39,6 +31,11 @@ export default function Home() {
   // CMS Content
   const { data: rawContent } = usePageContent('home');
   const content = mergeWithDefaults(rawContent, defaultHomeContent);
+
+  // Hero carousel images - use CMS images if set, otherwise use defaults
+  const heroCarouselImages = content.home_hero?.carousel_images?.length
+    ? content.home_hero.carousel_images
+    : defaultHomeCarouselImages;
 
   // Handle hash scrolling on page load
   useEffect(() => {
@@ -116,7 +113,7 @@ export default function Home() {
       {/* Hero Section with Carousel */}
       <section className="relative min-h-screen">
         <HeroCarousel
-          images={homeHeroImages}
+          images={heroCarouselImages}
           autoPlayInterval={5000}
           overlayStrength="medium"
           showScrollIndicator={true}
