@@ -6,7 +6,13 @@ import {
   parseXMLValue,
   isAWSConfigured
 } from "../_shared/aws-config.ts";
-import { sendEmail, getTenantAdminEmail } from "../_shared/resend-service.ts";
+import {
+  sendEmail,
+  getTenantAdminEmail,
+  getTenantBranding,
+  TenantBranding,
+  wrapWithBrandedTemplate
+} from "../_shared/resend-service.ts";
 import { renderEmail, EmailTemplateData } from "../_shared/email-template-service.ts";
 
 interface NotifyRequest {
@@ -107,46 +113,37 @@ const getCustomerEmailHtml = (data: NotifyRequest) => `
 </html>
 `;
 
-// Email template for admin
-const getAdminEmailHtml = (data: NotifyRequest) => `
-<!DOCTYPE html>
-<html>
-<head>
-    <meta charset="utf-8">
-    <title>New Booking Pending - DRIVE 247</title>
-</head>
-<body style="margin: 0; padding: 0; font-family: 'Segoe UI', Arial, sans-serif; background-color: #f5f5f5;">
-    <table role="presentation" style="width: 100%; border-collapse: collapse;">
-        <tr>
-            <td align="center" style="padding: 40px 0;">
-                <table role="presentation" style="width: 600px; max-width: 100%; border-collapse: collapse; background: white; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.1);">
+// Email content for admin (to be wrapped with branded template)
+const getAdminEmailContent = (data: NotifyRequest, branding: TenantBranding) => `
                     <tr>
-                        <td style="background: #f97316; padding: 20px; border-radius: 12px 12px 0 0;">
-                            <h1 style="margin: 0; color: white; font-size: 20px;">New Booking Requires Approval</h1>
+                        <td style="padding: 30px 30px 0; text-align: center;">
+                            <span style="display: inline-block; background: #fef3c7; color: #f97316; padding: 8px 20px; border-radius: 20px; font-weight: 600; font-size: 14px;">
+                                ACTION REQUIRED
+                            </span>
                         </td>
                     </tr>
                     <tr>
                         <td style="padding: 30px;">
-                            <table role="presentation" style="width: 100%; border-collapse: collapse;">
-                                <tr><td style="padding: 8px 0; color: #666; font-size: 14px;"><strong>Customer:</strong></td><td style="padding: 8px 0; color: #1a1a1a; font-size: 14px;">${data.customerName}</td></tr>
-                                <tr><td style="padding: 8px 0; color: #666; font-size: 14px;"><strong>Email:</strong></td><td style="padding: 8px 0; color: #1a1a1a; font-size: 14px;">${data.customerEmail}</td></tr>
-                                <tr><td style="padding: 8px 0; color: #666; font-size: 14px;"><strong>Phone:</strong></td><td style="padding: 8px 0; color: #1a1a1a; font-size: 14px;">${data.customerPhone || 'N/A'}</td></tr>
-                                <tr><td style="padding: 8px 0; color: #666; font-size: 14px;"><strong>Vehicle:</strong></td><td style="padding: 8px 0; color: #1a1a1a; font-size: 14px;">${data.vehicleName} (${data.vehicleReg})</td></tr>
-                                <tr><td style="padding: 8px 0; color: #666; font-size: 14px;"><strong>Dates:</strong></td><td style="padding: 8px 0; color: #1a1a1a; font-size: 14px;">${data.pickupDate} - ${data.returnDate}</td></tr>
-                                <tr><td style="padding: 8px 0; color: #666; font-size: 14px;"><strong>Amount:</strong></td><td style="padding: 8px 0; color: #1a1a1a; font-size: 14px; font-weight: bold;">$${data.amount.toLocaleString()}</td></tr>
+                            <h2 style="margin: 0 0 20px; color: #1a1a1a; font-size: 22px;">New Booking Requires Approval</h2>
+                            <table role="presentation" style="width: 100%; border-collapse: collapse; background: #f8f9fa; border-radius: 8px; margin-bottom: 25px;">
+                                <tr>
+                                    <td style="padding: 20px;">
+                                        <table role="presentation" style="width: 100%; border-collapse: collapse;">
+                                            <tr><td style="padding: 8px 0; color: #666; font-size: 14px;">Customer:</td><td style="padding: 8px 0; color: #1a1a1a; font-weight: 600; font-size: 14px; text-align: right;">${data.customerName}</td></tr>
+                                            <tr><td style="padding: 8px 0; color: #666; font-size: 14px;">Email:</td><td style="padding: 8px 0; color: #1a1a1a; font-size: 14px; text-align: right;">${data.customerEmail}</td></tr>
+                                            <tr><td style="padding: 8px 0; color: #666; font-size: 14px;">Phone:</td><td style="padding: 8px 0; color: #1a1a1a; font-size: 14px; text-align: right;">${data.customerPhone || 'N/A'}</td></tr>
+                                            <tr><td style="padding: 8px 0; color: #666; font-size: 14px;">Vehicle:</td><td style="padding: 8px 0; color: #1a1a1a; font-weight: 600; font-size: 14px; text-align: right;">${data.vehicleName} (${data.vehicleReg})</td></tr>
+                                            <tr><td style="padding: 8px 0; color: #666; font-size: 14px;">Dates:</td><td style="padding: 8px 0; color: #1a1a1a; font-size: 14px; text-align: right;">${data.pickupDate} - ${data.returnDate}</td></tr>
+                                            <tr><td style="padding: 8px 0; color: #666; font-size: 14px;">Amount:</td><td style="padding: 8px 0; color: #1a1a1a; font-weight: 600; font-size: 14px; text-align: right;">$${data.amount.toLocaleString()}</td></tr>
+                                        </table>
+                                    </td>
+                                </tr>
                             </table>
-                            <div style="margin-top: 25px; text-align: center;">
-                                <a href="${Deno.env.get('ADMIN_PORTAL_URL') || 'https://portal.drive-247.com'}/pending-bookings" style="display: inline-block; background: #C5A572; color: white; padding: 14px 40px; border-radius: 6px; text-decoration: none; font-weight: 600;">Review Booking</a>
+                            <div style="text-align: center;">
+                                <a href="https://${branding.slug}.portal.drive-247.com/pending-bookings" style="display: inline-block; background: ${branding.accentColor}; color: white; padding: 14px 40px; border-radius: 6px; text-decoration: none; font-weight: 600;">Review Booking</a>
                             </div>
                         </td>
-                    </tr>
-                </table>
-            </td>
-        </tr>
-    </table>
-</body>
-</html>
-`;
+                    </tr>`;
 
 // sendEmail is now imported from resend-service.ts
 
@@ -256,11 +253,16 @@ serve(async (req) => {
     );
     console.log('Customer email result:', results.customerEmail);
 
+    // Get tenant branding for emails and SMS
+    const branding = data.tenantId
+      ? await getTenantBranding(data.tenantId, supabase)
+      : { companyName: 'Drive 247', logoUrl: null, primaryColor: '#1a1a1a', accentColor: '#C5A572', contactEmail: 'support@drive-247.com', contactPhone: null, slug: 'drive247' };
+
     // Send customer SMS
     if (data.customerPhone) {
       results.customerSMS = await sendSMS(
         data.customerPhone,
-        `Your booking ${data.bookingRef} has been received and is under review. We'll confirm within 24 hours.`
+        `${branding.companyName}: Your booking ${data.bookingRef} has been received and is under review. We'll confirm within 24 hours.`
       );
       console.log('Customer SMS result:', results.customerSMS);
     }
@@ -276,12 +278,16 @@ serve(async (req) => {
       console.log('Falling back to env ADMIN_EMAIL:', adminEmail);
     }
 
+    // Build branded admin email HTML
+    const adminEmailContent = getAdminEmailContent(data, branding);
+    const adminEmailHtml = wrapWithBrandedTemplate(adminEmailContent, branding);
+
     // Send admin email
     if (adminEmail) {
       results.adminEmail = await sendEmail(
         adminEmail,
         `[ACTION REQUIRED] New Booking Pending: ${data.customerName} - ${data.vehicleName}`,
-        getAdminEmailHtml(data),
+        adminEmailHtml,
         supabase,
         data.tenantId
       );
@@ -293,7 +299,7 @@ serve(async (req) => {
     if (adminPhone) {
       results.adminSMS = await sendSMS(
         adminPhone,
-        `New booking pending from ${data.customerName} for ${data.vehicleName}. Amount: $${data.amount}. Review now.`
+        `${branding.companyName}: New booking pending from ${data.customerName} for ${data.vehicleName}. Amount: $${data.amount}. Review now.`
       );
       console.log('Admin SMS result:', results.adminSMS);
     }
