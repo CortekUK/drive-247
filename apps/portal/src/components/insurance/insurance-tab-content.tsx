@@ -63,7 +63,7 @@ export function InsuranceTabContent({ customerId }: InsuranceTabContentProps) {
         .from("insurance_policies")
         .select(`
           *,
-          vehicles(reg, make, model),
+          vehicles!insurance_policies_vehicle_id_fkey(reg, make, model),
           insurance_documents(id, doc_type, file_url, file_name, uploaded_at)
         `)
         .eq("customer_id", customerId)

@@ -32,7 +32,7 @@ export const useRecentActivity = () => {
           status,
           payment_type,
           created_at,
-          customers(name)
+          customers!payments_customer_id_fkey(name)
         `)
         .order("created_at", { ascending: false })
         .limit(5);
@@ -67,8 +67,8 @@ export const useRecentActivity = () => {
           id,
           status,
           created_at,
-          customers(name),
-          vehicles(reg)
+          customers!rentals_customer_id_fkey(name),
+          vehicles!rentals_vehicle_id_fkey(reg)
         `)
         .order("created_at", { ascending: false })
         .limit(5);

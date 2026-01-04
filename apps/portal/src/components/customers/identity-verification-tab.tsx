@@ -4,12 +4,14 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Shield, CheckCircle2, AlertCircle, XCircle, Clock, ExternalLink, RefreshCw, QrCode, Smartphone, Loader2 } from "lucide-react";
+import { Progress } from "@/components/ui/progress";
+import { Shield, CheckCircle2, AlertCircle, XCircle, Clock, ExternalLink, RefreshCw, QrCode, Smartphone, Loader2, Camera, Copy, Check } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import { EmptyState } from "@/components/shared/data-display/empty-state";
 import { useTenant } from "@/contexts/TenantContext";
+import { QRCodeSVG } from "qrcode.react";
 
 interface IdentityVerification {
   id: string;
@@ -422,65 +424,88 @@ export function IdentityVerificationTab({ customerId }: IdentityVerificationTabP
       </CardContent>
 
       {/* AI Verification QR Modal */}
-      <Dialog open={showQRModal} onOpenChange={setShowQRModal}>
+      <Dialog open={showQRModal} onOpenChange={(open) => {
+        if (!open) {
+          setShowQRModal(false);
+          setIsPolling(false);
+          setAiSessionData(null);
+        }
+      }}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              <Smartphone className="h-5 w-5" />
-              Scan QR Code to Verify
+              <Smartphone className="h-5 w-5 text-primary" />
+              Identity Verification
             </DialogTitle>
             <DialogDescription>
-              Have the customer scan this QR code with their phone camera to complete identity verification.
+              Have the customer scan this QR code with their phone camera.
             </DialogDescription>
           </DialogHeader>
 
-          <div className="flex flex-col items-center space-y-4 py-4">
-            {/* QR Code Display */}
+          <div className="flex flex-col items-center space-y-6 py-6">
+            {/* QR Code Display - Using local SVG generation */}
             {aiSessionData && (
-              <div className="bg-white p-4 rounded-lg border">
-                <img
-                  src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(aiSessionData.qrUrl)}`}
-                  alt="Verification QR Code"
-                  className="w-48 h-48"
+              <div className="bg-white p-6 rounded-xl shadow-lg border-2 border-gray-100">
+                <QRCodeSVG
+                  value={aiSessionData.qrUrl}
+                  size={200}
+                  level="H"
+                  includeMargin={false}
+                  className="rounded"
                 />
               </div>
             )}
 
-            {/* Timer */}
-            <div className="flex items-center gap-2 text-sm text-muted-foreground">
-              <Clock className="h-4 w-4" />
-              <span>Expires in {formatTime(timeRemaining)}</span>
+            {/* Timer with progress bar */}
+            <div className="w-full space-y-2">
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-muted-foreground flex items-center gap-1">
+                  <Clock className="h-4 w-4" />
+                  Time remaining
+                </span>
+                <span className={`font-mono font-medium ${timeRemaining < 60 ? 'text-destructive' : 'text-foreground'}`}>
+                  {formatTime(timeRemaining)}
+                </span>
+              </div>
+              <Progress value={(timeRemaining / 900) * 100} className="h-2" />
             </div>
 
             {/* Status indicator */}
-            {isPolling && (
-              <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                <Loader2 className="h-4 w-4 animate-spin" />
-                <span>Waiting for verification...</span>
-              </div>
-            )}
+            <div className="flex items-center gap-2 px-4 py-2 bg-blue-50 text-blue-700 rounded-full text-sm">
+              <Loader2 className="h-4 w-4 animate-spin" />
+              <span>Waiting for customer to complete verification...</span>
+            </div>
 
-            {/* Manual URL */}
+            {/* Manual URL with copy button */}
             {aiSessionData && (
-              <details className="w-full">
-                <summary className="text-xs text-muted-foreground cursor-pointer hover:text-foreground">
-                  Can't scan? Click for manual link
-                </summary>
-                <div className="mt-2 p-2 bg-muted rounded text-xs break-all">
-                  <a
-                    href={aiSessionData.qrUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-primary hover:underline"
+              <div className="w-full space-y-2">
+                <p className="text-xs text-center text-muted-foreground">
+                  Can't scan? Share this link with the customer:
+                </p>
+                <div className="flex items-center gap-2 p-2 bg-muted rounded-lg">
+                  <input
+                    type="text"
+                    readOnly
+                    value={aiSessionData.qrUrl}
+                    className="flex-1 bg-transparent text-xs truncate border-none focus:outline-none"
+                  />
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="shrink-0"
+                    onClick={() => {
+                      navigator.clipboard.writeText(aiSessionData.qrUrl);
+                      toast.success('Link copied to clipboard');
+                    }}
                   >
-                    {aiSessionData.qrUrl}
-                  </a>
+                    <Copy className="h-4 w-4" />
+                  </Button>
                 </div>
-              </details>
+              </div>
             )}
           </div>
 
-          <div className="flex justify-end">
+          <div className="flex justify-end gap-2">
             <Button
               variant="outline"
               onClick={() => {

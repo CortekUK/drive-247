@@ -666,14 +666,33 @@ export function replaceTemplateVariables(
   return result;
 }
 
+interface EmailWrapOptions {
+  companyName?: string;
+  accentColor?: string;
+  primaryColor?: string;
+  logoUrl?: string | null;
+  contactEmail?: string;
+}
+
 /**
  * Wrap email content in standard HTML email layout
  */
 export function wrapEmailHtml(
   content: string,
-  companyName: string = 'DRIVE 247',
-  primaryColor: string = '#C5A572'
+  options: EmailWrapOptions = {}
 ): string {
+  const {
+    companyName = 'DRIVE 247',
+    accentColor = '#C5A572',
+    primaryColor = '#1a1a1a',
+    logoUrl = null,
+    contactEmail = 'support@drive-247.com',
+  } = options;
+
+  const headerContent = logoUrl
+    ? `<img src="${logoUrl}" alt="${companyName}" style="max-height: 50px; max-width: 200px;">`
+    : `<h1 style="margin: 0; color: ${accentColor}; font-size: 28px; letter-spacing: 2px;">${companyName.toUpperCase()}</h1>`;
+
   return `<!DOCTYPE html>
 <html>
 <head>
@@ -685,7 +704,7 @@ export function wrapEmailHtml(
       table { border-collapse: collapse; }
       td { padding: 8px 12px; }
       h1 { color: #1a1a1a; margin: 0 0 20px; font-size: 26px; }
-      h2 { color: #1a1a1a; margin: 24px 0 12px; font-size: 18px; text-transform: uppercase; letter-spacing: 1px; border-bottom: 2px solid ${primaryColor}; padding-bottom: 8px; }
+      h2 { color: #1a1a1a; margin: 24px 0 12px; font-size: 18px; text-transform: uppercase; letter-spacing: 1px; border-bottom: 2px solid ${accentColor}; padding-bottom: 8px; }
       h3 { color: #1a1a1a; margin: 20px 0 12px; font-size: 16px; }
       p { color: #444; line-height: 1.7; margin: 0 0 16px; font-size: 15px; }
       ul, ol { color: #444; padding-left: 24px; margin: 0 0 16px; }
@@ -695,6 +714,7 @@ export function wrapEmailHtml(
       table td:first-child { color: #666; width: 40%; }
       table td:last-child { color: #1a1a1a; font-weight: 600; }
       strong { color: #1a1a1a; }
+      a { color: ${accentColor}; }
     </style>
 </head>
 <body>
@@ -704,9 +724,8 @@ export function wrapEmailHtml(
                 <table role="presentation" style="width: 600px; max-width: 100%; background: white; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.1);">
                     <!-- Header -->
                     <tr>
-                        <td style="background: linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 100%); padding: 30px; border-radius: 12px 12px 0 0; text-align: center;">
-                            <h1 style="margin: 0; color: ${primaryColor}; font-size: 28px; letter-spacing: 2px;">${companyName}</h1>
-                            <p style="margin: 10px 0 0; color: #888; font-size: 14px;">Premium Car Rentals</p>
+                        <td style="background: linear-gradient(135deg, ${primaryColor} 0%, #2d2d2d 100%); padding: 30px; border-radius: 12px 12px 0 0; text-align: center;">
+                            ${headerContent}
                         </td>
                     </tr>
                     <!-- Content -->
@@ -718,6 +737,9 @@ export function wrapEmailHtml(
                     <!-- Footer -->
                     <tr>
                         <td style="background: #f8f9fa; padding: 25px 30px; border-radius: 0 0 12px 12px; text-align: center;">
+                            <p style="margin: 0 0 10px; color: #666; font-size: 14px;">
+                                Questions? Email us at <a href="mailto:${contactEmail}" style="color: ${accentColor}; text-decoration: none;">${contactEmail}</a>
+                            </p>
                             <p style="margin: 0; color: #999; font-size: 12px;">&copy; ${new Date().getFullYear()} ${companyName}. All rights reserved.</p>
                         </td>
                     </tr>
@@ -735,11 +757,11 @@ export function wrapEmailHtml(
 export async function getTenantInfo(
   supabaseClient: any,
   tenantId: string
-): Promise<{ company_name: string; company_email: string; company_phone: string }> {
+): Promise<{ company_name: string; company_email: string; company_phone: string; primary_color: string; accent_color: string; logo_url: string | null }> {
   try {
     const { data, error } = await supabaseClient
       .from('tenants')
-      .select('company_name, email, phone')
+      .select('company_name, contact_email, contact_phone, primary_color, accent_color, logo_url')
       .eq('id', tenantId)
       .single();
 
@@ -747,8 +769,11 @@ export async function getTenantInfo(
 
     return {
       company_name: data.company_name || 'DRIVE 247',
-      company_email: data.email || 'support@drive-247.com',
-      company_phone: data.phone || '',
+      company_email: data.contact_email || 'support@drive-247.com',
+      company_phone: data.contact_phone || '',
+      primary_color: data.primary_color || '#1a1a1a',
+      accent_color: data.accent_color || '#C5A572',
+      logo_url: data.logo_url || null,
     };
   } catch (err) {
     console.warn('Error fetching tenant info:', err);
@@ -756,6 +781,9 @@ export async function getTenantInfo(
       company_name: 'DRIVE 247',
       company_email: 'support@drive-247.com',
       company_phone: '',
+      primary_color: '#1a1a1a',
+      accent_color: '#C5A572',
+      logo_url: null,
     };
   }
 }
@@ -769,13 +797,13 @@ export async function renderEmail(
   templateKey: string,
   data: EmailTemplateData
 ): Promise<{ subject: string; html: string }> {
-  // Get tenant info if not provided
-  if (!data.company_name || !data.company_email) {
-    const tenantInfo = await getTenantInfo(supabaseClient, tenantId);
-    data.company_name = data.company_name || tenantInfo.company_name;
-    data.company_email = data.company_email || tenantInfo.company_email;
-    data.company_phone = data.company_phone || tenantInfo.company_phone;
-  }
+  // Get tenant info (always fetch to get branding colors)
+  const tenantInfo = await getTenantInfo(supabaseClient, tenantId);
+
+  // Merge tenant info with provided data
+  data.company_name = data.company_name || tenantInfo.company_name;
+  data.company_email = data.company_email || tenantInfo.company_email;
+  data.company_phone = data.company_phone || tenantInfo.company_phone;
 
   // Get template (custom or default)
   const template = await getEmailTemplate(supabaseClient, tenantId, templateKey);
@@ -784,8 +812,14 @@ export async function renderEmail(
   const subject = replaceTemplateVariables(template.subject, data);
   const content = replaceTemplateVariables(template.content, data);
 
-  // Wrap in standard email HTML layout
-  const html = wrapEmailHtml(content, data.company_name);
+  // Wrap in standard email HTML layout with tenant branding
+  const html = wrapEmailHtml(content, {
+    companyName: data.company_name,
+    accentColor: tenantInfo.accent_color,
+    primaryColor: tenantInfo.primary_color,
+    logoUrl: tenantInfo.logo_url,
+    contactEmail: data.company_email,
+  });
 
   return { subject, html };
 }
