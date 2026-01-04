@@ -12,7 +12,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Eye, Plus, Search, ArrowUpDown, ChevronUp, ChevronDown, RefreshCw } from "lucide-react";
+import { Plus, Search, ArrowUpDown, ChevronUp, ChevronDown, RefreshCw, ArrowUpRight } from "lucide-react";
 import { EmptyState } from "@/components/shared/data-display/empty-state";
 import { AddVehicleDialog } from "@/components/vehicles/add-vehicle-dialog";
 import { FleetSummaryCards } from "@/components/vehicles/fleet-summary-cards";
@@ -531,7 +531,7 @@ export default function VehiclesListEnhanced() {
                        {getSortIcon('net_profit')}
                      </div>
                    </TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
+                  <TableHead className="text-right">View</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -600,13 +600,13 @@ export default function VehiclesListEnhanced() {
                      <TableCell className="text-right">
                        <Button
                          variant="ghost"
-                         size="sm"
+                         size="icon"
                          onClick={(e) => {
                            e.stopPropagation();
                            router.push(`/vehicles/${vehicle.id}`);
                          }}
                        >
-                         <Eye className="h-4 w-4" />
+                         <ArrowUpRight className="h-4 w-4" />
                        </Button>
                      </TableCell>
                    </TableRow>

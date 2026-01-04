@@ -15,8 +15,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { Users, Plus, Mail, Phone, Eye, Edit, Search, Shield, ArrowUpDown, ArrowUp, ArrowDown, X, MoreHorizontal, Ban, Trash2, XCircle, UserCheck } from "lucide-react";
+import { Users, Plus, Mail, Phone, Edit, Search, Shield, X, Ban, Trash2, UserCheck, ArrowUpRight } from "lucide-react";
 import { CustomerFormModal } from "@/components/customers/customer-form-modal";
 import { CustomerBalanceChip } from "@/components/customers/customer-balance-chip";
 import { CustomerSummaryCards } from "@/components/customers/customer-summary-cards";
@@ -437,15 +436,6 @@ const CustomersList = () => {
     refetchCustomers();
   };
 
-  const handleSort = (field: SortField) => {
-    if (sortField === field) {
-      setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc');
-    } else {
-      setSortField(field);
-      setSortOrder('asc');
-    }
-  };
-
   const clearFilters = () => {
     setSearchTerm('');
     setTypeFilter('all');
@@ -458,11 +448,6 @@ const CustomersList = () => {
   };
 
   const hasActiveFilters = debouncedSearchTerm || typeFilter !== 'all' || statusFilter !== 'all' || highSwitcherFilter !== 'all';
-
-  const SortIcon = ({ field }: { field: SortField }) => {
-    if (sortField !== field) return <ArrowUpDown className="h-4 w-4 text-muted-foreground" />;
-    return sortOrder === 'asc' ? <ArrowUp className="h-4 w-4 text-primary" /> : <ArrowDown className="h-4 w-4 text-primary" />;
-  };
 
   const hasNextOfKin = (customer: Customer) => {
     return !!(customer.nok_full_name || customer.nok_relationship || customer.nok_phone || customer.nok_email);
@@ -563,7 +548,6 @@ const CustomersList = () => {
                   <SelectItem value="all">All Customers</SelectItem>
                   <SelectItem value="Active">Active</SelectItem>
                   <SelectItem value="Inactive">Inactive</SelectItem>
-                  <SelectItem value="Rejected">Rejected</SelectItem>
                 </SelectContent>
               </Select>
 
@@ -631,51 +615,14 @@ const CustomersList = () => {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead
-                      className="cursor-pointer hover:bg-muted/50"
-                      onClick={() => handleSort('name')}
-                    >
-                      <div className="flex items-center gap-2">
-                        Name
-                        <SortIcon field="name" />
-                      </div>
-                    </TableHead>
-                    <TableHead
-                      className="cursor-pointer hover:bg-muted/50"
-                      onClick={() => handleSort('type')}
-                    >
-                      <div className="flex items-center gap-2">
-                        Type
-                        <SortIcon field="type" />
-                      </div>
-                    </TableHead>
+                    <TableHead>Name</TableHead>
                     <TableHead>Contact</TableHead>
-                    <TableHead
-                      className="cursor-pointer hover:bg-muted/50"
-                      onClick={() => handleSort('status')}
-                    >
-                      <div className="flex items-center gap-2">
-                        Status
-                        <SortIcon field="status" />
-                      </div>
-                    </TableHead>
-                    <TableHead
-                      className="text-center cursor-pointer hover:bg-muted/50"
-                      onClick={() => handleSort('balance')}
-                    >
-                      <div className="flex items-center justify-center gap-2">
-                        Balance
-                        <SortIcon field="balance" />
-                      </div>
-                    </TableHead>
-                    <TableHead className="text-left">Actions</TableHead>
+                    <TableHead className="text-center">View</TableHead>
+                    <TableHead className="text-right">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {paginatedCustomers.map((customer) => {
-                    const balanceData = customerBalances[customer.id];
-
-                    return (
+                  {paginatedCustomers.map((customer) => (
                       <TableRow key={customer.id} className="table-row">
                         <TableCell className="font-medium">
                           <div className="flex items-center gap-2">
@@ -700,18 +647,6 @@ const CustomersList = () => {
                           </div>
                         </TableCell>
                         <TableCell>
-                          <Badge
-                            variant="secondary"
-                            className={
-                              customer.customer_type === 'Company'
-                                ? 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200'
-                                : 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200'
-                            }
-                          >
-                            {customer.customer_type || 'Individual'}
-                          </Badge>
-                        </TableCell>
-                        <TableCell>
                           <div className="space-y-1 max-w-[200px]">
                             {customer.email && (
                               <div className="flex items-center gap-1 text-sm text-muted-foreground truncate">
@@ -727,110 +662,79 @@ const CustomersList = () => {
                             )}
                           </div>
                         </TableCell>
-                        <TableCell>
-                          <Badge
-                            variant={customer.status === 'Active' ? 'default' : 'secondary'}
-                            className={
-                              customer.status === 'Active'
-                                ? 'bg-pink-100 text-pink-800'
-                                : customer.status === 'Rejected'
-                                  ? 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200'
-                                  : 'bg-gray-100 text-gray-800'
-                            }
-                          >
-                            {customer.status}
-                          </Badge>
-                        </TableCell>
                         <TableCell className="text-center">
-                          {balanceData ? (
-                            <CustomerBalanceChip
-                              balance={balanceData.balance}
-                              status={balanceData.status}
-                              totalCharges={balanceData.totalCharges}
-                              totalPayments={balanceData.totalPayments}
-                              size="small"
-                            />
-                          ) : (
-                            <CustomerBalanceChip balance={0} status="Settled" size="small" />
-                          )}
-                        </TableCell>
-                        <TableCell className="text-left">
-                          <div className="flex justify-start gap-2">
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => router.push(`/customers/${customer.id}`)}
-                              aria-label={`View ${customer.name} details`}
-                            >
-                              <Eye className="h-4 w-4 mr-1" />
-                              View
-                            </Button>
-                            <DropdownMenu>
-                              <DropdownMenuTrigger asChild>
-                                <Button variant="outline" size="sm">
-                                  <MoreHorizontal className="h-4 w-4" />
-                                </Button>
-                              </DropdownMenuTrigger>
-                              <DropdownMenuContent align="end">
-                                {customer.status === 'Rejected' ? (
-                                  <>
-                                    <DropdownMenuItem
-                                      onClick={() => handleViewRejectedDetails(customer)}
-                                    >
-                                      <Eye className="h-4 w-4 mr-2" />
-                                      View Details
-                                    </DropdownMenuItem>
-                                    <DropdownMenuItem onClick={() => handleEditCustomer(customer)}>
-                                      <Edit className="h-4 w-4 mr-2" />
-                                      Edit
-                                    </DropdownMenuItem>
-                                    <DropdownMenuSeparator />
-                                    <DropdownMenuItem
-                                      onClick={() => handleApproveCustomer(customer)}
-                                      className="text-green-600 focus:text-green-600"
-                                    >
-                                      <UserCheck className="h-4 w-4 mr-2" />
-                                      Approve Customer
-                                    </DropdownMenuItem>
-                                  </>
-                                ) : (
-                                  <>
-                                    <DropdownMenuItem onClick={() => handleEditCustomer(customer)}>
-                                      <Edit className="h-4 w-4 mr-2" />
-                                      Edit
-                                    </DropdownMenuItem>
-                                    <DropdownMenuSeparator />
-                                    <DropdownMenuItem
-                                      onClick={() => handleRejectClick(customer)}
-                                      className="text-red-600 focus:text-red-600"
-                                    >
-                                      <XCircle className="h-4 w-4 mr-2" />
-                                      Reject Customer
-                                    </DropdownMenuItem>
-                                    <DropdownMenuItem
-                                      onClick={() => handleBlockClick(customer)}
-                                      className="text-orange-600 focus:text-orange-600"
-                                    >
-                                      <Ban className="h-4 w-4 mr-2" />
-                                      Block Customer
-                                    </DropdownMenuItem>
-                                  </>
-                                )}
-                                <DropdownMenuSeparator />
-                                <DropdownMenuItem
-                                  onClick={() => handleDeleteClick(customer)}
-                                  className="text-destructive focus:text-destructive"
+                          <TooltipProvider>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  onClick={() => router.push(`/customers/${customer.id}`)}
+                                  aria-label={`View ${customer.name} details`}
                                 >
-                                  <Trash2 className="h-4 w-4 mr-2" />
-                                  Delete
-                                </DropdownMenuItem>
-                              </DropdownMenuContent>
-                            </DropdownMenu>
+                                  <ArrowUpRight className="h-4 w-4" />
+                                </Button>
+                              </TooltipTrigger>
+                              <TooltipContent>
+                                <p>View Customer</p>
+                              </TooltipContent>
+                            </Tooltip>
+                          </TooltipProvider>
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <div className="flex justify-end gap-1">
+                            <TooltipProvider>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    onClick={() => handleEditCustomer(customer)}
+                                  >
+                                    <Edit className="h-4 w-4" />
+                                  </Button>
+                                </TooltipTrigger>
+                                <TooltipContent>
+                                  <p>Edit</p>
+                                </TooltipContent>
+                              </Tooltip>
+                            </TooltipProvider>
+                            <TooltipProvider>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    onClick={() => handleBlockClick(customer)}
+                                  >
+                                    <Ban className="h-4 w-4 text-orange-600" />
+                                  </Button>
+                                </TooltipTrigger>
+                                <TooltipContent>
+                                  <p>Block Customer</p>
+                                </TooltipContent>
+                              </Tooltip>
+                            </TooltipProvider>
+                            <TooltipProvider>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    onClick={() => handleDeleteClick(customer)}
+                                  >
+                                    <Trash2 className="h-4 w-4 text-destructive" />
+                                  </Button>
+                                </TooltipTrigger>
+                                <TooltipContent>
+                                  <p>Delete</p>
+                                </TooltipContent>
+                              </Tooltip>
+                            </TooltipProvider>
                           </div>
                         </TableCell>
                       </TableRow>
-                    );
-                  })}
+                  ))}
                 </TableBody>
               </Table>
             </div>

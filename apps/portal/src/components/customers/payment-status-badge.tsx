@@ -9,13 +9,13 @@ export const PaymentStatusBadge = ({ applied, amount }: PaymentStatusBadgeProps)
   if (applied >= amount) {
     return (
       <Badge variant="default" className="text-xs bg-green-600 hover:bg-green-700">
-        Applied
+        Paid
       </Badge>
     );
   } else {
     return (
       <Badge variant="secondary" className="text-xs">
-        Partially Applied
+        Partial
       </Badge>
     );
   }

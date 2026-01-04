@@ -14,7 +14,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { ArrowLeft, CreditCard, FileText, Plus, Upload, Car, AlertTriangle, Eye, Download, Edit, Trash2, User, Mail, Phone, CalendarPlus, DollarSign, FolderOpen, Receipt, CreditCard as PaymentIcon, Ban, CheckCircle, Users } from "lucide-react";
+import { ArrowLeft, CreditCard, FileText, Plus, Upload, Car, AlertTriangle, Eye, Download, Edit, Trash2, User, Mail, Phone, CalendarPlus, DollarSign, FolderOpen, Receipt, CreditCard as PaymentIcon, Ban, CheckCircle, Users, ArrowUpRight } from "lucide-react";
 import { MetricItem, MetricDivider } from "@/components/vehicles/metric-card";
 import { useCustomerBlockingActions } from "@/hooks/use-customer-blocking";
 import { TruncatedCell } from "@/components/shared/data-display/truncated-cell";
@@ -24,18 +24,12 @@ import { useCustomerDocuments, useDeleteCustomerDocument, useDownloadDocument } 
 import { useCustomerBalanceWithStatus } from "@/hooks/use-customer-balance";
 import { useCustomerActiveRentals } from "@/hooks/use-customer-active-rentals";
 import { useCustomerRentals } from "@/hooks/use-customer-rentals";
-import { useCustomerPayments, useCustomerPaymentStats } from "@/hooks/use-customer-payments";
-import { useCustomerFines, useCustomerFineStats } from "@/hooks/use-customer-fines";
-import { useCustomerVehicleHistory } from "@/hooks/use-customer-vehicle-history";
+import { useCustomerPayments } from "@/hooks/use-customer-payments";
 import AddCustomerDocumentDialog from "@/components/customers/add-customer-document-dialog";
-import { AddPaymentDialog } from "@/components/shared/dialogs/add-payment-dialog";
-import { AddFineDialog } from "@/components/shared/dialogs/add-fine-dialog";
 import { CustomerFormModal } from "@/components/customers/customer-form-modal";
 import DocumentStatusBadge from "@/components/customers/document-status-badge";
-import { DocumentSigningStatusBadge } from "@/components/customers/document-signing-status-badge";
 import { NextOfKinCard } from "@/components/customers/next-of-kin-card";
 import { PaymentStatusBadge } from "@/components/customers/payment-status-badge";
-import { FineStatusBadge } from "@/components/shared/status/fine-status-badge";
 import { format } from "date-fns";
 
 interface Customer {
@@ -68,11 +62,10 @@ const CustomerDetail = () => {
   const [activeTab, setActiveTab] = useState(initialTab);
   const [documentDialogOpen, setDocumentDialogOpen] = useState(false);
   const [editingDocumentId, setEditingDocumentId] = useState<string | undefined>();
-  const [paymentDialogOpen, setPaymentDialogOpen] = useState(false);
-  const [fineDialogOpen, setFineDialogOpen] = useState(false);
   const [editCustomerOpen, setEditCustomerOpen] = useState(false);
   const [blockDialogOpen, setBlockDialogOpen] = useState(false);
   const [blockReason, setBlockReason] = useState("");
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
 
   const { addBlockedIdentity, unblockCustomer, isLoading: blockingLoading } = useCustomerBlockingActions();
   const [isBlocking, setIsBlocking] = useState(false);
@@ -146,6 +139,22 @@ const CustomerDetail = () => {
     });
   };
 
+  const handleDeleteCustomer = async () => {
+    try {
+      const { error } = await supabase
+        .from("customers")
+        .delete()
+        .eq("id", id);
+
+      if (error) throw error;
+
+      setDeleteDialogOpen(false);
+      router.push("/customers");
+    } catch (error) {
+      console.error("Error deleting customer:", error);
+    }
+  };
+
   // Use the enhanced customer balance hook with status
   const { data: customerBalanceData } = useCustomerBalanceWithStatus(id);
 
@@ -153,42 +162,9 @@ const CustomerDetail = () => {
   const { data: activeRentalsCount } = useCustomerActiveRentals(id!);
   const { data: rentals } = useCustomerRentals(id!);
   const { data: payments } = useCustomerPayments(id!);
-  const { data: paymentStats } = useCustomerPaymentStats(id!);
-  const { data: fines } = useCustomerFines(id!);
-  const { data: fineStats } = useCustomerFineStats(id!);
-  const { data: vehicleHistory } = useCustomerVehicleHistory(id!);
   const { data: documents } = useCustomerDocuments(id!);
   const deleteDocument = useDeleteCustomerDocument();
   const downloadDocument = useDownloadDocument();
-
-  // Fetch rentals with DocuSign status for documents tab
-  const { data: rentalAgreements } = useQuery({
-    queryKey: ["customer-rental-agreements", id],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("rentals")
-        .select(`
-          id,
-          created_at,
-          docusign_envelope_id,
-          document_status,
-          signed_document_id,
-          signed_document:signed_document_id (
-            id,
-            file_url,
-            document_name
-          ),
-          vehicles:vehicle_id (reg, make, model)
-        `)
-        .eq("customer_id", id)
-        .order("created_at", { ascending: false });
-
-      if (error) throw error;
-      return data;
-    },
-    enabled: !!id,
-    refetchInterval: 5000, // Auto-refresh every 5 seconds to show updated status
-  });
 
   if (isLoading) {
     return <div>Loading customer details...</div>;
@@ -251,22 +227,7 @@ const CustomerDetail = () => {
 
           {/* Action Buttons */}
           <div className="flex flex-wrap items-center gap-2">
-            {!customer.is_blocked ? (
-              <>
-                <Button size="sm" onClick={() => router.push(`/rentals/new?customer=${id}`)}>
-                  <Plus className="h-4 w-4 mr-1" />
-                  Add Rental
-                </Button>
-                <Button size="sm" variant="outline" onClick={() => setPaymentDialogOpen(true)}>
-                  <DollarSign className="h-4 w-4 mr-1" />
-                  Payment
-                </Button>
-                <Button size="sm" variant="outline" onClick={() => setFineDialogOpen(true)}>
-                  <AlertTriangle className="h-4 w-4 mr-1" />
-                  Fine
-                </Button>
-              </>
-            ) : (
+            {customer.is_blocked && (
               <Button
                 size="sm"
                 variant="outline"
@@ -287,12 +248,21 @@ const CustomerDetail = () => {
                 size="sm"
                 variant="ghost"
                 onClick={() => setBlockDialogOpen(true)}
-                className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                className="text-orange-600 hover:text-orange-600 hover:bg-orange-600/10"
               >
                 <Ban className="h-4 w-4 mr-1" />
                 Block
               </Button>
             )}
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => setDeleteDialogOpen(true)}
+              className="text-destructive hover:text-destructive hover:bg-destructive/10"
+            >
+              <Trash2 className="h-4 w-4 mr-1" />
+              Delete
+            </Button>
           </div>
         </div>
       </div>
@@ -330,37 +300,6 @@ const CustomerDetail = () => {
                     </Badge>
                   </div>
                 )}
-              </div>
-            </div>
-
-            {/* Account & Statistics */}
-            <MetricDivider />
-            <div>
-              <h3 className="text-sm font-semibold text-muted-foreground mb-3">Account & Statistics</h3>
-              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-x-8 gap-y-3">
-                <div className="flex flex-col">
-                  <span className="text-xs text-muted-foreground mb-1">Account Status</span>
-                  {customerBalanceData ? (
-                    <CustomerBalanceChip
-                      balance={customerBalanceData.balance}
-                      status={customerBalanceData.status}
-                      totalCharges={customerBalanceData.totalCharges}
-                      totalPayments={customerBalanceData.totalPayments}
-                    />
-                  ) : (
-                    <Badge variant="secondary">Loading...</Badge>
-                  )}
-                </div>
-                <MetricItem label="Active Rentals" value={activeRentalsCount || 0} />
-                <MetricItem label="Total Payments" value={paymentStats?.paymentCount || 0} />
-                {paymentStats?.totalPayments != null && paymentStats.totalPayments > 0 && (
-                  <MetricItem label="Payment Amount" value={paymentStats.totalPayments} isAmount />
-                )}
-                <MetricItem label="Open Fines" value={fineStats?.openFines || 0} />
-                {fineStats?.openFineAmount != null && fineStats.openFineAmount > 0 && (
-                  <MetricItem label="Fine Amount" value={fineStats.openFineAmount} isAmount />
-                )}
-                <MetricItem label="Documents" value={documents?.length || 0} />
               </div>
             </div>
 
@@ -409,18 +348,6 @@ const CustomerDetail = () => {
                 <span className="xs:hidden sm:inline">Payments</span>
                 <span className="sm:hidden">P</span>
               </TabsTrigger>
-              <TabsTrigger value="fines" variant="evenly-spaced" className="min-w-0">
-                <AlertTriangle className="h-4 w-4 mr-1 sm:mr-2" />
-                <span className="hidden xs:inline sm:hidden">Fines</span>
-                <span className="xs:hidden sm:inline">Fines</span>
-                <span className="sm:hidden">F</span>
-              </TabsTrigger>
-              <TabsTrigger value="vehicles" variant="evenly-spaced" className="min-w-0">
-                <Car className="h-4 w-4 mr-1 sm:mr-2" />
-                <span className="hidden xs:inline sm:hidden">History</span>
-                <span className="xs:hidden sm:inline">Vehicle History</span>
-                <span className="sm:hidden">H</span>
-              </TabsTrigger>
               <TabsTrigger value="documents" variant="evenly-spaced" className="min-w-0">
                 <FileText className="h-4 w-4 mr-1 sm:mr-2" />
                 <span className="hidden xs:inline sm:hidden">Documents</span>
@@ -433,13 +360,7 @@ const CustomerDetail = () => {
         <TabsContent value="rentals" className="mt-6">
           <Card>
             <CardHeader>
-              <CardTitle className="flex items-center justify-between">
-                <span>Customer Rentals</span>
-                <Button onClick={() => router.push(`/rentals/new?customer=${id}`)} size="sm">
-                  <Plus className="h-4 w-4 mr-2" />
-                  Add Rental
-                </Button>
-              </CardTitle>
+              <CardTitle>Customer Rentals</CardTitle>
               <CardDescription>All rental agreements for this customer</CardDescription>
             </CardHeader>
             <CardContent>
@@ -448,18 +369,18 @@ const CustomerDetail = () => {
                   <Table>
                     <TableHeader>
                       <TableRow className="hover:bg-transparent">
+                        <TableHead className="font-semibold">Rental ID</TableHead>
                         <TableHead className="font-semibold">Vehicle</TableHead>
-                        <TableHead className="font-semibold">Start Date</TableHead>
-                        <TableHead className="font-semibold">End Date</TableHead>
-                        <TableHead className="font-semibold text-right">Monthly Amount</TableHead>
-                        <TableHead className="font-semibold">Status</TableHead>
-                        <TableHead className="font-semibold">Actions</TableHead>
+                        <TableHead className="font-semibold text-right">View</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
                       {rentals.map((rental) => (
                         <TableRow key={rental.id} className="hover:bg-muted/50 transition-colors">
-                          <TableCell className="font-medium">
+                          <TableCell className="font-medium font-mono text-xs">
+                            {rental.id.split('-')[0]}
+                          </TableCell>
+                          <TableCell>
                             <div>
                               <div className="font-semibold text-foreground">{rental.vehicle.reg}</div>
                               <TruncatedCell
@@ -469,29 +390,13 @@ const CustomerDetail = () => {
                               />
                             </div>
                           </TableCell>
-                          <TableCell className="whitespace-nowrap">
-                            {format(new Date(rental.start_date), "MM/dd/yyyy")}
-                          </TableCell>
-                          <TableCell className="whitespace-nowrap">
-                            {rental.end_date ? format(new Date(rental.end_date), "MM/dd/yyyy") : "Ongoing"}
-                          </TableCell>
-                          <TableCell className="text-right font-medium">
-                            ${rental.monthly_amount.toLocaleString()}
-                          </TableCell>
-                          <TableCell>
-                            <Badge variant={rental.status === 'Active' ? 'default' : 'secondary'}>
-                              {rental.status}
-                            </Badge>
-                          </TableCell>
-                          <TableCell>
+                          <TableCell className="text-right">
                             <Button
-                              variant="outline"
-                              size="sm"
+                              variant="ghost"
+                              size="icon"
                               onClick={() => router.push(`/rentals/${rental.id}`)}
-                              className="hover:bg-primary hover:text-primary-foreground"
                             >
-                              <Eye className="h-4 w-4 mr-1" />
-                              View
+                              <ArrowUpRight className="h-4 w-4" />
                             </Button>
                           </TableCell>
                         </TableRow>
@@ -504,8 +409,6 @@ const CustomerDetail = () => {
                   icon={Car}
                   title="No rentals found"
                   description="This customer doesn't have any rental agreements yet."
-                  actionLabel="Add First Rental"
-                  onAction={() => router.push(`/rentals/new?customer=${id}`)}
                 />
               )}
             </CardContent>
@@ -515,66 +418,34 @@ const CustomerDetail = () => {
         <TabsContent value="payments" className="mt-6">
           <Card>
             <CardHeader>
-              <CardTitle className="flex items-center justify-between">
-                <span>Payment History</span>
-                <Button onClick={() => setPaymentDialogOpen(true)} size="sm">
-                  <Plus className="h-4 w-4 mr-2" />
-                  Add Payment
-                </Button>
-              </CardTitle>
-              <CardDescription>All payments made by this customer</CardDescription>
+              <CardTitle>Payment History</CardTitle>
+              <CardDescription>Paid payments by this customer</CardDescription>
             </CardHeader>
             <CardContent>
-              {payments && payments.length > 0 ? (
+              {payments && payments.filter(p => p.remaining_amount === 0).length > 0 ? (
                 <div className="rounded-md border">
                   <Table>
                     <TableHeader>
                       <TableRow className="hover:bg-transparent">
                         <TableHead className="font-semibold">Date</TableHead>
-                        <TableHead className="font-semibold text-right">Amount</TableHead>
-                        <TableHead className="font-semibold">Method</TableHead>
-                        <TableHead className="font-semibold">Vehicle</TableHead>
-                        <TableHead className="font-semibold">Status</TableHead>
-                        <TableHead className="font-semibold text-right">Remaining</TableHead>
+                        <TableHead className="font-semibold">Amount</TableHead>
+                        <TableHead className="font-semibold text-right">Status</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {payments.map((payment) => (
+                      {payments.filter(p => p.remaining_amount === 0).map((payment) => (
                         <TableRow key={payment.id} className="hover:bg-muted/50 transition-colors">
                           <TableCell className="whitespace-nowrap">
                             {format(new Date(payment.payment_date), "MM/dd/yyyy")}
                           </TableCell>
-                          <TableCell className="text-right font-medium">
+                          <TableCell className="font-medium">
                             ${payment.amount.toLocaleString()}
                           </TableCell>
-                          <TableCell>
-                            <Badge variant="outline">{payment.method}</Badge>
-                          </TableCell>
-                          <TableCell>
-                            {payment.vehicle?.reg ? (
-                              <TruncatedCell
-                                content={payment.vehicle.reg}
-                                maxLength={15}
-                                className="font-medium"
-                              />
-                            ) : (
-                              <span className="text-muted-foreground">-</span>
-                            )}
-                          </TableCell>
-                          <TableCell>
+                          <TableCell className="text-right">
                             <PaymentStatusBadge
                               applied={payment.amount - payment.remaining_amount}
                               amount={payment.amount}
                             />
-                          </TableCell>
-                          <TableCell className="text-right">
-                            {payment.remaining_amount > 0 ? (
-                              <span className="text-orange-600 font-medium">
-                                ${payment.remaining_amount.toLocaleString()}
-                              </span>
-                            ) : (
-                              <span className="text-green-600 font-medium">Fully Applied</span>
-                            )}
                           </TableCell>
                         </TableRow>
                       ))}
@@ -585,177 +456,7 @@ const CustomerDetail = () => {
                 <EmptyState
                   icon={Receipt}
                   title="No payments found"
-                  description="This customer hasn't made any payments yet."
-                  actionLabel="Add First Payment"
-                  onAction={() => setPaymentDialogOpen(true)}
-                />
-              )}
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        <TabsContent value="fines" className="mt-6">
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center justify-between">
-                <span>Customer Fines</span>
-                <Button onClick={() => setFineDialogOpen(true)} size="sm">
-                  <Plus className="h-4 w-4 mr-2" />
-                  Upload Fine
-                </Button>
-              </CardTitle>
-              <CardDescription>All fines associated with this customer</CardDescription>
-            </CardHeader>
-            <CardContent>
-              {fines && fines.length > 0 ? (
-                <div className="rounded-md border">
-                  <Table>
-                    <TableHeader>
-                      <TableRow className="hover:bg-transparent">
-                        <TableHead className="font-semibold">Type</TableHead>
-                        <TableHead className="font-semibold">Reference</TableHead>
-                        <TableHead className="font-semibold">Vehicle</TableHead>
-                        <TableHead className="font-semibold text-right">Amount</TableHead>
-                        <TableHead className="font-semibold">Issue Date</TableHead>
-                        <TableHead className="font-semibold">Due Date</TableHead>
-                        <TableHead className="font-semibold">Status</TableHead>
-                        <TableHead className="font-semibold">Liability</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {fines.map((fine) => (
-                        <TableRow key={fine.id} className="hover:bg-muted/50 transition-colors">
-                          <TableCell className="font-medium">{fine.type === "PCN" ? "Parking Citation" : fine.type}</TableCell>
-                          <TableCell>
-                            {fine.reference_no ? (
-                              <TruncatedCell
-                                content={fine.reference_no}
-                                maxLength={12}
-                                className="font-mono text-sm"
-                              />
-                            ) : (
-                              <span className="text-muted-foreground">-</span>
-                            )}
-                          </TableCell>
-                          <TableCell>
-                            <div>
-                              <div className="font-semibold text-foreground">{fine.vehicle.reg}</div>
-                              <TruncatedCell
-                                content={`${fine.vehicle.make} ${fine.vehicle.model}`}
-                                maxLength={20}
-                                className="text-sm text-muted-foreground"
-                              />
-                            </div>
-                          </TableCell>
-                          <TableCell className="text-right font-medium">
-                            ${fine.amount.toLocaleString()}
-                          </TableCell>
-                          <TableCell className="whitespace-nowrap">
-                            {format(new Date(fine.issue_date), "MM/dd/yyyy")}
-                          </TableCell>
-                          <TableCell className="whitespace-nowrap">
-                            {format(new Date(fine.due_date), "MM/dd/yyyy")}
-                          </TableCell>
-                          <TableCell>
-                            <FineStatusBadge
-                              status={fine.status}
-                              dueDate={fine.due_date}
-                              remainingAmount={fine.amount}
-                            />
-                          </TableCell>
-                          <TableCell>
-                            <Badge variant={fine.liability === 'Individual' || fine.liability === 'Customer' ? 'default' : 'secondary'}>
-                              {fine.liability === "Customer" ? "Individual" : fine.liability}
-                            </Badge>
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </div>
-              ) : (
-                <EmptyState
-                  icon={AlertTriangle}
-                  title="No fines found"
-                  description="This customer doesn't have any fines associated with their account."
-                  actionLabel="Upload Fine"
-                  onAction={() => setFineDialogOpen(true)}
-                />
-              )}
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        <TabsContent value="vehicles" className="mt-6">
-          <Card>
-            <CardHeader>
-              <CardTitle>Vehicle History</CardTitle>
-              <CardDescription>All vehicles this customer has rented</CardDescription>
-            </CardHeader>
-            <CardContent>
-              {vehicleHistory && vehicleHistory.length > 0 ? (
-                <div className="rounded-md border">
-                  <Table>
-                    <TableHeader>
-                      <TableRow className="hover:bg-transparent">
-                        <TableHead className="font-semibold">Vehicle</TableHead>
-                        <TableHead className="font-semibold">Start Date</TableHead>
-                        <TableHead className="font-semibold">End Date</TableHead>
-                        <TableHead className="font-semibold text-right">Monthly Amount</TableHead>
-                        <TableHead className="font-semibold">Status</TableHead>
-                        <TableHead className="font-semibold">Actions</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {vehicleHistory.map((history) => (
-                        <TableRow key={history.rental_id} className="hover:bg-muted/50 transition-colors">
-                          <TableCell>
-                            <div>
-                              <div className="font-semibold text-foreground">{history.vehicle_reg}</div>
-                              <TruncatedCell
-                                content={`${history.vehicle_make} ${history.vehicle_model}`}
-                                maxLength={25}
-                                className="text-sm text-muted-foreground"
-                              />
-                            </div>
-                          </TableCell>
-                          <TableCell className="whitespace-nowrap">
-                            {format(new Date(history.start_date), "MM/dd/yyyy")}
-                          </TableCell>
-                          <TableCell className="whitespace-nowrap">
-                            {history.end_date ? format(new Date(history.end_date), "MM/dd/yyyy") : "Ongoing"}
-                          </TableCell>
-                          <TableCell className="text-right font-medium">
-                            ${history.monthly_amount.toLocaleString()}
-                          </TableCell>
-                          <TableCell>
-                            <Badge variant={history.status === 'Active' ? 'default' : 'secondary'}>
-                              {history.status}
-                            </Badge>
-                          </TableCell>
-                          <TableCell>
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => router.push(`/vehicles/${history.vehicle_id}`)}
-                              className="hover:bg-primary hover:text-primary-foreground"
-                            >
-                              <Car className="h-4 w-4 mr-1" />
-                              View
-                            </Button>
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </div>
-              ) : (
-                <EmptyState
-                  icon={Car}
-                  title="No vehicle history"
-                  description="This customer hasn't rented any vehicles yet."
-                  actionLabel="Add First Rental"
-                  onAction={() => router.push(`/rentals/new?customer=${id}`)}
+                  description="This customer doesn't have any paid payments yet."
                 />
               )}
             </CardContent>
@@ -772,170 +473,75 @@ const CustomerDetail = () => {
                   Add Document
                 </Button>
               </CardTitle>
-              <CardDescription>All documents uploaded for this customer, including rental agreements</CardDescription>
+              <CardDescription>Documents uploaded for this customer</CardDescription>
             </CardHeader>
             <CardContent>
-              {(documents && documents.length > 0) || (rentalAgreements && rentalAgreements.length > 0) ? (
-                <div className="space-y-6">
-                  {/* Customer Documents Section */}
-                  {documents && documents.length > 0 && (
-                    <div>
-                      <h3 className="text-sm font-semibold mb-3 text-muted-foreground">Uploaded Documents</h3>
-                      <div className="rounded-md border">
-                        <Table>
-                          <TableHeader>
-                            <TableRow className="hover:bg-transparent">
-                              <TableHead className="font-semibold">Document</TableHead>
-                              <TableHead className="font-semibold">Type</TableHead>
-                              <TableHead className="font-semibold">Vehicle</TableHead>
-                              <TableHead className="font-semibold">Created</TableHead>
-                              <TableHead className="font-semibold text-right">Actions</TableHead>
-                            </TableRow>
-                          </TableHeader>
-                          <TableBody>
-                            {documents.map((doc) => (
-                              <TableRow key={doc.id} className="hover:bg-muted/50 transition-colors">
-                                <TableCell>
-                                  <div className="font-semibold text-foreground">
-                                    {doc.document_name}
-                                  </div>
-                                  {doc.file_name && (
-                                    <div className="text-xs text-muted-foreground">{doc.file_name}</div>
-                                  )}
-                                </TableCell>
-                                <TableCell>{doc.document_type}</TableCell>
-                                <TableCell>
-                                  {doc.vehicles ? (
-                                    <TruncatedCell
-                                      content={`${doc.vehicles.reg} - ${doc.vehicles.make} ${doc.vehicles.model}`}
-                                      maxLength={25}
-                                      className="text-sm"
-                                    />
-                                  ) : (
-                                    <span className="text-muted-foreground">-</span>
-                                  )}
-                                </TableCell>
-                                <TableCell className="whitespace-nowrap">
-                                  {format(new Date(doc.created_at), "MM/dd/yyyy")}
-                                </TableCell>
-                                <TableCell>
-                                  <div className="flex items-center justify-end gap-1">
-                                    {doc.file_url && (
-                                      <Button
-                                        variant="outline"
-                                        size="sm"
-                                        className="h-8 w-8 p-0"
-                                        title="Download document"
-                                        onClick={() => downloadDocument.mutate(doc)}
-                                      >
-                                        <Download className="h-3 w-3" />
-                                      </Button>
-                                    )}
-                                    <Button
-                                      variant="outline"
-                                      size="sm"
-                                      className="h-8 w-8 p-0 text-destructive hover:text-destructive"
-                                      title="Delete document"
-                                      onClick={() => deleteDocument.mutate(doc.id)}
-                                    >
-                                      <Trash2 className="h-3 w-3" />
-                                    </Button>
-                                  </div>
-                                </TableCell>
-                              </TableRow>
-                            ))}
-                          </TableBody>
-                        </Table>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Rental Agreements Section */}
-                  {rentalAgreements && rentalAgreements.length > 0 && (
-                    <div>
-                      <h3 className="text-sm font-semibold mb-3 text-muted-foreground">Rental Agreements</h3>
-                      <div className="rounded-md border">
-                        <Table>
-                          <TableHeader>
-                            <TableRow className="hover:bg-transparent">
-                              <TableHead className="font-semibold">Document</TableHead>
-                              <TableHead className="font-semibold">Vehicle</TableHead>
-                              <TableHead className="font-semibold">Signing Status</TableHead>
-                              <TableHead className="font-semibold">Created</TableHead>
-                              <TableHead className="font-semibold text-right">Actions</TableHead>
-                            </TableRow>
-                          </TableHeader>
-                          <TableBody>
-                            {rentalAgreements.map((rental) => (
-                              <TableRow key={rental.id} className="hover:bg-muted/50 transition-colors">
-                                <TableCell>
-                                  <div className="font-semibold text-foreground">
-                                    Rental Agreement
-                                  </div>
-                                </TableCell>
-                                <TableCell>
-                                  <TruncatedCell
-                                    content={`${rental.vehicles?.reg} - ${rental.vehicles?.make} ${rental.vehicles?.model}`}
-                                    maxLength={25}
-                                    className="text-sm"
-                                  />
-                                </TableCell>
-                                <TableCell>
-                                  <DocumentSigningStatusBadge status={rental.document_status || 'pending'} />
-                                </TableCell>
-                                <TableCell className="whitespace-nowrap">
-                                  {format(new Date(rental.created_at), "MM/dd/yyyy")}
-                                </TableCell>
-                                <TableCell>
-                                  <div className="flex items-center justify-end gap-1">
-                                    {rental.signed_document_id && rental.signed_document?.file_url ? (
-                                      <>
-                                        <Button
-                                          variant="outline"
-                                          size="sm"
-                                          className="h-8 w-8 p-0"
-                                          title="View signed document"
-                                          onClick={() => window.open(rental.signed_document.file_url, '_blank')}
-                                        >
-                                          <Eye className="h-3 w-3" />
-                                        </Button>
-                                        <Button
-                                          variant="outline"
-                                          size="sm"
-                                          className="h-8 w-8 p-0"
-                                          title="Download signed document"
-                                          onClick={() => {
-                                            console.log('Downloading signed document...');
-                                            const link = document.createElement('a');
-                                            link.href = rental.signed_document.file_url;
-                                            link.download = rental.signed_document.document_name || 'rental-agreement.pdf';
-                                            link.click();
-                                          }}
-                                        >
-                                          <Download className="h-3 w-3" />
-                                        </Button>
-                                      </>
-                                    ) : (
-                                      <Button
-                                        variant="outline"
-                                        size="sm"
-                                        onClick={() => router.push(`/rentals/${rental.id}`)}
-                                        className="hover:bg-primary hover:text-primary-foreground"
-                                      >
-                                        <Eye className="h-4 w-4 mr-1" />
-                                        View Rental
-                                      </Button>
-                                    )}
-                                  </div>
-                                </TableCell>
-                              </TableRow>
-                            ))}
-                          </TableBody>
-                        </Table>
-                      </div>
-                    </div>
-                  )}
-
+              {documents && documents.length > 0 ? (
+                <div className="rounded-md border">
+                  <Table>
+                    <TableHeader>
+                      <TableRow className="hover:bg-transparent">
+                        <TableHead className="font-semibold">Document</TableHead>
+                        <TableHead className="font-semibold">Type</TableHead>
+                        <TableHead className="font-semibold">Vehicle</TableHead>
+                        <TableHead className="font-semibold">Created</TableHead>
+                        <TableHead className="font-semibold text-right">Actions</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {documents.map((doc) => (
+                        <TableRow key={doc.id} className="hover:bg-muted/50 transition-colors">
+                          <TableCell>
+                            <div className="font-semibold text-foreground">
+                              {doc.document_name}
+                            </div>
+                            {doc.file_name && (
+                              <div className="text-xs text-muted-foreground">{doc.file_name}</div>
+                            )}
+                          </TableCell>
+                          <TableCell>{doc.document_type}</TableCell>
+                          <TableCell>
+                            {doc.vehicles ? (
+                              <TruncatedCell
+                                content={`${doc.vehicles.reg} - ${doc.vehicles.make} ${doc.vehicles.model}`}
+                                maxLength={25}
+                                className="text-sm"
+                              />
+                            ) : (
+                              <span className="text-muted-foreground">-</span>
+                            )}
+                          </TableCell>
+                          <TableCell className="whitespace-nowrap">
+                            {format(new Date(doc.created_at), "MM/dd/yyyy")}
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex items-center justify-end gap-1">
+                              {doc.file_url && (
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  className="h-8 w-8 p-0"
+                                  title="Download document"
+                                  onClick={() => downloadDocument.mutate(doc)}
+                                >
+                                  <Download className="h-3 w-3" />
+                                </Button>
+                              )}
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="h-8 w-8 p-0 text-destructive hover:text-destructive"
+                                title="Delete document"
+                                onClick={() => deleteDocument.mutate(doc.id)}
+                              >
+                                <Trash2 className="h-3 w-3" />
+                              </Button>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
                 </div>
               ) : (
                 <EmptyState
@@ -954,17 +560,6 @@ const CustomerDetail = () => {
       </div>
 
       {/* Dialogs */}
-      <AddPaymentDialog
-        open={paymentDialogOpen}
-        onOpenChange={setPaymentDialogOpen}
-        customer_id={id}
-      />
-
-      <AddFineDialog
-        open={fineDialogOpen}
-        onOpenChange={setFineDialogOpen}
-      />
-
       <CustomerFormModal
         open={editCustomerOpen}
         onOpenChange={setEditCustomerOpen}
@@ -1034,6 +629,32 @@ const CustomerDetail = () => {
               disabled={!blockReason.trim() || isBlocking || (!customer.license_number && !customer.id_number)}
             >
               {isBlocking ? "Blocking..." : "Block Customer"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Customer Dialog */}
+      <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-destructive">
+              <Trash2 className="h-5 w-5" />
+              Delete Customer
+            </DialogTitle>
+            <DialogDescription>
+              Are you sure you want to delete {customer.name}? This action cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDeleteDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={handleDeleteCustomer}
+            >
+              Delete Customer
             </Button>
           </DialogFooter>
         </DialogContent>
