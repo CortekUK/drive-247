@@ -49,6 +49,7 @@ const RentalDetail = () => {
   const [sendingDocuSign, setSendingDocuSign] = useState(false);
   const [showCancelDialog, setShowCancelDialog] = useState(false);
   const [showRejectionDialog, setShowRejectionDialog] = useState(false);
+  const [loadingDocuSignDoc, setLoadingDocuSignDoc] = useState(false);
 
 
   const { data: rental, isLoading, error: rentalError } = useQuery({
@@ -540,6 +541,63 @@ const RentalDetail = () => {
   };
 
   const displayStatus = rental.computed_status || computeStatus(rental);
+
+  // Function to view DocuSign agreement
+  const handleViewAgreement = async () => {
+    setLoadingDocuSignDoc(true);
+    try {
+      // If we have a signed document, open it directly
+      if (signedDocument?.file_url) {
+        const { data } = supabase.storage
+          .from('customer-documents')
+          .getPublicUrl(signedDocument.file_url);
+        window.open(data.publicUrl, '_blank');
+        return;
+      }
+
+      // Otherwise, fetch from DocuSign
+      const { data, error } = await supabase.functions.invoke('get-docusign-document', {
+        body: { rentalId: id }
+      });
+
+      if (error || !data?.ok) {
+        toast({
+          title: "Error",
+          description: data?.error || "Failed to get document",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      // If we got a stored URL, open it
+      if (data.documentUrl) {
+        window.open(data.documentUrl, '_blank');
+        return;
+      }
+
+      // If we got base64 PDF, create blob and open
+      if (data.documentBase64) {
+        const byteCharacters = atob(data.documentBase64);
+        const byteNumbers = new Array(byteCharacters.length);
+        for (let i = 0; i < byteCharacters.length; i++) {
+          byteNumbers[i] = byteCharacters.charCodeAt(i);
+        }
+        const byteArray = new Uint8Array(byteNumbers);
+        const blob = new Blob([byteArray], { type: 'application/pdf' });
+        const url = URL.createObjectURL(blob);
+        window.open(url, '_blank');
+      }
+    } catch (err: any) {
+      toast({
+        title: "Error",
+        description: err?.message || "Failed to view agreement",
+        variant: "destructive",
+      });
+    } finally {
+      setLoadingDocuSignDoc(false);
+    }
+  };
+
   const getStatusVariant = (status: string) => {
     if (status === 'Active') return 'default';
     if (status === 'Closed') return 'secondary';
@@ -847,19 +905,21 @@ const RentalDetail = () => {
             </div>
 
             <div className="flex gap-2">
-              {/* View Signed Document Button */}
-              {signedDocument && (
+              {/* View Agreement Button - works for both pending and signed */}
+              {(rental.document_status === 'sent' || rental.document_status === 'delivered' || rental.document_status === 'viewed' || rental.document_status === 'signed' || rental.document_status === 'completed' || signedDocument) && (
                 <Button
                   variant="outline"
-                  onClick={() => {
-                    const { data } = supabase.storage
-                      .from('customer-documents')
-                      .getPublicUrl(signedDocument.file_url);
-                    window.open(data.publicUrl, '_blank');
-                  }}
+                  onClick={handleViewAgreement}
+                  disabled={loadingDocuSignDoc}
                 >
-                  <Download className="h-4 w-4 mr-2" />
-                  View Signed Agreement
+                  {loadingDocuSignDoc ? (
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  ) : (
+                    <ExternalLink className="h-4 w-4 mr-2" />
+                  )}
+                  {signedDocument || rental.document_status === 'completed' || rental.document_status === 'signed'
+                    ? 'View Signed Agreement'
+                    : 'View Agreement'}
                 </Button>
               )}
 
