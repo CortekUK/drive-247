@@ -74,11 +74,19 @@ export const VehicleFileUpload = ({
       });
     });
 
+    // Filter out duplicates - check against existing files
+    const existingNames = new Set(files.map(f => f.file_name));
+    const uniqueFiles = acceptedFiles.filter(f => !existingNames.has(f.name));
+
+    if (uniqueFiles.length < acceptedFiles.length) {
+      alert('Duplicate file(s) skipped - files with same name already uploaded');
+    }
+
     // Process accepted files
-    acceptedFiles.forEach((file) => {
+    uniqueFiles.forEach((file) => {
       onUpload(file);
     });
-  }, [onUpload]);
+  }, [onUpload, files]);
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     onDrop,
