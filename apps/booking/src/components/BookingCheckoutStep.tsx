@@ -192,52 +192,81 @@ export default function BookingCheckoutStep({
     }
   };
 
-  // Function to send DocuSign envelope and then redirect to appropriate payment flow
   const handleSendDocuSign = async () => {
-    if (!createdRentalData) return;
+    if (!createdRentalData) {
+      console.error('❌ No rental data available');
+      toast.error("Rental data not found. Please try again.");
+      return;
+    }
 
     setSendingDocuSign(true);
 
-    // Skip DocuSign if not configured - go straight to payment
-    // DocuSign integration is optional and can be enabled later
-    const DOCUSIGN_ENABLED = true; // DocuSign is configured
+    try {
+      console.log('═════════════════════════════════════════════════════════');
+      console.log('📄 CREATING DOCUSIGN ENVELOPE (via API route)');
+      console.log('═════════════════════════════════════════════════════════');
+      console.log('Rental ID:', createdRentalData.rental.id);
+      console.log('Customer ID:', createdRentalData.customer.id);
+      console.log('Customer Email:', formData.customerEmail);
+      console.log('Customer Name:', formData.customerName);
 
-    if (DOCUSIGN_ENABLED) {
-      try {
-        console.log('📄 Attempting to send DocuSign envelope...');
+      // Use local API route instead of Supabase Edge Function
+      const response = await fetch('/api/docusign', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          rentalId: createdRentalData.rental.id,
+          customerEmail: formData.customerEmail,
+          customerName: formData.customerName,
+        }),
+      });
 
-        const { data, error } = await supabase.functions.invoke('create-docusign-envelope', {
-          body: {
-            rentalId: createdRentalData.rental.id,
-            customerId: createdRentalData.customer.id,
-            customerEmail: formData.customerEmail,
-            customerName: formData.customerName,
-          },
-        });
+      const data = await response.json();
+      const error = response.ok ? null : data;
 
-        if (error) {
-          console.warn("⚠️ DocuSign envelope creation skipped:", error.message || error);
-        } else if (data?.ok) {
-          console.log("✅ Rental agreement sent via DocuSign");
-          toast.success("Rental agreement sent to your email!");
-        } else {
-          console.warn("⚠️ DocuSign not configured or failed:", data?.error || data?.detail);
-        }
-      } catch (error: any) {
-        console.warn("⚠️ DocuSign error (non-blocking):", error.message || error);
+      console.log('═════════════════════════════════════════════════════════');
+      console.log('📨 DOCUSIGN RESPONSE');
+      console.log('═════════════════════════════════════════════════════════');
+      console.log('Error:', error);
+      console.log('Data:', JSON.stringify(data, null, 2));
+
+      if (error) {
+        console.error("DocuSign call failed:", error);
+        toast.error("DocuSign unavailable. Agreement will be sent later.");
+      } else if (data?.ok) {
+        console.log('✅ DocuSign envelope created!');
+        toast.success("Agreement sent to your email!", { duration: 4000 });
+      } else {
+        console.warn("DocuSign returned error:", data);
+        toast.error(data?.error || "DocuSign failed. Agreement will be sent later.");
       }
-    }
 
-    setSendingDocuSign(false);
+      // Always proceed to payment
+      setSendingDocuSign(false);
 
-    // Always proceed to payment regardless of DocuSign status
-    const bookingMode = await getBookingMode();
-    console.log('💳 Proceeding to payment, mode:', bookingMode);
+      setTimeout(async () => {
+        const bookingMode = await getBookingMode();
+        console.log('💳 Proceeding to payment, mode:', bookingMode);
+        if (bookingMode === 'manual') {
+          redirectToPreAuthPayment();
+        } else {
+          redirectToStripePayment();
+        }
+      }, 1500);
 
-    if (bookingMode === 'manual') {
-      redirectToPreAuthPayment();
-    } else {
-      redirectToStripePayment();
+    } catch (err: any) {
+      console.error("DocuSign exception:", err);
+      toast.error("DocuSign error. Proceeding to payment...");
+      setSendingDocuSign(false);
+
+      setTimeout(async () => {
+        const bookingMode = await getBookingMode();
+        if (bookingMode === 'manual') {
+          redirectToPreAuthPayment();
+        } else {
+          redirectToStripePayment();
+        }
+      }, 1500);
     }
   };
 
@@ -325,7 +354,7 @@ export default function BookingCheckoutStep({
 
         const { data: newCustomer, error: createError } = await supabase
           .from("customers")
-          .insert(customerData)
+          .insert(customerData as any)
           .select()
           .single();
 
@@ -812,13 +841,8 @@ export default function BookingCheckoutStep({
       {generatedInvoice && createdRentalData && (
         <InvoiceDialog
           open={showInvoiceDialog}
-          onOpenChange={(open) => {
-            setShowInvoiceDialog(open);
-            if (!open) {
-              // When invoice dialog closes, automatically send DocuSign
-              handleSendDocuSign();
-            }
-          }}
+          onOpenChange={setShowInvoiceDialog}
+          onSignAgreement={handleSendDocuSign}
           invoice={generatedInvoice}
           customer={{
             name: formData.customerName,

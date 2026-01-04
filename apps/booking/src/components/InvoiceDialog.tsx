@@ -2,7 +2,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Button } from "@/components/ui/button";
 import { FileText, Download, Shield, ArrowRight } from "lucide-react";
 import { format } from "date-fns";
-import { useRef } from "react";
+import { useRef, useState } from "react";
 import { useReactToPrint } from "react-to-print";
 
 interface InvoiceDialogProps {
@@ -32,6 +32,7 @@ interface InvoiceDialogProps {
     end_date: string;
     monthly_amount: number;
   };
+  onSignAgreement?: () => Promise<void>;
 }
 
 const formatCurrency = (amount: number) => {
@@ -157,8 +158,10 @@ export const InvoiceDialog = ({
   customer,
   vehicle,
   rental,
+  onSignAgreement,
 }: InvoiceDialogProps) => {
   const printRef = useRef<HTMLDivElement>(null);
+  const [isSending, setIsSending] = useState(false);
   const vehicleName = vehicle.make && vehicle.model ? `${vehicle.make} ${vehicle.model}` : vehicle.reg;
   const rentalFee = invoice.subtotal;
 
@@ -178,6 +181,24 @@ export const InvoiceDialog = ({
       }
     `,
   });
+
+  const handleContinue = async () => {
+    if (onSignAgreement) {
+      try {
+        setIsSending(true);
+        await onSignAgreement();
+        // The parent component handles redirection, so we might not need to close explicitly
+        // but it doesn't hurt to close it if the redirection hasn't happened yet
+        onOpenChange(false);
+      } catch (error) {
+        console.error("Error signing agreement:", error);
+      } finally {
+        setIsSending(false);
+      }
+    } else {
+      onOpenChange(false);
+    }
+  };
 
   return (
     <>
@@ -316,9 +337,22 @@ export const InvoiceDialog = ({
               <Download className="h-4 w-4 mr-2" />
               Print / Save PDF
             </Button>
-            <Button onClick={() => onOpenChange(false)} className="gradient-accent w-full sm:w-auto">
-              Continue to Sign Agreement
-              <ArrowRight className="h-4 w-4 ml-2" />
+            <Button
+              onClick={handleContinue}
+              className="gradient-accent w-full sm:w-auto"
+              disabled={isSending}
+            >
+              {isSending ? (
+                <>
+                  <div className="animate-spin mr-2 h-4 w-4 border-2 border-b-transparent border-white rounded-full"></div>
+                  Preparing Agreement...
+                </>
+              ) : (
+                <>
+                  Continue to Payment
+                  <ArrowRight className="h-4 w-4 ml-2" />
+                </>
+              )}
             </Button>
           </div>
         </DialogContent>
