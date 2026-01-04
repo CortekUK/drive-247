@@ -103,7 +103,11 @@ const getAdminEmailContent = (rentals: RentalInfo[], branding: TenantBranding) =
                             <div style="text-align: center; padding: 40px; background: #ecfdf5; border-radius: 8px;">
                                 <p style="margin: 0; color: #10b981; font-size: 18px;">All caught up! No returns due today.</p>
                             </div>
-                            ` : ''}
+                            ` : `
+                            <div style="text-align: center; margin-top: 25px;">
+                                <a href="https://${branding.slug}.portal.drive-247.com/rentals" style="display: inline-block; background: ${branding.accentColor}; color: white; padding: 12px 30px; border-radius: 6px; text-decoration: none; font-weight: 600;">View All Rentals</a>
+                            </div>
+                            `}
                         </td>
                     </tr>`;
 };

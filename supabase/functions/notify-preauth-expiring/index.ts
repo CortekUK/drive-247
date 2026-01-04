@@ -91,6 +91,13 @@ const getEmailContent = (data: NotifyRequest, branding: TenantBranding) => {
                                     </td>
                                 </tr>
                             </table>
+                            <table role="presentation" style="width: 100%; border-collapse: collapse;">
+                                <tr>
+                                    <td style="text-align: center; padding: 20px 0;">
+                                        <a href="https://${branding.slug}.portal.drive-247.com/pending-bookings" style="display: inline-block; background: ${branding.accentColor}; color: white; padding: 14px 35px; border-radius: 6px; text-decoration: none; font-weight: 600; font-size: 16px;">Review Pending Bookings</a>
+                                    </td>
+                                </tr>
+                            </table>
                         </td>
                     </tr>`;
 };
