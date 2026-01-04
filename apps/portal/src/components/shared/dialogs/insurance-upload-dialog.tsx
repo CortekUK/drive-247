@@ -66,7 +66,18 @@ export function InsuranceUploadDialog({
         });
       }
 
-      setFiles(prev => [...prev, ...validFiles]);
+      // Filter out duplicates by file name
+      setFiles(prev => {
+        const existingNames = new Set(prev.map(f => f.name));
+        const uniqueNewFiles = validFiles.filter(f => !existingNames.has(f.name));
+        if (uniqueNewFiles.length < validFiles.length) {
+          toast({
+            title: "Duplicate skipped",
+            description: "File with the same name already selected",
+          });
+        }
+        return [...prev, ...uniqueNewFiles];
+      });
     }
   };
 
@@ -107,7 +118,18 @@ export function InsuranceUploadDialog({
         });
       }
 
-      setFiles(prev => [...prev, ...validFiles]);
+      // Filter out duplicates by file name
+      setFiles(prev => {
+        const existingNames = new Set(prev.map(f => f.name));
+        const uniqueNewFiles = validFiles.filter(f => !existingNames.has(f.name));
+        if (uniqueNewFiles.length < validFiles.length) {
+          toast({
+            title: "Duplicate skipped",
+            description: "File with the same name already selected",
+          });
+        }
+        return [...prev, ...uniqueNewFiles];
+      });
     }
   };
 

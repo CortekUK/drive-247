@@ -56,8 +56,15 @@ export const EnhancedFileUpload = ({
       return;
     }
 
-    // Process accepted files
-    const newFiles: FileWithPreview[] = acceptedFiles.map((file) => {
+    // Process accepted files - filter out duplicates by file name
+    const existingNames = new Set(files.map(f => f.name));
+    const uniqueAccepted = acceptedFiles.filter(f => !existingNames.has(f.name));
+
+    if (uniqueAccepted.length < acceptedFiles.length) {
+      errors.push('Duplicate file(s) skipped - files with same name already selected');
+    }
+
+    const newFiles: FileWithPreview[] = uniqueAccepted.map((file) => {
       const fileWithPreview = Object.assign(file, {
         id: Math.random().toString(36).substring(7),
         preview: file.type.startsWith('image/') ? URL.createObjectURL(file) : undefined,
