@@ -1,7 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { TrendingDown, TrendingUp, Users, Car, PoundSterling, AlertTriangle, Shield } from "lucide-react";
+import { TrendingDown, TrendingUp, Users, Car, DollarSign, AlertTriangle, Shield } from "lucide-react";
 import { format, addDays, isAfter, isBefore, isToday } from "date-fns";
 import { useTenant } from "@/contexts/TenantContext";
 
@@ -296,7 +296,7 @@ export const DashboardStats = () => {
       <StatCard
         title="Monthly Revenue"
         value={`$${monthlyRevenue?.toLocaleString() || "0"}`}
-        icon={PoundSterling}
+        icon={DollarSign}
         variant="success"
       />
       <StatCard

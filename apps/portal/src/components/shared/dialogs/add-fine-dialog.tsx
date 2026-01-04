@@ -56,7 +56,7 @@ const fineFormSchema = z.object({
   amount: z.string().refine((val) => !isNaN(Number(val)) && Number(val) > 0, {
     message: "Amount must be a positive number",
   }),
-  liability: z.enum(["Customer", "Company"]).default("Individual"),
+  liability: z.enum(["Customer", "Business"]).default("Customer"),
   notes: z.string().optional(),
 });
 
@@ -88,8 +88,8 @@ export const AddFineDialog = ({ open, onOpenChange, vehicle_id, customer_id }: A
   useEffect(() => {
     if (open) {
       form.reset({
-        type: "Parking",
-        liability: "Individual",
+        type: "PCN",
+        liability: "Customer",
         vehicle_id: vehicle_id || "",
         customer_id: customer_id || "",
       });
@@ -192,11 +192,11 @@ export const AddFineDialog = ({ open, onOpenChange, vehicle_id, customer_id }: A
           id,
           customer_id,
           vehicle_id,
-          customers!inner(id, name),
-          vehicles!inner(id, reg, make, model)
+          customers!rentals_customer_id_fkey(id, name),
+          vehicles!rentals_vehicle_id_fkey(id, reg, make, model)
         `)
         .eq("status", "Active")
-        .order("customers(name)");
+        .order("created_at", { ascending: false });
 
       if (tenant?.id) {
         query = query.eq("tenant_id", tenant.id);
@@ -206,15 +206,17 @@ export const AddFineDialog = ({ open, onOpenChange, vehicle_id, customer_id }: A
 
       if (error) throw error;
 
-      return data.map(rental => ({
-        rental_id: rental.id,
-        customer_id: rental.customer_id,
-        customer_name: (rental.customers as any).name,
-        vehicle_id: rental.vehicle_id,
-        vehicle_reg: (rental.vehicles as any).reg,
-        vehicle_make: (rental.vehicles as any).make,
-        vehicle_model: (rental.vehicles as any).model,
-      }));
+      return (data || [])
+        .filter(rental => rental.customers && rental.vehicles)
+        .map(rental => ({
+          rental_id: rental.id,
+          customer_id: rental.customer_id,
+          customer_name: (rental.customers as any).name,
+          vehicle_id: rental.vehicle_id,
+          vehicle_reg: (rental.vehicles as any).reg,
+          vehicle_make: (rental.vehicles as any).make,
+          vehicle_model: (rental.vehicles as any).model,
+        }));
     },
     enabled: !!tenant,
   });
@@ -435,7 +437,7 @@ export const AddFineDialog = ({ open, onOpenChange, vehicle_id, customer_id }: A
                       </FormControl>
                       <SelectContent>
                         <SelectItem value="Customer">Individual</SelectItem>
-                        <SelectItem value="Company">Company</SelectItem>
+                        <SelectItem value="Business">Business</SelectItem>
                       </SelectContent>
                     </Select>
                     <FormMessage />

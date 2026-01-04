@@ -10,10 +10,12 @@ interface Tenant {
   id: string;
   slug: string;
   company_name: string;
+  admin_name: string | null;
   status: string;
   contact_email: string;
   created_at: string;
   master_password_hash: string | null;
+  tenant_type: 'production' | 'test' | null;
 }
 
 interface TenantCredentials {
@@ -34,25 +36,32 @@ export default function RentalCompaniesPage() {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [formData, setFormData] = useState({
     companyName: '',
+    adminName: '',
     slug: '',
     contactEmail: '',
+    tenantType: 'production' as 'production' | 'test',
   });
   const [creating, setCreating] = useState(false);
-  const [showMasterPassword, setShowMasterPassword] = useState<string | null>(null);
-  const [generatedPassword, setGeneratedPassword] = useState<string>('');
   const [showDetailsModal, setShowDetailsModal] = useState(false);
   const [selectedTenantCreds, setSelectedTenantCreds] = useState<TenantCredentials | null>(null);
+  const [typeFilter, setTypeFilter] = useState<'all' | 'production' | 'test'>('all');
 
   useEffect(() => {
     loadTenants();
-  }, []);
+  }, [typeFilter]);
 
   const loadTenants = async () => {
     try {
-      const { data, error } = await supabase
+      let query = supabase
         .from('tenants')
         .select('*')
         .order('created_at', { ascending: false });
+
+      if (typeFilter !== 'all') {
+        query = query.eq('tenant_type', typeFilter);
+      }
+
+      const { data, error } = await query;
 
       if (error) throw error;
       setTenants(data || []);
@@ -86,9 +95,11 @@ export default function RentalCompaniesPage() {
         .insert([
           {
             company_name: formData.companyName,
+            admin_name: formData.adminName || null,
             slug: slug,
             contact_email: formData.contactEmail,
             status: 'active',
+            tenant_type: formData.tenantType,
           }
         ])
         .select()
@@ -158,97 +169,13 @@ export default function RentalCompaniesPage() {
       setSelectedTenantCreds(credentials);
       setShowDetailsModal(true);
       setShowCreateModal(false);
-      setFormData({ companyName: '', slug: '', contactEmail: '' });
+      setFormData({ companyName: '', adminName: '', slug: '', contactEmail: '', tenantType: 'production' });
       loadTenants();
 
     } catch (error: any) {
       toast.error(`Error creating tenant: ${error.message}`);
     } finally {
       setCreating(false);
-    }
-  };
-
-  const handleViewDetails = async (tenant: Tenant) => {
-    // Check if master password exists
-    if (!tenant.master_password_hash) {
-      toast.error('Please generate a master password first');
-      return;
-    }
-
-    // Show info that credentials cannot be retrieved
-    toast.info('For security reasons, credentials can only be viewed once during creation. Please use the "Generate" button to create new credentials if needed.');
-  };
-
-  const handleUpdateStatus = async (id: string, newStatus: string) => {
-    try {
-      const { error} = await supabase
-        .from('tenants')
-        .update({ status: newStatus })
-        .eq('id', id);
-
-      if (error) throw error;
-      loadTenants();
-    } catch (error: any) {
-      toast.error(`Error updating status: ${error.message}`);
-    }
-  };
-
-  const handleDeleteTenant = async (id: string, companyName: string) => {
-    const confirmed = window.confirm(
-      `⚠️ WARNING: This will PERMANENTLY DELETE "${companyName}" and ALL associated data including:\n\n` +
-      `- All vehicles\n` +
-      `- All customers\n` +
-      `- All rentals\n` +
-      `- All payments\n` +
-      `- All users\n` +
-      `- ALL related data\n\n` +
-      `This action CANNOT be undone!\n\n` +
-      `Type the company name to confirm deletion.`
-    );
-
-    if (!confirmed) return;
-
-    const confirmName = window.prompt(
-      `Type "${companyName}" exactly to confirm deletion:`
-    );
-
-    if (confirmName !== companyName) {
-      toast.error('Company name did not match. Deletion cancelled.');
-      return;
-    }
-
-    try {
-      const { error } = await supabase
-        .from('tenants')
-        .delete()
-        .eq('id', id);
-
-      if (error) throw error;
-
-      toast.success(`${companyName} has been permanently deleted.`);
-      loadTenants();
-    } catch (error: any) {
-      toast.error(`Error deleting tenant: ${error.message}`);
-    }
-  };
-
-  const handleGenerateMasterPassword = async (tenantId: string) => {
-    try {
-      const password = generateMasterPassword();
-      const hash = await hashMasterPassword(password);
-
-      const { error } = await supabase
-        .from('tenants')
-        .update({ master_password_hash: hash })
-        .eq('id', tenantId);
-
-      if (error) throw error;
-
-      setGeneratedPassword(password);
-      setShowMasterPassword(tenantId);
-      loadTenants();
-    } catch (error: any) {
-      toast.error(`Error generating master password: ${error.message}`);
     }
   };
 
@@ -298,7 +225,7 @@ Access URLs:
   }
 
   return (
-    <div className="p-8">
+    <div className="p-8 h-full overflow-auto">
       <div className="flex justify-between items-center mb-8">
         <div>
           <h1 className="text-3xl font-bold text-white">Rental Companies</h1>
@@ -308,11 +235,46 @@ Access URLs:
           onClick={() => setShowCreateModal(true)}
           className="px-6 py-3 bg-primary-600 text-white rounded-lg hover:bg-primary-700 font-medium"
         >
-          + Add New Company
+          + Add New Rental
         </button>
       </div>
 
-      <div className="bg-dark-card rounded-lg shadow overflow-hidden border border-dark-border">
+      {/* Type Filter */}
+      <div className="mb-4 flex items-center space-x-2">
+        <span className="text-sm text-gray-400">Filter:</span>
+        <button
+          onClick={() => setTypeFilter('all')}
+          className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+            typeFilter === 'all'
+              ? 'bg-primary-600 text-white'
+              : 'bg-dark-card text-gray-400 hover:text-white border border-dark-border'
+          }`}
+        >
+          All
+        </button>
+        <button
+          onClick={() => setTypeFilter('production')}
+          className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+            typeFilter === 'production'
+              ? 'bg-green-600 text-white'
+              : 'bg-dark-card text-gray-400 hover:text-white border border-dark-border'
+          }`}
+        >
+          Production
+        </button>
+        <button
+          onClick={() => setTypeFilter('test')}
+          className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+            typeFilter === 'test'
+              ? 'bg-orange-600 text-white'
+              : 'bg-dark-card text-gray-400 hover:text-white border border-dark-border'
+          }`}
+        >
+          Test
+        </button>
+      </div>
+
+      <div className="bg-dark-card rounded-lg shadow overflow-x-auto border border-dark-border">
         <table className="min-w-full divide-y divide-dark-border">
           <thead className="bg-dark-bg">
             <tr>
@@ -320,16 +282,10 @@ Access URLs:
                 Company
               </th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">
-                Slug
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">
-                Contact Email
+                Type
               </th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">
                 Status
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">
-                Master Password
               </th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">
                 Created
@@ -346,11 +302,17 @@ Access URLs:
                   <div className="text-sm font-medium text-white">{tenant.company_name}</div>
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap">
-                  <div className="text-sm text-gray-300">{tenant.slug}</div>
-                  <div className="text-xs text-gray-500">{tenant.slug}.portal.drive-247.com</div>
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap">
-                  <div className="text-sm text-gray-400">{tenant.contact_email}</div>
+                  {tenant.tenant_type ? (
+                    <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
+                      tenant.tenant_type === 'production'
+                        ? 'bg-blue-900/30 text-blue-400 border border-blue-800/50'
+                        : 'bg-orange-900/30 text-orange-400 border border-orange-800/50'
+                    }`}>
+                      {tenant.tenant_type}
+                    </span>
+                  ) : (
+                    <span className="text-gray-500 text-xs">—</span>
+                  )}
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap">
                   <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
@@ -361,59 +323,16 @@ Access URLs:
                     {tenant.status}
                   </span>
                 </td>
-                <td className="px-6 py-4 whitespace-nowrap">
-                  {tenant.master_password_hash ? (
-                    <div className="flex items-center space-x-2">
-                      <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-blue-900/30 text-blue-400 border border-blue-800/50">
-                        Configured
-                      </span>
-                      <button
-                        onClick={() => handleGenerateMasterPassword(tenant.id)}
-                        className="text-xs text-primary-400 hover:text-primary-300"
-                      >
-                        Regenerate
-                      </button>
-                    </div>
-                  ) : (
-                    <button
-                      onClick={() => handleGenerateMasterPassword(tenant.id)}
-                      className="text-xs text-primary-400 hover:text-primary-300 font-medium"
-                    >
-                      Generate
-                    </button>
-                  )}
-                </td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-400">
                   {new Date(tenant.created_at).toLocaleDateString('en-US')}
                 </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium space-x-2">
-                  {tenant.status === 'active' ? (
-                    <button
-                      onClick={() => handleUpdateStatus(tenant.id, 'suspended')}
-                      className="text-red-400 hover:text-red-300"
-                    >
-                      Suspend
-                    </button>
-                  ) : (
-                    <button
-                      onClick={() => handleUpdateStatus(tenant.id, 'active')}
-                      className="text-green-400 hover:text-green-300"
-                    >
-                      Activate
-                    </button>
-                  )}
-                  <button
-                    onClick={() => handleViewDetails(tenant)}
+                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                  <a
+                    href={`/admin/rentals/${tenant.id}`}
                     className="text-primary-400 hover:text-primary-300"
                   >
-                    View Details
-                  </button>
-                  <button
-                    onClick={() => handleDeleteTenant(tenant.id, tenant.company_name)}
-                    className="text-red-400 hover:text-red-300 font-semibold"
-                  >
-                    Delete
-                  </button>
+                    View Details →
+                  </a>
                 </td>
               </tr>
             ))}
@@ -450,6 +369,19 @@ Access URLs:
 
               <div>
                 <label className="block text-sm font-medium text-gray-300 mb-1">
+                  Admin Name
+                </label>
+                <input
+                  type="text"
+                  value={formData.adminName}
+                  onChange={(e) => setFormData({ ...formData, adminName: e.target.value })}
+                  className="w-full px-3 py-2 bg-dark-bg border border-dark-border rounded-md text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-primary-500"
+                  placeholder="John Doe"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-1">
                   Slug (subdomain) *
                 </label>
                 <input
@@ -477,6 +409,39 @@ Access URLs:
                   className="w-full px-3 py-2 bg-dark-bg border border-dark-border rounded-md text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-primary-500"
                   placeholder="admin@acmerentals.com"
                 />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-1">
+                  Tenant Type *
+                </label>
+                <div className="flex space-x-2">
+                  <button
+                    type="button"
+                    onClick={() => setFormData({ ...formData, tenantType: 'production' })}
+                    className={`flex-1 px-3 py-2 rounded-md text-sm font-medium transition-colors ${
+                      formData.tenantType === 'production'
+                        ? 'bg-green-600 text-white'
+                        : 'bg-dark-bg text-gray-400 border border-dark-border hover:text-white'
+                    }`}
+                  >
+                    Production
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setFormData({ ...formData, tenantType: 'test' })}
+                    className={`flex-1 px-3 py-2 rounded-md text-sm font-medium transition-colors ${
+                      formData.tenantType === 'test'
+                        ? 'bg-orange-600 text-white'
+                        : 'bg-dark-bg text-gray-400 border border-dark-border hover:text-white'
+                    }`}
+                  >
+                    Test
+                  </button>
+                </div>
+                <p className="text-xs text-gray-500 mt-1">
+                  Production = real customer, Test = internal/testing use
+                </p>
               </div>
 
               <div className="flex space-x-3 mt-6">
@@ -668,52 +633,6 @@ Access URLs:
         </div>
       )}
 
-      {/* Master Password Regeneration Modal */}
-      {showMasterPassword && (
-        <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50">
-          <div className="bg-dark-card rounded-lg p-8 max-w-md w-full border border-dark-border">
-            <h2 className="text-2xl font-bold text-white mb-4">Master Password Generated</h2>
-
-            <div className="bg-yellow-900/20 border border-yellow-700 rounded-lg p-4 mb-4">
-              <p className="text-sm text-yellow-400 mb-2">
-                <strong>Important:</strong> Save this password securely. It will only be shown once.
-              </p>
-            </div>
-
-            <div className="bg-dark-bg rounded-lg p-4 mb-4 border border-dark-border">
-              <label className="block text-sm font-medium text-gray-300 mb-2">
-                Master Password
-              </label>
-              <div className="flex items-center space-x-2">
-                <code className="flex-1 bg-dark-hover px-3 py-2 rounded border border-dark-border text-sm font-mono break-all text-white">
-                  {generatedPassword}
-                </code>
-                <button
-                  onClick={() => copyToClipboard(generatedPassword, 'Master password')}
-                  className="px-3 py-2 bg-primary-600 text-white rounded hover:bg-primary-700 text-sm whitespace-nowrap"
-                >
-                  Copy
-                </button>
-              </div>
-            </div>
-
-            <p className="text-sm text-gray-400 mb-6">
-              Use this password to log into the tenant's portal without knowing their actual password.
-              Access the portal at: <strong className="text-primary-400">{tenants.find(t => t.id === showMasterPassword)?.slug}.portal.drive-247.com</strong>
-            </p>
-
-            <button
-              onClick={() => {
-                setShowMasterPassword(null);
-                setGeneratedPassword('');
-              }}
-              className="w-full px-4 py-2 bg-dark-hover text-white rounded-md hover:bg-dark-border border border-dark-border"
-            >
-              Close
-            </button>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

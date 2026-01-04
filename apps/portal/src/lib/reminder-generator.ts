@@ -17,7 +17,7 @@ async function getOrgTimezone(tenantId?: string): Promise<string> {
       query = query.eq('tenant_id', tenantId);
     }
 
-    const { data, error } = await query.single();
+    const { data, error } = await query.maybeSingle();
 
     if (error || !data?.timezone) {
       return DEFAULT_TIMEZONE;
@@ -322,8 +322,8 @@ export async function generateDocumentReminders(tenantId?: string): Promise<numb
     .select(`
       id, document_type, policy_number, insurance_provider, end_date, policy_end_date,
       customer_id, vehicle_id,
-      customers!inner(name),
-      vehicles(reg, make, model)
+      customers!customer_documents_customer_id_fkey(name),
+      vehicles!customer_documents_vehicle_id_fkey(reg, make, model)
     `)
     .not('end_date', 'is', null)
     .or('policy_end_date.not.is.null');
@@ -338,8 +338,11 @@ export async function generateDocumentReminders(tenantId?: string): Promise<numb
     console.error('Error fetching documents:', error);
     return 0;
   }
-  
-  for (const doc of documents || []) {
+
+  // Filter out documents with missing customer references (client-side filtering)
+  const validDocuments = (documents || []).filter(doc => doc.customers);
+
+  for (const doc of validDocuments) {
     const endDate = doc.policy_end_date || doc.end_date;
     if (!endDate) continue;
     
@@ -394,15 +397,14 @@ export async function generateRentalReminders(tenantId?: string): Promise<number
     .select(`
       rental_id, customer_id, vehicle_id,
       due_date, remaining_amount,
-      rentals!inner(status),
-      customers!inner(name),
-      vehicles!inner(reg, make, model)
+      rentals!ledger_entries_rental_id_fkey(status),
+      customers!ledger_entries_customer_id_fkey(name),
+      vehicles!ledger_entries_vehicle_id_fkey(reg, make, model)
     `)
     .eq('type', 'Charge')
     .eq('category', 'Rental')
     .gt('remaining_amount', 0)
-    .lt('due_date', formatDate(today))
-    .eq('rentals.status', 'Active');
+    .lt('due_date', formatDate(today));
 
   if (tenantId) {
     overdueQuery = overdueQuery.eq('tenant_id', tenantId);
@@ -415,9 +417,14 @@ export async function generateRentalReminders(tenantId?: string): Promise<number
     return 0;
   }
   
+  // Filter to only active rentals with valid customer/vehicle references (client-side filtering)
+  const validOverdueRentals = (overdueRentals || []).filter(
+    charge => charge.rentals?.status === 'Active' && charge.customers && charge.vehicles
+  );
+
   // Group by rental to avoid duplicates
   const rentalGroups = new Map<string, any[]>();
-  for (const charge of overdueRentals || []) {
+  for (const charge of validOverdueRentals) {
     if (!rentalGroups.has(charge.rental_id)) {
       rentalGroups.set(charge.rental_id, []);
     }
@@ -467,8 +474,8 @@ export async function generateFineReminders(tenantId?: string): Promise<number> 
     .select(`
       id, reference_no, type, amount, due_date, liability,
       customer_id, vehicle_id,
-      customers(name),
-      vehicles(reg, make, model)
+      customers!fines_customer_id_fkey(name),
+      vehicles!fines_vehicle_id_fkey(reg, make, model)
     `)
     .in('status', ['Open', 'Appealed', 'Charged'])
     .not('due_date', 'is', null);
@@ -554,7 +561,7 @@ async function upsertReminder(input: ReminderInput): Promise<boolean> {
       existingQuery = existingQuery.eq('tenant_id', input.tenant_id);
     }
 
-    const { data: existing } = await existingQuery.single();
+    const { data: existing } = await existingQuery.maybeSingle();
 
     if (existing && ['done', 'dismissed', 'expired'].includes(existing.status)) {
       return false; // Don't recreate completed reminders

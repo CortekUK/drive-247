@@ -8,7 +8,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { ChevronLeft, Car, PoundSterling, TrendingUp, TrendingDown, Download, ArrowUpDown, ArrowUp, ArrowDown, BarChart3 } from "lucide-react";
+import { ChevronLeft, Car, DollarSign, TrendingUp, TrendingDown, Download, ArrowUpDown, ArrowUp, ArrowDown, BarChart3 } from "lucide-react";
 import { format, parseISO, startOfMonth, endOfMonth } from "date-fns";
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend } from "recharts";
 import { cn } from "@/lib/utils";
@@ -66,17 +66,17 @@ const MonthlyPLDrilldown = () => {
           side,
           category,
           amount,
-          vehicles!inner(id, reg, make, model)
+          vehicles!pnl_entries_vehicle_id_fkey(id, reg, make, model)
         `)
         .gte("entry_date", monthStart.toISOString().split('T')[0])
         .lte("entry_date", monthEnd.toISOString().split('T')[0]);
 
       if (error) throw error;
 
-      // Group by vehicle and calculate totals
+      // Group by vehicle and calculate totals (filter out entries with missing vehicles)
       const groupedData: Record<string, VehicleMonthlyPL> = {};
 
-      data?.forEach((entry) => {
+      data?.filter(entry => entry.vehicles).forEach((entry) => {
         const vehicleId = entry.vehicle_id;
         const vehicle = entry.vehicles as any;
 
@@ -344,7 +344,7 @@ const MonthlyPLDrilldown = () => {
           <Card className="shadow-sm">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">Net Profit</CardTitle>
-              <PoundSterling className={cn(
+              <DollarSign className={cn(
                 "h-4 w-4",
                 monthlyTotals.net_profit > 0 ? "text-success" :
                 monthlyTotals.net_profit < 0 ? "text-destructive" :

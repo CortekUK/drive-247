@@ -1,12 +1,12 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.57.4';
-
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-};
-
-const RESEND_API_KEY = Deno.env.get('RESEND_API_KEY');
+import { corsHeaders } from "../_shared/aws-config.ts";
+import {
+  sendEmail,
+  getTenantBranding,
+  TenantBranding,
+  wrapWithBrandedTemplate
+} from "../_shared/resend-service.ts";
 
 interface Reminder {
   id: string;
@@ -22,40 +22,7 @@ interface Reminder {
   context: Record<string, any>;
 }
 
-async function sendEmail(to: string, subject: string, html: string): Promise<boolean> {
-  if (!RESEND_API_KEY) {
-    console.log('RESEND_API_KEY not set, skipping email');
-    return false;
-  }
-
-  try {
-    const res = await fetch('https://api.resend.com/emails', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${RESEND_API_KEY}`,
-      },
-      body: JSON.stringify({
-        from: 'DRIVE917 <onboarding@resend.dev>',
-        to,
-        subject,
-        html,
-      }),
-    });
-
-    if (!res.ok) {
-      const error = await res.text();
-      console.error('Failed to send email:', error);
-      return false;
-    }
-
-    console.log('Email sent successfully to:', to);
-    return true;
-  } catch (error) {
-    console.error('Error sending email:', error);
-    return false;
-  }
-}
+// sendEmail is now imported from resend-service.ts
 
 function getSeverityColor(severity: string): string {
   switch (severity) {
@@ -70,7 +37,7 @@ function getSeverityBadge(severity: string): string {
   return `<span style="display: inline-block; background: ${color}; color: white; padding: 3px 10px; border-radius: 12px; font-size: 12px; font-weight: 600; text-transform: uppercase;">${severity}</span>`;
 }
 
-function generateReminderEmailHTML(reminders: Reminder[], recipientName: string): string {
+function generateReminderEmailContent(reminders: Reminder[], recipientName: string, branding: TenantBranding): string {
   const criticalReminders = reminders.filter(r => r.severity === 'critical');
   const warningReminders = reminders.filter(r => r.severity === 'warning');
   const infoReminders = reminders.filter(r => r.severity === 'info');
@@ -114,63 +81,45 @@ function generateReminderEmailHTML(reminders: Reminder[], recipientName: string)
   };
 
   return `
-<!DOCTYPE html>
-<html>
-<head>
-    <meta charset="utf-8">
-    <title>Daily Reminders Digest</title>
-</head>
-<body style="font-family: 'Segoe UI', Arial, sans-serif; line-height: 1.6; color: #333; max-width: 800px; margin: 0 auto; padding: 20px; background-color: #f5f5f5;">
-    <div style="background: white; border-radius: 10px; overflow: hidden; box-shadow: 0 2px 10px rgba(0,0,0,0.1);">
-        <div style="background: linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 100%); color: white; padding: 30px; text-align: center;">
-            <h1 style="margin: 0; font-size: 28px; color: #C5A572;">DRIVE917</h1>
-            <p style="margin: 10px 0 0; opacity: 0.9;">Daily Reminders Digest</p>
-        </div>
+                    <tr>
+                        <td style="padding: 30px;">
+                            <p style="font-size: 16px; margin: 0 0 15px;">Hello ${recipientName},</p>
+                            <p style="margin: 0 0 20px; color: #444;">You have <strong>${reminders.length}</strong> pending reminder${reminders.length !== 1 ? 's' : ''} that require your attention:</p>
 
-        <div style="padding: 30px;">
-            <p style="font-size: 16px;">Hello ${recipientName},</p>
-            <p>You have <strong>${reminders.length}</strong> pending reminder${reminders.length !== 1 ? 's' : ''} that require your attention:</p>
+                            <table role="presentation" style="width: 100%; border-collapse: collapse; margin-bottom: 20px;">
+                                <tr>
+                                    ${criticalReminders.length > 0 ? `
+                                    <td style="background: #fef2f2; border-left: 4px solid #dc2626; padding: 15px; border-radius: 0 8px 8px 0; text-align: center;">
+                                        <div style="font-size: 24px; font-weight: bold; color: #dc2626;">${criticalReminders.length}</div>
+                                        <div style="font-size: 12px; color: #666; text-transform: uppercase;">Critical</div>
+                                    </td>
+                                    ` : ''}
+                                    ${warningReminders.length > 0 ? `
+                                    <td style="background: #fffbeb; border-left: 4px solid #f59e0b; padding: 15px; border-radius: 0 8px 8px 0; text-align: center;">
+                                        <div style="font-size: 24px; font-weight: bold; color: #f59e0b;">${warningReminders.length}</div>
+                                        <div style="font-size: 12px; color: #666; text-transform: uppercase;">Warning</div>
+                                    </td>
+                                    ` : ''}
+                                    ${infoReminders.length > 0 ? `
+                                    <td style="background: #eff6ff; border-left: 4px solid #3b82f6; padding: 15px; border-radius: 0 8px 8px 0; text-align: center;">
+                                        <div style="font-size: 24px; font-weight: bold; color: #3b82f6;">${infoReminders.length}</div>
+                                        <div style="font-size: 12px; color: #666; text-transform: uppercase;">Info</div>
+                                    </td>
+                                    ` : ''}
+                                </tr>
+                            </table>
 
-            <div style="display: flex; gap: 15px; margin: 20px 0;">
-                ${criticalReminders.length > 0 ? `
-                <div style="flex: 1; background: #fef2f2; border-left: 4px solid #dc2626; padding: 15px; border-radius: 0 8px 8px 0;">
-                    <div style="font-size: 24px; font-weight: bold; color: #dc2626;">${criticalReminders.length}</div>
-                    <div style="font-size: 12px; color: #666; text-transform: uppercase;">Critical</div>
-                </div>
-                ` : ''}
-                ${warningReminders.length > 0 ? `
-                <div style="flex: 1; background: #fffbeb; border-left: 4px solid #f59e0b; padding: 15px; border-radius: 0 8px 8px 0;">
-                    <div style="font-size: 24px; font-weight: bold; color: #f59e0b;">${warningReminders.length}</div>
-                    <div style="font-size: 12px; color: #666; text-transform: uppercase;">Warning</div>
-                </div>
-                ` : ''}
-                ${infoReminders.length > 0 ? `
-                <div style="flex: 1; background: #eff6ff; border-left: 4px solid #3b82f6; padding: 15px; border-radius: 0 8px 8px 0;">
-                    <div style="font-size: 24px; font-weight: bold; color: #3b82f6;">${infoReminders.length}</div>
-                    <div style="font-size: 12px; color: #666; text-transform: uppercase;">Info</div>
-                </div>
-                ` : ''}
-            </div>
+                            ${renderSection('Critical Reminders', criticalReminders, '#dc2626')}
+                            ${renderSection('Warning Reminders', warningReminders, '#f59e0b')}
+                            ${renderSection('Info Reminders', infoReminders, '#3b82f6')}
 
-            ${renderSection('Critical Reminders', criticalReminders, '#dc2626')}
-            ${renderSection('Warning Reminders', warningReminders, '#f59e0b')}
-            ${renderSection('Info Reminders', infoReminders, '#3b82f6')}
-
-            <div style="margin-top: 30px; text-align: center;">
-                <a href="https://drive917.com/reminders" style="display: inline-block; background: #C5A572; color: white; padding: 12px 30px; border-radius: 6px; text-decoration: none; font-weight: 600;">
-                    View All Reminders
-                </a>
-            </div>
-        </div>
-
-        <div style="background: #f8f9fa; padding: 20px 30px; text-align: center; color: #666; font-size: 14px;">
-            <p>DRIVE917 - Premium Vehicle Rentals</p>
-            <p>This is an automated reminder digest. Please do not reply directly to this email.</p>
-        </div>
-    </div>
-</body>
-</html>
-  `;
+                            <div style="margin-top: 30px; text-align: center;">
+                                <a href="https://${branding.slug}.portal.drive-247.com/reminders" style="display: inline-block; background: ${branding.accentColor}; color: white; padding: 12px 30px; border-radius: 6px; text-decoration: none; font-weight: 600;">
+                                    View All Reminders
+                                </a>
+                            </div>
+                        </td>
+                    </tr>`;
 }
 
 function getNotificationType(severity: string): string {
@@ -300,35 +249,27 @@ serve(async (req) => {
         });
     }
 
+    // Get tenant branding (use first reminder's tenant_id)
+    const emailTenantId = pendingReminders[0]?.tenant_id;
+    const branding = emailTenantId
+      ? await getTenantBranding(emailTenantId, supabase)
+      : { companyName: 'Drive 247', logoUrl: null, primaryColor: '#1a1a1a', accentColor: '#C5A572', contactEmail: 'support@drive-247.com', contactPhone: null, slug: 'drive247' };
+
     // Send email digest to each admin
     for (const admin of adminUsers || []) {
       if (admin.email && pendingReminders.length > 0) {
-        const subject = `[DRIVE917] ${pendingReminders.length} Reminder${pendingReminders.length !== 1 ? 's' : ''} - ${
+        const subject = `[${branding.companyName}] ${pendingReminders.length} Reminder${pendingReminders.length !== 1 ? 's' : ''} - ${
           pendingReminders.filter(r => r.severity === 'critical').length > 0
             ? `${pendingReminders.filter(r => r.severity === 'critical').length} Critical`
             : 'Action Required'
         }`;
 
-        const html = generateReminderEmailHTML(pendingReminders, admin.name || 'Admin');
-        const emailSent = await sendEmail(admin.email, subject, html);
+        const emailContent = generateReminderEmailContent(pendingReminders, admin.name || 'Admin', branding);
+        const html = wrapWithBrandedTemplate(emailContent, branding);
+        const emailResult = await sendEmail(admin.email, subject, html, supabase, emailTenantId);
 
-        if (emailSent) {
+        if (emailResult?.success) {
           emailsSent++;
-
-          // Log email - get tenant_id from first reminder
-          const emailTenantId = pendingReminders[0]?.tenant_id;
-          await supabase.from('email_logs').insert({
-            recipient_email: admin.email,
-            recipient_name: admin.name || 'Admin',
-            subject: subject,
-            template: 'reminder_digest',
-            status: 'sent',
-            metadata: {
-              reminder_count: pendingReminders.length,
-              critical_count: pendingReminders.filter(r => r.severity === 'critical').length
-            },
-            tenant_id: emailTenantId
-          });
         }
       }
     }

@@ -88,7 +88,7 @@ export default function DocumentsList() {
         .from("customer_documents")
         .select(`
           *,
-          customers(name)
+          customers!customer_documents_customer_id_fkey(name)
         `)
         .order("created_at", { ascending: false });
 
@@ -115,8 +115,8 @@ export default function DocumentsList() {
           created_at,
           document_status,
           signed_document_id,
-          customers:customer_id(name),
-          vehicles:vehicle_id(reg, make, model)
+          customers!rentals_customer_id_fkey(name),
+          vehicles!rentals_vehicle_id_fkey(reg, make, model)
         `)
         .order("created_at", { ascending: false });
 

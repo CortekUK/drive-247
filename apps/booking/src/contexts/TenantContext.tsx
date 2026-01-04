@@ -56,6 +56,7 @@ export interface Tenant {
   min_rental_days: number | null;
   max_rental_days: number | null;
   booking_lead_time_hours: number | null;
+  minimum_rental_age: number | null;
   require_identity_verification: boolean | null;
   require_insurance_upload: boolean | null;
   payment_mode: string | null;
@@ -65,6 +66,9 @@ export interface Tenant {
   return_location_mode: 'fixed' | 'custom' | 'multiple' | null;
   fixed_pickup_address: string | null;
   fixed_return_address: string | null;
+
+  // Integration settings
+  integration_veriff: boolean | null;
 }
 
 interface TenantContextType {
@@ -162,9 +166,10 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
                 phone, address, business_hours, google_maps_url,
                 facebook_url, instagram_url, twitter_url, linkedin_url,
                 currency_code, timezone, date_format,
-                min_rental_days, max_rental_days, booking_lead_time_hours,
+                min_rental_days, max_rental_days, booking_lead_time_hours, minimum_rental_age,
                 require_identity_verification, require_insurance_upload, payment_mode,
-                pickup_location_mode, return_location_mode, fixed_pickup_address, fixed_return_address
+                pickup_location_mode, return_location_mode, fixed_pickup_address, fixed_return_address,
+                integration_veriff
               `)
               .eq('slug', defaultSlug)
               .eq('status', 'active')
@@ -235,13 +240,15 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
           min_rental_days,
           max_rental_days,
           booking_lead_time_hours,
+          minimum_rental_age,
           require_identity_verification,
           require_insurance_upload,
           payment_mode,
           pickup_location_mode,
           return_location_mode,
           fixed_pickup_address,
-          fixed_return_address
+          fixed_return_address,
+          integration_veriff
         `)
         .eq('slug', slug)
         .eq('status', 'active')

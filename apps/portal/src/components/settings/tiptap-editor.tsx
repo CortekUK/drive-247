@@ -140,15 +140,23 @@ export const TipTapEditor: React.FC<TipTapEditorProps> = ({
     },
   });
 
+  // Sync content when it changes externally (e.g., loading default template)
+  React.useEffect(() => {
+    if (editor && content && editor.getHTML() !== content) {
+      // Only update if content is different to avoid cursor jumping
+      editor.commands.setContent(content, false);
+    }
+  }, [editor, content]);
+
   const insertVariable = useCallback(
     (variable: TemplateVariable) => {
       if (!editor) return;
 
-      // Insert variable as a styled span
+      // Insert variable as plain text - will be replaced during email send
       editor
         .chain()
         .focus()
-        .insertContent(`<span class="variable-tag" data-variable="${variable.key}">{{${variable.key}}}</span>`)
+        .insertContent(`{{${variable.key}}}`)
         .run();
 
       setVariablesOpen(false);
@@ -405,14 +413,6 @@ export const TipTapEditor: React.FC<TipTapEditorProps> = ({
         .tiptap th {
           background-color: hsl(var(--muted));
           font-weight: 600;
-        }
-        .tiptap .variable-tag {
-          background-color: hsl(var(--primary) / 0.1);
-          color: hsl(var(--primary));
-          padding: 0.125rem 0.375rem;
-          border-radius: 0.25rem;
-          font-family: monospace;
-          font-size: 0.875em;
         }
       `}</style>
     </div>

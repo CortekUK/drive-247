@@ -36,18 +36,21 @@ export const useCustomerRentals = (customerId: string) => {
           status,
           schedule,
           created_at,
-          vehicles!inner(id, reg, make, model)
+          vehicles!rentals_vehicle_id_fkey(id, reg, make, model)
         `)
         .eq("tenant_id", tenant.id)
         .eq("customer_id", customerId)
         .order("created_at", { ascending: false });
-      
+
       if (error) throw error;
-      
-      return data.map(rental => ({
-        ...rental,
-        vehicle: rental.vehicles as any
-      })) as CustomerRental[];
+
+      // Filter out rentals with missing vehicle
+      return data
+        .filter(rental => rental.vehicles)
+        .map(rental => ({
+          ...rental,
+          vehicle: rental.vehicles as any
+        })) as CustomerRental[];
     },
     enabled: !!tenant && !!customerId,
   });

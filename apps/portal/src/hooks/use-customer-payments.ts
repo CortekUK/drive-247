@@ -39,8 +39,8 @@ export const useCustomerPayments = (customerId: string) => {
           status,
           remaining_amount,
           created_at,
-          vehicles(id, reg),
-          rentals(id)
+          vehicles!payments_vehicle_id_fkey(id, reg),
+          rentals!payments_rental_id_fkey(id)
         `)
         .eq("tenant_id", tenant.id)
         .eq("customer_id", customerId)

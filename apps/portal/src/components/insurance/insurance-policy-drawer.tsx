@@ -65,19 +65,20 @@ export function InsurancePolicyDrawer({
     queryKey: ["insurance-policy-detail", policyId],
     queryFn: async () => {
       if (!policyId) return null;
-      
+
       const { data, error } = await supabase
         .from("insurance_policies")
         .select(`
           *,
-          customers!inner(id, name, email, phone),
-          vehicles(id, reg, make, model),
+          customers!insurance_policies_customer_id_fkey(id, name, email, phone),
+          vehicles!insurance_policies_vehicle_id_fkey(id, reg, make, model),
           insurance_documents(id, doc_type, file_url, file_name, uploaded_at)
         `)
         .eq("id", policyId)
         .single();
 
       if (error) throw error;
+      if (!data.customers) throw new Error("Policy customer not found");
       return data as InsurancePolicy & {
         insurance_documents: Array<{
           id: string;
