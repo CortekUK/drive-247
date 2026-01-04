@@ -1,4 +1,5 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.4";
 import {
   corsHeaders,
   signedAWSRequest,
@@ -6,6 +7,7 @@ import {
   isAWSConfigured
 } from "../_shared/aws-config.ts";
 import { sendEmail } from "../_shared/resend-service.ts";
+import { renderEmail, EmailTemplateData } from "../_shared/email-template-service.ts";
 
 interface NotifyRequest {
   customerName: string;
@@ -13,6 +15,8 @@ interface NotifyRequest {
   customerPhone?: string;
   vehicleName: string;
   vehicleReg: string;
+  vehicleMake?: string;
+  vehicleModel?: string;
   vehicleColor?: string;
   bookingRef: string;
   startDate: string;
@@ -20,6 +24,7 @@ interface NotifyRequest {
   returnTime?: string;
   returnLocation?: string;
   emergencyPhone?: string;
+  tenantId?: string;
 }
 
 const getEmailHtml = (data: NotifyRequest) => {
@@ -203,11 +208,42 @@ serve(async (req) => {
       customerSMS: null as any,
     };
 
+    // Build customer email using template service if tenantId is provided
+    let customerSubject = `Your Rental Has Started - ${data.vehicleName} | DRIVE 247`;
+    let customerHtml = getEmailHtml(data);
+
+    if (data.tenantId) {
+      try {
+        const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+        const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+        const supabase = createClient(supabaseUrl, supabaseServiceKey);
+
+        const templateData: EmailTemplateData = {
+          customer_name: data.customerName,
+          customer_email: data.customerEmail,
+          customer_phone: data.customerPhone || '',
+          vehicle_make: data.vehicleMake || data.vehicleName.split(' ')[0] || '',
+          vehicle_model: data.vehicleModel || data.vehicleName.split(' ').slice(1).join(' ') || '',
+          vehicle_reg: data.vehicleReg,
+          rental_number: data.bookingRef,
+          rental_start_date: data.startDate,
+          rental_end_date: data.endDate,
+        };
+
+        const rendered = await renderEmail(supabase, data.tenantId, 'rental_started', templateData);
+        customerSubject = rendered.subject;
+        customerHtml = rendered.html;
+        console.log('Using custom/default email template for customer');
+      } catch (templateError) {
+        console.warn('Error rendering email template, using fallback:', templateError);
+      }
+    }
+
     // Send customer email
     results.customerEmail = await sendEmail(
       data.customerEmail,
-      `Your Rental Has Started - ${data.vehicleName} | DRIVE 247`,
-      getEmailHtml(data)
+      customerSubject,
+      customerHtml
     );
     console.log('Customer email result:', results.customerEmail);
 

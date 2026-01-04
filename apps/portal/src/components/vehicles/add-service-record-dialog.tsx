@@ -18,6 +18,7 @@ import {
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Wrench, Plus, Edit } from "lucide-react";
@@ -43,6 +44,7 @@ export function AddServiceRecordDialog({
     resolver: zodResolver(addServiceRecordSchema),
     defaultValues: {
       service_date: editingRecord?.service_date || new Date().toISOString().split('T')[0],
+      service_type: editingRecord?.service_type || "",
       mileage: editingRecord?.mileage || undefined,
       description: editingRecord?.description || "",
       cost: editingRecord?.cost || 0,
@@ -107,6 +109,40 @@ export function AddServiceRecordDialog({
 
             <FormField
               control={form.control}
+              name="service_type"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Service Type <span className="text-red-500">*</span></FormLabel>
+                  <Select onValueChange={field.onChange} defaultValue={field.value}>
+                    <FormControl>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select service type" />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      <SelectItem value="Oil Change">Oil Change</SelectItem>
+                      <SelectItem value="Tire Rotation">Tire Rotation</SelectItem>
+                      <SelectItem value="Brake Service">Brake Service</SelectItem>
+                      <SelectItem value="Battery Replacement">Battery Replacement</SelectItem>
+                      <SelectItem value="Air Filter">Air Filter</SelectItem>
+                      <SelectItem value="Transmission Service">Transmission Service</SelectItem>
+                      <SelectItem value="Coolant Flush">Coolant Flush</SelectItem>
+                      <SelectItem value="Spark Plugs">Spark Plugs</SelectItem>
+                      <SelectItem value="Wheel Alignment">Wheel Alignment</SelectItem>
+                      <SelectItem value="AC Service">AC Service</SelectItem>
+                      <SelectItem value="General Inspection">General Inspection</SelectItem>
+                      <SelectItem value="MOT">MOT</SelectItem>
+                      <SelectItem value="Full Service">Full Service</SelectItem>
+                      <SelectItem value="Other">Other</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
               name="mileage"
               render={({ field }) => (
                 <FormItem>
@@ -149,9 +185,9 @@ export function AddServiceRecordDialog({
               name="description"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Description</FormLabel>
+                  <FormLabel>Notes</FormLabel>
                   <FormControl>
-                    <Textarea 
+                    <Textarea
                       placeholder="Service details, parts replaced, etc."
                       {...field}
                     />

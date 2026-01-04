@@ -1,285 +1,162 @@
 'use client';
 
-import { useState } from "react";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
-import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Input } from "@/components/ui/input";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Plus, Edit, Trash2, Eye, Search } from "lucide-react";
-import { toast } from "@/hooks/use-toast";
-import EmailTemplateDialog from "@/components/settings/email-template-dialog";
-import EmailTemplatePreview from "@/components/settings/email-template-preview";
+import React, { useState, useMemo } from 'react';
+import { useRouter } from 'next/navigation';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import { Input } from '@/components/ui/input';
 import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
+  Mail,
+  Pencil,
+  ArrowLeft,
+  Loader2,
+  Check,
+  FileText,
+  Search,
+} from 'lucide-react';
+import { useEmailTemplates } from '@/hooks/use-email-templates';
+import { EMAIL_TEMPLATE_TYPES } from '@/lib/email-template-variables';
 
 export default function EmailTemplatesPage() {
-  const [selectedTemplate, setSelectedTemplate] = useState<any>(null);
-  const [dialogOpen, setDialogOpen] = useState(false);
-  const [previewOpen, setPreviewOpen] = useState(false);
-  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
-  const [templateToDelete, setTemplateToDelete] = useState<string | null>(null);
-  const [searchQuery, setSearchQuery] = useState("");
-  const [categoryFilter, setCategoryFilter] = useState<string>("all");
-  const queryClient = useQueryClient();
+  const router = useRouter();
+  const { customTemplates, isLoading, isCustomized } = useEmailTemplates();
+  const [searchQuery, setSearchQuery] = useState('');
 
-  // Fetch templates
-  const { data: templates, isLoading } = useQuery({
-    queryKey: ['email-templates', categoryFilter],
-    queryFn: async () => {
-      let query = supabase
-        .from('email_templates')
-        .select('*')
-        .order('category', { ascending: true })
-        .order('created_at', { ascending: false });
+  // Filter templates based on search query
+  const filteredTemplates = useMemo(() => {
+    if (!searchQuery.trim()) return EMAIL_TEMPLATE_TYPES;
+    const query = searchQuery.toLowerCase();
+    return EMAIL_TEMPLATE_TYPES.filter(
+      (t) =>
+        t.name.toLowerCase().includes(query) ||
+        t.description.toLowerCase().includes(query) ||
+        t.key.toLowerCase().includes(query)
+    );
+  }, [searchQuery]);
 
-      if (categoryFilter !== 'all') {
-        query = query.eq('category', categoryFilter);
-      }
-
-      const { data, error } = await query;
-      if (error) throw error;
-      return data;
-    }
-  });
-
-  // Delete mutation
-  const deleteMutation = useMutation({
-    mutationFn: async (templateId: string) => {
-      const { error } = await supabase
-        .from('email_templates')
-        .delete()
-        .eq('id', templateId);
-      if (error) throw error;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['email-templates'] });
-      toast({ title: "Template deleted successfully" });
-      setDeleteDialogOpen(false);
-      setTemplateToDelete(null);
-    },
-    onError: (error: any) => {
-      toast({
-        title: "Error deleting template",
-        description: error.message,
-        variant: "destructive"
-      });
-    }
-  });
-
-  // Filter templates by search query
-  const filteredTemplates = templates?.filter(template =>
-    template.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    template.subject.toLowerCase().includes(searchQuery.toLowerCase())
-  );
-
-  const handleCreate = () => {
-    setSelectedTemplate(null);
-    setDialogOpen(true);
-  };
-
-  const handleEdit = (template: any) => {
-    setSelectedTemplate(template);
-    setDialogOpen(true);
-  };
-
-  const handlePreview = (template: any) => {
-    setSelectedTemplate(template);
-    setPreviewOpen(true);
-  };
-
-  const handleDelete = (templateId: string) => {
-    setTemplateToDelete(templateId);
-    setDeleteDialogOpen(true);
-  };
-
-  const getCategoryColor = (category: string) => {
-    switch (category) {
-      case 'rejection': return 'destructive';
-      case 'approval': return 'default';
-      case 'reminder': return 'secondary';
-      case 'general': return 'outline';
-      default: return 'outline';
-    }
-  };
-
-  const getCategoryCount = (category: string) => {
-    if (!templates) return 0;
-    if (category === 'all') return templates.length;
-    return templates.filter(t => t.category === category).length;
-  };
+  if (isLoading) {
+    return (
+      <div className="container mx-auto p-6">
+        <div className="flex items-center justify-center h-64">
+          <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+        </div>
+      </div>
+    );
+  }
 
   return (
-    <div className="container mx-auto p-6 max-w-7xl">
+    <div className="container mx-auto p-6 space-y-6">
       {/* Header */}
-      <div className="flex justify-between items-center mb-6">
+      <div className="flex items-center gap-4">
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={() => router.push('/settings')}
+        >
+          <ArrowLeft className="h-4 w-4" />
+        </Button>
         <div>
           <h1 className="text-3xl font-bold">Email Templates</h1>
           <p className="text-muted-foreground mt-1">
-            Manage email templates for customer communications
+            Customize the emails sent to your customers
           </p>
         </div>
-        <Button onClick={handleCreate}>
-          <Plus className="mr-2 h-4 w-4" />
-          New Template
-        </Button>
       </div>
 
-      {/* Filters */}
-      <div className="flex gap-4 mb-6 flex-wrap">
-        {/* Search */}
-        <div className="relative flex-1 min-w-[300px]">
-          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input
-            placeholder="Search templates..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="pl-10"
-          />
-        </div>
+      {/* Info Card */}
+      <Card className="bg-muted/50">
+        <CardContent className="pt-6">
+          <div className="flex items-start gap-3">
+            <Mail className="h-5 w-5 text-primary mt-0.5" />
+            <div>
+              <p className="text-sm">
+                Customize each email type to match your brand. Templates not customized will use the default content.
+                Use variables like <code className="bg-muted px-1 py-0.5 rounded text-xs">{'{{customer_name}}'}</code> to personalize emails.
+              </p>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
 
-        {/* Category Filter */}
-        <Select value={categoryFilter} onValueChange={setCategoryFilter}>
-          <SelectTrigger className="w-[200px]">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All Categories ({getCategoryCount('all')})</SelectItem>
-            <SelectItem value="rejection">Rejection ({getCategoryCount('rejection')})</SelectItem>
-            <SelectItem value="approval">Approval ({getCategoryCount('approval')})</SelectItem>
-            <SelectItem value="reminder">Reminder ({getCategoryCount('reminder')})</SelectItem>
-            <SelectItem value="general">General ({getCategoryCount('general')})</SelectItem>
-          </SelectContent>
-        </Select>
+      {/* Search Bar */}
+      <div className="relative">
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+        <Input
+          placeholder="Search templates..."
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          className="pl-10 max-w-md"
+        />
       </div>
 
-      {/* Templates Grid */}
-      {isLoading ? (
-        <div className="text-center py-12">
-          <p className="text-muted-foreground">Loading templates...</p>
-        </div>
-      ) : filteredTemplates && filteredTemplates.length > 0 ? (
-        <div className="grid gap-4">
-          {filteredTemplates.map((template) => (
-            <Card key={template.id} className="p-4 hover:shadow-md transition-shadow">
-              <div className="flex items-start justify-between gap-4">
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 mb-2">
-                    <h3 className="font-semibold text-lg truncate">{template.name}</h3>
-                    <Badge variant={getCategoryColor(template.category)}>
-                      {template.category}
-                    </Badge>
-                    {!template.is_active && (
-                      <Badge variant="outline" className="text-muted-foreground">
-                        Inactive
-                      </Badge>
-                    )}
-                  </div>
-                  <p className="text-sm text-muted-foreground mb-2 line-clamp-1">
-                    <span className="font-medium">Subject:</span> {template.subject}
-                  </p>
-                  <div className="flex items-center gap-4 text-xs text-muted-foreground">
-                    <span>
-                      Variables: {JSON.parse(template.variables || '[]').length > 0
-                        ? JSON.parse(template.variables || '[]').join(', ')
-                        : 'None'}
-                    </span>
-                    <span>•</span>
-                    <span>
-                      Updated {new Date(template.updated_at).toLocaleDateString()}
-                    </span>
-                  </div>
-                </div>
+      {/* Templates List */}
+      <div className="grid gap-4">
+        {filteredTemplates.length === 0 && (
+          <Card className="p-8 text-center">
+            <p className="text-muted-foreground">No templates match your search.</p>
+          </Card>
+        )}
+        {filteredTemplates.map((templateType) => {
+          const customized = isCustomized(templateType.key);
+          const customTemplate = customTemplates.find(t => t.template_key === templateType.key);
 
-                <div className="flex gap-2 flex-shrink-0">
+          return (
+            <Card key={templateType.key} className={customized ? 'border-primary/50' : ''}>
+              <CardHeader className="pb-3">
+                <div className="flex items-start justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className={`p-2 rounded-lg ${customized ? 'bg-primary/10' : 'bg-muted'}`}>
+                      <FileText className={`h-5 w-5 ${customized ? 'text-primary' : 'text-muted-foreground'}`} />
+                    </div>
+                    <div>
+                      <CardTitle className="text-lg flex items-center gap-2">
+                        {templateType.name}
+                        {customized && (
+                          <Badge variant="outline" className="text-xs border-primary text-primary">
+                            <Check className="h-3 w-3 mr-1" />
+                            Customized
+                          </Badge>
+                        )}
+                        {!customized && (
+                          <Badge variant="secondary" className="text-xs">
+                            Default
+                          </Badge>
+                        )}
+                      </CardTitle>
+                      <CardDescription className="mt-1">
+                        {templateType.description}
+                      </CardDescription>
+                    </div>
+                  </div>
                   <Button
-                    variant="outline"
+                    variant={customized ? 'default' : 'outline'}
                     size="sm"
-                    onClick={() => handlePreview(template)}
+                    onClick={() => router.push(`/settings/email-templates/${templateType.key}`)}
                   >
-                    <Eye className="h-4 w-4" />
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => handleEdit(template)}
-                  >
-                    <Edit className="h-4 w-4" />
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => handleDelete(template.id)}
-                  >
-                    <Trash2 className="h-4 w-4" />
+                    <Pencil className="h-4 w-4 mr-1" />
+                    {customized ? 'Edit' : 'Customize'}
                   </Button>
                 </div>
-              </div>
+              </CardHeader>
+              {customized && customTemplate && (
+                <CardContent className="pt-0">
+                  <div className="text-xs text-muted-foreground">
+                    Subject: <span className="font-medium text-foreground">{customTemplate.subject}</span>
+                  </div>
+                </CardContent>
+              )}
+              {!customized && (
+                <CardContent className="pt-0">
+                  <div className="text-xs text-muted-foreground">
+                    Subject: <span className="font-medium text-foreground">{templateType.defaultSubject}</span>
+                  </div>
+                </CardContent>
+              )}
             </Card>
-          ))}
-        </div>
-      ) : (
-        <Card className="p-12 text-center">
-          <p className="text-muted-foreground mb-4">
-            {searchQuery ? 'No templates match your search' : 'No email templates yet'}
-          </p>
-          {!searchQuery && (
-            <Button onClick={handleCreate}>
-              <Plus className="mr-2 h-4 w-4" />
-              Create Your First Template
-            </Button>
-          )}
-        </Card>
-      )}
-
-      {/* Template Dialog */}
-      <EmailTemplateDialog
-        open={dialogOpen}
-        onOpenChange={setDialogOpen}
-        template={selectedTemplate}
-        onSuccess={() => {
-          queryClient.invalidateQueries({ queryKey: ['email-templates'] });
-          setDialogOpen(false);
-        }}
-      />
-
-      {/* Preview Dialog */}
-      <EmailTemplatePreview
-        open={previewOpen}
-        onOpenChange={setPreviewOpen}
-        template={selectedTemplate}
-      />
-
-      {/* Delete Confirmation Dialog */}
-      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Delete Template?</AlertDialogTitle>
-            <AlertDialogDescription>
-              This action cannot be undone. This will permanently delete the email template.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={() => templateToDelete && deleteMutation.mutate(templateToDelete)}
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-            >
-              Delete
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+          );
+        })}
+      </div>
     </div>
   );
 }

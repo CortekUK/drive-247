@@ -2,6 +2,31 @@ import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useTenant } from "@/contexts/TenantContext";
 
+// Default carousel images for fallback (defined early to avoid hoisting issues)
+export const defaultHomeCarouselImages = [
+  '/carousel-images/car1.jpeg',
+  '/carousel-images/car2.jpeg',
+  '/carousel-images/car3.jpeg',
+  '/carousel-images/car8.jpeg',
+  '/carousel-images/car6.jpeg',
+];
+
+export const defaultFleetCarouselImages = [
+  '/carousel-images/car2.jpeg',
+  '/carousel-images/car8.jpeg',
+  '/carousel-images/car5.jpeg',
+  '/carousel-images/car1.jpeg',
+  '/carousel-images/car6.jpeg',
+];
+
+export const defaultPromotionsCarouselImages = [
+  '/carousel-images/car5.jpeg',
+  '/carousel-images/car9.jpeg',
+  '/carousel-images/car7.jpeg',
+  '/carousel-images/car2.jpeg',
+  '/carousel-images/car3.jpeg',
+];
+
 // CMS Content Types
 export interface HeroContent {
   title: string;
@@ -109,6 +134,7 @@ export interface PromotionsHeroContent {
   primary_cta_href: string;
   secondary_cta_text: string;
   background_image?: string;
+  carousel_images?: string[];
 }
 
 export interface HowItWorksStep {
@@ -140,6 +166,7 @@ export interface FleetHeroContent {
   headline: string;
   subheading: string;
   background_image?: string;
+  carousel_images?: string[];
   primary_cta_text: string;
   secondary_cta_text: string;
 }
@@ -186,6 +213,7 @@ export interface HomeHeroContent {
   headline: string;
   subheading: string;
   background_image?: string;
+  carousel_images?: string[];
   phone_number: string;
   phone_cta_text: string;
   book_cta_text: string;
@@ -654,6 +682,7 @@ export const defaultPromotionsContent: PageContent = {
     primary_cta_text: "View Fleet & Pricing",
     primary_cta_href: "/fleet",
     secondary_cta_text: "Book Now",
+    carousel_images: defaultPromotionsCarouselImages,
   },
   how_it_works: {
     title: "How Promotions Work",
@@ -706,6 +735,7 @@ export const defaultFleetContent: PageContent = {
     headline: "Fleet & Pricing",
     subheading: "Browse our premium vehicles with clear daily, weekly, and monthly rates.",
     background_image: "",
+    carousel_images: defaultFleetCarouselImages,
     primary_cta_text: "Book Now",
     secondary_cta_text: "View Fleet Below",
   },
@@ -757,6 +787,7 @@ export const defaultHomeContent: PageContent = {
     headline: "Reliable Car Rentals You Can Count On",
     subheading: "Quality vehicles. Transparent pricing. Exceptional service.",
     background_image: "",
+    carousel_images: defaultHomeCarouselImages,
     phone_number: "08001234567",
     phone_cta_text: "Call 0800 123 4567",
     book_cta_text: "Book Now",

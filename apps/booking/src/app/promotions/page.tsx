@@ -8,15 +8,6 @@ import Footer from "@/components/Footer";
 import HeroCarousel from "@/components/HeroCarousel";
 import SEO from "@/components/SEO";
 import { Button } from "@/components/ui/button";
-
-// Hero carousel images - hardcoded for all tenants
-const promotionsHeroImages = [
-  '/carousel-images/car5.jpeg',     //car5
-  '/carousel-images/car9.jpeg',     //car5
-  '/carousel-images/car7.jpeg',    //car7
-  '/carousel-images/car2.jpeg',    //car2
-  '/carousel-images/car3.jpeg',    //car3
-];
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -25,7 +16,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Crown, Calendar, Tag, ChevronRight, Info } from "lucide-react";
 import { format, isBefore, isAfter, isToday } from "date-fns";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
-import { usePageContent, defaultPromotionsContent, mergeWithDefaults } from "@/hooks/usePageContent";
+import { usePageContent, defaultPromotionsContent, mergeWithDefaults, defaultPromotionsCarouselImages } from "@/hooks/usePageContent";
 
 interface Promotion {
   id: string;
@@ -61,6 +52,11 @@ const Promotions = () => {
   // CMS Content
   const { data: rawContent } = usePageContent("promotions");
   const content = mergeWithDefaults(rawContent, defaultPromotionsContent);
+
+  // Hero carousel images - use CMS images if set, otherwise use defaults
+  const heroCarouselImages = content.promotions_hero?.carousel_images?.length
+    ? content.promotions_hero.carousel_images
+    : defaultPromotionsCarouselImages;
 
   useEffect(() => {
     loadData();
@@ -185,7 +181,7 @@ const Promotions = () => {
         {/* Hero Section with Carousel */}
         <section className="relative min-h-screen">
           <HeroCarousel
-            images={promotionsHeroImages}
+            images={heroCarouselImages}
             autoPlayInterval={5000}
             overlayStrength="medium"
             showScrollIndicator={true}
