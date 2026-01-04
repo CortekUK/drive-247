@@ -251,7 +251,7 @@ const PLDashboard: React.FC = () => {
         .select('entry_date, amount, side, vehicle_id')
         .gte('entry_date', format(dateRange.from, 'yyyy-MM-dd'))
         .lte('entry_date', format(dateRange.to, 'yyyy-MM-dd'))
-        .order('entry_date');
+        .order('entry_date', { ascending: false });
 
       if (error) throw error;
 
