@@ -471,8 +471,8 @@ export default function VehiclesListEnhanced() {
                     </TableCell>
                     <TableCell>{vehicle.year || '—'}</TableCell>
                     <TableCell>{vehicle.colour}</TableCell>
-                    <TableCell className="text-center">
-                      <VehicleStatusBadge status={vehicle.status} />
+                    <TableCell>
+                      <VehicleStatusBadge status={vehicle.status} compact />
                     </TableCell>
                      <TableCell className="text-right">
                        <Button
