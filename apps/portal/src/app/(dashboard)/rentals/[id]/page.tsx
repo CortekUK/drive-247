@@ -1316,47 +1316,47 @@ const RentalDetail = () => {
 
               {/* AI Face Match Score - only show for AI verifications */}
               {identityVerification.verification_provider === 'ai' && identityVerification.ai_face_match_score && (
-                <div className="bg-gradient-to-r from-purple-50 to-indigo-50 border border-purple-100 rounded-xl p-4">
+                <div className="border border-border rounded-lg p-4 bg-card">
                   <div className="flex items-center justify-between mb-3">
-                    <div className="flex items-center gap-2">
-                      <div className="w-8 h-8 rounded-lg bg-purple-100 flex items-center justify-center">
-                        <Camera className="h-4 w-4 text-purple-600" />
+                    <div className="flex items-center gap-3">
+                      <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${
+                        identityVerification.ai_face_match_score >= 0.9 ? 'bg-green-500/10' :
+                        identityVerification.ai_face_match_score >= 0.7 ? 'bg-yellow-500/10' : 'bg-red-500/10'
+                      }`}>
+                        <Camera className={`h-5 w-5 ${
+                          identityVerification.ai_face_match_score >= 0.9 ? 'text-green-500' :
+                          identityVerification.ai_face_match_score >= 0.7 ? 'text-yellow-500' : 'text-red-500'
+                        }`} />
                       </div>
                       <div>
-                        <p className="text-xs text-muted-foreground uppercase tracking-wide">AI Face Match</p>
-                        <p className="text-sm font-medium text-foreground">Biometric Verification</p>
+                        <p className="text-sm font-medium">Face Match Score</p>
+                        <p className="text-xs text-muted-foreground">AI Biometric Verification</p>
                       </div>
                     </div>
                     <div className="text-right">
                       <p className={`text-2xl font-bold ${
-                        identityVerification.ai_face_match_score >= 0.9 ? 'text-green-600' :
-                        identityVerification.ai_face_match_score >= 0.7 ? 'text-yellow-600' : 'text-red-600'
+                        identityVerification.ai_face_match_score >= 0.9 ? 'text-green-500' :
+                        identityVerification.ai_face_match_score >= 0.7 ? 'text-yellow-500' : 'text-red-500'
                       }`}>
                         {(identityVerification.ai_face_match_score * 100).toFixed(1)}%
                       </p>
-                      <p className={`text-xs ${
-                        identityVerification.ai_face_match_score >= 0.9 ? 'text-green-600' :
-                        identityVerification.ai_face_match_score >= 0.7 ? 'text-yellow-600' : 'text-red-600'
+                      <p className={`text-xs font-medium ${
+                        identityVerification.ai_face_match_score >= 0.9 ? 'text-green-500' :
+                        identityVerification.ai_face_match_score >= 0.7 ? 'text-yellow-500' : 'text-red-500'
                       }`}>
                         {identityVerification.ai_face_match_score >= 0.9 ? 'Excellent Match' :
-                         identityVerification.ai_face_match_score >= 0.7 ? 'Manual Review' : 'Low Match'}
+                         identityVerification.ai_face_match_score >= 0.7 ? 'Needs Review' : 'Low Match'}
                       </p>
                     </div>
                   </div>
-                  <div className="relative h-2 bg-gray-200 rounded-full overflow-hidden">
+                  <div className="relative h-2 bg-muted rounded-full overflow-hidden">
                     <div
                       className={`absolute left-0 top-0 h-full rounded-full transition-all ${
-                        identityVerification.ai_face_match_score >= 0.9 ? 'bg-gradient-to-r from-green-400 to-green-600' :
-                        identityVerification.ai_face_match_score >= 0.7 ? 'bg-gradient-to-r from-yellow-400 to-yellow-600' :
-                        'bg-gradient-to-r from-red-400 to-red-600'
+                        identityVerification.ai_face_match_score >= 0.9 ? 'bg-green-500' :
+                        identityVerification.ai_face_match_score >= 0.7 ? 'bg-yellow-500' : 'bg-red-500'
                       }`}
                       style={{ width: `${identityVerification.ai_face_match_score * 100}%` }}
                     />
-                  </div>
-                  <div className="flex justify-between mt-1 text-xs text-muted-foreground">
-                    <span>0%</span>
-                    <span className="text-green-600">90%+ Match</span>
-                    <span>100%</span>
                   </div>
                 </div>
               )}
