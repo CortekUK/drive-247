@@ -17,6 +17,7 @@ import { ComplianceOverviewCard } from "@/components/dashboard/compliance-overvi
 import { ActionItems } from "@/components/dashboard/action-items";
 import { useDashboardKPIs } from "@/hooks/use-dashboard-kpis";
 import { useAuth } from "@/stores/auth-store";
+import { useTenant } from "@/contexts/TenantContext";
 import {
   format,
   startOfMonth,
@@ -57,6 +58,7 @@ export default function DashboardPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { appUser } = useAuth();
+  const { tenant } = useTenant();
 
   // Get date range from URL or default to "This Month"
   const dateRanges = getDateRanges();
@@ -88,10 +90,11 @@ export default function DashboardPage() {
     return "Good evening";
   };
 
-  // Extract first name from full name
+  // Extract first name from tenant admin name or user name
   const getFirstName = () => {
-    if (!appUser?.name) return "";
-    const names = appUser.name.trim().split(" ");
+    const name = tenant?.admin_name || appUser?.name;
+    if (!name) return "";
+    const names = name.trim().split(" ");
     return names[0];
   };
 

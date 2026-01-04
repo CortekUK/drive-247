@@ -8,7 +8,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Edit, Car, PoundSterling, CalendarIcon } from "lucide-react";
+import { Edit, Car, DollarSign, CalendarIcon } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Textarea } from "@/components/ui/textarea";
@@ -362,7 +362,7 @@ export const EditVehicleDialogEnhanced = ({ vehicle, open, onOpenChange }: EditV
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>
-                        <SelectItem value="Petrol">Petrol</SelectItem>
+                        <SelectItem value="Petrol">Gas</SelectItem>
                         <SelectItem value="Diesel">Diesel</SelectItem>
                         <SelectItem value="Hybrid">Hybrid</SelectItem>
                         <SelectItem value="Electric">Electric</SelectItem>
@@ -458,7 +458,7 @@ export const EditVehicleDialogEnhanced = ({ vehicle, open, onOpenChange }: EditV
             {/* Rental Rates Section */}
             <div className="space-y-4 p-4 border rounded-lg bg-muted/30">
               <div className="flex items-center gap-2 mb-3">
-                <PoundSterling className="h-4 w-4 text-primary" />
+                <DollarSign className="h-4 w-4 text-primary" />
                 <h3 className="font-semibold text-sm">Rental Rates</h3>
               </div>
 
@@ -562,7 +562,7 @@ export const EditVehicleDialogEnhanced = ({ vehicle, open, onOpenChange }: EditV
             {form.watch("acquisition_type") === "Finance" && (
               <div className="space-y-4 p-4 border rounded-lg bg-muted/30">
                 <div className="flex items-center gap-2 mb-3">
-                  <PoundSterling className="h-4 w-4 text-primary" />
+                  <DollarSign className="h-4 w-4 text-primary" />
                   <h3 className="font-semibold text-sm">Finance Information</h3>
                 </div>
                 

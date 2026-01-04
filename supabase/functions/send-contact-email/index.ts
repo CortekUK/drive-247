@@ -1,13 +1,73 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.57.4';
+import { corsHeaders } from "../_shared/aws-config.ts";
+import {
+  sendEmail,
+  getTenantBranding,
+  TenantBranding,
+  wrapWithBrandedTemplate
+} from "../_shared/resend-service.ts";
 
-const RESEND_API_KEY = Deno.env.get('RESEND_API_KEY')
-const FROM_EMAIL = Deno.env.get('FROM_EMAIL') || 'onboarding@resend.dev'
-
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-requested-with',
-  'Access-Control-Allow-Methods': 'POST, GET, OPTIONS, PUT, DELETE',
-  'Access-Control-Max-Age': '86400',
+function generateContactEmailContent(
+  name: string,
+  email: string,
+  phone: string,
+  subject: string,
+  message: string,
+  branding: TenantBranding
+): string {
+  return `
+                    <tr>
+                        <td style="padding: 30px;">
+                            <h2 style="margin: 0 0 20px; color: #1a1a1a; font-size: 22px;">New Contact Form Submission</h2>
+                            <table role="presentation" style="width: 100%; border-collapse: collapse; background: #f8f9fa; border-radius: 8px; margin-bottom: 25px;">
+                                <tr>
+                                    <td style="padding: 20px;">
+                                        <table role="presentation" style="width: 100%; border-collapse: collapse;">
+                                            <tr>
+                                                <td style="padding: 8px 0; color: #666; font-size: 14px;">Name:</td>
+                                                <td style="padding: 8px 0; color: #1a1a1a; font-weight: 600; font-size: 14px; text-align: right;">${name}</td>
+                                            </tr>
+                                            <tr>
+                                                <td style="padding: 8px 0; color: #666; font-size: 14px;">Email:</td>
+                                                <td style="padding: 8px 0; color: #1a1a1a; font-size: 14px; text-align: right;"><a href="mailto:${email}" style="color: ${branding.accentColor};">${email}</a></td>
+                                            </tr>
+                                            <tr>
+                                                <td style="padding: 8px 0; color: #666; font-size: 14px;">Phone:</td>
+                                                <td style="padding: 8px 0; color: #1a1a1a; font-size: 14px; text-align: right;"><a href="tel:${phone}" style="color: ${branding.accentColor};">${phone}</a></td>
+                                            </tr>
+                                            <tr>
+                                                <td style="padding: 8px 0; color: #666; font-size: 14px;">Subject:</td>
+                                                <td style="padding: 8px 0; color: #1a1a1a; font-weight: 600; font-size: 14px; text-align: right;">${subject}</td>
+                                            </tr>
+                                        </table>
+                                    </td>
+                                </tr>
+                            </table>
+                            <table role="presentation" style="width: 100%; border-collapse: collapse; background: #f8f9fa; border-left: 4px solid ${branding.accentColor}; border-radius: 0 8px 8px 0; margin-bottom: 25px;">
+                                <tr>
+                                    <td style="padding: 20px;">
+                                        <h3 style="margin: 0 0 10px; color: #1a1a1a; font-size: 14px;">Message</h3>
+                                        <p style="margin: 0; color: #444; line-height: 1.6; white-space: pre-wrap;">${message}</p>
+                                    </td>
+                                </tr>
+                            </table>
+                            <table role="presentation" style="width: 100%; border-collapse: collapse; background: #fef3c7; border-left: 4px solid ${branding.accentColor}; border-radius: 0 8px 8px 0; margin-bottom: 25px;">
+                                <tr>
+                                    <td style="padding: 15px 20px;">
+                                        <p style="margin: 0; color: #92400e; font-size: 14px;"><strong>Received:</strong> ${new Date().toLocaleString('en-GB', {
+                                          dateStyle: 'full',
+                                          timeStyle: 'short',
+                                          timeZone: 'Europe/London'
+                                        })}</p>
+                                    </td>
+                                </tr>
+                            </table>
+                            <div style="text-align: center;">
+                                <a href="mailto:${email}" style="display: inline-block; background: ${branding.accentColor}; color: white; padding: 14px 40px; border-radius: 6px; text-decoration: none; font-weight: 600;">Reply to ${name.split(' ')[0]}</a>
+                            </div>
+                        </td>
+                    </tr>`;
 }
 
 serve(async (req) => {
@@ -23,143 +83,46 @@ serve(async (req) => {
       phone,
       subject,
       message,
-      adminEmail
+      adminEmail,
+      tenantId
     } = await req.json()
 
-    const emailHtml = `
-      <!DOCTYPE html>
-      <html>
-        <head>
-          <style>
-            body { font-family: 'Helvetica Neue', Arial, sans-serif; line-height: 1.6; color: #333; }
-            .container { max-width: 600px; margin: 0 auto; padding: 20px; }
-            .header { background: linear-gradient(135deg, #1a1a1a, #2d2d2d); color: white; padding: 30px; text-align: center; border-radius: 10px 10px 0 0; }
-            .header h1 { margin: 0; font-size: 28px; }
-            .content { background: #f9f9f9; padding: 30px; border-radius: 0 0 10px 10px; }
-            .message-card { background: white; border: 2px solid #FFD700; border-radius: 8px; padding: 20px; margin: 20px 0; }
-            .detail-row { padding: 10px 0; border-bottom: 1px solid #eee; }
-            .detail-label { font-weight: 600; color: #666; display: inline-block; width: 100px; }
-            .detail-value { color: #333; }
-            .message-box { background: #f5f5f5; padding: 15px; border-left: 4px solid #FFD700; margin: 15px 0; border-radius: 4px; }
-            .footer { background: #1a1a1a; color: #999; padding: 20px; text-align: center; font-size: 12px; margin-top: 20px; border-radius: 10px; }
-            .icon { color: #FFD700; margin-right: 8px; }
-          </style>
-        </head>
-        <body>
-          <div class="container">
-            <div class="header">
-              <h1>🛡️ Contact Form Submission</h1>
-              <p style="margin: 10px 0 0 0; font-size: 16px;">New Message Received</p>
-            </div>
+    // Create supabase client
+    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+    const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-            <div class="content">
-              <div class="message-card">
-                <h2 style="margin-top: 0; color: #FFD700;">📬 Contact Details</h2>
+    // Get tenant branding if tenantId is provided
+    const branding = tenantId
+      ? await getTenantBranding(tenantId, supabase)
+      : { companyName: 'Drive 247', logoUrl: null, primaryColor: '#1a1a1a', accentColor: '#C5A572', contactEmail: 'support@drive-247.com', contactPhone: null, slug: 'drive247' };
 
-                <div class="detail-row">
-                  <span class="detail-label">Name:</span>
-                  <span class="detail-value">${name}</span>
-                </div>
+    // Build branded email HTML
+    const emailContent = generateContactEmailContent(name, email, phone, subject, message, branding);
+    const emailHtml = wrapWithBrandedTemplate(emailContent, branding);
 
-                <div class="detail-row">
-                  <span class="detail-label">Email:</span>
-                  <span class="detail-value"><a href="mailto:${email}" style="color: #FFD700;">${email}</a></span>
-                </div>
+    // Send email using shared service
+    const emailResult = await sendEmail(
+      adminEmail,
+      `New Contact Form Submission: ${subject}`,
+      emailHtml,
+      supabase,
+      tenantId
+    );
 
-                <div class="detail-row">
-                  <span class="detail-label">Phone:</span>
-                  <span class="detail-value"><a href="tel:${phone}" style="color: #FFD700;">${phone}</a></span>
-                </div>
-
-                <div class="detail-row" style="border-bottom: none;">
-                  <span class="detail-label">Subject:</span>
-                  <span class="detail-value"><strong>${subject}</strong></span>
-                </div>
-              </div>
-
-              <div class="message-box">
-                <h3 style="margin-top: 0; color: #333;">💬 Message:</h3>
-                <p style="margin: 0; white-space: pre-wrap;">${message}</p>
-              </div>
-
-              <div style="background: #fff3cd; border-left: 4px solid #FFD700; padding: 15px; margin: 20px 0; border-radius: 4px;">
-                <strong>⏰ Received:</strong> ${new Date().toLocaleString('en-GB', {
-                  dateStyle: 'full',
-                  timeStyle: 'short',
-                  timeZone: 'Europe/London'
-                })}
-              </div>
-
-              <div style="text-align: center; margin-top: 30px;">
-                <a href="mailto:${email}" style="display: inline-block; background: linear-gradient(135deg, #FFD700, #FFC700); color: #1a1a1a; padding: 12px 30px; text-decoration: none; border-radius: 6px; font-weight: bold; margin: 10px;">
-                  Reply to ${name.split(' ')[0]}
-                </a>
-              </div>
-            </div>
-
-            <div class="footer">
-              <p style="margin: 5px 0;"><strong>Drive 917</strong></p>
-              <p style="margin: 5px 0;">Luxury Chauffeur & Close Protection Services</p>
-              <p style="margin: 15px 0 5px 0;">This email was sent from your contact form</p>
-            </div>
-          </div>
-        </body>
-      </html>
-    `
-
-    const res = await fetch('https://api.resend.com/emails', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${RESEND_API_KEY}`,
-      },
-      body: JSON.stringify({
-        from: FROM_EMAIL,
-        to: [adminEmail],
-        subject: `New Contact Form Submission: ${subject}`,
-        html: emailHtml,
-        text: `Contact Form Submission
-
-Contact Details:
-Name: ${name}
-Email: ${email}
-Phone: ${phone}
-Subject: ${subject}
-
-Message:
-${message}
-
-Received: ${new Date().toLocaleString('en-GB', {
-          dateStyle: 'full',
-          timeStyle: 'short',
-          timeZone: 'Europe/London'
-        })}
-
----
-Reply to this customer at: ${email}
-
-Drive 917
-Luxury Chauffeur & Close Protection Services
-`,
-        reply_to: email, // Set reply-to as customer's email
-      }),
-    })
-
-    const data = await res.json()
-
-    if (res.ok) {
-      return new Response(JSON.stringify({ success: true, data }), {
+    if (emailResult?.success) {
+      return new Response(JSON.stringify({ success: true, data: emailResult }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         status: 200,
       })
     } else {
-      throw new Error(data.message || 'Failed to send email')
+      throw new Error(emailResult?.error || 'Failed to send email')
     }
   } catch (error) {
     console.error('Error sending contact email:', error)
-    const message = String(error instanceof Error ? error.message : error)
+    const errorMessage = String(error instanceof Error ? error.message : error)
     return new Response(
-      JSON.stringify({ error: message }),
+      JSON.stringify({ error: errorMessage }),
       {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         status: 400,

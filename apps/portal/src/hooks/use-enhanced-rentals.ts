@@ -107,15 +107,12 @@ export const useEnhancedRentals = (filters: RentalFilters = {}) => {
           end_date,
           monthly_amount,
           status,
-          customers!inner(id, name, customer_type),
-          vehicles!inner(id, reg, make, model)
+          customers!rentals_customer_id_fkey(id, name, customer_type),
+          vehicles!rentals_vehicle_id_fkey(id, reg, make, model)
         `, { count: 'exact' })
         .eq("tenant_id", tenant.id) as any;
 
-      // Apply customer type filter at DB level
-      if (customerType !== "all") {
-        query = query.eq("customers.customer_type", customerType);
-      }
+      // Note: Customer type filter moved to client-side to work with regular joins
 
       // Apply date range filters
       if (startDateFrom) {
@@ -154,8 +151,9 @@ export const useEnhancedRentals = (filters: RentalFilters = {}) => {
         initialPayments?.map(p => [p.rental_id, p.amount]) || []
       );
 
-      // Transform and filter data
+      // Transform and filter data - skip rentals with missing customer or vehicle
       const enhancedRentals: EnhancedRental[] = (rentalsData || [])
+        .filter((rental: any) => rental.customers && rental.vehicles)
         .map((rental: any) => {
           const periodType = 'Monthly';
           const durationMonths = calculateDuration(rental.start_date, rental.end_date, periodType);
@@ -182,6 +180,11 @@ export const useEnhancedRentals = (filters: RentalFilters = {}) => {
           };
         })
         .filter((rental: EnhancedRental) => {
+          // Apply customer type filter (moved from DB level for regular joins)
+          if (customerType !== "all") {
+            if (rental.customer?.customer_type !== customerType) return false;
+          }
+
           // Apply search filter (client-side for related fields)
           if (search) {
             const searchLower = search.toLowerCase();

@@ -32,7 +32,7 @@ export const useRecentActivity = () => {
           status,
           payment_type,
           created_at,
-          customers!inner(name)
+          customers!payments_customer_id_fkey(name)
         `)
         .order("created_at", { ascending: false })
         .limit(5);
@@ -44,18 +44,20 @@ export const useRecentActivity = () => {
       const { data: payments } = await paymentsQuery;
 
       if (payments) {
-        payments.forEach((payment) => {
-          activities.push({
-            id: payment.id,
-            type: "payment",
-            description: `${payment.payment_type} received`,
-            amount: Number(payment.amount),
-            customer: (payment.customers as any)?.name,
-            time: formatDistanceToNow(new Date(payment.created_at), { addSuffix: true }),
-            status: payment.status === "Applied" ? "success" : payment.status === "Credit" ? "pending" : "warning",
-            created_at: payment.created_at
+        payments
+          .filter(payment => payment.customers)
+          .forEach((payment) => {
+            activities.push({
+              id: payment.id,
+              type: "payment",
+              description: `${payment.payment_type} received`,
+              amount: Number(payment.amount),
+              customer: (payment.customers as any)?.name,
+              time: formatDistanceToNow(new Date(payment.created_at), { addSuffix: true }),
+              status: payment.status === "Applied" ? "success" : payment.status === "Credit" ? "pending" : "warning",
+              created_at: payment.created_at
+            });
           });
-        });
       }
 
       // Fetch recent rentals
@@ -65,8 +67,8 @@ export const useRecentActivity = () => {
           id,
           status,
           created_at,
-          customers!inner(name),
-          vehicles!inner(reg)
+          customers!rentals_customer_id_fkey(name),
+          vehicles!rentals_vehicle_id_fkey(reg)
         `)
         .order("created_at", { ascending: false })
         .limit(5);
@@ -78,17 +80,19 @@ export const useRecentActivity = () => {
       const { data: rentals } = await rentalsQuery;
 
       if (rentals) {
-        rentals.forEach((rental) => {
-          activities.push({
-            id: rental.id,
-            type: "rental",
-            description: `New rental agreement signed`,
-            customer: (rental.customers as any)?.name,
-            time: formatDistanceToNow(new Date(rental.created_at), { addSuffix: true }),
-            status: rental.status === "Active" ? "success" : "pending",
-            created_at: rental.created_at
+        rentals
+          .filter(rental => rental.customers && rental.vehicles)
+          .forEach((rental) => {
+            activities.push({
+              id: rental.id,
+              type: "rental",
+              description: `New rental agreement signed`,
+              customer: (rental.customers as any)?.name,
+              time: formatDistanceToNow(new Date(rental.created_at), { addSuffix: true }),
+              status: rental.status === "Active" ? "success" : "pending",
+              created_at: rental.created_at
+            });
           });
-        });
       }
 
       // Fetch recent vehicles

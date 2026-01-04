@@ -8,7 +8,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { ChevronLeft, Car, PoundSterling, TrendingUp, TrendingDown, Download, ArrowUpDown, ArrowUp, ArrowDown, BarChart3 } from "lucide-react";
+import { Tooltip as UITooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { ChevronLeft, Car, DollarSign, TrendingUp, TrendingDown, Download, ArrowUpDown, ArrowUp, ArrowDown, BarChart3 } from "lucide-react";
 import { format, parseISO, startOfMonth, endOfMonth } from "date-fns";
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend } from "recharts";
 import { cn } from "@/lib/utils";
@@ -66,17 +67,17 @@ const MonthlyPLDrilldown = () => {
           side,
           category,
           amount,
-          vehicles!inner(id, reg, make, model)
+          vehicles!pnl_entries_vehicle_id_fkey(id, reg, make, model)
         `)
         .gte("entry_date", monthStart.toISOString().split('T')[0])
         .lte("entry_date", monthEnd.toISOString().split('T')[0]);
 
       if (error) throw error;
 
-      // Group by vehicle and calculate totals
+      // Group by vehicle and calculate totals (filter out entries with missing vehicles)
       const groupedData: Record<string, VehicleMonthlyPL> = {};
 
-      data?.forEach((entry) => {
+      data?.filter(entry => entry.vehicles).forEach((entry) => {
         const vehicleId = entry.vehicle_id;
         const vehicle = entry.vehicles as any;
 
@@ -275,15 +276,22 @@ const MonthlyPLDrilldown = () => {
       {/* Header */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div className="flex items-center gap-4">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => router.push(`/pl-dashboard${fromDateRange ? `?dateRange=${fromDateRange}` : ''}${groupByMonth ? `${fromDateRange ? '&' : '?'}groupByMonth=true` : ''}`)}
-            className="flex items-center gap-2"
-          >
-            <ChevronLeft className="h-4 w-4" />
-            Back to Global P&L Dashboard
-          </Button>
+          <TooltipProvider>
+            <UITooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => router.push(`/pl-dashboard${fromDateRange ? `?dateRange=${fromDateRange}` : ''}${groupByMonth ? `${fromDateRange ? '&' : '?'}groupByMonth=true` : ''}`)}
+                >
+                  <ChevronLeft className="h-4 w-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>Back to Global P&L Dashboard</p>
+              </TooltipContent>
+            </UITooltip>
+          </TooltipProvider>
           <div>
             <h1 className="text-3xl font-bold tracking-tight">
               P&L Breakdown – {format(monthDate, 'MMMM yyyy')}
@@ -344,7 +352,7 @@ const MonthlyPLDrilldown = () => {
           <Card className="shadow-sm">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">Net Profit</CardTitle>
-              <PoundSterling className={cn(
+              <DollarSign className={cn(
                 "h-4 w-4",
                 monthlyTotals.net_profit > 0 ? "text-success" :
                 monthlyTotals.net_profit < 0 ? "text-destructive" :

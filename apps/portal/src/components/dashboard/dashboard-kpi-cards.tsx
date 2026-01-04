@@ -8,7 +8,6 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import {
   AlertTriangle,
   Calendar,
-  PoundSterling,
   Users,
   Bell,
   Info,

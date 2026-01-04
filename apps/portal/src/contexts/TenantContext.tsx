@@ -9,6 +9,8 @@ interface Tenant {
   company_name: string;
   status: string;
   contact_email: string;
+  admin_name: string | null;
+  integration_veriff: boolean | null;
 }
 
 interface TenantContextType {
@@ -80,7 +82,14 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
 
       // Extract tenant slug from subdomain (e.g., acme-portal.drive-247.com → acme)
       const hostname = window.location.hostname;
-      const slug = extractTenantSlug(hostname);
+      let slug = extractTenantSlug(hostname);
+      
+      // DEV FALLBACK: If no slug detected on localhost, use 'drive-247' as default
+      if (!slug && (hostname === 'localhost' || hostname === '127.0.0.1')) {
+        console.log('[TenantContext] DEV MODE: Using default tenant "drive-247"');
+        slug = 'drive-247';
+      }
+      
       setTenantSlug(slug);
 
       // If no tenant subdomain, show error (portal requires tenant context)
@@ -97,7 +106,7 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
       // Query the tenants table by slug
       const { data, error: queryError } = await supabase
         .from('tenants')
-        .select('id, slug, company_name, status, contact_email')
+        .select('id, slug, company_name, status, contact_email, admin_name, integration_veriff')
         .eq('slug', slug)
         .eq('status', 'active')
         .single();

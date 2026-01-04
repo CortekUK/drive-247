@@ -120,26 +120,32 @@ export const useOrgSettings = () => {
   // Update settings mutation
   const updateSettingsMutation = useMutation({
     mutationFn: async (updates: Partial<OrgSettings>): Promise<OrgSettings> => {
-      console.log('Updating settings with:', updates);
+      console.log('🔧 [SETTINGS] Updating settings with:', updates);
+      console.log('🔧 [SETTINGS] Calling Edge Function...');
+      
       const { data, error } = await supabase.functions.invoke('settings', {
-        method: 'POST',
-        body: JSON.stringify(updates),
+        body: updates,
       });
 
+      console.log('🔧 [SETTINGS] Edge Function response:', { data, error });
+
       if (error) {
-        console.error('Settings update error:', error);
+        console.error('❌ [SETTINGS] Settings update error:', error);
         throw new Error(`Failed to update settings: ${error.message}`);
       }
 
+      console.log('✅ [SETTINGS] Settings updated successfully! Response:', data);
       return data;
     },
     onSuccess: (data) => {
+      console.log('✅ [SETTINGS] onSuccess - Cache updated');
       // Update the cache with new data
       queryClient.setQueryData(['org-settings'], data);
       
       // Invalidate related queries that might depend on settings
       queryClient.invalidateQueries({ queryKey: ['dashboard-kpis'] });
       queryClient.invalidateQueries({ queryKey: ['reminders'] });
+      queryClient.invalidateQueries({ queryKey: ['audit-logs'] });
       
       toast({
         title: "Settings Updated",
@@ -177,10 +183,19 @@ export const useOrgSettings = () => {
   };
 
   const toggleReminder = (reminderType: keyof Pick<OrgSettings, 'reminder_due_today' | 'reminder_overdue_1d' | 'reminder_overdue_multi' | 'reminder_due_soon_2d'>) => {
-    if (!settings) return;
+    console.log('🔔 [TOGGLE] toggleReminder called with:', reminderType);
+    console.log('🔔 [TOGGLE] Current settings:', settings);
+    
+    if (!settings) {
+      console.log('🔔 [TOGGLE] No settings available, returning early');
+      return;
+    }
+
+    const newValue = !settings[reminderType];
+    console.log('🔔 [TOGGLE] Toggling', reminderType, 'from', settings[reminderType], 'to', newValue);
 
     return updateSettingsMutation.mutate({
-      [reminderType]: !settings[reminderType]
+      [reminderType]: newValue
     });
   };
 
