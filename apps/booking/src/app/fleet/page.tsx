@@ -13,16 +13,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useTenant } from "@/contexts/TenantContext";
 import Link from "next/link";
 import SEO from "@/components/SEO";
-import { usePageContent, defaultFleetContent, mergeWithDefaults } from "@/hooks/usePageContent";
-
-// Hero carousel images - hardcoded for all tenants
-const fleetHeroImages = [
-  '/carousel-images/car2.jpeg',
-  '/carousel-images/car8.jpeg',
-  '/carousel-images/car5.jpeg',
-  '/carousel-images/car1.jpeg',
-  '/carousel-images/car6.jpeg',
-];
+import { usePageContent, defaultFleetContent, mergeWithDefaults, defaultFleetCarouselImages } from "@/hooks/usePageContent";
 import {
   Car,
   CarFront,
@@ -127,6 +118,11 @@ const Pricing = () => {
   // CMS Content
   const { data: rawContent } = usePageContent("fleet");
   const content = mergeWithDefaults(rawContent, defaultFleetContent);
+
+  // Hero carousel images - use CMS images if set, otherwise use defaults
+  const heroCarouselImages = content.fleet_hero?.carousel_images?.length
+    ? content.fleet_hero.carousel_images
+    : defaultFleetCarouselImages;
 
   // Hardcoded service inclusions
   const serviceInclusions: ServiceInclusion[] = [
@@ -254,7 +250,7 @@ const Pricing = () => {
       {/* Hero Section with Carousel */}
       <section className="relative min-h-screen">
         <HeroCarousel
-          images={fleetHeroImages}
+          images={heroCarouselImages}
           autoPlayInterval={5000}
           overlayStrength="medium"
           showScrollIndicator={true}
