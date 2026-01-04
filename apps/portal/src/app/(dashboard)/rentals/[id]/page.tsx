@@ -33,7 +33,7 @@ interface Rental {
   signed_document_id?: string;
   insurance_status?: string;
   customer_id?: string;
-  customers: { id: string; name: string; email?: string; date_of_birth?: string | null };
+  customers: { id: string; name: string; email?: string; phone?: string | null };
   vehicles: { id: string; reg: string; make: string; model: string };
 }
 
@@ -59,8 +59,8 @@ const RentalDetail = () => {
         .from("rentals")
         .select(`
           *,
-          customers(id, name, email, date_of_birth),
-          vehicles(id, reg, make, model)
+          customers!rentals_customer_id_fkey(id, name, email, phone),
+          vehicles!rentals_vehicle_id_fkey(id, reg, make, model)
         `)
         .eq("id", id)
         .eq("tenant_id", tenant.id)
@@ -181,7 +181,7 @@ const RentalDetail = () => {
       if (tenant?.id) {
         const { data: unlinkedDocs } = await supabase
           .from("customer_documents")
-          .select("*, customers:customer_id(email)")
+          .select("*, customers!customer_documents_customer_id_fkey(email)")
           .eq("document_type", "Insurance Certificate")
           .eq("tenant_id", tenant.id)
           .is("rental_id", null)
@@ -749,9 +749,9 @@ const RentalDetail = () => {
             <div>
               <p className="text-sm text-muted-foreground">Date of Birth</p>
               <p className="font-medium">
-                {rental.customers?.date_of_birth
-                  ? `${new Date(rental.customers.date_of_birth).toLocaleDateString()} (${Math.floor((Date.now() - new Date(rental.customers.date_of_birth).getTime()) / (365.25 * 24 * 60 * 60 * 1000))} yrs)`
-                  : 'Not provided'}
+                {identityVerification?.date_of_birth
+                  ? `${new Date(identityVerification.date_of_birth).toLocaleDateString()} (${Math.floor((Date.now() - new Date(identityVerification.date_of_birth).getTime()) / (365.25 * 24 * 60 * 60 * 1000))} yrs)`
+                  : 'No DOB'}
               </p>
             </div>
             <div>
@@ -1316,13 +1316,47 @@ const RentalDetail = () => {
 
               {/* AI Face Match Score - only show for AI verifications */}
               {identityVerification.verification_provider === 'ai' && identityVerification.ai_face_match_score && (
-                <div className="bg-purple-50 border border-purple-200 rounded-lg p-3">
-                  <div className="flex items-center gap-2 text-sm">
-                    <Camera className="h-4 w-4 text-purple-600" />
-                    <span className="text-muted-foreground">Face Match Score:</span>
-                    <span className="font-semibold text-purple-700">
-                      {(identityVerification.ai_face_match_score * 100).toFixed(1)}%
-                    </span>
+                <div className="border border-border rounded-lg p-4 bg-card">
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center gap-3">
+                      <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${
+                        identityVerification.ai_face_match_score >= 0.9 ? 'bg-green-500/10' :
+                        identityVerification.ai_face_match_score >= 0.7 ? 'bg-yellow-500/10' : 'bg-red-500/10'
+                      }`}>
+                        <Camera className={`h-5 w-5 ${
+                          identityVerification.ai_face_match_score >= 0.9 ? 'text-green-500' :
+                          identityVerification.ai_face_match_score >= 0.7 ? 'text-yellow-500' : 'text-red-500'
+                        }`} />
+                      </div>
+                      <div>
+                        <p className="text-sm font-medium">Face Match Score</p>
+                        <p className="text-xs text-muted-foreground">AI Biometric Verification</p>
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <p className={`text-2xl font-bold ${
+                        identityVerification.ai_face_match_score >= 0.9 ? 'text-green-500' :
+                        identityVerification.ai_face_match_score >= 0.7 ? 'text-yellow-500' : 'text-red-500'
+                      }`}>
+                        {(identityVerification.ai_face_match_score * 100).toFixed(1)}%
+                      </p>
+                      <p className={`text-xs font-medium ${
+                        identityVerification.ai_face_match_score >= 0.9 ? 'text-green-500' :
+                        identityVerification.ai_face_match_score >= 0.7 ? 'text-yellow-500' : 'text-red-500'
+                      }`}>
+                        {identityVerification.ai_face_match_score >= 0.9 ? 'Excellent Match' :
+                         identityVerification.ai_face_match_score >= 0.7 ? 'Needs Review' : 'Low Match'}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="relative h-2 bg-muted rounded-full overflow-hidden">
+                    <div
+                      className={`absolute left-0 top-0 h-full rounded-full transition-all ${
+                        identityVerification.ai_face_match_score >= 0.9 ? 'bg-green-500' :
+                        identityVerification.ai_face_match_score >= 0.7 ? 'bg-yellow-500' : 'bg-red-500'
+                      }`}
+                      style={{ width: `${identityVerification.ai_face_match_score * 100}%` }}
+                    />
                   </div>
                 </div>
               )}

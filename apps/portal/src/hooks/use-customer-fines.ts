@@ -42,7 +42,7 @@ export const useCustomerFines = (customerId: string) => {
           liability,
           notes,
           created_at,
-          vehicles(id, reg, make, model)
+          vehicles!fines_vehicle_id_fkey(id, reg, make, model)
         `)
         .eq("tenant_id", tenant.id)
         .eq("customer_id", customerId)

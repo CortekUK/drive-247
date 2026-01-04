@@ -6,7 +6,7 @@ import {
   parseXMLValue,
   isAWSConfigured
 } from "../_shared/aws-config.ts";
-import { sendEmail } from "../_shared/resend-service.ts";
+import { sendEmail, getTenantAdminEmail } from "../_shared/resend-service.ts";
 import { renderEmail, EmailTemplateData } from "../_shared/email-template-service.ts";
 
 interface NotifyRequest {
@@ -234,16 +234,17 @@ serve(async (req) => {
       adminEmail: null as any,
     };
 
+    // Create supabase client for all email operations
+    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+    const supabase = createClient(supabaseUrl, supabaseServiceKey);
+
     // Build customer email using template service if tenantId is provided
     let customerSubject = `Payment Issue - Action Required | DRIVE 247`;
     let customerHtml = getCustomerEmailHtml(data);
 
     if (data.tenantId) {
       try {
-        const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
-        const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-        const supabase = createClient(supabaseUrl, supabaseServiceKey);
-
         const templateData: EmailTemplateData = {
           customer_name: data.customerName,
           customer_email: data.customerEmail,
@@ -264,11 +265,13 @@ serve(async (req) => {
       }
     }
 
-    // Send customer email
+    // Send customer email (with tenant-specific from address)
     results.customerEmail = await sendEmail(
       data.customerEmail,
       customerSubject,
-      customerHtml
+      customerHtml,
+      supabase,
+      data.tenantId
     );
     console.log('Customer email result:', results.customerEmail);
 
@@ -276,19 +279,33 @@ serve(async (req) => {
     if (data.customerPhone) {
       results.customerSMS = await sendSMS(
         data.customerPhone,
-        `DRIVE 247: We couldn't process your payment for booking ${data.bookingRef}. Please check your email or contact support.`
+        `We couldn't process your payment for booking ${data.bookingRef}. Please check your email or contact support.`
       );
       console.log('Customer SMS result:', results.customerSMS);
     }
 
+    // Get tenant-specific admin email, fall back to env variable
+    let adminEmail: string | null = null;
+    if (data.tenantId) {
+      adminEmail = await getTenantAdminEmail(data.tenantId, supabase);
+      console.log('Using tenant admin email:', adminEmail);
+    }
+    if (!adminEmail) {
+      adminEmail = Deno.env.get('ADMIN_EMAIL') || null;
+      console.log('Falling back to env ADMIN_EMAIL:', adminEmail);
+    }
+
     // Send admin email
-    const adminEmail = EMAIL_CONFIG.adminEmail;
-    results.adminEmail = await sendEmail(
-      adminEmail,
-      `Payment Failed - ${data.bookingRef} - $${data.amount} | DRIVE 247`,
-      getAdminEmailHtml(data)
-    );
-    console.log('Admin email result:', results.adminEmail);
+    if (adminEmail) {
+      results.adminEmail = await sendEmail(
+        adminEmail,
+        `Payment Failed - ${data.bookingRef} - $${data.amount}`,
+        getAdminEmailHtml(data),
+        supabase,
+        data.tenantId
+      );
+      console.log('Admin email result:', results.adminEmail);
+    }
 
     return new Response(
       JSON.stringify({ success: true, results }),

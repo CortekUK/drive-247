@@ -107,9 +107,9 @@ export const usePaymentsData = ({
         .from("payments")
         .select(`
           *,
-          customers(id, name),
-          vehicles(id, reg, make, model),
-          rentals(id, rental_number)
+          customers!payments_customer_id_fkey(id, name),
+          vehicles!payments_vehicle_id_fkey(id, reg, make, model),
+          rentals!payments_rental_id_fkey(id, rental_number)
         `, { count: 'exact' })
         .eq("tenant_id", tenant.id);
 
@@ -214,9 +214,9 @@ export const exportPaymentsCSV = async (filters: PaymentFilters, tenantId?: stri
     .from("payments")
     .select(`
       payment_date,
-      customers(name),
-      vehicles(reg),
-      rentals(rental_number),
+      customers!payments_customer_id_fkey(name),
+      vehicles!payments_vehicle_id_fkey(reg),
+      rentals!payments_rental_id_fkey(rental_number),
       payment_type,
       method,
       amount,

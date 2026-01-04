@@ -165,6 +165,7 @@ export interface PromotionsHeroContent {
   primary_cta_href: string;
   secondary_cta_text: string;
   background_image?: string;
+  carousel_images?: string[];
 }
 
 export interface HowItWorksStep {
@@ -196,6 +197,7 @@ export interface FleetHeroContent {
   headline: string;
   subheading: string;
   background_image?: string;
+  carousel_images?: string[];
   primary_cta_text: string;
   secondary_cta_text: string;
 }
@@ -253,6 +255,7 @@ export interface HomeHeroContent {
   headline: string;
   subheading: string;
   background_image?: string;
+  carousel_images?: string[];
   phone_number: string;
   phone_cta_text: string;
   book_cta_text: string;

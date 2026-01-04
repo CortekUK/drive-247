@@ -48,7 +48,7 @@ function buildQRUrl(tenantSlug: string, qrToken: string): string {
 }
 
 /**
- * Check rate limit: max 3 verification sessions per customer per hour
+ * Check rate limit: max 10 verification sessions per customer per hour
  */
 async function checkRateLimit(
   supabase: any,
@@ -57,6 +57,7 @@ async function checkRateLimit(
   tenantId?: string
 ): Promise<{ allowed: boolean; error?: string }> {
   const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000).toISOString();
+  const MAX_ATTEMPTS_PER_HOUR = 10;
 
   let query = supabase
     .from('identity_verifications')
@@ -79,10 +80,12 @@ async function checkRateLimit(
     return { allowed: true };
   }
 
-  if (count !== null && count >= 3) {
+  console.log(`Rate limit check: ${count}/${MAX_ATTEMPTS_PER_HOUR} attempts for ${customerEmail || customerId}`);
+
+  if (count !== null && count >= MAX_ATTEMPTS_PER_HOUR) {
     return {
       allowed: false,
-      error: 'Too many verification attempts. Please try again in an hour.'
+      error: `Too many verification attempts (${count}/${MAX_ATTEMPTS_PER_HOUR}). Please try again in an hour.`
     };
   }
 
