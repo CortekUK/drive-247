@@ -1,4 +1,5 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.4";
 import {
   corsHeaders,
   signedAWSRequest,
@@ -20,6 +21,7 @@ interface NotifyRequest {
   pickupLocation: string;
   pickupAddress?: string;
   specialInstructions?: string;
+  tenantId?: string;
 }
 
 const getEmailHtml = (data: NotifyRequest) => {
@@ -197,6 +199,11 @@ serve(async (req) => {
     const data: NotifyRequest = await req.json();
     console.log('Sending pickup reminder for:', data.bookingRef);
 
+    // Create supabase client for tenant-specific email settings
+    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+    const supabase = createClient(supabaseUrl, supabaseServiceKey);
+
     const results = {
       customerEmail: null as any,
       customerSMS: null as any,
@@ -205,8 +212,10 @@ serve(async (req) => {
     // Send customer email
     results.customerEmail = await sendEmail(
       data.customerEmail,
-      `Pickup Tomorrow - ${data.vehicleName} | DRIVE 247`,
-      getEmailHtml(data)
+      `Pickup Tomorrow - ${data.vehicleName}`,
+      getEmailHtml(data),
+      supabase,
+      data.tenantId
     );
     console.log('Customer email result:', results.customerEmail);
 
