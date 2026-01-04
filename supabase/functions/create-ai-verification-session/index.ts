@@ -214,13 +214,14 @@ async function createSessionForBooking(
     const qrUrl = buildQRUrl(tenantSlug, qrToken);
     const expiresAt = new Date(Date.now() + 15 * 60 * 1000); // 15 minutes
 
-    // Create verification record without customer_id (will be linked later)
+    // Create verification record without customer_id (will be auto-linked by email when rental is created)
     const vendorData = `booking_${customerEmail}_${Date.now()}`;
     const verificationData: any = {
       tenant_id: tenantId,
       provider: 'ai',
       verification_provider: 'ai',
       external_user_id: vendorData,
+      customer_email: customerEmail.toLowerCase().trim(), // Store email for auto-linking
       status: 'init',
       review_status: 'init',
       qr_session_token: qrToken,
