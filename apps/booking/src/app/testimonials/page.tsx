@@ -82,7 +82,7 @@ const Testimonials = () => {
     <>
       <SEO
         title={content.seo?.title || "Customer Reviews"}
-        description={content.seo?.description || "Read verified customer reviews of our luxury car rentals."}
+        description={content.seo?.description || "Read verified customer reviews of our car rentals."}
         keywords={content.seo?.keywords || "reviews, customer testimonials, verified reviews"}
       />
       <div className="min-h-screen bg-background">
@@ -99,7 +99,7 @@ const Testimonials = () => {
               <div className="h-[1px] w-24 bg-gradient-to-r from-transparent via-accent to-transparent" />
             </div>
             <p className="text-lg md:text-xl text-muted-foreground max-w-3xl mx-auto leading-relaxed">
-              {content.hero?.subtitle || "What our customers say about their luxury vehicle rental experience."}
+              {content.hero?.subtitle || "What our customers say about their vehicle rental experience."}
             </p>
           </div>
 

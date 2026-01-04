@@ -670,7 +670,7 @@ export default function VehicleDetail() {
                               ${service.cost.toLocaleString()}
                             </TableCell>
                             <TableCell className="max-w-[200px]">
-                              <TruncatedCell content={service.notes || '-'} maxLength={30} />
+                              <TruncatedCell content={service.description || '-'} maxLength={30} />
                             </TableCell>
                           </TableRow>
                         ))}
