@@ -84,17 +84,17 @@ serve(async (req) => {
       // Determine reminder type based on days difference
       if (daysDiff === 2) {
         reminderType = 'Upcoming';
-        message = `Payment due in 2 days: £${typedCharge.remaining_amount} for ${typedCharge.vehicles.reg} (${typedCharge.category})`;
+        message = `Payment due in 2 days: $${typedCharge.remaining_amount} for ${typedCharge.vehicles.reg} (${typedCharge.category})`;
       } else if (daysDiff === 0) {
         reminderType = 'Due';
-        message = `Payment due today: £${typedCharge.remaining_amount} for ${typedCharge.vehicles.reg} (${typedCharge.category})`;
+        message = `Payment due today: $${typedCharge.remaining_amount} for ${typedCharge.vehicles.reg} (${typedCharge.category})`;
       } else if (daysDiff === -1) {
         reminderType = 'Overdue1';
-        message = `Payment overdue by 1 day: £${typedCharge.remaining_amount} for ${typedCharge.vehicles.reg} (${typedCharge.category})`;
+        message = `Payment overdue by 1 day: $${typedCharge.remaining_amount} for ${typedCharge.vehicles.reg} (${typedCharge.category})`;
       } else if (daysDiff <= -7 && daysDiff >= -28 && daysDiff % 7 === 0) {
         reminderType = 'OverdueN';
         const weeksOverdue = Math.abs(daysDiff) / 7;
-        message = `Payment overdue by ${weeksOverdue} week${weeksOverdue > 1 ? 's' : ''}: £${typedCharge.remaining_amount} for ${typedCharge.vehicles.reg} (${typedCharge.category})`;
+        message = `Payment overdue by ${weeksOverdue} week${weeksOverdue > 1 ? 's' : ''}: $${typedCharge.remaining_amount} for ${typedCharge.vehicles.reg} (${typedCharge.category})`;
       }
 
       if (!reminderType) {

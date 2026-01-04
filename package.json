@@ -19,6 +19,8 @@
     "update-cms": "node scripts/update-cms-content.js"
   },
   "devDependencies": {
+    "pg": "^8.16.3",
+    "supabase": "^2.70.5",
     "turbo": "^2.6.3"
   },
   "dependencies": {

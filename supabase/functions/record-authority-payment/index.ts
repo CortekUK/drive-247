@@ -151,7 +151,7 @@ serve(async (req) => {
         success: true,
         authorityPaymentId: authorityPayment.id,
         pnlEntryId: pnlEntry?.id,
-        message: `Authority payment of £${amount} recorded for fine ${fineId}`
+        message: `Authority payment of $${amount} recorded for fine ${fineId}`
       }),
       { 
         status: 201, 

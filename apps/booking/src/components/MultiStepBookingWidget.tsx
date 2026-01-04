@@ -23,6 +23,7 @@ import LocationPicker from "./LocationPicker";
 import BookingCheckoutStep from "./BookingCheckoutStep";
 import InsuranceUploadDialog from "./insurance-upload-dialog";
 import AIScanProgress from "./ai-scan-progress";
+import AIVerificationQR from "./AIVerificationQR";
 import { stripePromise } from "@/config/stripe";
 import { usePageContent, defaultHomeContent, mergeWithDefaults } from "@/hooks/usePageContent";
 import { canCustomerBook } from "@/lib/tenantQueries";
@@ -102,6 +103,7 @@ const MultiStepBookingWidget = () => {
   });
   const searchDebounceTimer = useRef<NodeJS.Timeout>();
   const [expandedDescriptions, setExpandedDescriptions] = useState<Set<string>>(new Set());
+  const [vehicleImageIndex, setVehicleImageIndex] = useState<Record<string, number>>({});
   const [formData, setFormData] = useState({
     pickupLocation: "",
     dropoffLocation: "",
@@ -113,7 +115,7 @@ const MultiStepBookingWidget = () => {
     dropoffTime: "",
     specialRequests: "",
     vehicleId: "",
-    driverAge: "",
+    driverDOB: "",
     promoCode: "",
     customerName: "",
     customerEmail: "",
@@ -133,6 +135,14 @@ const MultiStepBookingWidget = () => {
   const [verificationSessionId, setVerificationSessionId] = useState<string | null>(null);
   const [verificationStatus, setVerificationStatus] = useState<'init' | 'pending' | 'verified' | 'rejected'>('init');
   const [isVerifying, setIsVerifying] = useState(false);
+
+  // AI verification state (when Veriff is disabled)
+  const [verificationMode, setVerificationMode] = useState<'veriff' | 'ai'>('veriff');
+  const [aiSessionData, setAiSessionData] = useState<{
+    sessionId: string;
+    qrUrl: string;
+    expiresAt: Date;
+  } | null>(null);
   const [locationCoords, setLocationCoords] = useState({
     pickupLat: null as number | null,
     pickupLon: null as number | null,
@@ -274,6 +284,19 @@ const MultiStepBookingWidget = () => {
     };
   }, [tenant?.id]);
 
+  // Determine verification mode based on tenant's integration_veriff setting
+  useEffect(() => {
+    if (tenant) {
+      // If integration_veriff is false (or explicitly not true), use AI verification
+      const useVeriff = tenant.integration_veriff === true;
+      const newMode = useVeriff ? 'veriff' : 'ai';
+      setVerificationMode(newMode);
+      console.log(`[Verification] 🔐 Mode set to: ${newMode.toUpperCase()}`);
+      console.log(`[Verification] integration_veriff value: ${tenant.integration_veriff} (type: ${typeof tenant.integration_veriff})`);
+      console.log(`[Verification] Tenant ID: ${tenant.id}, Slug: ${tenant.slug}`);
+    }
+  }, [tenant]);
+
   // Note: Verification no longer resets when customer details change
   // Users can freely edit their details after verification
   // The verification session ID remains valid
@@ -317,7 +340,7 @@ const MultiStepBookingWidget = () => {
       sessionStorage.removeItem('prefilledService');
       sessionStorage.removeItem('prefilledRequirements');
     }
-  }, []);
+  }, [tenant?.id]);
 
   // Restore form data from sessionStorage on mount (preserves data when navigating away)
   useEffect(() => {
@@ -389,7 +412,14 @@ const MultiStepBookingWidget = () => {
   }, [formData.customerName, formData.customerEmail, formData.vehicleId, showConfirmation]);
 
   const loadData = async () => {
+    // Wait for tenant to be loaded before querying
+    if (!tenant?.id) {
+      console.log('[loadData] Waiting for tenant to load...');
+      return;
+    }
+
     // Build query for vehicles with tenant filtering
+    // Status can be "Available" or "available" depending on how it was saved
     let vehiclesQuery = supabase
       .from("vehicles")
       .select(`
@@ -398,33 +428,26 @@ const MultiStepBookingWidget = () => {
           photo_url
         )
       `)
-      .ilike("status", "Available")
+      .eq("tenant_id", tenant.id)
+      .or("status.ilike.Available,status.ilike.available")
       .order("reg");
-
-    if (tenant?.id) {
-      vehiclesQuery = vehiclesQuery.eq("tenant_id", tenant.id);
-    }
 
     const { data: vehiclesData } = await vehiclesQuery;
 
     // Build query for pricing extras with tenant filtering
     // Note: pricing_extras may not be in generated Supabase types but exists in DB
-    let extrasQuery = (supabase as any).from("pricing_extras").select("*");
-
-    if (tenant?.id) {
-      extrasQuery = extrasQuery.eq("tenant_id", tenant.id);
-    }
+    const extrasQuery = (supabase as any)
+      .from("pricing_extras")
+      .select("*")
+      .eq("tenant_id", tenant.id);
 
     const { data: extrasData } = await extrasQuery;
 
     // Build query for blocked dates with tenant filtering
-    let blockedDatesQuery = supabase
+    const blockedDatesQuery = supabase
       .from("blocked_dates")
-      .select("id, start_date, end_date, vehicle_id, reason");
-
-    if (tenant?.id) {
-      blockedDatesQuery = blockedDatesQuery.eq("tenant_id", tenant.id);
-    }
+      .select("id, start_date, end_date, vehicle_id, reason")
+      .eq("tenant_id", tenant.id);
 
     const { data: blockedDatesData } = await blockedDatesQuery;
 
@@ -452,6 +475,7 @@ const MultiStepBookingWidget = () => {
     if (blockedDatesData) {
       // Store all blocked dates (global + vehicle-specific)
       setAllBlockedDates(blockedDatesData);
+      console.log('[BlockedDates] Loaded all blocked dates:', blockedDatesData.map(b => ({ id: b.id, vehicle_id: b.vehicle_id, start: b.start_date, end: b.end_date })));
 
       // Filter only global blocked dates (vehicle_id is null) for Step 1 calendar
       const globalBlockedDates = blockedDatesData.filter(range => range.vehicle_id === null);
@@ -584,12 +608,14 @@ const MultiStepBookingWidget = () => {
   const handleClearVerification = () => {
     setVerificationSessionId(null);
     setVerificationStatus('init');
+    setAiSessionData(null); // Clear AI session data too
     setFormData(prev => ({ ...prev, verificationSessionId: "", licenseNumber: "" }));
     localStorage.removeItem('verificationSessionId');
     localStorage.removeItem('verificationToken');
     localStorage.removeItem('verificationStatus');
     localStorage.removeItem('verifiedCustomerName');
     localStorage.removeItem('verifiedLicenseNumber');
+    localStorage.removeItem('verificationMode'); // Clear mode too
     toast.info("Verification cleared. You can verify again.");
   };
 
@@ -795,6 +821,112 @@ const MultiStepBookingWidget = () => {
     }
   };
 
+  // Handle AI verification start (when Veriff is disabled)
+  const handleStartAIVerification = async () => {
+    // Validate customer details first
+    if (!formData.customerName || !formData.customerEmail || !formData.customerPhone) {
+      toast.error("Please fill in your name, email, and phone number first");
+      return;
+    }
+
+    if (!tenant) {
+      toast.error("Tenant not loaded. Please refresh the page.");
+      return;
+    }
+
+    setIsVerifying(true);
+
+    try {
+      console.log('🔐 Starting AI verification...');
+
+      const { data, error } = await supabase.functions.invoke('create-ai-verification-session', {
+        body: {
+          customerDetails: {
+            name: formData.customerName,
+            email: formData.customerEmail,
+            phone: formData.customerPhone
+          },
+          tenantId: tenant.id,
+          tenantSlug: tenant.slug
+        }
+      });
+
+      if (error || !data?.ok) {
+        throw new Error(data?.error || error?.message || 'Failed to create AI verification session');
+      }
+
+      console.log('✅ AI verification session created:', data.sessionId);
+
+      // Store session data
+      setVerificationSessionId(data.sessionId);
+      setVerificationStatus('pending');
+      setAiSessionData({
+        sessionId: data.sessionId,
+        qrUrl: data.qrUrl,
+        expiresAt: new Date(data.expiresAt)
+      });
+      setFormData(prev => ({ ...prev, verificationSessionId: data.sessionId }));
+
+      // Persist to localStorage
+      localStorage.setItem('verificationSessionId', data.sessionId);
+      localStorage.setItem('verificationStatus', 'pending');
+      localStorage.setItem('verificationMode', 'ai');
+
+      toast.success("Scan the QR code with your phone to verify your identity.");
+
+      // Track analytics
+      if (typeof window !== 'undefined' && (window as any).gtag) {
+        (window as any).gtag('event', 'ai_verification_started', {
+          email: formData.customerEmail,
+        });
+      }
+    } catch (error: any) {
+      console.error("AI verification error:", error);
+      toast.error(error.message || "Failed to start verification. Please try again.");
+    } finally {
+      setIsVerifying(false);
+    }
+  };
+
+  // Handle AI verification completion
+  const handleAIVerificationComplete = (data: any) => {
+    console.log('✅ AI verification completed:', data);
+    setVerificationStatus('verified');
+    localStorage.setItem('verificationStatus', 'verified');
+
+    // Populate form with verified data
+    if (data.first_name || data.last_name) {
+      populateFormWithVerifiedData(data);
+    }
+
+    // Track analytics
+    if (typeof window !== 'undefined' && (window as any).gtag) {
+      (window as any).gtag('event', 'ai_verification_completed', {
+        email: formData.customerEmail,
+        result: 'verified',
+      });
+    }
+  };
+
+  // Handle AI verification QR expiry
+  const handleAIVerificationExpired = () => {
+    console.log('⏰ AI verification session expired');
+    setAiSessionData(null);
+    setVerificationStatus('init');
+    localStorage.removeItem('verificationSessionId');
+    localStorage.removeItem('verificationStatus');
+    toast.info('Verification session expired. Please try again.');
+  };
+
+  // Unified verification start handler (routes to Veriff or AI based on mode)
+  const handleUnifiedVerificationStart = () => {
+    if (verificationMode === 'veriff') {
+      handleStartVerification();
+    } else {
+      handleStartAIVerification();
+    }
+  };
+
   const calculatePriceBreakdown = () => {
     const selectedVehicle = vehicles.find(v => v.id === formData.vehicleId);
     if (!selectedVehicle) return null;
@@ -876,6 +1008,13 @@ const MultiStepBookingWidget = () => {
 
       if (existingCustomer) {
         customerId = existingCustomer.id;
+        // Update existing customer with DOB if provided
+        if (formData.driverDOB) {
+          await supabase
+            .from("customers")
+            .update({ date_of_birth: formData.driverDOB })
+            .eq("id", existingCustomer.id);
+        }
       } else {
         // Create new customer with sanitized data
         const customerData: any = {
@@ -883,7 +1022,8 @@ const MultiStepBookingWidget = () => {
           email: sanitizeEmail(formData.customerEmail),
           phone: sanitizePhone(formData.customerPhone),
           customer_type: formData.customerType || "Individual",
-          status: "Active"
+          status: "Active",
+          date_of_birth: formData.driverDOB || null
         };
 
         if (tenant?.id) {
@@ -956,7 +1096,7 @@ const MultiStepBookingWidget = () => {
       dropoffTime: "",
       specialRequests: "",
       vehicleId: "",
-      driverAge: "",
+      driverDOB: "",
       promoCode: "",
       customerName: "",
       customerEmail: "",
@@ -1009,7 +1149,6 @@ const MultiStepBookingWidget = () => {
           const distanceInMiles = Math.round(data.routes[0].distance / 1609.34 * 10) / 10;
           const durationInMinutes = Math.round(data.routes[0].duration / 60);
           setCalculatedDistance(distanceInMiles);
-          toast.success(`Driving distance: ${distanceInMiles} miles (approx. ${durationInMinutes} min)`);
         } else {
           throw new Error("No route found");
         }
@@ -1077,6 +1216,25 @@ const MultiStepBookingWidget = () => {
       }
       return newSet;
     });
+  };
+
+  // Image carousel navigation
+  const getVehicleImageIndex = (vehicleId: string) => vehicleImageIndex[vehicleId] || 0;
+
+  const nextVehicleImage = (e: React.MouseEvent, vehicleId: string, totalImages: number) => {
+    e.stopPropagation();
+    setVehicleImageIndex(prev => ({
+      ...prev,
+      [vehicleId]: ((prev[vehicleId] || 0) + 1) % totalImages
+    }));
+  };
+
+  const prevVehicleImage = (e: React.MouseEvent, vehicleId: string, totalImages: number) => {
+    e.stopPropagation();
+    setVehicleImageIndex(prev => ({
+      ...prev,
+      [vehicleId]: ((prev[vehicleId] || 0) - 1 + totalImages) % totalImages
+    }));
   };
 
   const getDisplayDescription = (vehicle: Vehicle) => {
@@ -1228,20 +1386,26 @@ const MultiStepBookingWidget = () => {
       return { price: primaryPrice, label: primaryLabel, secondaryPrices: [] };
     }
   };
+  // Helper to parse YYYY-MM-DD to local date at midnight (avoids UTC timezone issues)
+  const parseLocalDate = (dateStr: string): Date => {
+    const [year, month, day] = dateStr.split('-').map(Number);
+    return new Date(year, month - 1, day);
+  };
+
   const isVehicleBlockedForPeriod = (vehicleId: string): { blocked: boolean; blockedRange?: { start: string; end: string } } => {
     if (!formData.pickupDate || !formData.dropoffDate) {
       return { blocked: false };
     }
 
-    const pickupDate = new Date(formData.pickupDate);
-    const dropoffDate = new Date(formData.dropoffDate);
+    const pickupDate = parseLocalDate(formData.pickupDate);
+    const dropoffDate = parseLocalDate(formData.dropoffDate);
 
     // Find any blocked dates for this specific vehicle that overlap with the rental period
     const vehicleBlockedDates = allBlockedDates.filter(block => block.vehicle_id === vehicleId);
 
     for (const block of vehicleBlockedDates) {
-      const blockStart = new Date(block.start_date);
-      const blockEnd = new Date(block.end_date);
+      const blockStart = parseLocalDate(block.start_date);
+      const blockEnd = parseLocalDate(block.end_date);
 
       // Check if there's any overlap between rental period and blocked period
       const hasOverlap = pickupDate <= blockEnd && dropoffDate >= blockStart;
@@ -1310,6 +1474,32 @@ const MultiStepBookingWidget = () => {
       const price = v.monthly_rent || v.daily_rent || 0;
       return price >= filters.priceRange[0] && price <= filters.priceRange[1];
     });
+
+    // Filter out vehicles with blocked dates for the selected rental period
+    if (formData.pickupDate && formData.dropoffDate) {
+      const pickupDate = parseLocalDate(formData.pickupDate);
+      const dropoffDate = parseLocalDate(formData.dropoffDate);
+
+      filtered = filtered.filter(vehicle => {
+        // Check for vehicle-specific blocked dates
+        const vehicleBlockedDates = allBlockedDates.filter(block => block.vehicle_id === vehicle.id);
+
+        for (const block of vehicleBlockedDates) {
+          const blockStart = parseLocalDate(block.start_date);
+          const blockEnd = parseLocalDate(block.end_date);
+
+          // Check if there's any overlap between rental period and blocked period
+          const hasOverlap = pickupDate <= blockEnd && dropoffDate >= blockStart;
+
+          if (hasOverlap) {
+            console.log(`[BlockedDates] Vehicle ${vehicle.reg} blocked: rental ${formData.pickupDate}-${formData.dropoffDate} overlaps with block ${block.start_date}-${block.end_date}`);
+            return false; // Exclude this vehicle
+          }
+        }
+
+        return true; // Include this vehicle
+      });
+    }
 
     // Sort
     switch (sortBy) {
@@ -1460,6 +1650,18 @@ const MultiStepBookingWidget = () => {
       });
     }
   };
+
+  // Calculate age from date of birth
+  const calculateAge = (dob: Date): number => {
+    const today = new Date();
+    let age = today.getFullYear() - dob.getFullYear();
+    const monthDiff = today.getMonth() - dob.getMonth();
+    if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < dob.getDate())) {
+      age--;
+    }
+    return age;
+  };
+
   const validateStep1 = () => {
     const newErrors: {
       [key: string]: string;
@@ -1537,11 +1739,20 @@ const MultiStepBookingWidget = () => {
       }
     }
 
-    // Validate driver age - now required
-    if (!formData.driverAge || formData.driverAge.trim() === "") {
-      newErrors.driverAge = "Please select driver age range.";
-    } else if (!["under_25", "25_70", "over_70"].includes(formData.driverAge)) {
-      newErrors.driverAge = "Please select a valid driver age range.";
+    // Validate driver date of birth - must be 18+
+    if (!formData.driverDOB || formData.driverDOB.trim() === "") {
+      newErrors.driverDOB = "Date of birth is required.";
+    } else {
+      const dob = new Date(formData.driverDOB);
+      if (isNaN(dob.getTime())) {
+        newErrors.driverDOB = "Please enter a valid date of birth.";
+      } else {
+        const age = calculateAge(dob);
+        const minAge = tenant?.minimum_rental_age || 18;
+        if (age < minAge) {
+          newErrors.driverDOB = `You must be at least ${minAge} years old to rent a vehicle.`;
+        }
+      }
     }
 
     setErrors(newErrors);
@@ -1650,11 +1861,20 @@ const MultiStepBookingWidget = () => {
         }
         break;
 
-      case 'driverAge':
+      case 'driverDOB':
         if (!value || value.trim() === "") {
-          newErrors.driverAge = "Please select driver age range.";
-        } else if (!["under_25", "25_70", "over_70"].includes(value)) {
-          newErrors.driverAge = "Please select a valid driver age range.";
+          newErrors.driverDOB = "Date of birth is required.";
+        } else {
+          const dob = new Date(value);
+          if (isNaN(dob.getTime())) {
+            newErrors.driverDOB = "Please enter a valid date of birth.";
+          } else {
+            const age = calculateAge(dob);
+            const minAge = tenant?.minimum_rental_age || 18;
+            if (age < minAge) {
+              newErrors.driverDOB = `You must be at least ${minAge} years old to rent a vehicle.`;
+            }
+          }
         }
         break;
 
@@ -1670,6 +1890,10 @@ const MultiStepBookingWidget = () => {
 
   const handleStep1Continue = () => {
     if (validateStep1()) {
+      // Calculate age from DOB for young driver check
+      const driverAge = formData.driverDOB ? calculateAge(new Date(formData.driverDOB)) : 0;
+      const isYoungDriver = driverAge < 25;
+
       // Store in localStorage
       const bookingContext = {
         pickupLocation: formData.pickupLocation,
@@ -1678,9 +1902,10 @@ const MultiStepBookingWidget = () => {
         pickupTime: formData.pickupTime,
         dropoffDate: formData.dropoffDate,
         dropoffTime: formData.dropoffTime,
-        driverAge: formData.driverAge,
+        driverDOB: formData.driverDOB,
+        driverAge: driverAge,
         promoCode: formData.promoCode,
-        young_driver: formData.driverAge === 'under_25'
+        young_driver: isYoungDriver
       };
       localStorage.setItem('booking_context', JSON.stringify(bookingContext));
 
@@ -1697,9 +1922,9 @@ const MultiStepBookingWidget = () => {
           pickup_location: formData.pickupLocation,
           return_location: formData.dropoffLocation,
           rental_days: duration?.days || 0,
-          driver_age: formData.driverAge,
+          driver_age: driverAge,
           has_promo: !!formData.promoCode,
-          young_driver: formData.driverAge === 'under_25'
+          young_driver: isYoungDriver
         });
       }
       setCurrentStep(2);
@@ -2085,41 +2310,75 @@ const MultiStepBookingWidget = () => {
               </div>
             </div>
 
-            {/* Row 3: Driver Age & Promo Code */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
-              <div className="space-y-2">
-                <Label htmlFor="driverAge" className="font-medium">Driver's Age *</Label>
-                <Select value={formData.driverAge} onValueChange={value => {
-                  setFormData({
-                    ...formData,
-                    driverAge: value
-                  });
-                  // Instant validation
-                  validateField('driverAge', value);
-                }}>
-                  <SelectTrigger id="driverAge" className="h-12 focus-visible:ring-primary">
-                    <SelectValue placeholder="Select age range" />
+            {/* Row 3: Driver DOB */}
+            <div className="space-y-2">
+              <Label className="font-medium">Date of Birth *</Label>
+              <div className="grid grid-cols-3 gap-2 max-w-md">
+                {/* Month Select */}
+                <Select
+                  value={formData.driverDOB ? (new Date(formData.driverDOB).getMonth() + 1).toString().padStart(2, '0') : ""}
+                  onValueChange={(month) => {
+                    const currentDate = formData.driverDOB ? new Date(formData.driverDOB) : new Date(2000, 0, 1);
+                    const newDate = new Date(currentDate.getFullYear(), parseInt(month) - 1, Math.min(currentDate.getDate(), new Date(currentDate.getFullYear(), parseInt(month), 0).getDate()));
+                    const dateStr = format(newDate, "yyyy-MM-dd");
+                    setFormData({ ...formData, driverDOB: dateStr });
+                    validateField('driverDOB', dateStr);
+                  }}
+                >
+                  <SelectTrigger className={cn("h-12", errors.driverDOB && "border-destructive")}>
+                    <SelectValue placeholder="Month" />
                   </SelectTrigger>
-                  <SelectContent position="popper" sideOffset={4}>
-                    <SelectItem value="under_25">Under 25</SelectItem>
-                    <SelectItem value="25_70">25–70</SelectItem>
-                    <SelectItem value="over_70">70+</SelectItem>
+                  <SelectContent>
+                    {['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'].map((month, i) => (
+                      <SelectItem key={i} value={(i + 1).toString().padStart(2, '0')}>{month}</SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
-                {errors.driverAge && <p className="text-sm text-destructive">{errors.driverAge}</p>}
-                {formData.driverAge === 'under_25' && <p className="text-xs text-primary">Young Driver Fee will apply</p>}
+                {/* Day Select */}
+                <Select
+                  value={formData.driverDOB ? new Date(formData.driverDOB).getDate().toString() : ""}
+                  onValueChange={(day) => {
+                    const currentDate = formData.driverDOB ? new Date(formData.driverDOB) : new Date(2000, 0, 1);
+                    const newDate = new Date(currentDate.getFullYear(), currentDate.getMonth(), parseInt(day));
+                    const dateStr = format(newDate, "yyyy-MM-dd");
+                    setFormData({ ...formData, driverDOB: dateStr });
+                    validateField('driverDOB', dateStr);
+                  }}
+                >
+                  <SelectTrigger className={cn("h-12", errors.driverDOB && "border-destructive")}>
+                    <SelectValue placeholder="Day" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {Array.from({ length: 31 }, (_, i) => (
+                      <SelectItem key={i + 1} value={(i + 1).toString()}>{i + 1}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {/* Year Select */}
+                <Select
+                  value={formData.driverDOB ? new Date(formData.driverDOB).getFullYear().toString() : ""}
+                  onValueChange={(year) => {
+                    const currentDate = formData.driverDOB ? new Date(formData.driverDOB) : new Date(2000, 0, 1);
+                    const newDate = new Date(parseInt(year), currentDate.getMonth(), Math.min(currentDate.getDate(), new Date(parseInt(year), currentDate.getMonth() + 1, 0).getDate()));
+                    const dateStr = format(newDate, "yyyy-MM-dd");
+                    setFormData({ ...formData, driverDOB: dateStr });
+                    validateField('driverDOB', dateStr);
+                  }}
+                >
+                  <SelectTrigger className={cn("h-12", errors.driverDOB && "border-destructive")}>
+                    <SelectValue placeholder="Year" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {Array.from({ length: 100 }, (_, i) => new Date().getFullYear() - (tenant?.minimum_rental_age || 18) - i).map((year) => (
+                      <SelectItem key={year} value={year.toString()}>{year}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="promoCode" className="font-medium">Promo Code</Label>
-                <Input id="promoCode" value={formData.promoCode} onChange={e => {
-                  const value = e.target.value.toUpperCase();
-                  setFormData({
-                    ...formData,
-                    promoCode: value
-                  });
-                }} placeholder="Enter promo code" className="h-12 focus-visible:ring-primary" maxLength={20} />
-              </div>
+              {formData.driverDOB && (
+                <p className="text-sm text-muted-foreground">Age: <span className={cn("font-medium", errors.driverDOB ? "text-destructive" : "text-foreground")}>{calculateAge(new Date(formData.driverDOB))} years old</span></p>
+              )}
+              {errors.driverDOB && <p className="text-sm text-destructive">{errors.driverDOB}</p>}
             </div>
           </div>
 
@@ -2335,12 +2594,14 @@ const MultiStepBookingWidget = () => {
                     const blockStatus = isVehicleBlockedForPeriod(vehicle.id);
                     const isBlocked = blockStatus.blocked;
 
+                    // Hide blocked/unavailable vehicles completely
+                    if (isBlocked) return null;
+
                     if (viewMode === "list") {
                       // List View Card
                       return <Card key={vehicle.id} className={cn("group transition-all duration-300 overflow-hidden border-2 relative",
-                        isBlocked ? "opacity-60 cursor-not-allowed border-destructive/30" : "cursor-pointer hover:shadow-2xl",
-                        !isBlocked && isSelected ? "border-primary bg-primary/5 shadow-glow" : "border-border/30 hover:border-primary/40")} onClick={() => {
-                          if (isBlocked) return; // Prevent selection if blocked
+                        "cursor-pointer hover:shadow-2xl",
+                        isSelected ? "border-primary bg-primary/5 shadow-glow" : "border-border/30 hover:border-primary/40")} onClick={() => {
                           setFormData({
                             ...formData,
                             vehicleId: vehicle.id
@@ -2358,45 +2619,65 @@ const MultiStepBookingWidget = () => {
                           }
                         }}>
                         <div className="flex flex-col sm:flex-row">
-                          {/* Image */}
+                          {/* Image with Carousel */}
                           <div className="relative w-full sm:w-64 aspect-video sm:aspect-square overflow-hidden bg-gradient-to-br from-muted/30 to-muted/5">
-                            {vehicle.vehicle_photos?.[0]?.photo_url ? (
-                              <img
-                                src={vehicle.vehicle_photos[0].photo_url}
-                                alt={vehicleName}
-                                className="w-full h-full object-cover"
-                                loading="lazy"
-                                onError={(e) => {
-                                  e.currentTarget.style.display = 'none';
-                                  const fallback = e.currentTarget.nextElementSibling as HTMLElement;
-                                  if (fallback) fallback.style.display = 'flex';
-                                }}
-                              />
+                            {vehicle.vehicle_photos && vehicle.vehicle_photos.length > 0 ? (
+                              <>
+                                <img
+                                  src={vehicle.vehicle_photos[getVehicleImageIndex(vehicle.id)]?.photo_url || vehicle.vehicle_photos[0].photo_url}
+                                  alt={vehicleName}
+                                  className="w-full h-full object-cover"
+                                  loading="lazy"
+                                  onError={(e) => {
+                                    e.currentTarget.style.display = 'none';
+                                  }}
+                                />
+                                {/* Carousel Navigation - only show if more than 1 image */}
+                                {vehicle.vehicle_photos.length > 1 && (
+                                  <>
+                                    <button
+                                      onClick={(e) => prevVehicleImage(e, vehicle.id, vehicle.vehicle_photos!.length)}
+                                      className="absolute left-2 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full bg-black/50 hover:bg-black/70 flex items-center justify-center text-white transition-colors z-10"
+                                    >
+                                      <ChevronLeft className="w-5 h-5" />
+                                    </button>
+                                    <button
+                                      onClick={(e) => nextVehicleImage(e, vehicle.id, vehicle.vehicle_photos!.length)}
+                                      className="absolute right-2 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full bg-black/50 hover:bg-black/70 flex items-center justify-center text-white transition-colors z-10"
+                                    >
+                                      <ChevronRight className="w-5 h-5" />
+                                    </button>
+                                    {/* Dots indicator */}
+                                    <div className="absolute bottom-2 left-1/2 -translate-x-1/2 flex gap-1.5 z-10">
+                                      {vehicle.vehicle_photos.map((_, idx) => (
+                                        <div
+                                          key={idx}
+                                          className={cn(
+                                            "w-2 h-2 rounded-full transition-colors",
+                                            idx === getVehicleImageIndex(vehicle.id) ? "bg-white" : "bg-white/50"
+                                          )}
+                                        />
+                                      ))}
+                                    </div>
+                                  </>
+                                )}
+                              </>
                             ) : null}
-                            <div className={`${vehicle.vehicle_photos?.[0]?.photo_url ? 'hidden' : 'flex'} items-center justify-center h-full w-full absolute inset-0`}>
+                            <div className={`${vehicle.vehicle_photos && vehicle.vehicle_photos.length > 0 ? 'hidden' : 'flex'} items-center justify-center h-full w-full absolute inset-0`}>
                               <Car className="w-16 h-16 opacity-20 text-muted-foreground" />
                             </div>
 
                             {/* Registration Chip - hide when selected, show tick instead */}
                             {!isSelected ? (
-                              <div className="absolute top-3 right-3 px-3 py-1 bg-primary text-primary-foreground text-xs font-semibold rounded-full">
+                              <div className="absolute top-3 right-3 px-3 py-1 bg-primary text-primary-foreground text-xs font-semibold rounded-full z-20">
                                 {vehicle.reg}
                               </div>
                             ) : (
-                              <div className="absolute top-3 right-3 w-8 h-8 bg-primary rounded-full flex items-center justify-center shadow-lg">
+                              <div className="absolute top-3 right-3 w-8 h-8 bg-primary rounded-full flex items-center justify-center shadow-lg z-20">
                                 <Check className="w-5 h-5 text-black" />
                               </div>
                             )}
 
-                            {/* Blocked Badge */}
-                            {isBlocked && blockStatus.blockedRange && (
-                              <div className="absolute bottom-3 left-3 right-3 px-3 py-2 bg-destructive/90 text-white text-xs font-medium rounded-lg backdrop-blur">
-                                <p className="font-semibold mb-1">Unavailable</p>
-                                <p className="text-[10px] opacity-90">
-                                  {format(new Date(blockStatus.blockedRange.start), "MMM dd")} - {format(new Date(blockStatus.blockedRange.end), "MMM dd")}
-                                </p>
-                              </div>
-                            )}
                           </div>
 
                           {/* Content */}
@@ -2458,12 +2739,9 @@ const MultiStepBookingWidget = () => {
 
                                   <Button
                                     className={cn("w-40 h-11 font-medium transition-colors",
-                                      isBlocked ? "bg-muted text-muted-foreground cursor-not-allowed" :
-                                        isSelected ? "bg-primary text-primary-foreground hover:bg-primary/90" :
-                                          "bg-background border-2 border-primary text-primary hover:bg-primary hover:text-primary-foreground")}
-                                    disabled={isBlocked}
+                                      isSelected ? "bg-primary text-primary-foreground hover:bg-primary/90" :
+                                        "bg-background border-2 border-primary text-primary hover:bg-primary hover:text-primary-foreground")}
                                     onClick={e => {
-                                      if (isBlocked) return;
                                       e.stopPropagation();
                                       // Toggle: if already selected, deselect; otherwise select
                                       setFormData({
@@ -2477,7 +2755,7 @@ const MultiStepBookingWidget = () => {
                                         });
                                       }
                                     }}>
-                                    {isBlocked ? "Unavailable" : isSelected ? "Selected" : "Select"}
+                                    {isSelected ? "Selected" : "Select"}
                                   </Button>
                                 </div>
                               );
@@ -2488,7 +2766,7 @@ const MultiStepBookingWidget = () => {
                     }
 
                     // Grid View Card (existing design)
-                    return <Card key={vehicle.id} className={cn("group transition-all duration-300 overflow-hidden border-2 relative",
+                    return <Card key={vehicle.id} className={cn("group transition-all duration-300 overflow-hidden border-2 relative flex flex-col h-full",
                       isBlocked ? "opacity-60 cursor-not-allowed border-destructive/30" : "cursor-pointer hover:shadow-2xl hover:scale-[1.02]",
                       !isBlocked && isSelected ? "border-primary bg-primary/5 shadow-glow" : "border-border/30 hover:border-primary/40",
                       !isBlocked && isRollsRoyce && "shadow-glow")} onClick={() => {
@@ -2521,101 +2799,123 @@ const MultiStepBookingWidget = () => {
                         <Check className="w-5 h-5 text-black" />
                       </div>}
 
-                      {/* Image Block */}
+                      {/* Image Block with Carousel */}
                       <div className={cn("relative aspect-video overflow-hidden bg-gradient-to-br", isRollsRoyce ? "from-primary/10 to-primary/20" : "from-muted/30 to-muted/5")}>
-                        {vehicle.vehicle_photos?.[0]?.photo_url ? (
-                          <img
-                            src={vehicle.vehicle_photos[0].photo_url}
-                            alt={vehicleName}
-                            className="w-full h-full object-cover"
-                            loading="lazy"
-                            onError={(e) => {
-                              e.currentTarget.style.display = 'none';
-                              const fallback = e.currentTarget.nextElementSibling as HTMLElement;
-                              if (fallback) fallback.style.display = 'flex';
-                            }}
-                          />
+                        {vehicle.vehicle_photos && vehicle.vehicle_photos.length > 0 ? (
+                          <>
+                            <img
+                              src={vehicle.vehicle_photos[getVehicleImageIndex(vehicle.id)]?.photo_url || vehicle.vehicle_photos[0].photo_url}
+                              alt={vehicleName}
+                              className="w-full h-full object-cover"
+                              loading="lazy"
+                              onError={(e) => {
+                                e.currentTarget.style.display = 'none';
+                              }}
+                            />
+                            {/* Carousel Navigation - only show if more than 1 image */}
+                            {vehicle.vehicle_photos.length > 1 && (
+                              <>
+                                <button
+                                  onClick={(e) => prevVehicleImage(e, vehicle.id, vehicle.vehicle_photos!.length)}
+                                  className="absolute left-2 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full bg-black/50 hover:bg-black/70 flex items-center justify-center text-white transition-colors z-10"
+                                >
+                                  <ChevronLeft className="w-5 h-5" />
+                                </button>
+                                <button
+                                  onClick={(e) => nextVehicleImage(e, vehicle.id, vehicle.vehicle_photos!.length)}
+                                  className="absolute right-2 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full bg-black/50 hover:bg-black/70 flex items-center justify-center text-white transition-colors z-10"
+                                >
+                                  <ChevronRight className="w-5 h-5" />
+                                </button>
+                                {/* Dots indicator */}
+                                <div className="absolute bottom-2 left-1/2 -translate-x-1/2 flex gap-1.5 z-10">
+                                  {vehicle.vehicle_photos.map((_, idx) => (
+                                    <div
+                                      key={idx}
+                                      className={cn(
+                                        "w-2 h-2 rounded-full transition-colors",
+                                        idx === getVehicleImageIndex(vehicle.id) ? "bg-white" : "bg-white/50"
+                                      )}
+                                    />
+                                  ))}
+                                </div>
+                              </>
+                            )}
+                          </>
                         ) : null}
-                        <div className={`${vehicle.vehicle_photos?.[0]?.photo_url ? 'hidden' : 'flex'} flex-col items-center justify-center h-full w-full absolute inset-0`}>
+                        <div className={`${vehicle.vehicle_photos && vehicle.vehicle_photos.length > 0 ? 'hidden' : 'flex'} flex-col items-center justify-center h-full w-full absolute inset-0`}>
                           <Car className={cn("w-16 h-16 mb-2 opacity-20", isRollsRoyce ? "text-primary" : "text-muted-foreground")} />
                         </div>
 
-                        {/* Blocked Badge */}
-                        {isBlocked && blockStatus.blockedRange && (
-                          <div className="absolute bottom-3 left-3 right-3 px-3 py-2 bg-destructive/90 text-white text-xs font-medium rounded-lg backdrop-blur">
-                            <p className="font-semibold mb-1">Unavailable</p>
-                            <p className="text-[10px] opacity-90">
-                              {format(new Date(blockStatus.blockedRange.start), "MMM dd")} - {format(new Date(blockStatus.blockedRange.end), "MMM dd")}
-                            </p>
-                          </div>
-                        )}
                       </div>
 
                       {/* Content */}
-                      <div className="p-6 space-y-4">
-                        {/* Title */}
-                        <div>
-                          <h4 className="font-display text-xl font-semibold text-foreground mb-1 flex items-center gap-2">
-                            {vehicleName}
-                            {isRollsRoyce && <Crown className="w-5 h-5 text-primary" />}
-                          </h4>
-                          {vehicle.colour && <p className="text-xs text-muted-foreground">{vehicle.colour}</p>}
-                        </div>
-
-                        {/* Description */}
-                        {vehicle.description && (
-                          <div className="space-y-1">
-                            <p className="text-sm text-muted-foreground leading-relaxed">
-                              {getDisplayDescription(vehicle)}
-                            </p>
-                            {vehicle.description.length > MAX_DESCRIPTION_LENGTH && (
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  toggleDescription(vehicle.id);
-                                }}
-                                className="text-xs text-primary hover:text-primary/80 font-medium transition-colors"
-                              >
-                                {expandedDescriptions.has(vehicle.id) ? 'Show less' : 'Show more'}
-                              </button>
-                            )}
+                      <div className="p-6 flex-1 flex flex-col">
+                        {/* Card info section with spacing */}
+                        <div className="space-y-4 mb-4">
+                          {/* Title */}
+                          <div>
+                            <h4 className="font-display text-xl font-semibold text-foreground mb-1 flex items-center gap-2">
+                              {vehicleName}
+                              {isRollsRoyce && <Crown className="w-5 h-5 text-primary" />}
+                            </h4>
+                            {vehicle.colour && <p className="text-xs text-muted-foreground">{vehicle.colour}</p>}
                           </div>
-                        )}
 
-                        {/* Spec Bar */}
-                        <div className="flex items-center gap-4 text-xs text-muted-foreground pb-3 border-b border-border/50">
-                          <span title="Registration">{vehicle.reg}</span>
-                        </div>
-
-                        {/* Price Section */}
-                        {(() => {
-                          const priceDisplay = getDynamicPriceDisplay(vehicle);
-                          return (
+                          {/* Description */}
+                          {vehicle.description && (
                             <div className="space-y-1">
-                              <div className="flex items-baseline justify-between">
-                                <span className="text-2xl font-bold text-primary">
-                                  ${priceDisplay.price}
-                                </span>
-                                <span className="text-sm text-muted-foreground">{priceDisplay.label}</span>
-                              </div>
-                              {priceDisplay.secondaryPrices.length > 0 && (
-                                <p className="text-xs text-muted-foreground">
-                                  {priceDisplay.secondaryPrices.join(' • ')}
-                                </p>
+                              <p className="text-sm text-muted-foreground leading-relaxed">
+                                {getDisplayDescription(vehicle)}
+                              </p>
+                              {vehicle.description.length > MAX_DESCRIPTION_LENGTH && (
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    toggleDescription(vehicle.id);
+                                  }}
+                                  className="text-xs text-primary hover:text-primary/80 font-medium transition-colors"
+                                >
+                                  {expandedDescriptions.has(vehicle.id) ? 'Show less' : 'Show more'}
+                                </button>
                               )}
                             </div>
-                          );
-                        })()}
+                          )}
 
-                        {/* CTA */}
+                          {/* Spec Bar */}
+                          <div className="flex items-center gap-4 text-xs text-muted-foreground pb-3 border-b border-border/50">
+                            <span title="Registration">{vehicle.reg}</span>
+                          </div>
+
+                          {/* Price Section */}
+                          {(() => {
+                            const priceDisplay = getDynamicPriceDisplay(vehicle);
+                            return (
+                              <div className="space-y-1">
+                                <div className="flex items-baseline justify-between">
+                                  <span className="text-2xl font-bold text-primary">
+                                    ${priceDisplay.price}
+                                  </span>
+                                  <span className="text-sm text-muted-foreground">{priceDisplay.label}</span>
+                                </div>
+                                {priceDisplay.secondaryPrices.length > 0 && (
+                                  <p className="text-xs text-muted-foreground">
+                                    {priceDisplay.secondaryPrices.join(' • ')}
+                                  </p>
+                                )}
+                              </div>
+                            );
+                          })()}
+                        </div>
+
+                        {/* CTA - pushed to bottom with mt-auto */}
                         <Button
-                          className={cn("w-full h-11 font-medium transition-colors",
+                          className={cn("w-full h-11 font-medium transition-colors mt-auto",
                             isBlocked ? "bg-muted text-muted-foreground cursor-not-allowed" :
                               isSelected ? "bg-primary text-primary-foreground hover:bg-primary/90" :
                                 "bg-background border-2 border-primary text-primary hover:bg-primary hover:text-primary-foreground")}
                           disabled={isBlocked}
                           onClick={e => {
-                            if (isBlocked) return;
                             e.stopPropagation();
                             // Toggle: if already selected, deselect; otherwise select
                             setFormData({
@@ -2629,7 +2929,7 @@ const MultiStepBookingWidget = () => {
                               });
                             }
                           }}>
-                          {isBlocked ? "Unavailable" : isSelected ? "Selected" : "Select"}
+                          {isSelected ? "Selected" : "Select"}
                         </Button>
                       </div>
                     </Card>;
@@ -3218,7 +3518,7 @@ const MultiStepBookingWidget = () => {
                         <strong>You must verify your identity to continue.</strong> Please fill in your details above, then click the button below to start the verification process.
                       </p>
                       <Button
-                        onClick={handleStartVerification}
+                        onClick={handleUnifiedVerificationStart}
                         disabled={isVerifying || !formData.customerName || !formData.customerEmail || !formData.customerPhone}
                         variant="outline"
                         className="border-accent text-accent hover:bg-accent hover:text-white w-full sm:w-auto text-sm"
@@ -3254,70 +3554,86 @@ const MultiStepBookingWidget = () => {
               )}
 
               {verificationStatus === 'pending' && (
-                <div className="bg-yellow-500/10 border border-yellow-500/20 rounded-lg p-3 sm:p-4">
-                  <div className="flex items-start gap-2 sm:gap-3">
-                    <Clock className="w-5 h-5 text-yellow-500 mt-0.5 flex-shrink-0" />
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium mb-2 text-yellow-600 dark:text-yellow-500">Verification Pending</p>
-                      <p className="text-xs sm:text-sm text-muted-foreground mb-2">
-                        Your identity verification is in progress. Please complete the verification in the popup window.
-                      </p>
-                      <p className="text-xs text-muted-foreground mb-3">
-                        Once verified, you can proceed with your booking. This may take a few moments.
-                      </p>
-                      <div className="flex flex-col sm:flex-row gap-2">
-                        <Button
-                          onClick={() => {
-                            // Since Veriff API authentication isn't working, trust the user's
-                            // confirmation that they completed verification in Veriff
-                            console.log('✅ User confirmed verification complete');
-                            setVerificationStatus('verified');
-                            localStorage.setItem('verificationStatus', 'verified');
-                            localStorage.setItem('verificationTimestamp', Date.now().toString());
-                            toast.success('Identity verified! You can now continue with your booking.');
-                          }}
-                          variant="outline"
-                          className="border-green-500 text-green-600 hover:bg-green-500 hover:text-white w-full sm:w-auto"
-                          size="sm"
-                        >
-                          <CheckCircle className="w-4 h-4 mr-2 flex-shrink-0" />
-                          <span>I've Completed Verification</span>
-                        </Button>
-                        <Button
-                          onClick={handleStartVerification}
-                          disabled={isVerifying}
-                          variant="outline"
-                          className="border-yellow-500 text-yellow-600 hover:bg-yellow-500 hover:text-white w-full sm:w-auto"
-                          size="sm"
-                        >
-                          {isVerifying ? (
-                            <>
-                              <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin mr-2" />
-                              <span>Starting...</span>
-                            </>
-                          ) : (
-                            <>
-                              <RefreshCw className="w-4 h-4 mr-2 flex-shrink-0" />
-                              <span>Reopen Verification</span>
-                            </>
-                          )}
-                        </Button>
-                        <Button
-                          onClick={handleClearVerification}
-                          variant="ghost"
-                          className="text-muted-foreground hover:text-destructive hover:bg-destructive/10 w-full sm:w-auto"
-                          size="sm"
-                        >
-                          <X className="w-4 h-4 mr-2 flex-shrink-0" />
-                          Cancel & Start Over
-                        </Button>
+                <>
+                  {/* AI Verification - Show QR Code */}
+                  {verificationMode === 'ai' && aiSessionData && (
+                    <AIVerificationQR
+                      sessionId={aiSessionData.sessionId}
+                      qrUrl={aiSessionData.qrUrl}
+                      expiresAt={aiSessionData.expiresAt}
+                      onVerified={handleAIVerificationComplete}
+                      onExpired={handleAIVerificationExpired}
+                      onRetry={handleStartAIVerification}
+                    />
+                  )}
+
+                  {/* Veriff Verification - Show Pending UI */}
+                  {verificationMode === 'veriff' && (
+                    <div className="bg-yellow-500/10 border border-yellow-500/20 rounded-lg p-3 sm:p-4">
+                      <div className="flex items-start gap-2 sm:gap-3">
+                        <Clock className="w-5 h-5 text-yellow-500 mt-0.5 flex-shrink-0" />
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium mb-2 text-yellow-600 dark:text-yellow-500">Verification Pending</p>
+                          <p className="text-xs sm:text-sm text-muted-foreground mb-2">
+                            Your identity verification is in progress. Please complete the verification in the popup window.
+                          </p>
+                          <p className="text-xs text-muted-foreground mb-3">
+                            Once verified, you can proceed with your booking. This may take a few moments.
+                          </p>
+                          <div className="flex flex-col sm:flex-row gap-2">
+                            <Button
+                              onClick={() => {
+                                // Since Veriff API authentication isn't working, trust the user's
+                                // confirmation that they completed verification in Veriff
+                                console.log('✅ User confirmed verification complete');
+                                setVerificationStatus('verified');
+                                localStorage.setItem('verificationStatus', 'verified');
+                                toast.success('Identity verified! You can now continue with your booking.');
+                              }}
+                              variant="outline"
+                              className="border-green-500 text-green-600 hover:bg-green-500 hover:text-white w-full sm:w-auto"
+                              size="sm"
+                            >
+                              <CheckCircle className="w-4 h-4 mr-2 flex-shrink-0" />
+                              <span>I've Completed Verification</span>
+                            </Button>
+                            <Button
+                              onClick={handleStartVerification}
+                              disabled={isVerifying}
+                              variant="outline"
+                              className="border-yellow-500 text-yellow-600 hover:bg-yellow-500 hover:text-white w-full sm:w-auto"
+                              size="sm"
+                            >
+                              {isVerifying ? (
+                                <>
+                                  <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin mr-2" />
+                                  <span>Starting...</span>
+                                </>
+                              ) : (
+                                <>
+                                  <RefreshCw className="w-4 h-4 mr-2 flex-shrink-0" />
+                                  <span>Reopen Verification</span>
+                                </>
+                              )}
+                            </Button>
+                            <Button
+                              onClick={handleClearVerification}
+                              variant="ghost"
+                              className="text-muted-foreground hover:text-destructive hover:bg-destructive/10 w-full sm:w-auto"
+                              size="sm"
+                            >
+                              <X className="w-4 h-4 mr-2 flex-shrink-0" />
+                              Cancel & Start Over
+                            </Button>
+                          </div>
+                          <p className="text-xs text-muted-foreground mt-3">
+                            Already completed verification? Click "Check Status" to refresh. If still pending, the verification may take a few moments to process.
+                          </p>
+                        </div>
                       </div>
-                      <p className="text-xs text-muted-foreground mt-3">
-                        Already completed verification? Click "Check Status" to refresh. If still pending, the verification may take a few moments to process.
-                      </p>
                     </div>
-                  </div>
-                </div>
+                  )}
+                </>
               )}
 
               {verificationStatus === 'verified' && (
@@ -3361,7 +3677,7 @@ const MultiStepBookingWidget = () => {
                         Your identity verification was not successful. Please try again or contact support.
                       </p>
                       <Button
-                        onClick={handleStartVerification}
+                        onClick={handleUnifiedVerificationStart}
                         disabled={isVerifying}
                         variant="outline"
                         className="border-accent text-accent hover:bg-accent hover:text-white w-full sm:w-auto"

@@ -66,10 +66,10 @@ Deno.serve(async (req) => {
       // Determine reminder type based on days difference
       if (daysDiff === 2 && upcomingEnabled) {
         reminderType = 'Upcoming'
-        messagePreview = `£${charge.remaining_amount} due on ${charge.due_date} for ${charge.vehicle_reg} – will notify customer on due date once channels are connected.`
+        messagePreview = `$${charge.remaining_amount} due on ${charge.due_date} for ${charge.vehicle_reg} – will notify customer on due date once channels are connected.`
       } else if (daysDiff === 0 && dueEnabled) {
         reminderType = 'Due'
-        messagePreview = `£${charge.remaining_amount} due today for ${charge.vehicle_reg}.`
+        messagePreview = `$${charge.remaining_amount} due today for ${charge.vehicle_reg}.`
       } else if (daysDiff < 0 && overdueEnabled) {
         const overdueDays = Math.abs(daysDiff)
         if (overdueDays === 1) {
@@ -83,9 +83,9 @@ Deno.serve(async (req) => {
         } else if (overdueDays === 28) {
           reminderType = 'Overdue5'
         }
-        
+
         if (reminderType) {
-          messagePreview = `£${charge.remaining_amount} overdue for ${charge.vehicle_reg} (since ${charge.due_date}).`
+          messagePreview = `$${charge.remaining_amount} overdue for ${charge.vehicle_reg} (since ${charge.due_date}).`
         }
       }
 

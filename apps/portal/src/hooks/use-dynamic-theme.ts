@@ -303,6 +303,19 @@ export function useDynamicTheme() {
       updateMetaTag('twitter:image', branding.og_image_url);
     }
 
+    // Cache CSS variables for instant load on next visit
+    try {
+      const cssVars = Array.from(root.style)
+        .filter(prop => prop.startsWith('--'))
+        .map(prop => `${prop}: ${root.style.getPropertyValue(prop)};`)
+        .join(' ');
+      if (cssVars) {
+        localStorage.setItem('portal-tenant-branding-css', `:root { ${cssVars} }`);
+      }
+    } catch (e) {
+      // localStorage might not be available
+    }
+
   }, [branding, resolvedTheme, mounted]);
 
   return { branding, mounted };

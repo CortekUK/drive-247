@@ -10,7 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { AlertTriangle, ArrowLeft, FileText, PoundSterling, CheckCircle, Scale, CreditCard, Clock, Ban, Receipt, AlertCircle, Upload, User } from "lucide-react";
+import { AlertTriangle, ArrowLeft, FileText, DollarSign, CheckCircle, Scale, CreditCard, Clock, Ban, Receipt, AlertCircle, Upload, User } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { FineAppealDialog } from "@/components/fines/fine-appeal-dialog";
 import { FineStatusBadge } from "@/components/shared/status/fine-status-badge";
@@ -144,8 +144,8 @@ const FineDetail = () => {
         .from("fines")
         .select(`
           *,
-          customers(name),
-          vehicles(reg, make, model)
+          customers!fines_customer_id_fkey(name),
+          vehicles!fines_vehicle_id_fkey(reg, make, model)
         `)
         .eq("id", id)
         .single();
@@ -257,10 +257,16 @@ const FineDetail = () => {
         {/* Enhanced Header */}
         <div className="flex flex-col space-y-4 lg:flex-row lg:items-center lg:justify-between lg:space-y-0 mb-8">
           <div className="flex items-center gap-4">
-            <Button variant="outline" onClick={() => router.push("/fines")}>
-              <ArrowLeft className="h-4 w-4 mr-2" />
-              Back to Fines
-            </Button>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button variant="ghost" size="icon" onClick={() => router.push("/fines")}>
+                  <ArrowLeft className="h-4 w-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>Back to Fines</p>
+              </TooltipContent>
+            </Tooltip>
             <div>
               <h1 className="text-3xl font-bold">Fine Details</h1>
               <p className="text-muted-foreground">
@@ -349,7 +355,7 @@ const FineDetail = () => {
             title="Fine Amount"
             value={`$${Number(fine.amount).toLocaleString()}`}
             valueClassName="text-destructive dark:text-destructive"
-            icon={<PoundSterling className="h-4 w-4" />}
+            icon={<DollarSign className="h-4 w-4" />}
             className="bg-destructive/10 border-destructive/20"
           />
 
@@ -475,7 +481,7 @@ const FineDetail = () => {
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
-                  <PoundSterling className="h-5 w-5 text-primary" />
+                  <DollarSign className="h-5 w-5 text-primary" />
                   Authority Payments
                 </CardTitle>
               </CardHeader>

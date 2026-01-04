@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useRef } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { ChevronLeft, Car, FileText, PoundSterling, Wrench, Calendar, TrendingUp, TrendingDown, Plus, Shield, Clock, Trash2, Receipt, Users, Eye, EyeOff, Pencil, Ban } from "lucide-react";
+import { ChevronLeft, Car, FileText, DollarSign, Wrench, Calendar, TrendingUp, TrendingDown, Plus, Shield, Clock, Trash2, Receipt, Users, Eye, EyeOff, Pencil, Ban, Upload } from "lucide-react";
 import { getContractTotal } from "@/lib/vehicle-utils";
 import { format } from "date-fns";
 import { startOfMonth, endOfMonth, parseISO } from "date-fns";
@@ -95,6 +95,8 @@ interface Vehicle {
   vehicle_photos?: any[];
   // Description field
   description?: string;
+  // VIN field
+  vin?: string;
 }
 
 interface PLEntry {
@@ -128,6 +130,7 @@ export default function VehicleDetail() {
   const [showEditDialog, setShowEditDialog] = useState(false);
   const [showDisposeDialog, setShowDisposeDialog] = useState(false);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Get date filtering from URL params
   const monthParam = searchParams.get('month');
@@ -236,7 +239,7 @@ export default function VehicleDetail() {
         .from("rentals")
         .select(`
           *,
-          customers(name)
+          customers!rentals_customer_id_fkey(name)
         `)
         .eq("vehicle_id", id)
         .order("created_at", { ascending: false });
@@ -256,7 +259,7 @@ export default function VehicleDetail() {
         .from("fines")
         .select(`
           *,
-          customers(name)
+          customers!fines_customer_id_fkey(name)
         `)
         .eq("vehicle_id", id)
         .order("issue_date", { ascending: false });
@@ -374,10 +377,18 @@ export default function VehicleDetail() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center space-x-4">
-          <Button variant="ghost" size="sm" onClick={() => router.push(getBackLink())}>
-            <ChevronLeft className="h-4 w-4 mr-2" />
-            {getBackLabel()}
-          </Button>
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button variant="ghost" size="icon" onClick={() => router.push(getBackLink())}>
+                  <ChevronLeft className="h-4 w-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>{getBackLabel()}</p>
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
           <div>
             <h1 className="text-3xl font-bold">{vehicle.reg}</h1>
             <p className="text-muted-foreground">
@@ -475,11 +486,12 @@ export default function VehicleDetail() {
               </h3>
               <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-x-8 gap-y-3">
                 <MetricItem label="Registration" value={vehicle.reg} />
+                {vehicle.vin && <MetricItem label="VIN" value={vehicle.vin} />}
                 <MetricItem label="Make" value={vehicle.make} />
                 <MetricItem label="Model" value={vehicle.model} />
                 {vehicle.year && <MetricItem label="Year" value={vehicle.year} />}
                 <MetricItem label="Color" value={vehicle.colour} />
-                {vehicle.fuel_type && <MetricItem label="Fuel Type" value={vehicle.fuel_type} />}
+                {vehicle.fuel_type && <MetricItem label="Fuel Type" value={vehicle.fuel_type === 'Petrol' ? 'Gas' : vehicle.fuel_type} />}
                 <div className="flex items-center gap-2">
                   <span className="text-xs text-muted-foreground">Acquisition:</span>
                   <AcquisitionBadge acquisitionType={vehicle.acquisition_type} />
@@ -495,41 +507,13 @@ export default function VehicleDetail() {
               )}
             </div>
 
-            {/* Acquisition & Rental Information */}
-            <MetricDivider />
-            <div>
-              <h3 className="text-sm font-semibold text-muted-foreground mb-3">Acquisition & Rental</h3>
-              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-x-8 gap-y-3">
-                <MetricItem
-                  label={vehicle.acquisition_type === 'Finance' ? 'Contract Total' : 'Purchase Price'}
-                  value={vehicle.acquisition_type === 'Finance'
-                    ? getContractTotal(vehicle)
-                    : Number(vehicle.purchase_price)
-                  }
-                  isAmount
-                />
-                <MetricItem label="Acquired" value={format(new Date(vehicle.acquisition_date), "dd/MM/yyyy")} />
-
-                {/* Rent Information */}
-                {vehicle.daily_rent && (
-                  <MetricItem label="Daily Rent" value={vehicle.daily_rent} isAmount />
-                )}
-                {vehicle.weekly_rent && (
-                  <MetricItem label="Weekly Rent" value={vehicle.weekly_rent} isAmount />
-                )}
-                {vehicle.monthly_rent && (
-                  <MetricItem label="Monthly Rent" value={vehicle.monthly_rent} isAmount />
-                )}
-              </div>
-            </div>
-
             {/* Finance Information - Only show for financed vehicles */}
             {vehicle.acquisition_type === 'Finance' && (
               <>
                 <MetricDivider />
                 <div>
                   <h3 className="text-sm font-semibold text-muted-foreground mb-3 flex items-center gap-2">
-                    <PoundSterling className="h-4 w-4" />
+                    <DollarSign className="h-4 w-4" />
                     Finance Information
                   </h3>
                   <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-x-8 gap-y-3">
@@ -670,7 +654,7 @@ export default function VehicleDetail() {
                               ${service.cost.toLocaleString()}
                             </TableCell>
                             <TableCell className="max-w-[200px]">
-                              <TruncatedCell content={service.notes || '-'} maxLength={30} />
+                              <TruncatedCell content={service.description || '-'} maxLength={30} />
                             </TableCell>
                           </TableRow>
                         ))}
@@ -690,6 +674,21 @@ export default function VehicleDetail() {
 
           {/* Files Section */}
           <div className="mt-8">
+            {/* Hidden file input for upload */}
+            <input
+              type="file"
+              ref={fileInputRef}
+              className="hidden"
+              multiple
+              accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.csv"
+              onChange={(e) => {
+                const selectedFiles = e.target.files;
+                if (selectedFiles) {
+                  Array.from(selectedFiles).forEach(file => uploadFile(file));
+                }
+                e.target.value = '';
+              }}
+            />
             <Card className="shadow-card rounded-lg">
               <CardHeader className="pb-3">
                 <div className="flex items-center justify-between">
@@ -700,6 +699,15 @@ export default function VehicleDetail() {
                     </CardTitle>
                     <CardDescription>Upload and manage documents</CardDescription>
                   </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => fileInputRef.current?.click()}
+                    disabled={isUploadingFile}
+                  >
+                    <Upload className="h-4 w-4 mr-2" />
+                    Upload
+                  </Button>
                 </div>
               </CardHeader>
               <CardContent>

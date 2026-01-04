@@ -2,6 +2,7 @@ import { z } from "zod";
 
 export const addVehicleDialogSchema = z.object({
   reg: z.string().min(1, "Registration number is required"),
+  vin: z.string().optional(),
   make: z.string().min(1, "Make is required"),
   model: z.string().min(1, "Model is required"),
   year: z.number({ required_error: "Year is required", invalid_type_error: "Year must be a number" }).min(1900, "Year must be after 1900").max(new Date().getFullYear() + 1, "Year cannot be in the future"),
