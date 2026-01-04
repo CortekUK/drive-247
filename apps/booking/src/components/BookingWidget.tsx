@@ -152,6 +152,26 @@ const BookingWidget = () => {
       customerId = newCustomer.id;
     }
 
+    // Auto-link any unlinked identity verifications by email
+    if (customerId && formData.email && tenant?.id) {
+      const customerEmailLower = formData.email.toLowerCase().trim();
+      const { data: unlinkedVerification } = await supabase
+        .from("identity_verifications")
+        .update({
+          customer_id: customerId,
+          customer_email: null
+        })
+        .eq("customer_email", customerEmailLower)
+        .eq("tenant_id", tenant.id)
+        .is("customer_id", null)
+        .select("id")
+        .maybeSingle();
+
+      if (unlinkedVerification) {
+        console.log("✅ Auto-linked identity verification:", unlinkedVerification.id);
+      }
+    }
+
     // Build rental data
     const rentalData: any = {
       customer_id: customerId,

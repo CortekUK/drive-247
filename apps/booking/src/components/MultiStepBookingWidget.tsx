@@ -1044,6 +1044,40 @@ const MultiStepBookingWidget = () => {
         customerId = newCustomer.id;
       }
 
+      // Auto-link any unlinked identity verifications by email
+      if (customerId && formData.customerEmail && tenant?.id) {
+        const customerEmailLower = formData.customerEmail.toLowerCase().trim();
+        const { data: unlinkedVerification, error: linkError } = await supabase
+          .from("identity_verifications")
+          .update({
+            customer_id: customerId,
+            customer_email: null // Clear email after linking
+          })
+          .eq("customer_email", customerEmailLower)
+          .eq("tenant_id", tenant.id)
+          .is("customer_id", null)
+          .select("id")
+          .maybeSingle();
+
+        if (unlinkedVerification && !linkError) {
+          console.log("✅ Auto-linked identity verification:", unlinkedVerification.id, "to customer:", customerId);
+
+          // Also update customer's verification status if verification is complete
+          const { data: verification } = await supabase
+            .from("identity_verifications")
+            .select("review_result")
+            .eq("id", unlinkedVerification.id)
+            .single();
+
+          if (verification?.review_result === "GREEN") {
+            await supabase
+              .from("customers")
+              .update({ identity_verification_status: "verified" })
+              .eq("id", customerId);
+          }
+        }
+      }
+
       // Build rental data with sanitized inputs
       const rentalData: any = {
         customer_id: customerId,
