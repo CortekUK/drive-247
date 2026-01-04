@@ -6,7 +6,12 @@ import {
   parseXMLValue,
   isAWSConfigured
 } from "../_shared/aws-config.ts";
-import { sendEmail } from "../_shared/resend-service.ts";
+import {
+  sendEmail,
+  getTenantBranding,
+  TenantBranding,
+  wrapWithBrandedTemplate
+} from "../_shared/resend-service.ts";
 
 interface NotifyRequest {
   customerName: string;
@@ -24,24 +29,8 @@ interface NotifyRequest {
   tenantId?: string;
 }
 
-const getEmailHtml = (data: NotifyRequest) => {
+const getEmailContent = (data: NotifyRequest, branding: TenantBranding) => {
   return `
-<!DOCTYPE html>
-<html>
-<head>
-    <meta charset="utf-8">
-    <title>Pickup Reminder - DRIVE 247</title>
-</head>
-<body style="margin: 0; padding: 0; font-family: 'Segoe UI', Arial, sans-serif; background-color: #f5f5f5;">
-    <table role="presentation" style="width: 100%; border-collapse: collapse;">
-        <tr>
-            <td align="center" style="padding: 40px 0;">
-                <table role="presentation" style="width: 600px; max-width: 100%; border-collapse: collapse; background: white; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.1);">
-                    <tr>
-                        <td style="background: linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 100%); padding: 30px; border-radius: 12px 12px 0 0; text-align: center;">
-                            <h1 style="margin: 0; color: #C5A572; font-size: 28px; letter-spacing: 2px;">DRIVE 247</h1>
-                        </td>
-                    </tr>
                     <tr>
                         <td style="padding: 30px 30px 0; text-align: center;">
                             <span style="display: inline-block; background: #f0f9ff; color: #0ea5e9; padding: 8px 20px; border-radius: 20px; font-weight: 600; font-size: 14px;">
@@ -56,12 +45,12 @@ const getEmailHtml = (data: NotifyRequest) => {
                                 This is a friendly reminder that your vehicle pickup is scheduled for tomorrow.
                                 We're excited to have you drive with us!
                             </p>
-                            <table role="presentation" style="width: 100%; border-collapse: collapse; background: linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 100%); border-radius: 8px; margin-bottom: 25px;">
+                            <table role="presentation" style="width: 100%; border-collapse: collapse; background: linear-gradient(135deg, ${branding.primaryColor} 0%, #2d2d2d 100%); border-radius: 8px; margin-bottom: 25px;">
                                 <tr>
                                     <td style="padding: 25px; text-align: center;">
-                                        <p style="margin: 0 0 5px; color: #C5A572; font-size: 14px; text-transform: uppercase; letter-spacing: 1px;">Your Vehicle</p>
+                                        <p style="margin: 0 0 5px; color: ${branding.accentColor}; font-size: 14px; text-transform: uppercase; letter-spacing: 1px;">Your Vehicle</p>
                                         <p style="margin: 0; color: white; font-size: 24px; font-weight: 700;">${data.vehicleName}</p>
-                                        <p style="margin: 10px 0 0; color: #C5A572; font-size: 16px;">${data.vehicleReg}${data.vehicleColor ? ` • ${data.vehicleColor}` : ''}</p>
+                                        <p style="margin: 10px 0 0; color: ${branding.accentColor}; font-size: 16px;">${data.vehicleReg}${data.vehicleColor ? ` • ${data.vehicleColor}` : ''}</p>
                                     </td>
                                 </tr>
                             </table>
@@ -125,27 +114,12 @@ const getEmailHtml = (data: NotifyRequest) => {
                             <table role="presentation" style="width: 100%; border-collapse: collapse;">
                                 <tr>
                                     <td style="text-align: center; padding: 20px 0;">
-                                        <a href="mailto:support@drive-247.com" style="display: inline-block; background: #C5A572; color: white; padding: 14px 35px; border-radius: 6px; text-decoration: none; font-weight: 600; font-size: 16px;">Contact Support</a>
+                                        <a href="mailto:${branding.contactEmail}" style="display: inline-block; background: ${branding.accentColor}; color: white; padding: 14px 35px; border-radius: 6px; text-decoration: none; font-weight: 600; font-size: 16px;">Contact Support</a>
                                     </td>
                                 </tr>
                             </table>
                         </td>
-                    </tr>
-                    <tr>
-                        <td style="background: #f8f9fa; padding: 25px 30px; border-radius: 0 0 12px 12px; text-align: center;">
-                            <p style="margin: 0 0 10px; color: #666; font-size: 14px;">
-                                Questions? Email us at <a href="mailto:support@drive-247.com" style="color: #C5A572; text-decoration: none;">support@drive-247.com</a>
-                            </p>
-                            <p style="margin: 0; color: #999; font-size: 12px;">&copy; 2024 DRIVE 247. All rights reserved.</p>
-                        </td>
-                    </tr>
-                </table>
-            </td>
-        </tr>
-    </table>
-</body>
-</html>
-`;
+                    </tr>`;
 };
 
 // sendEmail is now imported from resend-service.ts
@@ -204,16 +178,25 @@ serve(async (req) => {
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
+    // Get tenant branding
+    const branding = data.tenantId
+      ? await getTenantBranding(data.tenantId, supabase)
+      : { companyName: 'Drive 247', logoUrl: null, primaryColor: '#1a1a1a', accentColor: '#C5A572', contactEmail: 'support@drive-247.com', contactPhone: null, slug: 'drive247' };
+
     const results = {
       customerEmail: null as any,
       customerSMS: null as any,
     };
 
+    // Build branded email HTML
+    const emailContent = getEmailContent(data, branding);
+    const emailHtml = wrapWithBrandedTemplate(emailContent, branding);
+
     // Send customer email
     results.customerEmail = await sendEmail(
       data.customerEmail,
       `Pickup Tomorrow - ${data.vehicleName}`,
-      getEmailHtml(data),
+      emailHtml,
       supabase,
       data.tenantId
     );
@@ -223,7 +206,7 @@ serve(async (req) => {
     if (data.customerPhone) {
       results.customerSMS = await sendSMS(
         data.customerPhone,
-        `DRIVE 247: Reminder - Your ${data.vehicleName} pickup is tomorrow at ${data.pickupTime}. Location: ${data.pickupLocation}. Ref: ${data.bookingRef}`
+        `${branding.companyName}: Reminder - Your ${data.vehicleName} pickup is tomorrow at ${data.pickupTime}. Location: ${data.pickupLocation}. Ref: ${data.bookingRef}`
       );
       console.log('Customer SMS result:', results.customerSMS);
     }

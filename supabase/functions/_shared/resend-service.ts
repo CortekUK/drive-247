@@ -22,6 +22,117 @@ interface EmailResult {
 }
 
 /**
+ * Tenant branding information for emails
+ */
+export interface TenantBranding {
+  companyName: string;
+  logoUrl: string | null;
+  primaryColor: string;
+  accentColor: string;
+  contactEmail: string;
+  contactPhone: string | null;
+  slug: string;
+}
+
+const DEFAULT_BRANDING: TenantBranding = {
+  companyName: 'Drive 247',
+  logoUrl: null,
+  primaryColor: '#1a1a1a',
+  accentColor: '#C5A572',
+  contactEmail: 'support@drive-247.com',
+  contactPhone: null,
+  slug: 'drive247',
+};
+
+/**
+ * Get tenant branding for email templates
+ */
+export async function getTenantBranding(tenantId: string, supabaseClient: any): Promise<TenantBranding> {
+  try {
+    const { data, error } = await supabaseClient
+      .from('tenants')
+      .select('slug, company_name, logo_url, primary_color, accent_color, contact_email, contact_phone')
+      .eq('id', tenantId)
+      .single();
+
+    if (error || !data) {
+      console.error('Error fetching tenant branding:', error);
+      return DEFAULT_BRANDING;
+    }
+
+    return {
+      companyName: data.company_name || DEFAULT_BRANDING.companyName,
+      logoUrl: data.logo_url || null,
+      primaryColor: data.primary_color || DEFAULT_BRANDING.primaryColor,
+      accentColor: data.accent_color || DEFAULT_BRANDING.accentColor,
+      contactEmail: data.contact_email || DEFAULT_BRANDING.contactEmail,
+      contactPhone: data.contact_phone || null,
+      slug: data.slug || DEFAULT_BRANDING.slug,
+    };
+  } catch (error) {
+    console.error('Exception fetching tenant branding:', error);
+    return DEFAULT_BRANDING;
+  }
+}
+
+/**
+ * Generate branded email header
+ */
+export function getEmailHeader(branding: TenantBranding): string {
+  const logoHtml = branding.logoUrl
+    ? `<img src="${branding.logoUrl}" alt="${branding.companyName}" style="max-height: 50px; max-width: 200px;">`
+    : `<h1 style="margin: 0; color: ${branding.accentColor}; font-size: 28px; letter-spacing: 2px;">${branding.companyName.toUpperCase()}</h1>`;
+
+  return `
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+</head>
+<body style="margin: 0; padding: 0; font-family: 'Segoe UI', Arial, sans-serif; background-color: #f5f5f5;">
+    <table role="presentation" style="width: 100%; border-collapse: collapse;">
+        <tr>
+            <td align="center" style="padding: 40px 0;">
+                <table role="presentation" style="width: 600px; max-width: 100%; border-collapse: collapse; background: white; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.1);">
+                    <tr>
+                        <td style="background: linear-gradient(135deg, ${branding.primaryColor} 0%, #2d2d2d 100%); padding: 30px; border-radius: 12px 12px 0 0; text-align: center;">
+                            ${logoHtml}
+                        </td>
+                    </tr>`;
+}
+
+/**
+ * Generate branded email footer
+ */
+export function getEmailFooter(branding: TenantBranding): string {
+  const currentYear = new Date().getFullYear();
+
+  return `
+                    <tr>
+                        <td style="background: #f8f9fa; padding: 25px 30px; border-radius: 0 0 12px 12px; text-align: center;">
+                            <p style="margin: 0 0 10px; color: #666; font-size: 14px;">
+                                Questions? Email us at <a href="mailto:${branding.contactEmail}" style="color: ${branding.accentColor}; text-decoration: none;">${branding.contactEmail}</a>
+                            </p>
+                            <p style="margin: 0; color: #999; font-size: 12px;">&copy; ${currentYear} ${branding.companyName}. All rights reserved.</p>
+                        </td>
+                    </tr>
+                </table>
+            </td>
+        </tr>
+    </table>
+</body>
+</html>`;
+}
+
+/**
+ * Wrap email content with branded header and footer
+ */
+export function wrapWithBrandedTemplate(content: string, branding: TenantBranding): string {
+  return getEmailHeader(branding) + content + getEmailFooter(branding);
+}
+
+/**
  * Get tenant-specific email settings from database
  */
 async function getTenantEmailSettings(tenantId: string, supabaseClient: any) {
