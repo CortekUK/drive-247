@@ -67,8 +67,8 @@ export const useFinesData = ({
         .from("fines")
         .select(`
           *,
-          customers(name, email, phone),
-          vehicles(reg, make, model),
+          customers!fines_customer_id_fkey(name, email, phone),
+          vehicles!fines_vehicle_id_fkey(reg, make, model),
           authority_payments(amount)
         `, { count: 'exact' })
         .eq("tenant_id", tenant.id);

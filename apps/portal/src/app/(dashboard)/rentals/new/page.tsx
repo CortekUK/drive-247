@@ -30,6 +30,7 @@ import { InvoiceDialog } from "@/components/shared/dialogs/invoice-dialog";
 import { createInvoice, Invoice } from "@/lib/invoice-utils";
 import { sendBookingNotification, sendPaymentVerificationNotification } from "@/lib/notifications";
 import { useOrgSettings } from "@/hooks/use-org-settings";
+import { useBlockedDates } from "@/hooks/use-blocked-dates";
 import { InsuranceUploadDialog } from "@/components/shared/dialogs/insurance-upload-dialog";
 import { LocationPicker } from "@/components/ui/location-picker";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -92,6 +93,98 @@ const CreateRental = () => {
   // Get payment mode from org settings
   const { settings: orgSettings } = useOrgSettings();
   const isManualPaymentMode = orgSettings?.payment_mode === 'manual';
+
+  // Get all blocked dates (global and vehicle-specific)
+  const { blockedDates } = useBlockedDates();
+
+  // Helper to parse YYYY-MM-DD to local date at midnight (avoids UTC timezone issues)
+  const parseLocalDate = (dateStr: string): Date => {
+    const [year, month, day] = dateStr.split('-').map(Number);
+    return new Date(year, month - 1, day);
+  };
+
+  // Helper to normalize a Date to midnight local time for comparison
+  const normalizeDate = (date: Date): Date => {
+    return new Date(date.getFullYear(), date.getMonth(), date.getDate());
+  };
+
+  // Helper function to check if rental dates overlap with blocked dates
+  const checkBlockedDatesOverlap = (startDate: Date, endDate: Date, vehicleId: string): { blocked: boolean; reason?: string; isGlobal?: boolean } => {
+    if (!blockedDates || blockedDates.length === 0) return { blocked: false };
+
+    // Normalize input dates to midnight for proper comparison
+    const normalizedStart = normalizeDate(startDate);
+    const normalizedEnd = normalizeDate(endDate);
+
+    for (const block of blockedDates) {
+      const blockStart = parseLocalDate(block.start_date);
+      const blockEnd = parseLocalDate(block.end_date);
+
+      // Check if there's any overlap
+      const hasOverlap = normalizedStart <= blockEnd && normalizedEnd >= blockStart;
+
+      if (hasOverlap) {
+        const isGlobal = !block.vehicle_id;
+        const isVehicleSpecific = block.vehicle_id === vehicleId;
+
+        // Block if it's a global block OR if it's for this specific vehicle
+        if (isGlobal || isVehicleSpecific) {
+          console.log(`[BlockedDates] Rental blocked: ${startDate.toISOString()} - ${endDate.toISOString()} overlaps with ${block.start_date} - ${block.end_date} (vehicle: ${block.vehicle_id || 'global'})`);
+          return {
+            blocked: true,
+            reason: block.reason || (isGlobal ? "General blocked period" : "Vehicle maintenance/blocked"),
+            isGlobal
+          };
+        }
+      }
+    }
+
+    return { blocked: false };
+  };
+
+  // Get dates to disable in calendar (global blocks only)
+  const getGlobalBlockedDates = (): Date[] => {
+    if (!blockedDates) return [];
+
+    const dates: Date[] = [];
+    const globalBlocks = blockedDates.filter(b => !b.vehicle_id);
+
+    for (const block of globalBlocks) {
+      const start = parseLocalDate(block.start_date);
+      const end = parseLocalDate(block.end_date);
+      const current = new Date(start);
+
+      while (current <= end) {
+        dates.push(new Date(current));
+        current.setDate(current.getDate() + 1);
+      }
+    }
+
+    return dates;
+  };
+
+  const globalBlockedDatesArray = getGlobalBlockedDates();
+
+  // Get vehicle-specific blocked dates for a given vehicle
+  const getVehicleBlockedDates = (vehicleId: string): Date[] => {
+    if (!blockedDates || !vehicleId) return [];
+
+    const dates: Date[] = [];
+    const vehicleBlocks = blockedDates.filter(b => b.vehicle_id === vehicleId);
+
+    for (const block of vehicleBlocks) {
+      const start = parseLocalDate(block.start_date);
+      const end = parseLocalDate(block.end_date);
+      const current = new Date(start);
+
+      while (current <= end) {
+        dates.push(new Date(current));
+        current.setDate(current.getDate() + 1);
+      }
+    }
+
+    return dates;
+  };
 
   const today = new Date();
   const todayAtMidnight = startOfDay(today);
@@ -249,6 +342,13 @@ const CreateRental = () => {
         throw new Error("This customer already has an active rental. Individuals can only have one active rental at a time.");
       }
 
+      // Check for blocked dates (global and vehicle-specific)
+      const blockCheck = checkBlockedDatesOverlap(data.start_date, data.end_date, data.vehicle_id);
+      if (blockCheck.blocked) {
+        const blockType = blockCheck.isGlobal ? "Global blocked period" : "Vehicle blocked";
+        throw new Error(`Cannot create rental: ${blockType}. Reason: ${blockCheck.reason}`);
+      }
+
       // Create rental
       const { data: rental, error: rentalError } = await supabase
         .from("rentals")
@@ -259,7 +359,7 @@ const CreateRental = () => {
           end_date: data.end_date.toISOString().split('T')[0],
           rental_period_type: data.rental_period_type,
           monthly_amount: data.monthly_amount,
-          status: "Pending",
+          status: "Active",
           tenant_id: tenant?.id,
         })
         .select()
@@ -657,7 +757,22 @@ const CreateRental = () => {
                               date={field.value}
                               onSelect={field.onChange}
                               placeholder="Select start date"
-                              disabled={(date) => isBefore(date, yearAgo)}
+                              disabled={(date) => {
+                                // Disable dates more than a year ago
+                                if (isBefore(date, yearAgo)) return true;
+                                // Disable globally blocked dates
+                                if (globalBlockedDatesArray.some(
+                                  blockedDate => blockedDate.toDateString() === date.toDateString()
+                                )) return true;
+                                // Disable vehicle-specific blocked dates if vehicle is selected
+                                if (selectedVehicleId) {
+                                  const vehicleBlockedDates = getVehicleBlockedDates(selectedVehicleId);
+                                  if (vehicleBlockedDates.some(
+                                    blockedDate => blockedDate.toDateString() === date.toDateString()
+                                  )) return true;
+                                }
+                                return false;
+                              }}
                               error={!!form.formState.errors.start_date}
                               className="w-full"
                             />
@@ -703,11 +818,24 @@ const CreateRental = () => {
                                 date={field.value}
                                 onSelect={field.onChange}
                                 placeholder="Select end date"
-                                disabled={(date) =>
-                                  watchedValues.start_date
-                                    ? isBefore(date, getMinEndDate(watchedValues.start_date))
-                                    : false
-                                }
+                                disabled={(date) => {
+                                  // Disable dates before minimum end date
+                                  if (watchedValues.start_date && isBefore(date, getMinEndDate(watchedValues.start_date))) {
+                                    return true;
+                                  }
+                                  // Disable globally blocked dates
+                                  if (globalBlockedDatesArray.some(
+                                    blockedDate => blockedDate.toDateString() === date.toDateString()
+                                  )) return true;
+                                  // Disable vehicle-specific blocked dates if vehicle is selected
+                                  if (selectedVehicleId) {
+                                    const vehicleBlockedDates = getVehicleBlockedDates(selectedVehicleId);
+                                    if (vehicleBlockedDates.some(
+                                      blockedDate => blockedDate.toDateString() === date.toDateString()
+                                    )) return true;
+                                  }
+                                  return false;
+                                }}
                                 error={!!form.formState.errors.end_date}
                                 className="w-full"
                               />

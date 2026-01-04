@@ -220,8 +220,33 @@ export const useSiteSettings = () => {
     enabled: !tenantLoading, // Wait for tenant to load
   });
 
+  // Build immediate settings from tenant while CMS query runs
+  // This prevents flash of default "Drive917" branding
+  const immediateSettings: SiteSettings = tenant ? {
+    ...defaultSettings,
+    id: tenant.id,
+    company_name: tenant.company_name || defaultSettings.company_name,
+    phone: tenant.phone || defaultSettings.phone,
+    phone_display: tenant.phone || defaultSettings.phone_display,
+    email: tenant.contact_email || defaultSettings.email,
+    office_address: tenant.address || defaultSettings.office_address,
+    google_maps_url: tenant.google_maps_url || defaultSettings.google_maps_url,
+    availability: tenant.business_hours || defaultSettings.availability,
+    logo_url: tenant.logo_url || null,
+    light_logo_url: tenant.logo_url || null,
+    dark_logo_url: tenant.logo_url || null,
+    logo_alt: tenant.app_name || tenant.company_name || defaultSettings.logo_alt,
+    favicon_url: tenant.favicon_url || null,
+    accent_color: tenant.accent_color || defaultSettings.accent_color,
+    facebook_url: tenant.facebook_url || null,
+    instagram_url: tenant.instagram_url || null,
+    twitter_url: tenant.twitter_url || null,
+    linkedin_url: tenant.linkedin_url || null,
+    copyright_text: `© ${new Date().getFullYear()} ${tenant.company_name}. All rights reserved.`,
+  } : defaultSettings;
+
   return {
-    settings: settings || defaultSettings,
+    settings: settings || immediateSettings,
     isLoading: isLoading || tenantLoading,
     error,
   };

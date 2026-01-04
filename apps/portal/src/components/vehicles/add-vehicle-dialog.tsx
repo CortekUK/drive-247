@@ -11,7 +11,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Plus, Car, PoundSterling, CalendarIcon, ShieldCheck, KeyRound, Cog, Upload, X, Camera } from "lucide-react";
+import { Plus, Car, DollarSign, CalendarIcon, ShieldCheck, KeyRound, Cog, Upload, X, Camera } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Textarea } from "@/components/ui/textarea";
@@ -484,7 +484,7 @@ export const AddVehicleDialog = ({ open, onOpenChange }: AddVehicleDialogProps) 
                             </SelectTrigger>
                           </FormControl>
                           <SelectContent>
-                            <SelectItem value="Petrol">Petrol</SelectItem>
+                            <SelectItem value="Petrol">Gas</SelectItem>
                             <SelectItem value="Diesel">Diesel</SelectItem>
                             <SelectItem value="Hybrid">Hybrid</SelectItem>
                             <SelectItem value="Electric">Electric</SelectItem>

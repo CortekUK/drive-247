@@ -16,14 +16,11 @@ export const useRentalInitialFee = (rentalId: string | undefined) => {
         .eq("tenant_id", tenant.id)
         .eq("rental_id", rentalId)
         .eq("payment_type", "InitialFee")
-        .single();
+        .maybeSingle();
 
       if (error) {
-        if (error.code === 'PGRST116') {
-          // No initial fee found
-          return null;
-        }
-        throw error;
+        console.error("Error fetching initial fee:", error);
+        return null;
       }
 
       return data;

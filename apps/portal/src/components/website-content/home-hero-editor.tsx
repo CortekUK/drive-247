@@ -18,6 +18,7 @@ import {
 } from "@/components/ui/form";
 import { Loader2, Save, Home } from "lucide-react";
 import { HeroImageUpload } from "@/components/website-content/hero-image-upload";
+import { CarouselImagesEditor } from "@/components/website-content/carousel-images-editor";
 import type { HomeHeroContent } from "@/types/cms";
 
 interface HomeHeroEditorProps {
@@ -37,37 +38,50 @@ const formSchema = z.object({
 
 type FormValues = z.infer<typeof formSchema>;
 
+// Default values for pre-filling
+const defaults = {
+  headline: "Reliable Car Rentals You Can Count On",
+  subheading: "Quality vehicles. Transparent pricing. Exceptional service.",
+  trust_line: "Premium Fleet • Flexible Rates • 24/7 Support",
+  phone_number: "08001234567",
+  phone_cta_text: "Call 0800 123 4567",
+  book_cta_text: "Book Now",
+};
+
 export function HomeHeroEditor({ content, onSave, isSaving }: HomeHeroEditorProps) {
   const [backgroundImage, setBackgroundImage] = useState(content.background_image || "");
+  const [carouselImages, setCarouselImages] = useState<string[]>(content.carousel_images || []);
 
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
     defaultValues: {
-      headline: content.headline || "",
-      subheading: content.subheading || "",
-      trust_line: content.trust_line || "",
-      phone_number: content.phone_number || "",
-      phone_cta_text: content.phone_cta_text || "",
-      book_cta_text: content.book_cta_text || "",
+      headline: content.headline || defaults.headline,
+      subheading: content.subheading || defaults.subheading,
+      trust_line: content.trust_line || defaults.trust_line,
+      phone_number: content.phone_number || defaults.phone_number,
+      phone_cta_text: content.phone_cta_text || defaults.phone_cta_text,
+      book_cta_text: content.book_cta_text || defaults.book_cta_text,
     },
   });
 
   useEffect(() => {
     form.reset({
-      headline: content.headline || "",
-      subheading: content.subheading || "",
-      trust_line: content.trust_line || "",
-      phone_number: content.phone_number || "",
-      phone_cta_text: content.phone_cta_text || "",
-      book_cta_text: content.book_cta_text || "",
+      headline: content.headline || defaults.headline,
+      subheading: content.subheading || defaults.subheading,
+      trust_line: content.trust_line || defaults.trust_line,
+      phone_number: content.phone_number || defaults.phone_number,
+      phone_cta_text: content.phone_cta_text || defaults.phone_cta_text,
+      book_cta_text: content.book_cta_text || defaults.book_cta_text,
     });
     setBackgroundImage(content.background_image || "");
+    setCarouselImages(content.carousel_images || []);
   }, [content, form]);
 
   const onSubmit = (data: FormValues) => {
     onSave({
       ...data,
       background_image: backgroundImage,
+      carousel_images: carouselImages.length > 0 ? carouselImages : undefined,
     } as HomeHeroContent);
   };
 
@@ -85,11 +99,22 @@ export function HomeHeroEditor({ content, onSave, isSaving }: HomeHeroEditorProp
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-6">
+            <CarouselImagesEditor
+              images={carouselImages}
+              onImagesChange={setCarouselImages}
+              label="Hero Carousel Images"
+              description="Images that rotate in the hero background. Leave empty to use default images."
+              bucket="cms-media"
+              maxImages={10}
+            />
+
+            <Separator />
+
             <HeroImageUpload
               currentImageUrl={backgroundImage}
               onImageChange={(url) => setBackgroundImage(url || "")}
-              label="Hero Background Image"
-              description="The background image for the home page hero"
+              label="Static Background Image (Optional)"
+              description="A single static background image. Carousel images above will take priority if set."
               bucket="cms-media"
             />
 

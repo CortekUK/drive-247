@@ -101,7 +101,7 @@ export function useVehicleFiles(vehicleId: string) {
       return data;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['vehicleFiles', vehicleId] });
+      queryClient.invalidateQueries({ queryKey: ['vehicleFiles', tenant?.id, vehicleId] });
       toast({
         title: "File Uploaded",
         description: "File has been uploaded successfully.",
@@ -141,7 +141,7 @@ export function useVehicleFiles(vehicleId: string) {
       if (dbError) throw dbError;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['vehicleFiles', vehicleId] });
+      queryClient.invalidateQueries({ queryKey: ['vehicleFiles', tenant?.id, vehicleId] });
       toast({
         title: "File Deleted",
         description: "File has been deleted successfully.",

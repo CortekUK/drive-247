@@ -403,7 +403,7 @@ async function waiveFine(supabase: any, fineId: string): Promise<FineChargeResul
       status: 'error',
       chargedAmount: 0,
       remainingAmount: 0,
-      error: `Cannot waive fine - authority payment of £${totalPaid} has already been made. Use "Charge to Account" to recover costs from customer.`
+      error: `Cannot waive fine - authority payment of $${totalPaid} has already been made. Use "Charge to Account" to recover costs from customer.`
     };
   }
 

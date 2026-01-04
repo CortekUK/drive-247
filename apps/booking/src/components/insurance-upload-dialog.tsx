@@ -226,29 +226,41 @@ export default function InsuranceUploadDialog({ open, onOpenChange, onUploadComp
 
           if (verifyResult.status === 'rejected') {
             console.log('[INSURANCE-UPLOAD] Document REJECTED:', verifyResult.rejectionReason);
-            toast.error(
-              verifyResult.message || 'This document is not a valid insurance certificate. Please re-upload.',
-              {
-                duration: 8000,
-                description: verifyResult.suggestion || 'Upload a valid insurance certificate'
-              }
-            );
-            setFiles([]);
-            return; // Don't proceed with rejected documents
+            // Show warning but don't block - let user proceed with manual review
+            toast.warning('Document requires review', {
+              duration: 6000,
+              description: 'Our team will verify your insurance document shortly.'
+            });
+            // Don't return - allow user to proceed, manual review will happen
           } else if (verifyResult.status === 'approved') {
             console.log('[INSURANCE-UPLOAD] Document APPROVED');
-            toast.success('Insurance document verified successfully!');
+            const extractedData = verifyResult.extractedData;
+            if (extractedData?.provider || extractedData?.policyNumber) {
+              toast.success('✓ Insurance Verified', {
+                duration: 5000,
+                description: `${extractedData.provider || 'Insurance'} • Policy: ${extractedData.policyNumber || 'Confirmed'}`
+              });
+            } else {
+              toast.success('✓ Insurance document verified!', { duration: 4000 });
+            }
           } else {
             console.log('[INSURANCE-UPLOAD] Document pending review');
-            toast.info('Document uploaded. Verification in progress...');
+            toast.info('Document uploaded', {
+              duration: 4000,
+              description: 'Verification in progress...'
+            });
           }
-        } catch (verifyError: any) {
+        } catch (verifyError: unknown) {
           console.error('[INSURANCE-UPLOAD] Verification API error:', verifyError);
           // Continue anyway - manual review will be needed
+          toast.info('Document uploaded for review', { duration: 3000 });
         }
       }
 
-      toast.success(`${files.length} document(s) uploaded successfully!`);
+      // Only show this if multiple files, otherwise the verification toast is enough
+      if (files.length > 1) {
+        toast.success(`${files.length} documents uploaded!`);
+      }
 
       // Return first document ID and file path for AI scanning
       onUploadComplete(uploadedDocIds[0], uploadedFilePaths[0]);

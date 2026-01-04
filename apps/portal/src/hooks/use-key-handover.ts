@@ -44,7 +44,7 @@ export function useKeyHandover(rentalId: string | undefined) {
           photos:rental_handover_photos(*)
         `)
         .eq("rental_id", rentalId)
-        .order("created_at", { ascending: true });
+        .order("created_at", { ascending: false });
 
       if (error) throw error;
       return data as KeyHandover[];
@@ -68,7 +68,7 @@ export function useKeyHandover(rentalId: string | undefined) {
         .select("id")
         .eq("rental_id", rentalId)
         .eq("handover_type", type)
-        .single();
+        .maybeSingle();
 
       if (existing) return existing;
 
@@ -227,7 +227,7 @@ export function useKeyHandover(rentalId: string | undefined) {
           .from("rentals")
           .select("vehicle_id")
           .eq("id", rentalId)
-          .single();
+          .maybeSingle();
 
         // Update rental status to Closed
         const { error } = await supabase
