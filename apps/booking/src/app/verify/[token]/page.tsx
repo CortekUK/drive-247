@@ -99,6 +99,7 @@ export default function VerifyPage() {
     try {
       console.log('[Camera] Starting camera with mode:', mode);
       setCameraError(null);
+      setIsCameraActive(false);
 
       // Stop any existing stream first
       if (streamRef.current) {
@@ -108,46 +109,82 @@ export default function VerifyPage() {
 
       // Check if getUserMedia is available
       if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-        throw new Error('Camera not supported on this browser. Please use file upload instead.');
+        throw new Error('Camera not supported. Please use file upload.');
       }
 
-      const constraints: MediaStreamConstraints = {
-        video: {
-          facingMode: mode,
-          width: { ideal: 1920 },
-          height: { ideal: 1080 }
-        }
-      };
+      // Try different constraint configurations for better compatibility
+      let stream: MediaStream | null = null;
+      const constraintOptions = [
+        // Try with specific facing mode first
+        { video: { facingMode: mode, width: { ideal: 1280 }, height: { ideal: 720 } } },
+        // Fallback to exact facing mode
+        { video: { facingMode: { exact: mode } } },
+        // Fallback to any camera
+        { video: true }
+      ];
 
-      console.log('[Camera] Requesting user media...');
-      const stream = await navigator.mediaDevices.getUserMedia(constraints);
-      console.log('[Camera] Got stream:', stream.id);
+      for (const constraints of constraintOptions) {
+        try {
+          console.log('[Camera] Trying constraints:', JSON.stringify(constraints));
+          stream = await navigator.mediaDevices.getUserMedia(constraints);
+          if (stream) {
+            console.log('[Camera] Got stream with constraints:', JSON.stringify(constraints));
+            break;
+          }
+        } catch (e) {
+          console.log('[Camera] Failed with constraints:', JSON.stringify(constraints));
+        }
+      }
+
+      if (!stream) {
+        throw new Error('Could not access any camera. Please use file upload.');
+      }
+
       streamRef.current = stream;
+      setFacingMode(mode);
+
+      // Wait a bit for video element to be in DOM
+      await new Promise(resolve => setTimeout(resolve, 100));
 
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
-        try {
-          await videoRef.current.play();
-          console.log('[Camera] Video playing');
-        } catch (playErr) {
-          console.error('[Camera] Play error:', playErr);
-        }
-      }
 
-      setFacingMode(mode);
-      setIsCameraActive(true);
+        // Wait for video to be ready
+        await new Promise<void>((resolve, reject) => {
+          const video = videoRef.current!;
+          video.onloadedmetadata = () => {
+            console.log('[Camera] Video metadata loaded');
+            video.play()
+              .then(() => {
+                console.log('[Camera] Video playing successfully');
+                resolve();
+              })
+              .catch(reject);
+          };
+          video.onerror = () => reject(new Error('Video element error'));
+          // Timeout after 5 seconds
+          setTimeout(() => reject(new Error('Camera timeout')), 5000);
+        });
+
+        setIsCameraActive(true);
+        console.log('[Camera] Camera active and playing');
+      } else {
+        throw new Error('Video element not ready');
+      }
     } catch (err: any) {
       console.error('[Camera] Error:', err);
       let errorMsg = 'Unable to access camera';
-      if (err.name === 'NotAllowedError') {
-        errorMsg = 'Camera permission denied. Use file upload instead.';
-      } else if (err.name === 'NotFoundError') {
-        errorMsg = 'No camera found. Use file upload instead.';
+      if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
+        errorMsg = 'Camera permission denied. Tap below to upload a photo instead.';
+      } else if (err.name === 'NotFoundError' || err.name === 'DevicesNotFoundError') {
+        errorMsg = 'No camera found. Tap below to upload a photo instead.';
+      } else if (err.name === 'NotReadableError' || err.name === 'TrackStartError') {
+        errorMsg = 'Camera is in use by another app. Tap below to upload a photo instead.';
       } else if (err.message) {
         errorMsg = err.message;
       }
       setCameraError(errorMsg);
-      toast.error(errorMsg);
+      setIsCameraActive(false);
     }
   }, []);
 
@@ -583,21 +620,26 @@ export default function VerifyPage() {
 
       {/* Camera / Preview Area */}
       <div className="flex-1 relative bg-black">
-        {isCameraActive && !hasCapture ? (
-          <video
-            ref={videoRef}
-            autoPlay
-            playsInline
-            muted
-            className={`w-full h-full object-cover ${isSelfieStep ? 'scale-x-[-1]' : ''}`}
-          />
-        ) : hasCapture && preview ? (
+        {/* Always render video element but hide when not active */}
+        <video
+          ref={videoRef}
+          autoPlay
+          playsInline
+          muted
+          className={`w-full h-full object-cover ${isSelfieStep ? 'scale-x-[-1]' : ''} ${(!isCameraActive || hasCapture) ? 'hidden' : ''}`}
+        />
+
+        {/* Show captured image preview */}
+        {hasCapture && preview && (
           <img
             src={preview}
             alt="Captured"
             className="w-full h-full object-contain"
           />
-        ) : (
+        )}
+
+        {/* Show loading/error state when camera not active and no capture */}
+        {!isCameraActive && !hasCapture && (
           <div className="w-full h-full flex items-center justify-center text-white">
             <div className="text-center p-4">
               {cameraError ? (
