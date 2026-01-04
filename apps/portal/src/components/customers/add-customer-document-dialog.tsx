@@ -209,7 +209,8 @@ export default function AddCustomerDocumentDialog({
       }
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["customer-documents", customerId] });
+      // Invalidate all customer-documents queries to ensure refresh
+      queryClient.invalidateQueries({ queryKey: ["customer-documents"] });
       toast.success(documentId ? "Document updated successfully" : "Document added successfully");
       form.reset();
       setSelectedFile(null);

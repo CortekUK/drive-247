@@ -56,7 +56,7 @@ const fineFormSchema = z.object({
   amount: z.string().refine((val) => !isNaN(Number(val)) && Number(val) > 0, {
     message: "Amount must be a positive number",
   }),
-  liability: z.enum(["Customer", "Company"]).default("Individual"),
+  liability: z.enum(["Customer", "Business"]).default("Customer"),
   notes: z.string().optional(),
 });
 
@@ -88,8 +88,8 @@ export const AddFineDialog = ({ open, onOpenChange, vehicle_id, customer_id }: A
   useEffect(() => {
     if (open) {
       form.reset({
-        type: "Parking",
-        liability: "Individual",
+        type: "PCN",
+        liability: "Customer",
         vehicle_id: vehicle_id || "",
         customer_id: customer_id || "",
       });
@@ -437,7 +437,7 @@ export const AddFineDialog = ({ open, onOpenChange, vehicle_id, customer_id }: A
                       </FormControl>
                       <SelectContent>
                         <SelectItem value="Customer">Individual</SelectItem>
-                        <SelectItem value="Company">Company</SelectItem>
+                        <SelectItem value="Business">Business</SelectItem>
                       </SelectContent>
                     </Select>
                     <FormMessage />

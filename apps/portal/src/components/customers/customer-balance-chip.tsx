@@ -57,7 +57,7 @@ export const CustomerBalanceChip = ({
       <Tooltip>
         <TooltipTrigger asChild>
           <div className={cn(
-            "flex flex-col items-center gap-0.5",
+            "flex flex-col items-start gap-0.5",
             className
           )}>
             <span className={cn(
