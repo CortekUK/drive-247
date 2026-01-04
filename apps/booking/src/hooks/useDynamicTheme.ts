@@ -309,6 +309,19 @@ export function useDynamicTheme() {
       }
     }
 
+    // Cache CSS variables for instant load on next visit
+    try {
+      const cssVars = Array.from(root.style)
+        .filter(prop => prop.startsWith('--'))
+        .map(prop => `${prop}: ${root.style.getPropertyValue(prop)};`)
+        .join(' ');
+      if (cssVars) {
+        localStorage.setItem('tenant-branding-css', `:root { ${cssVars} }`);
+      }
+    } catch (e) {
+      // localStorage might not be available
+    }
+
   }, [branding, isDarkMode]);
 
   return { branding, isDarkMode };
