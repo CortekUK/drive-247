@@ -173,6 +173,10 @@ async function createEnvelope(accessToken: string, accountInfo: { accountId: str
         console.log('Creating envelope...');
         const { accountId, baseUrl } = accountInfo;
 
+        // Webhook URL - Supabase Edge Function
+        const webhookUrl = `${supabaseUrl}/functions/v1/docusign-webhook`;
+        console.log('Webhook URL:', webhookUrl);
+
         const envelope = {
             emailSubject: `Rental Agreement - ${data.rentalId.substring(0, 8)}`,
             documents: [{
@@ -197,7 +201,27 @@ async function createEnvelope(accessToken: string, accountInfo: { accountId: str
                     }
                 }]
             },
-            status: 'sent'
+            status: 'sent',
+            // Envelope-level webhook - no dashboard config needed!
+            eventNotification: {
+                url: webhookUrl,
+                loggingEnabled: true,
+                requireAcknowledgment: true,
+                envelopeEvents: [
+                    { envelopeEventStatusCode: 'sent' },
+                    { envelopeEventStatusCode: 'delivered' },
+                    { envelopeEventStatusCode: 'signed' },
+                    { envelopeEventStatusCode: 'completed' },
+                    { envelopeEventStatusCode: 'declined' },
+                    { envelopeEventStatusCode: 'voided' }
+                ],
+                recipientEvents: [
+                    { recipientEventStatusCode: 'Sent' },
+                    { recipientEventStatusCode: 'Delivered' },
+                    { recipientEventStatusCode: 'Completed' },
+                    { recipientEventStatusCode: 'Declined' }
+                ]
+            }
         };
 
         const response = await fetch(
@@ -272,21 +296,22 @@ export async function POST(request: NextRequest) {
             return NextResponse.json({ ok: false, error: 'Failed to create envelope' }, { status: 500 });
         }
 
-        // 4. Update rental record with DocuSign status
+        // 4. Update rental record with DocuSign status and envelope ID
         if (supabaseUrl && supabaseServiceKey) {
             try {
                 const supabase = createClient(supabaseUrl, supabaseServiceKey);
                 const { error: updateError } = await supabase
                     .from('rentals')
                     .update({
-                        document_status: 'sent'
+                        document_status: 'sent',
+                        docusign_envelope_id: envelopeId  // Store envelope ID for webhook lookup
                     })
                     .eq('id', body.rentalId);
 
                 if (updateError) {
-                    console.error('Failed to update rental document_status:', updateError);
+                    console.error('Failed to update rental:', updateError);
                 } else {
-                    console.log('Rental document_status updated to "sent"');
+                    console.log('Rental updated - document_status: sent, envelope_id:', envelopeId);
                 }
             } catch (dbError) {
                 console.error('Database update error:', dbError);
