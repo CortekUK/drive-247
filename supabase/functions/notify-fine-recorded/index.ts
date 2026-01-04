@@ -1,11 +1,12 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.4";
 import {
   corsHeaders,
   signedAWSRequest,
   parseXMLValue,
   isAWSConfigured
 } from "../_shared/aws-config.ts";
-import { sendEmail } from "../_shared/resend-service.ts";
+import { sendEmail, getTenantAdminEmail } from "../_shared/resend-service.ts";
 
 interface NotifyRequest {
   customerName: string;
@@ -21,6 +22,7 @@ interface NotifyRequest {
   fineLocation?: string;
   dueDate?: string;
   description?: string;
+  tenantId?: string;
 }
 
 const getCustomerEmailHtml = (data: NotifyRequest) => {
@@ -29,7 +31,7 @@ const getCustomerEmailHtml = (data: NotifyRequest) => {
 <html>
 <head>
     <meta charset="utf-8">
-    <title>Traffic Fine Notice - DRIVE 247</title>
+    <title>Traffic Fine Notice</title>
 </head>
 <body style="margin: 0; padding: 0; font-family: 'Segoe UI', Arial, sans-serif; background-color: #f5f5f5;">
     <table role="presentation" style="width: 100%; border-collapse: collapse;">
@@ -38,7 +40,7 @@ const getCustomerEmailHtml = (data: NotifyRequest) => {
                 <table role="presentation" style="width: 600px; max-width: 100%; border-collapse: collapse; background: white; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.1);">
                     <tr>
                         <td style="background: linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 100%); padding: 30px; border-radius: 12px 12px 0 0; text-align: center;">
-                            <h1 style="margin: 0; color: #C5A572; font-size: 28px; letter-spacing: 2px;">DRIVE 247</h1>
+                            <h1 style="margin: 0; color: #C5A572; font-size: 28px; letter-spacing: 2px;">Traffic Fine Notice</h1>
                         </td>
                     </tr>
                     <tr>
@@ -119,21 +121,11 @@ const getCustomerEmailHtml = (data: NotifyRequest) => {
                                     </td>
                                 </tr>
                             </table>
-                            <table role="presentation" style="width: 100%; border-collapse: collapse;">
-                                <tr>
-                                    <td style="text-align: center; padding: 20px 0;">
-                                        <a href="mailto:support@drive-247.com" style="display: inline-block; background: #C5A572; color: white; padding: 14px 35px; border-radius: 6px; text-decoration: none; font-weight: 600; font-size: 16px;">Contact Support</a>
-                                    </td>
-                                </tr>
-                            </table>
                         </td>
                     </tr>
                     <tr>
                         <td style="background: #f8f9fa; padding: 25px 30px; border-radius: 0 0 12px 12px; text-align: center;">
-                            <p style="margin: 0 0 10px; color: #666; font-size: 14px;">
-                                Questions? Email us at <a href="mailto:support@drive-247.com" style="color: #C5A572; text-decoration: none;">support@drive-247.com</a>
-                            </p>
-                            <p style="margin: 0; color: #999; font-size: 12px;">&copy; 2024 DRIVE 247. All rights reserved.</p>
+                            <p style="margin: 0; color: #999; font-size: 12px;">&copy; 2024 All rights reserved.</p>
                         </td>
                     </tr>
                 </table>
@@ -154,7 +146,7 @@ const getAdminEmailHtml = (data: NotifyRequest) => {
     <table style="width: 100%; max-width: 600px; margin: 0 auto; background: white; border-radius: 8px; overflow: hidden;">
         <tr>
             <td style="background: #1a1a1a; padding: 20px; text-align: center;">
-                <h1 style="margin: 0; color: #C5A572; font-size: 24px;">DRIVE 247 ADMIN</h1>
+                <h1 style="margin: 0; color: #C5A572; font-size: 24px;">ADMIN NOTIFICATION</h1>
             </td>
         </tr>
         <tr>
@@ -181,8 +173,6 @@ const getAdminEmailHtml = (data: NotifyRequest) => {
 </html>
 `;
 };
-
-// sendEmail is now imported from resend-service.ts
 
 async function sendSMS(phoneNumber: string, message: string) {
   if (!isAWSConfigured() || !phoneNumber) {
@@ -233,17 +223,24 @@ serve(async (req) => {
     const data: NotifyRequest = await req.json();
     console.log('Sending fine notification for:', data.fineRef);
 
+    // Create supabase client for all email operations
+    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+    const supabase = createClient(supabaseUrl, supabaseServiceKey);
+
     const results = {
       customerEmail: null as any,
       customerSMS: null as any,
       adminEmail: null as any,
     };
 
-    // Send customer email
+    // Send customer email (with tenant-specific from address)
     results.customerEmail = await sendEmail(
       data.customerEmail,
-      `Traffic Fine Notice - $${data.fineAmount} | DRIVE 247`,
-      getCustomerEmailHtml(data)
+      `Traffic Fine Notice - $${data.fineAmount}`,
+      getCustomerEmailHtml(data),
+      supabase,
+      data.tenantId
     );
     console.log('Customer email result:', results.customerEmail);
 
@@ -251,19 +248,33 @@ serve(async (req) => {
     if (data.customerPhone) {
       results.customerSMS = await sendSMS(
         data.customerPhone,
-        `DRIVE 247: A ${data.fineType} fine of $${data.fineAmount} has been recorded for your rental ${data.bookingRef}. Check your email for details.`
+        `A ${data.fineType} fine of $${data.fineAmount} has been recorded for your rental ${data.bookingRef}. Check your email for details.`
       );
       console.log('Customer SMS result:', results.customerSMS);
     }
 
+    // Get tenant-specific admin email, fall back to env variable
+    let adminEmail: string | null = null;
+    if (data.tenantId) {
+      adminEmail = await getTenantAdminEmail(data.tenantId, supabase);
+      console.log('Using tenant admin email:', adminEmail);
+    }
+    if (!adminEmail) {
+      adminEmail = Deno.env.get('ADMIN_EMAIL') || null;
+      console.log('Falling back to env ADMIN_EMAIL:', adminEmail);
+    }
+
     // Send admin email
-    const adminEmail = EMAIL_CONFIG.adminEmail;
-    results.adminEmail = await sendEmail(
-      adminEmail,
-      `New Fine Recorded - ${data.fineRef} - $${data.fineAmount} | DRIVE 247`,
-      getAdminEmailHtml(data)
-    );
-    console.log('Admin email result:', results.adminEmail);
+    if (adminEmail) {
+      results.adminEmail = await sendEmail(
+        adminEmail,
+        `New Fine Recorded - ${data.fineRef} - $${data.fineAmount}`,
+        getAdminEmailHtml(data),
+        supabase,
+        data.tenantId
+      );
+      console.log('Admin email result:', results.adminEmail);
+    }
 
     return new Response(
       JSON.stringify({ success: true, results }),

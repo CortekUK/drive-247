@@ -1,11 +1,12 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.4";
 import {
   corsHeaders,
   signedAWSRequest,
   parseXMLValue,
   isAWSConfigured
 } from "../_shared/aws-config.ts";
-import { sendEmail } from "../_shared/resend-service.ts";
+import { sendEmail, getTenantAdminEmail } from "../_shared/resend-service.ts";
 
 interface NotifyRequest {
   bookingRef: string;
@@ -16,6 +17,7 @@ interface NotifyRequest {
   amount: number;
   expiresAt: string;
   hoursRemaining: number;
+  tenantId?: string;
 }
 
 const getEmailHtml = (data: NotifyRequest) => {

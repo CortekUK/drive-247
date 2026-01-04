@@ -1,11 +1,9 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.4";
 import {
   corsHeaders,
-  signedAWSRequest,
-  parseXMLValue,
-  isAWSConfigured
 } from "../_shared/aws-config.ts";
-import { sendEmail } from "../_shared/resend-service.ts";
+import { sendEmail, getTenantAdminEmail } from "../_shared/resend-service.ts";
 
 interface NotifyRequest {
   customerName: string;
@@ -16,6 +14,7 @@ interface NotifyRequest {
   envelopeId: string;
   signedAt: string;
   documentUrl?: string;
+  tenantId?: string;
 }
 
 const getAdminEmailHtml = (data: NotifyRequest) => {
@@ -72,18 +71,37 @@ serve(async (req) => {
     const data: NotifyRequest = await req.json();
     console.log('Sending DocuSign completed notification for:', data.bookingRef);
 
+    // Create supabase client for all email operations
+    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+    const supabase = createClient(supabaseUrl, supabaseServiceKey);
+
     const results = {
       adminEmail: null as any,
     };
 
+    // Get tenant-specific admin email, fall back to env variable
+    let adminEmail: string | null = null;
+    if (data.tenantId) {
+      adminEmail = await getTenantAdminEmail(data.tenantId, supabase);
+      console.log('Using tenant admin email:', adminEmail);
+    }
+    if (!adminEmail) {
+      adminEmail = Deno.env.get('ADMIN_EMAIL') || null;
+      console.log('Falling back to env ADMIN_EMAIL:', adminEmail);
+    }
+
     // Send admin email
-    const adminEmail = EMAIL_CONFIG.adminEmail;
-    results.adminEmail = await sendEmail(
-      adminEmail,
-      `Contract Signed - ${data.bookingRef} - ${data.customerName} | DRIVE 247`,
-      getAdminEmailHtml(data)
-    );
-    console.log('Admin email result:', results.adminEmail);
+    if (adminEmail) {
+      results.adminEmail = await sendEmail(
+        adminEmail,
+        `Contract Signed - ${data.bookingRef} - ${data.customerName}`,
+        getAdminEmailHtml(data),
+        supabase,
+        data.tenantId
+      );
+      console.log('Admin email result:', results.adminEmail);
+    }
 
     return new Response(
       JSON.stringify({ success: true, results }),

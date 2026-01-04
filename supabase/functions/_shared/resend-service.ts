@@ -28,7 +28,7 @@ async function getTenantEmailSettings(tenantId: string, supabaseClient: any) {
   try {
     const { data, error } = await supabaseClient
       .from('tenants')
-      .select('email_from, company_name')
+      .select('slug, company_name, admin_email, contact_email')
       .eq('id', tenantId)
       .single();
 
@@ -40,6 +40,31 @@ async function getTenantEmailSettings(tenantId: string, supabaseClient: any) {
     return data;
   } catch (error) {
     console.error('Exception fetching tenant settings:', error);
+    return null;
+  }
+}
+
+/**
+ * Get tenant admin email for notifications
+ * Falls back to contact_email if admin_email not set
+ */
+export async function getTenantAdminEmail(tenantId: string, supabaseClient: any): Promise<string | null> {
+  try {
+    const { data, error } = await supabaseClient
+      .from('tenants')
+      .select('admin_email, contact_email')
+      .eq('id', tenantId)
+      .single();
+
+    if (error) {
+      console.error('Error fetching tenant admin email:', error);
+      return null;
+    }
+
+    // Prefer admin_email, fall back to contact_email
+    return data?.admin_email || data?.contact_email || null;
+  } catch (error) {
+    console.error('Exception fetching tenant admin email:', error);
     return null;
   }
 }
@@ -73,8 +98,9 @@ export async function sendResendEmail(
   if (options.tenantId && supabaseClient) {
     const tenantSettings = await getTenantEmailSettings(options.tenantId, supabaseClient);
     if (tenantSettings) {
-      if (tenantSettings.email_from) {
-        fromEmail = tenantSettings.email_from;
+      // Use {slug}@drive-247.com as the from email
+      if (tenantSettings.slug) {
+        fromEmail = `${tenantSettings.slug}@drive-247.com`;
       }
       if (tenantSettings.company_name) {
         fromName = tenantSettings.company_name;

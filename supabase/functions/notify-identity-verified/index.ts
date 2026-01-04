@@ -1,11 +1,12 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.4";
 import {
   corsHeaders,
   signedAWSRequest,
   parseXMLValue,
   isAWSConfigured
 } from "../_shared/aws-config.ts";
-import { sendEmail } from "../_shared/resend-service.ts";
+import { sendEmail, getTenantAdminEmail } from "../_shared/resend-service.ts";
 
 interface NotifyRequest {
   customerName: string;
@@ -14,6 +15,7 @@ interface NotifyRequest {
   verificationStatus: "approved" | "declined" | "resubmission_requested";
   declineReason?: string;
   bookingRef?: string;
+  tenantId?: string;
 }
 
 const getStatusMessage = (status: string) => {
@@ -193,13 +195,8 @@ async function sendSMS(phoneNumber: string, message: string) {
   return { success: true, messageId: parseXMLValue(responseText, 'MessageId') };
 }
 
-async function sendAdminNotification(data: NotifyRequest) {
-  if (data.verificationStatus !== "declined") return null;
-
-  const adminEmail = EMAIL_CONFIG.adminEmail;
-  const subject = `Identity Verification Failed - ${data.customerName} | DRIVE 247`;
-
-  const html = `
+function getAdminNotificationHtml(data: NotifyRequest) {
+  return `
 <!DOCTYPE html>
 <html>
 <head><meta charset="utf-8"><title>Identity Verification Failed</title></head>
@@ -207,7 +204,7 @@ async function sendAdminNotification(data: NotifyRequest) {
     <table style="width: 100%; max-width: 600px; margin: 0 auto; background: white; border-radius: 8px; overflow: hidden;">
         <tr>
             <td style="background: #1a1a1a; padding: 20px; text-align: center;">
-                <h1 style="margin: 0; color: #C5A572; font-size: 24px;">DRIVE 247 ADMIN</h1>
+                <h1 style="margin: 0; color: #C5A572; font-size: 24px;">ADMIN NOTIFICATION</h1>
             </td>
         </tr>
         <tr>
@@ -228,8 +225,6 @@ async function sendAdminNotification(data: NotifyRequest) {
 </body>
 </html>
 `;
-
-  return await sendEmail(adminEmail, subject, html);
 }
 
 serve(async (req) => {
@@ -241,40 +236,66 @@ serve(async (req) => {
     const data: NotifyRequest = await req.json();
     console.log('Sending identity verification notification for:', data.customerEmail);
 
+    // Create supabase client for all email operations
+    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+    const supabase = createClient(supabaseUrl, supabaseServiceKey);
+
     const results = {
       customerEmail: null as any,
       customerSMS: null as any,
       adminEmail: null as any,
     };
 
-    // Send customer email
+    // Send customer email (with tenant-specific from address)
     const statusText = data.verificationStatus === "approved" ? "Verified"
       : data.verificationStatus === "declined" ? "Declined"
       : "Action Required";
 
     results.customerEmail = await sendEmail(
       data.customerEmail,
-      `Identity Verification ${statusText} | DRIVE 247`,
-      getEmailHtml(data)
+      `Identity Verification ${statusText}`,
+      getEmailHtml(data),
+      supabase,
+      data.tenantId
     );
     console.log('Customer email result:', results.customerEmail);
 
     // Send customer SMS
     if (data.customerPhone) {
       const smsMessage = data.verificationStatus === "approved"
-        ? `DRIVE 247: Your identity has been verified successfully. Your booking will be processed shortly.`
+        ? `Your identity has been verified successfully. Your booking will be processed shortly.`
         : data.verificationStatus === "declined"
-        ? `DRIVE 247: Your identity verification was unsuccessful. Please contact support for assistance.`
-        : `DRIVE 247: We need you to resubmit your identity documents. Please check your email for details.`;
+        ? `Your identity verification was unsuccessful. Please contact support for assistance.`
+        : `We need you to resubmit your identity documents. Please check your email for details.`;
 
       results.customerSMS = await sendSMS(data.customerPhone, smsMessage);
       console.log('Customer SMS result:', results.customerSMS);
     }
 
     // Send admin notification for declined verifications
-    results.adminEmail = await sendAdminNotification(data);
-    if (results.adminEmail) {
-      console.log('Admin email result:', results.adminEmail);
+    if (data.verificationStatus === "declined") {
+      // Get tenant-specific admin email, fall back to env variable
+      let adminEmail: string | null = null;
+      if (data.tenantId) {
+        adminEmail = await getTenantAdminEmail(data.tenantId, supabase);
+        console.log('Using tenant admin email:', adminEmail);
+      }
+      if (!adminEmail) {
+        adminEmail = Deno.env.get('ADMIN_EMAIL') || null;
+        console.log('Falling back to env ADMIN_EMAIL:', adminEmail);
+      }
+
+      if (adminEmail) {
+        results.adminEmail = await sendEmail(
+          adminEmail,
+          `Identity Verification Failed - ${data.customerName}`,
+          getAdminNotificationHtml(data),
+          supabase,
+          data.tenantId
+        );
+        console.log('Admin email result:', results.adminEmail);
+      }
     }
 
     return new Response(

@@ -6,7 +6,7 @@ import {
   parseXMLValue,
   isAWSConfigured
 } from "../_shared/aws-config.ts";
-import { sendEmail } from "../_shared/resend-service.ts";
+import { sendEmail, getTenantAdminEmail } from "../_shared/resend-service.ts";
 import { renderEmail, EmailTemplateData } from "../_shared/email-template-service.ts";
 
 interface NotifyRequest {
@@ -213,13 +213,13 @@ serve(async (req) => {
     let customerSubject = `Booking Received - Reference: ${data.bookingRef} | DRIVE 247`;
     let customerHtml = getCustomerEmailHtml(data);
 
+    // Create supabase client for all email operations
+    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+    const supabase = createClient(supabaseUrl, supabaseServiceKey);
+
     if (data.tenantId) {
       try {
-        // Create supabase admin client
-        const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
-        const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-        const supabase = createClient(supabaseUrl, supabaseServiceKey);
-
         // Prepare template data
         const templateData: EmailTemplateData = {
           customer_name: data.customerName,
@@ -246,11 +246,13 @@ serve(async (req) => {
       }
     }
 
-    // Send customer email
+    // Send customer email (with tenant-specific from address)
     results.customerEmail = await sendEmail(
       data.customerEmail,
       customerSubject,
-      customerHtml
+      customerHtml,
+      supabase,
+      data.tenantId
     );
     console.log('Customer email result:', results.customerEmail);
 
@@ -258,28 +260,40 @@ serve(async (req) => {
     if (data.customerPhone) {
       results.customerSMS = await sendSMS(
         data.customerPhone,
-        `DRIVE 247: Your booking ${data.bookingRef} has been received and is under review. We'll confirm within 24 hours.`
+        `Your booking ${data.bookingRef} has been received and is under review. We'll confirm within 24 hours.`
       );
       console.log('Customer SMS result:', results.customerSMS);
     }
 
+    // Get tenant-specific admin email, fall back to env variable
+    let adminEmail: string | null = null;
+    if (data.tenantId) {
+      adminEmail = await getTenantAdminEmail(data.tenantId, supabase);
+      console.log('Using tenant admin email:', adminEmail);
+    }
+    if (!adminEmail) {
+      adminEmail = Deno.env.get('ADMIN_EMAIL') || null;
+      console.log('Falling back to env ADMIN_EMAIL:', adminEmail);
+    }
+
     // Send admin email
-    const adminEmail = Deno.env.get('ADMIN_EMAIL') || 'admin@drive-247.com';
     if (adminEmail) {
       results.adminEmail = await sendEmail(
         adminEmail,
         `[ACTION REQUIRED] New Booking Pending: ${data.customerName} - ${data.vehicleName}`,
-        getAdminEmailHtml(data)
+        getAdminEmailHtml(data),
+        supabase,
+        data.tenantId
       );
       console.log('Admin email result:', results.adminEmail);
     }
 
-    // Send admin SMS
+    // Send admin SMS (only if env configured - tenant SMS not yet supported)
     const adminPhone = Deno.env.get('ADMIN_PHONE');
     if (adminPhone) {
       results.adminSMS = await sendSMS(
         adminPhone,
-        `DRIVE 247: New booking pending from ${data.customerName} for ${data.vehicleName}. Amount: $${data.amount}. Review now.`
+        `New booking pending from ${data.customerName} for ${data.vehicleName}. Amount: $${data.amount}. Review now.`
       );
       console.log('Admin SMS result:', results.adminSMS);
     }
