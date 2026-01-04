@@ -24,7 +24,18 @@
       "Bash(git ls-tree:*)",
       "Bash(wc:*)",
       "Bash(git show:*)",
-      "Bash(node scripts/create-site-settings-page.js:*)"
+      "Bash(node scripts/create-site-settings-page.js:*)",
+      "Bash(npm ls:*)",
+      "Bash(taskkill //F //PID 15100)",
+      "Bash(git reset:*)",
+      "Bash(git commit -m \"$\\(cat <<''EOF''\nfix\\(portal\\): vehicle fixes - service type, document upload, disposal dialog\n\n- Add service_type field to service records with dropdown selection\n- Rename Description to Notes in service record form\n- Fix document upload not showing after upload \\(query key mismatch\\)\n- Fix vehicle disposal dialog height issue with scroll\n- Add .env and .claude/ to gitignore\n\n🤖 Generated with [Claude Code]\\(https://claude.com/claude-code\\)\n\nCo-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>\nEOF\n\\)\")",
+      "Bash(git push:*)",
+      "Bash(npx tsc:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(taskkill //F //PID 20896)",
+      "Bash(git checkout:*)",
+      "Bash(find:*)"
     ],
     "deny": [],
     "ask": []
