@@ -113,7 +113,7 @@ export function InsurancePolicyDialog({
         .from("rentals")
         .select(`
           vehicle_id,
-          vehicles!inner(
+          vehicles!rentals_vehicle_id_fkey(
             id,
             reg,
             make,
@@ -122,7 +122,7 @@ export function InsurancePolicyDialog({
         `)
         .eq("customer_id", customerId)
         .eq("status", "Active");
-      
+
       if (error) throw error;
       return data.map(r => r.vehicles).filter(Boolean);
     },

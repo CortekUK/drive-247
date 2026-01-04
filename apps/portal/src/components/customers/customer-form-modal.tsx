@@ -362,6 +362,10 @@ export const CustomerFormModal = ({ open, onOpenChange, customer }: CustomerForm
       queryClient.invalidateQueries({ queryKey: ["customers-list"] });
       queryClient.invalidateQueries({ queryKey: ["customer-balances-list"] });
       queryClient.invalidateQueries({ queryKey: ["customer-balances-enhanced"] });
+      // Also refresh the specific customer detail page if editing
+      if (isEditing && customer?.id) {
+        queryClient.invalidateQueries({ queryKey: ["customer", customer.id] });
+      }
 
       // Close modal and reset form
       onOpenChange(false);

@@ -77,7 +77,7 @@ export default function AddCustomerDocumentDialog({
       const { data, error } = await supabase
         .from("rentals")
         .select(`
-          vehicles(id, reg, make, model)
+          vehicles!rentals_vehicle_id_fkey(id, reg, make, model)
         `)
         .eq("customer_id", customerId)
         .eq("status", "Active");
@@ -209,7 +209,8 @@ export default function AddCustomerDocumentDialog({
       }
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["customer-documents", customerId] });
+      // Invalidate all customer-documents queries to ensure refresh
+      queryClient.invalidateQueries({ queryKey: ["customer-documents"] });
       toast.success(documentId ? "Document updated successfully" : "Document added successfully");
       form.reset();
       setSelectedFile(null);

@@ -23,7 +23,8 @@
       "Bash(node -e:*)",
       "Bash(git ls-tree:*)",
       "Bash(wc:*)",
-      "Bash(git show:*)"
+      "Bash(git show:*)",
+      "Bash(node scripts/create-site-settings-page.js:*)"
     ],
     "deny": [],
     "ask": []

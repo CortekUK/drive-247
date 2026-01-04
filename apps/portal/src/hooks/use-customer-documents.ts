@@ -42,7 +42,7 @@ export function useCustomerDocuments(customerId: string) {
         .from("customer_documents")
         .select(`
           *,
-          vehicles(id, reg, make, model)
+          vehicles!customer_documents_vehicle_id_fkey(id, reg, make, model)
         `)
         .eq("tenant_id", tenant.id)
         .eq("customer_id", customerId)
@@ -96,10 +96,9 @@ export function useDeleteCustomerDocument() {
       if (error) throw error;
       return document?.customer_id;
     },
-    onSuccess: (customerId) => {
-      if (customerId) {
-        queryClient.invalidateQueries({ queryKey: ["customer-documents", customerId] });
-      }
+    onSuccess: () => {
+      // Invalidate all customer-documents queries to ensure refresh
+      queryClient.invalidateQueries({ queryKey: ["customer-documents"] });
       toast.success("Document deleted successfully");
     },
     onError: (error) => {

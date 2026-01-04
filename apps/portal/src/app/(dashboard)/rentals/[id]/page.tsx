@@ -9,7 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { FileText, ArrowLeft, PoundSterling, Plus, X, Send, Download, Ban, Check, AlertTriangle, Loader2, Shield, CheckCircle, XCircle, ExternalLink, UserCheck, IdCard, Camera, FileSignature, Clock, Mail, RefreshCw, Trash2 } from "lucide-react";
+import { FileText, ArrowLeft, DollarSign, Plus, X, Send, Download, Ban, Check, AlertTriangle, Loader2, Shield, CheckCircle, XCircle, ExternalLink, UserCheck, IdCard, Camera, FileSignature, Clock, Mail, RefreshCw, Trash2 } from "lucide-react";
 import { AddPaymentDialog } from "@/components/shared/dialogs/add-payment-dialog";
 import { useToast } from "@/hooks/use-toast";
 import { useTenant } from "@/contexts/TenantContext";
@@ -33,7 +33,7 @@ interface Rental {
   signed_document_id?: string;
   insurance_status?: string;
   customer_id?: string;
-  customers: { id: string; name: string; email?: string };
+  customers: { id: string; name: string; email?: string; phone?: string | null };
   vehicles: { id: string; reg: string; make: string; model: string };
 }
 
@@ -50,23 +50,28 @@ const RentalDetail = () => {
   const [showRejectionDialog, setShowRejectionDialog] = useState(false);
 
 
-  const { data: rental, isLoading } = useQuery({
-    queryKey: ["rental", id],
+  const { data: rental, isLoading, error: rentalError } = useQuery({
+    queryKey: ["rental", id, tenant?.id],
     queryFn: async () => {
+      if (!tenant?.id) throw new Error("No tenant context");
+
       const { data, error } = await supabase
         .from("rentals")
         .select(`
           *,
-          customers(id, name, email),
-          vehicles(id, reg, make, model)
+          customers!rentals_customer_id_fkey(id, name, email, phone),
+          vehicles!rentals_vehicle_id_fkey(id, reg, make, model)
         `)
         .eq("id", id)
-        .single();
+        .eq("tenant_id", tenant.id)
+        .maybeSingle();
 
       if (error) throw error;
+      if (!data) throw new Error("Rental not found");
+      if (!data.customers) throw new Error("Rental customer not found");
       return data as Rental;
     },
-    enabled: !!id,
+    enabled: !!id && !!tenant?.id,
   });
 
   const { data: rentalTotals } = useRentalTotals(id);
@@ -101,9 +106,12 @@ const RentalDetail = () => {
         .eq("rental_id", id)
         .order("created_at", { ascending: false })
         .limit(1)
-        .single();
+        .maybeSingle();
 
-      if (error && error.code !== 'PGRST116') throw error;
+      if (error) {
+        console.error("Error fetching rental payment:", error);
+        return null;
+      }
       return data;
     },
     enabled: !!id && !!tenant?.id,
@@ -173,7 +181,7 @@ const RentalDetail = () => {
       if (tenant?.id) {
         const { data: unlinkedDocs } = await supabase
           .from("customer_documents")
-          .select("*, customers:customer_id(email)")
+          .select("*, customers!customer_documents_customer_id_fkey(email)")
           .eq("document_type", "Insurance Certificate")
           .eq("tenant_id", tenant.id)
           .is("rental_id", null)
@@ -739,6 +747,14 @@ const RentalDetail = () => {
               <p className="font-medium">{rental.customers?.name}</p>
             </div>
             <div>
+              <p className="text-sm text-muted-foreground">Date of Birth</p>
+              <p className="font-medium">
+                {identityVerification?.date_of_birth
+                  ? `${new Date(identityVerification.date_of_birth).toLocaleDateString()} (${Math.floor((Date.now() - new Date(identityVerification.date_of_birth).getTime()) / (365.25 * 24 * 60 * 60 * 1000))} yrs)`
+                  : 'No DOB'}
+              </p>
+            </div>
+            <div>
               <p className="text-sm text-muted-foreground">Vehicle</p>
               <p className="font-medium">
                 {rental.vehicles?.reg} ({rental.vehicles?.make} {rental.vehicles?.model})
@@ -1221,7 +1237,7 @@ const RentalDetail = () => {
             Identity Verification
           </CardTitle>
           <CardDescription>
-            Veriff identity verification status and documents for this customer
+            Identity verification status and documents for this customer
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -1280,6 +1296,16 @@ const RentalDetail = () => {
                       Pending
                     </Badge>
                   )}
+                  {/* Provider Badge */}
+                  {identityVerification.verification_provider === 'ai' ? (
+                    <Badge variant="outline" className="border-purple-500 text-purple-600">
+                      AI Verified
+                    </Badge>
+                  ) : (
+                    <Badge variant="secondary">
+                      Veriff
+                    </Badge>
+                  )}
                 </div>
                 {identityVerification.verification_completed_at && (
                   <span className="text-sm text-muted-foreground">
@@ -1287,6 +1313,53 @@ const RentalDetail = () => {
                   </span>
                 )}
               </div>
+
+              {/* AI Face Match Score - only show for AI verifications */}
+              {identityVerification.verification_provider === 'ai' && identityVerification.ai_face_match_score && (
+                <div className="border border-border rounded-lg p-4 bg-card">
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center gap-3">
+                      <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${
+                        identityVerification.ai_face_match_score >= 0.9 ? 'bg-green-500/10' :
+                        identityVerification.ai_face_match_score >= 0.7 ? 'bg-yellow-500/10' : 'bg-red-500/10'
+                      }`}>
+                        <Camera className={`h-5 w-5 ${
+                          identityVerification.ai_face_match_score >= 0.9 ? 'text-green-500' :
+                          identityVerification.ai_face_match_score >= 0.7 ? 'text-yellow-500' : 'text-red-500'
+                        }`} />
+                      </div>
+                      <div>
+                        <p className="text-sm font-medium">Face Match Score</p>
+                        <p className="text-xs text-muted-foreground">AI Biometric Verification</p>
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <p className={`text-2xl font-bold ${
+                        identityVerification.ai_face_match_score >= 0.9 ? 'text-green-500' :
+                        identityVerification.ai_face_match_score >= 0.7 ? 'text-yellow-500' : 'text-red-500'
+                      }`}>
+                        {(identityVerification.ai_face_match_score * 100).toFixed(1)}%
+                      </p>
+                      <p className={`text-xs font-medium ${
+                        identityVerification.ai_face_match_score >= 0.9 ? 'text-green-500' :
+                        identityVerification.ai_face_match_score >= 0.7 ? 'text-yellow-500' : 'text-red-500'
+                      }`}>
+                        {identityVerification.ai_face_match_score >= 0.9 ? 'Excellent Match' :
+                         identityVerification.ai_face_match_score >= 0.7 ? 'Needs Review' : 'Low Match'}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="relative h-2 bg-muted rounded-full overflow-hidden">
+                    <div
+                      className={`absolute left-0 top-0 h-full rounded-full transition-all ${
+                        identityVerification.ai_face_match_score >= 0.9 ? 'bg-green-500' :
+                        identityVerification.ai_face_match_score >= 0.7 ? 'bg-yellow-500' : 'bg-red-500'
+                      }`}
+                      style={{ width: `${identityVerification.ai_face_match_score * 100}%` }}
+                    />
+                  </div>
+                </div>
+              )}
 
               {/* Extracted Person Info */}
               {(identityVerification.first_name || identityVerification.last_name || identityVerification.date_of_birth) && (
@@ -1355,13 +1428,13 @@ const RentalDetail = () => {
               )}
 
               {/* Document Images */}
-              {(identityVerification.document_front_url || identityVerification.document_back_url) && (
+              {(identityVerification.document_front_url || identityVerification.document_back_url || identityVerification.selfie_image_url) && (
                 <div className="bg-muted/50 rounded-lg p-4">
                   <h4 className="text-sm font-semibold mb-3 flex items-center gap-2">
                     <Camera className="h-4 w-4" />
                     Verification Images
                   </h4>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                     {identityVerification.document_front_url && (
                       <div className="space-y-2">
                         <span className="text-sm text-muted-foreground">ID Front</span>
@@ -1418,7 +1491,35 @@ const RentalDetail = () => {
                         </Button>
                       </div>
                     )}
-                                      </div>
+                    {identityVerification.selfie_image_url && (
+                      <div className="space-y-2">
+                        <span className="text-sm text-muted-foreground">Selfie</span>
+                        <div className="relative aspect-[3/4] bg-black/5 rounded-lg overflow-hidden border">
+                          <img
+                            src={identityVerification.selfie_image_url}
+                            alt="Selfie"
+                            className="w-full h-full object-contain"
+                            onError={(e) => {
+                              (e.target as HTMLImageElement).style.display = 'none';
+                              (e.target as HTMLImageElement).nextElementSibling?.classList.remove('hidden');
+                            }}
+                          />
+                          <div className="hidden absolute inset-0 flex items-center justify-center text-muted-foreground text-sm">
+                            Image unavailable
+                          </div>
+                        </div>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="w-full"
+                          onClick={() => window.open(identityVerification.selfie_image_url, '_blank')}
+                        >
+                          <ExternalLink className="h-3 w-3 mr-1" />
+                          View Full Size
+                        </Button>
+                      </div>
+                    )}
+                  </div>
                   {identityVerification.media_fetched_at && (
                     <p className="text-xs text-muted-foreground mt-3">
                       Images fetched: {new Date(identityVerification.media_fetched_at).toLocaleString()}
