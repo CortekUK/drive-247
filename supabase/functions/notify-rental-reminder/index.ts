@@ -6,7 +6,12 @@ import {
   parseXMLValue,
   isAWSConfigured
 } from "../_shared/aws-config.ts";
-import { sendEmail } from "../_shared/resend-service.ts";
+import {
+  sendEmail,
+  getTenantBranding,
+  TenantBranding,
+  wrapWithBrandedTemplate
+} from "../_shared/resend-service.ts";
 
 interface NotifyRequest {
   customerName: string;
@@ -68,26 +73,10 @@ const getReminderContent = (type: string, daysOverdue?: number) => {
   }
 };
 
-const getEmailHtml = (data: NotifyRequest) => {
+const getEmailContent = (data: NotifyRequest, branding: TenantBranding) => {
   const content = getReminderContent(data.reminderType, data.daysOverdue);
 
   return `
-<!DOCTYPE html>
-<html>
-<head>
-    <meta charset="utf-8">
-    <title>${content.title} - DRIVE 247</title>
-</head>
-<body style="margin: 0; padding: 0; font-family: 'Segoe UI', Arial, sans-serif; background-color: #f5f5f5;">
-    <table role="presentation" style="width: 100%; border-collapse: collapse;">
-        <tr>
-            <td align="center" style="padding: 40px 0;">
-                <table role="presentation" style="width: 600px; max-width: 100%; border-collapse: collapse; background: white; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.1);">
-                    <tr>
-                        <td style="background: linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 100%); padding: 30px; border-radius: 12px 12px 0 0; text-align: center;">
-                            <h1 style="margin: 0; color: #C5A572; font-size: 28px; letter-spacing: 2px;">DRIVE 247</h1>
-                        </td>
-                    </tr>
                     <tr>
                         <td style="padding: 30px 30px 0; text-align: center;">
                             <span style="display: inline-block; background: ${content.badgeBg}; color: ${content.badgeColor}; padding: 8px 20px; border-radius: 20px; font-weight: 600; font-size: 14px;">
@@ -171,27 +160,12 @@ const getEmailHtml = (data: NotifyRequest) => {
                             <table role="presentation" style="width: 100%; border-collapse: collapse;">
                                 <tr>
                                     <td style="text-align: center; padding: 20px 0;">
-                                        <a href="mailto:support@drive-247.com" style="display: inline-block; background: #C5A572; color: white; padding: 14px 35px; border-radius: 6px; text-decoration: none; font-weight: 600; font-size: 16px;">Contact Support</a>
+                                        <a href="mailto:${branding.contactEmail}" style="display: inline-block; background: ${branding.accentColor}; color: white; padding: 14px 35px; border-radius: 6px; text-decoration: none; font-weight: 600; font-size: 16px;">Contact Support</a>
                                     </td>
                                 </tr>
                             </table>
                         </td>
-                    </tr>
-                    <tr>
-                        <td style="background: #f8f9fa; padding: 25px 30px; border-radius: 0 0 12px 12px; text-align: center;">
-                            <p style="margin: 0 0 10px; color: #666; font-size: 14px;">
-                                Questions? Email us at <a href="mailto:support@drive-247.com" style="color: #C5A572; text-decoration: none;">support@drive-247.com</a>
-                            </p>
-                            <p style="margin: 0; color: #999; font-size: 12px;">&copy; 2024 DRIVE 247. All rights reserved.</p>
-                        </td>
-                    </tr>
-                </table>
-            </td>
-        </tr>
-    </table>
-</body>
-</html>
-`;
+                    </tr>`;
 };
 
 // sendEmail is now imported from resend-service.ts
@@ -250,6 +224,11 @@ serve(async (req) => {
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
+    // Get tenant branding
+    const branding = data.tenantId
+      ? await getTenantBranding(data.tenantId, supabase)
+      : { companyName: 'Drive 247', logoUrl: null, primaryColor: '#1a1a1a', accentColor: '#C5A572', contactEmail: 'support@drive-247.com', contactPhone: null, slug: 'drive247' };
+
     const results = {
       customerEmail: null as any,
       customerSMS: null as any,
@@ -257,11 +236,15 @@ serve(async (req) => {
 
     const content = getReminderContent(data.reminderType, data.daysOverdue);
 
+    // Build branded email HTML
+    const emailContent = getEmailContent(data, branding);
+    const emailHtml = wrapWithBrandedTemplate(emailContent, branding);
+
     // Send customer email
     results.customerEmail = await sendEmail(
       data.customerEmail,
       `${content.subject} - ${data.bookingRef}`,
-      getEmailHtml(data),
+      emailHtml,
       supabase,
       data.tenantId
     );
@@ -272,16 +255,16 @@ serve(async (req) => {
       let smsMessage = "";
       switch (data.reminderType) {
         case "return_24h":
-          smsMessage = `DRIVE 247: Reminder - Your rental ${data.bookingRef} is due for return tomorrow, ${data.returnDate}. Please ensure timely return.`;
+          smsMessage = `${branding.companyName}: Reminder - Your rental ${data.bookingRef} is due for return tomorrow, ${data.returnDate}. Please ensure timely return.`;
           break;
         case "return_today":
-          smsMessage = `DRIVE 247: Your rental ${data.bookingRef} is due for return TODAY. Please return ${data.vehicleName} by ${data.returnTime || 'end of day'}.`;
+          smsMessage = `${branding.companyName}: Your rental ${data.bookingRef} is due for return TODAY. Please return ${data.vehicleName} by ${data.returnTime || 'end of day'}.`;
           break;
         case "overdue":
-          smsMessage = `DRIVE 247 URGENT: Your rental ${data.bookingRef} is ${data.daysOverdue} day(s) overdue. Please return immediately to avoid additional charges.`;
+          smsMessage = `${branding.companyName} URGENT: Your rental ${data.bookingRef} is ${data.daysOverdue} day(s) overdue. Please return immediately to avoid additional charges.`;
           break;
         default:
-          smsMessage = `DRIVE 247: Reminder about your rental ${data.bookingRef}. Please check your email for details.`;
+          smsMessage = `${branding.companyName}: Reminder about your rental ${data.bookingRef}. Please check your email for details.`;
       }
 
       results.customerSMS = await sendSMS(data.customerPhone, smsMessage);
