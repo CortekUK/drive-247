@@ -47,6 +47,7 @@ export const AddVehicleDialog = ({ open, onOpenChange }: AddVehicleDialogProps) 
     reValidateMode: "onChange",
     defaultValues: {
       reg: "",
+      vin: "",
       make: "",
       model: "",
       colour: "",
@@ -136,6 +137,7 @@ export const AddVehicleDialog = ({ open, onOpenChange }: AddVehicleDialogProps) 
 
       const vehicleData: any = {
         reg: normalizedReg,
+        vin: data.vin || null,
         make: data.make,
         model: data.model,
         year: data.year,
@@ -332,6 +334,16 @@ export const AddVehicleDialog = ({ open, onOpenChange }: AddVehicleDialogProps) 
               hasErrors = true;
             }
 
+            // Require at least one photo
+            if (photoFiles.length === 0) {
+              toast({
+                title: "Photo Required",
+                description: "Please upload at least one vehicle photo.",
+                variant: "destructive",
+              });
+              hasErrors = true;
+            }
+
             if (hasErrors) return;
 
             onSubmit(data);
@@ -352,7 +364,23 @@ export const AddVehicleDialog = ({ open, onOpenChange }: AddVehicleDialogProps) 
                       </FormItem>
                     )}
                   />
-                  
+
+                  <FormField
+                    control={form.control}
+                    name="vin"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>VIN Number</FormLabel>
+                        <FormControl>
+                          <Input placeholder="e.g. 1HGBH41JXMN109186" {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
                   <FormField
                     control={form.control}
                     name="acquisition_date"
@@ -881,7 +909,7 @@ export const AddVehicleDialog = ({ open, onOpenChange }: AddVehicleDialogProps) 
                 <div className="space-y-2 ">
                   <h3 className="text-lg font-semibold flex items-center gap-2">
                     <Camera className="h-5 w-5 text-primary" />
-                    Vehicle Photos (Optional)
+                    Vehicle Photo <span className="text-red-500">*</span>
                   </h3>
 
                   {/* Photo previews grid */}
@@ -911,8 +939,8 @@ export const AddVehicleDialog = ({ open, onOpenChange }: AddVehicleDialogProps) 
                       <div className="relative w-64 h-48 bg-muted/30 rounded-lg border-2 border-dashed border-muted-foreground/20 overflow-hidden">
                         <div className="flex flex-col items-center justify-center h-full text-muted-foreground">
                           <Car className="h-12 w-12 mb-2 opacity-30" />
-                          <p className="text-xs font-medium">No photos selected</p>
-                          <p className="text-xs opacity-75">Upload photos of the vehicle</p>
+                          <p className="text-xs font-medium">No photo selected</p>
+                          <p className="text-xs opacity-75">Upload at least one photo (required)</p>
                         </div>
                       </div>
                     </div>

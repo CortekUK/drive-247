@@ -25,8 +25,7 @@ export const AcquisitionBadge = ({ acquisitionType, showTooltip = true }: Acquis
   const { variant, icon: Icon, className, tooltip } = config[acquisitionType as keyof typeof config] || config.Purchase;
 
   const badge = (
-    <Badge variant={variant} className={`flex items-center justify-center gap-1 ${className}`}>
-      <Icon className="h-3 w-3" />
+    <Badge variant={variant} className={`flex items-center justify-center ${className}`}>
       {acquisitionType}
     </Badge>
   );

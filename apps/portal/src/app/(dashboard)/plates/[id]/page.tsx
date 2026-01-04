@@ -6,6 +6,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { ArrowLeft, Calendar, Hash, Car, FileText, ExternalLink, DollarSign } from "lucide-react";
 import { formatInTimeZone } from "date-fns-tz";
 
@@ -119,14 +120,18 @@ export default function PlateDetail() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-4">
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => router.push("/plates")}
-          >
-            <ArrowLeft className="h-4 w-4 mr-2" />
-            Back to Plates
-          </Button>
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button variant="ghost" size="icon" onClick={() => router.push("/plates")}>
+                  <ArrowLeft className="h-4 w-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>Back to Plates</p>
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
           <div>
             <h1 className="text-2xl font-bold">{plate.plate_number}</h1>
             <p className="text-muted-foreground">
