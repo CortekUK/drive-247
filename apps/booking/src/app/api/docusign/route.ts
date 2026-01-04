@@ -1,5 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import crypto from 'crypto';
+import { createClient } from '@supabase/supabase-js';
+
+// Supabase client for updating rental status
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
+const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
 
 // DocuSign configuration
 const DOCUSIGN_INTEGRATION_KEY = process.env.DOCUSIGN_INTEGRATION_KEY || '';
@@ -265,6 +270,27 @@ export async function POST(request: NextRequest) {
         const envelopeId = await createEnvelope(accessToken, accountInfo, body);
         if (!envelopeId) {
             return NextResponse.json({ ok: false, error: 'Failed to create envelope' }, { status: 500 });
+        }
+
+        // 4. Update rental record with DocuSign status
+        if (supabaseUrl && supabaseServiceKey) {
+            try {
+                const supabase = createClient(supabaseUrl, supabaseServiceKey);
+                const { error: updateError } = await supabase
+                    .from('rentals')
+                    .update({
+                        document_status: 'sent'
+                    })
+                    .eq('id', body.rentalId);
+
+                if (updateError) {
+                    console.error('Failed to update rental document_status:', updateError);
+                } else {
+                    console.log('Rental document_status updated to "sent"');
+                }
+            } catch (dbError) {
+                console.error('Database update error:', dbError);
+            }
         }
 
         console.log('SUCCESS! Envelope:', envelopeId);
