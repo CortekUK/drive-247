@@ -33,7 +33,7 @@ interface Rental {
   signed_document_id?: string;
   insurance_status?: string;
   customer_id?: string;
-  customers: { id: string; name: string; email?: string; date_of_birth?: string | null };
+  customers: { id: string; name: string; email?: string };
   vehicles: { id: string; reg: string; make: string; model: string };
 }
 
@@ -59,7 +59,7 @@ const RentalDetail = () => {
         .from("rentals")
         .select(`
           *,
-          customers(id, name, email, date_of_birth),
+          customers(id, name, email),
           vehicles(id, reg, make, model)
         `)
         .eq("id", id)
@@ -745,14 +745,6 @@ const RentalDetail = () => {
             <div>
               <p className="text-sm text-muted-foreground">Customer</p>
               <p className="font-medium">{rental.customers?.name}</p>
-            </div>
-            <div>
-              <p className="text-sm text-muted-foreground">Date of Birth</p>
-              <p className="font-medium">
-                {rental.customers?.date_of_birth
-                  ? `${new Date(rental.customers.date_of_birth).toLocaleDateString()} (${Math.floor((Date.now() - new Date(rental.customers.date_of_birth).getTime()) / (365.25 * 24 * 60 * 60 * 1000))} yrs)`
-                  : 'Not provided'}
-              </p>
             </div>
             <div>
               <p className="text-sm text-muted-foreground">Vehicle</p>

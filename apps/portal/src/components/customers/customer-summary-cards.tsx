@@ -11,6 +11,7 @@ interface Customer {
   status: string;
   whatsapp_opt_in: boolean;
   high_switcher?: boolean;
+  is_blocked?: boolean;
 }
 
 interface CustomerSummaryCardsProps {
@@ -18,11 +19,13 @@ interface CustomerSummaryCardsProps {
 }
 
 export const CustomerSummaryCards = ({ customers }: CustomerSummaryCardsProps) => {
-  const totalCustomers = customers.length;
-  const activeCustomers = customers.filter(c => c.status === 'Active').length;
-  const rejectedCustomers = customers.filter(c => c.status === 'Rejected').length;
-  const highSwitchers = customers.filter(c => c.high_switcher).length;
-  const companies = customers.filter(c => c.customer_type === 'Company').length;
+  // Filter out blocked customers from all counts
+  const nonBlockedCustomers = customers.filter(c => !c.is_blocked);
+  const totalCustomers = nonBlockedCustomers.length;
+  const activeCustomers = nonBlockedCustomers.filter(c => c.status === 'Active').length;
+  const rejectedCustomers = nonBlockedCustomers.filter(c => c.status === 'Rejected').length;
+  const highSwitchers = nonBlockedCustomers.filter(c => c.high_switcher).length;
+  const companies = nonBlockedCustomers.filter(c => c.customer_type === 'Company').length;
 
   const cards = [
     {

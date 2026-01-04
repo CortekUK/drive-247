@@ -14,7 +14,7 @@ export const addFineDialogSchema = z.object({
   amount: z.string().refine((val) => !isNaN(Number(val)) && Number(val) > 0, {
     message: "Amount must be a positive number",
   }),
-  liability: z.enum(["Customer", "Company"]).default("Customer"),
+  liability: z.enum(["Customer", "Business"]).default("Customer"),
   notes: z.string().optional(),
 });
 

@@ -96,10 +96,9 @@ export function useDeleteCustomerDocument() {
       if (error) throw error;
       return document?.customer_id;
     },
-    onSuccess: (customerId) => {
-      if (customerId) {
-        queryClient.invalidateQueries({ queryKey: ["customer-documents", customerId] });
-      }
+    onSuccess: () => {
+      // Invalidate all customer-documents queries to ensure refresh
+      queryClient.invalidateQueries({ queryKey: ["customer-documents"] });
       toast.success("Document deleted successfully");
     },
     onError: (error) => {
