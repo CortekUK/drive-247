@@ -1,11 +1,12 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.4";
 import {
   corsHeaders,
   signedAWSRequest,
   parseXMLValue,
   isAWSConfigured
 } from "../_shared/aws-config.ts";
-import { sendEmail } from "../_shared/resend-service.ts";
+import { sendEmail, getTenantAdminEmail } from "../_shared/resend-service.ts";
 
 interface RentalInfo {
   bookingRef: string;
@@ -23,6 +24,7 @@ interface RentalInfo {
 
 interface NotifyRequest {
   rentals: RentalInfo[];
+  tenantId?: string;
 }
 
 const getAdminEmailHtml = (rentals: RentalInfo[]) => {
@@ -174,6 +176,11 @@ serve(async (req) => {
     const data: NotifyRequest = await req.json();
     console.log('Sending return due notification for', data.rentals.length, 'rentals');
 
+    // Create supabase client for all email operations
+    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+    const supabase = createClient(supabaseUrl, supabaseServiceKey);
+
     const results = {
       adminEmail: null as any,
       adminSMS: null as any,
@@ -182,28 +189,43 @@ serve(async (req) => {
     const overdue = data.rentals.filter(r => r.status === "overdue");
     const dueToday = data.rentals.filter(r => r.status === "due_today");
 
-    // Send admin email
-    const adminEmail = EMAIL_CONFIG.adminEmail;
-    let subject = "Daily Returns Summary";
-    if (overdue.length > 0) {
-      subject = `URGENT: ${overdue.length} Overdue Return${overdue.length > 1 ? 's' : ''} | DRIVE 247`;
-    } else if (dueToday.length > 0) {
-      subject = `${dueToday.length} Return${dueToday.length > 1 ? 's' : ''} Due Today | DRIVE 247`;
+    // Get tenant-specific admin email, fall back to env variable
+    let adminEmail: string | null = null;
+    if (data.tenantId) {
+      adminEmail = await getTenantAdminEmail(data.tenantId, supabase);
+      console.log('Using tenant admin email:', adminEmail);
+    }
+    if (!adminEmail) {
+      adminEmail = Deno.env.get('ADMIN_EMAIL') || null;
+      console.log('Falling back to env ADMIN_EMAIL:', adminEmail);
     }
 
-    results.adminEmail = await sendEmail(
-      adminEmail,
-      subject,
-      getAdminEmailHtml(data.rentals)
-    );
-    console.log('Admin email result:', results.adminEmail);
+    // Build subject line
+    let subject = "Daily Returns Summary";
+    if (overdue.length > 0) {
+      subject = `URGENT: ${overdue.length} Overdue Return${overdue.length > 1 ? 's' : ''}`;
+    } else if (dueToday.length > 0) {
+      subject = `${dueToday.length} Return${dueToday.length > 1 ? 's' : ''} Due Today`;
+    }
 
-    // Send admin SMS if there are overdue rentals
-    const adminPhone = EMAIL_CONFIG.adminPhone;
+    // Send admin email
+    if (adminEmail) {
+      results.adminEmail = await sendEmail(
+        adminEmail,
+        subject,
+        getAdminEmailHtml(data.rentals),
+        supabase,
+        data.tenantId
+      );
+      console.log('Admin email result:', results.adminEmail);
+    }
+
+    // Send admin SMS if there are overdue rentals (using env variable for now)
+    const adminPhone = Deno.env.get('ADMIN_PHONE');
     if (adminPhone && overdue.length > 0) {
       results.adminSMS = await sendSMS(
         adminPhone,
-        `DRIVE 247 URGENT: ${overdue.length} rental(s) overdue. Check admin portal for details.`
+        `URGENT: ${overdue.length} rental(s) overdue. Check admin portal for details.`
       );
       console.log('Admin SMS result:', results.adminSMS);
     }
