@@ -445,13 +445,13 @@ export function IdentityVerificationTab({ customerId }: IdentityVerificationTabP
           <div className="flex flex-col items-center space-y-6 py-6">
             {/* QR Code Display - Using local SVG generation */}
             {aiSessionData && (
-              <div className="bg-white p-6 rounded-xl shadow-lg border-2 border-gray-100">
+              <div className="bg-white p-4 rounded-xl shadow-lg border">
                 <QRCodeSVG
                   value={aiSessionData.qrUrl}
-                  size={200}
+                  size={220}
                   level="H"
-                  includeMargin={false}
-                  className="rounded"
+                  includeMargin={true}
+                  marginSize={2}
                 />
               </div>
             )}
