@@ -82,8 +82,8 @@ export const PaymentManagement = () => {
         .from("payments")
         .select(`
           *,
-          customers(name),
-          vehicles(reg)
+          customers!payments_customer_id_fkey(name),
+          vehicles!payments_vehicle_id_fkey(reg)
         `)
         .order("payment_date", { ascending: false });
       

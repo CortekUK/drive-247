@@ -26,8 +26,8 @@ export const useActiveRentals = () => {
           id,
           customer_id,
           vehicle_id,
-          customers(id, name),
-          vehicles(id, reg, make, model)
+          customers!rentals_customer_id_fkey(id, name),
+          vehicles!rentals_vehicle_id_fkey(id, reg, make, model)
         `)
         .eq("tenant_id", tenant.id)
         .eq("status", "Active")

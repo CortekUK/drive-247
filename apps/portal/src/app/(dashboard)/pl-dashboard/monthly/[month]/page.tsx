@@ -66,7 +66,7 @@ const MonthlyPLDrilldown = () => {
           side,
           category,
           amount,
-          vehicles(id, reg, make, model)
+          vehicles!pnl_entries_vehicle_id_fkey(id, reg, make, model)
         `)
         .gte("entry_date", monthStart.toISOString().split('T')[0])
         .lte("entry_date", monthEnd.toISOString().split('T')[0]);

@@ -60,8 +60,8 @@ export function useInsuranceData(filters: InsuranceFilters) {
         .from("insurance_policies")
         .select(`
           *,
-          customers(id, name, email, phone),
-          vehicles(id, reg, make, model)
+          customers!insurance_policies_customer_id_fkey(id, name, email, phone),
+          vehicles!insurance_policies_vehicle_id_fkey(id, reg, make, model)
         `)
         .eq("tenant_id", tenant.id)
         .order("expiry_date", { ascending: true });
