@@ -30,9 +30,8 @@ out/
 *.sln
 *.sw?
 .vercel
-.env*.local
 
 
 helper-folder
 quality-assurance
-testing-qa
+testing-qa.env
