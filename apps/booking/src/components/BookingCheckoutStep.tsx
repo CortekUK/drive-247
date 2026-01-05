@@ -218,6 +218,8 @@ export default function BookingCheckoutStep({
           rentalId: createdRentalData.rental.id,
           customerEmail: formData.customerEmail,
           customerName: formData.customerName,
+          tenantId: tenant?.id, // Pass tenant ID for template lookup
+          vehicleId: selectedVehicle.id, // Fallback for tenant lookup
         }),
       });
 

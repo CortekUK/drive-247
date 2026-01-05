@@ -20,37 +20,243 @@ interface CreateEnvelopeResponse {
   detail?: string;
 }
 
-function generateRentalAgreementPDF(rental: any, customer: any, vehicle: any): string {
-  const agreementText = `
-RENTAL AGREEMENT
+// ============================================================================
+// TEMPLATE PROCESSING FUNCTIONS
+// ============================================================================
 
-Agreement Created: ${new Date().toLocaleDateString('en-US')}
-Agreement Reference: ${rental?.id || 'N/A'}
+// Fetch active agreement template for tenant
+async function getActiveTemplate(supabase: any, tenantId: string): Promise<string | null> {
+  try {
+    console.log('Fetching active template for tenant:', tenantId);
+
+    const { data, error } = await supabase
+      .from('agreement_templates')
+      .select('template_content')
+      .eq('tenant_id', tenantId)
+      .eq('is_active', true)
+      .single();
+
+    if (error) {
+      if (error.code === 'PGRST116') {
+        console.log('No active template found, will use default');
+        return null;
+      }
+      console.error('Error fetching template:', error);
+      return null;
+    }
+
+    console.log('Found active template for tenant');
+    return data?.template_content || null;
+  } catch (error) {
+    console.error('getActiveTemplate error:', error);
+    return null;
+  }
+}
+
+// Format date for display
+function formatDate(date: string | Date | null): string {
+  if (!date) return 'N/A';
+  const d = typeof date === 'string' ? new Date(date) : date;
+  return d.toLocaleDateString('en-US', {
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+  });
+}
+
+// Format currency
+function formatCurrency(amount: number | null): string {
+  if (amount === null || amount === undefined) return '$0';
+  return new Intl.NumberFormat('en-US', {
+    style: 'currency',
+    currency: 'USD',
+  }).format(amount);
+}
+
+// Process template by replacing variables with actual data
+function processTemplate(
+  template: string,
+  rental: any,
+  customer: any,
+  vehicle: any,
+  tenant: any
+): string {
+  const variables: Record<string, string> = {
+    // Customer variables
+    customer_name: customer?.name || 'Customer',
+    customer_email: customer?.email || '',
+    customer_phone: customer?.phone || '',
+    customer_address: customer?.address || '',
+    customer_type: customer?.customer_type || customer?.type || 'Individual',
+
+    // Vehicle variables
+    vehicle_make: vehicle?.make || '',
+    vehicle_model: vehicle?.model || '',
+    vehicle_year: vehicle?.year?.toString() || '',
+    vehicle_reg: vehicle?.reg || 'N/A',
+    vehicle_color: vehicle?.color || '',
+
+    // Rental variables
+    rental_number: rental?.id?.substring(0, 8)?.toUpperCase() || 'N/A',
+    rental_start_date: formatDate(rental?.start_date),
+    rental_end_date: rental?.end_date ? formatDate(rental.end_date) : 'Ongoing',
+    monthly_amount: formatCurrency(rental?.monthly_amount),
+    rental_period_type: rental?.rental_period_type || 'Monthly',
+
+    // Company/Tenant variables
+    company_name: tenant?.company_name || 'Drive 247',
+    company_email: tenant?.contact_email || '',
+    company_phone: tenant?.contact_phone || '',
+
+    // Agreement date
+    agreement_date: formatDate(new Date()),
+  };
+
+  let result = template;
+
+  // Replace all {{variable}} placeholders
+  for (const [key, value] of Object.entries(variables)) {
+    const placeholder = new RegExp(`\\{\\{\\s*${key}\\s*\\}\\}`, 'gi');
+    result = result.replace(placeholder, value);
+  }
+
+  return result;
+}
+
+// Convert HTML to plain text for DocuSign
+function htmlToText(html: string): string {
+  return html
+    // Replace <br> tags with newlines
+    .replace(/<br\s*\/?>/gi, '\n')
+    // Replace closing block tags with newlines
+    .replace(/<\/(p|div|h[1-6]|li|tr)>/gi, '\n')
+    // Replace <hr> with separator line
+    .replace(/<hr\s*\/?>/gi, '\n' + '='.repeat(70) + '\n')
+    // Handle table cells
+    .replace(/<\/td>/gi, ' | ')
+    .replace(/<\/th>/gi, ' | ')
+    // Handle list items
+    .replace(/<li>/gi, '• ')
+    // Remove all remaining HTML tags
+    .replace(/<[^>]+>/g, '')
+    // Decode HTML entities
+    .replace(/&nbsp;/gi, ' ')
+    .replace(/&amp;/gi, '&')
+    .replace(/&lt;/gi, '<')
+    .replace(/&gt;/gi, '>')
+    .replace(/&quot;/gi, '"')
+    .replace(/&#39;/gi, "'")
+    .replace(/&middot;/gi, '·')
+    // Clean up excessive whitespace
+    .replace(/\n{3,}/g, '\n\n')
+    .replace(/[ \t]+/g, ' ')
+    .trim();
+}
+
+// Generate default template when no custom template exists
+function generateDefaultTemplate(rental: any, customer: any, vehicle: any, tenant: any): string {
+  const companyName = tenant?.company_name || 'Drive 247';
+
+  return `
+RENTAL AGREEMENT
+${'='.repeat(70)}
+
+Agreement Date: ${formatDate(new Date())}
+Reference: ${rental?.id?.substring(0, 8)?.toUpperCase() || 'N/A'}
+
+${'='.repeat(70)}
+
+LANDLORD:
+${companyName}
+${tenant?.contact_email || ''}
+${tenant?.contact_phone || ''}
+
+${'='.repeat(70)}
 
 CUSTOMER:
 Name: ${customer?.name || 'Customer'}
 Email: ${customer?.email || 'N/A'}
+Phone: ${customer?.phone || ''}
 
-VEHICLE:
-${vehicle?.make || ''} ${vehicle?.model || ''} - ${vehicle?.reg || 'N/A'}
+${'='.repeat(70)}
+
+VEHICLE DETAILS:
+Registration: ${vehicle?.reg || 'N/A'}
+Make & Model: ${vehicle?.make || ''} ${vehicle?.model || ''}
+Year: ${vehicle?.year || ''}
+
+${'='.repeat(70)}
 
 RENTAL TERMS:
-Start Date: ${rental?.start_date ? new Date(rental.start_date).toLocaleDateString('en-US') : 'N/A'}
-End Date: ${rental?.end_date ? new Date(rental.end_date).toLocaleDateString('en-US') : 'Ongoing'}
-Amount: $${(rental?.monthly_amount || 0).toLocaleString('en-US')}
+Start Date: ${formatDate(rental?.start_date)}
+End Date: ${rental?.end_date ? formatDate(rental.end_date) : 'Ongoing'}
+Amount: ${formatCurrency(rental?.monthly_amount)}
+Period: ${rental?.rental_period_type || 'Monthly'}
 
-AGREEMENT:
-By signing, Customer agrees to all terms.
+${'='.repeat(70)}
+
+TERMS AND CONDITIONS:
+1. Customer agrees to rent the vehicle for the specified period.
+2. Payment is due on the agreed schedule.
+3. Customer will maintain the vehicle in good condition.
+4. Customer is responsible for any damage during the rental period.
+5. Vehicle must not be used for illegal purposes or sub-leased.
+
+${'='.repeat(70)}
+
+SIGNATURES:
 
 Customer Signature: _________________________
+
 Date: ______________
 
-Drive 247 - Generated: ${new Date().toISOString()}
+
+${companyName} Signature: _________________________
+
+Date: ______________
+
+${'='.repeat(70)}
+${companyName} - Generated: ${new Date().toISOString()}
 `;
-  return btoa(agreementText);
 }
 
-// Base64URL encoding
+// Generate document from template or use default
+async function generateDocument(
+  supabase: any,
+  rental: any,
+  customer: any,
+  vehicle: any,
+  tenantId: string
+): Promise<string> {
+  // Get tenant info
+  const { data: tenant } = await supabase
+    .from('tenants')
+    .select('company_name, contact_email, contact_phone')
+    .eq('id', tenantId)
+    .single();
+
+  // Try to get active template
+  const template = await getActiveTemplate(supabase, tenantId);
+
+  if (template) {
+    console.log('Using custom template from portal');
+    // Process template variables
+    const processedContent = processTemplate(template, rental, customer, vehicle, tenant);
+    // Convert HTML to plain text
+    const plainText = htmlToText(processedContent);
+    return btoa(plainText);
+  }
+
+  // Fallback to default template
+  console.log('Using default template');
+  const defaultText = generateDefaultTemplate(rental, customer, vehicle, tenant);
+  return btoa(defaultText);
+}
+
+// ============================================================================
+// JWT AND AUTHENTICATION FUNCTIONS
+// ============================================================================
+
 function base64url(data: string | Uint8Array): string {
   let base64: string;
   if (typeof data === 'string') {
@@ -61,7 +267,6 @@ function base64url(data: string | Uint8Array): string {
   return base64.replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
 }
 
-// Parse PEM private key
 function parsePEM(pem: string): Uint8Array {
   const lines = pem
     .replace(/\\n/g, '\n')
@@ -72,7 +277,6 @@ function parsePEM(pem: string): Uint8Array {
   return Uint8Array.from(binary, c => c.charCodeAt(0));
 }
 
-// Create JWT using Web Crypto API
 async function createJWT(
   integrationKey: string,
   userId: string,
@@ -81,15 +285,8 @@ async function createJWT(
 ): Promise<string | null> {
   try {
     console.log('Creating JWT...');
-    console.log('Integration Key:', integrationKey);
-    console.log('User ID:', userId);
-    console.log('Auth Server:', authServer);
-    console.log('Private Key length:', privateKeyPem.length);
 
-    // Header
     const header = { alg: 'RS256', typ: 'JWT' };
-
-    // Payload
     const now = Math.floor(Date.now() / 1000);
     const payload = {
       iss: integrationKey,
@@ -100,22 +297,14 @@ async function createJWT(
       scope: 'signature impersonation'
     };
 
-    console.log('JWT Payload:', JSON.stringify(payload));
-
-    // Encode header and payload
     const headerB64 = base64url(JSON.stringify(header));
     const payloadB64 = base64url(JSON.stringify(payload));
     const unsignedToken = `${headerB64}.${payloadB64}`;
 
-    // Parse and import private key
     const keyData = parsePEM(privateKeyPem);
-    console.log('Key data length:', keyData.length);
-
-    // Try importing as PKCS#8 first, then wrap if needed
     let cryptoKey: CryptoKey;
 
     try {
-      // First try PKCS#8 format
       cryptoKey = await crypto.subtle.importKey(
         'pkcs8',
         keyData,
@@ -123,10 +312,7 @@ async function createJWT(
         false,
         ['sign']
       );
-      console.log('Key imported as PKCS#8');
     } catch {
-      console.log('PKCS#8 failed, trying to wrap PKCS#1...');
-
       // Wrap PKCS#1 in PKCS#8
       const pkcs8 = new Uint8Array(keyData.length + 26);
       pkcs8.set([0x30, 0x82, (keyData.length + 22) >> 8, (keyData.length + 22) & 0xff]);
@@ -142,10 +328,8 @@ async function createJWT(
         false,
         ['sign']
       );
-      console.log('Key imported with PKCS#1 wrapper');
     }
 
-    // Sign
     const encoder = new TextEncoder();
     const signature = await crypto.subtle.sign(
       'RSASSA-PKCS1-v1_5',
@@ -153,10 +337,8 @@ async function createJWT(
       encoder.encode(unsignedToken)
     );
 
-    const signatureB64 = base64url(new Uint8Array(signature));
-    const jwt = `${unsignedToken}.${signatureB64}`;
-
-    console.log('JWT created successfully, length:', jwt.length);
+    const jwt = `${unsignedToken}.${base64url(new Uint8Array(signature))}`;
+    console.log('JWT created successfully');
     return jwt;
 
   } catch (error) {
@@ -165,7 +347,6 @@ async function createJWT(
   }
 }
 
-// Get access token from DocuSign
 async function getAccessToken(
   integrationKey: string,
   userId: string,
@@ -177,12 +358,8 @@ async function getAccessToken(
     const authServer = isDemo ? 'account-d.docusign.com' : 'account.docusign.com';
 
     const jwt = await createJWT(integrationKey, userId, privateKey, authServer);
-    if (!jwt) {
-      console.error('Failed to create JWT');
-      return null;
-    }
+    if (!jwt) return null;
 
-    console.log('Exchanging JWT for access token...');
     const response = await fetch(`https://${authServer}/oauth/token`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
@@ -190,11 +367,8 @@ async function getAccessToken(
     });
 
     const responseText = await response.text();
-    console.log('Token response status:', response.status);
-    console.log('Token response:', responseText.substring(0, 200));
-
     if (!response.ok) {
-      console.error('Token exchange failed');
+      console.error('Token exchange failed:', responseText);
       return null;
     }
 
@@ -208,7 +382,10 @@ async function getAccessToken(
   }
 }
 
-// Send envelope via email
+// ============================================================================
+// DOCUSIGN ENVELOPE FUNCTIONS
+// ============================================================================
+
 async function sendEnvelope(
   accessToken: string,
   accountId: string,
@@ -220,11 +397,9 @@ async function sendEnvelope(
 ): Promise<{ envelopeId: string } | null> {
   try {
     console.log('Creating DocuSign envelope...');
-    console.log('Account ID:', accountId);
-    console.log('Customer:', customerName, customerEmail);
 
     const envelope = {
-      emailSubject: `Rental Agreement - Ref: ${rentalId.substring(0, 8)}`,
+      emailSubject: `Rental Agreement - Ref: ${rentalId.substring(0, 8).toUpperCase()}`,
       documents: [{
         documentBase64,
         name: 'Rental Agreement.txt',
@@ -242,6 +417,12 @@ async function sendEnvelope(
               anchorString: 'Customer Signature:',
               anchorUnits: 'pixels',
               anchorXOffset: '200',
+              anchorYOffset: '-10'
+            }],
+            dateSignedTabs: [{
+              anchorString: 'Date:',
+              anchorUnits: 'pixels',
+              anchorXOffset: '50',
               anchorYOffset: '-10'
             }]
           }
@@ -264,10 +445,9 @@ async function sendEnvelope(
 
     const responseText = await response.text();
     console.log('Envelope response status:', response.status);
-    console.log('Envelope response:', responseText.substring(0, 300));
 
     if (!response.ok) {
-      console.error('Envelope creation failed');
+      console.error('Envelope creation failed:', responseText);
       return null;
     }
 
@@ -280,6 +460,10 @@ async function sendEnvelope(
     return null;
   }
 }
+
+// ============================================================================
+// MAIN HANDLER
+// ============================================================================
 
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -295,11 +479,9 @@ serve(async (req) => {
     const { rentalId, customerEmail, customerName } = await req.json();
 
     console.log('='.repeat(60));
-    console.log('CREATE DOCUSIGN ENVELOPE');
+    console.log('CREATE DOCUSIGN ENVELOPE (with Template Support)');
     console.log('='.repeat(60));
     console.log('Rental ID:', rentalId);
-    console.log('Customer Email:', customerEmail);
-    console.log('Customer Name:', customerName);
 
     if (!rentalId) {
       return new Response(
@@ -315,12 +497,6 @@ serve(async (req) => {
     const PRIVATE_KEY = Deno.env.get('DOCUSIGN_PRIVATE_KEY');
     const BASE_URL = Deno.env.get('DOCUSIGN_BASE_URL') || 'https://demo.docusign.net/restapi';
 
-    console.log('Integration Key:', INTEGRATION_KEY ? '✓' : '✗');
-    console.log('User ID:', USER_ID ? '✓' : '✗');
-    console.log('Account ID:', ACCOUNT_ID ? '✓' : '✗');
-    console.log('Private Key:', PRIVATE_KEY ? `✓ (${PRIVATE_KEY.length} chars)` : '✗');
-    console.log('Base URL:', BASE_URL);
-
     if (!INTEGRATION_KEY || !USER_ID || !ACCOUNT_ID || !PRIVATE_KEY) {
       return new Response(
         JSON.stringify({ ok: false, error: 'DocuSign configuration missing' }),
@@ -328,16 +504,53 @@ serve(async (req) => {
       );
     }
 
-    // Use provided customer data or defaults
-    const email = customerEmail || 'test@example.com';
-    const name = customerName || 'Customer';
+    // Fetch rental with customer and vehicle data
+    const { data: rental, error: rentalError } = await supabase
+      .from('rentals')
+      .select(`
+        *,
+        customers:customer_id (id, name, email, phone, address, customer_type, type),
+        vehicles:vehicle_id (id, reg, make, model, year, color)
+      `)
+      .eq('id', rentalId)
+      .single();
 
-    // Generate document
-    const doc = generateRentalAgreementPDF(
-      { id: rentalId, start_date: new Date(), monthly_amount: 0 },
-      { name, email },
-      { make: 'Vehicle', model: '', reg: 'N/A' }
-    );
+    let customer: any;
+    let vehicle: any;
+    let tenantId: string | null = null;
+
+    if (rentalError || !rental) {
+      console.log('Rental not found, using provided customer data');
+      // Use provided data as fallback
+      customer = { name: customerName || 'Customer', email: customerEmail || 'N/A' };
+      vehicle = { make: 'Vehicle', model: '', reg: 'N/A' };
+    } else {
+      customer = rental.customers || { name: customerName, email: customerEmail };
+      vehicle = rental.vehicles || { make: 'Vehicle', model: '', reg: 'N/A' };
+      tenantId = rental.tenant_id;
+    }
+
+    // Override with provided values if available
+    const email = customerEmail || customer?.email || 'N/A';
+    const name = customerName || customer?.name || 'Customer';
+
+    console.log('Customer:', name, email);
+    console.log('Vehicle:', vehicle?.make, vehicle?.model, vehicle?.reg);
+    console.log('Tenant ID:', tenantId);
+
+    // Generate document (uses admin template if available)
+    let doc: string;
+    if (tenantId) {
+      doc = await generateDocument(supabase, rental, customer, vehicle, tenantId);
+    } else {
+      // No tenant, use basic default
+      doc = btoa(generateDefaultTemplate(
+        { id: rentalId, start_date: new Date(), monthly_amount: 0 },
+        { name, email },
+        vehicle,
+        {}
+      ));
+    }
 
     // Get access token
     const accessToken = await getAccessToken(INTEGRATION_KEY, USER_ID, PRIVATE_KEY, BASE_URL);

@@ -47,6 +47,7 @@ const RentalDetail = () => {
   const { tenant } = useTenant();
   const [showAddPayment, setShowAddPayment] = useState(false);
   const [sendingDocuSign, setSendingDocuSign] = useState(false);
+  const [checkingDocuSignStatus, setCheckingDocuSignStatus] = useState(false);
   const [showCancelDialog, setShowCancelDialog] = useState(false);
   const [showRejectionDialog, setShowRejectionDialog] = useState(false);
   const [loadingDocuSignDoc, setLoadingDocuSignDoc] = useState(false);
@@ -305,7 +306,7 @@ const RentalDetail = () => {
 
       if (verif) {
         const status = verif.review_result === 'GREEN' ? 'verified' :
-                       verif.review_result === 'RED' ? 'rejected' : 'pending';
+          verif.review_result === 'RED' ? 'rejected' : 'pending';
         await supabase
           .from("customers")
           .update({ identity_verification_status: status })
@@ -797,7 +798,7 @@ const RentalDetail = () => {
           </CardContent>
         </Card>
 
-        </div>
+      </div>
 
       {/* Rental Details */}
       <Card>
@@ -897,10 +898,10 @@ const RentalDetail = () => {
                 {rental.document_status === 'signed' || rental.signed_document_id
                   ? 'Agreement has been signed by customer'
                   : rental.document_status === 'sent'
-                  ? 'Waiting for customer to sign'
-                  : rental.document_status === 'viewed'
-                  ? 'Customer has viewed the agreement'
-                  : 'Agreement has not been sent yet'}
+                    ? 'Waiting for customer to sign'
+                    : rental.document_status === 'viewed'
+                      ? 'Customer has viewed the agreement'
+                      : 'Agreement has not been sent yet'}
               </span>
             </div>
 
@@ -930,14 +931,24 @@ const RentalDetail = () => {
                   onClick={async () => {
                     setSendingDocuSign(true);
                     try {
-                      const { data: docuSignData, error: docuSignError } = await supabase.functions.invoke('create-docusign-envelope', {
-                        body: { rentalId: id }
+                      // Use local API route instead of edge function
+                      const response = await fetch('/api/docusign', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                          rentalId: id,
+                          customerEmail: rental.customers?.email,
+                          customerName: rental.customers?.name,
+                          tenantId: tenant?.id,
+                        }),
                       });
 
-                      if (docuSignError || !docuSignData?.ok) {
+                      const docuSignData = await response.json();
+
+                      if (!response.ok || !docuSignData?.ok) {
                         toast({
                           title: "DocuSign Error",
-                          description: docuSignData?.detail || docuSignError?.message || "Failed to send DocuSign agreement.",
+                          description: docuSignData?.detail || docuSignData?.error || "Failed to send DocuSign agreement.",
                           variant: "destructive",
                         });
                       } else {
@@ -963,6 +974,55 @@ const RentalDetail = () => {
                   {sendingDocuSign ? "Sending..." : rental.document_status === 'sent' ? "Resend DocuSign" : "Send DocuSign"}
                 </Button>
               )}
+
+              {/* Check Status Button - show when sent but not signed */}
+              {(rental as any).docusign_envelope_id && rental.document_status !== 'signed' && !rental.signed_document_id && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={async () => {
+                    setCheckingDocuSignStatus(true);
+                    try {
+                      const response = await fetch('/api/docusign/status', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                          rentalId: id,
+                          envelopeId: (rental as any).docusign_envelope_id,
+                        }),
+                      });
+
+                      const statusData = await response.json();
+
+                      if (statusData?.ok) {
+                        toast({
+                          title: "Status Updated",
+                          description: `Document status: ${statusData.status}`,
+                        });
+                        queryClient.invalidateQueries({ queryKey: ["rental", id] });
+                      } else {
+                        toast({
+                          title: "Check Failed",
+                          description: statusData?.error || "Could not check status",
+                          variant: "destructive",
+                        });
+                      }
+                    } catch (error: any) {
+                      toast({
+                        title: "Error",
+                        description: error?.message || "Failed to check status",
+                        variant: "destructive",
+                      });
+                    } finally {
+                      setCheckingDocuSignStatus(false);
+                    }
+                  }}
+                  disabled={checkingDocuSignStatus}
+                >
+                  <RefreshCw className={`h-4 w-4 mr-1 ${checkingDocuSignStatus ? 'animate-spin' : ''}`} />
+                  {checkingDocuSignStatus ? "Checking..." : "Check Status"}
+                </Button>
+              )}
             </div>
           </div>
         </CardContent>
@@ -980,95 +1040,95 @@ const RentalDetail = () => {
           <div className="flex items-center justify-between">
             <p className="text-sm text-muted-foreground">Upload customer's insurance documents for verification</p>
             <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => {
-                    const input = document.createElement('input');
-                    input.type = 'file';
-                    input.accept = 'image/*,.pdf';
-                    input.onchange = async (e) => {
-                      const file = (e.target as HTMLInputElement).files?.[0];
-                      if (!file) return;
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                const input = document.createElement('input');
+                input.type = 'file';
+                input.accept = 'image/*,.pdf';
+                input.onchange = async (e) => {
+                  const file = (e.target as HTMLInputElement).files?.[0];
+                  if (!file) return;
 
-                      try {
-                        toast({ title: "Uploading...", description: "Uploading insurance document" });
+                  try {
+                    toast({ title: "Uploading...", description: "Uploading insurance document" });
 
-                        const fileName = `${rental.customer_id}/${Date.now()}_${file.name}`;
-                        const { error: uploadError } = await supabase.storage
-                          .from('customer-documents')
-                          .upload(fileName, file);
+                    const fileName = `${rental.customer_id}/${Date.now()}_${file.name}`;
+                    const { error: uploadError } = await supabase.storage
+                      .from('customer-documents')
+                      .upload(fileName, file);
 
-                        if (uploadError) throw uploadError;
+                    if (uploadError) throw uploadError;
 
-                        const { data: docData, error: docError } = await supabase
-                          .from('customer_documents')
-                          .insert({
-                            customer_id: rental.customer_id,
-                            rental_id: id,
-                            document_type: 'Insurance Certificate',
-                            document_name: file.name,
-                            file_name: file.name,
-                            file_url: fileName,
-                            status: 'Pending',
-                            ai_scan_status: 'pending',
-                            tenant_id: tenant?.id,
-                          })
-                          .select()
-                          .single();
+                    const { data: docData, error: docError } = await supabase
+                      .from('customer_documents')
+                      .insert({
+                        customer_id: rental.customer_id,
+                        rental_id: id,
+                        document_type: 'Insurance Certificate',
+                        document_name: file.name,
+                        file_name: file.name,
+                        file_url: fileName,
+                        status: 'Pending',
+                        ai_scan_status: 'pending',
+                        tenant_id: tenant?.id,
+                      })
+                      .select()
+                      .single();
 
-                        if (docError) throw docError;
+                    if (docError) throw docError;
 
-                        // Trigger AI scan with documentId and fileUrl
-                        supabase.functions.invoke('scan-insurance-document', {
-                          body: { documentId: docData.id, fileUrl: fileName }
-                        });
+                    // Trigger AI scan with documentId and fileUrl
+                    supabase.functions.invoke('scan-insurance-document', {
+                      body: { documentId: docData.id, fileUrl: fileName }
+                    });
 
-                        toast({ title: "Success", description: "Insurance document uploaded and AI scan initiated" });
-                        queryClient.invalidateQueries({ queryKey: ["rental-insurance-docs", id] });
-                      } catch (error: any) {
-                        toast({
-                          title: "Upload Failed",
-                          description: error.message || "Failed to upload document",
-                          variant: "destructive"
-                        });
-                      }
-                    };
-                    input.click();
-                  }}
-                >
-                  <Plus className="h-4 w-4 mr-1" />
-                  Upload Document
-                </Button>
+                    toast({ title: "Success", description: "Insurance document uploaded and AI scan initiated" });
+                    queryClient.invalidateQueries({ queryKey: ["rental-insurance-docs", id] });
+                  } catch (error: any) {
+                    toast({
+                      title: "Upload Failed",
+                      description: error.message || "Failed to upload document",
+                      variant: "destructive"
+                    });
+                  }
+                };
+                input.click();
+              }}
+            >
+              <Plus className="h-4 w-4 mr-1" />
+              Upload Document
+            </Button>
           </div>
 
           {/* Document List */}
-            {insuranceDocuments && insuranceDocuments.length > 0 ? (
-              <div className="space-y-4">
-                {insuranceDocuments.map((doc: any) => {
-                  const validationScore = doc.ai_validation_score || 0;
-                  const extractedData = doc.ai_extracted_data || {};
+          {insuranceDocuments && insuranceDocuments.length > 0 ? (
+            <div className="space-y-4">
+              {insuranceDocuments.map((doc: any) => {
+                const validationScore = doc.ai_validation_score || 0;
+                const extractedData = doc.ai_extracted_data || {};
 
-                  const getScoreBadge = (score: number) => {
-                    if (score >= 0.7) {
-                      return <Badge className="bg-green-600">Valid ({(score * 100).toFixed(0)}%)</Badge>;
-                    } else if (score >= 0.4) {
-                      return <Badge className="bg-yellow-600">Review Required ({(score * 100).toFixed(0)}%)</Badge>;
-                    } else {
-                      return <Badge className="bg-orange-600">Low Confidence ({(score * 100).toFixed(0)}%)</Badge>;
-                    }
-                  };
+                const getScoreBadge = (score: number) => {
+                  if (score >= 0.7) {
+                    return <Badge className="bg-green-600">Valid ({(score * 100).toFixed(0)}%)</Badge>;
+                  } else if (score >= 0.4) {
+                    return <Badge className="bg-yellow-600">Review Required ({(score * 100).toFixed(0)}%)</Badge>;
+                  } else {
+                    return <Badge className="bg-orange-600">Low Confidence ({(score * 100).toFixed(0)}%)</Badge>;
+                  }
+                };
 
-                  return (
-                    <div key={doc.id} className={`border rounded-lg p-4 space-y-3 ${doc.isUnlinked ? 'border-yellow-500/50 bg-yellow-500/5' : ''}`}>
-                      {/* Unlinked Warning */}
-                      {doc.isUnlinked && (
-                        <Alert className="mb-3 border-yellow-500/50 bg-yellow-500/10">
-                          <AlertTriangle className="h-4 w-4 text-yellow-600" />
-                          <AlertDescription className="text-sm">
-                            This document is not linked to any rental. Click "Link to Rental" to associate it with this booking.
-                          </AlertDescription>
-                        </Alert>
-                      )}
+                return (
+                  <div key={doc.id} className={`border rounded-lg p-4 space-y-3 ${doc.isUnlinked ? 'border-yellow-500/50 bg-yellow-500/5' : ''}`}>
+                    {/* Unlinked Warning */}
+                    {doc.isUnlinked && (
+                      <Alert className="mb-3 border-yellow-500/50 bg-yellow-500/10">
+                        <AlertTriangle className="h-4 w-4 text-yellow-600" />
+                        <AlertDescription className="text-sm">
+                          This document is not linked to any rental. Click "Link to Rental" to associate it with this booking.
+                        </AlertDescription>
+                      </Alert>
+                    )}
                     <div className="flex items-start justify-between">
                       <div className="flex-1">
                         <div className="flex items-center gap-2 mb-2">
@@ -1313,7 +1373,7 @@ const RentalDetail = () => {
           {identityVerification && (
             <div className="space-y-4">
               {/* Needs Linking Alert */}
-              {identityVerification.needsLinking && (
+              {(identityVerification as any).needsLinking && (
                 <Alert className="border-blue-500/50 bg-blue-500/10">
                   <AlertTriangle className="h-4 w-4 text-blue-600" />
                   <AlertDescription className="flex items-center justify-between">
