@@ -2,12 +2,13 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Button } from "@/components/ui/button";
 import { FileText, Download, Shield, ArrowRight } from "lucide-react";
 import { format } from "date-fns";
-import { useRef, useState } from "react";
+import { useRef } from "react";
 import { useReactToPrint } from "react-to-print";
 
 interface InvoiceDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  onSignAgreement?: () => void;
   invoice: {
     invoice_number: string;
     invoice_date: string;
@@ -32,7 +33,6 @@ interface InvoiceDialogProps {
     end_date: string;
     monthly_amount: number;
   };
-  onSignAgreement?: () => Promise<void>;
 }
 
 const formatCurrency = (amount: number) => {
@@ -154,14 +154,13 @@ const PrintableInvoice = ({ invoice, customer, vehicle, rental }: Omit<InvoiceDi
 export const InvoiceDialog = ({
   open,
   onOpenChange,
+  onSignAgreement,
   invoice,
   customer,
   vehicle,
   rental,
-  onSignAgreement,
 }: InvoiceDialogProps) => {
   const printRef = useRef<HTMLDivElement>(null);
-  const [isSending, setIsSending] = useState(false);
   const vehicleName = vehicle.make && vehicle.model ? `${vehicle.make} ${vehicle.model}` : vehicle.reg;
   const rentalFee = invoice.subtotal;
 
@@ -182,24 +181,6 @@ export const InvoiceDialog = ({
     `,
   });
 
-  const handleContinue = async () => {
-    if (onSignAgreement) {
-      try {
-        setIsSending(true);
-        await onSignAgreement();
-        // The parent component handles redirection, so we might not need to close explicitly
-        // but it doesn't hurt to close it if the redirection hasn't happened yet
-        onOpenChange(false);
-      } catch (error) {
-        console.error("Error signing agreement:", error);
-      } finally {
-        setIsSending(false);
-      }
-    } else {
-      onOpenChange(false);
-    }
-  };
-
   return (
     <>
       {/* Hidden printable component */}
@@ -215,12 +196,7 @@ export const InvoiceDialog = ({
       </div>
 
       <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent className="max-w-2xl w-[95vw] max-h-[85vh] overflow-y-auto scrollbar-hide" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
-          <style>{`
-            .scrollbar-hide::-webkit-scrollbar {
-              display: none;
-            }
-          `}</style>
+        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto scrollbar-hide" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
           <DialogHeader>
             <div className="flex items-center justify-between">
               <DialogTitle className="flex items-center gap-2">
@@ -230,26 +206,26 @@ export const InvoiceDialog = ({
             </div>
           </DialogHeader>
 
-          <div className="space-y-4 sm:space-y-6">
+          <div className="space-y-6">
             {/* Company Header */}
-            <div className="border-b pb-4 sm:pb-6">
-              <h1 className="text-2xl sm:text-3xl font-bold text-accent">DRIVE 917</h1>
-              <p className="text-xs sm:text-sm text-muted-foreground mt-1 sm:mt-2">Luxury Vehicle Rental Services</p>
+            <div className="border-b pb-6">
+              <h1 className="text-3xl font-bold text-accent">DRIVE 917</h1>
+              <p className="text-sm text-muted-foreground mt-2">Luxury Vehicle Rental Services</p>
             </div>
 
-            {/* Invoice Details - Responsive Grid */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
+            {/* Invoice Details */}
+            <div className="grid grid-cols-2 gap-6">
               <div>
-                <h3 className="font-semibold mb-2 text-sm sm:text-base">Bill To:</h3>
-                <div className="text-xs sm:text-sm space-y-1">
+                <h3 className="font-semibold mb-2">Bill To:</h3>
+                <div className="text-sm space-y-1">
                   <p className="font-medium">{customer.name}</p>
-                  {customer.email && <p className="text-muted-foreground">{customer.email}</p>}
-                  {customer.phone && <p className="text-muted-foreground">{customer.phone}</p>}
+                  {customer.email && <p>{customer.email}</p>}
+                  {customer.phone && <p>{customer.phone}</p>}
                 </div>
               </div>
-              <div className="sm:text-right">
-                <h3 className="font-semibold mb-2 text-sm sm:text-base">Invoice Details:</h3>
-                <div className="text-xs sm:text-sm space-y-1">
+              <div className="text-right">
+                <h3 className="font-semibold mb-2">Invoice Details:</h3>
+                <div className="text-sm space-y-1">
                   <p><span className="text-muted-foreground">Invoice #:</span> <strong>{invoice.invoice_number}</strong></p>
                   <p><span className="text-muted-foreground">Date:</span> {format(new Date(invoice.invoice_date), 'PPP')}</p>
                   {invoice.due_date && (
@@ -259,10 +235,10 @@ export const InvoiceDialog = ({
               </div>
             </div>
 
-            {/* Vehicle & Rental Info - Responsive */}
-            <div className="border rounded-lg p-3 sm:p-4 bg-muted/30">
-              <h3 className="font-semibold mb-2 sm:mb-3 text-sm sm:text-base">Rental Information</h3>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 text-xs sm:text-sm">
+            {/* Vehicle & Rental Info */}
+            <div className="border rounded-lg p-4 bg-muted/30">
+              <h3 className="font-semibold mb-3">Rental Information</h3>
+              <div className="grid grid-cols-2 gap-4 text-sm">
                 <div>
                   <p className="text-muted-foreground">Vehicle:</p>
                   <p className="font-medium">{vehicleName}</p>
@@ -277,38 +253,38 @@ export const InvoiceDialog = ({
               </div>
             </div>
 
-            {/* Invoice Items - Responsive Table */}
+            {/* Invoice Items */}
             <div className="border rounded-lg overflow-hidden">
               <table className="w-full">
                 <thead className="bg-muted">
                   <tr>
-                    <th className="text-left p-2 sm:p-3 text-xs sm:text-sm font-semibold">Description</th>
-                    <th className="text-right p-2 sm:p-3 text-xs sm:text-sm font-semibold">Amount</th>
+                    <th className="text-left p-3 text-sm font-semibold">Description</th>
+                    <th className="text-right p-3 text-sm font-semibold">Amount</th>
                   </tr>
                 </thead>
                 <tbody>
                   <tr className="border-b">
-                    <td className="p-2 sm:p-3 text-xs sm:text-sm">
+                    <td className="p-3 text-sm">
                       <div>
                         <p className="font-medium">Rental Fee</p>
-                        <p className="text-xs text-muted-foreground hidden sm:block">
+                        <p className="text-xs text-muted-foreground">
                           {vehicleName} ({vehicle.reg})
                         </p>
                       </div>
                     </td>
-                    <td className="p-2 sm:p-3 text-xs sm:text-sm text-right font-medium">
+                    <td className="p-3 text-sm text-right font-medium">
                       {formatCurrency(rentalFee)}
                     </td>
                   </tr>
                   {invoice.tax_amount > 0 && (
                     <tr className="border-b">
-                      <td className="p-2 sm:p-3 text-xs sm:text-sm">Taxes & Fees</td>
-                      <td className="p-2 sm:p-3 text-xs sm:text-sm text-right">{formatCurrency(invoice.tax_amount)}</td>
+                      <td className="p-3 text-sm">Taxes & Fees</td>
+                      <td className="p-3 text-sm text-right">{formatCurrency(invoice.tax_amount)}</td>
                     </tr>
                   )}
                   <tr className="bg-muted/50">
-                    <td className="p-2 sm:p-3 text-xs sm:text-sm font-bold">Total</td>
-                    <td className="p-2 sm:p-3 text-base sm:text-lg font-bold text-right text-accent">
+                    <td className="p-3 text-sm font-bold">Total</td>
+                    <td className="p-3 text-lg font-bold text-right text-accent">
                       {formatCurrency(invoice.total_amount)}
                     </td>
                   </tr>
@@ -318,41 +294,36 @@ export const InvoiceDialog = ({
 
             {/* Notes */}
             {invoice.notes && (
-              <div className="border rounded-lg p-3 sm:p-4 bg-muted/30">
-                <h3 className="font-semibold mb-2 text-xs sm:text-sm">Notes:</h3>
-                <p className="text-xs sm:text-sm text-muted-foreground">{invoice.notes}</p>
+              <div className="border rounded-lg p-4 bg-muted/30">
+                <h3 className="font-semibold mb-2 text-sm">Notes:</h3>
+                <p className="text-sm text-muted-foreground">{invoice.notes}</p>
               </div>
             )}
 
             {/* Footer */}
-            <div className="text-center text-xs sm:text-sm text-muted-foreground border-t pt-3 sm:pt-4">
+            <div className="text-center text-sm text-muted-foreground border-t pt-4">
               <p>Thank you for your business!</p>
               <p className="text-xs mt-1">This is a computer-generated invoice.</p>
             </div>
           </div>
 
-          {/* Action Buttons - Responsive */}
-          <div className="flex flex-col sm:flex-row justify-between items-stretch sm:items-center gap-2 sm:gap-4 border-t pt-4">
-            <Button variant="outline" onClick={handlePrint} className="w-full sm:w-auto">
+          {/* Action Buttons */}
+          <div className="flex justify-between items-center border-t pt-4">
+            <Button variant="outline" onClick={handlePrint}>
               <Download className="h-4 w-4 mr-2" />
               Print / Save PDF
             </Button>
             <Button
-              onClick={handleContinue}
-              className="gradient-accent w-full sm:w-auto"
-              disabled={isSending}
+              onClick={() => {
+                onOpenChange(false);
+                if (onSignAgreement) {
+                  onSignAgreement();
+                }
+              }}
+              className="gradient-accent"
             >
-              {isSending ? (
-                <>
-                  <div className="animate-spin mr-2 h-4 w-4 border-2 border-b-transparent border-white rounded-full"></div>
-                  Preparing Agreement...
-                </>
-              ) : (
-                <>
-                  Continue to Payment
-                  <ArrowRight className="h-4 w-4 ml-2" />
-                </>
-              )}
+              Continue to Sign Agreement
+              <ArrowRight className="h-4 w-4 ml-2" />
             </Button>
           </div>
         </DialogContent>
