@@ -50,6 +50,7 @@ export const useFinesData = ({
     liability: [],
     vehicleSearch: '',
     customerSearch: '',
+    search: '',
   },
   sortBy = 'due_date',
   sortOrder = 'asc',
@@ -82,24 +83,16 @@ export const useFinesData = ({
         query = query.in('liability', filters.liability);
       }
 
-      // Note: Vehicle and customer search will be applied client-side after fetching
-      // because Supabase doesn't support searching on foreign table columns with .or()
+      // Note: Search will be applied client-side after fetching
+      // because we need to search across multiple related tables (vehicles, customers) and reference_no
 
-      // Date range filters
-      if (filters.issueDateFrom) {
-        query = query.gte('issue_date', filters.issueDateFrom.toISOString().split('T')[0]);
+      // Date filters (single date pickers)
+      if (filters.issueDate) {
+        query = query.eq('issue_date', filters.issueDate.toISOString().split('T')[0]);
       }
 
-      if (filters.issueDateTo) {
-        query = query.lte('issue_date', filters.issueDateTo.toISOString().split('T')[0]);
-      }
-
-      if (filters.dueDateFrom) {
-        query = query.gte('due_date', filters.dueDateFrom.toISOString().split('T')[0]);
-      }
-
-      if (filters.dueDateTo) {
-        query = query.lte('due_date', filters.dueDateTo.toISOString().split('T')[0]);
+      if (filters.dueDate) {
+        query = query.eq('due_date', filters.dueDate.toISOString().split('T')[0]);
       }
 
       // Quick filters
@@ -122,9 +115,12 @@ export const useFinesData = ({
       // Apply sorting
       query = query.order(sortBy, { ascending: sortOrder === 'asc' });
 
-      // Apply pagination
-      const startIndex = (page - 1) * pageSize;
-      const endIndex = startIndex + pageSize - 1;
+      // When searching, fetch more records to allow client-side filtering
+      // Otherwise, apply normal pagination
+      const isSearching = filters.search && filters.search.trim();
+      const effectivePageSize = isSearching ? 500 : pageSize; // Fetch more when searching
+      const startIndex = (page - 1) * effectivePageSize;
+      const endIndex = startIndex + effectivePageSize - 1;
       query = query.range(startIndex, endIndex);
 
       const { data, error, count } = await query;
@@ -155,22 +151,16 @@ export const useFinesData = ({
         };
       });
 
-      // Apply client-side filters for foreign table columns
-      if (filters.vehicleSearch && filters.vehicleSearch.trim()) {
-        const search = filters.vehicleSearch.trim().toLowerCase();
+      // Apply client-side search filter (unified search across vehicle, customer, and reference)
+      if (filters.search && filters.search.trim()) {
+        const search = filters.search.trim().toLowerCase();
         enhancedFines = enhancedFines.filter(fine =>
-          fine.vehicles.reg.toLowerCase().includes(search) ||
-          fine.vehicles.make.toLowerCase().includes(search) ||
-          fine.vehicles.model.toLowerCase().includes(search)
-        );
-      }
-
-      if (filters.customerSearch && filters.customerSearch.trim()) {
-        const search = filters.customerSearch.trim().toLowerCase();
-        enhancedFines = enhancedFines.filter(fine =>
-          fine.customers?.name.toLowerCase().includes(search) ||
-          fine.customers?.email?.toLowerCase().includes(search) ||
-          fine.customers?.phone?.toLowerCase().includes(search)
+          (fine.reference_no && fine.reference_no.toLowerCase().includes(search)) ||
+          fine.vehicles?.reg?.toLowerCase().includes(search) ||
+          fine.vehicles?.make?.toLowerCase().includes(search) ||
+          fine.vehicles?.model?.toLowerCase().includes(search) ||
+          fine.customers?.name?.toLowerCase().includes(search) ||
+          fine.customers?.email?.toLowerCase().includes(search)
         );
       }
 

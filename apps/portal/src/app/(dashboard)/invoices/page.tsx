@@ -1,13 +1,18 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { useRouter } from "next/navigation";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { FileText, Eye } from "lucide-react";
-import { format } from "date-fns";
+import { FileText, ArrowUpRight, Search, CalendarIcon, X } from "lucide-react";
+import { format, isAfter, isBefore, startOfDay, endOfDay } from "date-fns";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Calendar } from "@/components/ui/calendar";
+import { cn } from "@/lib/utils";
 import { formatCurrency } from "@/lib/invoice-utils";
 import { InvoiceDialog } from "@/components/shared/dialogs/invoice-dialog";
 import { EmptyState } from "@/components/shared/data-display/empty-state";
@@ -38,6 +43,7 @@ interface Invoice {
     model: string;
   };
   rentals: {
+    rental_number: string;
     start_date: string;
     end_date: string;
     monthly_amount: number;
@@ -45,9 +51,12 @@ interface Invoice {
 }
 
 const InvoicesList = () => {
+  const router = useRouter();
   const [selectedInvoice, setSelectedInvoice] = useState<Invoice | null>(null);
-  console.log("selectedInvoice", selectedInvoice);
   const [showInvoiceDialog, setShowInvoiceDialog] = useState(false);
+  const [search, setSearch] = useState("");
+  const [dateFrom, setDateFrom] = useState<Date | undefined>(undefined);
+  const [dateTo, setDateTo] = useState<Date | undefined>(undefined);
 
   const { data: invoices, isLoading } = useQuery({
     queryKey: ["invoices-list"],
@@ -59,6 +68,7 @@ const InvoicesList = () => {
           customers:customer_id (name, email, phone),
           vehicles:vehicle_id (reg, make, model),
           rentals:rental_id (
+            rental_number,
             start_date,
             end_date,
             monthly_amount
@@ -70,6 +80,38 @@ const InvoicesList = () => {
       return data as any as Invoice[];
     },
   });
+
+  // Filter invoices based on search and date
+  const filteredInvoices = useMemo(() => {
+    if (!invoices) return [];
+
+    return invoices.filter((invoice) => {
+      // Search filter
+      if (search.trim()) {
+        const searchLower = search.toLowerCase();
+        const matchesSearch =
+          invoice.invoice_number?.toLowerCase().includes(searchLower) ||
+          invoice.customers?.name?.toLowerCase().includes(searchLower) ||
+          invoice.rentals?.rental_number?.toLowerCase().includes(searchLower);
+        if (!matchesSearch) return false;
+      }
+
+      // Date filter
+      const invoiceDate = new Date(invoice.invoice_date);
+      if (dateFrom && isBefore(invoiceDate, startOfDay(dateFrom))) return false;
+      if (dateTo && isAfter(invoiceDate, endOfDay(dateTo))) return false;
+
+      return true;
+    });
+  }, [invoices, search, dateFrom, dateTo]);
+
+  const clearFilters = () => {
+    setSearch("");
+    setDateFrom(undefined);
+    setDateTo(undefined);
+  };
+
+  const hasActiveFilters = search || dateFrom || dateTo;
 
   const handleViewInvoice = (invoice: Invoice) => {
     setSelectedInvoice(invoice);
@@ -86,6 +128,76 @@ const InvoicesList = () => {
         </div>
       </div>
 
+      {/* Search Filter */}
+      <div className="flex flex-wrap gap-3 items-center">
+        <div className="relative flex-1 min-w-[250px] max-w-md">
+          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
+          <Input
+            placeholder="Search by invoice #, customer, or rental..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="pl-10"
+          />
+        </div>
+
+        <Popover>
+          <PopoverTrigger asChild>
+            <Button
+              variant="outline"
+              size="sm"
+              className={cn(
+                "justify-start text-left font-normal",
+                !dateFrom && "text-muted-foreground"
+              )}
+            >
+              <CalendarIcon className="mr-2 h-4 w-4" />
+              {dateFrom ? format(dateFrom, "dd/MM/yyyy") : "From"}
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent className="w-auto p-0" align="start">
+            <Calendar
+              mode="single"
+              selected={dateFrom}
+              onSelect={setDateFrom}
+              initialFocus
+              className="pointer-events-auto"
+            />
+          </PopoverContent>
+        </Popover>
+
+        <Popover>
+          <PopoverTrigger asChild>
+            <Button
+              variant="outline"
+              size="sm"
+              className={cn(
+                "justify-start text-left font-normal",
+                !dateTo && "text-muted-foreground"
+              )}
+            >
+              <CalendarIcon className="mr-2 h-4 w-4" />
+              {dateTo ? format(dateTo, "dd/MM/yyyy") : "To"}
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent className="w-auto p-0" align="start">
+            <Calendar
+              mode="single"
+              selected={dateTo}
+              onSelect={setDateTo}
+              initialFocus
+              className="pointer-events-auto"
+            />
+          </PopoverContent>
+        </Popover>
+
+        {hasActiveFilters && (
+          <Button variant="outline" size="sm" onClick={clearFilters} className="gap-1">
+            <X className="h-3 w-3" />
+            Clear
+          </Button>
+        )}
+      </div>
+
       {/* Invoices Table */}
       <Card>
         <CardHeader>
@@ -97,11 +209,11 @@ const InvoicesList = () => {
         <CardContent>
           {isLoading ? (
             <div className="text-center py-8 text-muted-foreground">Loading invoices...</div>
-          ) : !invoices || invoices.length === 0 ? (
+          ) : !filteredInvoices || filteredInvoices.length === 0 ? (
             <EmptyState
               icon={FileText}
               title="No invoices found"
-              description="Invoices will appear here when rentals are created"
+              description={search ? "No invoices match your search" : "Invoices will appear here when rentals are created"}
             />
           ) : (
             <div className="rounded-md border">
@@ -110,38 +222,54 @@ const InvoicesList = () => {
                   <TableRow>
                     <TableHead>Invoice #</TableHead>
                     <TableHead>Customer</TableHead>
-                    <TableHead>Vehicle</TableHead>
+                    <TableHead>Rental</TableHead>
                     <TableHead>Invoice Date</TableHead>
                     <TableHead>Due Date</TableHead>
                     <TableHead className="text-left">Amount</TableHead>
-                    <TableHead className="w-20">Actions</TableHead>
+                    <TableHead className="text-right">View</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {invoices.map((invoice) => (
+                  {filteredInvoices.map((invoice) => (
                     <TableRow key={invoice.id}>
                       <TableCell className="font-medium">{invoice.invoice_number}</TableCell>
-                      <TableCell>{invoice.customers?.name || "—"}</TableCell>
-                      <TableCell>
-                        {invoice.vehicles?.reg || "—"}
-                        <span className="text-xs text-muted-foreground block">
-                          {invoice.vehicles?.make} {invoice.vehicles?.model}
-                        </span>
+                      <TableCell className="max-w-[150px]">
+                        <button
+                          onClick={() => router.push(`/customers/${invoice.customer_id}`)}
+                          className="text-foreground hover:underline hover:opacity-80 font-medium truncate block max-w-full text-left"
+                          title={invoice.customers?.name}
+                        >
+                          {(invoice.customers?.name?.length || 0) > 20
+                            ? invoice.customers?.name?.slice(0, 20) + "..."
+                            : invoice.customers?.name || "—"}
+                        </button>
                       </TableCell>
-                      <TableCell>{format(new Date(invoice.invoice_date), "PP")}</TableCell>
                       <TableCell>
-                        {invoice.due_date ? format(new Date(invoice.due_date), "PP") : "—"}
+                        {invoice.rentals?.rental_number ? (
+                          <button
+                            onClick={() => router.push(`/rentals/${invoice.rental_id}`)}
+                            className="text-foreground hover:underline hover:opacity-80"
+                          >
+                            {invoice.rentals.rental_number}
+                          </button>
+                        ) : (
+                          <span className="text-muted-foreground">—</span>
+                        )}
+                      </TableCell>
+                      <TableCell>{format(new Date(invoice.invoice_date), "dd/MM/yyyy")}</TableCell>
+                      <TableCell>
+                        {invoice.due_date ? format(new Date(invoice.due_date), "dd/MM/yyyy") : "—"}
                       </TableCell>
                       <TableCell className="text-left font-medium">
                         {formatCurrency(invoice.total_amount)}
                       </TableCell>
-                      <TableCell>
+                      <TableCell className="text-right">
                         <Button
                           variant="ghost"
-                          size="sm"
+                          size="icon"
                           onClick={() => handleViewInvoice(invoice)}
                         >
-                          <Eye className="h-4 w-4" />
+                          <ArrowUpRight className="h-4 w-4" />
                         </Button>
                       </TableCell>
                     </TableRow>

@@ -3,30 +3,19 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger
-} from "@/components/ui/dropdown-menu";
-import {
   CreditCard,
   Plus,
-  ExternalLink,
-  MoreHorizontal,
-  Eye,
+  ArrowUpRight,
   FileText,
-  Download,
   ChevronLeft,
   ChevronRight,
   CheckCircle,
   XCircle,
-  Clock,
-  AlertCircle
+  Clock
 } from "lucide-react";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
@@ -37,7 +26,7 @@ import { PaymentSummaryCards } from "@/components/payments/payment-summary-cards
 import { PaymentFilters, PaymentFilters as IPaymentFilters } from "@/components/payments/payment-filters";
 import { PaymentAllocationDrawer } from "@/components/payments/payment-allocation-drawer";
 import { AddPaymentDialog } from "@/components/shared/dialogs/add-payment-dialog";
-import { usePaymentsData, exportPaymentsCSV } from "@/hooks/use-payments-data";
+import { usePaymentsData } from "@/hooks/use-payments-data";
 import { usePaymentVerificationActions, getVerificationStatusInfo, VerificationStatus } from "@/hooks/use-payment-verification";
 import { useOrgSettings } from "@/hooks/use-org-settings";
 
@@ -71,6 +60,7 @@ const PaymentsList = () => {
   const getInitialFilters = (): IPaymentFilters => {
     const today = new Date();
     return {
+      search: '',
       customerSearch: '',
       vehicleSearch: '',
       method: 'all',
@@ -120,22 +110,6 @@ const PaymentsList = () => {
     }
   };
 
-  const handleExportCSV = async () => {
-    try {
-      await exportPaymentsCSV(filters);
-      toast({
-        title: "Export Complete",
-        description: "Payments data has been exported to CSV",
-      });
-    } catch (error) {
-      toast({
-        title: "Export Failed",
-        description: "Failed to export data. Please try again.",
-        variant: "destructive",
-      });
-    }
-  };
-
   const handleApprovePayment = (paymentId: string) => {
     approvePayment.mutate(paymentId);
   };
@@ -171,14 +145,10 @@ const PaymentsList = () => {
         <div>
           <h1 className="text-3xl font-bold">Payments</h1>
           <p className="text-muted-foreground">
-            Record customer payments — automatically allocated to outstanding charges using FIFO
+            Track and manage all payment records
           </p>
         </div>
         <div className="flex gap-2">
-          <Button variant="outline" onClick={handleExportCSV}>
-            <Download className="h-4 w-4 mr-2" />
-            Export CSV
-          </Button>
           <AddPaymentDialog
             open={showAddDialog}
             onOpenChange={setShowAddDialog}
@@ -247,121 +217,51 @@ const PaymentsList = () => {
                       >
                         Customer {sortBy === 'customer' && (sortOrder === 'asc' ? '↑' : '↓')}
                       </TableHead>
-                      <TableHead>Vehicle</TableHead>
                       <TableHead>Rental</TableHead>
-                      <TableHead>Type</TableHead>
-                      <TableHead>Method</TableHead>
                       <TableHead
                         className="text-left cursor-pointer hover:bg-muted/50"
                         onClick={() => handleSort('amount')}
                       >
                         Amount {sortBy === 'amount' && (sortOrder === 'asc' ? '↑' : '↓')}
                       </TableHead>
-                      <TableHead>Allocation</TableHead>
-                      <TableHead>Status</TableHead>
-                      <TableHead>Actions</TableHead>
+                      <TableHead className="text-right">Actions</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {payments.map((payment) => {
-                      const allocatedAmount = payment.amount - (payment.remaining_amount || 0);
-                      const hasCredit = (payment.remaining_amount || 0) > 0;
-
                       return (
                         <TableRow key={payment.id} className="hover:bg-muted/50">
                           <TableCell className="font-medium">
                             {formatInTimeZone(new Date(payment.payment_date), 'Europe/London', 'dd/MM/yyyy')}
                           </TableCell>
-                          <TableCell>
+                          <TableCell className="max-w-[150px]">
                             <button
                               onClick={() => router.push(`/customers/${payment.customers.id}`)}
-                              className="text-foreground hover:underline hover:opacity-80 font-medium"
+                              className="text-foreground hover:underline hover:opacity-80 font-medium truncate block max-w-full text-left"
+                              title={payment.customers.name}
                             >
-                              {payment.customers.name}
+                              {payment.customers.name.length > 20
+                                ? payment.customers.name.slice(0, 20) + "..."
+                                : payment.customers.name}
                             </button>
                           </TableCell>
                           <TableCell>
-                            {payment.vehicles ? (
+                            {payment.rentals ? (
                               <button
-                                onClick={() => router.push(`/vehicles/${payment.vehicles!.id}`)}
-                                className="text-foreground hover:underline hover:opacity-80 font-medium"
+                                onClick={() => router.push(`/rentals/${payment.rentals!.id}`)}
+                                className="text-foreground hover:underline hover:opacity-80"
                               >
-                                {payment.vehicles.reg}
-                                {payment.vehicles.make && payment.vehicles.model &&
-                                  <span className="text-muted-foreground"> • {payment.vehicles.make} {payment.vehicles.model}</span>
-                                }
+                                {payment.rentals.rental_number || `R-${payment.rentals.id.slice(0, 6)}`}
                               </button>
                             ) : (
-                              '-'
+                              <span className="text-muted-foreground">—</span>
                             )}
                           </TableCell>
-                           <TableCell>
-                             {payment.rentals ? (
-                               <Badge variant="outline" className="text-xs cursor-pointer"
-                                 onClick={() => router.push(`/rentals/${payment.rentals!.id}`)}>
-                                 {payment.rentals.rental_number || `R-${payment.rentals.id.slice(0, 6)}`}
-                               </Badge>
-                             ) : (
-                               <span className="text-muted-foreground text-xs">No Rental</span>
-                             )}
-                           </TableCell>
-                           <TableCell>
-                             <Badge
-                               variant={payment.payment_type === 'InitialFee' ? 'default' : 'secondary'}
-                               className={payment.payment_type === 'InitialFee' ? 'bg-purple-600 hover:bg-purple-700' : ''}
-                             >
-                               {getPaymentTypeDisplay(payment.payment_type)}
-                             </Badge>
-                           </TableCell>
-                           <TableCell>{payment.method || '-'}</TableCell>
                           <TableCell className="text-left font-medium">
                             ${payment.amount.toLocaleString('en-US', { minimumFractionDigits: 2 })}
                           </TableCell>
                           <TableCell>
-                            {allocatedAmount === payment.amount ? (
-                              <Badge variant="default" className="bg-primary/10 text-primary dark:bg-primary/20">
-                                Balanced
-                              </Badge>
-                            ) : hasCredit ? (
-                              <TooltipProvider>
-                                <Tooltip>
-                                  <TooltipTrigger asChild>
-                                    <Badge variant="secondary" className="bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200 cursor-help">
-                                      Credit ${payment.remaining_amount?.toFixed(2)}
-                                    </Badge>
-                                  </TooltipTrigger>
-                                  <TooltipContent>
-                                    <div>
-                                      <p>Applied ${allocatedAmount.toFixed(2)} to charges</p>
-                                      <p>Remaining ${payment.remaining_amount?.toFixed(2)} credit will auto-apply to next charge</p>
-                                    </div>
-                                  </TooltipContent>
-                                </Tooltip>
-                              </TooltipProvider>
-                            ) : (payment.remaining_amount || 0) < 0 ? (
-                              <Badge variant="secondary" className="bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200">
-                                Debit ${Math.abs(payment.remaining_amount || 0).toFixed(2)}
-                              </Badge>
-                            ) : (
-                              <Badge variant="outline">Pending</Badge>
-                            )}
-                          </TableCell>
-                          <TableCell>
-                            {(() => {
-                              const verificationStatus = payment.verification_status || 'auto_approved';
-                              const statusInfo = getVerificationStatusInfo(verificationStatus);
-                              return (
-                                <Badge className={statusInfo.className}>
-                                  {verificationStatus === 'pending' && <Clock className="h-3 w-3 mr-1" />}
-                                  {verificationStatus === 'approved' && <CheckCircle className="h-3 w-3 mr-1" />}
-                                  {verificationStatus === 'rejected' && <XCircle className="h-3 w-3 mr-1" />}
-                                  {statusInfo.label}
-                                </Badge>
-                              );
-                            })()}
-                          </TableCell>
-                          <TableCell>
-                            <div className="flex items-center gap-1">
+                            <div className="flex items-center justify-end gap-1">
                               {/* Show Accept/Reject buttons for pending payments */}
                               {payment.verification_status === 'pending' && (
                                 <>
@@ -399,23 +299,36 @@ const PaymentsList = () => {
                                   </TooltipProvider>
                                 </>
                               )}
-                              <DropdownMenu>
-                                <DropdownMenuTrigger asChild>
-                                  <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
-                                    <MoreHorizontal className="h-4 w-4" />
-                                  </Button>
-                                </DropdownMenuTrigger>
-                                <DropdownMenuContent align="end">
-                                  <DropdownMenuItem onClick={() => handleViewAllocations(payment.id)}>
-                                    <Eye className="h-4 w-4 mr-2" />
-                                    View Allocations
-                                  </DropdownMenuItem>
-                                  <DropdownMenuItem onClick={() => handleViewLedger(payment)}>
-                                    <FileText className="h-4 w-4 mr-2" />
-                                    View Ledger
-                                  </DropdownMenuItem>
-                                </DropdownMenuContent>
-                              </DropdownMenu>
+                              <TooltipProvider>
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      className="h-8 w-8 p-0"
+                                      onClick={() => handleViewAllocations(payment.id)}
+                                    >
+                                      <ArrowUpRight className="h-4 w-4" />
+                                    </Button>
+                                  </TooltipTrigger>
+                                  <TooltipContent>View Allocations</TooltipContent>
+                                </Tooltip>
+                              </TooltipProvider>
+                              <TooltipProvider>
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      className="h-8 w-8 p-0"
+                                      onClick={() => handleViewLedger(payment)}
+                                    >
+                                      <FileText className="h-4 w-4" />
+                                    </Button>
+                                  </TooltipTrigger>
+                                  <TooltipContent>View Ledger</TooltipContent>
+                                </Tooltip>
+                              </TooltipProvider>
                             </div>
                           </TableCell>
                         </TableRow>

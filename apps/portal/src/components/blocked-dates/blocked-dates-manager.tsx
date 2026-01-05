@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -9,8 +9,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { CalendarIcon, Plus, Trash2, Ban, Calendar as CalendarIconLucide, Globe } from "lucide-react";
-import { format } from "date-fns";
+import { CalendarIcon, Plus, Trash2, Ban, Calendar as CalendarIconLucide, Globe, X } from "lucide-react";
+import { format, isAfter, isBefore, startOfDay, endOfDay } from "date-fns";
 import { cn } from "@/lib/utils";
 import { useBlockedDates } from "@/hooks/use-blocked-dates";
 import { EmptyState } from "@/components/shared/data-display/empty-state";
@@ -27,8 +27,33 @@ export const BlockedDatesManager = ({ vehicle_id }: BlockedDatesManagerProps) =>
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [itemToDelete, setItemToDelete] = useState<{ id: string; startDate: string; endDate: string } | null>(null);
 
+  // Filter state
+  const [filterDateFrom, setFilterDateFrom] = useState<Date | undefined>(undefined);
+  const [filterDateTo, setFilterDateTo] = useState<Date | undefined>(undefined);
+
   const { blockedDates, isLoading, addBlockedDate, deleteBlockedDate, isAdding, isDeleting } =
     useBlockedDates(vehicle_id);
+
+  // Filter blocked dates
+  const filteredBlockedDates = useMemo(() => {
+    return blockedDates.filter((item) => {
+      const itemStartDate = new Date(item.start_date);
+      const itemEndDate = new Date(item.end_date);
+
+      // Check if blocked date overlaps with filter range
+      if (filterDateFrom && isBefore(itemEndDate, startOfDay(filterDateFrom))) return false;
+      if (filterDateTo && isAfter(itemStartDate, endOfDay(filterDateTo))) return false;
+
+      return true;
+    });
+  }, [blockedDates, filterDateFrom, filterDateTo]);
+
+  const clearFilters = () => {
+    setFilterDateFrom(undefined);
+    setFilterDateTo(undefined);
+  };
+
+  const hasActiveFilters = filterDateFrom || filterDateTo;
 
   // Helper function to check if a date is already blocked
   const isDateBlocked = (date: Date): boolean => {
@@ -77,10 +102,71 @@ export const BlockedDatesManager = ({ vehicle_id }: BlockedDatesManagerProps) =>
   };
 
   return (
-    <Card>
-      <CardHeader className="flex flex-row items-center justify-between space-y-0">
-        <div />
-        <Dialog open={isOpen} onOpenChange={setIsOpen}>
+    <>
+      {/* Date Filters */}
+      <div className="flex flex-wrap gap-3 items-center mb-6">
+        <Popover>
+          <PopoverTrigger asChild>
+            <Button
+              variant="outline"
+              size="sm"
+              className={cn(
+                "justify-start text-left font-normal",
+                !filterDateFrom && "text-muted-foreground"
+              )}
+            >
+              <CalendarIcon className="mr-2 h-4 w-4" />
+              {filterDateFrom ? format(filterDateFrom, "dd/MM/yyyy") : "From"}
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent className="w-auto p-0" align="start">
+            <Calendar
+              mode="single"
+              selected={filterDateFrom}
+              onSelect={setFilterDateFrom}
+              initialFocus
+              className="pointer-events-auto"
+            />
+          </PopoverContent>
+        </Popover>
+
+        <Popover>
+          <PopoverTrigger asChild>
+            <Button
+              variant="outline"
+              size="sm"
+              className={cn(
+                "justify-start text-left font-normal",
+                !filterDateTo && "text-muted-foreground"
+              )}
+            >
+              <CalendarIcon className="mr-2 h-4 w-4" />
+              {filterDateTo ? format(filterDateTo, "dd/MM/yyyy") : "To"}
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent className="w-auto p-0" align="start">
+            <Calendar
+              mode="single"
+              selected={filterDateTo}
+              onSelect={setFilterDateTo}
+              initialFocus
+              className="pointer-events-auto"
+            />
+          </PopoverContent>
+        </Popover>
+
+        {hasActiveFilters && (
+          <Button variant="outline" size="sm" onClick={clearFilters} className="gap-1">
+            <X className="h-3 w-3" />
+            Clear
+          </Button>
+        )}
+      </div>
+
+      <Card>
+        <CardHeader className="flex flex-row items-center justify-between space-y-0">
+          <div />
+          <Dialog open={isOpen} onOpenChange={setIsOpen}>
           <DialogTrigger asChild>
             <Button size="sm" className="flex items-center gap-2">
               <Plus className="h-4 w-4" />
@@ -186,11 +272,11 @@ export const BlockedDatesManager = ({ vehicle_id }: BlockedDatesManagerProps) =>
       <CardContent>
         {isLoading ? (
           <div className="text-center py-8 text-muted-foreground">Loading blocked dates...</div>
-        ) : blockedDates.length === 0 ? (
+        ) : filteredBlockedDates.length === 0 ? (
           <EmptyState
             icon={CalendarIconLucide}
             title="No blocked dates"
-            description="Block date ranges to prevent rentals on specific days"
+            description={hasActiveFilters ? "No blocked dates match your filters" : "Block date ranges to prevent rentals on specific days"}
           />
         ) : (
           <div className="rounded-md border">
@@ -205,7 +291,7 @@ export const BlockedDatesManager = ({ vehicle_id }: BlockedDatesManagerProps) =>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {blockedDates.map((blockedDate) => {
+                {filteredBlockedDates.map((blockedDate) => {
                   const isGeneralBlock = !blockedDate.vehicle_id;
 
                   return (
@@ -279,5 +365,6 @@ export const BlockedDatesManager = ({ vehicle_id }: BlockedDatesManagerProps) =>
         </AlertDialogContent>
       </AlertDialog>
     </Card>
+    </>
   );
 };

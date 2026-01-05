@@ -1,4 +1,4 @@
-import { differenceInMonths, differenceInDays, differenceInWeeks, parseISO, isAfter, getDaysInMonth } from "date-fns";
+import { differenceInMonths, differenceInDays, differenceInWeeks, parseISO, isAfter } from "date-fns";
 
 export const calculateDurationInMonths = (startDate: string, endDate: string | null): number => {
   if (!endDate) {
@@ -9,28 +9,13 @@ export const calculateDurationInMonths = (startDate: string, endDate: string | n
   const start = parseISO(startDate);
   const end = parseISO(endDate);
 
-  // Calculate months difference
-  const months = differenceInMonths(end, start);
-
-  // If less than 1 month, check if it spans most of a calendar month
-  if (months === 0) {
-    const days = differenceInDays(end, start);
-    // Use actual days in the start month for more accurate calculation
-    const daysInStartMonth = getDaysInMonth(start);
-    // If rental spans 80% or more of the month, count as 1 month; otherwise use fractional
-    if (days >= daysInStartMonth * 0.8) {
-      return 1;
-    }
-    // For very short rentals, still return at least 1
-    return 1;
-  }
-
-  return months;
+  // Calculate months difference - return actual value (can be 0 for same-day)
+  return differenceInMonths(end, start);
 };
 
 export const calculateDuration = (startDate: string, endDate: string | null, periodType: string = 'Monthly'): number => {
   if (!endDate) {
-    // For active rentals, calculate duration from start to now
+    // For active rentals, calculate duration from start to now (minimum 1)
     const start = parseISO(startDate);
     const now = new Date();
 
@@ -45,17 +30,18 @@ export const calculateDuration = (startDate: string, endDate: string | null, per
     }
   }
 
+  // For closed rentals, show actual duration (can be 0 for same-day)
   const start = parseISO(startDate);
   const end = parseISO(endDate);
 
   switch (periodType) {
     case 'Daily':
-      return Math.max(1, differenceInDays(end, start));
+      return differenceInDays(end, start);
     case 'Weekly':
-      return Math.max(1, differenceInWeeks(end, start));
+      return differenceInWeeks(end, start);
     case 'Monthly':
     default:
-      return Math.max(1, differenceInMonths(end, start));
+      return differenceInMonths(end, start);
   }
 };
 
@@ -80,6 +66,43 @@ export const formatDuration = (months: number, periodType: string = 'Monthly'): 
     default:
       return `${months} mo`;
   }
+};
+
+// Smart duration formatter that shows days when < 1 month
+export const formatDurationSmart = (startDate: string, endDate: string | null, periodType: string = 'Monthly'): string => {
+  if (!endDate) {
+    // Active rental - show at least 1
+    const start = parseISO(startDate);
+    const now = new Date();
+    const months = differenceInMonths(now, start);
+    if (months > 0) return `${months} mo`;
+    const days = differenceInDays(now, start);
+    return days === 0 ? "< 1 day" : `${days} ${days === 1 ? 'day' : 'days'}`;
+  }
+
+  const start = parseISO(startDate);
+  const end = parseISO(endDate);
+
+  // For daily period type, always show days
+  if (periodType === 'Daily') {
+    const days = differenceInDays(end, start);
+    return days === 0 ? "< 1 day" : `${days} ${days === 1 ? 'day' : 'days'}`;
+  }
+
+  // For weekly period type
+  if (periodType === 'Weekly') {
+    const weeks = differenceInWeeks(end, start);
+    if (weeks > 0) return `${weeks} ${weeks === 1 ? 'week' : 'weeks'}`;
+    const days = differenceInDays(end, start);
+    return days === 0 ? "< 1 day" : `${days} ${days === 1 ? 'day' : 'days'}`;
+  }
+
+  // For monthly - show days if < 1 month
+  const months = differenceInMonths(end, start);
+  if (months > 0) return `${months} mo`;
+
+  const days = differenceInDays(end, start);
+  return days === 0 ? "< 1 day" : `${days} ${days === 1 ? 'day' : 'days'}`;
 };
 
 export const getRentalStatus = (startDate: string, endDate: string | null, status: string): string => {

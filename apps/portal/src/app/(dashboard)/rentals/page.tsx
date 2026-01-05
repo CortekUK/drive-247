@@ -25,15 +25,16 @@ import {
   Eye,
   CreditCard,
   XCircle,
-  Download,
   Trash2,
+  ArrowUpRight,
 } from "lucide-react";
+import { TruncatedCell } from "@/components/shared/data-display/truncated-cell";
 import { useEnhancedRentals, RentalFilters } from "@/hooks/use-enhanced-rentals";
 import { RentalsFilters } from "@/components/rentals/rentals-filters";
 import { AddPaymentDialog } from "@/components/shared/dialogs/add-payment-dialog";
 import { CloseRentalDialog } from "@/components/rentals/close-rental-dialog";
 import { DeleteRentalDialog } from "@/components/rentals/delete-rental-dialog";
-import { formatDuration } from "@/lib/rental-utils";
+import { formatDurationSmart } from "@/lib/rental-utils";
 import {
   Pagination,
   PaginationContent,
@@ -188,23 +189,13 @@ const RentalsList = () => {
             Manage rental agreements and contracts
           </p>
         </div>
-        <div className="flex gap-2">
-          <Button
-            variant="outline"
-            onClick={handleExportCSV}
-            disabled={!rentals.length}
-          >
-            <Download className="h-4 w-4 mr-2" />
-            Export CSV
-          </Button>
-          <Button
-            onClick={() => router.push("/rentals/new")}
-            className="bg-gradient-primary"
-          >
-            <Plus className="h-4 w-4 mr-2" />
-            New Rental
-          </Button>
-        </div>
+        <Button
+          onClick={() => router.push("/rentals/new")}
+          className="bg-gradient-primary"
+        >
+          <Plus className="h-4 w-4 mr-2" />
+          New Rental
+        </Button>
       </div>
 
       {/* Quick Stats */}
@@ -277,16 +268,10 @@ const RentalsList = () => {
                       <TableHead>Rental #</TableHead>
                       <TableHead>Customer</TableHead>
                       <TableHead>Vehicle</TableHead>
-                      <TableHead>Start Date</TableHead>
-                      <TableHead>End Date</TableHead>
                       <TableHead>Duration</TableHead>
-                      <TableHead className="text-left">
-                        Initial Payment
-                      </TableHead>
-                      <TableHead className="text-left">Rental Amount</TableHead>
-                      <TableHead className="text-left">Total Amount</TableHead>
+                      <TableHead>Initial Payment</TableHead>
                       <TableHead>Status</TableHead>
-                      <TableHead className="text-left">Actions</TableHead>
+                      <TableHead className="text-right">View</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -301,15 +286,18 @@ const RentalsList = () => {
                             {rental.rental_number}
                           </Button>
                         </TableCell>
-                        <TableCell>
+                        <TableCell className="max-w-[150px]">
                           <Button
                             variant="link"
-                            className="p-0 h-auto font-medium"
+                            className="p-0 h-auto font-medium truncate block max-w-full text-left"
                             onClick={() =>
                               router.push(`/customers/${rental.customer.id}`)
                             }
+                            title={rental.customer.name}
                           >
-                            {rental.customer.name}
+                            {rental.customer.name.length > 20
+                              ? rental.customer.name.slice(0, 20) + "..."
+                              : rental.customer.name}
                           </Button>
                         </TableCell>
                         <TableCell>
@@ -319,45 +307,18 @@ const RentalsList = () => {
                             onClick={() =>
                               router.push(`/vehicles/${rental.vehicle.id}`)
                             }
+                            title={`${rental.vehicle.make} ${rental.vehicle.model}`}
                           >
-                            {rental.vehicle.reg} ({rental.vehicle.make}{" "}
-                            {rental.vehicle.model})
+                            {rental.vehicle.reg}
                           </Button>
                         </TableCell>
                         <TableCell>
-                          {new Date(rental.start_date).toLocaleDateString()}
+                          {formatDurationSmart(rental.start_date, rental.end_date, rental.rental_period_type)}
                         </TableCell>
                         <TableCell>
-                          {rental.end_date
-                            ? new Date(rental.end_date).toLocaleDateString()
-                            : "—"}
-                        </TableCell>
-                        <TableCell>
-                          {formatDuration(rental.duration_months, rental.rental_period_type)}
-                        </TableCell>
-                        <TableCell className="text-left">
                           {rental.initial_payment
-                            ? `$${Number(
-                                rental.initial_payment
-                              ).toLocaleString()}`
+                            ? `$${Number(rental.initial_payment).toLocaleString()}`
                             : "—"}
-                        </TableCell>
-                        <TableCell className="text-left">
-                          <div className="flex items-center gap-2">
-                            <span>
-                              ${Number(rental.monthly_amount).toLocaleString()}
-                            </span>
-                          </div>
-                        </TableCell>
-                        <TableCell className="text-left">
-                          <div className="flex items-center gap-2">
-                            <span className="font-medium">
-                              ${Number(rental.total_amount).toLocaleString()}
-                            </span>
-                            {rental.protection_cost > 0 && (
-                              <span className="text-xs text-[#C5A572]">(+${rental.protection_cost})</span>
-                            )}
-                          </div>
                         </TableCell>
                         <TableCell>
                           <Badge
@@ -368,47 +329,19 @@ const RentalsList = () => {
                                 ? "secondary"
                                 : "outline"
                             }
+                            className="text-xs"
                           >
                             {rental.computed_status}
                           </Badge>
                         </TableCell>
                         <TableCell className="text-right">
-                          <div className="flex items-center gap-1">
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => router.push(`/rentals/${rental.id}`)}
-                            >
-                              <Eye className="h-4 w-4 mr-1" />
-                              View
-                            </Button>
-                            {rental.computed_status === "Active" && (
-                              <>
-                                <Button
-                                  variant="outline"
-                                  size="sm"
-                                  onClick={() => handleMakePayment(rental)}
-                                >
-                                  <CreditCard className="h-4 w-4" />
-                                </Button>
-                                <Button
-                                  variant="outline"
-                                  size="sm"
-                                  onClick={() => handleCloseRental(rental)}
-                                >
-                                  <XCircle className="h-4 w-4" />
-                                </Button>
-                              </>
-                            )}
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => handleDeleteRental(rental)}
-                              className="text-destructive hover:text-destructive"
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </Button>
-                          </div>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => router.push(`/rentals/${rental.id}`)}
+                          >
+                            <ArrowUpRight className="h-4 w-4" />
+                          </Button>
                         </TableCell>
                       </TableRow>
                     ))}

@@ -9,7 +9,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 
 import { Checkbox } from "@/components/ui/checkbox";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { AlertTriangle, Plus, Eye, Filter, MoreVertical, CreditCard, Ban, Receipt, Scale, ArrowUpDown } from "lucide-react";
+import { AlertTriangle, Plus, ArrowUpRight, MoreVertical, CreditCard, Ban, Receipt, Scale } from "lucide-react";
 import { FineStatusBadge } from "@/components/shared/status/fine-status-badge";
 import { FineKPIs } from "@/components/fines/fine-kpis";
 import { FineFilters, FineFilterState } from "@/components/fines/fine-filters";
@@ -33,6 +33,7 @@ const FinesList = () => {
     liability: [],
     vehicleSearch: '',
     customerSearch: '',
+    search: '',
   });
 
   const [sortBy, setSortBy] = useState('created_at');
@@ -130,15 +131,6 @@ const FinesList = () => {
     },
   });
 
-  // Handle sorting
-  const handleSort = (column: string) => {
-    if (sortBy === column) {
-      setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc');
-    } else {
-      setSortBy(column);
-      setSortOrder('asc');
-    }
-  };
 
   // Handle row selection
   const handleSelectFine = (fineId: string, checked: boolean) => {
@@ -179,31 +171,26 @@ const FinesList = () => {
           {fine.reference_no || fine.id.slice(0, 8)}
         </TableCell>
 
-        <TableCell>
-          {fine.vehicles.reg} • {fine.vehicles.make} {fine.vehicles.model}
+        <TableCell className="max-w-[120px]">
+          <span className="truncate block" title={`${fine.vehicles.reg} - ${fine.vehicles.make} ${fine.vehicles.model}`}>
+            {fine.vehicles.reg}
+          </span>
         </TableCell>
 
-        <TableCell>
-          {fine.customers?.name || '-'}
+        <TableCell className="max-w-[150px]">
+          <span className="truncate block" title={fine.customers?.name}>
+            {(fine.customers?.name?.length || 0) > 20
+              ? fine.customers?.name?.slice(0, 20) + "..."
+              : fine.customers?.name || "—"}
+          </span>
         </TableCell>
 
         <TableCell>
           {new Date(fine.issue_date).toLocaleDateString()}
         </TableCell>
 
-        <TableCell className={cn(fine.isOverdue && "text-destructive font-medium")}>
-          {new Date(fine.due_date).toLocaleDateString()}
-          {fine.isOverdue && (
-            <Badge variant="destructive" className="ml-2 text-xs">
-              {Math.abs(fine.daysUntilDue)} days overdue
-            </Badge>
-          )}
-        </TableCell>
-
         <TableCell>
-          <Badge variant={fine.liability === 'Individual' || fine.liability === 'Customer' ? 'default' : 'secondary'}>
-            {fine.liability === "Customer" ? "Individual" : fine.liability}
-          </Badge>
+          {new Date(fine.due_date).toLocaleDateString()}
         </TableCell>
 
         <TableCell>
@@ -228,12 +215,12 @@ const FinesList = () => {
         <TableCell className="text-right">
           <div className="flex items-center gap-2">
             <Button
-              variant="outline"
-              size="sm"
+              variant="ghost"
+              size="icon"
               onClick={() => router.push(`/fines/${fine.id}`)}
+              title="View Fine"
             >
-              <Eye className="h-4 w-4 mr-1" />
-              View
+              <ArrowUpRight className="h-4 w-4" />
             </Button>
 
             <DropdownMenu>
@@ -308,26 +295,9 @@ const FinesList = () => {
             <TableHead>Vehicle</TableHead>
             <TableHead>Customer</TableHead>
             <TableHead>Issue Date</TableHead>
-            <TableHead
-              className="cursor-pointer hover:bg-muted/50"
-              onClick={() => handleSort('due_date')}
-            >
-              <div className="flex items-center gap-1">
-                Due Date
-                <ArrowUpDown className="h-4 w-4" />
-              </div>
-            </TableHead>
-            <TableHead>Liability</TableHead>
+            <TableHead>Due Date</TableHead>
             <TableHead>Status</TableHead>
-            <TableHead
-              className="text-right cursor-pointer hover:bg-muted/50"
-              onClick={() => handleSort('amount')}
-            >
-              <div className="flex items-center justify-end gap-1">
-                Amount
-                <ArrowUpDown className="h-4 w-4" />
-              </div>
-            </TableHead>
+            <TableHead className="text-left">Amount</TableHead>
             <TableHead className="text-right">Actions</TableHead>
           </TableRow>
         </TableHeader>
@@ -336,7 +306,7 @@ const FinesList = () => {
             fines.map(renderFineRow)
           ) : (
             <TableRow>
-              <TableCell colSpan={10} className="text-center py-8">
+              <TableCell colSpan={9} className="text-center py-8">
                 <div className="flex flex-col items-center space-y-2">
                   <AlertTriangle className="h-12 w-12 text-muted-foreground" />
                   <p className="text-lg font-medium">No fines found</p>

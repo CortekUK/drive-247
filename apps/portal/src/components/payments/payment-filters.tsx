@@ -1,25 +1,22 @@
 "use client";
 
 import { useState } from "react";
-import { useSearchParams, useRouter } from "next/navigation";
-import { Card, CardContent } from "@/components/ui/card";
+import { useSearchParams } from "next/navigation";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { CalendarIcon, X, Search, Filter, Clock } from "lucide-react";
+import { CalendarIcon, X, Search } from "lucide-react";
 import { formatInTimeZone } from "date-fns-tz";
 import { cn } from "@/lib/utils";
-import { useQuery } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
 
 interface PaymentFiltersProps {
   onFiltersChange: (filters: PaymentFilters) => void;
 }
 
 export interface PaymentFilters {
+  search: string;
   customerSearch: string;
   vehicleSearch: string;
   method: string;
@@ -31,39 +28,27 @@ export interface PaymentFilters {
 
 export const PaymentFilters = ({ onFiltersChange }: PaymentFiltersProps) => {
   const searchParams = useSearchParams();
-  
+
+  // Initialize with thisMonth dates
+  const getInitialDates = () => {
+    const today = new Date();
+    return {
+      dateFrom: new Date(today.getFullYear(), today.getMonth(), 1),
+      dateTo: today,
+    };
+  };
+
+  const initialDates = getInitialDates();
+
   const [filters, setFilters] = useState<PaymentFilters>({
-    customerSearch: searchParams?.get('customer') || '',
-    vehicleSearch: searchParams?.get('vehicle') || '',
-    method: searchParams?.get('method') || 'all',
-    dateFrom: searchParams?.get('dateFrom') ? new Date(searchParams?.get('dateFrom')!) : undefined,
-    dateTo: searchParams?.get('dateTo') ? new Date(searchParams?.get('dateTo')!) : undefined,
-    quickFilter: searchParams?.get('period') || 'thisMonth',
+    search: searchParams?.get('search') || '',
+    customerSearch: '',
+    vehicleSearch: '',
+    method: 'all',
+    dateFrom: searchParams?.get('dateFrom') ? new Date(searchParams?.get('dateFrom')!) : initialDates.dateFrom,
+    dateTo: searchParams?.get('dateTo') ? new Date(searchParams?.get('dateTo')!) : initialDates.dateTo,
+    quickFilter: 'thisMonth',
     verificationStatus: searchParams?.get('status') || 'all',
-  });
-
-  const { data: customers } = useQuery({
-    queryKey: ["customers-search"],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("customers")
-        .select("id, name")
-        .order("name");
-      if (error) throw error;
-      return data;
-    },
-  });
-
-  const { data: vehicles } = useQuery({
-    queryKey: ["vehicles-search"],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("vehicles")
-        .select("id, reg, make, model")
-        .order("reg");
-      if (error) throw error;
-      return data;
-    },
   });
 
   const updateFilters = (newFilters: Partial<PaymentFilters>) => {
@@ -83,36 +68,15 @@ export const PaymentFilters = ({ onFiltersChange }: PaymentFiltersProps) => {
     onFiltersChange(updatedFilters);
   };
 
-  const applyQuickFilter = (period: string) => {
-    const today = new Date();
-    let dateFrom: Date | undefined;
-    let dateTo: Date | undefined;
-
-    switch (period) {
-      case 'last7Days':
-        dateFrom = new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000);
-        dateTo = today;
-        break;
-      case 'thisMonth':
-        dateFrom = new Date(today.getFullYear(), today.getMonth(), 1);
-        dateTo = today;
-        break;
-      case 'allTime':
-        dateFrom = undefined;
-        dateTo = undefined;
-        break;
-    }
-
-    updateFilters({ quickFilter: period, dateFrom, dateTo });
-  };
-
   const clearFilters = () => {
+    const today = new Date();
     const clearedFilters: PaymentFilters = {
+      search: '',
       customerSearch: '',
       vehicleSearch: '',
       method: 'all',
-      dateFrom: undefined,
-      dateTo: undefined,
+      dateFrom: new Date(today.getFullYear(), today.getMonth(), 1),
+      dateTo: today,
       quickFilter: 'thisMonth',
       verificationStatus: 'all',
     };
@@ -120,161 +84,91 @@ export const PaymentFilters = ({ onFiltersChange }: PaymentFiltersProps) => {
     onFiltersChange(clearedFilters);
   };
 
-  const hasActiveFilters = filters.customerSearch || filters.vehicleSearch ||
-    filters.method !== 'all' || filters.dateFrom || filters.dateTo ||
-    filters.quickFilter !== 'thisMonth' || filters.verificationStatus !== 'all';
+  const hasActiveFilters = filters.search ||
+    filters.dateFrom || filters.dateTo ||
+    filters.verificationStatus !== 'all';
 
   return (
-    <Card>
-      <CardContent className="pt-6">
-        <div className="space-y-4">
-          {/* Quick Filter Pills */}
-          <div className="flex flex-wrap gap-2">
-            <Badge
-              variant={filters.quickFilter === 'last7Days' ? 'default' : 'outline'}
-              className="cursor-pointer"
-              onClick={() => applyQuickFilter('last7Days')}
-            >
-              Last 7 Days
-            </Badge>
-            <Badge
-              variant={filters.quickFilter === 'thisMonth' ? 'default' : 'outline'}
-              className="cursor-pointer"
-              onClick={() => applyQuickFilter('thisMonth')}
-            >
-              This Month
-            </Badge>
-            <Badge
-              variant={filters.quickFilter === 'allTime' ? 'default' : 'outline'}
-              className="cursor-pointer"
-              onClick={() => applyQuickFilter('allTime')}
-            >
-              All Time
-            </Badge>
-          </div>
+    <div className="flex flex-wrap gap-3 items-center">
+      <div className="relative flex-1 min-w-[250px] max-w-md">
+        <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
+        <Input
+          placeholder="Search by customer or vehicle..."
+          value={filters.search}
+          onChange={(e) => updateFilters({ search: e.target.value, customerSearch: e.target.value, vehicleSearch: e.target.value })}
+          className="pl-10"
+        />
+      </div>
 
-          {/* Filter Controls */}
-          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-6">
-            <div>
-              <Input
-                placeholder="Search Customers..."
-                value={filters.customerSearch}
-                onChange={(e) => updateFilters({ customerSearch: e.target.value })}
-                className="w-full"
-              />
-            </div>
+      <Select value={filters.verificationStatus} onValueChange={(value) => updateFilters({ verificationStatus: value })}>
+        <SelectTrigger className="w-[140px]">
+          <SelectValue placeholder="Status" />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="all">All Statuses</SelectItem>
+          <SelectItem value="pending">Pending</SelectItem>
+          <SelectItem value="approved">Approved</SelectItem>
+          <SelectItem value="rejected">Rejected</SelectItem>
+          <SelectItem value="auto_approved">Auto-Approved</SelectItem>
+        </SelectContent>
+      </Select>
 
-            <div>
-              <Input
-                placeholder="Search Vehicles..."
-                value={filters.vehicleSearch}
-                onChange={(e) => updateFilters({ vehicleSearch: e.target.value })}
-                className="w-full"
-              />
-            </div>
+      <Popover>
+        <PopoverTrigger asChild>
+          <Button
+            variant="outline"
+            size="sm"
+            className={cn(
+              "justify-start text-left font-normal",
+              !filters.dateFrom && "text-muted-foreground"
+            )}
+          >
+            <CalendarIcon className="mr-2 h-4 w-4" />
+            {filters.dateFrom ? formatInTimeZone(filters.dateFrom, 'Europe/London', "dd/MM/yyyy") : "From"}
+          </Button>
+        </PopoverTrigger>
+        <PopoverContent className="w-auto p-0" align="start">
+          <Calendar
+            mode="single"
+            selected={filters.dateFrom}
+            onSelect={(date) => updateFilters({ dateFrom: date })}
+            initialFocus
+            className="pointer-events-auto"
+          />
+        </PopoverContent>
+      </Popover>
 
-            <div>
-              <Select value={filters.method} onValueChange={(value) => updateFilters({ method: value })}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Payment Method" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Methods</SelectItem>
-                  <SelectItem value="Cash">Cash</SelectItem>
-                  <SelectItem value="Card">Card</SelectItem>
-                  <SelectItem value="Bank Transfer">Bank Transfer</SelectItem>
-                  <SelectItem value="Other">Other</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
+      <Popover>
+        <PopoverTrigger asChild>
+          <Button
+            variant="outline"
+            size="sm"
+            className={cn(
+              "justify-start text-left font-normal",
+              !filters.dateTo && "text-muted-foreground"
+            )}
+          >
+            <CalendarIcon className="mr-2 h-4 w-4" />
+            {filters.dateTo ? formatInTimeZone(filters.dateTo, 'Europe/London', "dd/MM/yyyy") : "To"}
+          </Button>
+        </PopoverTrigger>
+        <PopoverContent className="w-auto p-0" align="start">
+          <Calendar
+            mode="single"
+            selected={filters.dateTo}
+            onSelect={(date) => updateFilters({ dateTo: date })}
+            initialFocus
+            className="pointer-events-auto"
+          />
+        </PopoverContent>
+      </Popover>
 
-            <div>
-              <Select value={filters.verificationStatus} onValueChange={(value) => updateFilters({ verificationStatus: value })}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Verification Status" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Statuses</SelectItem>
-                  <SelectItem value="pending">
-                    <div className="flex items-center gap-2">
-                      <Clock className="h-3 w-3 text-orange-500" />
-                      Pending Review
-                    </div>
-                  </SelectItem>
-                  <SelectItem value="approved">Approved</SelectItem>
-                  <SelectItem value="rejected">Rejected</SelectItem>
-                  <SelectItem value="auto_approved">Auto-Approved</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div>
-              <Popover>
-                <PopoverTrigger asChild>
-                  <Button
-                    variant="outline"
-                    className={cn(
-                      "w-full justify-start text-left font-normal",
-                      !filters.dateFrom && "text-muted-foreground"
-                    )}
-                  >
-                    <CalendarIcon className="mr-2 h-4 w-4" />
-                    {filters.dateFrom ? formatInTimeZone(filters.dateFrom, 'America/New_York', "MM/dd/yyyy") : "From Date"}
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-auto p-0" align="start">
-                  <Calendar
-                    mode="single"
-                    selected={filters.dateFrom}
-                    onSelect={(date) => updateFilters({ dateFrom: date })}
-                    initialFocus
-                    className="pointer-events-auto"
-                  />
-                </PopoverContent>
-              </Popover>
-            </div>
-
-            <div>
-              <Popover>
-                <PopoverTrigger asChild>
-                  <Button
-                    variant="outline"
-                    className={cn(
-                      "w-full justify-start text-left font-normal",
-                      !filters.dateTo && "text-muted-foreground"
-                    )}
-                  >
-                    <CalendarIcon className="mr-2 h-4 w-4" />
-                    {filters.dateTo ? formatInTimeZone(filters.dateTo, 'America/New_York', "MM/dd/yyyy") : "To Date"}
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-auto p-0" align="start">
-                  <Calendar
-                    mode="single"
-                    selected={filters.dateTo}
-                    onSelect={(date) => updateFilters({ dateTo: date })}
-                    initialFocus
-                    className="pointer-events-auto"
-                  />
-                </PopoverContent>
-              </Popover>
-            </div>
-          </div>
-
-          {hasActiveFilters && (
-            <div className="flex justify-between items-center pt-2">
-              <div className="text-sm text-muted-foreground">
-                <Filter className="inline h-4 w-4 mr-1" />
-                Filters Active
-              </div>
-              <Button variant="outline" size="sm" onClick={clearFilters}>
-                <X className="h-4 w-4 mr-2" />
-                Clear All
-              </Button>
-            </div>
-          )}
-        </div>
-      </CardContent>
-    </Card>
+      {hasActiveFilters && (
+        <Button variant="outline" size="sm" onClick={clearFilters} className="gap-1">
+          <X className="h-3 w-3" />
+          Clear
+        </Button>
+      )}
+    </div>
   );
 };

@@ -7,17 +7,14 @@ import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { AlertTriangle, ArrowLeft, FileText, DollarSign, CheckCircle, Scale, CreditCard, Clock, Ban, Receipt, AlertCircle, Upload, User } from "lucide-react";
+import { AlertTriangle, ArrowLeft, FileText, DollarSign, Scale, CreditCard, Ban, Receipt, Upload } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { FineAppealDialog } from "@/components/fines/fine-appeal-dialog";
 import { FineStatusBadge } from "@/components/shared/status/fine-status-badge";
 import { AuthorityPaymentDialog } from "@/components/fines/authority-payment-dialog";
-import { KPICard } from "@/components/ui/kpi-card";
 import { InfoGrid } from "@/components/ui/info-grid";
-import { Timeline, TimelineItem } from "@/components/ui/timeline";
 
 interface Fine {
   id: string;
@@ -187,25 +184,7 @@ const FineDetail = () => {
   });
 
   if (isLoading) {
-    return (
-      <div className="space-y-6">
-        <div className="flex items-center gap-4">
-          <Button variant="outline" disabled>
-            <ArrowLeft className="h-4 w-4 mr-2" />
-            Back to Fines
-          </Button>
-          <div>
-            <h1 className="text-3xl font-bold">Fine Details</h1>
-            <p className="text-muted-foreground">Loading...</p>
-          </div>
-        </div>
-        <div className="grid gap-4 md:grid-cols-4">
-          {Array.from({ length: 4 }).map((_, i) => (
-            <KPICard key={i} title="" value="" isLoading />
-          ))}
-        </div>
-      </div>
-    );
+    return <div className="py-[24px] px-[8px]">Loading fine details...</div>;
   }
 
   if (!fine) {
@@ -253,9 +232,9 @@ const FineDetail = () => {
 
   return (
     <TooltipProvider>
-      <div className="space-y-16 max-w-7xl mx-auto p-6 pt-8">
-        {/* Enhanced Header */}
-        <div className="flex flex-col space-y-4 lg:flex-row lg:items-center lg:justify-between lg:space-y-0 mb-8">
+      <div className="space-y-6 py-[24px] px-[8px]">
+        {/* Header */}
+        <div className="flex items-center justify-between">
           <div className="flex items-center gap-4">
             <Tooltip>
               <TooltipTrigger asChild>
@@ -275,127 +254,97 @@ const FineDetail = () => {
             </div>
           </div>
 
-          <div className="flex flex-col gap-3">
-            {/* Row 1: Primary Financial Actions */}
-            <div className="flex flex-wrap gap-2">
-              {canCharge && (
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button
-                      variant="outline"
-                      onClick={() => chargeFineAction.mutate()}
-                      disabled={chargeFineAction.isPending || isCharged}
-                    >
-                      <CreditCard className="h-4 w-4 mr-2" />
-                      {isCharged ? "Already Charged" : "Charge to Account"}
-                    </Button>
-                  </TooltipTrigger>
-                  {isCharged && (
-                    <TooltipContent>
-                      <p>Fine has already been charged to customer account</p>
-                    </TooltipContent>
-                  )}
-                </Tooltip>
-              )}
+          <div className="flex gap-2">
+            {canCharge && (
+              <Button
+                variant="outline"
+                onClick={() => chargeFineAction.mutate()}
+                disabled={chargeFineAction.isPending || isCharged}
+              >
+                <CreditCard className="h-4 w-4 mr-2" />
+                {isCharged ? "Already Charged" : "Charge to Account"}
+              </Button>
+            )}
 
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    variant="outline"
-                    onClick={() => setShowAuthorityPaymentDialog(true)}
-                    className={hasAuthorityPayments ? "border-green-200 bg-green-50" : ""}
-                  >
-                    <Receipt className="h-4 w-4 mr-2" />
-                    Record Authority Payment
-                    {hasAuthorityPayments && (
-                      <Badge variant="secondary" className="ml-2 text-xs">
-                        ${totalAuthorityPayments.toLocaleString()}
-                      </Badge>
-                    )}
-                  </Button>
-                </TooltipTrigger>
-                {hasAuthorityPayments && (
-                  <TooltipContent>
-                    <p>Payments already recorded: ${totalAuthorityPayments.toLocaleString()}</p>
-                  </TooltipContent>
-                )}
-              </Tooltip>
-            </div>
+            <Button
+              variant="outline"
+              onClick={() => setShowAuthorityPaymentDialog(true)}
+            >
+              <Receipt className="h-4 w-4 mr-2" />
+              Record Payment
+            </Button>
 
-            {/* Row 2: Secondary Status Actions */}
-            <div className="flex flex-wrap gap-2">
-              {canAppeal && (
-                <Button
-                  variant="outline"
-                  onClick={() => setShowAppealDialog(true)}
-                  disabled={appealFineAction.isPending || isAppealed}
-                >
-                  <Scale className="h-4 w-4 mr-2" />
-                  {isAppealed ? "Appealed" : "Mark as Appealed"}
-                </Button>
-              )}
+            {canAppeal && (
+              <Button
+                variant="outline"
+                onClick={() => setShowAppealDialog(true)}
+                disabled={appealFineAction.isPending || isAppealed}
+              >
+                <Scale className="h-4 w-4 mr-2" />
+                {isAppealed ? "Appealed" : "Appeal"}
+              </Button>
+            )}
 
-              {canWaive && (
-                <Button
-                  variant="outline"
-                  onClick={() => waiveFineAction.mutate()}
-                  disabled={waiveFineAction.isPending}
-                >
-                  <Ban className="h-4 w-4 mr-2" />
-                  Waive Fine
-                </Button>
-              )}
-            </div>
+            {canWaive && (
+              <Button
+                variant="outline"
+                onClick={() => waiveFineAction.mutate()}
+                disabled={waiveFineAction.isPending}
+              >
+                <Ban className="h-4 w-4 mr-2" />
+                Waive
+              </Button>
+            )}
           </div>
         </div>
 
-        {/* KPI Card Row */}
-        <div className="grid gap-4 md:grid-cols-4">
-          <KPICard
-            title="Fine Amount"
-            value={`$${Number(fine.amount).toLocaleString()}`}
-            valueClassName="text-destructive dark:text-destructive"
-            icon={<DollarSign className="h-4 w-4" />}
-            className="bg-destructive/10 border-destructive/20"
-          />
+        {/* Summary Cards */}
+        <div className="grid gap-6 md:grid-cols-4">
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-lg">Fine Amount</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold text-red-600">
+                ${Number(fine.amount).toLocaleString()}
+              </div>
+            </CardContent>
+          </Card>
 
-          <KPICard
-            title="Status"
-            value={<FineStatusBadge
-              status={fine.status}
-              dueDate={fine.due_date}
-              remainingAmount={0}
-            />}
-            badge={totalAuthorityPayments >= fine.amount && (
-              <Badge variant="secondary" className="text-green-700 bg-green-100">
-                Authority Settled
-              </Badge>
-            )}
-            className="bg-muted/50 border-muted-foreground/20"
-          />
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-lg">Status</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <FineStatusBadge
+                status={fine.status}
+                dueDate={fine.due_date}
+                remainingAmount={0}
+              />
+            </CardContent>
+          </Card>
 
-          <KPICard
-            title="Authority Payments"
-            value={hasAuthorityPayments ? `$${totalAuthorityPayments.toLocaleString()}` : "$0"}
-            valueClassName={hasAuthorityPayments ? "text-success dark:text-success" : "text-muted-foreground"}
-            subtitle={hasAuthorityPayments ? `of $${fine.amount.toLocaleString()}` : undefined}
-            icon={<Receipt className="h-4 w-4" />}
-            className={hasAuthorityPayments ? "bg-success/10 border-success/20" : "bg-muted/30 border-muted-foreground/20"}
-          />
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-lg">Authority Payments</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className={`text-2xl font-bold ${hasAuthorityPayments ? 'text-green-600' : 'text-muted-foreground'}`}>
+                ${totalAuthorityPayments.toLocaleString()}
+              </div>
+            </CardContent>
+          </Card>
 
-          <KPICard
-            title="Days Until Due"
-            value={getDaysUntilDueDisplay()}
-            valueClassName={getDaysUntilDueColor() === "text-red-600" ? "text-destructive dark:text-destructive" : getDaysUntilDueColor() === "text-amber-600" ? "text-warning dark:text-warning" : "text-success dark:text-success"}
-            icon={<Clock className="h-4 w-4" />}
-            className={
-              getDaysUntilDueColor() === "text-red-600"
-                ? "bg-destructive/10 border-destructive/20"
-                : getDaysUntilDueColor() === "text-amber-600"
-                ? "bg-warning/10 border-warning/20"
-                : "bg-success/10 border-success/20"
-            }
-          />
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-lg">Due Date</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className={`text-2xl font-bold ${getDaysUntilDueColor()}`}>
+                {getDaysUntilDueDisplay()}
+              </div>
+            </CardContent>
+          </Card>
         </div>
 
         {/* Enhanced Tabbed Layout */}

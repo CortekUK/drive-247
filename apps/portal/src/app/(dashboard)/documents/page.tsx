@@ -1,17 +1,20 @@
 "use client";
 
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { FileText, Download, ExternalLink, CheckCircle, XCircle } from "lucide-react";
+import { FileText, Download, ExternalLink, Search, CalendarIcon, X } from "lucide-react";
 import { EmptyState } from "@/components/shared/data-display/empty-state";
-import { format } from "date-fns";
-import { useState } from "react";
+import { format, isAfter, isBefore, startOfDay, endOfDay } from "date-fns";
+import { useState, useMemo } from "react";
 import { useTenant } from "@/contexts/TenantContext";
 import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Calendar } from "@/components/ui/calendar";
+import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 
 interface Document {
@@ -33,52 +36,10 @@ interface Document {
 
 export default function DocumentsList() {
   const [searchQuery, setSearchQuery] = useState("");
+  const [docType, setDocType] = useState("all");
+  const [dateFrom, setDateFrom] = useState<Date | undefined>(undefined);
+  const [dateTo, setDateTo] = useState<Date | undefined>(undefined);
   const { tenant } = useTenant();
-  const queryClient = useQueryClient();
-
-  // Mutation for approving documents
-  const approveDocumentMutation = useMutation({
-    mutationFn: async (documentId: string) => {
-      const { error } = await supabase
-        .from("customer_documents")
-        .update({
-          verified: true,
-          status: "Active",
-          updated_at: new Date().toISOString()
-        })
-        .eq("id", documentId);
-      if (error) throw error;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["completed-documents"] });
-      toast.success("Document approved successfully");
-    },
-    onError: () => {
-      toast.error("Failed to approve document");
-    },
-  });
-
-  // Mutation for rejecting documents
-  const rejectDocumentMutation = useMutation({
-    mutationFn: async (documentId: string) => {
-      const { error } = await supabase
-        .from("customer_documents")
-        .update({
-          verified: false,
-          status: "Expired",
-          updated_at: new Date().toISOString()
-        })
-        .eq("id", documentId);
-      if (error) throw error;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["completed-documents"] });
-      toast.success("Document rejected");
-    },
-    onError: () => {
-      toast.error("Failed to reject document");
-    },
-  });
 
   // Fetch completed documents from customer_documents table
   const { data: completedDocuments = [], isLoading: isLoadingCompleted } = useQuery({
@@ -154,11 +115,38 @@ export default function DocumentsList() {
 
   const documents = allDocuments;
 
-  const filteredDocuments = documents.filter((doc) => {
-    const matchesSearch = doc.document_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                         doc.customers?.name?.toLowerCase().includes(searchQuery.toLowerCase());
-    return matchesSearch;
-  });
+  const filteredDocuments = useMemo(() => {
+    return documents.filter((doc) => {
+      // Search filter
+      if (searchQuery.trim()) {
+        const matchesSearch = doc.document_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                             doc.customers?.name?.toLowerCase().includes(searchQuery.toLowerCase());
+        if (!matchesSearch) return false;
+      }
+
+      // Type filter
+      if (docType !== "all") {
+        if (docType === "agreement" && !doc.isRentalAgreement) return false;
+        if (docType === "document" && doc.isRentalAgreement) return false;
+      }
+
+      // Date filter
+      const docDate = new Date(doc.created_at);
+      if (dateFrom && isBefore(docDate, startOfDay(dateFrom))) return false;
+      if (dateTo && isAfter(docDate, endOfDay(dateTo))) return false;
+
+      return true;
+    });
+  }, [documents, searchQuery, docType, dateFrom, dateTo]);
+
+  const clearFilters = () => {
+    setSearchQuery("");
+    setDocType("all");
+    setDateFrom(undefined);
+    setDateTo(undefined);
+  };
+
+  const hasActiveFilters = searchQuery || docType !== "all" || dateFrom || dateTo;
 
   const getPublicUrl = (filePath: string) => {
     // If it's already a full URL, return as is
@@ -196,49 +184,6 @@ export default function DocumentsList() {
     window.open(publicUrl, "_blank");
   };
 
-  const getDocumentTypeColor = (type?: string) => {
-    switch (type?.toLowerCase()) {
-      case "contract":
-      case "agreement":
-        return "default";
-      case "invoice":
-        return "secondary";
-      case "receipt":
-        return "outline";
-      default:
-        return "outline";
-    }
-  };
-
-  const getStatusColor = (status?: string) => {
-    switch (status?.toLowerCase()) {
-      case "signed":
-      case "completed":
-        return "default";
-      case "sent":
-        return "secondary";
-      case "pending":
-        return "outline";
-      default:
-        return "outline";
-    }
-  };
-
-  const getStatusLabel = (status?: string) => {
-    if (!status) return "—";
-    // Capitalize first letter
-    const capitalized = status.charAt(0).toUpperCase() + status.slice(1).toLowerCase();
-    // Replace "Active" with "Completed"
-    return capitalized === "Active" ? "Completed" : capitalized;
-  };
-
-  const getFileIcon = (mimeType?: string) => {
-    if (mimeType?.includes("pdf")) return "PDF";
-    if (mimeType?.includes("image")) return "IMG";
-    if (mimeType?.includes("word") || mimeType?.includes("document")) return "DOC";
-    return "FILE";
-  };
-
   if (isLoading) {
     return (
       <div className="space-y-6">
@@ -260,17 +205,86 @@ export default function DocumentsList() {
         </div>
       </div>
 
-      {/* Search */}
-      <Card>
-        <CardContent className="pt-6">
+      {/* Search and Filters */}
+      <div className="flex flex-wrap gap-3 items-center">
+        <div className="relative flex-1 min-w-[250px] max-w-md">
+          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
           <Input
             placeholder="Search by document name or customer..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full"
+            className="pl-10"
           />
-        </CardContent>
-      </Card>
+        </div>
+
+        <Select value={docType} onValueChange={setDocType}>
+          <SelectTrigger className="w-[140px]">
+            <SelectValue placeholder="Type" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Types</SelectItem>
+            <SelectItem value="document">Documents</SelectItem>
+            <SelectItem value="agreement">Agreements</SelectItem>
+          </SelectContent>
+        </Select>
+
+        <Popover>
+          <PopoverTrigger asChild>
+            <Button
+              variant="outline"
+              size="sm"
+              className={cn(
+                "justify-start text-left font-normal",
+                !dateFrom && "text-muted-foreground"
+              )}
+            >
+              <CalendarIcon className="mr-2 h-4 w-4" />
+              {dateFrom ? format(dateFrom, "dd/MM/yyyy") : "From"}
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent className="w-auto p-0" align="start">
+            <Calendar
+              mode="single"
+              selected={dateFrom}
+              onSelect={setDateFrom}
+              initialFocus
+              className="pointer-events-auto"
+            />
+          </PopoverContent>
+        </Popover>
+
+        <Popover>
+          <PopoverTrigger asChild>
+            <Button
+              variant="outline"
+              size="sm"
+              className={cn(
+                "justify-start text-left font-normal",
+                !dateTo && "text-muted-foreground"
+              )}
+            >
+              <CalendarIcon className="mr-2 h-4 w-4" />
+              {dateTo ? format(dateTo, "dd/MM/yyyy") : "To"}
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent className="w-auto p-0" align="start">
+            <Calendar
+              mode="single"
+              selected={dateTo}
+              onSelect={setDateTo}
+              initialFocus
+              className="pointer-events-auto"
+            />
+          </PopoverContent>
+        </Popover>
+
+        {hasActiveFilters && (
+          <Button variant="outline" size="sm" onClick={clearFilters} className="gap-1">
+            <X className="h-3 w-3" />
+            Clear
+          </Button>
+        )}
+      </div>
 
       {/* Documents Table */}
       <Card>
@@ -300,88 +314,58 @@ export default function DocumentsList() {
                     <TableHead>Document Name</TableHead>
                     <TableHead>Customer</TableHead>
                     <TableHead>Created</TableHead>
-                    <TableHead>Status</TableHead>
                     <TableHead className="text-right">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {filteredDocuments.map((doc) => (
                     <TableRow key={doc.id}>
-                      <TableCell className="font-medium">{doc.document_name}</TableCell>
-                      <TableCell className="font-medium text-foreground">
-                        {doc.customers?.name || "—"}
+                      <TableCell className="font-medium max-w-[180px]">
+                        <span
+                          className="truncate block"
+                          title={doc.document_name}
+                        >
+                          {doc.document_name.length > 25
+                            ? doc.document_name.slice(0, 25) + "..."
+                            : doc.document_name}
+                        </span>
+                      </TableCell>
+                      <TableCell className="font-medium text-foreground max-w-[150px]">
+                        <span
+                          className="truncate block"
+                          title={doc.customers?.name}
+                        >
+                          {(doc.customers?.name?.length || 0) > 20
+                            ? doc.customers?.name?.slice(0, 20) + "..."
+                            : doc.customers?.name || "—"}
+                        </span>
                       </TableCell>
                       <TableCell className="text-sm">
-                        {format(new Date(doc.created_at), "MMM dd, yyyy HH:mm")}
-                      </TableCell>
-                      <TableCell>
-                        {doc.status ? (
-                          (doc.status?.toLowerCase() === "completed" || 
-                           doc.status?.toLowerCase() === "signed" || 
-                           doc.status?.toLowerCase() === "active") ? (
-                            <span 
-                              className="inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold"
-                              style={{
-                                backgroundColor: "#22c55e",
-                                color: "#ffffff",
-                                borderColor: "transparent",
-                                borderWidth: "1px"
-                              }}
-                            >
-                              {getStatusLabel(doc.status)}
-                            </span>
-                          ) : (
-                            <Badge variant={getStatusColor(doc.status)}>
-                              {getStatusLabel(doc.status)}
-                            </Badge>
-                          )
-                        ) : (
-                          "—"
-                        )}
+                        <div>{format(new Date(doc.created_at), "dd/MM/yyyy")}</div>
+                        <div className="text-xs text-muted-foreground">
+                          {format(new Date(doc.created_at), "h:mm a")}
+                        </div>
                       </TableCell>
                       <TableCell className="text-right">
                         <div className="flex items-center justify-end gap-2">
                           {doc.file_url ? (
                             <>
                               <Button
-                                variant="outline"
-                                size="sm"
+                                variant="ghost"
+                                size="icon"
                                 onClick={() => handleDownload(doc.file_url!, doc.file_name || doc.document_name)}
+                                title="Download"
                               >
                                 <Download className="h-4 w-4" />
                               </Button>
                               <Button
-                                variant="outline"
-                                size="sm"
+                                variant="ghost"
+                                size="icon"
                                 onClick={() => handleView(doc.file_url!)}
+                                title="View"
                               >
                                 <ExternalLink className="h-4 w-4" />
                               </Button>
-                              {/* Approve/Reject buttons for pending documents */}
-                              {!doc.isRentalAgreement && doc.status?.toLowerCase() !== "active" && !doc.verified && (
-                                <>
-                                  <Button
-                                    variant="outline"
-                                    size="sm"
-                                    className="text-green-600 hover:text-green-700 hover:bg-green-50"
-                                    onClick={() => approveDocumentMutation.mutate(doc.id)}
-                                    disabled={approveDocumentMutation.isPending || rejectDocumentMutation.isPending}
-                                    title="Approve document"
-                                  >
-                                    <CheckCircle className="h-4 w-4" />
-                                  </Button>
-                                  <Button
-                                    variant="outline"
-                                    size="sm"
-                                    className="text-red-600 hover:text-red-700 hover:bg-red-50"
-                                    onClick={() => rejectDocumentMutation.mutate(doc.id)}
-                                    disabled={approveDocumentMutation.isPending || rejectDocumentMutation.isPending}
-                                    title="Reject document"
-                                  >
-                                    <XCircle className="h-4 w-4" />
-                                  </Button>
-                                </>
-                              )}
                             </>
                           ) : doc.isRentalAgreement ? (
                             <span className="text-sm text-muted-foreground">Pending signature</span>

@@ -2,47 +2,26 @@
 
 import React, { useState } from 'react';
 import { useReminders, useReminderStats, useReminderActions, useReminderGeneration, type ReminderFilters } from '@/hooks/use-reminders';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Separator } from '@/components/ui/separator';
 import {
-  AlertTriangle,
-  Clock,
   CheckCircle,
   XCircle,
   Bell,
-  Calendar,
-  Filter,
-  Download,
   Play,
   Pause,
-  MoreHorizontal
+  MoreHorizontal,
+  X
 } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import Link from 'next/link';
 
 const capitalize = (str: string) => str.charAt(0).toUpperCase() + str.slice(1);
-
-const SEVERITY_COLORS = {
-  critical: 'destructive',
-  warning: 'secondary',
-  info: 'outline'
-} as const;
-
-const SEVERITY_ICONS = {
-  critical: AlertTriangle,
-  warning: Clock,
-  info: Bell
-};
 
 const STATUS_COLORS = {
   pending: 'default',
@@ -56,7 +35,6 @@ const STATUS_COLORS = {
 export default function RemindersPageEnhanced() {
   const [filters, setFilters] = useState<ReminderFilters>({});
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
-  const [showFilters, setShowFilters] = useState(false);
 
   const { data: reminders = [], isLoading, error } = useReminders(filters);
   const { data: stats } = useReminderStats();
@@ -90,43 +68,6 @@ export default function RemindersPageEnhanced() {
     });
 
     setSelectedIds([]);
-  };
-
-  const exportReminders = () => {
-    const csv = [
-      'ID,Rule Code,Object Type,Object ID,Title,Message,Due On,Remind On,Status,Severity,Snooze Until,Last Sent At,Created At,Updated At',
-      ...reminders.map(r => [
-        r.id,
-        r.rule_code,
-        r.object_type,
-        r.object_id,
-        `"${r.title}"`,
-        `"${r.message}"`,
-        r.due_on,
-        r.remind_on,
-        r.status,
-        r.severity,
-        r.snooze_until || '',
-        r.last_sent_at || '',
-        r.created_at,
-        r.updated_at
-      ].join(','))
-    ].join('\n');
-
-    const blob = new Blob([csv], { type: 'text/csv' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `reminders_${new Date().toISOString().split('T')[0]}.csv`;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
-  };
-
-  const getSeverityIcon = (severity: string) => {
-    const Icon = SEVERITY_ICONS[severity as keyof typeof SEVERITY_ICONS] || Bell;
-    return <Icon className="h-4 w-4" />;
   };
 
   const getObjectLink = (reminder: any) => {
@@ -174,36 +115,15 @@ export default function RemindersPageEnhanced() {
           </p>
         </div>
 
-        <div className="flex items-center gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setShowFilters(!showFilters)}
-          >
-            <Filter className="h-4 w-4 mr-2" />
-            Filters
-          </Button>
-
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={exportReminders}
-            disabled={reminders.length === 0}
-          >
-            <Download className="h-4 w-4 mr-2" />
-            Export
-          </Button>
-
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => generateReminders.mutate()}
-            disabled={generateReminders.isPending}
-          >
-            <Play className="h-4 w-4 mr-2" />
-            {generateReminders.isPending ? 'Generating...' : 'Generate'}
-          </Button>
-        </div>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => generateReminders.mutate()}
+          disabled={generateReminders.isPending}
+        >
+          <Play className="h-4 w-4 mr-2" />
+          {generateReminders.isPending ? 'Generating...' : 'Generate'}
+        </Button>
       </div>
 
       {/* Stats Cards */}
@@ -249,88 +169,75 @@ export default function RemindersPageEnhanced() {
         </Card>
       </div>
 
-      {/* Filters Panel */}
-      {showFilters && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-sm">Filter Reminders</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-              <div className="space-y-2">
-                <Label>Status</Label>
-                <Select
-                  value={filters.status?.[0] || ''}
-                  onValueChange={(value) =>
-                    setFilters(prev => ({ ...prev, status: value ? [value] : undefined }))
-                  }
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="All statuses" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="pending">Pending</SelectItem>
-                    <SelectItem value="sent">Sent</SelectItem>
-                    <SelectItem value="snoozed">Snoozed</SelectItem>
-                    <SelectItem value="done">Done</SelectItem>
-                    <SelectItem value="dismissed">Dismissed</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
+      {/* Filters Row */}
+      <div className="flex flex-wrap gap-3 items-center">
+        <Select
+          value={filters.status?.[0] || 'all'}
+          onValueChange={(value) =>
+            setFilters(prev => ({ ...prev, status: value && value !== 'all' ? [value] : undefined }))
+          }
+        >
+          <SelectTrigger className="w-[150px]">
+            <SelectValue placeholder="All Status" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Status</SelectItem>
+            <SelectItem value="pending">Pending</SelectItem>
+            <SelectItem value="sent">Sent</SelectItem>
+            <SelectItem value="snoozed">Snoozed</SelectItem>
+            <SelectItem value="done">Done</SelectItem>
+            <SelectItem value="dismissed">Dismissed</SelectItem>
+          </SelectContent>
+        </Select>
 
-              <div className="space-y-2">
-                <Label>Severity</Label>
-                <Select
-                  value={filters.severity?.[0] || ''}
-                  onValueChange={(value) =>
-                    setFilters(prev => ({ ...prev, severity: value ? [value] : undefined }))
-                  }
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="All severities" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="critical">Critical</SelectItem>
-                    <SelectItem value="warning">Warning</SelectItem>
-                    <SelectItem value="info">Info</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
+        <Select
+          value={filters.severity?.[0] || 'all'}
+          onValueChange={(value) =>
+            setFilters(prev => ({ ...prev, severity: value && value !== 'all' ? [value] : undefined }))
+          }
+        >
+          <SelectTrigger className="w-[150px]">
+            <SelectValue placeholder="All Severity" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Severity</SelectItem>
+            <SelectItem value="critical">Critical</SelectItem>
+            <SelectItem value="warning">Warning</SelectItem>
+            <SelectItem value="info">Info</SelectItem>
+          </SelectContent>
+        </Select>
 
-              <div className="space-y-2">
-                <Label>Object Type</Label>
-                <Select
-                  value={filters.object_type?.[0] || ''}
-                  onValueChange={(value) =>
-                    setFilters(prev => ({ ...prev, object_type: value ? [value] : undefined }))
-                  }
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="All types" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="Vehicle">Vehicle</SelectItem>
-                    <SelectItem value="Rental">Rental</SelectItem>
-                    <SelectItem value="Customer">Customer</SelectItem>
-                    <SelectItem value="Fine">Fine</SelectItem>
-                    <SelectItem value="Document">Document</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
+        <Select
+          value={filters.object_type?.[0] || 'all'}
+          onValueChange={(value) =>
+            setFilters(prev => ({ ...prev, object_type: value && value !== 'all' ? [value] : undefined }))
+          }
+        >
+          <SelectTrigger className="w-[150px]">
+            <SelectValue placeholder="All Types" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Types</SelectItem>
+            <SelectItem value="Vehicle">Vehicle</SelectItem>
+            <SelectItem value="Rental">Rental</SelectItem>
+            <SelectItem value="Customer">Customer</SelectItem>
+            <SelectItem value="Fine">Fine</SelectItem>
+            <SelectItem value="Document">Document</SelectItem>
+          </SelectContent>
+        </Select>
 
-              <div className="flex items-end">
-                <Button
-                  variant="outline"
-                  onClick={() => setFilters({})}
-                  className="w-full"
-                >
-                  Clear Filters
-                </Button>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      )}
+        {(filters.status || filters.severity || filters.object_type) && (
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setFilters({})}
+            className="gap-1"
+          >
+            <X className="h-3 w-3" />
+            Clear
+          </Button>
+        )}
+      </div>
 
       {/* Bulk Actions */}
       {selectedIds.length > 0 && (
@@ -436,13 +343,11 @@ export default function RemindersPageEnhanced() {
                         onCheckedChange={handleSelectAll}
                       />
                     </TableHead>
-                    <TableHead className="w-[50px]"></TableHead>
                     <TableHead>Title</TableHead>
-                    <TableHead>Object</TableHead>
+                    <TableHead>Related To</TableHead>
                     <TableHead>Due On</TableHead>
                     <TableHead>Remind On</TableHead>
                     <TableHead>Status</TableHead>
-                    <TableHead>Snooze Until</TableHead>
                     <TableHead className="w-[100px]">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -457,16 +362,13 @@ export default function RemindersPageEnhanced() {
                           }
                         />
                       </TableCell>
-                      <TableCell>
-                        <div className="flex items-center">
-                          {getSeverityIcon(reminder.severity)}
-                        </div>
-                      </TableCell>
-                      <TableCell>
+                      <TableCell className="max-w-[250px]">
                         <div>
-                          <div className="font-medium">{reminder.title}</div>
-                          <div className="text-sm text-muted-foreground truncate max-w-[300px]">
-                            {reminder.message}
+                          <div className="font-medium truncate" title={reminder.title}>
+                            {reminder.title.length > 35 ? reminder.title.slice(0, 35) + '...' : reminder.title}
+                          </div>
+                          <div className="text-sm text-muted-foreground truncate">
+                            {reminder.message.length > 40 ? reminder.message.slice(0, 40) + '...' : reminder.message}
                           </div>
                         </div>
                       </TableCell>
@@ -492,13 +394,6 @@ export default function RemindersPageEnhanced() {
                         <Badge variant={STATUS_COLORS[reminder.status as keyof typeof STATUS_COLORS]}>
                           {capitalize(reminder.status)}
                         </Badge>
-                      </TableCell>
-                      <TableCell>
-                        {reminder.snooze_until && (
-                          <div className="text-sm">
-                            {format(parseISO(reminder.snooze_until), 'MMM dd, yyyy')}
-                          </div>
-                        )}
                       </TableCell>
                       <TableCell>
                         <DropdownMenu>

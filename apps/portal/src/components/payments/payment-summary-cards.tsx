@@ -1,7 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { CreditCard, TrendingUp, Calendar, Hash } from "lucide-react";
+import { CreditCard, TrendingUp, Receipt } from "lucide-react";
 import { useTenant } from "@/contexts/TenantContext";
 
 export const PaymentSummaryCards = () => {
@@ -71,7 +71,7 @@ export const PaymentSummaryCards = () => {
       <Card className="bg-card hover:bg-accent/50 border shadow-sm transition-all duration-200 cursor-pointer hover:shadow-md">
         <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
           <CardTitle className="text-sm font-medium">Payment Count</CardTitle>
-          <Hash className="h-4 w-4 text-muted-foreground" />
+          <Receipt className="h-4 w-4 text-muted-foreground" />
         </CardHeader>
         <CardContent>
           <div className="text-2xl font-bold">{summaryData?.paymentCount || 0}</div>
