@@ -125,7 +125,10 @@ export const usePendingBookingsCount = () => {
       const { count, error } = await query;
 
       if (error) {
-        console.error("Error fetching pending bookings count:", error);
+        // Only log if there's an actual error message
+        if (error.message || error.code) {
+          console.error("Error fetching pending bookings count:", error.message || error);
+        }
         return 0;
       }
 

@@ -2,22 +2,21 @@ import { NextRequest, NextResponse } from 'next/server';
 import crypto from 'crypto';
 import { createClient } from '@supabase/supabase-js';
 
-// DocuSign configuration from environment variables
+// DocuSign configuration
 const DOCUSIGN_INTEGRATION_KEY = process.env.DOCUSIGN_INTEGRATION_KEY || '';
 const DOCUSIGN_USER_ID = process.env.DOCUSIGN_USER_ID || '';
 const DOCUSIGN_PRIVATE_KEY = process.env.DOCUSIGN_PRIVATE_KEY || '';
 const DOCUSIGN_BASE_URL = process.env.DOCUSIGN_BASE_URL || 'https://demo.docusign.net/restapi';
 
-// Supabase client
+// Supabase
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
 
-interface EnvelopeRequest {
+interface DocuSignRequest {
     rentalId: string;
     customerEmail: string;
     customerName: string;
-    tenantId?: string;  // Passed from frontend
-    vehicleId?: string; // Fallback for tenant lookup
+    tenantId: string;
 }
 
 // Base64URL encode
@@ -26,14 +25,13 @@ function base64url(input: string | Buffer): string {
     return base64.replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
 }
 
-// Format date
+// Format helpers
 function formatDate(date: string | Date | null): string {
     if (!date) return 'N/A';
     const d = typeof date === 'string' ? new Date(date) : date;
     return d.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
 }
 
-// Format currency
 function formatCurrency(amount: number | null): string {
     if (amount === null || amount === undefined) return '$0';
     return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(amount);
@@ -47,7 +45,6 @@ function processTemplate(template: string, rental: any, customer: any, vehicle: 
         customer_phone: customer?.phone || '',
         vehicle_make: vehicle?.make || '',
         vehicle_model: vehicle?.model || '',
-        vehicle_year: vehicle?.year?.toString() || '',
         vehicle_reg: vehicle?.reg || 'N/A',
         rental_number: rental?.id?.substring(0, 8)?.toUpperCase() || 'N/A',
         rental_start_date: formatDate(rental?.start_date),
@@ -67,7 +64,7 @@ function processTemplate(template: string, rental: any, customer: any, vehicle: 
     return result;
 }
 
-// Convert HTML to plain text
+// HTML to text
 function htmlToText(html: string): string {
     return html
         .replace(/<br\s*\/?>/gi, '\n')
@@ -87,10 +84,9 @@ function htmlToText(html: string): string {
         .trim();
 }
 
-// Generate default agreement
+// Default agreement
 function generateDefaultAgreement(rental: any, customer: any, vehicle: any, tenant: any): string {
     const companyName = tenant?.company_name || 'Drive 247';
-
     return `
 RENTAL AGREEMENT
 ${'='.repeat(70)}
@@ -143,14 +139,13 @@ ${companyName} - Generated: ${new Date().toISOString()}
 `;
 }
 
-// Create JWT for DocuSign
+// JWT creation
 function createJWT(): string {
     const privateKey = DOCUSIGN_PRIVATE_KEY.replace(/\\n/g, '\n');
     const isDemo = DOCUSIGN_BASE_URL.includes('demo');
     const authServer = isDemo ? 'account-d.docusign.com' : 'account.docusign.com';
 
     const now = Math.floor(Date.now() / 1000);
-
     const header = { alg: 'RS256', typ: 'JWT' };
     const payload = {
         iss: DOCUSIGN_INTEGRATION_KEY,
@@ -175,13 +170,9 @@ function createJWT(): string {
 // Get access token
 async function getAccessToken(): Promise<string | null> {
     try {
-        console.log('Getting DocuSign access token...');
-
         const isDemo = DOCUSIGN_BASE_URL.includes('demo');
         const authServer = isDemo ? 'account-d.docusign.com' : 'account.docusign.com';
-
         const jwt = createJWT();
-        console.log('JWT created, length:', jwt.length);
 
         const response = await fetch(`https://${authServer}/oauth/token`, {
             method: 'POST',
@@ -189,27 +180,17 @@ async function getAccessToken(): Promise<string | null> {
             body: `grant_type=urn:ietf:params:oauth:grant-type:jwt-bearer&assertion=${jwt}`
         });
 
-        const text = await response.text();
-
-        if (!response.ok) {
-            console.error('Token exchange failed:', text);
-            return null;
-        }
-
-        const data = JSON.parse(text);
-        console.log('Access token obtained!');
+        if (!response.ok) return null;
+        const data = await response.json();
         return data.access_token;
-
-    } catch (error) {
-        console.error('getAccessToken error:', error);
+    } catch {
         return null;
     }
 }
 
-// Get user account info (dynamic account ID discovery)
+// Get user account info
 async function getUserInfo(accessToken: string): Promise<{ accountId: string; baseUrl: string } | null> {
     try {
-        console.log('Fetching user info...');
         const isDemo = DOCUSIGN_BASE_URL.includes('demo');
         const authServer = isDemo ? 'account-d.docusign.com' : 'account.docusign.com';
 
@@ -217,42 +198,27 @@ async function getUserInfo(accessToken: string): Promise<{ accountId: string; ba
             headers: { 'Authorization': `Bearer ${accessToken}` }
         });
 
-        if (!response.ok) {
-            console.error('UserInfo failed:', response.status);
-            return null;
-        }
-
+        if (!response.ok) return null;
         const data = await response.json();
         const account = data.accounts?.find((a: any) => a.is_default) || data.accounts?.[0];
 
-        if (!account) {
-            console.error('No accounts found');
-            return null;
-        }
-
-        console.log('Using Account:', account.account_name, `(${account.account_id})`);
-        return {
-            accountId: account.account_id,
-            baseUrl: `${account.base_uri}/restapi`
-        };
-    } catch (error) {
-        console.error('getUserInfo error:', error);
+        if (!account) return null;
+        return { accountId: account.account_id, baseUrl: `${account.base_uri}/restapi` };
+    } catch {
         return null;
     }
 }
 
-// Create and send envelope
+// Create envelope
 async function createEnvelope(
     accessToken: string,
     accountInfo: { accountId: string; baseUrl: string },
     documentBase64: string,
-    customerEmail: string,
-    customerName: string,
+    email: string,
+    name: string,
     rentalId: string
 ): Promise<string | null> {
     try {
-        console.log('Creating envelope...');
-
         const envelope = {
             emailSubject: `Rental Agreement - Ref: ${rentalId.substring(0, 8).toUpperCase()}`,
             documents: [{
@@ -263,8 +229,8 @@ async function createEnvelope(
             }],
             recipients: {
                 signers: [{
-                    email: customerEmail,
-                    name: customerName,
+                    email,
+                    name,
                     recipientId: '1',
                     routingOrder: '1',
                     tabs: {
@@ -292,164 +258,96 @@ async function createEnvelope(
             }
         );
 
-        const text = await response.text();
-        console.log('Envelope response:', response.status);
-
-        if (!response.ok) {
-            console.error('Envelope creation failed:', text);
-            return null;
-        }
-
-        const result = JSON.parse(text);
-        console.log('Envelope ID:', result.envelopeId);
+        if (!response.ok) return null;
+        const result = await response.json();
         return result.envelopeId;
-
-    } catch (error) {
-        console.error('createEnvelope error:', error);
+    } catch {
         return null;
     }
 }
 
 export async function POST(request: NextRequest) {
     try {
-        const body = await request.json() as EnvelopeRequest;
+        const body = await request.json() as DocuSignRequest;
 
         console.log('='.repeat(50));
-        console.log('DOCUSIGN API - DIRECT IMPLEMENTATION');
+        console.log('PORTAL DOCUSIGN API');
         console.log('='.repeat(50));
         console.log('Rental ID:', body.rentalId);
         console.log('Customer:', body.customerName, body.customerEmail);
+        console.log('Tenant ID:', body.tenantId);
 
         if (!body.rentalId || !body.customerEmail || !body.customerName) {
             return NextResponse.json({ ok: false, error: 'Missing required fields' }, { status: 400 });
         }
 
         if (!DOCUSIGN_INTEGRATION_KEY || !DOCUSIGN_PRIVATE_KEY || !DOCUSIGN_USER_ID) {
-            console.error('DocuSign configuration missing');
             return NextResponse.json({ ok: false, error: 'DocuSign not configured' }, { status: 500 });
         }
 
-        // Initialize Supabase to fetch rental data and admin template
         const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
         // Fetch rental with related data
-        const { data: rental, error: rentalError } = await supabase
+        const { data: rental } = await supabase
             .from('rentals')
-            .select(`
-        *,
-        customers:customer_id (id, name, email, phone, address, customer_type),
-        vehicles:vehicle_id (id, reg, make, model, year)
-      `)
+            .select(`*, customers:customer_id(*), vehicles:vehicle_id(*)`)
             .eq('id', body.rentalId)
             .single();
 
-        let customer: { name: string; email: string; phone?: string } = { name: body.customerName, email: body.customerEmail };
-        let vehicle: { make?: string; model?: string; reg: string; year?: string } = { make: '', model: '', reg: 'N/A' };
-        let tenant: { company_name?: string; contact_email?: string; contact_phone?: string } | null = null;
+        const customer = rental?.customers || { name: body.customerName, email: body.customerEmail };
+        const vehicle = rental?.vehicles || { make: '', model: '', reg: 'N/A' };
 
-        // Priority for tenant ID: 1) Passed from frontend, 2) From rental, 3) From vehicle
-        let tenantId: string | null = body.tenantId || null;
-
-        if (!rentalError && rental) {
-            customer = rental.customers || customer;
-            vehicle = rental.vehicles || vehicle;
-
-            // Use rental's tenant_id if not passed from frontend
-            if (!tenantId && rental.tenant_id) {
-                tenantId = rental.tenant_id;
-            }
-        }
-
-        // Fallback: Get tenant from vehicle if still no tenantId
-        if (!tenantId && body.vehicleId) {
-            console.log('Looking up tenant from vehicle:', body.vehicleId);
-            const { data: vehicleData } = await supabase
-                .from('vehicles')
-                .select('tenant_id')
-                .eq('id', body.vehicleId)
-                .single();
-            if (vehicleData?.tenant_id) {
-                tenantId = vehicleData.tenant_id;
-                console.log('Got tenant from vehicle:', tenantId);
-            }
-        }
-
-        // Fetch tenant info if we have an ID
-        if (tenantId) {
+        // Fetch tenant
+        let tenant = null;
+        if (body.tenantId) {
             const { data: tenantData } = await supabase
                 .from('tenants')
                 .select('company_name, contact_email, contact_phone')
-                .eq('id', tenantId)
+                .eq('id', body.tenantId)
                 .single();
             tenant = tenantData;
         }
 
-        // Try to get admin's custom template
+        // Fetch template
         let documentContent: string;
-
-        console.log('='.repeat(50));
-        console.log('TEMPLATE LOOKUP');
-        console.log('='.repeat(50));
-        console.log('Tenant ID:', tenantId);
-        console.log('Rental tenant_id:', rental?.tenant_id);
-
-        if (tenantId) {
-            console.log('Fetching template for tenant:', tenantId);
-
-            const { data: templateData, error: templateError } = await supabase
+        if (body.tenantId) {
+            const { data: templateData } = await supabase
                 .from('agreement_templates')
-                .select('template_content, template_name, is_active')
-                .eq('tenant_id', tenantId)
+                .select('template_content')
+                .eq('tenant_id', body.tenantId)
                 .eq('is_active', true)
                 .single();
 
-            console.log('Template query result:');
-            console.log('  - Error:', templateError?.message || 'none');
-            console.log('  - Found:', templateData ? 'YES' : 'NO');
-            console.log('  - Template name:', templateData?.template_name || 'N/A');
-            console.log('  - Content length:', templateData?.template_content?.length || 0);
-
             if (templateData?.template_content) {
-                console.log('✅ Using admin custom template:', templateData.template_name);
-                const processed = processTemplate(templateData.template_content, rental, customer, vehicle, tenant);
-                documentContent = htmlToText(processed);
-                console.log('Processed content length:', documentContent.length);
+                console.log('Using admin template');
+                documentContent = htmlToText(processTemplate(templateData.template_content, rental, customer, vehicle, tenant));
             } else {
-                console.log('❌ No active template found, using default');
+                console.log('Using default template');
                 documentContent = generateDefaultAgreement(rental, customer, vehicle, tenant);
             }
         } else {
-            console.log('❌ No tenant ID on rental, using default template');
-            documentContent = generateDefaultAgreement(
-                { id: body.rentalId, start_date: new Date(), monthly_amount: 0 },
-                customer,
-                vehicle,
-                {}
-            );
+            documentContent = generateDefaultAgreement(rental, customer, vehicle, tenant);
         }
 
         const documentBase64 = Buffer.from(documentContent).toString('base64');
 
-        // 1. Get Access Token
+        // Get access token
         const accessToken = await getAccessToken();
         if (!accessToken) {
-            const consentUrl = `https://account-d.docusign.com/oauth/auth?response_type=code&scope=signature%20impersonation&client_id=${DOCUSIGN_INTEGRATION_KEY}&redirect_uri=https://developers.docusign.com/platform/auth/consent`;
-            return NextResponse.json(
-                { ok: false, error: 'DocuSign auth failed', detail: `Consent required: ${consentUrl}` },
-                { status: 401 }
-            );
+            return NextResponse.json({
+                ok: false,
+                error: 'DocuSign auth failed',
+                detail: `Consent required: https://account-d.docusign.com/oauth/auth?response_type=code&scope=signature%20impersonation&client_id=${DOCUSIGN_INTEGRATION_KEY}&redirect_uri=https://developers.docusign.com/platform/auth/consent`
+            }, { status: 401 });
         }
 
-        // 2. Get user account info (dynamic account ID)
+        // Get account info
         const accountInfo = await getUserInfo(accessToken);
         if (!accountInfo) {
-            return NextResponse.json(
-                { ok: false, error: 'Failed to get DocuSign account info' },
-                { status: 500 }
-            );
+            return NextResponse.json({ ok: false, error: 'Failed to get DocuSign account' }, { status: 500 });
         }
 
-        // 3. Create Envelope
+        // Create envelope
         const envelopeId = await createEnvelope(
             accessToken,
             accountInfo,
@@ -463,9 +361,9 @@ export async function POST(request: NextRequest) {
             return NextResponse.json({ ok: false, error: 'Failed to create envelope' }, { status: 500 });
         }
 
-        // 4. Update rental with DocuSign info
-        console.log('Updating rental with DocuSign envelope info...');
-        const { error: updateError } = await supabase
+        // Update rental with DocuSign info
+        console.log('Updating rental with envelope info...');
+        await supabase
             .from('rentals')
             .update({
                 docusign_envelope_id: envelopeId,
@@ -475,17 +373,7 @@ export async function POST(request: NextRequest) {
             })
             .eq('id', body.rentalId);
 
-        if (updateError) {
-            console.error('Failed to update rental with envelope info:', updateError);
-            // Don't fail the request - envelope was still created
-        } else {
-            console.log('✅ Rental updated with DocuSign status');
-        }
-
-        console.log('='.repeat(50));
         console.log('SUCCESS! Envelope:', envelopeId);
-        console.log('='.repeat(50));
-
         return NextResponse.json({ ok: true, envelopeId, emailSent: true });
 
     } catch (error: any) {
