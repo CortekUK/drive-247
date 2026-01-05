@@ -103,9 +103,9 @@ export async function isCustomerBlocked(tenantId: string, customerId: string) {
 }
 
 /**
- * Check if an identity (license number, ID number) is blocked for a tenant
+ * Check if an identity (license number, ID number, or email) is blocked for a tenant
  * @param tenantId - The tenant ID
- * @param identityNumber - The license number or ID number to check
+ * @param identityNumber - The license number, ID number, or email to check
  */
 export async function isIdentityBlocked(tenantId: string, identityNumber: string) {
   if (!identityNumber || identityNumber.trim() === '') {
@@ -118,7 +118,7 @@ export async function isIdentityBlocked(tenantId: string, identityNumber: string
     .eq('tenant_id', tenantId)
     .eq('identity_number', identityNumber.trim())
     .eq('is_active', true)
-    .in('identity_type', ['license', 'id_card', 'passport'])
+    .in('identity_type', ['license', 'id_card', 'passport', 'email'])
     .maybeSingle();
 
   return {
@@ -130,16 +130,48 @@ export async function isIdentityBlocked(tenantId: string, identityNumber: string
 }
 
 /**
- * Check if a customer can book (not blocked by customer record or identity)
+ * Check if an email is globally blacklisted (blocked by 3+ tenants)
+ * @param email - The email to check
+ */
+export async function isGloballyBlacklisted(email: string): Promise<{ isBlacklisted: boolean; error: any }> {
+  if (!email || email.trim() === '') {
+    return { isBlacklisted: false, error: null };
+  }
+
+  const { data, error } = await supabase
+    .from('global_blacklist')
+    .select('id')
+    .eq('email', email.trim())
+    .maybeSingle();
+
+  return {
+    isBlacklisted: !!data,
+    error
+  };
+}
+
+/**
+ * Check if a customer can book (not blocked by customer record, email, or global blacklist)
  * @param tenantId - The tenant ID
- * @param customerEmail - Customer email to look up existing customer
- * @param licenseNumber - License number to check against blocked identities
+ * @param customerEmail - Customer email to look up existing customer and check blocked identities
+ * @param licenseNumber - License number to check against blocked identities (optional)
  */
 export async function canCustomerBook(
   tenantId: string,
   customerEmail: string,
   licenseNumber?: string
 ): Promise<{ canBook: boolean; reason: string | null }> {
+  // First check global blacklist (blocked by 3+ tenants)
+  if (customerEmail && customerEmail.trim() !== '') {
+    const globalCheck = await isGloballyBlacklisted(customerEmail);
+    if (globalCheck.isBlacklisted) {
+      return {
+        canBook: false,
+        reason: 'This email has been blacklisted due to violations across multiple rental companies. Please contact support.'
+      };
+    }
+  }
+
   // Check if existing customer is blocked
   const { data: existingCustomer } = await supabase
     .from('customers')
@@ -155,7 +187,18 @@ export async function canCustomerBook(
     };
   }
 
-  // Check if license number is in blocked identities
+  // Check if email is in blocked identities (tenant-specific)
+  if (customerEmail && customerEmail.trim() !== '') {
+    const emailCheck = await isIdentityBlocked(tenantId, customerEmail);
+    if (emailCheck.isBlocked) {
+      return {
+        canBook: false,
+        reason: emailCheck.reason || 'This email has been blocked. Please contact support.'
+      };
+    }
+  }
+
+  // Check if license number is in blocked identities (optional, for backward compatibility)
   if (licenseNumber && licenseNumber.trim() !== '') {
     const identityCheck = await isIdentityBlocked(tenantId, licenseNumber);
     if (identityCheck.isBlocked) {

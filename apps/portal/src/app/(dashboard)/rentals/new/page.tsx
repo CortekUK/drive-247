@@ -1,12 +1,12 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
-import { addMonths, addDays, addWeeks, isAfter, isBefore, subYears, startOfDay } from "date-fns";
+import { addMonths, addDays, addWeeks, isAfter, isBefore, subYears, startOfDay, format } from "date-fns";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -14,7 +14,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage, FormDescription } from "@/components/ui/form";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
-import { ArrowLeft, FileText, Save, AlertTriangle, MapPin, Clock, Shield, Upload } from "lucide-react";
+import { ArrowLeft, FileText, Save, AlertTriangle, MapPin, Clock, Shield, Upload, CheckCircle2, XCircle, Loader2, RefreshCw, QrCode, Smartphone, Copy } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from "@/components/ui/label";
@@ -35,6 +35,11 @@ import { InsuranceUploadDialog } from "@/components/shared/dialogs/insurance-upl
 import { LocationPicker } from "@/components/ui/location-picker";
 import { Checkbox } from "@/components/ui/checkbox";
 import { TimePicker } from "@/components/ui/time-picker";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Badge } from "@/components/ui/badge";
+import { Progress } from "@/components/ui/progress";
+import { Textarea } from "@/components/ui/textarea";
+import { toast as sonnerToast } from "sonner";
 
 const rentalSchema = z.object({
   customer_id: z.string().min(1, "Customer is required"),
@@ -52,6 +57,7 @@ const rentalSchema = z.object({
   driver_age_range: z.enum(["under_25", "25_70", "over_70"]).optional(),
   promo_code: z.string().optional(),
   insurance_status: z.enum(["pending", "uploaded", "verified", "bonzah", "not_required"]).optional(),
+  notes: z.string().optional(),
 }).refine((data) => {
   let minEndDate: Date;
 
@@ -89,6 +95,14 @@ const CreateRental = () => {
   const [createdRentalData, setCreatedRentalData] = useState<any>(null);
   const [generatedInvoice, setGeneratedInvoice] = useState<Invoice | null>(null);
   const [sendingDocuSign, setSendingDocuSign] = useState(false);
+
+  // Verification state
+  const [creatingVerification, setCreatingVerification] = useState(false);
+  const [showQRModal, setShowQRModal] = useState(false);
+  const [aiSessionData, setAiSessionData] = useState<{ sessionId: string; qrUrl: string; expiresAt: Date } | null>(null);
+  const [timeRemaining, setTimeRemaining] = useState(0);
+  const [isPolling, setIsPolling] = useState(false);
+  const pollIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
   // Get payment mode from org settings
   const { settings: orgSettings } = useOrgSettings();
@@ -208,6 +222,7 @@ const CreateRental = () => {
       driver_age_range: undefined,
       promo_code: "",
       insurance_status: "pending",
+      notes: "",
     },
     mode: "onChange", // Validate on change for real-time feedback
   });
@@ -248,6 +263,47 @@ const CreateRental = () => {
 
   // Get active rentals count for selected customer to enforce rules
   const { data: activeRentalsCount } = useCustomerActiveRentals(selectedCustomerId);
+
+  // Get customer details including DOB for verification
+  const { data: customerDetails } = useQuery({
+    queryKey: ["customer-details-for-rental", tenant?.id, selectedCustomerId],
+    queryFn: async () => {
+      if (!selectedCustomerId || !tenant?.id) return null;
+      const { data, error } = await (supabase as any)
+        .from("customers")
+        .select("id, name, email, phone, date_of_birth, identity_verification_status")
+        .eq("id", selectedCustomerId)
+        .eq("tenant_id", tenant.id)
+        .single();
+      if (error) throw error;
+      return data as { id: string; name: string; email?: string; phone?: string; date_of_birth?: string; identity_verification_status?: string } | null;
+    },
+    enabled: !!selectedCustomerId && !!tenant?.id,
+  });
+
+  // Get customer's latest verification status
+  const { data: customerVerification, refetch: refetchVerification } = useQuery({
+    queryKey: ["customer-verification-for-rental", tenant?.id, selectedCustomerId],
+    queryFn: async () => {
+      if (!selectedCustomerId || !tenant?.id) return null;
+      const { data, error } = await supabase
+        .from("identity_verifications")
+        .select("id, status, review_result, review_status, first_name, last_name, document_number, verification_provider, created_at")
+        .eq("customer_id", selectedCustomerId)
+        .eq("tenant_id", tenant.id)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (error) throw error;
+      return data;
+    },
+    enabled: !!selectedCustomerId && !!tenant?.id,
+  });
+
+  // Derive verification state
+  const isCustomerVerified = customerVerification?.review_result === "GREEN";
+  const verificationPending = customerVerification?.status === "pending" || customerVerification?.review_status === "pending";
+  const verificationMode = tenant?.integration_veriff !== false ? "veriff" : "ai";
 
   const { data: vehicles } = useQuery({
     queryKey: ["vehicles-for-rental", tenant?.id],
@@ -319,10 +375,152 @@ const CreateRental = () => {
   const selectedCustomer = customers?.find(c => c.id === selectedCustomerId);
   const selectedVehicle = vehicles?.find(v => v.id === selectedVehicleId);
 
+  // Handle creating verification session
+  const handleCreateVerification = async () => {
+    if (!selectedCustomerId || !tenant) return;
+
+    setCreatingVerification(true);
+    try {
+      if (verificationMode === "ai") {
+        // AI verification flow
+        const { data, error } = await supabase.functions.invoke("create-ai-verification-session", {
+          body: {
+            customerId: selectedCustomerId,
+            tenantId: tenant.id,
+            tenantSlug: tenant.slug,
+          },
+        });
+
+        if (error) throw error;
+        if (!data.ok) {
+          throw new Error(data.detail || data.error || "Failed to create AI verification session");
+        }
+
+        sonnerToast.success("AI verification session created");
+        setAiSessionData({
+          sessionId: data.sessionId,
+          qrUrl: data.qrUrl,
+          expiresAt: new Date(data.expiresAt),
+        });
+        setShowQRModal(true);
+        setIsPolling(true);
+        await refetchVerification();
+      } else {
+        // Veriff flow
+        const { data, error } = await supabase.functions.invoke("create-veriff-session", {
+          body: { customerId: selectedCustomerId },
+        });
+
+        if (error) throw error;
+        if (!data.ok) {
+          throw new Error(data.detail || data.error || "Failed to create verification session");
+        }
+
+        sonnerToast.success("Verification session created successfully");
+
+        // Open Veriff verification in new window
+        if (data.sessionUrl) {
+          window.open(data.sessionUrl, "_blank");
+        }
+
+        await refetchVerification();
+      }
+    } catch (error: any) {
+      console.error("Error creating verification:", error);
+      sonnerToast.error(error.message || "Failed to create verification session");
+    } finally {
+      setCreatingVerification(false);
+    }
+  };
+
+  // Timer for QR expiry countdown
+  useEffect(() => {
+    if (!showQRModal || !aiSessionData) return;
+
+    const updateTime = () => {
+      const now = new Date();
+      const remaining = Math.max(0, Math.floor((aiSessionData.expiresAt.getTime() - now.getTime()) / 1000));
+      setTimeRemaining(remaining);
+
+      if (remaining === 0) {
+        setShowQRModal(false);
+        setIsPolling(false);
+        setAiSessionData(null);
+        sonnerToast.error("QR code expired. Please try again.");
+      }
+    };
+
+    updateTime();
+    const timer = setInterval(updateTime, 1000);
+    return () => clearInterval(timer);
+  }, [showQRModal, aiSessionData]);
+
+  // Poll for AI verification completion
+  const checkAIVerificationStatus = useCallback(async () => {
+    if (!isPolling || !aiSessionData) return;
+
+    try {
+      const { data, error } = await supabase
+        .from("identity_verifications")
+        .select("status, review_status, review_result")
+        .eq("id", aiSessionData.sessionId)
+        .single();
+
+      if (error) {
+        console.error("Status check error:", error);
+        return;
+      }
+
+      if (data.status === "completed") {
+        setIsPolling(false);
+        setShowQRModal(false);
+        setAiSessionData(null);
+        await refetchVerification();
+
+        if (data.review_result === "GREEN") {
+          sonnerToast.success("Identity verified successfully!");
+        } else if (data.review_result === "RED") {
+          sonnerToast.error("Identity verification failed");
+        } else {
+          sonnerToast.info("Verification needs manual review");
+        }
+      }
+    } catch (err) {
+      console.error("Status check error:", err);
+    }
+  }, [aiSessionData, isPolling, refetchVerification]);
+
+  // Set up polling
+  useEffect(() => {
+    if (isPolling && aiSessionData) {
+      const initialTimeout = setTimeout(checkAIVerificationStatus, 5000);
+      pollIntervalRef.current = setInterval(checkAIVerificationStatus, 3000);
+
+      return () => {
+        clearTimeout(initialTimeout);
+        if (pollIntervalRef.current) {
+          clearInterval(pollIntervalRef.current);
+        }
+      };
+    }
+  }, [isPolling, aiSessionData, checkAIVerificationStatus]);
+
+  // Format time remaining
+  const formatTime = (seconds: number): string => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins}:${secs.toString().padStart(2, "0")}`;
+  };
+
   const onSubmit = async (data: RentalFormData) => {
     setLoading(true);
     setSubmitError("");
     try {
+      // Check customer verification first (STRICT blocking)
+      if (!isCustomerVerified) {
+        throw new Error("Customer must complete identity verification before rental can be created.");
+      }
+
       // Validate form data
       if (!data.customer_id || !data.vehicle_id) {
         throw new Error("Customer and Vehicle must be selected");
@@ -349,7 +547,7 @@ const CreateRental = () => {
         throw new Error(`Cannot create rental: ${blockType}. Reason: ${blockCheck.reason}`);
       }
 
-      // Create rental
+      // Create rental with Pending status (will become Active after DocuSign)
       const { data: rental, error: rentalError } = await supabase
         .from("rentals")
         .insert({
@@ -359,8 +557,21 @@ const CreateRental = () => {
           end_date: data.end_date.toISOString().split('T')[0],
           rental_period_type: data.rental_period_type,
           monthly_amount: data.monthly_amount,
-          status: "Active",
+          status: "Pending", // Start as Pending, will become Active after DocuSign signed
+          document_status: "pending", // Track DocuSign state
+          source: "portal", // Track rental origin
           tenant_id: tenant?.id,
+          // Booking-aligned fields
+          pickup_location: data.pickup_location || null,
+          return_location: sameAsPickup ? data.pickup_location : data.return_location || null,
+          pickup_location_id: pickupLocationId || null,
+          return_location_id: sameAsPickup ? pickupLocationId : returnLocationId || null,
+          pickup_time: data.pickup_time || null,
+          return_time: data.return_time || null,
+          driver_age_range: data.driver_age_range || null,
+          promo_code: data.promo_code || null,
+          insurance_status: data.insurance_status || "pending",
+          notes: data.notes || null,
         })
         .select()
         .single();
@@ -455,17 +666,8 @@ const CreateRental = () => {
         }
       }
 
-      // Update vehicle status to Rented
-      let vehicleUpdateQuery = supabase
-        .from("vehicles")
-        .update({ status: "Rented" })
-        .eq("id", data.vehicle_id);
-
-      if (tenant?.id) {
-        vehicleUpdateQuery = vehicleUpdateQuery.eq("tenant_id", tenant.id);
-      }
-
-      await vehicleUpdateQuery;
+      // NOTE: Vehicle status stays "Available" until DocuSign is signed
+      // The docusign-webhook will update vehicle to "Rented" when agreement is completed
 
       // Generate only first month's charge (subsequent charges created monthly)
       await supabase.rpc("backfill_rental_charges_first_month_only");
@@ -560,12 +762,6 @@ const CreateRental = () => {
         console.error('Error sending booking notifications:', notificationError);
       }
 
-      // Show success toast
-      toast({
-        title: "Rental Created Successfully",
-        description: `Rental created for ${customerName} • ${vehicleReg}`,
-      });
-
       // Refresh queries
       queryClient.invalidateQueries({ queryKey: ["rentals-list"] });
       queryClient.invalidateQueries({ queryKey: ["vehicles-list"] });
@@ -575,12 +771,63 @@ const CreateRental = () => {
       queryClient.invalidateQueries({ queryKey: ["reminders"] });
       queryClient.invalidateQueries({ queryKey: ["reminder-stats"] });
 
-      // Show invoice first (if generated), then DocuSign dialog
+      // Auto-trigger DocuSign (required for rental to become Active)
+      let docuSignSuccess = false;
+      try {
+        const { data: docuSignData, error: docuSignError } = await supabase.functions.invoke("create-docusign-envelope", {
+          body: {
+            rentalId: rental.id,
+          },
+        });
+
+        if (docuSignError || !docuSignData?.ok) {
+          console.error("DocuSign error:", docuSignError || docuSignData);
+          toast({
+            title: "Rental Created - DocuSign Pending",
+            description: `Rental created but DocuSign failed to send. You can retry from the rental details page.`,
+            variant: "default",
+          });
+        } else {
+          docuSignSuccess = true;
+          // Update rental with envelope ID
+          await supabase
+            .from("rentals")
+            .update({
+              docusign_envelope_id: docuSignData.envelopeId,
+              document_status: "sent",
+              envelope_sent_at: new Date().toISOString(),
+            })
+            .eq("id", rental.id);
+
+          toast({
+            title: "Rental Created - Agreement Sent",
+            description: `Rental created for ${customerName} • ${vehicleReg}. DocuSign agreement sent to customer.`,
+          });
+        }
+      } catch (docuSignErr: any) {
+        console.error("Error sending DocuSign:", docuSignErr);
+        toast({
+          title: "Rental Created - DocuSign Pending",
+          description: `Rental created but DocuSign failed. You can retry from the rental details page.`,
+          variant: "default",
+        });
+      }
+
+      // Store rental data for invoice dialog
+      setCreatedRentalData({
+        rental,
+        customer: selectedCustomer,
+        vehicle: selectedVehicle,
+        formData: data,
+        docuSignSuccess,
+      });
+
+      // Show invoice dialog if invoice was generated
       if (invoiceCreated) {
         setShowInvoiceDialog(true);
       } else {
-        // If invoice couldn't be generated, skip to DocuSign dialog directly
-        setShowDocuSignDialog(true);
+        // Navigate directly to rental detail page
+        router.push(`/rentals/${rental.id}`);
       }
     } catch (error: any) {
       console.error("Error creating rental:", error);
@@ -714,6 +961,106 @@ const CreateRental = () => {
                       )}
                     />
                   </div>
+
+                  {/* Customer Verification Section */}
+                  {selectedCustomerId && (
+                    <div className="space-y-4 p-4 border rounded-lg bg-muted/30">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <Shield className="h-5 w-5 text-primary" />
+                          <h3 className="font-medium">Identity Verification</h3>
+                          <span className="text-sm text-muted-foreground">
+                            ({verificationMode === "ai" ? "AI Verification" : "Veriff"})
+                          </span>
+                        </div>
+                        {isCustomerVerified ? (
+                          <Badge variant="default" className="bg-green-500 hover:bg-green-600">
+                            <CheckCircle2 className="h-3 w-3 mr-1" />
+                            Verified
+                          </Badge>
+                        ) : verificationPending ? (
+                          <Badge variant="secondary">
+                            <Clock className="h-3 w-3 mr-1" />
+                            Pending
+                          </Badge>
+                        ) : (
+                          <Badge variant="outline" className="border-amber-500 text-amber-600">
+                            <AlertTriangle className="h-3 w-3 mr-1" />
+                            Not Verified
+                          </Badge>
+                        )}
+                      </div>
+
+                      {/* DOB Warning */}
+                      {customerDetails && !customerDetails.date_of_birth && (
+                        <Alert variant="default" className="border-amber-500 bg-amber-50">
+                          <AlertTriangle className="h-4 w-4 text-amber-600" />
+                          <AlertDescription className="text-amber-700">
+                            Customer date of birth is not set. This may be required for identity verification.
+                          </AlertDescription>
+                        </Alert>
+                      )}
+
+                      {isCustomerVerified ? (
+                        <div className="text-sm text-muted-foreground">
+                          <p>Customer identity has been verified.</p>
+                          {customerVerification?.first_name && customerVerification?.last_name && (
+                            <p className="mt-1">
+                              Name: {customerVerification.first_name} {customerVerification.last_name}
+                            </p>
+                          )}
+                          {customerVerification?.document_number && (
+                            <p>Document: {customerVerification.document_number}</p>
+                          )}
+                          {customerVerification?.created_at && (
+                            <p>Verified on: {format(new Date(customerVerification.created_at), "MMM d, yyyy")}</p>
+                          )}
+                        </div>
+                      ) : verificationPending ? (
+                        <div className="flex items-center justify-between">
+                          <p className="text-sm text-muted-foreground">
+                            Verification is in progress. Please wait for the customer to complete verification.
+                          </p>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={() => refetchVerification()}
+                          >
+                            <RefreshCw className="h-4 w-4 mr-2" />
+                            Refresh
+                          </Button>
+                        </div>
+                      ) : (
+                        <div className="space-y-3">
+                          <Alert variant="destructive">
+                            <XCircle className="h-4 w-4" />
+                            <AlertDescription>
+                              Customer must complete identity verification before rental can be created.
+                            </AlertDescription>
+                          </Alert>
+                          <Button
+                            type="button"
+                            onClick={handleCreateVerification}
+                            disabled={creatingVerification}
+                            className="w-full"
+                          >
+                            {creatingVerification ? (
+                              <>
+                                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                                Creating Session...
+                              </>
+                            ) : (
+                              <>
+                                <Shield className="h-4 w-4 mr-2" />
+                                Start Verification
+                              </>
+                            )}
+                          </Button>
+                        </div>
+                      )}
+                    </div>
+                  )}
 
                   {/* Rental Period Type */}
                   <div className="grid grid-cols-1 gap-4">
@@ -1103,13 +1450,31 @@ const CreateRental = () => {
                         )}
                       />
                     </div>
+                    {/* Notes / Special Requests */}
+                    <FormField
+                      control={form.control}
+                      name="notes"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Notes / Special Requests</FormLabel>
+                          <FormControl>
+                            <Textarea
+                              {...field}
+                              placeholder="Any special requirements or notes for this rental"
+                              rows={3}
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
                   </div>
 
                   {/* Helper Info */}
                   <div className="bg-muted/50 p-4 rounded-lg">
                     <p className="text-sm text-muted-foreground">
-                      <strong>Note:</strong> Monthly charges will be generated automatically from the start date to the end date.
-                      Payments are applied automatically to outstanding charges.
+                      <strong>Note:</strong> Rental will start as &quot;Pending&quot; until the DocuSign agreement is signed.
+                      Once signed, the rental becomes &quot;Active&quot; and the vehicle is marked as &quot;Rented&quot;.
                     </p>
                   </div>
 
@@ -1120,11 +1485,11 @@ const CreateRental = () => {
                     </Button>
                     <Button
                       type="submit"
-                      disabled={loading || !isFormValid}
+                      disabled={loading || !isFormValid || !isCustomerVerified}
                       className="bg-gradient-primary"
                     >
                       <Save className="h-4 w-4 mr-2" />
-                      {loading ? "Creating..." : "Create Rental"}
+                      {loading ? "Creating..." : !isCustomerVerified ? "Verification Required" : "Create Rental"}
                     </Button>
                   </div>
                 </form>
@@ -1154,8 +1519,11 @@ const CreateRental = () => {
           onOpenChange={(open) => {
             setShowInvoiceDialog(open);
             if (!open) {
-              // When invoice dialog closes, show DocuSign confirmation
-              setShowDocuSignDialog(true);
+              // Navigate to rental detail page after viewing invoice
+              // DocuSign is already sent automatically
+              if (createdRentalData?.rental?.id) {
+                router.push(`/rentals/${createdRentalData.rental.id}`);
+              }
             }
           }}
           invoice={generatedInvoice}
@@ -1177,80 +1545,6 @@ const CreateRental = () => {
         />
       )}
 
-      {/* DocuSign Confirmation Dialog */}
-      <AlertDialog open={showDocuSignDialog} onOpenChange={setShowDocuSignDialog}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Send DocuSign Agreement?</AlertDialogTitle>
-            <AlertDialogDescription>
-              Would you like to send the rental agreement to the customer via DocuSign for electronic signature?
-              {createdRentalData?.customer?.email && (
-                <span className="block mt-2 text-sm font-medium">
-                  Email: {createdRentalData.customer.email}
-                </span>
-              )}
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel
-              onClick={() => {
-                setShowDocuSignDialog(false);
-                // Navigate to rental detail page
-                if (createdRentalData?.rental?.id) {
-                  router.push(`/rentals/${createdRentalData.rental.id}`);
-                }
-              }}
-            >
-              No, Skip
-            </AlertDialogCancel>
-            <AlertDialogAction
-              onClick={async () => {
-                setSendingDocuSign(true);
-                try {
-                  // Send DocuSign
-                  const { data: docuSignData, error: docuSignError } = await supabase.functions.invoke('create-docusign-envelope', {
-                    body: {
-                      rentalId: createdRentalData?.rental?.id,
-                    }
-                  });
-
-                  if (docuSignError || !docuSignData?.ok) {
-                    console.error('DocuSign error:', docuSignError || docuSignData);
-                    toast({
-                      title: "DocuSign Error",
-                      description: docuSignData?.detail || docuSignError?.message || "Failed to send DocuSign agreement. You can send it later from the rental detail page.",
-                      variant: "destructive",
-                    });
-                  } else {
-                    toast({
-                      title: "DocuSign Sent",
-                      description: "Rental agreement has been sent via DocuSign",
-                    });
-                  }
-                } catch (error: any) {
-                  console.error('Error sending DocuSign:', error);
-                  toast({
-                    title: "DocuSign Error",
-                    description: error?.message || "Failed to send DocuSign agreement",
-                    variant: "destructive",
-                  });
-                } finally {
-                  setSendingDocuSign(false);
-                  setShowDocuSignDialog(false);
-                  // Navigate to rental detail page
-                  if (createdRentalData?.rental?.id) {
-                    router.push(`/rentals/${createdRentalData.rental.id}`);
-                  }
-                }
-              }}
-              disabled={sendingDocuSign}
-            >
-              {sendingDocuSign ? "Sending..." : "Yes, Send DocuSign"}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-
       {/* Insurance Upload Dialog */}
       <InsuranceUploadDialog
         open={showInsuranceUpload}
@@ -1261,6 +1555,117 @@ const CreateRental = () => {
           form.setValue("insurance_status", "uploaded");
         }}
       />
+
+      {/* AI Verification QR Modal */}
+      <Dialog
+        open={showQRModal}
+        onOpenChange={(open) => {
+          if (!open) {
+            setShowQRModal(false);
+            setIsPolling(false);
+            setAiSessionData(null);
+          }
+        }}
+      >
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Smartphone className="h-5 w-5 text-primary" />
+              Identity Verification
+            </DialogTitle>
+            <DialogDescription>
+              Have the customer scan this QR code with their phone camera.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="flex flex-col items-center space-y-6 py-6">
+            {/* QR Code Display */}
+            {aiSessionData && (
+              <div
+                className="rounded-xl shadow-lg border-2 border-gray-200"
+                style={{
+                  backgroundColor: "#FFFFFF",
+                  padding: "16px",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                }}
+              >
+                <img
+                  src={`https://quickchart.io/qr?text=${encodeURIComponent(aiSessionData.qrUrl)}&size=300&margin=3&dark=000000&light=ffffff&ecLevel=M&format=png`}
+                  alt="Scan QR code to verify identity"
+                  width={300}
+                  height={300}
+                  style={{ display: "block", imageRendering: "pixelated" }}
+                />
+              </div>
+            )}
+
+            {/* Timer with progress bar */}
+            <div className="w-full space-y-2">
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-muted-foreground flex items-center gap-1">
+                  <Clock className="h-4 w-4" />
+                  Time remaining
+                </span>
+                <span
+                  className={`font-mono font-medium ${timeRemaining < 60 ? "text-destructive" : "text-foreground"}`}
+                >
+                  {formatTime(timeRemaining)}
+                </span>
+              </div>
+              <Progress value={(timeRemaining / 900) * 100} className="h-2" />
+            </div>
+
+            {/* Status indicator */}
+            <div className="flex items-center gap-2 px-4 py-2 bg-blue-50 text-blue-700 rounded-full text-sm">
+              <Loader2 className="h-4 w-4 animate-spin" />
+              <span>Waiting for customer to complete verification...</span>
+            </div>
+
+            {/* Manual URL with copy button */}
+            {aiSessionData && (
+              <div className="w-full space-y-2">
+                <p className="text-xs text-center text-muted-foreground">
+                  Can&apos;t scan? Share this link with the customer:
+                </p>
+                <div className="flex items-center gap-2 p-2 bg-muted rounded-lg">
+                  <input
+                    type="text"
+                    readOnly
+                    value={aiSessionData.qrUrl}
+                    className="flex-1 bg-transparent text-xs truncate border-none focus:outline-none"
+                  />
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="shrink-0"
+                    onClick={() => {
+                      navigator.clipboard.writeText(aiSessionData.qrUrl);
+                      sonnerToast.success("Link copied to clipboard");
+                    }}
+                  >
+                    <Copy className="h-4 w-4" />
+                  </Button>
+                </div>
+              </div>
+            )}
+          </div>
+
+          <div className="flex justify-end gap-2">
+            <Button
+              variant="outline"
+              onClick={() => {
+                setShowQRModal(false);
+                setIsPolling(false);
+                setAiSessionData(null);
+              }}
+            >
+              Cancel
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

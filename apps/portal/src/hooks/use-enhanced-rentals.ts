@@ -8,6 +8,7 @@ export interface RentalFilters {
   search?: string;
   status?: string;
   customerType?: string;
+  paymentMode?: string;
   duration?: string;
   durationMin?: number;
   durationMax?: number;
@@ -33,6 +34,7 @@ export interface EnhancedRental {
   computed_status: string;
   duration_months: number;
   initial_payment: number | null;
+  payment_mode?: string;
   customer: {
     id: string;
     name: string;
@@ -62,6 +64,7 @@ export const useEnhancedRentals = (filters: RentalFilters = {}) => {
     search = "",
     status = "all",
     customerType = "all",
+    paymentMode = "all",
     duration = "all",
     durationMin,
     durationMax,
@@ -81,6 +84,7 @@ export const useEnhancedRentals = (filters: RentalFilters = {}) => {
     search,
     status,
     customerType,
+    paymentMode,
     duration,
     durationMin,
     durationMax,
@@ -107,6 +111,7 @@ export const useEnhancedRentals = (filters: RentalFilters = {}) => {
           end_date,
           monthly_amount,
           status,
+          payment_mode,
           customers!rentals_customer_id_fkey(id, name, customer_type),
           vehicles!rentals_vehicle_id_fkey(id, reg, make, model)
         `, { count: 'exact' })
@@ -175,6 +180,7 @@ export const useEnhancedRentals = (filters: RentalFilters = {}) => {
             computed_status: computedStatus,
             duration_months: durationMonths,
             initial_payment: initialPaymentAmount,
+            payment_mode: rental.payment_mode,
             customer: rental.customers as any,
             vehicle: rental.vehicles as any,
           };
@@ -183,6 +189,11 @@ export const useEnhancedRentals = (filters: RentalFilters = {}) => {
           // Apply customer type filter (moved from DB level for regular joins)
           if (customerType !== "all") {
             if (rental.customer?.customer_type !== customerType) return false;
+          }
+
+          // Apply payment mode filter
+          if (paymentMode !== "all") {
+            if (rental.payment_mode !== paymentMode) return false;
           }
 
           // Apply search filter (client-side for related fields)

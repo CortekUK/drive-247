@@ -3,19 +3,34 @@
 import React, { useState, useEffect } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from '@/components/ui/alert-dialog';
 import {
   ArrowLeft,
   Save,
   Loader2,
   Eye,
   Edit3,
+  RotateCcw,
 } from 'lucide-react';
-import { useAgreementTemplates } from '@/hooks/use-agreement-templates';
-import { DEFAULT_AGREEMENT_TEMPLATE, DEFAULT_TEMPLATE_NAME } from '@/lib/default-agreement-template';
+import {
+  useTemplateSelection,
+  type TemplateType,
+  DEFAULT_TEMPLATE_NAME,
+  CUSTOM_TEMPLATE_NAME,
+} from '@/hooks/use-agreement-templates';
+import { DEFAULT_AGREEMENT_TEMPLATE } from '@/lib/default-agreement-template';
 import {
   getSampleData,
   replaceVariables,
@@ -26,71 +41,88 @@ import { TipTapEditor } from '@/components/settings/tiptap-editor';
 export default function EditAgreementTemplatePage() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const templateId = searchParams.get('id');
-  const isNew = !templateId;
+  const templateType = (searchParams.get('type') as TemplateType) || 'default';
 
   const {
-    templates,
+    defaultTemplate,
+    customTemplate,
     isLoading,
-    createTemplateAsync,
-    isCreating,
-    updateTemplateAsync,
+    updateContentAsync,
     isUpdating,
-  } = useAgreementTemplates();
+    resetDefaultAsync,
+    isResetting,
+  } = useTemplateSelection();
 
-  // Initialize with defaults for new templates
-  const [templateName, setTemplateName] = useState(isNew ? DEFAULT_TEMPLATE_NAME : '');
-  const [templateContent, setTemplateContent] = useState(isNew ? DEFAULT_AGREEMENT_TEMPLATE : '');
+  const [templateContent, setTemplateContent] = useState('');
   const [loaded, setLoaded] = useState(false);
+  const [hasChanges, setHasChanges] = useState(false);
 
   const sampleData = getSampleData();
 
-  // Load template data if editing existing template
+  const currentTemplate = templateType === 'default' ? defaultTemplate : customTemplate;
+  const templateName = templateType === 'default' ? DEFAULT_TEMPLATE_NAME : CUSTOM_TEMPLATE_NAME;
+  const isDefault = templateType === 'default';
+
+  // Load template content when data is available
   useEffect(() => {
-    if (templateId && templates.length > 0 && !loaded) {
-      const template = templates.find((t) => t.id === templateId);
-      if (template) {
-        setTemplateName(template.template_name);
-        setTemplateContent(template.template_content);
-        setLoaded(true);
+    if (!isLoading && !loaded) {
+      if (currentTemplate && currentTemplate.template_content) {
+        // Template exists in database with content, use it
+        setTemplateContent(currentTemplate.template_content);
+      } else if (isDefault) {
+        // Default template - use default content from codebase
+        setTemplateContent(DEFAULT_AGREEMENT_TEMPLATE);
+      } else {
+        // Custom template - start blank
+        setTemplateContent('');
       }
+      setLoaded(true);
     }
-  }, [templateId, templates, loaded]);
+  }, [currentTemplate, loaded, isLoading, isDefault]);
+
+  // Track changes
+  useEffect(() => {
+    if (loaded) {
+      const originalContent = currentTemplate?.template_content || (isDefault ? DEFAULT_AGREEMENT_TEMPLATE : '');
+      setHasChanges(templateContent !== originalContent);
+    }
+  }, [templateContent, currentTemplate, loaded, isDefault]);
 
   const handleSave = async () => {
-    if (!templateName.trim()) {
-      toast({ title: 'Error', description: 'Please enter a template name', variant: 'destructive' });
-      return;
-    }
     if (!templateContent.trim()) {
-      toast({ title: 'Error', description: 'Please enter template content', variant: 'destructive' });
+      toast({ title: 'Error', description: 'Template content cannot be empty', variant: 'destructive' });
       return;
     }
 
     try {
-      if (templateId) {
-        await updateTemplateAsync({
-          id: templateId,
-          template_name: templateName,
-          template_content: templateContent,
-        });
-      } else {
-        await createTemplateAsync({
-          template_name: templateName,
-          template_content: templateContent,
-          is_active: true,
-        });
-      }
+      await updateContentAsync({ type: templateType, content: templateContent });
+      setHasChanges(false);
       router.push('/settings/agreement-templates');
     } catch (error) {
       // Error handled by hook
     }
   };
 
-  const previewContent = replaceVariables(templateContent, sampleData);
-  const isSaving = isCreating || isUpdating;
+  const handleReset = async () => {
+    if (isDefault) {
+      try {
+        await resetDefaultAsync();
+        setTemplateContent(DEFAULT_AGREEMENT_TEMPLATE);
+        setHasChanges(false);
+      } catch (error) {
+        // Error handled by hook
+      }
+    }
+  };
 
-  if (isLoading && templateId) {
+  const handleContentChange = (content: string) => {
+    setTemplateContent(content);
+  };
+
+  const previewContent = replaceVariables(templateContent, sampleData);
+  const isSaving = isUpdating;
+
+  if (isLoading) {
     return (
       <div className="flex items-center justify-center h-[80vh]">
         <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
@@ -107,19 +139,55 @@ export default function EditAgreementTemplatePage() {
             <ArrowLeft className="h-4 w-4" />
           </Button>
           <div>
-            <h1 className="text-xl font-semibold">
-              {isNew ? 'Create Agreement Template' : 'Edit Agreement Template'}
+            <h1 className="text-xl font-semibold flex items-center gap-2">
+              Edit {templateName}
+              {hasChanges && (
+                <Badge variant="secondary" className="text-xs">Unsaved changes</Badge>
+              )}
             </h1>
             <p className="text-sm text-muted-foreground">
-              Use the rich text editor to customize your rental agreement
+              {isDefault
+                ? 'Customize the standard rental agreement template'
+                : 'Create your own custom rental agreement'}
             </p>
           </div>
         </div>
         <div className="flex items-center gap-3">
+          {isDefault && (
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <Button variant="outline" disabled={isResetting}>
+                  {isResetting ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <>
+                      <RotateCcw className="h-4 w-4 mr-2" />
+                      Reset to Original
+                    </>
+                  )}
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Reset Default Template?</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    This will restore the default template to its original content.
+                    Any customizations you've made will be lost.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                  <AlertDialogAction onClick={handleReset}>
+                    Reset Template
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+          )}
           <Button variant="outline" onClick={() => router.push('/settings/agreement-templates')}>
             Cancel
           </Button>
-          <Button onClick={handleSave} disabled={isSaving}>
+          <Button onClick={handleSave} disabled={isSaving || !hasChanges}>
             {isSaving ? (
               <>
                 <Loader2 className="h-4 w-4 mr-2 animate-spin" />
@@ -135,22 +203,6 @@ export default function EditAgreementTemplatePage() {
         </div>
       </div>
 
-      {/* Template Name */}
-      <div className="px-6 py-3 border-b bg-muted/30">
-        <div className="flex items-center gap-4">
-          <Label htmlFor="template-name" className="text-sm font-medium whitespace-nowrap">
-            Template Name
-          </Label>
-          <Input
-            id="template-name"
-            value={templateName}
-            onChange={(e) => setTemplateName(e.target.value)}
-            placeholder="e.g., Standard Rental Agreement"
-            className="max-w-md"
-          />
-        </div>
-      </div>
-
       {/* Editor and Preview - Side by Side */}
       <div className="flex-1 grid grid-cols-2 min-h-0 overflow-hidden">
         {/* Editor */}
@@ -162,7 +214,7 @@ export default function EditAgreementTemplatePage() {
           <div className="flex-1 overflow-hidden">
             <TipTapEditor
               content={templateContent}
-              onChange={setTemplateContent}
+              onChange={handleContentChange}
               placeholder="Start typing your agreement template..."
             />
           </div>

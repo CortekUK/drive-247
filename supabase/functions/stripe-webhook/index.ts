@@ -145,20 +145,24 @@ serve(async (req) => {
             // Don't fail the webhook for notification errors
           }
         } else {
-          // Auto mode: Payment was captured, activate rental
-          console.log("Auto checkout completed, activating rental:", rentalId);
+          // Auto mode: Payment was captured, but rental stays Pending until admin approves
+          // Rental status = Pending (approval_status=pending, payment_status=fulfilled)
+          console.log("Auto checkout completed, updating payment_status to fulfilled:", rentalId);
 
-          // Update rental status to Active
-          const { error: rentalError } = await supabase
+          // Update rental payment_status to fulfilled (approval_status stays pending)
+          // Rental will only go Active when admin clicks Approve (approval_status = approved)
+          const { error: rentalUpdateError } = await supabase
             .from("rentals")
             .update({
-              status: "Active",
+              payment_status: "fulfilled",
               updated_at: new Date().toISOString(),
             })
             .eq("id", rentalId);
 
-          if (rentalError) {
-            console.error("Failed to update rental status:", rentalError);
+          if (rentalUpdateError) {
+            console.error("Failed to update rental payment_status:", rentalUpdateError);
+          } else {
+            console.log("Rental payment_status updated to fulfilled");
           }
 
           // Create payment record if it doesn't exist
@@ -190,12 +194,12 @@ serve(async (req) => {
                 apply_from_date: today,
                 method: "Card",
                 payment_type: "Payment",
-                status: "Pending", // Will be updated by apply-payment
-                remaining_amount: paymentAmount, // Will be reduced by apply-payment
-                verification_status: "auto_approved",
+                status: "Pending", // Will be updated when admin approves
+                remaining_amount: paymentAmount,
+                verification_status: "pending", // Changed: needs admin approval
                 stripe_checkout_session_id: session.id,
                 stripe_payment_intent_id: session.payment_intent as string,
-                capture_status: "captured",
+                capture_status: "captured", // Payment is captured, just needs approval
                 booking_source: "website",
               };
 
@@ -215,27 +219,65 @@ serve(async (req) => {
               } else {
                 console.log("Payment record created from webhook:", newPayment.id);
 
-                // Apply payment to charges using edge function
+                // Send booking pending notification for auto mode (same as manual mode)
                 try {
-                  const response = await fetch(
-                    `${Deno.env.get("SUPABASE_URL")}/functions/v1/apply-payment`,
-                    {
-                      method: "POST",
-                      headers: {
-                        "Content-Type": "application/json",
-                        Authorization: `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`,
-                      },
-                      body: JSON.stringify({ paymentId: newPayment.id }),
-                    }
-                  );
+                  const { data: rentalWithDetails } = await supabase
+                    .from("rentals")
+                    .select(`
+                      id,
+                      start_date,
+                      end_date,
+                      monthly_amount,
+                      tenant_id,
+                      customer:customers(id, name, email, phone),
+                      vehicle:vehicles(id, make, model, reg)
+                    `)
+                    .eq("id", rentalId)
+                    .single();
 
-                  if (response.ok) {
-                    console.log("Payment applied successfully");
-                  } else {
-                    console.error("Failed to apply payment:", await response.text());
+                  if (rentalWithDetails && rentalWithDetails.customer && rentalWithDetails.vehicle) {
+                    const vehicleName = rentalWithDetails.vehicle.make && rentalWithDetails.vehicle.model
+                      ? `${rentalWithDetails.vehicle.make} ${rentalWithDetails.vehicle.model}`
+                      : rentalWithDetails.vehicle.reg;
+
+                    const notificationData = {
+                      paymentId: newPayment.id,
+                      rentalId: rentalId,
+                      customerId: rentalWithDetails.customer.id,
+                      customerName: rentalWithDetails.customer.name,
+                      customerEmail: rentalWithDetails.customer.email,
+                      customerPhone: rentalWithDetails.customer.phone,
+                      vehicleName: vehicleName,
+                      vehicleReg: rentalWithDetails.vehicle.reg,
+                      pickupDate: new Date(rentalWithDetails.start_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
+                      returnDate: new Date(rentalWithDetails.end_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
+                      amount: rentalWithDetails.monthly_amount || paymentAmount,
+                      bookingRef: rentalId.substring(0, 8).toUpperCase(),
+                      paymentMode: 'auto', // Indicate this is auto mode
+                    };
+
+                    console.log("Sending booking pending notification for auto mode:", notificationData.bookingRef);
+
+                    const notifyResponse = await fetch(
+                      `${Deno.env.get("SUPABASE_URL")}/functions/v1/notify-booking-pending`,
+                      {
+                        method: "POST",
+                        headers: {
+                          "Content-Type": "application/json",
+                          Authorization: `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`,
+                        },
+                        body: JSON.stringify(notificationData),
+                      }
+                    );
+
+                    if (notifyResponse.ok) {
+                      console.log("Booking notification sent successfully");
+                    } else {
+                      console.error("Failed to send booking notification:", await notifyResponse.text());
+                    }
                   }
-                } catch (applyError) {
-                  console.error("Error calling apply-payment:", applyError);
+                } catch (notifyError) {
+                  console.error("Error sending booking notification:", notifyError);
                 }
               }
             }

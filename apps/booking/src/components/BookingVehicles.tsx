@@ -33,6 +33,7 @@ interface Vehicle {
   monthly_rent?: number;
   daily_rent?: number;
   weekly_rent?: number;
+  photo_url?: string | null;
   vehicle_photos?: VehiclePhoto[];
 }
 
@@ -210,9 +211,9 @@ const BookingVehicles = () => {
               {vehicles.map((vehicle) => (
                 <Card key={vehicle.id} className="overflow-hidden hover:shadow-glow transition-all">
                   <div className="aspect-[4/3] overflow-hidden bg-muted">
-                    {vehicle.vehicle_photos?.[0]?.photo_url ? (
+                    {vehicle.vehicle_photos?.[0]?.photo_url || vehicle.photo_url ? (
                       <img
-                        src={vehicle.vehicle_photos[0].photo_url}
+                        src={vehicle.vehicle_photos?.[0]?.photo_url || vehicle.photo_url || ''}
                         alt={`${vehicle.make} ${vehicle.model}`}
                         className="w-full h-full object-cover hover:scale-105 transition-transform duration-300"
                       />

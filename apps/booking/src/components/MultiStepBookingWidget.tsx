@@ -49,6 +49,7 @@ interface Vehicle {
   monthly_rent?: number | null;
   daily_rent?: number | null;
   weekly_rent?: number | null;
+  photo_url?: string | null;
   vehicle_photos?: VehiclePhoto[];
   description?: string | null;
 }
@@ -2696,8 +2697,18 @@ const MultiStepBookingWidget = () => {
                                   </>
                                 )}
                               </>
+                            ) : vehicle.photo_url ? (
+                              <img
+                                src={vehicle.photo_url}
+                                alt={vehicleName}
+                                className="w-full h-full object-cover"
+                                loading="lazy"
+                                onError={(e) => {
+                                  e.currentTarget.style.display = 'none';
+                                }}
+                              />
                             ) : null}
-                            <div className={`${vehicle.vehicle_photos && vehicle.vehicle_photos.length > 0 ? 'hidden' : 'flex'} items-center justify-center h-full w-full absolute inset-0`}>
+                            <div className={`${(vehicle.vehicle_photos && vehicle.vehicle_photos.length > 0) || vehicle.photo_url ? 'hidden' : 'flex'} items-center justify-center h-full w-full absolute inset-0`}>
                               <Car className="w-16 h-16 opacity-20 text-muted-foreground" />
                             </div>
 
@@ -2876,8 +2887,18 @@ const MultiStepBookingWidget = () => {
                               </>
                             )}
                           </>
+                        ) : vehicle.photo_url ? (
+                          <img
+                            src={vehicle.photo_url}
+                            alt={vehicleName}
+                            className="w-full h-full object-cover"
+                            loading="lazy"
+                            onError={(e) => {
+                              e.currentTarget.style.display = 'none';
+                            }}
+                          />
                         ) : null}
-                        <div className={`${vehicle.vehicle_photos && vehicle.vehicle_photos.length > 0 ? 'hidden' : 'flex'} flex-col items-center justify-center h-full w-full absolute inset-0`}>
+                        <div className={`${(vehicle.vehicle_photos && vehicle.vehicle_photos.length > 0) || vehicle.photo_url ? 'hidden' : 'flex'} flex-col items-center justify-center h-full w-full absolute inset-0`}>
                           <Car className={cn("w-16 h-16 mb-2 opacity-20", isRollsRoyce ? "text-primary" : "text-muted-foreground")} />
                         </div>
 
@@ -3004,9 +3025,9 @@ const MultiStepBookingWidget = () => {
                   {/* Selected Vehicle */}
                   <div className="flex gap-3">
                     <div className="w-16 h-16 rounded-md overflow-hidden bg-muted flex-shrink-0 relative">
-                      {selectedVehicle.vehicle_photos?.[0]?.photo_url ? (
+                      {selectedVehicle.vehicle_photos?.[0]?.photo_url || selectedVehicle.photo_url ? (
                         <img
-                          src={selectedVehicle.vehicle_photos[0].photo_url}
+                          src={selectedVehicle.vehicle_photos?.[0]?.photo_url || selectedVehicle.photo_url || ''}
                           alt={selectedVehicle.make && selectedVehicle.model ? `${selectedVehicle.make} ${selectedVehicle.model}` : selectedVehicle.reg}
                           className="w-full h-full object-cover"
                           loading="lazy"
@@ -3017,7 +3038,7 @@ const MultiStepBookingWidget = () => {
                           }}
                         />
                       ) : null}
-                      <div className={`${selectedVehicle.vehicle_photos?.[0]?.photo_url ? 'hidden' : 'flex'} w-full h-full items-center justify-center absolute inset-0`}>
+                      <div className={`${selectedVehicle.vehicle_photos?.[0]?.photo_url || selectedVehicle.photo_url ? 'hidden' : 'flex'} w-full h-full items-center justify-center absolute inset-0`}>
                         <Car className="w-6 h-6 text-muted-foreground opacity-30" />
                       </div>
                     </div>

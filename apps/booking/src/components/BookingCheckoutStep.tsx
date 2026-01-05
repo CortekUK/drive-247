@@ -450,7 +450,11 @@ export default function BookingCheckoutStep({
         console.log('⚠️ No verification session ID in formData');
       }
 
-      // Step 2: Create rental in portal DB with Pending status
+      // Step 2: Get booking mode FIRST (needed for rental creation)
+      const bookingMode = await getBookingMode();
+      console.log('📋 Booking mode:', bookingMode);
+
+      // Step 3: Create rental in portal DB with Pending status
       const rentalPeriodType = calculateRentalPeriodType();
       const grandTotal = calculateGrandTotal(); // Use grand total (includes taxes/fees) for rental amount
 
@@ -461,7 +465,10 @@ export default function BookingCheckoutStep({
         end_date: formData.dropoffDate,   // Already in YYYY-MM-DD format from step 1
         rental_period_type: rentalPeriodType,
         monthly_amount: grandTotal, // Store grand total (rental + taxes + fees + protection)
-        status: "Pending", // Set to Pending until payment succeeds
+        status: "Pending", // Derived from approval_status + payment_status
+        payment_mode: bookingMode, // Track which payment mode was used
+        approval_status: "pending", // Awaiting admin approval
+        payment_status: "pending", // Awaiting payment (will be updated by webhook)
         // Location data
         pickup_location: formData.pickupLocation || null,
         pickup_location_id: formData.pickupLocationId || null,
@@ -497,35 +504,9 @@ export default function BookingCheckoutStep({
         console.log('✅ First charge generated successfully');
       }
 
-      // Step 3: Check booking mode and conditionally update vehicle status
-      // In MANUAL mode: Keep vehicle as "Available" until admin approves
-      // In AUTO mode: Mark as "Rented" immediately (old behavior)
-      const bookingMode = await getBookingMode();
-      console.log('📋 Booking mode:', bookingMode);
-
-      if (bookingMode === 'auto') {
-        // AUTO mode: Update vehicle status to "Rented" immediately
-        let vehicleUpdateQuery = supabase
-          .from("vehicles")
-          .update({ status: "Rented" })
-          .eq("id", selectedVehicle.id);
-
-        if (tenant?.id) {
-          vehicleUpdateQuery = vehicleUpdateQuery.eq("tenant_id", tenant.id);
-        }
-
-        const { error: vehicleUpdateError } = await vehicleUpdateQuery;
-
-        if (vehicleUpdateError) {
-          console.error("Failed to update vehicle status:", vehicleUpdateError);
-          // Don't throw - continue with payment flow
-        } else {
-          console.log('✅ Vehicle marked as Rented (AUTO mode)');
-        }
-      } else {
-        // MANUAL mode: Keep vehicle Available until admin approves
-        console.log('⏳ Vehicle status unchanged (MANUAL mode - awaiting approval)');
-      }
+      // Step 4: Vehicle status - keep as Available until admin approves (both modes)
+      // Vehicle will only be marked as "Rented" when admin clicks Approve
+      console.log('⏳ Vehicle status unchanged - awaiting admin approval');
 
       // Step 4: Create invoice (with fallback to local if DB fails)
       let invoiceNotes = `Security deposit of $${depositAmount.toLocaleString()} will be held during the rental period.`;

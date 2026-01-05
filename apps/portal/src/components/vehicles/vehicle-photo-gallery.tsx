@@ -18,11 +18,13 @@ interface VehiclePhoto {
 interface VehiclePhotoGalleryProps {
   vehicleId: string;
   vehicleReg: string;
+  fallbackPhotoUrl?: string;
 }
 
 export const VehiclePhotoGallery = ({
   vehicleId,
   vehicleReg,
+  fallbackPhotoUrl,
 }: VehiclePhotoGalleryProps) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [uploadingCount, setUploadingCount] = useState(0);
@@ -256,6 +258,20 @@ export const VehiclePhotoGallery = ({
                 </Button>
               </div>
             ))}
+          </div>
+        ) : fallbackPhotoUrl ? (
+          <div className="flex justify-center">
+            <div className="relative w-64 h-48 bg-muted/30 rounded-lg border-2 border-muted-foreground/20 overflow-hidden">
+              <img
+                src={fallbackPhotoUrl}
+                alt={`${vehicleReg}`}
+                className="w-full h-full object-cover"
+                onError={(e) => {
+                  console.error("Fallback image load error:", e);
+                  e.currentTarget.style.display = "none";
+                }}
+              />
+            </div>
           </div>
         ) : (
           <div className="flex justify-center">

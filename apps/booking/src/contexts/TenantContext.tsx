@@ -177,6 +177,7 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
 
             if (defaultTenant && !defaultError) {
               console.log(`[TenantContext] Loaded default tenant: ${defaultTenant.company_name} (${defaultTenant.id})`);
+              console.log('[TenantContext] tenant_id:', defaultTenant.id);
               setTenantSlug(defaultSlug);
               setTenant(defaultTenant as Tenant);
               setLoading(false);
@@ -269,6 +270,7 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
       }
 
       console.log(`[TenantContext] Loaded tenant: ${data.company_name} (${data.id})`);
+      console.log('[TenantContext] tenant_id:', data.id);
       setTenant(data as Tenant);
       setError(null);
     } catch (err) {

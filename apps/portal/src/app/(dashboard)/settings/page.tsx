@@ -14,7 +14,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
-import { Settings as SettingsIcon, Building2, Bell, Zap, Upload, Save, Loader2, Database, AlertTriangle, Trash2, CreditCard, Palette, Link2, CheckCircle2, AlertCircle, ExternalLink, MapPin, FileText, Car, Mail } from 'lucide-react';
+import { Settings as SettingsIcon, Building2, Bell, Zap, Upload, Save, Loader2, Database, AlertTriangle, Trash2, CreditCard, Palette, Link2, CheckCircle2, AlertCircle, ExternalLink, MapPin, FileText, Car, Mail, ShieldX } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
 import { useOrgSettings } from '@/hooks/use-org-settings';
 import { useTenantBranding } from '@/hooks/use-tenant-branding';
@@ -81,7 +81,7 @@ const Settings = () => {
   // Handle URL tab parameter
   useEffect(() => {
     const tabParam = searchParams.get('tab');
-    if (tabParam && ['branding', 'reminders', 'payments', 'stripe-connect', 'locations', 'agreement', 'rental'].includes(tabParam)) {
+    if (tabParam && ['branding', 'reminders', 'payments', 'stripe-connect', 'locations', 'agreement', 'rental', 'blacklist'].includes(tabParam)) {
       setActiveTab(tabParam);
     }
   }, [searchParams]);
@@ -388,7 +388,7 @@ const Settings = () => {
 
       {/* Settings Tabs */}
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-        <TabsList className="grid w-full grid-cols-8">
+        <TabsList className="grid w-full grid-cols-9">
           <TabsTrigger value="branding" className="flex items-center gap-2">
             <Palette className="h-4 w-4" />
             <span className="hidden sm:inline">Branding</span>
@@ -420,6 +420,10 @@ const Settings = () => {
           <TabsTrigger value="emails" className="flex items-center gap-2">
             <Mail className="h-4 w-4" />
             <span className="hidden sm:inline">Emails</span>
+          </TabsTrigger>
+          <TabsTrigger value="blacklist" className="flex items-center gap-2">
+            <ShieldX className="h-4 w-4" />
+            <span className="hidden sm:inline">Blacklist</span>
           </TabsTrigger>
         </TabsList>
 
@@ -1291,6 +1295,34 @@ const Settings = () => {
               >
                 <Mail className="h-4 w-4" />
                 Manage Email Templates
+              </Button>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* Global Blacklist Tab */}
+        <TabsContent value="blacklist" className="space-y-6">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <ShieldX className="h-5 w-5 text-primary" />
+                Global Blacklist
+              </CardTitle>
+              <CardDescription>
+                View customers blocked by multiple rental companies
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <p className="text-sm text-muted-foreground mb-4">
+                When a customer is blocked by 3 or more rental companies, they are automatically added to the global blacklist.
+                Blacklisted customers cannot make bookings with any rental company on the platform.
+              </p>
+              <Button
+                onClick={() => router.push('/settings/blacklist')}
+                className="flex items-center gap-2"
+              >
+                <ShieldX className="h-4 w-4" />
+                View Global Blacklist
               </Button>
             </CardContent>
           </Card>

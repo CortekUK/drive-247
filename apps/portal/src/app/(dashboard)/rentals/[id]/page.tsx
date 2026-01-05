@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { FileText, ArrowLeft, DollarSign, Plus, X, Send, Download, Ban, Check, AlertTriangle, Loader2, Shield, CheckCircle, XCircle, ExternalLink, UserCheck, IdCard, Camera, FileSignature, Clock, Mail, RefreshCw, Trash2 } from "lucide-react";
 import { AddPaymentDialog } from "@/components/shared/dialogs/add-payment-dialog";
 import { useToast } from "@/hooks/use-toast";
@@ -17,7 +18,6 @@ import { useTenant } from "@/contexts/TenantContext";
 import { useRentalTotals } from "@/hooks/use-rental-ledger-data";
 import { useRentalInitialFee } from "@/hooks/use-rental-initial-fee";
 import { RentalLedger } from "@/components/rentals/rental-ledger";
-import { ComplianceStatusPanel } from "@/components/rentals/compliance-status-panel";
 import { KeyHandoverSection } from "@/components/rentals/key-handover-section";
 import { CancelRentalDialog } from "@/components/shared/dialogs/cancel-rental-dialog";
 import RejectionDialog from "@/components/rentals/rejection-dialog";
@@ -33,9 +33,13 @@ interface Rental {
   document_status?: string;
   signed_document_id?: string;
   insurance_status?: string;
+  payment_mode?: string;
+  approval_status?: string;
+  payment_status?: string;
+  cancellation_reason?: string;
   customer_id?: string;
   customers: { id: string; name: string; email?: string; phone?: string | null };
-  vehicles: { id: string; reg: string; make: string; model: string };
+  vehicles: { id: string; reg: string; make: string; model: string; status?: string };
 }
 
 const RentalDetail = () => {
@@ -50,6 +54,12 @@ const RentalDetail = () => {
   const [checkingDocuSignStatus, setCheckingDocuSignStatus] = useState(false);
   const [showCancelDialog, setShowCancelDialog] = useState(false);
   const [showRejectionDialog, setShowRejectionDialog] = useState(false);
+  const [showApproveDialog, setShowApproveDialog] = useState(false);
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const [showCloseDialog, setShowCloseDialog] = useState(false);
+  const [isApproving, setIsApproving] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [isClosing, setIsClosing] = useState(false);
   const [loadingDocuSignDoc, setLoadingDocuSignDoc] = useState(false);
 
 
@@ -63,7 +73,7 @@ const RentalDetail = () => {
         .select(`
           *,
           customers!rentals_customer_id_fkey(id, name, email, phone),
-          vehicles!rentals_vehicle_id_fkey(id, reg, make, model)
+          vehicles!rentals_vehicle_id_fkey(id, reg, make, model, status)
         `)
         .eq("id", id)
         .eq("tenant_id", tenant.id)
@@ -119,6 +129,28 @@ const RentalDetail = () => {
     },
     enabled: !!id && !!tenant?.id,
   });
+
+  // Fetch key handover status for approval check
+  const { data: keyHandoverStatus } = useQuery({
+    queryKey: ["key-handover-status", id],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("rental_key_handovers")
+        .select("id, handover_type, handed_at")
+        .eq("rental_id", id)
+        .eq("handover_type", "giving")
+        .maybeSingle();
+
+      if (error) {
+        console.error("Error fetching key handover:", error);
+        return null;
+      }
+      return data;
+    },
+    enabled: !!id,
+  });
+
+  const isKeyHandoverCompleted = !!keyHandoverStatus?.handed_at;
 
   // Fetch signed document if available
   const { data: signedDocument } = useQuery({
@@ -202,13 +234,11 @@ const RentalDetail = () => {
     enabled: !!id && !!tenant?.id,
   });
 
-  // Fetch identity verification for this customer
+  // Fetch identity verification for this customer (by customer_id or by email)
   const { data: identityVerification, isLoading: isLoadingVerification } = useQuery({
-    queryKey: ["customer-identity-verification", rental?.customers?.id, tenant?.id],
+    queryKey: ["customer-identity-verification", rental?.customers?.id, rental?.customers?.email, tenant?.id],
     queryFn: async () => {
       if (!rental?.customers?.id) return null;
-
-      console.log('Fetching identity verification for customer:', rental.customers.id);
 
       // First try to find by customer_id
       const { data, error } = await supabase
@@ -221,116 +251,53 @@ const RentalDetail = () => {
 
       if (error) {
         console.error("Error fetching identity verification:", error);
-        return null;
       }
 
       if (data) {
-        console.log('Found identity verification by customer_id:', data.id, 'status:', data.review_result);
         return data;
       }
 
-      console.log('No verification by customer_id, checking ALL unlinked records...');
+      // Fallback: look by customer email if no verification linked by customer_id
+      if (rental.customers?.email) {
+        const customerEmail = rental.customers.email.toLowerCase().trim();
+        const { data: emailData, error: emailError } = await supabase
+          .from("identity_verifications")
+          .select("*")
+          .eq("customer_email", customerEmail)
+          .is("customer_id", null)
+          .order("created_at", { ascending: false })
+          .limit(1)
+          .maybeSingle();
 
-      // Check ALL unlinked verifications (might not have tenant_id either)
-      const { data: unlinkedData } = await supabase
-        .from("identity_verifications")
-        .select("*")
-        .is("customer_id", null)
-        .order("created_at", { ascending: false })
-        .limit(10);
-
-      if (unlinkedData && unlinkedData.length > 0) {
-        console.log('Found unlinked verifications:', unlinkedData.length);
-        // Try to match by name if available
-        const customerName = rental?.customers?.name?.toLowerCase() || '';
-        const match = unlinkedData.find((v: any) => {
-          const veriffName = `${v.first_name || ''} ${v.last_name || ''}`.toLowerCase().trim();
-          return veriffName && customerName && (
-            customerName.includes(veriffName) ||
-            veriffName.includes(customerName) ||
-            (v.first_name && customerName.includes(v.first_name.toLowerCase())) ||
-            (v.last_name && customerName.includes(v.last_name.toLowerCase()))
-          );
-        });
-
-        if (match) {
-          console.log('Found matching unlinked verification by name:', match.id);
-          return { ...match, needsLinking: true };
+        if (emailError) {
+          console.error("Error fetching identity verification by email:", emailError);
+          return null;
         }
 
-        // Return all unlinked for selection
-        console.log('No name match, returning first unlinked for review');
-        return { ...unlinkedData[0], needsLinking: true, allUnlinked: unlinkedData };
+        if (emailData) {
+          // Auto-link this verification to the customer
+          await supabase
+            .from("identity_verifications")
+            .update({ customer_id: rental.customers.id, tenant_id: tenant?.id })
+            .eq("id", emailData.id);
+
+          // Update customer's verification status
+          const status = emailData.review_result === 'GREEN' ? 'verified' :
+                         emailData.review_result === 'RED' ? 'rejected' : 'pending';
+          await supabase
+            .from("customers")
+            .update({ identity_verification_status: status })
+            .eq("id", rental.customers.id);
+
+          return { ...emailData, customer_id: rental.customers.id };
+        }
       }
 
-      console.log('No identity verification found for customer');
       return null;
     },
     enabled: !!rental?.customers?.id,
   });
 
-  // Fetch all recent unlinked verifications for manual linking
-  const { data: unlinkedVerifications } = useQuery({
-    queryKey: ["unlinked-verifications", tenant?.id],
-    queryFn: async () => {
-      const { data } = await supabase
-        .from("identity_verifications")
-        .select("*")
-        .is("customer_id", null)
-        .order("created_at", { ascending: false })
-        .limit(10);
-      return data || [];
-    },
-    enabled: !identityVerification && !!rental?.customers?.id,
-  });
-
-  // Mutation to link a verification to this customer
-  const linkVerificationMutation = useMutation({
-    mutationFn: async (verificationId: string) => {
-      const { error } = await supabase
-        .from("identity_verifications")
-        .update({
-          customer_id: rental?.customers?.id,
-          tenant_id: tenant?.id
-        })
-        .eq("id", verificationId);
-
-      if (error) throw error;
-
-      // Also update customer's verification status
-      const { data: verif } = await supabase
-        .from("identity_verifications")
-        .select("review_result")
-        .eq("id", verificationId)
-        .single();
-
-      if (verif) {
-        const status = verif.review_result === 'GREEN' ? 'verified' :
-          verif.review_result === 'RED' ? 'rejected' : 'pending';
-        await supabase
-          .from("customers")
-          .update({ identity_verification_status: status })
-          .eq("id", rental?.customers?.id);
-      }
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["customer-identity-verification"] });
-      queryClient.invalidateQueries({ queryKey: ["unlinked-verifications"] });
-      queryClient.invalidateQueries({ queryKey: ["rental", id] });
-      toast({
-        title: "Verification Linked",
-        description: "Identity verification has been linked to this customer.",
-      });
-    },
-    onError: (error: any) => {
-      console.error("Link verification error:", error);
-      toast({
-        title: "Error",
-        description: "Failed to link verification: " + error.message,
-        variant: "destructive",
-      });
-    },
-  });
 
   // Mutation for approving insurance document
   const approveInsuranceMutation = useMutation({
@@ -632,133 +599,73 @@ const RentalDetail = () => {
           </div>
         </div>
         <div className="flex gap-2">
-          {displayStatus === 'Active' && (
+          {/* Pending Rental - Show Approve, Reject, Delete buttons */}
+          {rental.status === 'Pending' && (
+            <>
+              <Button
+                variant="default"
+                className="bg-green-600 hover:bg-green-700"
+                onClick={() => setShowApproveDialog(true)}
+              >
+                <Check className="h-4 w-4 mr-2" />
+                Approve
+              </Button>
+              <Button
+                variant="destructive"
+                onClick={() => setShowRejectionDialog(true)}
+              >
+                <Ban className="h-4 w-4 mr-2" />
+                Reject
+              </Button>
+              <Button
+                variant="outline"
+                className="text-destructive"
+                onClick={() => setShowDeleteDialog(true)}
+              >
+                <Trash2 className="h-4 w-4 mr-2" />
+                Delete
+              </Button>
+            </>
+          )}
+
+          {/* Active Rental - Show Add Payment, Add Fine, Close, Cancel buttons */}
+          {rental.status === 'Active' && (
             <>
               <Button variant="outline" onClick={() => setShowAddPayment(true)}>
                 <Plus className="h-4 w-4 mr-2" />
                 Add Payment
               </Button>
+              <Button variant="outline" onClick={() => router.push(`/fines/new?rental_id=${rental.id}&customer_id=${rental.customers?.id}&vehicle_id=${rental.vehicles?.id}`)}>
+                <Plus className="h-4 w-4 mr-2" />
+                Add Fine
+              </Button>
               <Button
                 variant="outline"
-                onClick={async () => {
-                  try {
-                    let closeRentalQuery = supabase
-                      .from("rentals")
-                      .update({ status: "Closed" })
-                      .eq("id", id);
-
-                    if (tenant?.id) {
-                      closeRentalQuery = closeRentalQuery.eq("tenant_id", tenant.id);
-                    }
-
-                    await closeRentalQuery;
-
-                    let updateVehicleQuery = supabase
-                      .from("vehicles")
-                      .update({ status: "Available" })
-                      .eq("id", rental.vehicles?.id);
-
-                    if (tenant?.id) {
-                      updateVehicleQuery = updateVehicleQuery.eq("tenant_id", tenant.id);
-                    }
-
-                    await updateVehicleQuery;
-
-                    toast({
-                      title: "Rental Closed",
-                      description: "Rental has been closed and vehicle is now available.",
-                    });
-
-                    queryClient.invalidateQueries({ queryKey: ["rental", id] });
-                    queryClient.invalidateQueries({ queryKey: ["rentals-list"] });
-                    queryClient.invalidateQueries({ queryKey: ["vehicles-list"] });
-                  } catch (error) {
-                    toast({
-                      title: "Error",
-                      description: "Failed to close rental.",
-                      variant: "destructive",
-                    });
-                  }
-                }}
+                onClick={() => setShowCloseDialog(true)}
               >
                 <X className="h-4 w-4 mr-2" />
-                Close Rental
+                Close
               </Button>
               <Button
                 variant="destructive"
                 onClick={() => setShowCancelDialog(true)}
               >
                 <Ban className="h-4 w-4 mr-2" />
-                Cancel & Refund
+                Cancel
               </Button>
             </>
           )}
-          {(displayStatus === 'Pending' || displayStatus === 'Pending Approval') && (
-            <>
-              {payment?.capture_status === 'requires_capture' && (
-                <Button
-                  variant="default"
-                  onClick={async () => {
-                    try {
-                      // Capture the payment
-                      const { error: captureError } = await supabase.functions.invoke('capture-payment', {
-                        body: {
-                          paymentId: payment.id,
-                          rentalId: id,
-                        }
-                      });
 
-                      if (captureError) throw captureError;
-
-                      // Update rental status to Active
-                      await supabase
-                        .from('rentals')
-                        .update({ status: 'Active' })
-                        .eq('id', id);
-
-                      // Send approval email
-                      await supabase.functions.invoke('notify-booking-approved', {
-                        body: {
-                          customerEmail: rental.customers?.email,
-                          customerName: rental.customers?.name,
-                          vehicleName: `${rental.vehicles?.make} ${rental.vehicles?.model}`,
-                          bookingRef: id.substring(0, 8).toUpperCase(),
-                          pickupDate: rental.start_date,
-                          returnDate: rental.end_date,
-                        }
-                      }).catch(err => {
-                        console.warn('Failed to send approval email:', err);
-                      });
-
-                      toast({
-                        title: "Booking Approved",
-                        description: "Payment captured and customer notified",
-                      });
-
-                      queryClient.invalidateQueries({ queryKey: ['rental', id] });
-                      queryClient.invalidateQueries({ queryKey: ['rentals-list'] });
-                      queryClient.invalidateQueries({ queryKey: ['rental-payment', id] });
-                    } catch (error: any) {
-                      toast({
-                        title: "Error",
-                        description: error.message || "Failed to approve booking",
-                        variant: "destructive",
-                      });
-                    }
-                  }}
-                >
-                  <Check className="h-4 w-4 mr-2" />
-                  Approve Booking
-                </Button>
-              )}
-              <Button
-                variant="destructive"
-                onClick={() => setShowRejectionDialog(true)}
-              >
-                <Ban className="h-4 w-4 mr-2" />
-                Reject Booking
-              </Button>
-            </>
+          {/* Closed/Cancelled Rental - Show Delete button */}
+          {(rental.status === 'Closed' || rental.status === 'Cancelled') && (
+            <Button
+              variant="outline"
+              className="text-destructive"
+              onClick={() => setShowDeleteDialog(true)}
+            >
+              <Trash2 className="h-4 w-4 mr-2" />
+              Delete
+            </Button>
           )}
         </div>
       </div>
@@ -798,7 +705,7 @@ const RentalDetail = () => {
           </CardContent>
         </Card>
 
-      </div>
+        </div>
 
       {/* Rental Details */}
       <Card>
@@ -808,49 +715,130 @@ const RentalDetail = () => {
             Rental Information
           </CardTitle>
         </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-            <div>
-              <p className="text-sm text-muted-foreground">Customer</p>
-              <p className="font-medium">{rental.customers?.name}</p>
+        <CardContent className="space-y-6">
+          {/* Customer & Vehicle Info */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div className="bg-muted/30 rounded-lg p-4 space-y-1">
+              <p className="text-xs uppercase tracking-wider text-muted-foreground">Customer</p>
+              <p className="text-lg font-semibold">{rental.customers?.name}</p>
+              {identityVerification?.date_of_birth && (
+                <p className="text-sm text-muted-foreground">
+                  DOB: {new Date(identityVerification.date_of_birth).toLocaleDateString()} ({Math.floor((Date.now() - new Date(identityVerification.date_of_birth).getTime()) / (365.25 * 24 * 60 * 60 * 1000))} yrs)
+                </p>
+              )}
             </div>
-            <div>
-              <p className="text-sm text-muted-foreground">Date of Birth</p>
-              <p className="font-medium">
-                {identityVerification?.date_of_birth
-                  ? `${new Date(identityVerification.date_of_birth).toLocaleDateString()} (${Math.floor((Date.now() - new Date(identityVerification.date_of_birth).getTime()) / (365.25 * 24 * 60 * 60 * 1000))} yrs)`
-                  : 'No DOB'}
-              </p>
+            <div className="bg-muted/30 rounded-lg p-4 space-y-1">
+              <p className="text-xs uppercase tracking-wider text-muted-foreground">Vehicle</p>
+              <p className="text-lg font-semibold">{rental.vehicles?.reg}</p>
+              <p className="text-sm text-muted-foreground">{rental.vehicles?.make} {rental.vehicles?.model}</p>
             </div>
-            <div>
-              <p className="text-sm text-muted-foreground">Vehicle</p>
-              <p className="font-medium">
-                {rental.vehicles?.reg} ({rental.vehicles?.make} {rental.vehicles?.model})
-              </p>
+            <div className="bg-muted/30 rounded-lg p-4 space-y-1">
+              <p className="text-xs uppercase tracking-wider text-muted-foreground">{rental.rental_period_type || 'Monthly'} Amount</p>
+              <p className="text-lg font-semibold">${Number(rental.monthly_amount).toLocaleString()}</p>
+              {initialFee && (
+                <p className="text-sm text-muted-foreground">Initial Fee: ${Number(initialFee.amount).toLocaleString()}</p>
+              )}
             </div>
-            <div>
-              <p className="text-sm text-muted-foreground">Start Date</p>
-              <p className="font-medium">{new Date(rental.start_date).toLocaleDateString()}</p>
+          </div>
+
+          {/* Rental Period */}
+          <div className="border rounded-lg p-4">
+            <p className="text-xs uppercase tracking-wider text-muted-foreground mb-3">Rental Period</p>
+            <div className="grid grid-cols-3 gap-6">
+              <div>
+                <p className="text-sm text-muted-foreground">Start Date</p>
+                <p className="text-base font-medium">{new Date(rental.start_date).toLocaleDateString()}</p>
+              </div>
+              <div>
+                <p className="text-sm text-muted-foreground">End Date</p>
+                <p className="text-base font-medium">{new Date(rental.end_date).toLocaleDateString()}</p>
+              </div>
+              <div>
+                <p className="text-sm text-muted-foreground">Period Type</p>
+                <Badge variant="outline" className="mt-1">{rental.rental_period_type || 'Monthly'}</Badge>
+              </div>
             </div>
-            <div>
-              <p className="text-sm text-muted-foreground">End Date</p>
-              <p className="font-medium">{new Date(rental.end_date).toLocaleDateString()}</p>
-            </div>
-            <div>
-              <p className="text-sm text-muted-foreground">Period Type</p>
-              <Badge variant="outline" className="font-medium">
-                {rental.rental_period_type || 'Monthly'}
-              </Badge>
-            </div>
-            <div>
-              <p className="text-sm text-muted-foreground">{rental.rental_period_type || 'Monthly'} Amount</p>
-              <p className="font-medium">${Number(rental.monthly_amount).toLocaleString()}</p>
-            </div>
-            <div>
-              <p className="text-sm text-muted-foreground">Initial Fee</p>
-              <p className="font-medium">
-                {initialFee ? `$${Number(initialFee.amount).toLocaleString()}` : 'No Initial Fee'}
-              </p>
+          </div>
+
+          {/* Status Overview */}
+          <div className="border rounded-lg p-4">
+            <p className="text-xs uppercase tracking-wider text-muted-foreground mb-3">Status Overview</p>
+            <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+              <div className="text-center p-3 bg-muted/20 rounded-lg">
+                <p className="text-xs text-muted-foreground mb-2">Rental</p>
+                <Badge
+                  variant="outline"
+                  className={
+                    rental.status === 'Active'
+                      ? 'bg-emerald-950/50 text-emerald-300 border-emerald-800'
+                      : rental.status === 'Closed'
+                      ? 'bg-slate-800/50 text-slate-300 border-slate-700'
+                      : rental.status === 'Cancelled'
+                      ? 'bg-red-950/50 text-red-300 border-red-800'
+                      : 'bg-amber-950/50 text-amber-300 border-amber-800'
+                  }
+                >
+                  {rental.status}
+                </Badge>
+              </div>
+              <div className="text-center p-3 bg-muted/20 rounded-lg">
+                <p className="text-xs text-muted-foreground mb-2">Approval</p>
+                <Badge
+                  variant="outline"
+                  className={
+                    rental.approval_status === 'approved'
+                      ? 'bg-emerald-950/50 text-emerald-300 border-emerald-800'
+                      : rental.approval_status === 'rejected'
+                      ? 'bg-red-950/50 text-red-300 border-red-800'
+                      : 'bg-amber-950/50 text-amber-300 border-amber-800'
+                  }
+                >
+                  {rental.approval_status === 'approved' ? 'Approved' : rental.approval_status === 'rejected' ? 'Rejected' : 'Pending'}
+                </Badge>
+              </div>
+              <div className="text-center p-3 bg-muted/20 rounded-lg">
+                <p className="text-xs text-muted-foreground mb-2">Payment</p>
+                <Badge
+                  variant="outline"
+                  className={
+                    rental.payment_status === 'fulfilled'
+                      ? 'bg-emerald-950/50 text-emerald-300 border-emerald-800'
+                      : rental.payment_status === 'refunded'
+                      ? 'bg-orange-950/50 text-orange-300 border-orange-800'
+                      : rental.payment_status === 'failed'
+                      ? 'bg-red-950/50 text-red-300 border-red-800'
+                      : 'bg-amber-950/50 text-amber-300 border-amber-800'
+                  }
+                >
+                  {rental.payment_status === 'fulfilled' ? 'Fulfilled' : rental.payment_status === 'refunded' ? 'Refunded' : rental.payment_status === 'failed' ? 'Failed' : 'Pending'}
+                </Badge>
+              </div>
+              <div className="text-center p-3 bg-muted/20 rounded-lg">
+                <p className="text-xs text-muted-foreground mb-2">Vehicle</p>
+                <Badge
+                  variant="outline"
+                  className={
+                    rental.vehicles?.status === 'Available'
+                      ? 'bg-emerald-950/50 text-emerald-300 border-emerald-800'
+                      : rental.vehicles?.status === 'Rented'
+                      ? 'bg-sky-950/50 text-sky-300 border-sky-800'
+                      : 'bg-slate-800/50 text-slate-300 border-slate-700'
+                  }
+                >
+                  {rental.vehicles?.status || 'Unknown'}
+                </Badge>
+              </div>
+              <div className="text-center p-3 bg-muted/20 rounded-lg">
+                <p className="text-xs text-muted-foreground mb-2">Payment Mode</p>
+                <Badge
+                  variant="outline"
+                  className={rental.payment_mode === 'auto'
+                    ? 'bg-sky-950/50 text-sky-300 border-sky-800'
+                    : 'bg-slate-800/50 text-slate-300 border-slate-700'}
+                >
+                  {rental.payment_mode === 'auto' ? 'Auto' : 'Manual'}
+                </Badge>
+              </div>
             </div>
           </div>
         </CardContent>
@@ -898,10 +886,10 @@ const RentalDetail = () => {
                 {rental.document_status === 'signed' || rental.signed_document_id
                   ? 'Agreement has been signed by customer'
                   : rental.document_status === 'sent'
-                    ? 'Waiting for customer to sign'
-                    : rental.document_status === 'viewed'
-                      ? 'Customer has viewed the agreement'
-                      : 'Agreement has not been sent yet'}
+                  ? 'Waiting for customer to sign'
+                  : rental.document_status === 'viewed'
+                  ? 'Customer has viewed the agreement'
+                  : 'Agreement has not been sent yet'}
               </span>
             </div>
 
@@ -1040,163 +1028,210 @@ const RentalDetail = () => {
           <div className="flex items-center justify-between">
             <p className="text-sm text-muted-foreground">Upload customer's insurance documents for verification</p>
             <Button
-              variant="outline"
-              size="sm"
-              onClick={() => {
-                const input = document.createElement('input');
-                input.type = 'file';
-                input.accept = 'image/*,.pdf';
-                input.onchange = async (e) => {
-                  const file = (e.target as HTMLInputElement).files?.[0];
-                  if (!file) return;
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    const input = document.createElement('input');
+                    input.type = 'file';
+                    input.accept = 'image/*,.pdf';
+                    input.onchange = async (e) => {
+                      const file = (e.target as HTMLInputElement).files?.[0];
+                      if (!file) return;
 
-                  try {
-                    toast({ title: "Uploading...", description: "Uploading insurance document" });
+                      try {
+                        toast({ title: "Uploading...", description: "Uploading insurance document" });
 
-                    const fileName = `${rental.customer_id}/${Date.now()}_${file.name}`;
-                    const { error: uploadError } = await supabase.storage
-                      .from('customer-documents')
-                      .upload(fileName, file);
+                        const fileName = `${rental.customer_id}/${Date.now()}_${file.name}`;
+                        const { error: uploadError } = await supabase.storage
+                          .from('customer-documents')
+                          .upload(fileName, file);
 
-                    if (uploadError) throw uploadError;
+                        if (uploadError) throw uploadError;
 
-                    const { data: docData, error: docError } = await supabase
-                      .from('customer_documents')
-                      .insert({
-                        customer_id: rental.customer_id,
-                        rental_id: id,
-                        document_type: 'Insurance Certificate',
-                        document_name: file.name,
-                        file_name: file.name,
-                        file_url: fileName,
-                        status: 'Pending',
-                        ai_scan_status: 'pending',
-                        tenant_id: tenant?.id,
-                      })
-                      .select()
-                      .single();
+                        const { data: docData, error: docError } = await supabase
+                          .from('customer_documents')
+                          .insert({
+                            customer_id: rental.customer_id,
+                            rental_id: id,
+                            document_type: 'Insurance Certificate',
+                            document_name: file.name,
+                            file_name: file.name,
+                            file_url: fileName,
+                            status: 'Pending',
+                            ai_scan_status: 'pending',
+                            tenant_id: tenant?.id,
+                          })
+                          .select()
+                          .single();
 
-                    if (docError) throw docError;
+                        if (docError) throw docError;
 
-                    // Trigger AI scan with documentId and fileUrl
-                    supabase.functions.invoke('scan-insurance-document', {
-                      body: { documentId: docData.id, fileUrl: fileName }
-                    });
+                        // Trigger AI scan with documentId and fileUrl
+                        supabase.functions.invoke('scan-insurance-document', {
+                          body: { documentId: docData.id, fileUrl: fileName }
+                        });
 
-                    toast({ title: "Success", description: "Insurance document uploaded and AI scan initiated" });
-                    queryClient.invalidateQueries({ queryKey: ["rental-insurance-docs", id] });
-                  } catch (error: any) {
-                    toast({
-                      title: "Upload Failed",
-                      description: error.message || "Failed to upload document",
-                      variant: "destructive"
-                    });
-                  }
-                };
-                input.click();
-              }}
-            >
-              <Plus className="h-4 w-4 mr-1" />
-              Upload Document
-            </Button>
+                        toast({ title: "Success", description: "Insurance document uploaded and AI scan initiated" });
+                        queryClient.invalidateQueries({ queryKey: ["rental-insurance-docs", id] });
+                      } catch (error: any) {
+                        toast({
+                          title: "Upload Failed",
+                          description: error.message || "Failed to upload document",
+                          variant: "destructive"
+                        });
+                      }
+                    };
+                    input.click();
+                  }}
+                >
+                  <Plus className="h-4 w-4 mr-1" />
+                  Upload Document
+                </Button>
           </div>
 
           {/* Document List */}
-          {insuranceDocuments && insuranceDocuments.length > 0 ? (
-            <div className="space-y-4">
-              {insuranceDocuments.map((doc: any) => {
-                const validationScore = doc.ai_validation_score || 0;
-                const extractedData = doc.ai_extracted_data || {};
+            {insuranceDocuments && insuranceDocuments.length > 0 ? (
+              <div className="space-y-4">
+                {insuranceDocuments.map((doc: any) => {
+                  const validationScore = doc.ai_validation_score || 0;
+                  const extractedData = doc.ai_extracted_data || {};
 
-                const getScoreBadge = (score: number) => {
-                  if (score >= 0.7) {
-                    return <Badge className="bg-green-600">Valid ({(score * 100).toFixed(0)}%)</Badge>;
-                  } else if (score >= 0.4) {
-                    return <Badge className="bg-yellow-600">Review Required ({(score * 100).toFixed(0)}%)</Badge>;
-                  } else {
-                    return <Badge className="bg-orange-600">Low Confidence ({(score * 100).toFixed(0)}%)</Badge>;
-                  }
-                };
+                  const getScoreColor = (score: number) => {
+                    if (score >= 0.7) return 'green';
+                    if (score >= 0.4) return 'yellow';
+                    return 'red';
+                  };
 
-                return (
-                  <div key={doc.id} className={`border rounded-lg p-4 space-y-3 ${doc.isUnlinked ? 'border-yellow-500/50 bg-yellow-500/5' : ''}`}>
-                    {/* Unlinked Warning */}
-                    {doc.isUnlinked && (
-                      <Alert className="mb-3 border-yellow-500/50 bg-yellow-500/10">
-                        <AlertTriangle className="h-4 w-4 text-yellow-600" />
-                        <AlertDescription className="text-sm">
-                          This document is not linked to any rental. Click "Link to Rental" to associate it with this booking.
-                        </AlertDescription>
-                      </Alert>
-                    )}
-                    <div className="flex items-start justify-between">
-                      <div className="flex-1">
-                        <div className="flex items-center gap-2 mb-2">
+                  const getScoreLabel = (score: number) => {
+                    if (score >= 0.7) return 'Valid Document';
+                    if (score >= 0.4) return 'Review Required';
+                    return 'Low Confidence';
+                  };
+
+                  const scoreColor = getScoreColor(validationScore);
+
+                  return (
+                    <div key={doc.id} className={`border rounded-lg p-4 space-y-3 ${doc.isUnlinked ? 'border-yellow-500/50 bg-yellow-500/5' : ''}`}>
+                      {/* Unlinked Warning */}
+                      {doc.isUnlinked && (
+                        <Alert className="mb-3 border-yellow-500/50 bg-yellow-500/10">
+                          <AlertTriangle className="h-4 w-4 text-yellow-600" />
+                          <AlertDescription className="text-sm">
+                            This document is not linked to any rental. Click "Link to Rental" to associate it with this booking.
+                          </AlertDescription>
+                        </Alert>
+                      )}
+
+                      {/* Document Info Row */}
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
                           <FileText className="h-4 w-4 text-muted-foreground" />
                           <span className="font-medium">{doc.file_name || doc.document_name}</span>
                           {doc.isUnlinked && (
                             <Badge variant="outline" className="text-yellow-600 border-yellow-500">Unlinked</Badge>
                           )}
                         </div>
-                        <div className="text-sm text-muted-foreground">
+                        <span className="text-sm text-muted-foreground">
                           Uploaded: {doc.uploaded_at ? new Date(doc.uploaded_at).toLocaleDateString() : 'N/A'}
+                        </span>
+                      </div>
+
+                      {/* Validation Score Card - similar to Face Match Score */}
+                      {doc.ai_scan_status === 'completed' && doc.ai_validation_score !== null && (
+                        <div className="border border-border rounded-lg p-4 bg-card">
+                          <div className="flex items-center justify-between mb-3">
+                            <div className="flex items-center gap-3">
+                              <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${
+                                scoreColor === 'green' ? 'bg-green-500/10' :
+                                scoreColor === 'yellow' ? 'bg-yellow-500/10' : 'bg-red-500/10'
+                              }`}>
+                                <Shield className={`h-5 w-5 ${
+                                  scoreColor === 'green' ? 'text-green-500' :
+                                  scoreColor === 'yellow' ? 'text-yellow-500' : 'text-red-500'
+                                }`} />
+                              </div>
+                              <div>
+                                <p className="text-sm font-medium">Validation Score</p>
+                                <p className="text-xs text-muted-foreground">AI Document Verification</p>
+                              </div>
+                            </div>
+                            <div className="text-right">
+                              <p className={`text-2xl font-bold ${
+                                scoreColor === 'green' ? 'text-green-500' :
+                                scoreColor === 'yellow' ? 'text-yellow-500' : 'text-red-500'
+                              }`}>
+                                {(validationScore * 100).toFixed(0)}%
+                              </p>
+                              <p className={`text-xs font-medium ${
+                                scoreColor === 'green' ? 'text-green-500' :
+                                scoreColor === 'yellow' ? 'text-yellow-500' : 'text-red-500'
+                              }`}>
+                                {getScoreLabel(validationScore)}
+                              </p>
+                            </div>
+                          </div>
+                          <div className="relative h-2 bg-muted rounded-full overflow-hidden">
+                            <div
+                              className={`absolute left-0 top-0 h-full rounded-full transition-all ${
+                                scoreColor === 'green' ? 'bg-green-500' :
+                                scoreColor === 'yellow' ? 'bg-yellow-500' : 'bg-red-500'
+                              }`}
+                              style={{ width: `${validationScore * 100}%` }}
+                            />
+                          </div>
                         </div>
-                      </div>
-                      <div className="flex flex-col items-end gap-2">
-                        {doc.ai_scan_status === 'completed' && doc.ai_validation_score !== null && (
-                          getScoreBadge(doc.ai_validation_score)
-                        )}
-                        {doc.ai_scan_status === 'pending' && (
-                          <div className="flex items-center gap-2">
-                            <Badge variant="outline">Pending Scan</Badge>
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => retryScanMutation.mutate(doc.id)}
-                              disabled={retryScanMutation.isPending}
-                              title="Start AI scan"
-                            >
-                              {retryScanMutation.isPending ? (
-                                <Loader2 className="h-3 w-3 animate-spin" />
-                              ) : (
-                                <RefreshCw className="h-3 w-3" />
-                              )}
-                            </Button>
-                          </div>
-                        )}
-                        {doc.ai_scan_status === 'processing' && (
-                          <div className="flex items-center gap-2">
-                            <Badge variant="outline">
-                              <Loader2 className="h-3 w-3 animate-spin mr-1" />
-                              Scanning...
-                            </Badge>
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => retryScanMutation.mutate(doc.id)}
-                              disabled={retryScanMutation.isPending}
-                              title="Retry scan if stuck"
-                            >
-                              <RefreshCw className={`h-3 w-3 ${retryScanMutation.isPending ? 'animate-spin' : ''}`} />
-                            </Button>
-                          </div>
-                        )}
-                        {doc.ai_scan_status === 'failed' && (
-                          <div className="flex items-center gap-2">
-                            <Badge variant="destructive">Scan Failed</Badge>
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => retryScanMutation.mutate(doc.id)}
-                              disabled={retryScanMutation.isPending}
-                              title="Retry scan"
-                            >
-                              <RefreshCw className={`h-3 w-3 ${retryScanMutation.isPending ? 'animate-spin' : ''}`} />
-                            </Button>
-                          </div>
-                        )}
-                      </div>
-                    </div>
+                      )}
+
+                      {/* Scan Status Indicators */}
+                      {doc.ai_scan_status === 'pending' && (
+                        <div className="flex items-center gap-2">
+                          <Badge variant="outline">Pending Scan</Badge>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => retryScanMutation.mutate(doc.id)}
+                            disabled={retryScanMutation.isPending}
+                            title="Start AI scan"
+                          >
+                            {retryScanMutation.isPending ? (
+                              <Loader2 className="h-3 w-3 animate-spin" />
+                            ) : (
+                              <RefreshCw className="h-3 w-3" />
+                            )}
+                          </Button>
+                        </div>
+                      )}
+                      {doc.ai_scan_status === 'processing' && (
+                        <div className="flex items-center gap-2">
+                          <Badge variant="outline">
+                            <Loader2 className="h-3 w-3 animate-spin mr-1" />
+                            Scanning...
+                          </Badge>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => retryScanMutation.mutate(doc.id)}
+                            disabled={retryScanMutation.isPending}
+                            title="Retry scan if stuck"
+                          >
+                            <RefreshCw className={`h-3 w-3 ${retryScanMutation.isPending ? 'animate-spin' : ''}`} />
+                          </Button>
+                        </div>
+                      )}
+                      {doc.ai_scan_status === 'failed' && (
+                        <div className="flex items-center gap-2">
+                          <Badge variant="destructive">Scan Failed</Badge>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => retryScanMutation.mutate(doc.id)}
+                            disabled={retryScanMutation.isPending}
+                            title="Retry scan"
+                          >
+                            <RefreshCw className={`h-3 w-3 ${retryScanMutation.isPending ? 'animate-spin' : ''}`} />
+                          </Button>
+                        </div>
+                      )}
 
                     {/* AI Extracted Data */}
                     {doc.ai_scan_status === 'completed' && extractedData && Object.keys(extractedData).length > 0 && (
@@ -1305,38 +1340,6 @@ const RentalDetail = () => {
                         )}
                       </div>
 
-                      {/* Approve/Reject Buttons - only show if not already active/verified and document is linked */}
-                      {!doc.isUnlinked && doc.status?.toLowerCase() !== 'active' && !doc.verified && (
-                        <div className="flex gap-2">
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            className="text-green-600 hover:text-green-700 hover:bg-green-50 border-green-300"
-                            onClick={() => approveInsuranceMutation.mutate(doc.id)}
-                            disabled={approveInsuranceMutation.isPending}
-                          >
-                            <CheckCircle className="h-4 w-4 mr-1" />
-                            Approve
-                          </Button>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            className="text-red-600 hover:text-red-700 hover:bg-red-50 border-red-300"
-                            onClick={handleRejectInsurance}
-                          >
-                            <XCircle className="h-4 w-4 mr-1" />
-                            Reject Booking
-                          </Button>
-                        </div>
-                      )}
-
-                      {/* Show status badge if already approved (Active status or verified) */}
-                      {(doc.status?.toLowerCase() === 'active' || doc.verified) && (
-                        <Badge className="bg-green-600">
-                          <CheckCircle className="h-3 w-3 mr-1" />
-                          Approved
-                        </Badge>
-                      )}
                       {doc.status?.toLowerCase() === 'expired' && (
                         <Badge variant="destructive">
                           <XCircle className="h-3 w-3 mr-1" />
@@ -1372,34 +1375,6 @@ const RentalDetail = () => {
         <CardContent>
           {identityVerification && (
             <div className="space-y-4">
-              {/* Needs Linking Alert */}
-              {(identityVerification as any).needsLinking && (
-                <Alert className="border-blue-500/50 bg-blue-500/10">
-                  <AlertTriangle className="h-4 w-4 text-blue-600" />
-                  <AlertDescription className="flex items-center justify-between">
-                    <span className="text-sm">
-                      Found a verification that appears to match this customer but is not linked.
-                      <strong className="ml-1">
-                        {identityVerification.first_name} {identityVerification.last_name}
-                      </strong>
-                    </span>
-                    <Button
-                      size="sm"
-                      onClick={() => linkVerificationMutation.mutate(identityVerification.id)}
-                      disabled={linkVerificationMutation.isPending}
-                      className="ml-4"
-                    >
-                      {linkVerificationMutation.isPending ? (
-                        <Loader2 className="h-3 w-3 mr-1 animate-spin" />
-                      ) : (
-                        <CheckCircle className="h-3 w-3 mr-1" />
-                      )}
-                      Link to Customer
-                    </Button>
-                  </AlertDescription>
-                </Alert>
-              )}
-
               {/* Status Row */}
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
@@ -1563,21 +1538,21 @@ const RentalDetail = () => {
                     <Camera className="h-4 w-4" />
                     Verification Images
                   </h4>
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                     {identityVerification.document_front_url && (
                       <div className="space-y-2">
                         <span className="text-sm text-muted-foreground">ID Front</span>
-                        <div className="relative aspect-[3/2] bg-black/5 rounded-lg overflow-hidden border">
+                        <div className="relative aspect-square rounded-lg overflow-hidden border">
                           <img
                             src={identityVerification.document_front_url}
                             alt="ID Front"
-                            className="w-full h-full object-contain"
+                            className="w-full h-full object-cover"
                             onError={(e) => {
                               (e.target as HTMLImageElement).style.display = 'none';
                               (e.target as HTMLImageElement).nextElementSibling?.classList.remove('hidden');
                             }}
                           />
-                          <div className="hidden absolute inset-0 flex items-center justify-center text-muted-foreground text-sm">
+                          <div className="hidden absolute inset-0 flex items-center justify-center bg-muted text-muted-foreground text-sm">
                             Image unavailable
                           </div>
                         </div>
@@ -1595,17 +1570,17 @@ const RentalDetail = () => {
                     {identityVerification.document_back_url && (
                       <div className="space-y-2">
                         <span className="text-sm text-muted-foreground">ID Back</span>
-                        <div className="relative aspect-[3/2] bg-black/5 rounded-lg overflow-hidden border">
+                        <div className="relative aspect-square rounded-lg overflow-hidden border">
                           <img
                             src={identityVerification.document_back_url}
                             alt="ID Back"
-                            className="w-full h-full object-contain"
+                            className="w-full h-full object-cover"
                             onError={(e) => {
                               (e.target as HTMLImageElement).style.display = 'none';
                               (e.target as HTMLImageElement).nextElementSibling?.classList.remove('hidden');
                             }}
                           />
-                          <div className="hidden absolute inset-0 flex items-center justify-center text-muted-foreground text-sm">
+                          <div className="hidden absolute inset-0 flex items-center justify-center bg-muted text-muted-foreground text-sm">
                             Image unavailable
                           </div>
                         </div>
@@ -1623,17 +1598,17 @@ const RentalDetail = () => {
                     {identityVerification.selfie_image_url && (
                       <div className="space-y-2">
                         <span className="text-sm text-muted-foreground">Selfie</span>
-                        <div className="relative aspect-[3/4] bg-black/5 rounded-lg overflow-hidden border">
+                        <div className="relative aspect-square rounded-lg overflow-hidden border">
                           <img
                             src={identityVerification.selfie_image_url}
                             alt="Selfie"
-                            className="w-full h-full object-contain"
+                            className="w-full h-full object-cover"
                             onError={(e) => {
                               (e.target as HTMLImageElement).style.display = 'none';
                               (e.target as HTMLImageElement).nextElementSibling?.classList.remove('hidden');
                             }}
                           />
-                          <div className="hidden absolute inset-0 flex items-center justify-center text-muted-foreground text-sm">
+                          <div className="hidden absolute inset-0 flex items-center justify-center bg-muted text-muted-foreground text-sm">
                             Image unavailable
                           </div>
                         </div>
@@ -1671,78 +1646,12 @@ const RentalDetail = () => {
 
           {/* Empty state when no verification data */}
           {!identityVerification && !isLoadingVerification && (
-            <div className="space-y-4">
-              <div className="text-center py-4 text-muted-foreground">
-                <UserCheck className="h-12 w-12 mx-auto mb-3 opacity-50" />
-                <p className="font-medium">No identity verification linked</p>
-                <p className="text-sm mt-1">
-                  This customer hasn't completed Veriff identity verification yet, or the verification is not linked to this customer.
-                </p>
-              </div>
-
-              {/* Show unlinked verifications if available */}
-              {unlinkedVerifications && unlinkedVerifications.length > 0 && (
-                <div className="border-t pt-4">
-                  <h4 className="text-sm font-semibold mb-3 flex items-center gap-2">
-                    <AlertTriangle className="h-4 w-4 text-yellow-600" />
-                    Unlinked Verifications Found ({unlinkedVerifications.length})
-                  </h4>
-                  <p className="text-sm text-muted-foreground mb-3">
-                    The following verifications are not linked to any customer. If one belongs to <strong>{rental?.customers?.name}</strong>, click "Link" to connect it.
-                  </p>
-                  <div className="space-y-2">
-                    {unlinkedVerifications.map((verif: any) => (
-                      <div
-                        key={verif.id}
-                        className="flex items-center justify-between p-3 bg-muted/50 rounded-lg border"
-                      >
-                        <div className="flex items-center gap-4">
-                          <div>
-                            {verif.review_result === 'GREEN' ? (
-                              <Badge className="bg-green-600" variant="default">
-                                <CheckCircle className="h-3 w-3 mr-1" />
-                                Verified
-                              </Badge>
-                            ) : verif.review_result === 'RED' ? (
-                              <Badge variant="destructive">
-                                <XCircle className="h-3 w-3 mr-1" />
-                                Declined
-                              </Badge>
-                            ) : (
-                              <Badge variant="outline">Pending</Badge>
-                            )}
-                          </div>
-                          <div>
-                            <p className="font-medium">
-                              {verif.first_name || ''} {verif.last_name || ''}
-                              {!verif.first_name && !verif.last_name && <span className="text-muted-foreground italic">Name not extracted</span>}
-                            </p>
-                            <p className="text-xs text-muted-foreground">
-                              {verif.document_type ? verif.document_type.replace(/_/g, ' ') : 'Document type unknown'}
-                              {verif.document_country && ` • ${verif.document_country}`}
-                              {verif.created_at && ` • ${new Date(verif.created_at).toLocaleDateString()}`}
-                            </p>
-                          </div>
-                        </div>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => linkVerificationMutation.mutate(verif.id)}
-                          disabled={linkVerificationMutation.isPending}
-                          className="border-blue-300 text-blue-600 hover:bg-blue-50"
-                        >
-                          {linkVerificationMutation.isPending ? (
-                            <Loader2 className="h-3 w-3 mr-1 animate-spin" />
-                          ) : (
-                            <CheckCircle className="h-3 w-3 mr-1" />
-                          )}
-                          Link
-                        </Button>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
+            <div className="text-center py-4 text-muted-foreground">
+              <UserCheck className="h-12 w-12 mx-auto mb-3 opacity-50" />
+              <p className="font-medium">No identity verification found</p>
+              <p className="text-sm mt-1">
+                This customer hasn't completed identity verification yet.
+              </p>
             </div>
           )}
 
@@ -1763,15 +1672,6 @@ const RentalDetail = () => {
       <div id="ledger">
         {id && <RentalLedger rentalId={id} />}
       </div>
-
-      {/* Payment Status Compliance */}
-      {id && (
-        <ComplianceStatusPanel
-          objectType="Rental"
-          objectId={id}
-          title="Payment Reminders"
-        />
-      )}
 
       {/* Add Payment Dialog */}
       {rental && (
@@ -1822,6 +1722,240 @@ const RentalDetail = () => {
           payment={payment || undefined}
         />
       )}
+
+      {/* Approve Confirmation Dialog */}
+      <AlertDialog open={showApproveDialog} onOpenChange={setShowApproveDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Approve Booking</AlertDialogTitle>
+            <AlertDialogDescription>
+              {!isKeyHandoverCompleted ? (
+                <span className="block text-amber-500">
+                  <strong>Key handover required:</strong> Please complete the vehicle collection (key handover) before approving this booking. Scroll down to the Key Handover section to mark keys as handed over.
+                </span>
+              ) : (
+                <>
+                  Are you sure you want to approve this booking for {rental?.customers?.name}?
+                  {rental?.payment_mode === 'manual' && rental?.payment_status === 'pending' && (
+                    <span className="block mt-2 text-amber-600">
+                      This will capture the payment hold on the customer's card.
+                    </span>
+                  )}
+                  <span className="block mt-2">
+                    The rental will become active and the customer will be notified.
+                  </span>
+                </>
+              )}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isApproving}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={isApproving || !isKeyHandoverCompleted}
+              onClick={async (e) => {
+                e.preventDefault();
+                setIsApproving(true);
+                try {
+                  // For manual mode with pending payment, capture first
+                  if (rental?.payment_mode === 'manual' && rental?.payment_status === 'pending' && payment?.capture_status === 'requires_capture') {
+                    const { error: captureError } = await supabase.functions.invoke('capture-payment', {
+                      body: {
+                        paymentId: payment.id,
+                        rentalId: id,
+                      }
+                    });
+                    if (captureError) throw captureError;
+                  }
+
+                  // Update rental
+                  await supabase
+                    .from('rentals')
+                    .update({
+                      approval_status: 'approved',
+                      payment_status: 'fulfilled',
+                      status: 'Active',
+                      updated_at: new Date().toISOString(),
+                    })
+                    .eq('id', id);
+
+                  // Send approval email
+                  await supabase.functions.invoke('notify-booking-approved', {
+                    body: {
+                      customerEmail: rental?.customers?.email,
+                      customerName: rental?.customers?.name,
+                      vehicleName: `${rental?.vehicles?.make} ${rental?.vehicles?.model}`,
+                      bookingRef: id.substring(0, 8).toUpperCase(),
+                      pickupDate: rental?.start_date,
+                      returnDate: rental?.end_date,
+                    }
+                  }).catch(err => console.warn('Failed to send approval email:', err));
+
+                  toast({
+                    title: "Booking Approved",
+                    description: "Rental is now active and customer notified",
+                  });
+
+                  queryClient.invalidateQueries({ queryKey: ['rental', id] });
+                  queryClient.invalidateQueries({ queryKey: ['rentals-list'] });
+                  queryClient.invalidateQueries({ queryKey: ['rental-payment', id] });
+                  setShowApproveDialog(false);
+                } catch (error: any) {
+                  toast({
+                    title: "Error",
+                    description: error.message || "Failed to approve booking",
+                    variant: "destructive",
+                  });
+                } finally {
+                  setIsApproving(false);
+                }
+              }}
+            >
+              {isApproving ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Approving...
+                </>
+              ) : (
+                "Approve"
+              )}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Close Rental Confirmation Dialog */}
+      <AlertDialog open={showCloseDialog} onOpenChange={setShowCloseDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Close Rental</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to close this rental for {rental?.customers?.name}?
+              <span className="block mt-2">
+                The vehicle ({rental?.vehicles?.reg}) will be marked as available.
+              </span>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isClosing}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={isClosing}
+              onClick={async (e) => {
+                e.preventDefault();
+                setIsClosing(true);
+                try {
+                  await supabase
+                    .from("rentals")
+                    .update({ status: "Closed", updated_at: new Date().toISOString() })
+                    .eq("id", id)
+                    .eq("tenant_id", tenant?.id);
+
+                  await supabase
+                    .from("vehicles")
+                    .update({ status: "Available" })
+                    .eq("id", rental?.vehicles?.id)
+                    .eq("tenant_id", tenant?.id);
+
+                  toast({
+                    title: "Rental Closed",
+                    description: "Rental has been closed and vehicle is now available.",
+                  });
+
+                  queryClient.invalidateQueries({ queryKey: ["rental", id] });
+                  queryClient.invalidateQueries({ queryKey: ["rentals-list"] });
+                  queryClient.invalidateQueries({ queryKey: ["vehicles-list"] });
+                  setShowCloseDialog(false);
+                } catch (error) {
+                  toast({
+                    title: "Error",
+                    description: "Failed to close rental.",
+                    variant: "destructive",
+                  });
+                } finally {
+                  setIsClosing(false);
+                }
+              }}
+            >
+              {isClosing ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Closing...
+                </>
+              ) : (
+                "Close Rental"
+              )}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Delete Rental Confirmation Dialog */}
+      <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Rental</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete this rental?
+              <span className="block mt-2 text-red-600 font-medium">
+                This action cannot be undone. All associated data will be permanently removed.
+              </span>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isDeleting}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={isDeleting}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={async (e) => {
+                e.preventDefault();
+                setIsDeleting(true);
+                try {
+                  // Release vehicle if it was reserved
+                  if (rental?.vehicles?.id) {
+                    await supabase
+                      .from("vehicles")
+                      .update({ status: "Available" })
+                      .eq("id", rental.vehicles.id)
+                      .eq("tenant_id", tenant?.id);
+                  }
+
+                  // Delete the rental
+                  await supabase
+                    .from("rentals")
+                    .delete()
+                    .eq("id", id)
+                    .eq("tenant_id", tenant?.id);
+
+                  toast({
+                    title: "Rental Deleted",
+                    description: "The rental has been permanently deleted.",
+                  });
+
+                  queryClient.invalidateQueries({ queryKey: ["rentals-list"] });
+                  queryClient.invalidateQueries({ queryKey: ["vehicles-list"] });
+                  router.push("/rentals");
+                } catch (error) {
+                  toast({
+                    title: "Error",
+                    description: "Failed to delete rental.",
+                    variant: "destructive",
+                  });
+                } finally {
+                  setIsDeleting(false);
+                }
+              }}
+            >
+              {isDeleting ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Deleting...
+                </>
+              ) : (
+                "Delete"
+              )}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 };

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useMemo } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
   Card,
@@ -22,17 +22,10 @@ import {
 import {
   FileText,
   Plus,
-  Eye,
-  CreditCard,
-  XCircle,
   Download,
-  Trash2,
 } from "lucide-react";
 import { useEnhancedRentals, RentalFilters } from "@/hooks/use-enhanced-rentals";
 import { RentalsFilters } from "@/components/rentals/rentals-filters";
-import { AddPaymentDialog } from "@/components/shared/dialogs/add-payment-dialog";
-import { CloseRentalDialog } from "@/components/rentals/close-rental-dialog";
-import { DeleteRentalDialog } from "@/components/rentals/delete-rental-dialog";
 import { formatDuration } from "@/lib/rental-utils";
 import {
   Pagination,
@@ -46,10 +39,6 @@ import {
 const RentalsList = () => {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const [paymentDialogOpen, setPaymentDialogOpen] = useState(false);
-  const [closeRentalDialogOpen, setCloseRentalDialogOpen] = useState(false);
-  const [deleteRentalDialogOpen, setDeleteRentalDialogOpen] = useState(false);
-  const [selectedRental, setSelectedRental] = useState<any>(null);
 
   // Parse filters from URL
   const filters: RentalFilters = useMemo(
@@ -57,6 +46,7 @@ const RentalsList = () => {
       search: searchParams.get("search") || "",
       status: searchParams.get("status") || "all",
       customerType: searchParams.get("customerType") || "all",
+      paymentMode: searchParams.get("paymentMode") || "all",
       duration: searchParams.get("duration") || "all",
       durationMin: searchParams.get("durationMin")
         ? parseInt(searchParams.get("durationMin")!)
@@ -145,21 +135,6 @@ const RentalsList = () => {
     link.download = "rentals-export.csv";
     link.click();
     window.URL.revokeObjectURL(url);
-  };
-
-  const handleMakePayment = (rental: any) => {
-    setSelectedRental(rental);
-    setPaymentDialogOpen(true);
-  };
-
-  const handleCloseRental = (rental: any) => {
-    setSelectedRental(rental);
-    setCloseRentalDialogOpen(true);
-  };
-
-  const handleDeleteRental = (rental: any) => {
-    setSelectedRental(rental);
-    setDeleteRentalDialogOpen(true);
   };
 
   if (isLoading) {
@@ -276,53 +251,24 @@ const RentalsList = () => {
                     <TableRow>
                       <TableHead>Rental #</TableHead>
                       <TableHead>Customer</TableHead>
-                      <TableHead>Vehicle</TableHead>
                       <TableHead>Start Date</TableHead>
                       <TableHead>End Date</TableHead>
                       <TableHead>Duration</TableHead>
-                      <TableHead className="text-left">
-                        Initial Payment
-                      </TableHead>
-                      <TableHead className="text-left">Rental Amount</TableHead>
-                      <TableHead className="text-left">Total Amount</TableHead>
                       <TableHead>Status</TableHead>
-                      <TableHead className="text-left">Actions</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {rentals.map((rental) => (
-                      <TableRow key={rental.id} className="hover:bg-muted/50">
-                        <TableCell>
-                          <Button
-                            variant="link"
-                            className="p-0 h-auto font-medium"
-                            onClick={() => router.push(`/rentals/${rental.id}`)}
-                          >
-                            {rental.rental_number}
-                          </Button>
+                      <TableRow
+                        key={rental.id}
+                        className="hover:bg-muted/50 cursor-pointer"
+                        onClick={() => router.push(`/rentals/${rental.id}`)}
+                      >
+                        <TableCell className="font-medium">
+                          {rental.rental_number}
                         </TableCell>
                         <TableCell>
-                          <Button
-                            variant="link"
-                            className="p-0 h-auto font-medium"
-                            onClick={() =>
-                              router.push(`/customers/${rental.customer.id}`)
-                            }
-                          >
-                            {rental.customer.name}
-                          </Button>
-                        </TableCell>
-                        <TableCell>
-                          <Button
-                            variant="link"
-                            className="p-0 h-auto"
-                            onClick={() =>
-                              router.push(`/vehicles/${rental.vehicle.id}`)
-                            }
-                          >
-                            {rental.vehicle.reg} ({rental.vehicle.make}{" "}
-                            {rental.vehicle.model})
-                          </Button>
+                          {rental.customer.name.split(' ')[0]}
                         </TableCell>
                         <TableCell>
                           {new Date(rental.start_date).toLocaleDateString()}
@@ -335,80 +281,19 @@ const RentalsList = () => {
                         <TableCell>
                           {formatDuration(rental.duration_months, rental.rental_period_type)}
                         </TableCell>
-                        <TableCell className="text-left">
-                          {rental.initial_payment
-                            ? `$${Number(
-                                rental.initial_payment
-                              ).toLocaleString()}`
-                            : "—"}
-                        </TableCell>
-                        <TableCell className="text-left">
-                          <div className="flex items-center gap-2">
-                            <span>
-                              ${Number(rental.monthly_amount).toLocaleString()}
-                            </span>
-                          </div>
-                        </TableCell>
-                        <TableCell className="text-left">
-                          <div className="flex items-center gap-2">
-                            <span className="font-medium">
-                              ${Number(rental.total_amount).toLocaleString()}
-                            </span>
-                            {rental.protection_cost > 0 && (
-                              <span className="text-xs text-[#C5A572]">(+${rental.protection_cost})</span>
-                            )}
-                          </div>
-                        </TableCell>
                         <TableCell>
                           <Badge
                             variant={
-                              rental.computed_status === "Active"
-                                ? "default"
-                                : rental.computed_status === "Closed"
+                              rental.status === "Closed"
                                 ? "secondary"
+                                : rental.status === "Cancelled"
+                                ? "destructive"
                                 : "outline"
                             }
+                            className={rental.status === "Active" ? "bg-green-600 text-white" : ""}
                           >
-                            {rental.computed_status}
+                            {rental.status}
                           </Badge>
-                        </TableCell>
-                        <TableCell className="text-right">
-                          <div className="flex items-center gap-1">
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => router.push(`/rentals/${rental.id}`)}
-                            >
-                              <Eye className="h-4 w-4 mr-1" />
-                              View
-                            </Button>
-                            {rental.computed_status === "Active" && (
-                              <>
-                                <Button
-                                  variant="outline"
-                                  size="sm"
-                                  onClick={() => handleMakePayment(rental)}
-                                >
-                                  <CreditCard className="h-4 w-4" />
-                                </Button>
-                                <Button
-                                  variant="outline"
-                                  size="sm"
-                                  onClick={() => handleCloseRental(rental)}
-                                >
-                                  <XCircle className="h-4 w-4" />
-                                </Button>
-                              </>
-                            )}
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => handleDeleteRental(rental)}
-                              className="text-destructive hover:text-destructive"
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </Button>
-                          </div>
                         </TableCell>
                       </TableRow>
                     ))}
@@ -487,29 +372,6 @@ const RentalsList = () => {
           )}
         </CardContent>
       </Card>
-
-      {/* Payment Dialog */}
-      <AddPaymentDialog
-        open={paymentDialogOpen}
-        onOpenChange={setPaymentDialogOpen}
-        customer_id={selectedRental?.customer?.id}
-        vehicle_id={selectedRental?.vehicle?.id}
-        rental_id={selectedRental?.id}
-      />
-
-      {/* Close Rental Dialog */}
-      <CloseRentalDialog
-        open={closeRentalDialogOpen}
-        onOpenChange={setCloseRentalDialogOpen}
-        rental={selectedRental}
-      />
-
-      {/* Delete Rental Dialog */}
-      <DeleteRentalDialog
-        open={deleteRentalDialogOpen}
-        onOpenChange={setDeleteRentalDialogOpen}
-        rental={selectedRental}
-      />
     </div>
   );
 };

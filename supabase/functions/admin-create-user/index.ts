@@ -96,39 +96,129 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Create the user in Supabase Auth using admin API
-    const { data: newUser, error: createError } = await supabaseAdmin.auth.admin.createUser({
-      email,
-      password: temporaryPassword,
-      email_confirm: true,
-      user_metadata: {
-        name,
-        role
-      }
-    });
-
-    if (createError || !newUser.user) {
-      console.error('Failed to create user in auth:', createError);
-      return new Response(
-        JSON.stringify({ error: createError?.message || 'Failed to create user' }),
-        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
-
-    // Create corresponding app_users record
+    // Determine tenant_id for the new user
     // If tenant_id is specified (by super admin), use it
     // Otherwise: super admins create users with NULL tenant_id, regular users inherit from creator
     const newUserTenantId = tenant_id || (currentUserData.is_super_admin ? null : currentUserData.tenant_id);
 
+    // Check if user already exists in auth by trying to list users with that email
+    const { data: existingUsers } = await supabaseAdmin.auth.admin.listUsers();
+    const existingAuthUser = existingUsers?.users?.find(u => u.email === email);
+
+    let authUserId: string;
+    let isExistingUser = false;
+
+    if (existingAuthUser) {
+      // User already exists in auth
+      console.log('User already exists in auth:', existingAuthUser.id);
+      authUserId = existingAuthUser.id;
+      isExistingUser = true;
+
+      // Check if they already have an app_users record for this tenant
+      const { data: existingAppUser } = await supabaseAdmin
+        .from('app_users')
+        .select('id, tenant_id')
+        .eq('auth_user_id', authUserId)
+        .eq('tenant_id', newUserTenantId)
+        .single();
+
+      if (existingAppUser) {
+        // User already linked to this tenant
+        console.log('User already linked to this tenant:', existingAppUser.id);
+        return new Response(
+          JSON.stringify({
+            success: true,
+            user: {
+              id: existingAppUser.id,
+              email,
+              name,
+              role,
+              auth_user_id: authUserId
+            },
+            message: 'User already exists and is linked to this tenant'
+          }),
+          { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      // Check if user has an app_users record for a DIFFERENT tenant
+      const { data: otherTenantAppUser } = await supabaseAdmin
+        .from('app_users')
+        .select('id, tenant_id')
+        .eq('auth_user_id', authUserId)
+        .single();
+
+      if (otherTenantAppUser && otherTenantAppUser.tenant_id !== newUserTenantId) {
+        // User exists but belongs to another tenant - update their tenant_id
+        console.log('Updating user tenant_id from', otherTenantAppUser.tenant_id, 'to', newUserTenantId);
+        const { data: updatedAppUser, error: updateError } = await supabaseAdmin
+          .from('app_users')
+          .update({
+            tenant_id: newUserTenantId,
+            role: role,
+            name: name,
+            is_active: true
+          })
+          .eq('id', otherTenantAppUser.id)
+          .select()
+          .single();
+
+        if (updateError) {
+          console.error('Failed to update user tenant:', updateError);
+          return new Response(
+            JSON.stringify({ error: 'Failed to update user tenant' }),
+            { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+
+        return new Response(
+          JSON.stringify({
+            success: true,
+            user: {
+              id: updatedAppUser.id,
+              email,
+              name,
+              role,
+              auth_user_id: authUserId
+            },
+            message: 'Existing user linked to new tenant'
+          }),
+          { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+    } else {
+      // Create new user in Supabase Auth
+      const { data: newUser, error: createError } = await supabaseAdmin.auth.admin.createUser({
+        email,
+        password: temporaryPassword,
+        email_confirm: true,
+        user_metadata: {
+          name,
+          role
+        }
+      });
+
+      if (createError || !newUser.user) {
+        console.error('Failed to create user in auth:', createError);
+        return new Response(
+          JSON.stringify({ error: createError?.message || 'Failed to create user' }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      authUserId = newUser.user.id;
+    }
+
+    // Create app_users record (only if not already handled above)
     const { data: appUser, error: appUserError } = await supabaseAdmin
       .from('app_users')
       .insert({
-        auth_user_id: newUser.user.id,
+        auth_user_id: authUserId,
         email,
         name,
         role,
         is_active: true,
-        must_change_password: true,
+        must_change_password: !isExistingUser, // Only require password change for new users
         tenant_id: newUserTenantId
       })
       .select()
@@ -136,8 +226,10 @@ Deno.serve(async (req) => {
 
     if (appUserError) {
       console.error('Failed to create app_users record:', appUserError);
-      // Try to clean up the auth user
-      await supabaseAdmin.auth.admin.deleteUser(newUser.user.id);
+      // Only delete auth user if we just created it
+      if (!isExistingUser) {
+        await supabaseAdmin.auth.admin.deleteUser(authUserId);
+      }
       return new Response(
         JSON.stringify({ error: 'Failed to create user profile' }),
         { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -159,7 +251,7 @@ Deno.serve(async (req) => {
         }
       });
 
-    console.log('User created successfully:', { id: newUser.user.id, email, role });
+    console.log('User created successfully:', { id: authUserId, email, role, isExistingUser });
 
     return new Response(
       JSON.stringify({
@@ -169,7 +261,7 @@ Deno.serve(async (req) => {
           email,
           name,
           role,
-          auth_user_id: newUser.user.id
+          auth_user_id: authUserId
         }
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }

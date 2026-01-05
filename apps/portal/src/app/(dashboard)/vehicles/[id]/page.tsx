@@ -463,6 +463,7 @@ export default function VehicleDetail() {
             <VehiclePhotoGallery
               vehicleId={vehicle.id}
               vehicleReg={vehicle.reg}
+              fallbackPhotoUrl={vehicle.photo_url}
             />
           </div>
 

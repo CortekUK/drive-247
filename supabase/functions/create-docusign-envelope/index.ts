@@ -154,69 +154,83 @@ function htmlToText(html: string): string {
 }
 
 // Generate default template when no custom template exists
-function generateDefaultTemplate(rental: any, customer: any, vehicle: any, tenant: any): string {
-  const companyName = tenant?.company_name || 'Drive 247';
-
-  return `
-RENTAL AGREEMENT
+function generateDefaultTemplate(
+  rental: any,
+  customer: any,
+  vehicle: any,
+  tenant: any
+): string {
+  return `${'='.repeat(70)}
+                         RENTAL AGREEMENT
 ${'='.repeat(70)}
 
 Agreement Date: ${formatDate(new Date())}
-Reference: ${rental?.id?.substring(0, 8)?.toUpperCase() || 'N/A'}
+Rental Reference: ${rental?.id?.substring(0, 8)?.toUpperCase() || 'N/A'}
+
+${'─'.repeat(70)}
+VEHICLE DETAILS
+${'─'.repeat(70)}
+Make:          ${vehicle?.make || 'N/A'}
+Model:         ${vehicle?.model || 'N/A'}
+Year:          ${vehicle?.year || 'N/A'}
+Registration:  ${vehicle?.reg || 'N/A'}
+Color:         ${vehicle?.color || 'N/A'}
+
+${'─'.repeat(70)}
+CUSTOMER DETAILS
+${'─'.repeat(70)}
+Name:          ${customer?.name || 'N/A'}
+Email:         ${customer?.email || 'N/A'}
+Phone:         ${customer?.phone || 'N/A'}
+Address:       ${customer?.address || 'N/A'}
+
+${'─'.repeat(70)}
+RENTAL PERIOD
+${'─'.repeat(70)}
+Start Date:    ${formatDate(rental?.start_date)}
+End Date:      ${rental?.end_date ? formatDate(rental.end_date) : 'Ongoing'}
+Payment:       ${formatCurrency(rental?.monthly_amount)} (${rental?.rental_period_type || 'Monthly'})
 
 ${'='.repeat(70)}
-
-LANDLORD:
-${companyName}
-${tenant?.contact_email || ''}
-${tenant?.contact_phone || ''}
-
+                      TERMS & CONDITIONS
 ${'='.repeat(70)}
 
-CUSTOMER:
-Name: ${customer?.name || 'Customer'}
-Email: ${customer?.email || 'N/A'}
-Phone: ${customer?.phone || ''}
+The Customer agrees to rent the vehicle described above for the specified rental period and confirms that all information provided is accurate and complete.
+
+Payment is due in accordance with the agreed schedule. Late payments, failed authorizations, or chargebacks may result in additional charges or immediate termination of the rental.
+
+The vehicle is provided in safe, operable condition. The Customer agrees to return the vehicle on time, in substantially the same condition as received, reasonable wear and tear excepted. The Customer is responsible for fuel level, cleanliness, and any excessive wear, damage, or loss occurring during the rental period.
+
+The vehicle may be used for lawful purposes only and may not be subleased, sold, or operated by any driver not expressly authorized by the rental company. Prohibited use includes, but is not limited to, racing, towing (unless approved), off-road use, or operation while impaired.
+
+The Customer assumes full responsibility for any loss, damage, theft, or liability arising during the rental period, including loss of use, diminution of value, towing, storage, administrative, and recovery fees, unless such amounts are expressly covered by an accepted protection product.
+
+INSURANCE & LIABILITY
+
+The rental company does not provide primary automobile liability insurance unless explicitly stated in writing. The Customer confirms that they maintain valid automobile liability insurance or have elected to purchase optional protection products, if offered. Optional protection products are subject to separate terms, may be administered by third-party providers, and are not insurance unless expressly stated. Coverage exclusions may apply. The rental company makes no representation as to the adequacy of any insurance or protection selected.
+
+The Customer is solely responsible for all traffic violations, parking tickets, tolls, congestion charges, and related administrative fees incurred during the rental period, including those processed after vehicle return.
+
+The rental company reserves the right to terminate this agreement immediately in the event of misuse, non-payment, or breach of these terms. Early termination does not relieve the Customer of outstanding charges.
+
+This agreement shall be governed by the laws of the State in which the rental company operates, without regard to conflict-of-law principles.
+
+BY SIGNING BELOW, THE CUSTOMER ACKNOWLEDGES THAT THEY HAVE READ, UNDERSTOOD, AND AGREE TO THESE TERMS & CONDITIONS.
 
 ${'='.repeat(70)}
-
-VEHICLE DETAILS:
-Registration: ${vehicle?.reg || 'N/A'}
-Make & Model: ${vehicle?.make || ''} ${vehicle?.model || ''}
-Year: ${vehicle?.year || ''}
-
+                         SIGNATURES
 ${'='.repeat(70)}
 
-RENTAL TERMS:
-Start Date: ${formatDate(rental?.start_date)}
-End Date: ${rental?.end_date ? formatDate(rental.end_date) : 'Ongoing'}
-Amount: ${formatCurrency(rental?.monthly_amount)}
-Period: ${rental?.rental_period_type || 'Monthly'}
+Customer Signature: _______________________________
 
-${'='.repeat(70)}
-
-TERMS AND CONDITIONS:
-1. Customer agrees to rent the vehicle for the specified period.
-2. Payment is due on the agreed schedule.
-3. Customer will maintain the vehicle in good condition.
-4. Customer is responsible for any damage during the rental period.
-5. Vehicle must not be used for illegal purposes or sub-leased.
-
-${'='.repeat(70)}
-
-SIGNATURES:
-
-Customer Signature: _________________________
-
-Date: ______________
+Date: _______________________________
 
 
-${companyName} Signature: _________________________
+For ${tenant?.company_name || 'Drive 247'}
 
-Date: ______________
+Authorized Signature: _______________________________
 
-${'='.repeat(70)}
-${companyName} - Generated: ${new Date().toISOString()}
+Date: _______________________________
 `;
 }
 
@@ -544,12 +558,7 @@ serve(async (req) => {
       doc = await generateDocument(supabase, rental, customer, vehicle, tenantId);
     } else {
       // No tenant, use basic default
-      doc = btoa(generateDefaultTemplate(
-        { id: rentalId, start_date: new Date(), monthly_amount: 0 },
-        { name, email },
-        vehicle,
-        {}
-      ));
+      doc = btoa(generateDefaultTemplate(rental, customer, vehicle, null));
     }
 
     // Get access token

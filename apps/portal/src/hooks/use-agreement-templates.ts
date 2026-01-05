@@ -2,6 +2,9 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useTenant } from '@/contexts/TenantContext';
 import { toast } from '@/hooks/use-toast';
+import { DEFAULT_AGREEMENT_TEMPLATE } from '@/lib/default-agreement-template';
+
+export type TemplateType = 'default' | 'custom';
 
 export interface AgreementTemplate {
   id: string;
@@ -25,6 +28,10 @@ export interface UpdateTemplateInput {
   template_content?: string;
   is_active?: boolean;
 }
+
+// Template names for identification
+export const DEFAULT_TEMPLATE_NAME = 'Default Template';
+export const CUSTOM_TEMPLATE_NAME = 'Custom Template';
 
 /**
  * Hook to manage agreement templates for the current tenant
@@ -313,5 +320,360 @@ export const useActiveAgreementTemplate = () => {
     isLoading,
     error,
     hasTemplate: !!activeTemplate,
+  };
+};
+
+/**
+ * Hook specifically for managing the two-template system (Default vs Custom)
+ */
+export const useTemplateSelection = () => {
+  const { tenant } = useTenant();
+  const queryClient = useQueryClient();
+
+  const {
+    data: templates,
+    isLoading,
+    error,
+    refetch,
+  } = useQuery({
+    queryKey: ['agreement-templates-selection', tenant?.id],
+    queryFn: async (): Promise<{ defaultTemplate: AgreementTemplate | null; customTemplate: AgreementTemplate | null }> => {
+      if (!tenant?.id) {
+        return { defaultTemplate: null, customTemplate: null };
+      }
+
+      const { data, error } = await supabase
+        .from('agreement_templates')
+        .select('*')
+        .eq('tenant_id', tenant.id)
+        .in('template_name', [DEFAULT_TEMPLATE_NAME, CUSTOM_TEMPLATE_NAME]);
+
+      if (error) {
+        console.error('[TemplateSelection] Error fetching templates:', error);
+        throw error;
+      }
+
+      const defaultTemplate = data?.find((t) => t.template_name === DEFAULT_TEMPLATE_NAME) || null;
+      const customTemplate = data?.find((t) => t.template_name === CUSTOM_TEMPLATE_NAME) || null;
+
+      return { defaultTemplate, customTemplate };
+    },
+    enabled: !!tenant?.id,
+  });
+
+  // Initialize default template if it doesn't exist
+  const initializeDefaultMutation = useMutation({
+    mutationFn: async (): Promise<AgreementTemplate> => {
+      if (!tenant?.id) {
+        throw new Error('No tenant ID available');
+      }
+
+      const { data, error } = await supabase
+        .from('agreement_templates')
+        .insert({
+          tenant_id: tenant.id,
+          template_name: DEFAULT_TEMPLATE_NAME,
+          template_content: DEFAULT_AGREEMENT_TEMPLATE,
+          is_active: true,
+        })
+        .select()
+        .single();
+
+      if (error) {
+        throw error;
+      }
+
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['agreement-templates-selection', tenant?.id] });
+    },
+  });
+
+  // Initialize custom template if it doesn't exist
+  const initializeCustomMutation = useMutation({
+    mutationFn: async (): Promise<AgreementTemplate> => {
+      if (!tenant?.id) {
+        throw new Error('No tenant ID available');
+      }
+
+      const { data, error } = await supabase
+        .from('agreement_templates')
+        .insert({
+          tenant_id: tenant.id,
+          template_name: CUSTOM_TEMPLATE_NAME,
+          template_content: '', // Start blank
+          is_active: false,
+        })
+        .select()
+        .single();
+
+      if (error) {
+        throw error;
+      }
+
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['agreement-templates-selection', tenant?.id] });
+    },
+  });
+
+  // Set active template by type
+  const setActiveByTypeMutation = useMutation({
+    mutationFn: async (type: TemplateType): Promise<void> => {
+      if (!tenant?.id) {
+        throw new Error('No tenant ID available');
+      }
+
+      const targetName = type === 'default' ? DEFAULT_TEMPLATE_NAME : CUSTOM_TEMPLATE_NAME;
+
+      // Deactivate all templates first
+      await supabase
+        .from('agreement_templates')
+        .update({ is_active: false })
+        .eq('tenant_id', tenant.id);
+
+      // Activate the selected template
+      const { error } = await supabase
+        .from('agreement_templates')
+        .update({ is_active: true, updated_at: new Date().toISOString() })
+        .eq('tenant_id', tenant.id)
+        .eq('template_name', targetName);
+
+      if (error) {
+        throw error;
+      }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['agreement-templates-selection', tenant?.id] });
+      toast({
+        title: 'Template Updated',
+        description: 'Active template has been changed successfully.',
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: 'Error',
+        description: error.message || 'Failed to set active template',
+        variant: 'destructive',
+      });
+    },
+  });
+
+  // Update or create template content
+  const updateContentMutation = useMutation({
+    mutationFn: async ({ type, content }: { type: TemplateType; content: string }): Promise<void> => {
+      if (!tenant?.id) {
+        throw new Error('No tenant ID available');
+      }
+
+      const targetName = type === 'default' ? DEFAULT_TEMPLATE_NAME : CUSTOM_TEMPLATE_NAME;
+      const isDefaultType = type === 'default';
+
+      // Check if template exists
+      const { data: existing } = await supabase
+        .from('agreement_templates')
+        .select('id')
+        .eq('tenant_id', tenant.id)
+        .eq('template_name', targetName)
+        .single();
+
+      if (existing) {
+        // Update existing template
+        const { error } = await supabase
+          .from('agreement_templates')
+          .update({
+            template_content: content,
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', existing.id);
+
+        if (error) {
+          throw error;
+        }
+      } else {
+        // If setting as active, deactivate all other templates first
+        if (isDefaultType) {
+          await supabase
+            .from('agreement_templates')
+            .update({ is_active: false })
+            .eq('tenant_id', tenant.id);
+        }
+
+        // Create new template
+        const { error } = await supabase
+          .from('agreement_templates')
+          .insert({
+            tenant_id: tenant.id,
+            template_name: targetName,
+            template_content: content,
+            is_active: isDefaultType, // Default template is active by default
+          });
+
+        if (error) {
+          throw error;
+        }
+      }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['agreement-templates-selection', tenant?.id] });
+      toast({
+        title: 'Template Saved',
+        description: 'Template content has been saved successfully.',
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: 'Error',
+        description: error.message || 'Failed to save template',
+        variant: 'destructive',
+      });
+    },
+  });
+
+  // Clear custom template content
+  const clearCustomMutation = useMutation({
+    mutationFn: async (): Promise<void> => {
+      if (!tenant?.id) {
+        throw new Error('No tenant ID available');
+      }
+
+      const { error } = await supabase
+        .from('agreement_templates')
+        .update({
+          template_content: '',
+          is_active: false,
+          updated_at: new Date().toISOString()
+        })
+        .eq('tenant_id', tenant.id)
+        .eq('template_name', CUSTOM_TEMPLATE_NAME);
+
+      if (error) {
+        throw error;
+      }
+
+      // Make sure default template is active if custom was active
+      if (customTemplate?.is_active) {
+        await supabase
+          .from('agreement_templates')
+          .update({ is_active: true })
+          .eq('tenant_id', tenant.id)
+          .eq('template_name', DEFAULT_TEMPLATE_NAME);
+      }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['agreement-templates-selection', tenant?.id] });
+      toast({
+        title: 'Template Cleared',
+        description: 'Custom template has been cleared.',
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: 'Error',
+        description: error.message || 'Failed to clear template',
+        variant: 'destructive',
+      });
+    },
+  });
+
+  // Reset default template to original content (or create if doesn't exist)
+  const resetDefaultMutation = useMutation({
+    mutationFn: async (): Promise<void> => {
+      if (!tenant?.id) {
+        throw new Error('No tenant ID available');
+      }
+
+      // Check if template exists
+      const { data: existing } = await supabase
+        .from('agreement_templates')
+        .select('id')
+        .eq('tenant_id', tenant.id)
+        .eq('template_name', DEFAULT_TEMPLATE_NAME)
+        .single();
+
+      if (existing) {
+        // Update existing template
+        const { error } = await supabase
+          .from('agreement_templates')
+          .update({
+            template_content: DEFAULT_AGREEMENT_TEMPLATE,
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', existing.id);
+
+        if (error) {
+          throw error;
+        }
+      } else {
+        // Deactivate all other templates first
+        await supabase
+          .from('agreement_templates')
+          .update({ is_active: false })
+          .eq('tenant_id', tenant.id);
+
+        // Create new template with default content
+        const { error } = await supabase
+          .from('agreement_templates')
+          .insert({
+            tenant_id: tenant.id,
+            template_name: DEFAULT_TEMPLATE_NAME,
+            template_content: DEFAULT_AGREEMENT_TEMPLATE,
+            is_active: true,
+          });
+
+        if (error) {
+          throw error;
+        }
+      }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['agreement-templates-selection', tenant?.id] });
+      toast({
+        title: 'Template Reset',
+        description: 'Default template has been reset to original content.',
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: 'Error',
+        description: error.message || 'Failed to reset template',
+        variant: 'destructive',
+      });
+    },
+  });
+
+  const defaultTemplate = templates?.defaultTemplate || null;
+  const customTemplate = templates?.customTemplate || null;
+  const activeType: TemplateType | null = defaultTemplate?.is_active
+    ? 'default'
+    : customTemplate?.is_active
+      ? 'custom'
+      : null;
+
+  return {
+    defaultTemplate,
+    customTemplate,
+    activeType,
+    isLoading,
+    error,
+    refetch,
+    initializeDefault: initializeDefaultMutation.mutateAsync,
+    isInitializingDefault: initializeDefaultMutation.isPending,
+    initializeCustom: initializeCustomMutation.mutateAsync,
+    isInitializingCustom: initializeCustomMutation.isPending,
+    setActiveByType: setActiveByTypeMutation.mutate,
+    setActiveByTypeAsync: setActiveByTypeMutation.mutateAsync,
+    isSettingActive: setActiveByTypeMutation.isPending,
+    updateContent: updateContentMutation.mutate,
+    updateContentAsync: updateContentMutation.mutateAsync,
+    isUpdating: updateContentMutation.isPending,
+    resetDefault: resetDefaultMutation.mutate,
+    resetDefaultAsync: resetDefaultMutation.mutateAsync,
+    isResetting: resetDefaultMutation.isPending,
+    clearCustom: clearCustomMutation.mutate,
+    clearCustomAsync: clearCustomMutation.mutateAsync,
+    isClearing: clearCustomMutation.isPending,
   };
 };

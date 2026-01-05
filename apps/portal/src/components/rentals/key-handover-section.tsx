@@ -1,13 +1,10 @@
 import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import {
   Key,
   KeyRound,
-  CheckCircle2,
-  Clock,
   AlertCircle
 } from "lucide-react";
 import { useKeyHandover, HandoverType } from "@/hooks/use-key-handover";
@@ -55,8 +52,6 @@ export const KeyHandoverSection = ({ rentalId, rentalStatus }: KeyHandoverSectio
     setReceivingNotes(receivingHandover?.notes || "");
   }, [receivingHandover?.notes]);
 
-  const isPending = rentalStatus === "Pending";
-  const isActive = rentalStatus === "Active";
   const isClosed = rentalStatus === "Closed" || rentalStatus === "Completed";
 
   const givingCompleted = !!givingHandover?.handed_at;
@@ -98,26 +93,9 @@ export const KeyHandoverSection = ({ rentalId, rentalStatus }: KeyHandoverSectio
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           {/* Vehicle Collection Section */}
           <div className="space-y-4 p-4 border rounded-lg bg-muted/20">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <KeyRound className="h-5 w-5 text-primary" />
-                <h3 className="font-semibold">Vehicle Collection</h3>
-              </div>
-              {givingCompleted ? (
-                <Badge className="bg-green-600">
-                  <CheckCircle2 className="h-3 w-3 mr-1" />
-                  Collected
-                </Badge>
-              ) : isClosed ? (
-                <Badge variant="secondary">Not Recorded</Badge>
-              ) : isPending ? (
-                <Badge variant="outline" className="text-orange-600 border-orange-600">
-                  <Clock className="h-3 w-3 mr-1" />
-                  Pending
-                </Badge>
-              ) : (
-                <Badge variant="secondary">Waiting</Badge>
-              )}
+            <div className="flex items-center gap-2">
+              <KeyRound className="h-5 w-5 text-primary" />
+              <h3 className="font-semibold">Vehicle Collection</h3>
             </div>
 
             <p className="text-sm text-muted-foreground">
@@ -182,28 +160,9 @@ export const KeyHandoverSection = ({ rentalId, rentalStatus }: KeyHandoverSectio
 
           {/* Vehicle Return Section */}
           <div className={`space-y-4 p-4 border rounded-lg ${!givingCompleted ? 'bg-muted/50 opacity-60' : 'bg-muted/20'}`}>
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <Key className="h-5 w-5 text-primary" />
-                <h3 className="font-semibold">Vehicle Return</h3>
-              </div>
-              {receivingCompleted ? (
-                <Badge className="bg-green-600">
-                  <CheckCircle2 className="h-3 w-3 mr-1" />
-                  Received
-                </Badge>
-              ) : isClosed ? (
-                <Badge variant="secondary">Not Recorded</Badge>
-              ) : isActive && givingCompleted ? (
-                <Badge variant="outline" className="text-orange-600 border-orange-600">
-                  <Clock className="h-3 w-3 mr-1" />
-                  Awaiting
-                </Badge>
-              ) : (
-                <Badge variant="secondary">
-                  {!givingCompleted ? "Pending" : "Waiting"}
-                </Badge>
-              )}
+            <div className="flex items-center gap-2">
+              <Key className="h-5 w-5 text-primary" />
+              <h3 className="font-semibold">Vehicle Return</h3>
             </div>
 
             <p className="text-sm text-muted-foreground">

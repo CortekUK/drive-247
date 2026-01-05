@@ -127,6 +127,17 @@ export const RentalsFilters = ({ filters, onFiltersChange, onClearFilters }: Ren
           </SelectContent>
         </Select>
 
+        <Select value={filters.paymentMode || "all"} onValueChange={(value) => updateFilter("paymentMode", value)}>
+          <SelectTrigger className="w-[150px]">
+            <SelectValue placeholder="Payment Mode" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Modes</SelectItem>
+            <SelectItem value="auto">Auto</SelectItem>
+            <SelectItem value="manual">Manual</SelectItem>
+          </SelectContent>
+        </Select>
+
         <div className="flex gap-2 items-center">
           <span className="text-sm text-muted-foreground">Duration (mo):</span>
           <Input

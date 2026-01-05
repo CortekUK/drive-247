@@ -6,7 +6,7 @@ import { useTenant } from "@/contexts/TenantContext";
 
 export interface BlockedIdentity {
   id: string;
-  identity_type: 'license' | 'id_card' | 'passport' | 'other';
+  identity_type: 'license' | 'id_card' | 'passport' | 'email' | 'other';
   identity_number: string;
   reason: string;
   blocked_by: string | null;
@@ -22,7 +22,7 @@ export interface BlockCustomerRequest {
 }
 
 export interface AddBlockedIdentityRequest {
-  identityType: 'license' | 'id_card' | 'passport' | 'other';
+  identityType: 'license' | 'id_card' | 'passport' | 'email' | 'other';
   identityNumber: string;
   reason: string;
   notes?: string;
@@ -171,10 +171,19 @@ export function useCustomerBlockingActions() {
         .single();
 
       if (error) throw error;
+
+      // If blocking by email, check and update global blacklist
+      if (identityType === 'email') {
+        await supabase.rpc('check_and_update_global_blacklist', {
+          p_email: identityNumber
+        });
+      }
+
       return data;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['blocked-identities'] });
+      queryClient.invalidateQueries({ queryKey: ['global-blacklist'] });
       toast({
         title: "Identity Blocked",
         description: "The identity has been added to the blocklist.",
@@ -200,6 +209,13 @@ export function useCustomerBlockingActions() {
   // Remove identity from blocklist (deactivate)
   const removeBlockedIdentity = useMutation({
     mutationFn: async (identityId: string) => {
+      // First get the identity to check if it's an email type
+      const { data: identity } = await supabase
+        .from('blocked_identities')
+        .select('identity_type, identity_number')
+        .eq('id', identityId)
+        .single();
+
       let query = supabase
         .from('blocked_identities')
         .update({ is_active: false, updated_at: new Date().toISOString() })
@@ -212,9 +228,17 @@ export function useCustomerBlockingActions() {
       const { error } = await query;
 
       if (error) throw error;
+
+      // If it was an email type, update global blacklist
+      if (identity?.identity_type === 'email' && identity?.identity_number) {
+        await supabase.rpc('check_and_update_global_blacklist', {
+          p_email: identity.identity_number
+        });
+      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['blocked-identities'] });
+      queryClient.invalidateQueries({ queryKey: ['global-blacklist'] });
       toast({
         title: "Identity Unblocked",
         description: "The identity has been removed from the blocklist.",
@@ -240,7 +264,7 @@ export function useCustomerBlockingActions() {
 }
 
 // Utility function to check identity blocking (for use in forms/validation)
-// Only checks license, id_card, passport types - NOT email
+// Checks license, id_card, passport, and email types
 export async function checkIdentityBlocked(identityNumber: string, tenantId?: string): Promise<{
   isBlocked: boolean;
   reason?: string;
@@ -255,7 +279,7 @@ export async function checkIdentityBlocked(identityNumber: string, tenantId?: st
     .select('identity_type, reason')
     .eq('identity_number', identityNumber.trim())
     .eq('is_active', true)
-    .in('identity_type', ['license', 'id_card', 'passport']);
+    .in('identity_type', ['license', 'id_card', 'passport', 'email']);
 
   if (tenantId) {
     query = query.eq('tenant_id', tenantId);

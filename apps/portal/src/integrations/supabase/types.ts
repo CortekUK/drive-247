@@ -3608,6 +3608,10 @@ export type Database = {
           id: string
           insurance_status: string | null
           monthly_amount: number
+          payment_mode: string | null
+          approval_status: string | null
+          payment_status: string | null
+          cancellation_reason: string | null
           pickup_location: string | null
           pickup_location_id: string | null
           pickup_time: string | null
@@ -3639,6 +3643,10 @@ export type Database = {
           id?: string
           insurance_status?: string | null
           monthly_amount: number
+          payment_mode?: string | null
+          approval_status?: string | null
+          payment_status?: string | null
+          cancellation_reason?: string | null
           pickup_location?: string | null
           pickup_location_id?: string | null
           pickup_time?: string | null
@@ -3670,6 +3678,10 @@ export type Database = {
           id?: string
           insurance_status?: string | null
           monthly_amount?: number
+          payment_mode?: string | null
+          approval_status?: string | null
+          payment_status?: string | null
+          cancellation_reason?: string | null
           pickup_location?: string | null
           pickup_location_id?: string | null
           pickup_time?: string | null

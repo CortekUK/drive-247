@@ -211,14 +211,22 @@ export default function TenantDetailsPage() {
     setDeleting(true);
 
     try {
-      const { error } = await supabase
-        .from('tenants')
-        .delete()
-        .eq('id', tenant.id);
+      // Use the edge function to delete tenant and all associated data including auth users
+      const { data, error } = await supabase.functions.invoke('admin-delete-tenant', {
+        body: { tenant_id: tenant.id }
+      });
 
       if (error) throw error;
 
-      toast.success('Tenant deleted successfully!');
+      if (data?.error) {
+        throw new Error(data.error);
+      }
+
+      // Log what was deleted
+      console.log('Deletion results:', data?.deletionResults);
+      console.log('Deleted auth users:', data?.deletedAuthUsers);
+
+      toast.success('Tenant and all associated data deleted successfully!');
       router.push('/admin/rentals');
     } catch (error: any) {
       toast.error(`Error deleting tenant: ${error.message}`);

@@ -205,14 +205,26 @@ export default function RejectionDialog({
         }
       }
 
-      // Step 2: Update rental status
+      // Step 2: Update rental status - using new status fields
+      // approval_status -> rejected, status -> Cancelled, payment_status -> refunded (if applicable)
+      const rentalUpdateData: any = {
+        status: 'Cancelled',
+        approval_status: 'rejected',
+        cancellation_reason: rejectionReason || 'rejected_by_admin',
+        updated_at: new Date().toISOString(),
+      };
+
+      // Set payment_status based on refund action
+      if (isPaymentCaptured && refundAmount > 0) {
+        rentalUpdateData.payment_status = 'refunded';
+      } else if (isPreAuth) {
+        // Pre-auth was released, not a refund
+        rentalUpdateData.payment_status = 'refunded';
+      }
+
       let rentalQuery = supabase
         .from('rentals')
-        .update({
-          status: 'Rejected',
-          rejection_reason: rejectionReason || 'Rejected by admin',
-          rejected_at: new Date().toISOString(),
-        })
+        .update(rentalUpdateData)
         .eq('id', rental.id);
 
       if (tenant?.id) {

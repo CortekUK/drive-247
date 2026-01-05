@@ -125,6 +125,7 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
       }
 
       console.log(`[TenantContext] Loaded tenant: ${data.company_name} (${data.id})`);
+      console.log('[TenantContext] tenant_id:', data.id);
       setTenant(data);
       setError(null);
     } catch (err: any) {

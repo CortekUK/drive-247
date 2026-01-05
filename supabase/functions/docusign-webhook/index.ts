@@ -272,9 +272,26 @@ async function handleDocuSignWebhook(supabaseClient: any, event: DocuSignEvent) 
       document_status: mappedStatus
     };
 
-    // If completed, download the signed document
+    // If completed, update rental to Active, vehicle to Rented, and download signed document
     if (mappedStatus === 'completed') {
-      console.log('Envelope completed, downloading signed document...');
+      console.log('Envelope completed, activating rental and downloading signed document...');
+
+      // Update rental status to Active (from Pending)
+      updateData.status = 'Active';
+
+      // Update vehicle status to Rented
+      if (rental.vehicle_id) {
+        const { error: vehicleUpdateError } = await supabaseClient
+          .from('vehicles')
+          .update({ status: 'Rented' })
+          .eq('id', rental.vehicle_id);
+
+        if (vehicleUpdateError) {
+          console.error('Error updating vehicle status:', vehicleUpdateError);
+        } else {
+          console.log('Vehicle status updated to Rented:', rental.vehicle_id);
+        }
+      }
 
       // Get DocuSign credentials
       const DOCUSIGN_INTEGRATION_KEY = Deno.env.get('DOCUSIGN_INTEGRATION_KEY');

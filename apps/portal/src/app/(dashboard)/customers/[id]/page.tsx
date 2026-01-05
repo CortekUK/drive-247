@@ -98,12 +98,7 @@ const CustomerDetail = () => {
   });
 
   const handleBlockCustomer = async () => {
-    if (!blockReason.trim() || !customer) return;
-
-    // Determine what to block: license > id_number > email
-    const identityToBlock = customer.license_number || customer.id_number || customer.email;
-    const identityType = customer.license_number ? 'license' :
-                         customer.id_number ? 'id_card' : 'email';
+    if (!blockReason.trim() || !customer || !customer.email) return;
 
     setIsBlocking(true);
     try {
@@ -119,15 +114,18 @@ const CustomerDetail = () => {
 
       if (blockError) throw blockError;
 
-      // Then add to blocked identities list
-      if (identityToBlock) {
-        await addBlockedIdentity.mutateAsync({
-          identityType: identityType as 'license' | 'id_card' | 'passport' | 'other',
-          identityNumber: identityToBlock,
-          reason: blockReason,
-          notes: `Blocked from customer: ${customer.name}`
-        });
-      }
+      // Add email to blocked identities list
+      await addBlockedIdentity.mutateAsync({
+        identityType: 'email',
+        identityNumber: customer.email,
+        reason: blockReason,
+        notes: `Blocked from customer: ${customer.name}`
+      });
+
+      // Check and update global blacklist (auto-adds if blocked by 3+ tenants)
+      await (supabase as any).rpc('check_and_update_global_blacklist', {
+        p_email: customer.email
+      });
 
       setBlockDialogOpen(false);
       setBlockReason("");
@@ -995,43 +993,23 @@ const CustomerDetail = () => {
               Block Customer
             </DialogTitle>
             <DialogDescription>
-              This will block {customer.name} from making new rentals. Their license/ID number will be added to the blocklist.
+              This will block {customer.name} from making new rentals. Their email will be added to the blocklist.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-4">
-            {!customer.license_number && !customer.id_number ? (
-              <Alert variant="destructive">
-                <AlertTriangle className="h-4 w-4" />
-                <AlertTitle>Cannot Block Customer</AlertTitle>
-                <AlertDescription>
-                  This customer does not have a license number or ID number on file.
-                  Please edit the customer and add their license number before blocking.
-                </AlertDescription>
-              </Alert>
-            ) : (
-              <>
-                <div className="space-y-2">
-                  <Label htmlFor="block-reason">Reason for blocking <span className="text-red-500">*</span></Label>
-                  <Textarea
-                    id="block-reason"
-                    placeholder="Enter the reason for blocking this customer..."
-                    value={blockReason}
-                    onChange={(e) => setBlockReason(e.target.value)}
-                    rows={3}
-                  />
-                </div>
-                {customer.license_number && (
-                  <div className="text-sm text-muted-foreground">
-                    <strong>License Number:</strong> {customer.license_number} will be added to blocklist
-                  </div>
-                )}
-                {customer.id_number && (
-                  <div className="text-sm text-muted-foreground">
-                    <strong>ID Number:</strong> {customer.id_number} will be added to blocklist
-                  </div>
-                )}
-              </>
-            )}
+            <div className="space-y-2">
+              <Label htmlFor="block-reason">Reason for blocking <span className="text-red-500">*</span></Label>
+              <Textarea
+                id="block-reason"
+                placeholder="Enter the reason for blocking this customer..."
+                value={blockReason}
+                onChange={(e) => setBlockReason(e.target.value)}
+                rows={3}
+              />
+            </div>
+            <div className="text-sm text-muted-foreground">
+              <strong>Email:</strong> {customer.email} will be added to blocklist
+            </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setBlockDialogOpen(false)}>
@@ -1040,7 +1018,7 @@ const CustomerDetail = () => {
             <Button
               variant="destructive"
               onClick={handleBlockCustomer}
-              disabled={!blockReason.trim() || isBlocking || (!customer.license_number && !customer.id_number)}
+              disabled={!blockReason.trim() || isBlocking || !customer.email}
             >
               {isBlocking ? "Blocking..." : "Block Customer"}
             </Button>

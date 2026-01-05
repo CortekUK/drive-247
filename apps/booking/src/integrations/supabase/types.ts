@@ -3320,6 +3320,10 @@ export type Database = {
           envelope_sent_at: string | null
           id: string
           monthly_amount: number
+          payment_mode: string | null
+          approval_status: string | null
+          payment_status: string | null
+          cancellation_reason: string | null
           rental_number: string | null
           rental_period_type: string | null
           schedule: string | null
@@ -3341,6 +3345,10 @@ export type Database = {
           envelope_sent_at?: string | null
           id?: string
           monthly_amount: number
+          payment_mode?: string | null
+          approval_status?: string | null
+          payment_status?: string | null
+          cancellation_reason?: string | null
           rental_number?: string | null
           rental_period_type?: string | null
           schedule?: string | null
@@ -3362,6 +3370,10 @@ export type Database = {
           envelope_sent_at?: string | null
           id?: string
           monthly_amount?: number
+          payment_mode?: string | null
+          approval_status?: string | null
+          payment_status?: string | null
+          cancellation_reason?: string | null
           rental_number?: string | null
           rental_period_type?: string | null
           schedule?: string | null

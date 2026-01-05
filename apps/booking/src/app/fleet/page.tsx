@@ -364,11 +364,11 @@ const Pricing = () => {
                     <div className="relative p-4 md:p-6">
                       <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 lg:gap-6">
                         {/* Vehicle Image */}
-                        {vehicle.vehicle_photos?.[0]?.photo_url ? (
+                        {vehicle.vehicle_photos?.[0]?.photo_url || vehicle.photo_url ? (
                           <div className="w-full lg:w-48 flex-shrink-0">
                             <div className="relative aspect-[4/3] rounded-lg overflow-hidden shadow-glow border border-accent/20">
                               <img
-                                src={vehicle.vehicle_photos[0].photo_url}
+                                src={vehicle.vehicle_photos?.[0]?.photo_url || vehicle.photo_url || ''}
                                 alt={`${vehicleName} - Luxury vehicle`}
                                 className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
                                 loading="lazy"
@@ -385,7 +385,7 @@ const Pricing = () => {
                         {/* Left Content */}
                         <div className="flex-1 space-y-2">
                           <div className="flex items-start gap-3">
-                            {!vehicle.vehicle_photos?.[0]?.photo_url && (
+                            {!vehicle.vehicle_photos?.[0]?.photo_url && !vehicle.photo_url && (
                               <div className="lg:hidden p-2 rounded-lg bg-accent/10 border border-accent/20 group-hover:bg-accent/20 transition-colors">
                                 <Car className="w-5 h-5 text-accent" />
                               </div>
