@@ -182,6 +182,11 @@ serve(async (req) => {
         });
       }
 
+      // Extract and remove _tenant_id from body (used for audit logging, not saved to settings)
+      const requestTenantId: string | undefined = body._tenant_id;
+      delete body._tenant_id;
+      console.log('🔍 Request tenant_id from frontend:', requestTenantId);
+
       // ✨ 2. Get the authenticated user and app_user (MOVED HERE - BEFORE validation)
       const authHeader = req.headers.get('Authorization');
       if (!authHeader) {
@@ -312,11 +317,17 @@ serve(async (req) => {
         tenantId = data.tenant_id || appUser.tenant_id;
       }
 
-      // Use appUser.tenant_id as fallback if settings don't have tenant_id
-      // For super admins (who have null tenant_id), try to get tenant from org_id lookup
-      let auditTenantId = tenantId || appUser.tenant_id;
+      // Use requestTenantId (from frontend context) first, then appUser.tenant_id as fallback
+      // For super admins (who have null tenant_id), the frontend MUST provide the tenant context
+      let auditTenantId = requestTenantId || tenantId || appUser.tenant_id;
       
-      // If still no tenant_id (super admin case), try to find a tenant by org_id
+      console.log('🔍 Tenant ID resolution:');
+      console.log('  - requestTenantId (from frontend):', requestTenantId);
+      console.log('  - tenantId (from org_settings):', tenantId);
+      console.log('  - appUser.tenant_id:', appUser.tenant_id);
+      console.log('  - Final auditTenantId:', auditTenantId);
+      
+      // If still no tenant_id (super admin case without frontend context), try to find tenant from the settings being updated
       if (!auditTenantId && updatedSettings?.org_id) {
         console.log('🔍 No tenant_id, trying to find tenant by org_id:', updatedSettings.org_id);
         const { data: orgTenant } = await serviceClient
@@ -330,10 +341,16 @@ serve(async (req) => {
         }
       }
       
-      // Last resort: use the Drive 247 default tenant for super admins
-      if (!auditTenantId && appUser.is_super_admin) {
-        auditTenantId = 'ffbc48dc-a264-47cc-9ae1-2cd4f400b662'; // Drive 247 tenant
-        console.log('🔍 Using default Drive 247 tenant for super admin');
+      // If still no tenant_id, try to get it from the settings record itself
+      if (!auditTenantId && updatedSettings?.tenant_id) {
+        auditTenantId = updatedSettings.tenant_id;
+        console.log('🔍 Using tenant_id from updated settings:', auditTenantId);
+      }
+      
+      // Super admins acting on behalf of a tenant should have the tenant context
+      // If no tenant can be determined, log a warning but don't use hardcoded value
+      if (!auditTenantId) {
+        console.warn('⚠️ Could not determine tenant_id for audit log - super admin without tenant context');
       }
 
       // Create audit log entry using service client (bypasses RLS)
