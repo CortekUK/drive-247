@@ -46,9 +46,8 @@ export function VehicleStatusBadge({ status, showTooltip = true, compact = false
   const Icon = config.icon;
 
   const badge = (
-    <Badge variant={config.variant} className={`flex items-center justify-center gap-1 ${config.className} ${compact ? 'text-xs px-2 py-0.5' : ''}`}>
-      <Icon className="h-3 w-3" />
-      {!compact && <span className="capitalize">{status}</span>}
+    <Badge variant={config.variant} className={`flex items-center justify-center ${config.className} ${compact ? 'text-xs px-2 py-0.5' : ''}`}>
+      <span className="capitalize">{status}</span>
     </Badge>
   );
 

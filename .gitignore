@@ -35,4 +35,5 @@ out/
 
 helper-folder
 quality-assurance
-testing-qa
+testing-qa.env
+.env

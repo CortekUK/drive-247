@@ -12,17 +12,11 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Eye, Plus, Search, ArrowUpDown, ChevronUp, ChevronDown, RefreshCw } from "lucide-react";
+import { Eye, Plus, Search } from "lucide-react";
 import { EmptyState } from "@/components/shared/data-display/empty-state";
 import { AddVehicleDialog } from "@/components/vehicles/add-vehicle-dialog";
 import { FleetSummaryCards } from "@/components/vehicles/fleet-summary-cards";
 import { VehicleStatusBadge } from "@/components/vehicles/vehicle-status-badge";
-import { AcquisitionBadge } from "@/components/vehicles/acquisition-badge";
-import { MOTTaxStatusChip } from "@/components/vehicles/mot-tax-status-chip";
-import { WarrantyStatusChip } from "@/components/vehicles/warranty-status-chip";
-import { ServicePlanChip } from "@/components/vehicles/service-plan-chip";
-import { SpareKeyChip } from "@/components/vehicles/spare-key-chip";
-import { NetPLChip } from "@/components/vehicles/net-pl-chip";
 import { VehiclePhotoThumbnail } from "@/components/vehicles/vehicle-photo-thumbnail";
 import { VehicleStatus, VehiclePLData, formatCurrency } from "@/lib/vehicle-utils";
 import { useToast } from "@/hooks/use-toast";
@@ -38,6 +32,7 @@ interface Vehicle {
   make: string;
   model: string;
   colour: string;
+  year?: number;
   acquisition_type: string;
   purchase_price?: number;
   mot_due_date?: string;
@@ -57,7 +52,7 @@ interface Vehicle {
   description?: string;
 }
 
-type SortField = 'reg' | 'make_model' | 'acquisition_type' | 'status' | 'mot_due_date' | 'tax_due_date' | 'warranty_end_date' | 'net_profit';
+type SortField = 'reg' | 'make_model' | 'year' | 'status';
 type SortDirection = 'asc' | 'desc';
 type PerformanceFilter = 'all' | 'profitable' | 'loss';
 
@@ -265,25 +260,13 @@ export default function VehiclesListEnhanced() {
             aVal = `${a.make} ${a.model}`;
             bVal = `${b.make} ${b.model}`;
             break;
-          case 'acquisition_type':
-            aVal = a.acquisition_type;
-            bVal = b.acquisition_type;
+          case 'year':
+            aVal = a.year || 0;
+            bVal = b.year || 0;
             break;
           case 'status':
             aVal = a.status;
             bVal = b.status;
-            break;
-          case 'mot_due_date':
-            aVal = a.mot_due_date || '9999-12-31';
-            bVal = b.mot_due_date || '9999-12-31';
-            break;
-          case 'tax_due_date':
-            aVal = a.tax_due_date || '9999-12-31';
-            bVal = b.tax_due_date || '9999-12-31';
-            break;
-          case 'net_profit':
-            aVal = a.pl_data.net_profit;
-            bVal = b.pl_data.net_profit;
             break;
           default:
             aVal = a.reg;
@@ -319,43 +302,8 @@ export default function VehiclesListEnhanced() {
     return makes.sort();
   }, [vehicles]);
 
-  const handleSort = (field: SortField) => {
-    const newDirection = sortField === field && sortDirection === 'asc' ? 'desc' : 'asc';
-
-    const params = new URLSearchParams(searchParams.toString());
-    params.set('sort', field);
-    params.set('dir', newDirection);
-
-    // Reset to page 1 when sorting
-    params.delete('page');
-    setCurrentPage(1);
-
-    router.push(`?${params.toString()}`);
-
-    // Debug logging
-    console.log(`Sorting by ${field} in ${newDirection} direction`);
-  };
-
   const handleRowClick = (vehicleId: string) => {
     router.push(`/vehicles/${vehicleId}`);
-  };
-
-  const clearFilters = () => {
-    setFilters({
-      search: '',
-      status: 'all',
-      make: 'all',
-      performance: 'all',
-      servicePlan: 'all',
-      spareKey: 'all',
-    });
-    setCurrentPage(1);
-    router.push('/vehicles');
-  };
-
-  const getSortIcon = (field: SortField) => {
-    if (sortField !== field) return <ArrowUpDown className="h-4 w-4" />;
-    return sortDirection === 'asc' ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />;
   };
 
   if (isLoading) {
@@ -407,7 +355,7 @@ export default function VehiclesListEnhanced() {
       <FleetSummaryCards vehicles={filteredVehicles} />
 
       {/* Filters */}
-      <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <div className="relative">
           <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
           <Input
@@ -452,15 +400,6 @@ export default function VehiclesListEnhanced() {
             <SelectItem value="loss">Loss Making</SelectItem>
           </SelectContent>
         </Select>
-
-        <Button
-          variant="outline"
-          onClick={clearFilters}
-          className="flex items-center gap-2"
-        >
-          <RefreshCw className="h-4 w-4" />
-          Clear
-        </Button>
       </div>
 
       {/* Results Info */}
@@ -488,49 +427,11 @@ export default function VehiclesListEnhanced() {
                <TableHeader>
                  <TableRow>
                    <TableHead>Photo</TableHead>
-                   <TableHead className="cursor-pointer" onClick={() => handleSort('reg')}>
-                     <div className="flex items-center gap-2">
-                       Registration
-                       {getSortIcon('reg')}
-                     </div>
-                   </TableHead>
-                  <TableHead className="cursor-pointer" onClick={() => handleSort('make_model')}>
-                    <div className="flex items-center gap-2">
-                      Make/Model
-                      {getSortIcon('make_model')}
-                    </div>
-                  </TableHead>
+                   <TableHead>Registration</TableHead>
+                  <TableHead>Make/Model</TableHead>
+                  <TableHead>Year</TableHead>
                   <TableHead>Color</TableHead>
-                  <TableHead className="cursor-pointer" onClick={() => handleSort('acquisition_type')}>
-                    <div className="flex items-center gap-2">
-                      Acquisition
-                      {getSortIcon('acquisition_type')}
-                    </div>
-                  </TableHead>
-                  <TableHead className="cursor-pointer" onClick={() => handleSort('status')}>
-                    <div className="flex items-center gap-2">
-                      Status
-                      {getSortIcon('status')}
-                    </div>
-                  </TableHead>
-                  <TableHead className="cursor-pointer" onClick={() => handleSort('mot_due_date')}>
-                    <div className="flex items-center gap-2">
-                      Inspection Due
-                      {getSortIcon('mot_due_date')}
-                    </div>
-                  </TableHead>
-                    <TableHead className="cursor-pointer" onClick={() => handleSort('tax_due_date')}>
-                      <div className="flex items-center gap-2">
-                        Registration Due
-                        {getSortIcon('tax_due_date')}
-                       </div>
-                     </TableHead>
-                    <TableHead className="cursor-pointer text-center" onClick={() => handleSort('net_profit')}>
-                     <div className="flex items-center justify-center gap-2">
-                       Net P&L
-                       {getSortIcon('net_profit')}
-                     </div>
-                   </TableHead>
+                  <TableHead>Status</TableHead>
                   <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
@@ -568,35 +469,11 @@ export default function VehiclesListEnhanced() {
                         </div>
                       </div>
                     </TableCell>
+                    <TableCell>{vehicle.year || '—'}</TableCell>
                     <TableCell>{vehicle.colour}</TableCell>
-                    <TableCell className="text-center">
-                      <AcquisitionBadge acquisitionType={vehicle.acquisition_type} />
-                    </TableCell>
                     <TableCell className="text-center">
                       <VehicleStatusBadge status={vehicle.status} />
                     </TableCell>
-                    <TableCell className="text-center">
-                      <MOTTaxStatusChip
-                        dueDate={vehicle.mot_due_date}
-                        type="MOT"
-                        compact
-                      />
-                    </TableCell>
-                    <TableCell className="text-center">
-                      <MOTTaxStatusChip
-                        dueDate={vehicle.tax_due_date}
-                        type="TAX"
-                        compact
-                      />
-                    </TableCell>
-                     <TableCell className="text-center">
-                       <NetPLChip
-                         revenue={vehicle.pl_data.total_revenue}
-                         costs={vehicle.pl_data.total_costs}
-                         net={vehicle.pl_data.net_profit}
-                         compact
-                       />
-                     </TableCell>
                      <TableCell className="text-right">
                        <Button
                          variant="ghost"

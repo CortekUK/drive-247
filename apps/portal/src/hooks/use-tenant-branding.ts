@@ -219,8 +219,41 @@ export const useTenantBranding = () => {
     },
   });
 
+  // Build immediate branding from tenant while query runs
+  // This prevents flash of default "Drive 917" branding
+  const immediateFromTenant: TenantBranding = tenant ? {
+    app_name: tenant.app_name || tenant.company_name || DEFAULT_BRANDING.app_name,
+    primary_color: tenant.primary_color || DEFAULT_BRANDING.primary_color,
+    secondary_color: tenant.secondary_color || DEFAULT_BRANDING.secondary_color,
+    accent_color: tenant.accent_color || DEFAULT_BRANDING.accent_color,
+    light_primary_color: tenant.light_primary_color,
+    light_secondary_color: tenant.light_secondary_color,
+    light_accent_color: tenant.light_accent_color,
+    light_background_color: tenant.light_background_color,
+    dark_primary_color: tenant.dark_primary_color,
+    dark_secondary_color: tenant.dark_secondary_color,
+    dark_accent_color: tenant.dark_accent_color,
+    dark_background_color: tenant.dark_background_color,
+    light_header_footer_color: tenant.light_header_footer_color,
+    dark_header_footer_color: tenant.dark_header_footer_color,
+    logo_url: tenant.logo_url,
+    favicon_url: tenant.favicon_url,
+    hero_background_url: tenant.hero_background_url,
+    meta_title: tenant.meta_title,
+    meta_description: tenant.meta_description,
+    og_image_url: tenant.og_image_url,
+    phone: tenant.phone,
+    address: tenant.address,
+    business_hours: tenant.business_hours,
+    google_maps_url: tenant.google_maps_url,
+    facebook_url: tenant.facebook_url,
+    instagram_url: tenant.instagram_url,
+    twitter_url: tenant.twitter_url,
+    linkedin_url: tenant.linkedin_url,
+  } : DEFAULT_BRANDING;
+
   return {
-    branding: branding || DEFAULT_BRANDING,
+    branding: branding || immediateFromTenant,
     isLoading,
     error,
     refetch,

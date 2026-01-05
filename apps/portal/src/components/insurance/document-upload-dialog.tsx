@@ -99,7 +99,19 @@ export function DocumentUploadDialog({
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || []);
-    setSelectedFiles(files);
+    // Filter out duplicates by file name within the batch
+    const seen = new Set<string>();
+    const uniqueFiles = files.filter(f => {
+      if (seen.has(f.name)) {
+        return false;
+      }
+      seen.add(f.name);
+      return true;
+    });
+    if (uniqueFiles.length < files.length) {
+      toast.warning('Duplicate file(s) skipped');
+    }
+    setSelectedFiles(uniqueFiles);
   };
 
   const removeFile = (index: number) => {

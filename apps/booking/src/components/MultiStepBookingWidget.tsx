@@ -103,6 +103,7 @@ const MultiStepBookingWidget = () => {
   });
   const searchDebounceTimer = useRef<NodeJS.Timeout>();
   const [expandedDescriptions, setExpandedDescriptions] = useState<Set<string>>(new Set());
+  const [vehicleImageIndex, setVehicleImageIndex] = useState<Record<string, number>>({});
   const [formData, setFormData] = useState({
     pickupLocation: "",
     dropoffLocation: "",
@@ -339,7 +340,7 @@ const MultiStepBookingWidget = () => {
       sessionStorage.removeItem('prefilledService');
       sessionStorage.removeItem('prefilledRequirements');
     }
-  }, []);
+  }, [tenant?.id]);
 
   // Restore form data from sessionStorage on mount (preserves data when navigating away)
   useEffect(() => {
@@ -411,7 +412,14 @@ const MultiStepBookingWidget = () => {
   }, [formData.customerName, formData.customerEmail, formData.vehicleId, showConfirmation]);
 
   const loadData = async () => {
+    // Wait for tenant to be loaded before querying
+    if (!tenant?.id) {
+      console.log('[loadData] Waiting for tenant to load...');
+      return;
+    }
+
     // Build query for vehicles with tenant filtering
+    // Status can be "Available" or "available" depending on how it was saved
     let vehiclesQuery = supabase
       .from("vehicles")
       .select(`
@@ -420,33 +428,26 @@ const MultiStepBookingWidget = () => {
           photo_url
         )
       `)
-      .ilike("status", "Available")
+      .eq("tenant_id", tenant.id)
+      .or("status.ilike.Available,status.ilike.available")
       .order("reg");
-
-    if (tenant?.id) {
-      vehiclesQuery = vehiclesQuery.eq("tenant_id", tenant.id);
-    }
 
     const { data: vehiclesData } = await vehiclesQuery;
 
     // Build query for pricing extras with tenant filtering
     // Note: pricing_extras may not be in generated Supabase types but exists in DB
-    let extrasQuery = (supabase as any).from("pricing_extras").select("*");
-
-    if (tenant?.id) {
-      extrasQuery = extrasQuery.eq("tenant_id", tenant.id);
-    }
+    const extrasQuery = (supabase as any)
+      .from("pricing_extras")
+      .select("*")
+      .eq("tenant_id", tenant.id);
 
     const { data: extrasData } = await extrasQuery;
 
     // Build query for blocked dates with tenant filtering
-    let blockedDatesQuery = supabase
+    const blockedDatesQuery = supabase
       .from("blocked_dates")
-      .select("id, start_date, end_date, vehicle_id, reason");
-
-    if (tenant?.id) {
-      blockedDatesQuery = blockedDatesQuery.eq("tenant_id", tenant.id);
-    }
+      .select("id, start_date, end_date, vehicle_id, reason")
+      .eq("tenant_id", tenant.id);
 
     const { data: blockedDatesData } = await blockedDatesQuery;
 
@@ -474,6 +475,7 @@ const MultiStepBookingWidget = () => {
     if (blockedDatesData) {
       // Store all blocked dates (global + vehicle-specific)
       setAllBlockedDates(blockedDatesData);
+      console.log('[BlockedDates] Loaded all blocked dates:', blockedDatesData.map(b => ({ id: b.id, vehicle_id: b.vehicle_id, start: b.start_date, end: b.end_date })));
 
       // Filter only global blocked dates (vehicle_id is null) for Step 1 calendar
       const globalBlockedDates = blockedDatesData.filter(range => range.vehicle_id === null);
@@ -1042,6 +1044,40 @@ const MultiStepBookingWidget = () => {
         customerId = newCustomer.id;
       }
 
+      // Auto-link any unlinked identity verifications by email
+      if (customerId && formData.customerEmail && tenant?.id) {
+        const customerEmailLower = formData.customerEmail.toLowerCase().trim();
+        const { data: unlinkedVerification, error: linkError } = await supabase
+          .from("identity_verifications")
+          .update({
+            customer_id: customerId,
+            customer_email: null // Clear email after linking
+          })
+          .eq("customer_email", customerEmailLower)
+          .eq("tenant_id", tenant.id)
+          .is("customer_id", null)
+          .select("id")
+          .maybeSingle();
+
+        if (unlinkedVerification && !linkError) {
+          console.log("✅ Auto-linked identity verification:", unlinkedVerification.id, "to customer:", customerId);
+
+          // Also update customer's verification status if verification is complete
+          const { data: verification } = await supabase
+            .from("identity_verifications")
+            .select("review_result")
+            .eq("id", unlinkedVerification.id)
+            .single();
+
+          if (verification?.review_result === "GREEN") {
+            await supabase
+              .from("customers")
+              .update({ identity_verification_status: "verified" })
+              .eq("id", customerId);
+          }
+        }
+      }
+
       // Build rental data with sanitized inputs
       const rentalData: any = {
         customer_id: customerId,
@@ -1147,7 +1183,6 @@ const MultiStepBookingWidget = () => {
           const distanceInMiles = Math.round(data.routes[0].distance / 1609.34 * 10) / 10;
           const durationInMinutes = Math.round(data.routes[0].duration / 60);
           setCalculatedDistance(distanceInMiles);
-          toast.success(`Driving distance: ${distanceInMiles} miles (approx. ${durationInMinutes} min)`);
         } else {
           throw new Error("No route found");
         }
@@ -1215,6 +1250,25 @@ const MultiStepBookingWidget = () => {
       }
       return newSet;
     });
+  };
+
+  // Image carousel navigation
+  const getVehicleImageIndex = (vehicleId: string) => vehicleImageIndex[vehicleId] || 0;
+
+  const nextVehicleImage = (e: React.MouseEvent, vehicleId: string, totalImages: number) => {
+    e.stopPropagation();
+    setVehicleImageIndex(prev => ({
+      ...prev,
+      [vehicleId]: ((prev[vehicleId] || 0) + 1) % totalImages
+    }));
+  };
+
+  const prevVehicleImage = (e: React.MouseEvent, vehicleId: string, totalImages: number) => {
+    e.stopPropagation();
+    setVehicleImageIndex(prev => ({
+      ...prev,
+      [vehicleId]: ((prev[vehicleId] || 0) - 1 + totalImages) % totalImages
+    }));
   };
 
   const getDisplayDescription = (vehicle: Vehicle) => {
@@ -1366,20 +1420,26 @@ const MultiStepBookingWidget = () => {
       return { price: primaryPrice, label: primaryLabel, secondaryPrices: [] };
     }
   };
+  // Helper to parse YYYY-MM-DD to local date at midnight (avoids UTC timezone issues)
+  const parseLocalDate = (dateStr: string): Date => {
+    const [year, month, day] = dateStr.split('-').map(Number);
+    return new Date(year, month - 1, day);
+  };
+
   const isVehicleBlockedForPeriod = (vehicleId: string): { blocked: boolean; blockedRange?: { start: string; end: string } } => {
     if (!formData.pickupDate || !formData.dropoffDate) {
       return { blocked: false };
     }
 
-    const pickupDate = new Date(formData.pickupDate);
-    const dropoffDate = new Date(formData.dropoffDate);
+    const pickupDate = parseLocalDate(formData.pickupDate);
+    const dropoffDate = parseLocalDate(formData.dropoffDate);
 
     // Find any blocked dates for this specific vehicle that overlap with the rental period
     const vehicleBlockedDates = allBlockedDates.filter(block => block.vehicle_id === vehicleId);
 
     for (const block of vehicleBlockedDates) {
-      const blockStart = new Date(block.start_date);
-      const blockEnd = new Date(block.end_date);
+      const blockStart = parseLocalDate(block.start_date);
+      const blockEnd = parseLocalDate(block.end_date);
 
       // Check if there's any overlap between rental period and blocked period
       const hasOverlap = pickupDate <= blockEnd && dropoffDate >= blockStart;
@@ -1448,6 +1508,32 @@ const MultiStepBookingWidget = () => {
       const price = v.monthly_rent || v.daily_rent || 0;
       return price >= filters.priceRange[0] && price <= filters.priceRange[1];
     });
+
+    // Filter out vehicles with blocked dates for the selected rental period
+    if (formData.pickupDate && formData.dropoffDate) {
+      const pickupDate = parseLocalDate(formData.pickupDate);
+      const dropoffDate = parseLocalDate(formData.dropoffDate);
+
+      filtered = filtered.filter(vehicle => {
+        // Check for vehicle-specific blocked dates
+        const vehicleBlockedDates = allBlockedDates.filter(block => block.vehicle_id === vehicle.id);
+
+        for (const block of vehicleBlockedDates) {
+          const blockStart = parseLocalDate(block.start_date);
+          const blockEnd = parseLocalDate(block.end_date);
+
+          // Check if there's any overlap between rental period and blocked period
+          const hasOverlap = pickupDate <= blockEnd && dropoffDate >= blockStart;
+
+          if (hasOverlap) {
+            console.log(`[BlockedDates] Vehicle ${vehicle.reg} blocked: rental ${formData.pickupDate}-${formData.dropoffDate} overlaps with block ${block.start_date}-${block.end_date}`);
+            return false; // Exclude this vehicle
+          }
+        }
+
+        return true; // Include this vehicle
+      });
+    }
 
     // Sort
     switch (sortBy) {
@@ -2258,88 +2344,75 @@ const MultiStepBookingWidget = () => {
               </div>
             </div>
 
-            {/* Row 3: Driver DOB & Promo Code */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
-              <div className="space-y-2">
-                <Label className="font-medium">Date of Birth *</Label>
-                <div className="grid grid-cols-3 gap-2">
-                  {/* Month Select */}
-                  <Select
-                    value={formData.driverDOB ? (new Date(formData.driverDOB).getMonth() + 1).toString().padStart(2, '0') : ""}
-                    onValueChange={(month) => {
-                      const currentDate = formData.driverDOB ? new Date(formData.driverDOB) : new Date(2000, 0, 1);
-                      const newDate = new Date(currentDate.getFullYear(), parseInt(month) - 1, Math.min(currentDate.getDate(), new Date(currentDate.getFullYear(), parseInt(month), 0).getDate()));
-                      const dateStr = format(newDate, "yyyy-MM-dd");
-                      setFormData({ ...formData, driverDOB: dateStr });
-                      validateField('driverDOB', dateStr);
-                    }}
-                  >
-                    <SelectTrigger className={cn("h-12", errors.driverDOB && "border-destructive")}>
-                      <SelectValue placeholder="Month" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'].map((month, i) => (
-                        <SelectItem key={i} value={(i + 1).toString().padStart(2, '0')}>{month}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  {/* Day Select */}
-                  <Select
-                    value={formData.driverDOB ? new Date(formData.driverDOB).getDate().toString() : ""}
-                    onValueChange={(day) => {
-                      const currentDate = formData.driverDOB ? new Date(formData.driverDOB) : new Date(2000, 0, 1);
-                      const newDate = new Date(currentDate.getFullYear(), currentDate.getMonth(), parseInt(day));
-                      const dateStr = format(newDate, "yyyy-MM-dd");
-                      setFormData({ ...formData, driverDOB: dateStr });
-                      validateField('driverDOB', dateStr);
-                    }}
-                  >
-                    <SelectTrigger className={cn("h-12", errors.driverDOB && "border-destructive")}>
-                      <SelectValue placeholder="Day" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {Array.from({ length: 31 }, (_, i) => (
-                        <SelectItem key={i + 1} value={(i + 1).toString()}>{i + 1}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  {/* Year Select */}
-                  <Select
-                    value={formData.driverDOB ? new Date(formData.driverDOB).getFullYear().toString() : ""}
-                    onValueChange={(year) => {
-                      const currentDate = formData.driverDOB ? new Date(formData.driverDOB) : new Date(2000, 0, 1);
-                      const newDate = new Date(parseInt(year), currentDate.getMonth(), Math.min(currentDate.getDate(), new Date(parseInt(year), currentDate.getMonth() + 1, 0).getDate()));
-                      const dateStr = format(newDate, "yyyy-MM-dd");
-                      setFormData({ ...formData, driverDOB: dateStr });
-                      validateField('driverDOB', dateStr);
-                    }}
-                  >
-                    <SelectTrigger className={cn("h-12", errors.driverDOB && "border-destructive")}>
-                      <SelectValue placeholder="Year" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {Array.from({ length: 100 }, (_, i) => new Date().getFullYear() - (tenant?.minimum_rental_age || 18) - i).map((year) => (
-                        <SelectItem key={year} value={year.toString()}>{year}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                {formData.driverDOB && (
-                  <p className="text-sm text-muted-foreground">Age: <span className={cn("font-medium", errors.driverDOB ? "text-destructive" : "text-foreground")}>{calculateAge(new Date(formData.driverDOB))} years old</span></p>
-                )}
-                {errors.driverDOB && <p className="text-sm text-destructive">{errors.driverDOB}</p>}
+            {/* Row 3: Driver DOB */}
+            <div className="space-y-2">
+              <Label className="font-medium">Date of Birth *</Label>
+              <div className="grid grid-cols-3 gap-2 max-w-md">
+                {/* Month Select */}
+                <Select
+                  value={formData.driverDOB ? (new Date(formData.driverDOB).getMonth() + 1).toString().padStart(2, '0') : ""}
+                  onValueChange={(month) => {
+                    const currentDate = formData.driverDOB ? new Date(formData.driverDOB) : new Date(2000, 0, 1);
+                    const newDate = new Date(currentDate.getFullYear(), parseInt(month) - 1, Math.min(currentDate.getDate(), new Date(currentDate.getFullYear(), parseInt(month), 0).getDate()));
+                    const dateStr = format(newDate, "yyyy-MM-dd");
+                    setFormData({ ...formData, driverDOB: dateStr });
+                    validateField('driverDOB', dateStr);
+                  }}
+                >
+                  <SelectTrigger className={cn("h-12", errors.driverDOB && "border-destructive")}>
+                    <SelectValue placeholder="Month" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'].map((month, i) => (
+                      <SelectItem key={i} value={(i + 1).toString().padStart(2, '0')}>{month}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {/* Day Select */}
+                <Select
+                  value={formData.driverDOB ? new Date(formData.driverDOB).getDate().toString() : ""}
+                  onValueChange={(day) => {
+                    const currentDate = formData.driverDOB ? new Date(formData.driverDOB) : new Date(2000, 0, 1);
+                    const newDate = new Date(currentDate.getFullYear(), currentDate.getMonth(), parseInt(day));
+                    const dateStr = format(newDate, "yyyy-MM-dd");
+                    setFormData({ ...formData, driverDOB: dateStr });
+                    validateField('driverDOB', dateStr);
+                  }}
+                >
+                  <SelectTrigger className={cn("h-12", errors.driverDOB && "border-destructive")}>
+                    <SelectValue placeholder="Day" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {Array.from({ length: 31 }, (_, i) => (
+                      <SelectItem key={i + 1} value={(i + 1).toString()}>{i + 1}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {/* Year Select */}
+                <Select
+                  value={formData.driverDOB ? new Date(formData.driverDOB).getFullYear().toString() : ""}
+                  onValueChange={(year) => {
+                    const currentDate = formData.driverDOB ? new Date(formData.driverDOB) : new Date(2000, 0, 1);
+                    const newDate = new Date(parseInt(year), currentDate.getMonth(), Math.min(currentDate.getDate(), new Date(parseInt(year), currentDate.getMonth() + 1, 0).getDate()));
+                    const dateStr = format(newDate, "yyyy-MM-dd");
+                    setFormData({ ...formData, driverDOB: dateStr });
+                    validateField('driverDOB', dateStr);
+                  }}
+                >
+                  <SelectTrigger className={cn("h-12", errors.driverDOB && "border-destructive")}>
+                    <SelectValue placeholder="Year" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {Array.from({ length: 100 }, (_, i) => new Date().getFullYear() - (tenant?.minimum_rental_age || 18) - i).map((year) => (
+                      <SelectItem key={year} value={year.toString()}>{year}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="promoCode" className="font-medium">Promo Code</Label>
-                <Input id="promoCode" value={formData.promoCode} onChange={e => {
-                  const value = e.target.value.toUpperCase();
-                  setFormData({
-                    ...formData,
-                    promoCode: value
-                  });
-                }} placeholder="Enter promo code" className="h-12 focus-visible:ring-primary" maxLength={20} />
-              </div>
+              {formData.driverDOB && (
+                <p className="text-sm text-muted-foreground">Age: <span className={cn("font-medium", errors.driverDOB ? "text-destructive" : "text-foreground")}>{calculateAge(new Date(formData.driverDOB))} years old</span></p>
+              )}
+              {errors.driverDOB && <p className="text-sm text-destructive">{errors.driverDOB}</p>}
             </div>
           </div>
 
@@ -2555,12 +2628,14 @@ const MultiStepBookingWidget = () => {
                     const blockStatus = isVehicleBlockedForPeriod(vehicle.id);
                     const isBlocked = blockStatus.blocked;
 
+                    // Hide blocked/unavailable vehicles completely
+                    if (isBlocked) return null;
+
                     if (viewMode === "list") {
                       // List View Card
                       return <Card key={vehicle.id} className={cn("group transition-all duration-300 overflow-hidden border-2 relative",
-                        isBlocked ? "opacity-60 cursor-not-allowed border-destructive/30" : "cursor-pointer hover:shadow-2xl",
-                        !isBlocked && isSelected ? "border-primary bg-primary/5 shadow-glow" : "border-border/30 hover:border-primary/40")} onClick={() => {
-                          if (isBlocked) return; // Prevent selection if blocked
+                        "cursor-pointer hover:shadow-2xl",
+                        isSelected ? "border-primary bg-primary/5 shadow-glow" : "border-border/30 hover:border-primary/40")} onClick={() => {
                           setFormData({
                             ...formData,
                             vehicleId: vehicle.id
@@ -2578,45 +2653,65 @@ const MultiStepBookingWidget = () => {
                           }
                         }}>
                         <div className="flex flex-col sm:flex-row">
-                          {/* Image */}
+                          {/* Image with Carousel */}
                           <div className="relative w-full sm:w-64 aspect-video sm:aspect-square overflow-hidden bg-gradient-to-br from-muted/30 to-muted/5">
-                            {vehicle.vehicle_photos?.[0]?.photo_url ? (
-                              <img
-                                src={vehicle.vehicle_photos[0].photo_url}
-                                alt={vehicleName}
-                                className="w-full h-full object-cover"
-                                loading="lazy"
-                                onError={(e) => {
-                                  e.currentTarget.style.display = 'none';
-                                  const fallback = e.currentTarget.nextElementSibling as HTMLElement;
-                                  if (fallback) fallback.style.display = 'flex';
-                                }}
-                              />
+                            {vehicle.vehicle_photos && vehicle.vehicle_photos.length > 0 ? (
+                              <>
+                                <img
+                                  src={vehicle.vehicle_photos[getVehicleImageIndex(vehicle.id)]?.photo_url || vehicle.vehicle_photos[0].photo_url}
+                                  alt={vehicleName}
+                                  className="w-full h-full object-cover"
+                                  loading="lazy"
+                                  onError={(e) => {
+                                    e.currentTarget.style.display = 'none';
+                                  }}
+                                />
+                                {/* Carousel Navigation - only show if more than 1 image */}
+                                {vehicle.vehicle_photos.length > 1 && (
+                                  <>
+                                    <button
+                                      onClick={(e) => prevVehicleImage(e, vehicle.id, vehicle.vehicle_photos!.length)}
+                                      className="absolute left-2 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full bg-black/50 hover:bg-black/70 flex items-center justify-center text-white transition-colors z-10"
+                                    >
+                                      <ChevronLeft className="w-5 h-5" />
+                                    </button>
+                                    <button
+                                      onClick={(e) => nextVehicleImage(e, vehicle.id, vehicle.vehicle_photos!.length)}
+                                      className="absolute right-2 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full bg-black/50 hover:bg-black/70 flex items-center justify-center text-white transition-colors z-10"
+                                    >
+                                      <ChevronRight className="w-5 h-5" />
+                                    </button>
+                                    {/* Dots indicator */}
+                                    <div className="absolute bottom-2 left-1/2 -translate-x-1/2 flex gap-1.5 z-10">
+                                      {vehicle.vehicle_photos.map((_, idx) => (
+                                        <div
+                                          key={idx}
+                                          className={cn(
+                                            "w-2 h-2 rounded-full transition-colors",
+                                            idx === getVehicleImageIndex(vehicle.id) ? "bg-white" : "bg-white/50"
+                                          )}
+                                        />
+                                      ))}
+                                    </div>
+                                  </>
+                                )}
+                              </>
                             ) : null}
-                            <div className={`${vehicle.vehicle_photos?.[0]?.photo_url ? 'hidden' : 'flex'} items-center justify-center h-full w-full absolute inset-0`}>
+                            <div className={`${vehicle.vehicle_photos && vehicle.vehicle_photos.length > 0 ? 'hidden' : 'flex'} items-center justify-center h-full w-full absolute inset-0`}>
                               <Car className="w-16 h-16 opacity-20 text-muted-foreground" />
                             </div>
 
                             {/* Registration Chip - hide when selected, show tick instead */}
                             {!isSelected ? (
-                              <div className="absolute top-3 right-3 px-3 py-1 bg-primary text-primary-foreground text-xs font-semibold rounded-full">
+                              <div className="absolute top-3 right-3 px-3 py-1 bg-primary text-primary-foreground text-xs font-semibold rounded-full z-20">
                                 {vehicle.reg}
                               </div>
                             ) : (
-                              <div className="absolute top-3 right-3 w-8 h-8 bg-primary rounded-full flex items-center justify-center shadow-lg">
+                              <div className="absolute top-3 right-3 w-8 h-8 bg-primary rounded-full flex items-center justify-center shadow-lg z-20">
                                 <Check className="w-5 h-5 text-black" />
                               </div>
                             )}
 
-                            {/* Blocked Badge */}
-                            {isBlocked && blockStatus.blockedRange && (
-                              <div className="absolute bottom-3 left-3 right-3 px-3 py-2 bg-destructive/90 text-white text-xs font-medium rounded-lg backdrop-blur">
-                                <p className="font-semibold mb-1">Unavailable</p>
-                                <p className="text-[10px] opacity-90">
-                                  {format(new Date(blockStatus.blockedRange.start), "MMM dd")} - {format(new Date(blockStatus.blockedRange.end), "MMM dd")}
-                                </p>
-                              </div>
-                            )}
                           </div>
 
                           {/* Content */}
@@ -2678,12 +2773,9 @@ const MultiStepBookingWidget = () => {
 
                                   <Button
                                     className={cn("w-40 h-11 font-medium transition-colors",
-                                      isBlocked ? "bg-muted text-muted-foreground cursor-not-allowed" :
-                                        isSelected ? "bg-primary text-primary-foreground hover:bg-primary/90" :
-                                          "bg-background border-2 border-primary text-primary hover:bg-primary hover:text-primary-foreground")}
-                                    disabled={isBlocked}
+                                      isSelected ? "bg-primary text-primary-foreground hover:bg-primary/90" :
+                                        "bg-background border-2 border-primary text-primary hover:bg-primary hover:text-primary-foreground")}
                                     onClick={e => {
-                                      if (isBlocked) return;
                                       e.stopPropagation();
                                       // Toggle: if already selected, deselect; otherwise select
                                       setFormData({
@@ -2697,7 +2789,7 @@ const MultiStepBookingWidget = () => {
                                         });
                                       }
                                     }}>
-                                    {isBlocked ? "Unavailable" : isSelected ? "Selected" : "Select"}
+                                    {isSelected ? "Selected" : "Select"}
                                   </Button>
                                 </div>
                               );
@@ -2708,7 +2800,7 @@ const MultiStepBookingWidget = () => {
                     }
 
                     // Grid View Card (existing design)
-                    return <Card key={vehicle.id} className={cn("group transition-all duration-300 overflow-hidden border-2 relative",
+                    return <Card key={vehicle.id} className={cn("group transition-all duration-300 overflow-hidden border-2 relative flex flex-col h-full",
                       isBlocked ? "opacity-60 cursor-not-allowed border-destructive/30" : "cursor-pointer hover:shadow-2xl hover:scale-[1.02]",
                       !isBlocked && isSelected ? "border-primary bg-primary/5 shadow-glow" : "border-border/30 hover:border-primary/40",
                       !isBlocked && isRollsRoyce && "shadow-glow")} onClick={() => {
@@ -2741,101 +2833,123 @@ const MultiStepBookingWidget = () => {
                         <Check className="w-5 h-5 text-black" />
                       </div>}
 
-                      {/* Image Block */}
+                      {/* Image Block with Carousel */}
                       <div className={cn("relative aspect-video overflow-hidden bg-gradient-to-br", isRollsRoyce ? "from-primary/10 to-primary/20" : "from-muted/30 to-muted/5")}>
-                        {vehicle.vehicle_photos?.[0]?.photo_url ? (
-                          <img
-                            src={vehicle.vehicle_photos[0].photo_url}
-                            alt={vehicleName}
-                            className="w-full h-full object-cover"
-                            loading="lazy"
-                            onError={(e) => {
-                              e.currentTarget.style.display = 'none';
-                              const fallback = e.currentTarget.nextElementSibling as HTMLElement;
-                              if (fallback) fallback.style.display = 'flex';
-                            }}
-                          />
+                        {vehicle.vehicle_photos && vehicle.vehicle_photos.length > 0 ? (
+                          <>
+                            <img
+                              src={vehicle.vehicle_photos[getVehicleImageIndex(vehicle.id)]?.photo_url || vehicle.vehicle_photos[0].photo_url}
+                              alt={vehicleName}
+                              className="w-full h-full object-cover"
+                              loading="lazy"
+                              onError={(e) => {
+                                e.currentTarget.style.display = 'none';
+                              }}
+                            />
+                            {/* Carousel Navigation - only show if more than 1 image */}
+                            {vehicle.vehicle_photos.length > 1 && (
+                              <>
+                                <button
+                                  onClick={(e) => prevVehicleImage(e, vehicle.id, vehicle.vehicle_photos!.length)}
+                                  className="absolute left-2 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full bg-black/50 hover:bg-black/70 flex items-center justify-center text-white transition-colors z-10"
+                                >
+                                  <ChevronLeft className="w-5 h-5" />
+                                </button>
+                                <button
+                                  onClick={(e) => nextVehicleImage(e, vehicle.id, vehicle.vehicle_photos!.length)}
+                                  className="absolute right-2 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full bg-black/50 hover:bg-black/70 flex items-center justify-center text-white transition-colors z-10"
+                                >
+                                  <ChevronRight className="w-5 h-5" />
+                                </button>
+                                {/* Dots indicator */}
+                                <div className="absolute bottom-2 left-1/2 -translate-x-1/2 flex gap-1.5 z-10">
+                                  {vehicle.vehicle_photos.map((_, idx) => (
+                                    <div
+                                      key={idx}
+                                      className={cn(
+                                        "w-2 h-2 rounded-full transition-colors",
+                                        idx === getVehicleImageIndex(vehicle.id) ? "bg-white" : "bg-white/50"
+                                      )}
+                                    />
+                                  ))}
+                                </div>
+                              </>
+                            )}
+                          </>
                         ) : null}
-                        <div className={`${vehicle.vehicle_photos?.[0]?.photo_url ? 'hidden' : 'flex'} flex-col items-center justify-center h-full w-full absolute inset-0`}>
+                        <div className={`${vehicle.vehicle_photos && vehicle.vehicle_photos.length > 0 ? 'hidden' : 'flex'} flex-col items-center justify-center h-full w-full absolute inset-0`}>
                           <Car className={cn("w-16 h-16 mb-2 opacity-20", isRollsRoyce ? "text-primary" : "text-muted-foreground")} />
                         </div>
 
-                        {/* Blocked Badge */}
-                        {isBlocked && blockStatus.blockedRange && (
-                          <div className="absolute bottom-3 left-3 right-3 px-3 py-2 bg-destructive/90 text-white text-xs font-medium rounded-lg backdrop-blur">
-                            <p className="font-semibold mb-1">Unavailable</p>
-                            <p className="text-[10px] opacity-90">
-                              {format(new Date(blockStatus.blockedRange.start), "MMM dd")} - {format(new Date(blockStatus.blockedRange.end), "MMM dd")}
-                            </p>
-                          </div>
-                        )}
                       </div>
 
                       {/* Content */}
-                      <div className="p-6 space-y-4">
-                        {/* Title */}
-                        <div>
-                          <h4 className="font-display text-xl font-semibold text-foreground mb-1 flex items-center gap-2">
-                            {vehicleName}
-                            {isRollsRoyce && <Crown className="w-5 h-5 text-primary" />}
-                          </h4>
-                          {vehicle.colour && <p className="text-xs text-muted-foreground">{vehicle.colour}</p>}
-                        </div>
-
-                        {/* Description */}
-                        {vehicle.description && (
-                          <div className="space-y-1">
-                            <p className="text-sm text-muted-foreground leading-relaxed">
-                              {getDisplayDescription(vehicle)}
-                            </p>
-                            {vehicle.description.length > MAX_DESCRIPTION_LENGTH && (
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  toggleDescription(vehicle.id);
-                                }}
-                                className="text-xs text-primary hover:text-primary/80 font-medium transition-colors"
-                              >
-                                {expandedDescriptions.has(vehicle.id) ? 'Show less' : 'Show more'}
-                              </button>
-                            )}
+                      <div className="p-6 flex-1 flex flex-col">
+                        {/* Card info section with spacing */}
+                        <div className="space-y-4 mb-4">
+                          {/* Title */}
+                          <div>
+                            <h4 className="font-display text-xl font-semibold text-foreground mb-1 flex items-center gap-2">
+                              {vehicleName}
+                              {isRollsRoyce && <Crown className="w-5 h-5 text-primary" />}
+                            </h4>
+                            {vehicle.colour && <p className="text-xs text-muted-foreground">{vehicle.colour}</p>}
                           </div>
-                        )}
 
-                        {/* Spec Bar */}
-                        <div className="flex items-center gap-4 text-xs text-muted-foreground pb-3 border-b border-border/50">
-                          <span title="Registration">{vehicle.reg}</span>
-                        </div>
-
-                        {/* Price Section */}
-                        {(() => {
-                          const priceDisplay = getDynamicPriceDisplay(vehicle);
-                          return (
+                          {/* Description */}
+                          {vehicle.description && (
                             <div className="space-y-1">
-                              <div className="flex items-baseline justify-between">
-                                <span className="text-2xl font-bold text-primary">
-                                  ${priceDisplay.price}
-                                </span>
-                                <span className="text-sm text-muted-foreground">{priceDisplay.label}</span>
-                              </div>
-                              {priceDisplay.secondaryPrices.length > 0 && (
-                                <p className="text-xs text-muted-foreground">
-                                  {priceDisplay.secondaryPrices.join(' • ')}
-                                </p>
+                              <p className="text-sm text-muted-foreground leading-relaxed">
+                                {getDisplayDescription(vehicle)}
+                              </p>
+                              {vehicle.description.length > MAX_DESCRIPTION_LENGTH && (
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    toggleDescription(vehicle.id);
+                                  }}
+                                  className="text-xs text-primary hover:text-primary/80 font-medium transition-colors"
+                                >
+                                  {expandedDescriptions.has(vehicle.id) ? 'Show less' : 'Show more'}
+                                </button>
                               )}
                             </div>
-                          );
-                        })()}
+                          )}
 
-                        {/* CTA */}
+                          {/* Spec Bar */}
+                          <div className="flex items-center gap-4 text-xs text-muted-foreground pb-3 border-b border-border/50">
+                            <span title="Registration">{vehicle.reg}</span>
+                          </div>
+
+                          {/* Price Section */}
+                          {(() => {
+                            const priceDisplay = getDynamicPriceDisplay(vehicle);
+                            return (
+                              <div className="space-y-1">
+                                <div className="flex items-baseline justify-between">
+                                  <span className="text-2xl font-bold text-primary">
+                                    ${priceDisplay.price}
+                                  </span>
+                                  <span className="text-sm text-muted-foreground">{priceDisplay.label}</span>
+                                </div>
+                                {priceDisplay.secondaryPrices.length > 0 && (
+                                  <p className="text-xs text-muted-foreground">
+                                    {priceDisplay.secondaryPrices.join(' • ')}
+                                  </p>
+                                )}
+                              </div>
+                            );
+                          })()}
+                        </div>
+
+                        {/* CTA - pushed to bottom with mt-auto */}
                         <Button
-                          className={cn("w-full h-11 font-medium transition-colors",
+                          className={cn("w-full h-11 font-medium transition-colors mt-auto",
                             isBlocked ? "bg-muted text-muted-foreground cursor-not-allowed" :
                               isSelected ? "bg-primary text-primary-foreground hover:bg-primary/90" :
                                 "bg-background border-2 border-primary text-primary hover:bg-primary hover:text-primary-foreground")}
                           disabled={isBlocked}
                           onClick={e => {
-                            if (isBlocked) return;
                             e.stopPropagation();
                             // Toggle: if already selected, deselect; otherwise select
                             setFormData({
@@ -2849,7 +2963,7 @@ const MultiStepBookingWidget = () => {
                               });
                             }
                           }}>
-                          {isBlocked ? "Unavailable" : isSelected ? "Selected" : "Select"}
+                          {isSelected ? "Selected" : "Select"}
                         </Button>
                       </div>
                     </Card>;

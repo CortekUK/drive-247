@@ -8,6 +8,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
+import { Tooltip as UITooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { ChevronLeft, Car, DollarSign, TrendingUp, TrendingDown, Download, ArrowUpDown, ArrowUp, ArrowDown, BarChart3 } from "lucide-react";
 import { format, parseISO, startOfMonth, endOfMonth } from "date-fns";
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend } from "recharts";
@@ -275,15 +276,22 @@ const MonthlyPLDrilldown = () => {
       {/* Header */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div className="flex items-center gap-4">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => router.push(`/pl-dashboard${fromDateRange ? `?dateRange=${fromDateRange}` : ''}${groupByMonth ? `${fromDateRange ? '&' : '?'}groupByMonth=true` : ''}`)}
-            className="flex items-center gap-2"
-          >
-            <ChevronLeft className="h-4 w-4" />
-            Back to Global P&L Dashboard
-          </Button>
+          <TooltipProvider>
+            <UITooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => router.push(`/pl-dashboard${fromDateRange ? `?dateRange=${fromDateRange}` : ''}${groupByMonth ? `${fromDateRange ? '&' : '?'}groupByMonth=true` : ''}`)}
+                >
+                  <ChevronLeft className="h-4 w-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>Back to Global P&L Dashboard</p>
+              </TooltipContent>
+            </UITooltip>
+          </TooltipProvider>
           <div>
             <h1 className="text-3xl font-bold tracking-tight">
               P&L Breakdown – {format(monthDate, 'MMMM yyyy')}

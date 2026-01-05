@@ -45,6 +45,21 @@ function GlobalKeyboardShortcuts({ children }: { children: React.ReactNode }) {
   return <>{children}</>;
 }
 
+// Inline script to apply cached branding BEFORE React hydrates
+const brandingScript = `
+(function() {
+  try {
+    var cached = localStorage.getItem('portal-tenant-branding-css');
+    if (cached) {
+      var style = document.createElement('style');
+      style.id = 'cached-branding';
+      style.textContent = cached;
+      document.head.appendChild(style);
+    }
+  } catch(e) {}
+})();
+`;
+
 export default function RootLayout({
   children,
 }: {
@@ -63,6 +78,7 @@ export default function RootLayout({
           href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap"
           rel="stylesheet"
         />
+        <script dangerouslySetInnerHTML={{ __html: brandingScript }} />
       </head>
       <body suppressHydrationWarning>
         <QueryClientProvider client={queryClient}>

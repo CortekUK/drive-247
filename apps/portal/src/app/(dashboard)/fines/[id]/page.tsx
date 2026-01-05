@@ -257,10 +257,16 @@ const FineDetail = () => {
         {/* Enhanced Header */}
         <div className="flex flex-col space-y-4 lg:flex-row lg:items-center lg:justify-between lg:space-y-0 mb-8">
           <div className="flex items-center gap-4">
-            <Button variant="outline" onClick={() => router.push("/fines")}>
-              <ArrowLeft className="h-4 w-4 mr-2" />
-              Back to Fines
-            </Button>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button variant="ghost" size="icon" onClick={() => router.push("/fines")}>
+                  <ArrowLeft className="h-4 w-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>Back to Fines</p>
+              </TooltipContent>
+            </Tooltip>
             <div>
               <h1 className="text-3xl font-bold">Fine Details</h1>
               <p className="text-muted-foreground">

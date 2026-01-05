@@ -11,7 +11,8 @@ import { toast } from "sonner";
 import { format } from "date-fns";
 import { EmptyState } from "@/components/shared/data-display/empty-state";
 import { useTenant } from "@/contexts/TenantContext";
-import { QRCodeSVG } from "qrcode.react";
+// QRCodeCanvas from qrcode.react wasn't scanning properly on some phones
+// Using quickchart.io API which is more reliable for phone scanners
 
 interface IdentityVerification {
   id: string;
@@ -443,15 +444,24 @@ export function IdentityVerificationTab({ customerId }: IdentityVerificationTabP
           </DialogHeader>
 
           <div className="flex flex-col items-center space-y-6 py-6">
-            {/* QR Code Display - Using local SVG generation */}
+            {/* QR Code Display - Using quickchart.io API for reliable phone scanning */}
             {aiSessionData && (
-              <div className="bg-white p-6 rounded-xl shadow-lg border-2 border-gray-100">
-                <QRCodeSVG
-                  value={aiSessionData.qrUrl}
-                  size={200}
-                  level="H"
-                  includeMargin={false}
-                  className="rounded"
+              <div
+                className="rounded-xl shadow-lg border-2 border-gray-200"
+                style={{
+                  backgroundColor: '#FFFFFF',
+                  padding: '16px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center'
+                }}
+              >
+                <img
+                  src={`https://quickchart.io/qr?text=${encodeURIComponent(aiSessionData.qrUrl)}&size=300&margin=3&dark=000000&light=ffffff&ecLevel=M&format=png`}
+                  alt="Scan QR code to verify identity"
+                  width={300}
+                  height={300}
+                  style={{ display: 'block', imageRendering: 'pixelated' }}
                 />
               </div>
             )}

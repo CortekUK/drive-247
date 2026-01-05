@@ -253,6 +253,10 @@ async function createEnvelope(
     try {
         console.log('Creating envelope...');
 
+        // Webhook URL - Supabase Edge Function
+        const webhookUrl = `${supabaseUrl}/functions/v1/docusign-webhook`;
+        console.log('Webhook URL:', webhookUrl);
+
         const envelope = {
             emailSubject: `Rental Agreement - Ref: ${rentalId.substring(0, 8).toUpperCase()}`,
             documents: [{
@@ -277,7 +281,27 @@ async function createEnvelope(
                     }
                 }]
             },
-            status: 'sent'
+            status: 'sent',
+            // Envelope-level webhook - no dashboard config needed!
+            eventNotification: {
+                url: webhookUrl,
+                loggingEnabled: true,
+                requireAcknowledgment: true,
+                envelopeEvents: [
+                    { envelopeEventStatusCode: 'sent' },
+                    { envelopeEventStatusCode: 'delivered' },
+                    { envelopeEventStatusCode: 'signed' },
+                    { envelopeEventStatusCode: 'completed' },
+                    { envelopeEventStatusCode: 'declined' },
+                    { envelopeEventStatusCode: 'voided' }
+                ],
+                recipientEvents: [
+                    { recipientEventStatusCode: 'Sent' },
+                    { recipientEventStatusCode: 'Delivered' },
+                    { recipientEventStatusCode: 'Completed' },
+                    { recipientEventStatusCode: 'Declined' }
+                ]
+            }
         };
 
         const response = await fetch(

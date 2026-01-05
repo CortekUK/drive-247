@@ -8,6 +8,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -217,10 +218,18 @@ const CustomerDetail = () => {
       {/* Header */}
       <div className="space-y-4">
         {/* Back Button */}
-        <Button variant="ghost" size="sm" onClick={() => router.push("/customers")} className="gap-2 text-muted-foreground hover:text-foreground">
-          <ArrowLeft className="h-4 w-4" />
-          Back to Customers
-        </Button>
+        <TooltipProvider>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button variant="ghost" size="icon" onClick={() => router.push("/customers")}>
+                <ArrowLeft className="h-4 w-4" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>
+              <p>Back to Customers</p>
+            </TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
 
         {/* Customer Info & Actions */}
         <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4">
