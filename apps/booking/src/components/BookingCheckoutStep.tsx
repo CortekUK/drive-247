@@ -7,12 +7,13 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
-import { ChevronLeft, CreditCard, Shield, Calendar, MapPin, Clock, Car, User, Loader2 } from "lucide-react";
+import { ChevronLeft, CreditCard, Shield, Calendar, MapPin, Clock, Car, User, Loader2, Ticket } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useTenant } from "@/contexts/TenantContext";
 import { format } from "date-fns";
 import { InvoiceDialog } from "@/components/InvoiceDialog";
 import { createInvoiceWithFallback, Invoice } from "@/lib/invoiceUtils";
+import { AppliedDiscount } from "@/lib/promoCode";
 
 interface BookingCheckoutStepProps {
   formData: any;
@@ -23,6 +24,7 @@ interface BookingCheckoutStepProps {
     formatted: string;
   };
   vehicleTotal: number;
+  appliedDiscount?: AppliedDiscount | null;
   onBack: () => void;
 }
 
@@ -32,6 +34,7 @@ export default function BookingCheckoutStep({
   extras,
   rentalDuration,
   vehicleTotal,
+  appliedDiscount,
   onBack
 }: BookingCheckoutStepProps) {
   const router = useRouter();
@@ -71,13 +74,23 @@ export default function BookingCheckoutStep({
     }
   };
 
+  // Get the effective rental amount (after discount if applied)
+  const getEffectiveRentalAmount = () => {
+    if (appliedDiscount) {
+      return appliedDiscount.finalPrice;
+    }
+    return vehicleTotal;
+  };
+
   const calculateTaxesAndFees = () => {
-    return (vehicleTotal * 0.10) + 50; // 10% tax + $50 service fee
+    const effectiveAmount = getEffectiveRentalAmount();
+    return (effectiveAmount * 0.10) + 50; // 10% tax + $50 service fee
   };
 
   const calculateGrandTotal = () => {
+    const effectiveAmount = getEffectiveRentalAmount();
     const taxesAndFees = calculateTaxesAndFees();
-    return vehicleTotal + taxesAndFees;
+    return effectiveAmount + taxesAndFees;
   };
 
   const depositAmount = 500; // Fixed deposit
@@ -765,8 +778,39 @@ export default function BookingCheckoutStep({
             <div className="space-y-3">
               <div className="flex justify-between text-sm">
                 <span className="text-muted-foreground">Rental ({rentalDuration.days} days)</span>
-                <span className="font-medium">${vehicleTotal.toLocaleString()}</span>
+                <div className="text-right">
+                  {appliedDiscount ? (
+                    <>
+                      <span className="text-muted-foreground line-through mr-2">
+                        ${vehicleTotal.toLocaleString()}
+                      </span>
+                      <span className="font-medium text-green-600">
+                        ${appliedDiscount.finalPrice.toLocaleString()}
+                      </span>
+                    </>
+                  ) : (
+                    <span className="font-medium">${vehicleTotal.toLocaleString()}</span>
+                  )}
+                </div>
               </div>
+
+              {/* Show promo discount breakdown */}
+              {appliedDiscount && (
+                <div className="flex justify-between text-sm bg-green-500/10 -mx-4 px-4 py-2 rounded">
+                  <span className="text-green-600 flex items-center gap-1">
+                    <Ticket className="w-4 h-4" />
+                    Promo: {appliedDiscount.promoCode}
+                    <span className="text-xs text-muted-foreground ml-1">
+                      ({appliedDiscount.discountType === 'percentage'
+                        ? `${appliedDiscount.discountValue}% off`
+                        : `$${appliedDiscount.discountValue} off`})
+                    </span>
+                  </span>
+                  <span className="font-medium text-green-600">
+                    -${appliedDiscount.discountAmount.toFixed(2)}
+                  </span>
+                </div>
+              )}
 
               <div className="flex justify-between text-sm">
                 <span className="text-muted-foreground">Taxes & Fees</span>
@@ -785,6 +829,11 @@ export default function BookingCheckoutStep({
                     ${calculateGrandTotal().toLocaleString()}
                   </span>
                 </div>
+                {appliedDiscount && (
+                  <p className="text-xs text-green-600 text-right mt-1">
+                    You save ${appliedDiscount.discountAmount.toFixed(2)}!
+                  </p>
+                )}
               </div>
 
               <p className="text-xs text-muted-foreground mt-4">

@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -15,7 +15,7 @@ import { Badge } from "@/components/ui/badge";
 import { supabase } from "@/integrations/supabase/client";
 import { useTenant } from "@/contexts/TenantContext";
 import { toast } from "sonner";
-import { ChevronRight, ChevronLeft, Check, Baby, Coffee, MapPin, UserCheck, Car, Crown, TrendingUp, Users as GroupIcon, Calculator, Shield, CheckCircle, CalendarIcon, Clock, Search, Grid3x3, List, SlidersHorizontal, X, AlertCircle, FileCheck, RefreshCw, Upload } from "lucide-react";
+import { ChevronRight, ChevronLeft, Check, Baby, Coffee, MapPin, UserCheck, Car, Crown, TrendingUp, Users as GroupIcon, Calculator, Shield, CheckCircle, CalendarIcon, Clock, Search, Grid3x3, List, SlidersHorizontal, X, AlertCircle, FileCheck, RefreshCw, Upload, Ticket, Loader2 } from "lucide-react";
 import { format, differenceInHours } from "date-fns";
 import { cn } from "@/lib/utils";
 import BookingConfirmation from "./BookingConfirmation";
@@ -29,6 +29,7 @@ import { usePageContent, defaultHomeContent, mergeWithDefaults } from "@/hooks/u
 import { canCustomerBook } from "@/lib/tenantQueries";
 import { sanitizeName, sanitizeEmail, sanitizePhone, sanitizeLocation, sanitizeTextArea, isInputSafe } from "@/lib/sanitize";
 import { createVeriffFrame, MESSAGES } from "@veriff/incontext-sdk";
+import { validatePromoCode, calculateDiscount, calculateCombinedDiscount, parseBadgeDiscount, PromoCodeValidation, AppliedDiscount, BadgeDiscount } from "@/lib/promoCode";
 interface VehiclePhoto {
   photo_url: string;
 }
@@ -87,6 +88,17 @@ const MultiStepBookingWidget = () => {
   // CMS Content for booking header
   const { data: rawCmsContent } = usePageContent("home");
   const cmsContent = mergeWithDefaults(rawCmsContent, defaultHomeContent);
+
+  // Parse badge discount from CMS content (global sale badge) - memoized to prevent infinite loops
+  const badgeDiscount = useMemo<BadgeDiscount | null>(() => {
+    if (!cmsContent.promo_badge?.enabled) return null;
+    const parsed = parseBadgeDiscount(cmsContent.promo_badge.discount_amount);
+    if (parsed) {
+      // Add minimum_spend from CMS settings
+      parsed.minimumSpend = cmsContent.promo_badge.minimum_spend || 0;
+    }
+    return parsed;
+  }, [cmsContent.promo_badge?.enabled, cmsContent.promo_badge?.discount_amount, cmsContent.promo_badge?.minimum_spend]);
 
   // Step 2 enhancements
   const [searchTerm, setSearchTerm] = useState("");
@@ -149,6 +161,13 @@ const MultiStepBookingWidget = () => {
     dropoffLat: null as number | null,
     dropoffLon: null as number | null
   });
+
+  // Promo code state
+  const [promoCodeInput, setPromoCodeInput] = useState('');
+  const [promoValidating, setPromoValidating] = useState(false);
+  const [promoValidation, setPromoValidation] = useState<PromoCodeValidation | null>(null);
+  const [appliedDiscount, setAppliedDiscount] = useState<AppliedDiscount | null>(null);
+
   useEffect(() => {
     loadData();
 
@@ -2006,6 +2025,89 @@ const MultiStepBookingWidget = () => {
     setCurrentStep(4);
   };
 
+  // Promo code validation handler
+  const handleApplyPromoCode = async () => {
+    if (!promoCodeInput.trim()) {
+      setPromoValidation({ valid: false, message: 'Please enter a promo code' });
+      return;
+    }
+
+    setPromoValidating(true);
+    setPromoValidation(null);
+    setAppliedDiscount(null);
+
+    try {
+      const result = await validatePromoCode(promoCodeInput, tenant?.id || null);
+      setPromoValidation(result);
+
+      if (result.valid && result.discount) {
+        // Store promo code in form data - discount will be calculated when vehicle is selected
+        setFormData(prev => ({ ...prev, promoCode: promoCodeInput.toUpperCase() }));
+        toast.success(result.message);
+
+        // If vehicle already selected, calculate discount immediately (stacking badge + promo)
+        if (estimatedBooking) {
+          const discount = calculateCombinedDiscount(
+            estimatedBooking.total,
+            badgeDiscount,
+            result.discount,
+            promoCodeInput.toUpperCase()
+          );
+          setAppliedDiscount(discount);
+        }
+      } else if (!result.valid) {
+        toast.error(result.message);
+      }
+    } catch (err) {
+      console.error('Promo code validation error:', err);
+      setPromoValidation({ valid: false, message: 'Failed to validate promo code' });
+      toast.error('Failed to validate promo code');
+    } finally {
+      setPromoValidating(false);
+    }
+  };
+
+  // Recalculate discount when vehicle/booking changes (badge and/or promo)
+  useEffect(() => {
+    if (estimatedBooking) {
+      const hasPromo = promoValidation?.valid && promoValidation.discount;
+      const hasBadge = badgeDiscount !== null;
+
+      if (hasPromo || hasBadge) {
+        const discount = calculateCombinedDiscount(
+          estimatedBooking.total,
+          badgeDiscount,
+          hasPromo ? promoValidation!.discount! : null,
+          formData.promoCode || (hasBadge ? 'SALE' : '')
+        );
+        setAppliedDiscount(discount);
+      } else {
+        setAppliedDiscount(null);
+      }
+    }
+  }, [estimatedBooking?.total, promoValidation, badgeDiscount]);
+
+  // Remove applied promo code (keeps badge discount if present)
+  const handleRemovePromoCode = () => {
+    setPromoCodeInput('');
+    setPromoValidation(null);
+    setFormData(prev => ({ ...prev, promoCode: '' }));
+
+    // If badge discount exists, recalculate with badge only
+    if (badgeDiscount && estimatedBooking) {
+      const discount = calculateCombinedDiscount(
+        estimatedBooking.total,
+        badgeDiscount,
+        null,
+        'SALE'
+      );
+      setAppliedDiscount(discount);
+    } else {
+      setAppliedDiscount(null);
+    }
+    toast.info('Promo code removed');
+  };
+
   // Step 4: Customer Details
   const handleStep4Continue = async () => {
     console.log('🚀 handleStep4Continue called');
@@ -2344,75 +2446,139 @@ const MultiStepBookingWidget = () => {
               </div>
             </div>
 
-            {/* Row 3: Driver DOB */}
-            <div className="space-y-2">
-              <Label className="font-medium">Date of Birth *</Label>
-              <div className="grid grid-cols-3 gap-2 max-w-md">
-                {/* Month Select */}
-                <Select
-                  value={formData.driverDOB ? (new Date(formData.driverDOB).getMonth() + 1).toString().padStart(2, '0') : ""}
-                  onValueChange={(month) => {
-                    const currentDate = formData.driverDOB ? new Date(formData.driverDOB) : new Date(2000, 0, 1);
-                    const newDate = new Date(currentDate.getFullYear(), parseInt(month) - 1, Math.min(currentDate.getDate(), new Date(currentDate.getFullYear(), parseInt(month), 0).getDate()));
-                    const dateStr = format(newDate, "yyyy-MM-dd");
-                    setFormData({ ...formData, driverDOB: dateStr });
-                    validateField('driverDOB', dateStr);
-                  }}
-                >
-                  <SelectTrigger className={cn("h-12", errors.driverDOB && "border-destructive")}>
-                    <SelectValue placeholder="Month" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'].map((month, i) => (
-                      <SelectItem key={i} value={(i + 1).toString().padStart(2, '0')}>{month}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                {/* Day Select */}
-                <Select
-                  value={formData.driverDOB ? new Date(formData.driverDOB).getDate().toString() : ""}
-                  onValueChange={(day) => {
-                    const currentDate = formData.driverDOB ? new Date(formData.driverDOB) : new Date(2000, 0, 1);
-                    const newDate = new Date(currentDate.getFullYear(), currentDate.getMonth(), parseInt(day));
-                    const dateStr = format(newDate, "yyyy-MM-dd");
-                    setFormData({ ...formData, driverDOB: dateStr });
-                    validateField('driverDOB', dateStr);
-                  }}
-                >
-                  <SelectTrigger className={cn("h-12", errors.driverDOB && "border-destructive")}>
-                    <SelectValue placeholder="Day" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {Array.from({ length: 31 }, (_, i) => (
-                      <SelectItem key={i + 1} value={(i + 1).toString()}>{i + 1}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                {/* Year Select */}
-                <Select
-                  value={formData.driverDOB ? new Date(formData.driverDOB).getFullYear().toString() : ""}
-                  onValueChange={(year) => {
-                    const currentDate = formData.driverDOB ? new Date(formData.driverDOB) : new Date(2000, 0, 1);
-                    const newDate = new Date(parseInt(year), currentDate.getMonth(), Math.min(currentDate.getDate(), new Date(parseInt(year), currentDate.getMonth() + 1, 0).getDate()));
-                    const dateStr = format(newDate, "yyyy-MM-dd");
-                    setFormData({ ...formData, driverDOB: dateStr });
-                    validateField('driverDOB', dateStr);
-                  }}
-                >
-                  <SelectTrigger className={cn("h-12", errors.driverDOB && "border-destructive")}>
-                    <SelectValue placeholder="Year" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {Array.from({ length: 100 }, (_, i) => new Date().getFullYear() - (tenant?.minimum_rental_age || 18) - i).map((year) => (
-                      <SelectItem key={year} value={year.toString()}>{year}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+            {/* Row 3: Driver DOB & Promo Code */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 lg:gap-8">
+              {/* Date of Birth */}
+              <div className="space-y-2">
+                <Label className="font-medium">Date of Birth *</Label>
+                <div className="grid grid-cols-3 gap-2">
+                  {/* Month Select */}
+                  <Select
+                    value={formData.driverDOB ? (new Date(formData.driverDOB).getMonth() + 1).toString().padStart(2, '0') : ""}
+                    onValueChange={(month) => {
+                      const currentDate = formData.driverDOB ? new Date(formData.driverDOB) : new Date(2000, 0, 1);
+                      const newDate = new Date(currentDate.getFullYear(), parseInt(month) - 1, Math.min(currentDate.getDate(), new Date(currentDate.getFullYear(), parseInt(month), 0).getDate()));
+                      const dateStr = format(newDate, "yyyy-MM-dd");
+                      setFormData({ ...formData, driverDOB: dateStr });
+                      validateField('driverDOB', dateStr);
+                    }}
+                  >
+                    <SelectTrigger className={cn("h-12", errors.driverDOB && "border-destructive")}>
+                      <SelectValue placeholder="Month" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'].map((month, i) => (
+                        <SelectItem key={i} value={(i + 1).toString().padStart(2, '0')}>{month}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  {/* Day Select */}
+                  <Select
+                    value={formData.driverDOB ? new Date(formData.driverDOB).getDate().toString() : ""}
+                    onValueChange={(day) => {
+                      const currentDate = formData.driverDOB ? new Date(formData.driverDOB) : new Date(2000, 0, 1);
+                      const newDate = new Date(currentDate.getFullYear(), currentDate.getMonth(), parseInt(day));
+                      const dateStr = format(newDate, "yyyy-MM-dd");
+                      setFormData({ ...formData, driverDOB: dateStr });
+                      validateField('driverDOB', dateStr);
+                    }}
+                  >
+                    <SelectTrigger className={cn("h-12", errors.driverDOB && "border-destructive")}>
+                      <SelectValue placeholder="Day" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {Array.from({ length: 31 }, (_, i) => (
+                        <SelectItem key={i + 1} value={(i + 1).toString()}>{i + 1}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  {/* Year Select */}
+                  <Select
+                    value={formData.driverDOB ? new Date(formData.driverDOB).getFullYear().toString() : ""}
+                    onValueChange={(year) => {
+                      const currentDate = formData.driverDOB ? new Date(formData.driverDOB) : new Date(2000, 0, 1);
+                      const newDate = new Date(parseInt(year), currentDate.getMonth(), Math.min(currentDate.getDate(), new Date(parseInt(year), currentDate.getMonth() + 1, 0).getDate()));
+                      const dateStr = format(newDate, "yyyy-MM-dd");
+                      setFormData({ ...formData, driverDOB: dateStr });
+                      validateField('driverDOB', dateStr);
+                    }}
+                  >
+                    <SelectTrigger className={cn("h-12", errors.driverDOB && "border-destructive")}>
+                      <SelectValue placeholder="Year" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {Array.from({ length: 100 }, (_, i) => new Date().getFullYear() - (tenant?.minimum_rental_age || 18) - i).map((year) => (
+                        <SelectItem key={year} value={year.toString()}>{year}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                {formData.driverDOB && (
+                  <p className="text-sm text-muted-foreground">Age: <span className={cn("font-medium", errors.driverDOB ? "text-destructive" : "text-foreground")}>{calculateAge(new Date(formData.driverDOB))} years old</span></p>
+                )}
+                {errors.driverDOB && <p className="text-sm text-destructive">{errors.driverDOB}</p>}
               </div>
-              {formData.driverDOB && (
-                <p className="text-sm text-muted-foreground">Age: <span className={cn("font-medium", errors.driverDOB ? "text-destructive" : "text-foreground")}>{calculateAge(new Date(formData.driverDOB))} years old</span></p>
-              )}
-              {errors.driverDOB && <p className="text-sm text-destructive">{errors.driverDOB}</p>}
+
+              {/* Promo Code */}
+              <div className="space-y-2">
+                <Label className="font-medium">Promo Code</Label>
+                {!(promoValidation?.valid) ? (
+                  <div className="relative">
+                    <Input
+                      value={promoCodeInput}
+                      onChange={(e) => setPromoCodeInput(e.target.value.toUpperCase())}
+                      placeholder="Enter promo code"
+                      className="h-12 uppercase pr-20"
+                      disabled={promoValidating}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault();
+                          handleApplyPromoCode();
+                        }
+                      }}
+                    />
+                    <Button
+                      type="button"
+                      onClick={handleApplyPromoCode}
+                      disabled={promoValidating || !promoCodeInput.trim()}
+                      variant="ghost"
+                      className="absolute right-1 top-1/2 -translate-y-1/2 h-10 px-4 text-accent hover:text-accent hover:bg-accent/10 font-medium"
+                    >
+                      {promoValidating ? (
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                      ) : (
+                        'Apply'
+                      )}
+                    </Button>
+                  </div>
+                ) : (
+                  <div className="bg-green-500/10 border border-green-500/20 rounded-lg h-12 px-3 flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <CheckCircle className="w-4 h-4 text-green-500" />
+                      <span className="text-sm font-medium text-green-600 dark:text-green-500">
+                        {formData.promoCode || promoCodeInput.toUpperCase()}
+                      </span>
+                      <span className="text-xs text-muted-foreground">
+                        ({promoValidation.discount?.type === 'percentage'
+                          ? `${promoValidation.discount?.value}% off`
+                          : `$${promoValidation.discount?.value} off`})
+                      </span>
+                    </div>
+                    <Button
+                      type="button"
+                      onClick={handleRemovePromoCode}
+                      variant="ghost"
+                      size="sm"
+                      className="h-8 w-8 p-0 text-destructive hover:text-destructive hover:bg-destructive/10"
+                    >
+                      <X className="w-4 h-4" />
+                    </Button>
+                  </div>
+                )}
+                {promoValidation && !promoValidation.valid && (
+                  <p className="text-sm text-destructive">{promoValidation.message}</p>
+                )}
+              </div>
             </div>
           </div>
 
@@ -2755,15 +2921,80 @@ const MultiStepBookingWidget = () => {
                             {/* Pricing & CTA */}
                             {(() => {
                               const priceDisplay = getDynamicPriceDisplay(vehicle);
+                              const hasPromoDiscount = promoValidation?.valid && promoValidation.discount;
+                              const hasBadgeDiscount = badgeDiscount !== null;
+
+                              // Calculate combined discounted price (badge first, then promo)
+                              // Discounts only apply if price meets admin-set minimum spend
+                              let discountedPrice = priceDisplay.price;
+                              let actualBadgeApplied = false;
+                              let actualPromoApplied = false;
+                              let spendMoreAmount = 0; // How much more to spend to unlock discount
+
+                              // Check badge discount
+                              if (hasBadgeDiscount) {
+                                const badgeMinSpend = badgeDiscount.minimumSpend || 0;
+                                if (badgeMinSpend > 0 && priceDisplay.price < badgeMinSpend) {
+                                  // Minimum not met - calculate how much more needed
+                                  spendMoreAmount = Math.max(spendMoreAmount, badgeMinSpend - priceDisplay.price);
+                                } else {
+                                  // Minimum met or no minimum - apply discount
+                                  if (badgeDiscount.type === 'percentage') {
+                                    discountedPrice = discountedPrice * (1 - badgeDiscount.value / 100);
+                                    actualBadgeApplied = true;
+                                  } else {
+                                    discountedPrice = Math.max(0, discountedPrice - badgeDiscount.value);
+                                    actualBadgeApplied = true;
+                                  }
+                                }
+                              }
+
+                              // Check promo discount
+                              if (hasPromoDiscount && promoValidation.discount) {
+                                const promoMinSpend = promoValidation.discount.minimumSpend || 0;
+                                if (promoMinSpend > 0 && priceDisplay.price < promoMinSpend) {
+                                  // Minimum not met - calculate how much more needed
+                                  spendMoreAmount = Math.max(spendMoreAmount, promoMinSpend - priceDisplay.price);
+                                } else {
+                                  // Minimum met or no minimum - apply discount
+                                  if (promoValidation.discount.type === 'percentage') {
+                                    discountedPrice = discountedPrice * (1 - promoValidation.discount.value / 100);
+                                    actualPromoApplied = true;
+                                  } else {
+                                    discountedPrice = Math.max(0, discountedPrice - promoValidation.discount.value);
+                                    actualPromoApplied = true;
+                                  }
+                                }
+                              }
+                              discountedPrice = Math.round(discountedPrice);
+                              const hasAnyDiscount = actualBadgeApplied || actualPromoApplied;
+                              const showSpendMore = spendMoreAmount > 0 && (hasBadgeDiscount || hasPromoDiscount);
+
                               return (
                                 <div className="flex items-end justify-between gap-4 mt-4">
                                   <div className="space-y-1">
                                     <div className="flex items-baseline gap-2">
-                                      <span className="text-3xl font-bold text-primary">
-                                        ${priceDisplay.price}
-                                      </span>
+                                      {hasAnyDiscount ? (
+                                        <>
+                                          <span className="text-lg text-muted-foreground line-through">
+                                            ${priceDisplay.price}
+                                          </span>
+                                          <span className="text-3xl font-bold text-green-500">
+                                            ${discountedPrice}
+                                          </span>
+                                        </>
+                                      ) : (
+                                        <span className="text-3xl font-bold text-primary">
+                                          ${priceDisplay.price}
+                                        </span>
+                                      )}
                                       <span className="text-sm text-muted-foreground">{priceDisplay.label}</span>
                                     </div>
+                                    {showSpendMore && (
+                                      <p className="text-xs text-amber-500 font-medium">
+                                        Spend ${Math.round(spendMoreAmount)} more to unlock discount
+                                      </p>
+                                    )}
                                     {priceDisplay.secondaryPrices.length > 0 && (
                                       <p className="text-xs text-muted-foreground">
                                         {priceDisplay.secondaryPrices.join(' • ')}
@@ -2924,14 +3155,79 @@ const MultiStepBookingWidget = () => {
                           {/* Price Section */}
                           {(() => {
                             const priceDisplay = getDynamicPriceDisplay(vehicle);
+                            const hasPromoDiscount = promoValidation?.valid && promoValidation.discount;
+                            const hasBadgeDiscount = badgeDiscount !== null;
+
+                            // Calculate combined discounted price (badge first, then promo)
+                            // Discounts only apply if price meets admin-set minimum spend
+                            let discountedPrice = priceDisplay.price;
+                            let actualBadgeApplied = false;
+                            let actualPromoApplied = false;
+                            let spendMoreAmount = 0; // How much more to spend to unlock discount
+
+                            // Check badge discount
+                            if (hasBadgeDiscount) {
+                              const badgeMinSpend = badgeDiscount.minimumSpend || 0;
+                              if (badgeMinSpend > 0 && priceDisplay.price < badgeMinSpend) {
+                                // Minimum not met - calculate how much more needed
+                                spendMoreAmount = Math.max(spendMoreAmount, badgeMinSpend - priceDisplay.price);
+                              } else {
+                                // Minimum met or no minimum - apply discount
+                                if (badgeDiscount.type === 'percentage') {
+                                  discountedPrice = discountedPrice * (1 - badgeDiscount.value / 100);
+                                  actualBadgeApplied = true;
+                                } else {
+                                  discountedPrice = Math.max(0, discountedPrice - badgeDiscount.value);
+                                  actualBadgeApplied = true;
+                                }
+                              }
+                            }
+
+                            // Check promo discount
+                            if (hasPromoDiscount && promoValidation.discount) {
+                              const promoMinSpend = promoValidation.discount.minimumSpend || 0;
+                              if (promoMinSpend > 0 && priceDisplay.price < promoMinSpend) {
+                                // Minimum not met - calculate how much more needed
+                                spendMoreAmount = Math.max(spendMoreAmount, promoMinSpend - priceDisplay.price);
+                              } else {
+                                // Minimum met or no minimum - apply discount
+                                if (promoValidation.discount.type === 'percentage') {
+                                  discountedPrice = discountedPrice * (1 - promoValidation.discount.value / 100);
+                                  actualPromoApplied = true;
+                                } else {
+                                  discountedPrice = Math.max(0, discountedPrice - promoValidation.discount.value);
+                                  actualPromoApplied = true;
+                                }
+                              }
+                            }
+                            discountedPrice = Math.round(discountedPrice);
+                            const hasAnyDiscount = actualBadgeApplied || actualPromoApplied;
+                            const showSpendMore = spendMoreAmount > 0 && (hasBadgeDiscount || hasPromoDiscount);
+
                             return (
                               <div className="space-y-1">
                                 <div className="flex items-baseline justify-between">
-                                  <span className="text-2xl font-bold text-primary">
-                                    ${priceDisplay.price}
-                                  </span>
+                                  {hasAnyDiscount ? (
+                                    <div className="flex items-baseline gap-2">
+                                      <span className="text-sm text-muted-foreground line-through">
+                                        ${priceDisplay.price}
+                                      </span>
+                                      <span className="text-2xl font-bold text-green-500">
+                                        ${discountedPrice}
+                                      </span>
+                                    </div>
+                                  ) : (
+                                    <span className="text-2xl font-bold text-primary">
+                                      ${priceDisplay.price}
+                                    </span>
+                                  )}
                                   <span className="text-sm text-muted-foreground">{priceDisplay.label}</span>
                                 </div>
+                                {showSpendMore && (
+                                  <p className="text-xs text-amber-500 font-medium">
+                                    Spend ${Math.round(spendMoreAmount)} more to unlock discount
+                                  </p>
+                                )}
                                 {priceDisplay.secondaryPrices.length > 0 && (
                                   <p className="text-xs text-muted-foreground">
                                     {priceDisplay.secondaryPrices.join(' • ')}
@@ -3026,11 +3322,57 @@ const MultiStepBookingWidget = () => {
                         {selectedVehicle.make && selectedVehicle.model ? `${selectedVehicle.make} ${selectedVehicle.model}` : selectedVehicle.make || selectedVehicle.model || selectedVehicle.reg}
                       </p>
                       <p className="text-xs text-muted-foreground">{estimatedBooking.days} days</p>
-                      <p className="text-lg font-bold text-primary mt-1">
-                        ${estimatedBooking.total.toFixed(0)}
-                      </p>
+                      {appliedDiscount && appliedDiscount.discountAmount > 0 ? (
+                        <div className="mt-1">
+                          <span className="text-sm text-muted-foreground line-through mr-2">
+                            ${estimatedBooking.total.toFixed(0)}
+                          </span>
+                          <span className="text-lg font-bold text-green-500">
+                            ${appliedDiscount.finalPrice.toFixed(0)}
+                          </span>
+                        </div>
+                      ) : (
+                        <p className="text-lg font-bold text-primary mt-1">
+                          ${estimatedBooking.total.toFixed(0)}
+                        </p>
+                      )}
                     </div>
                   </div>
+                  {appliedDiscount && appliedDiscount.discountAmount > 0 && (
+                    <p className="text-xs text-green-500">
+                      You save ${appliedDiscount.discountAmount.toFixed(0)}!
+                    </p>
+                  )}
+                  {/* Show "spend more" message when discount available but minimum not met */}
+                  {(() => {
+                    const hasBadge = badgeDiscount !== null;
+                    const hasPromo = promoValidation?.valid && promoValidation.discount;
+                    if (!hasBadge && !hasPromo) return null;
+                    if (appliedDiscount && appliedDiscount.discountAmount > 0) return null;
+
+                    let spendMoreAmount = 0;
+                    const total = estimatedBooking?.total || 0;
+
+                    if (hasBadge && badgeDiscount.minimumSpend && badgeDiscount.minimumSpend > 0) {
+                      if (total < badgeDiscount.minimumSpend) {
+                        spendMoreAmount = Math.max(spendMoreAmount, badgeDiscount.minimumSpend - total);
+                      }
+                    }
+                    if (hasPromo && promoValidation.discount?.minimumSpend && promoValidation.discount.minimumSpend > 0) {
+                      if (total < promoValidation.discount.minimumSpend) {
+                        spendMoreAmount = Math.max(spendMoreAmount, promoValidation.discount.minimumSpend - total);
+                      }
+                    }
+
+                    if (spendMoreAmount > 0) {
+                      return (
+                        <p className="text-xs text-amber-500 font-medium">
+                          Spend ${Math.round(spendMoreAmount)} more to unlock discount
+                        </p>
+                      );
+                    }
+                    return null;
+                  })()}
                   <p className="text-xs text-muted-foreground">
                     Final total at checkout
                   </p>
@@ -3771,6 +4113,7 @@ const MultiStepBookingWidget = () => {
               formatted: '1 day'
             }}
             vehicleTotal={estimatedBooking?.total || 0}
+            appliedDiscount={appliedDiscount}
             onBack={() => setCurrentStep(4)}
           />
         </div>}

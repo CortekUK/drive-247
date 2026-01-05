@@ -30,6 +30,7 @@ const formSchema = z.object({
   discount_label: z.string().optional(),
   line1: z.string().optional(),
   line2: z.string().optional(),
+  minimum_spend: z.coerce.number().min(0).optional(),
 });
 
 type FormValues = z.infer<typeof formSchema>;
@@ -43,6 +44,7 @@ export function PromoBadgeEditor({ content, onSave, isSaving }: PromoBadgeEditor
       discount_label: content.discount_label || "",
       line1: content.line1 || "",
       line2: content.line2 || "",
+      minimum_spend: content.minimum_spend || 0,
     },
   });
 
@@ -59,6 +61,7 @@ export function PromoBadgeEditor({ content, onSave, isSaving }: PromoBadgeEditor
       discount_label: content.discount_label || "",
       line1: content.line1 || "",
       line2: content.line2 || "",
+      minimum_spend: content.minimum_spend || 0,
     });
   }, [content, form]);
 
@@ -131,6 +134,23 @@ export function PromoBadgeEditor({ content, onSave, isSaving }: PromoBadgeEditor
                     )}
                   />
                 </div>
+
+                <FormField
+                  control={form.control}
+                  name="minimum_spend"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Minimum Spend ($)</FormLabel>
+                      <FormControl>
+                        <Input type="number" min="0" step="0.01" placeholder="0" {...field} />
+                      </FormControl>
+                      <FormDescription>
+                        Customer must spend at least this amount for the badge discount to apply. Set to 0 for no minimum.
+                      </FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
                 <div className="grid gap-4 md:grid-cols-2">
                   <FormField
                     control={form.control}

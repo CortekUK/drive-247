@@ -14,7 +14,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage, FormDescription } from "@/components/ui/form";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
-import { ArrowLeft, FileText, Save, AlertTriangle, MapPin, Clock, Shield, Upload } from "lucide-react";
+import { ArrowLeft, FileText, Save, AlertTriangle, MapPin, Clock, Shield, Upload, Ticket, Loader2, CheckCircle, X } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from "@/components/ui/label";
@@ -221,6 +221,24 @@ const CreateRental = () => {
   const [pickupLocationId, setPickupLocationId] = useState<string | undefined>(undefined);
   const [returnLocationId, setReturnLocationId] = useState<string | undefined>(undefined);
 
+  // Promo code validation state
+  const [promoValidating, setPromoValidating] = useState(false);
+  const [promoValidation, setPromoValidation] = useState<{
+    valid: boolean;
+    message: string;
+    discount?: { type: 'percentage' | 'fixed'; value: number };
+    promoId?: string;
+  } | null>(null);
+  const [appliedDiscount, setAppliedDiscount] = useState<{
+    originalPrice: number;
+    discountAmount: number;
+    finalPrice: number;
+    discountType: 'percentage' | 'fixed';
+    discountValue: number;
+    promoCode: string;
+    promoId: string;
+  } | null>(null);
+
   // Watch form values for live updates
   const watchedValues = form.watch();
   const selectedCustomerId = watchedValues.customer_id;
@@ -318,6 +336,145 @@ const CreateRental = () => {
 
   const selectedCustomer = customers?.find(c => c.id === selectedCustomerId);
   const selectedVehicle = vehicles?.find(v => v.id === selectedVehicleId);
+
+  // Promo code validation handler
+  const handleApplyPromoCode = async () => {
+    const promoCode = watchedValues.promo_code?.trim();
+    if (!promoCode) {
+      setPromoValidation({ valid: false, message: 'Please enter a promo code' });
+      return;
+    }
+
+    setPromoValidating(true);
+    setPromoValidation(null);
+    setAppliedDiscount(null);
+
+    try {
+      // Query the promotions table directly
+      let query = supabase
+        .from('promotions')
+        .select('*')
+        .eq('promo_code', promoCode.toUpperCase());
+
+      if (tenant?.id) {
+        query = query.eq('tenant_id', tenant.id);
+      }
+
+      const { data: promo, error } = await query.maybeSingle();
+
+      if (error) {
+        console.error('Promo code lookup error:', error);
+        setPromoValidation({ valid: false, message: 'Unable to validate promo code' });
+        toast({ title: "Error", description: "Unable to validate promo code", variant: "destructive" });
+        return;
+      }
+
+      if (!promo) {
+        setPromoValidation({ valid: false, message: 'Invalid promo code' });
+        toast({ title: "Invalid Code", description: "This promo code does not exist", variant: "destructive" });
+        return;
+      }
+
+      // Check if promo is active
+      if (!promo.is_active) {
+        setPromoValidation({ valid: false, message: 'This promo code is no longer active' });
+        toast({ title: "Invalid Code", description: "This promo code is no longer active", variant: "destructive" });
+        return;
+      }
+
+      // Check date validity
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const startDate = new Date(promo.start_date);
+      startDate.setHours(0, 0, 0, 0);
+      const endDate = new Date(promo.end_date);
+      endDate.setHours(23, 59, 59, 999);
+
+      if (today < startDate) {
+        setPromoValidation({ valid: false, message: 'This promo code is not yet active' });
+        toast({ title: "Invalid Code", description: "This promo code is not yet active", variant: "destructive" });
+        return;
+      }
+
+      if (today > endDate) {
+        setPromoValidation({ valid: false, message: 'This promo code has expired' });
+        toast({ title: "Expired", description: "This promo code has expired", variant: "destructive" });
+        return;
+      }
+
+      // Valid promo code - calculate discount
+      const originalPrice = watchedValues.monthly_amount || 0;
+      let discountAmount: number;
+
+      if (promo.discount_type === 'percentage') {
+        discountAmount = (originalPrice * promo.discount_value) / 100;
+      } else {
+        discountAmount = Math.min(promo.discount_value, originalPrice);
+      }
+
+      discountAmount = Math.round(discountAmount * 100) / 100;
+      const finalPrice = Math.round((originalPrice - discountAmount) * 100) / 100;
+
+      const discountType = promo.discount_type as 'percentage' | 'fixed';
+
+      setPromoValidation({
+        valid: true,
+        message: `${promo.title} - ${discountType === 'percentage' ? `${promo.discount_value}% off` : `$${promo.discount_value} off`}`,
+        discount: { type: discountType, value: promo.discount_value },
+        promoId: promo.id,
+      });
+
+      setAppliedDiscount({
+        originalPrice,
+        discountAmount,
+        finalPrice,
+        discountType,
+        discountValue: promo.discount_value,
+        promoCode: promoCode.toUpperCase(),
+        promoId: promo.id,
+      });
+
+      toast({ title: "Promo Applied!", description: promoValidation?.message || `${promo.title} applied` });
+    } catch (err) {
+      console.error('Promo code validation error:', err);
+      setPromoValidation({ valid: false, message: 'Failed to validate promo code' });
+      toast({ title: "Error", description: "Failed to validate promo code", variant: "destructive" });
+    } finally {
+      setPromoValidating(false);
+    }
+  };
+
+  // Remove applied promo code
+  const handleRemovePromoCode = () => {
+    form.setValue('promo_code', '');
+    setPromoValidation(null);
+    setAppliedDiscount(null);
+    toast({ title: "Removed", description: "Promo code removed" });
+  };
+
+  // Recalculate discount when monthly amount changes
+  useEffect(() => {
+    if (appliedDiscount && watchedValues.monthly_amount) {
+      const originalPrice = watchedValues.monthly_amount;
+      let discountAmount: number;
+
+      if (appliedDiscount.discountType === 'percentage') {
+        discountAmount = (originalPrice * appliedDiscount.discountValue) / 100;
+      } else {
+        discountAmount = Math.min(appliedDiscount.discountValue, originalPrice);
+      }
+
+      discountAmount = Math.round(discountAmount * 100) / 100;
+      const finalPrice = Math.round((originalPrice - discountAmount) * 100) / 100;
+
+      setAppliedDiscount(prev => prev ? {
+        ...prev,
+        originalPrice,
+        discountAmount,
+        finalPrice,
+      } : null);
+    }
+  }, [watchedValues.monthly_amount]);
 
   const onSubmit = async (data: RentalFormData) => {
     setLoading(true);
@@ -1091,13 +1248,71 @@ const CreateRental = () => {
                         name="promo_code"
                         render={({ field }) => (
                           <FormItem>
-                            <FormLabel>Promo Code</FormLabel>
-                            <FormControl>
-                              <Input
-                                {...field}
-                                placeholder="Enter promo code"
-                              />
-                            </FormControl>
+                            <FormLabel className="flex items-center gap-2">
+                              <Ticket className="h-4 w-4" />
+                              Promo Code
+                            </FormLabel>
+                            {!appliedDiscount ? (
+                              <div className="flex gap-2">
+                                <FormControl>
+                                  <Input
+                                    {...field}
+                                    placeholder="Enter promo code"
+                                    className="uppercase"
+                                    disabled={promoValidating}
+                                    onKeyDown={(e) => {
+                                      if (e.key === 'Enter') {
+                                        e.preventDefault();
+                                        handleApplyPromoCode();
+                                      }
+                                    }}
+                                  />
+                                </FormControl>
+                                <Button
+                                  type="button"
+                                  variant="outline"
+                                  onClick={handleApplyPromoCode}
+                                  disabled={promoValidating || !field.value?.trim()}
+                                >
+                                  {promoValidating ? (
+                                    <Loader2 className="h-4 w-4 animate-spin" />
+                                  ) : (
+                                    'Apply'
+                                  )}
+                                </Button>
+                              </div>
+                            ) : (
+                              <div className="flex items-center justify-between bg-green-50 dark:bg-green-950 border border-green-200 dark:border-green-800 rounded-md px-3 py-2">
+                                <div className="flex items-center gap-2">
+                                  <CheckCircle className="h-4 w-4 text-green-600" />
+                                  <div>
+                                    <span className="font-medium text-green-700 dark:text-green-400">{appliedDiscount.promoCode}</span>
+                                    <span className="text-sm text-muted-foreground ml-2">
+                                      ({appliedDiscount.discountType === 'percentage'
+                                        ? `${appliedDiscount.discountValue}% off`
+                                        : `$${appliedDiscount.discountValue} off`})
+                                    </span>
+                                  </div>
+                                </div>
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={handleRemovePromoCode}
+                                  className="text-destructive hover:text-destructive"
+                                >
+                                  <X className="h-4 w-4" />
+                                </Button>
+                              </div>
+                            )}
+                            {promoValidation && !promoValidation.valid && (
+                              <p className="text-sm text-destructive">{promoValidation.message}</p>
+                            )}
+                            {appliedDiscount && (
+                              <p className="text-sm text-green-600">
+                                You save ${appliedDiscount.discountAmount.toFixed(2)} (Final: ${appliedDiscount.finalPrice.toFixed(2)})
+                              </p>
+                            )}
                             <FormMessage />
                           </FormItem>
                         )}
@@ -1143,6 +1358,7 @@ const CreateRental = () => {
             rentalPeriodType={watchedValues.rental_period_type}
             monthlyAmount={watchedValues.monthly_amount}
             initialFee={watchedValues.initial_fee}
+            appliedDiscount={appliedDiscount}
           />
         </div>
       </div>

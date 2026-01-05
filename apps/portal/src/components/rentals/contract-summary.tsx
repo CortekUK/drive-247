@@ -1,6 +1,6 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { CalendarDays, DollarSign, FileText, Clock } from "lucide-react";
+import { CalendarDays, DollarSign, FileText, Clock, Ticket } from "lucide-react";
 import { differenceInMonths, format } from "date-fns";
 
 interface Customer {
@@ -17,6 +17,16 @@ interface Vehicle {
   model: string;
 }
 
+interface AppliedDiscount {
+  originalPrice: number;
+  discountAmount: number;
+  finalPrice: number;
+  discountType: 'percentage' | 'fixed';
+  discountValue: number;
+  promoCode: string;
+  promoId: string;
+}
+
 interface ContractSummaryProps {
   customer?: Customer;
   vehicle?: Vehicle;
@@ -25,6 +35,7 @@ interface ContractSummaryProps {
   rentalPeriodType?: "Daily" | "Weekly" | "Monthly";
   monthlyAmount?: number;
   initialFee?: number;
+  appliedDiscount?: AppliedDiscount | null;
 }
 
 export const ContractSummary = ({
@@ -35,9 +46,13 @@ export const ContractSummary = ({
   rentalPeriodType = "Monthly",
   monthlyAmount,
   initialFee,
+  appliedDiscount,
 }: ContractSummaryProps) => {
   const termMonths = startDate && endDate ? differenceInMonths(endDate, startDate) : 0;
-  const totalRentalCharges = termMonths * (monthlyAmount || 0);
+
+  // Calculate effective amount after discount
+  const effectiveAmount = appliedDiscount ? appliedDiscount.finalPrice : (monthlyAmount || 0);
+  const totalRentalCharges = termMonths * effectiveAmount;
   const totalInitialFee = initialFee || 0;
 
   return (
@@ -117,28 +132,65 @@ export const ContractSummary = ({
             <DollarSign className="h-4 w-4" />
             Financial Summary
           </div>
-          
+
           <div className="space-y-2 pl-6">
             <div className="flex justify-between items-center">
               <span className="text-sm">{rentalPeriodType} Amount:</span>
-              <span className="font-medium">
-                {monthlyAmount ? `$${monthlyAmount.toFixed(2)}` : '$0.00'}
-              </span>
+              <div className="text-right">
+                {appliedDiscount ? (
+                  <>
+                    <span className="text-sm text-muted-foreground line-through mr-2">
+                      ${monthlyAmount?.toFixed(2)}
+                    </span>
+                    <span className="font-medium text-green-600">
+                      ${appliedDiscount.finalPrice.toFixed(2)}
+                    </span>
+                  </>
+                ) : (
+                  <span className="font-medium">
+                    {monthlyAmount ? `$${monthlyAmount.toFixed(2)}` : '$0.00'}
+                  </span>
+                )}
+              </div>
             </div>
-            
+
+            {/* Promo Code Discount */}
+            {appliedDiscount && (
+              <div className="flex justify-between items-center bg-green-50 dark:bg-green-950 -mx-3 px-3 py-1.5 rounded">
+                <span className="text-sm text-green-700 dark:text-green-400 flex items-center gap-1">
+                  <Ticket className="h-3 w-3" />
+                  {appliedDiscount.promoCode}
+                  <span className="text-xs text-muted-foreground ml-1">
+                    ({appliedDiscount.discountType === 'percentage'
+                      ? `${appliedDiscount.discountValue}%`
+                      : `$${appliedDiscount.discountValue}`} off)
+                  </span>
+                </span>
+                <span className="font-medium text-green-600">
+                  -${appliedDiscount.discountAmount.toFixed(2)}
+                </span>
+              </div>
+            )}
+
             <div className="flex justify-between items-center">
               <span className="text-sm">Initial Fee:</span>
               <span className="font-medium">
                 {totalInitialFee > 0 ? `$${totalInitialFee.toFixed(2)}` : 'None'}
               </span>
             </div>
-            
+
             {termMonths > 0 && (
               <div className="flex justify-between items-center pt-2 border-t">
                 <span className="text-sm font-medium">Total Rental Charges:</span>
                 <span className="font-semibold text-primary">
                   ${totalRentalCharges.toFixed(2)}
                 </span>
+              </div>
+            )}
+
+            {appliedDiscount && termMonths > 0 && (
+              <div className="text-xs text-green-600 text-right">
+                You save ${(termMonths * appliedDiscount.discountAmount).toFixed(2)} total!
               </div>
             )}
           </div>

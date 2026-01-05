@@ -35,7 +35,7 @@ const Navigation = () => {
     { path: '/about', label: 'About' },
     { path: '/fleet', label: 'Fleet & Pricing' },
     { path: '/testimonials', label: 'Reviews' },
-    { path: '/promotions', label: 'Promotions' },
+    // { path: '/promotions', label: 'Promotions' }, // Hidden for now
     { path: '/contact', label: 'Contact' }
   ];
 

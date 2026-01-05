@@ -119,6 +119,26 @@ export default function Home() {
           showScrollIndicator={true}
           className="min-h-screen"
         >
+          {/* Promo Badge - Fixed position at bottom right */}
+          {content.promo_badge?.enabled && (
+            <div className="absolute bottom-24 right-4 md:right-8 lg:right-12 z-30 animate-bounce-slow">
+              <div className="relative w-24 h-24 md:w-28 md:h-28 rounded-full bg-gradient-to-br from-[#F5B942] via-[#E9B63E] to-[#F5B942] flex flex-col items-center justify-center shadow-lg transform hover:scale-105 transition-transform cursor-pointer">
+                <span className="text-xl md:text-2xl font-bold text-[#0C1A17] leading-none">
+                  {content.promo_badge.discount_amount || "20%"}
+                </span>
+                <span className="text-lg md:text-xl font-bold text-[#0C1A17] leading-none">
+                  {content.promo_badge.discount_label || "OFF"}
+                </span>
+                <span className="text-[8px] md:text-[9px] font-semibold text-[#0C1A17]/80 mt-1 uppercase tracking-wide text-center px-2">
+                  {content.promo_badge.line1 || "When You Book"}
+                </span>
+                <span className="text-[8px] md:text-[9px] font-semibold text-[#0C1A17]/80 uppercase tracking-wide text-center px-2">
+                  {content.promo_badge.line2 || "Online"}
+                </span>
+              </div>
+            </div>
+          )}
+
           {/* Hero Content */}
           <div className="flex items-center justify-center min-h-screen pt-20">
             <div className="container mx-auto px-4">

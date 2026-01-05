@@ -226,6 +226,7 @@ export interface PromoBadgeContent {
   discount_label: string;
   line1: string;
   line2: string;
+  minimum_spend?: number;
 }
 
 export interface HomeCTAContent {
