@@ -24,7 +24,6 @@ interface ContractSummaryProps {
   endDate?: Date;
   rentalPeriodType?: "Daily" | "Weekly" | "Monthly";
   monthlyAmount?: number;
-  initialFee?: number;
 }
 
 export const ContractSummary = ({
@@ -34,11 +33,9 @@ export const ContractSummary = ({
   endDate,
   rentalPeriodType = "Monthly",
   monthlyAmount,
-  initialFee,
 }: ContractSummaryProps) => {
   const termMonths = startDate && endDate ? differenceInMonths(endDate, startDate) : 0;
   const totalRentalCharges = termMonths * (monthlyAmount || 0);
-  const totalInitialFee = initialFee || 0;
 
   return (
     <Card className="h-fit">
@@ -125,14 +122,7 @@ export const ContractSummary = ({
                 {monthlyAmount ? `$${monthlyAmount.toFixed(2)}` : '$0.00'}
               </span>
             </div>
-            
-            <div className="flex justify-between items-center">
-              <span className="text-sm">Initial Fee:</span>
-              <span className="font-medium">
-                {totalInitialFee > 0 ? `$${totalInitialFee.toFixed(2)}` : 'None'}
-              </span>
-            </div>
-            
+
             {termMonths > 0 && (
               <div className="flex justify-between items-center pt-2 border-t">
                 <span className="text-sm font-medium">Total Rental Charges:</span>
@@ -170,11 +160,6 @@ export const ContractSummary = ({
             {rentalPeriodType} charges will be generated automatically from the start date to the end date.
             Payments are applied automatically to outstanding charges.
           </p>
-          {initialFee && initialFee > 0 && (
-            <p className="text-xs text-muted-foreground mt-2">
-              Initial fee will be recorded as a payment on the start date and will appear in Payments & P&L.
-            </p>
-          )}
         </div>
       </CardContent>
     </Card>

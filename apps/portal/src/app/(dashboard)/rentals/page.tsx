@@ -61,7 +61,7 @@ const RentalsList = () => {
       startDateTo: searchParams.get("startDateTo")
         ? new Date(searchParams.get("startDateTo")!)
         : undefined,
-      sortBy: searchParams.get("sortBy") || "start_date",
+      sortBy: searchParams.get("sortBy") || "created_at",
       sortOrder: (searchParams.get("sortOrder") as "asc" | "desc") || "desc",
       page: parseInt(searchParams.get("page") || "1"),
     }),
@@ -207,12 +207,12 @@ const RentalsList = () => {
               <p className="text-sm text-muted-foreground">Closed</p>
             </CardContent>
           </Card>
-          <Card className="bg-gradient-to-br from-primary/10 to-primary/5 border-primary/20 hover:border-primary/40 transition-all duration-200 cursor-pointer hover:shadow-md">
+          <Card className="bg-gradient-to-br from-amber-500/10 to-amber-500/5 border-amber-500/20 hover:border-amber-500/40 transition-all duration-200 cursor-pointer hover:shadow-md">
             <CardContent className="p-4">
-              <div className="text-2xl font-bold text-primary">
-                {stats.upcoming}
+              <div className="text-2xl font-bold text-amber-500">
+                {stats.pending}
               </div>
-              <p className="text-sm text-muted-foreground">Upcoming</p>
+              <p className="text-sm text-muted-foreground">Pending</p>
             </CardContent>
           </Card>
           <Card className="bg-card hover:bg-accent/50 border transition-all duration-200 cursor-pointer hover:shadow-md">
@@ -250,6 +250,7 @@ const RentalsList = () => {
                   <TableHeader>
                     <TableRow>
                       <TableHead>Rental #</TableHead>
+                      <TableHead>Created</TableHead>
                       <TableHead>Customer</TableHead>
                       <TableHead>Start Date</TableHead>
                       <TableHead>End Date</TableHead>
@@ -266,6 +267,16 @@ const RentalsList = () => {
                       >
                         <TableCell className="font-medium">
                           {rental.rental_number}
+                        </TableCell>
+                        <TableCell className="text-muted-foreground text-sm">
+                          {rental.created_at
+                            ? new Date(rental.created_at).toLocaleString(undefined, {
+                                month: 'short',
+                                day: 'numeric',
+                                hour: '2-digit',
+                                minute: '2-digit'
+                              })
+                            : "—"}
                         </TableCell>
                         <TableCell>
                           {rental.customer.name.split(' ')[0]}
@@ -284,15 +295,21 @@ const RentalsList = () => {
                         <TableCell>
                           <Badge
                             variant={
-                              rental.status === "Closed"
+                              rental.computed_status === "Closed"
                                 ? "secondary"
-                                : rental.status === "Cancelled"
+                                : rental.computed_status === "Cancelled" || rental.computed_status === "Rejected"
                                 ? "destructive"
                                 : "outline"
                             }
-                            className={rental.status === "Active" ? "bg-green-600 text-white" : ""}
+                            className={
+                              rental.computed_status === "Active"
+                                ? "bg-green-600 text-white"
+                                : rental.computed_status === "Pending"
+                                ? "bg-amber-500/20 text-amber-600 border-amber-500"
+                                : ""
+                            }
                           >
-                            {rental.status}
+                            {rental.computed_status}
                           </Badge>
                         </TableCell>
                       </TableRow>

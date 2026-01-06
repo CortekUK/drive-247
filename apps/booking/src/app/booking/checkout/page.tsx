@@ -86,21 +86,6 @@ const BookingCheckoutContent = () => {
 
       if (vError) throw vError;
       setVehicleDetails(vehicle);
-
-      // Load extras (filtered by tenant)
-      let extrasQuery = supabase
-        .from("pricing_extras")
-        .select("*")
-        .eq("is_active", true);
-
-      if (tenant?.id) {
-        extrasQuery = extrasQuery.eq("tenant_id", tenant.id);
-      }
-
-      const { data: extrasData, error: eError } = await extrasQuery;
-
-      if (eError) throw eError;
-      setExtras(extrasData || []);
     } catch (error: any) {
       toast.error("Failed to load booking details");
       console.error(error);

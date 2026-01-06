@@ -20,7 +20,7 @@ export const DEFAULT_AGREEMENT_TEMPLATE = `<h1>RENTAL AGREEMENT</h1>
 <tr><td><strong>Name</strong></td><td>{{customer_name}}</td></tr>
 <tr><td><strong>Email</strong></td><td>{{customer_email}}</td></tr>
 <tr><td><strong>Phone</strong></td><td>{{customer_phone}}</td></tr>
-<tr><td><strong>Address</strong></td><td>{{customer_address}}</td></tr>
+<tr><td><strong>License Number</strong></td><td>{{customer_license_number}}</td></tr>
 </table>
 
 <h2>Rental Period</h2>

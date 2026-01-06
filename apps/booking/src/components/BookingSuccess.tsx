@@ -28,10 +28,14 @@ const BookingSuccess = () => {
       try {
         // If we have a rentalId from URL params (portal integration)
         if (rentalId) {
-          // Step 1: Update rental status to Active
+          // Step 1: Update rental payment_status to fulfilled (payment complete)
+          // Note: status stays "Pending" until admin approves (approval_status + payment_status)
           const { error: rentalUpdateError } = await supabase
             .from("rentals")
-            .update({ status: "Active" })
+            .update({
+              payment_status: "fulfilled",
+              updated_at: new Date().toISOString()
+            })
             .eq("id", rentalId);
 
           if (rentalUpdateError) {

@@ -108,11 +108,14 @@ serve(async (req) => {
               const notificationData = {
                 paymentId: paymentId || '',
                 rentalId: rentalId,
+                tenantId: rental.tenant_id, // Required for tenant-specific templates and admin email
                 customerId: rental.customer.id,
                 customerName: rental.customer.name,
                 customerEmail: rental.customer.email,
                 customerPhone: rental.customer.phone,
                 vehicleName: vehicleName,
+                vehicleMake: rental.vehicle.make,
+                vehicleModel: rental.vehicle.model,
                 vehicleReg: rental.vehicle.reg,
                 pickupDate: new Date(rental.start_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
                 returnDate: new Date(rental.end_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
@@ -243,11 +246,14 @@ serve(async (req) => {
                     const notificationData = {
                       paymentId: newPayment.id,
                       rentalId: rentalId,
+                      tenantId: rentalWithDetails.tenant_id, // Required for tenant-specific templates and admin email
                       customerId: rentalWithDetails.customer.id,
                       customerName: rentalWithDetails.customer.name,
                       customerEmail: rentalWithDetails.customer.email,
                       customerPhone: rentalWithDetails.customer.phone,
                       vehicleName: vehicleName,
+                      vehicleMake: rentalWithDetails.vehicle.make,
+                      vehicleModel: rentalWithDetails.vehicle.model,
                       vehicleReg: rentalWithDetails.vehicle.reg,
                       pickupDate: new Date(rentalWithDetails.start_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
                       returnDate: new Date(rentalWithDetails.end_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),

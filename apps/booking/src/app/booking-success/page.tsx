@@ -30,10 +30,14 @@ const BookingSuccessContent = () => {
       try {
         // If we have a rentalId from URL params (portal integration)
         if (rentalId) {
-          // Step 1: Update rental status to Active
+          // Step 1: Update rental payment_status to fulfilled (payment complete)
+          // Note: status stays "Pending" until admin approves (approval_status + payment_status)
           let rentalUpdateQuery = supabase
             .from("rentals")
-            .update({ status: "Active" })
+            .update({
+              payment_status: "fulfilled",
+              updated_at: new Date().toISOString()
+            })
             .eq("id", rentalId);
 
           if (tenant?.id) {
@@ -113,6 +117,59 @@ const BookingSuccessContent = () => {
                     }
                   } catch (applyErr) {
                     console.error("❌ Error applying payment:", applyErr);
+                  }
+
+                  // Send booking notification emails and create in-app notifications
+                  try {
+                    // Fetch rental details for notification
+                    const { data: rentalForNotify } = await supabase
+                      .from("rentals")
+                      .select(`
+                        id,
+                        start_date,
+                        end_date,
+                        monthly_amount,
+                        tenant_id,
+                        customer:customers(id, name, email, phone),
+                        vehicle:vehicles(id, make, model, reg)
+                      `)
+                      .eq("id", rentalId)
+                      .single();
+
+                    if (rentalForNotify && rentalForNotify.customer && rentalForNotify.vehicle) {
+                      const vehicleName = rentalForNotify.vehicle.make && rentalForNotify.vehicle.model
+                        ? `${rentalForNotify.vehicle.make} ${rentalForNotify.vehicle.model}`
+                        : rentalForNotify.vehicle.reg;
+
+                      console.log('📧 Sending booking notification...');
+                      const { data: notifyResult, error: notifyError } = await supabase.functions.invoke('notify-booking-pending', {
+                        body: {
+                          paymentId: paymentRecord.id,
+                          rentalId: rentalId,
+                          tenantId: rentalForNotify.tenant_id,
+                          customerId: rentalForNotify.customer.id,
+                          customerName: rentalForNotify.customer.name,
+                          customerEmail: rentalForNotify.customer.email,
+                          customerPhone: rentalForNotify.customer.phone,
+                          vehicleName: vehicleName,
+                          vehicleMake: rentalForNotify.vehicle.make,
+                          vehicleModel: rentalForNotify.vehicle.model,
+                          vehicleReg: rentalForNotify.vehicle.reg,
+                          pickupDate: new Date(rentalForNotify.start_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
+                          returnDate: new Date(rentalForNotify.end_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
+                          amount: rentalForNotify.monthly_amount || paymentDetails.amount,
+                          bookingRef: rentalId.substring(0, 8).toUpperCase(),
+                        }
+                      });
+
+                      if (notifyError) {
+                        console.error("❌ Failed to send booking notification:", notifyError);
+                      } else {
+                        console.log('✅ Booking notification sent:', notifyResult);
+                      }
+                    }
+                  } catch (notifyErr) {
+                    console.error("❌ Error sending booking notification:", notifyErr);
                   }
                 }
 

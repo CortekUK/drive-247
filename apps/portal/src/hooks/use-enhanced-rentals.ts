@@ -32,9 +32,12 @@ export interface EnhancedRental {
   total_amount: number;
   status: string;
   computed_status: string;
+  approval_status?: string;
+  payment_status?: string;
   duration_months: number;
   initial_payment: number | null;
   payment_mode?: string;
+  created_at?: string;
   customer: {
     id: string;
     name: string;
@@ -52,7 +55,7 @@ export interface RentalStats {
   total: number;
   active: number;
   closed: number;
-  upcoming: number;
+  pending: number;
   avgDuration: number;
 }
 
@@ -111,7 +114,10 @@ export const useEnhancedRentals = (filters: RentalFilters = {}) => {
           end_date,
           monthly_amount,
           status,
+          approval_status,
+          payment_status,
           payment_mode,
+          created_at,
           customers!rentals_customer_id_fkey(id, name, customer_type),
           vehicles!rentals_vehicle_id_fkey(id, reg, make, model)
         `, { count: 'exact' })
@@ -162,7 +168,25 @@ export const useEnhancedRentals = (filters: RentalFilters = {}) => {
         .map((rental: any) => {
           const periodType = 'Monthly';
           const durationMonths = calculateDuration(rental.start_date, rental.end_date, periodType);
-          const computedStatus = getRentalStatus(rental.start_date, rental.end_date, rental.status);
+
+          // Compute status based on database status field
+          // Active status is only set in DB when BOTH approval AND key handover are completed
+          // So we trust the DB status field for Active
+          let computedStatus: string;
+          if (rental.status === 'Cancelled') {
+            computedStatus = 'Cancelled';
+          } else if (rental.status === 'Closed') {
+            computedStatus = 'Closed';
+          } else if (rental.status === 'Active') {
+            // Trust the DB - Active means both approval and key handover are done
+            computedStatus = 'Active';
+          } else if (rental.approval_status === 'rejected') {
+            computedStatus = 'Rejected';
+          } else {
+            // Not yet active (pending approval or key handover)
+            computedStatus = 'Pending';
+          }
+
           const initialPaymentAmount = initialPaymentMap.get(rental.id) || null;
           const totalAmount = rental.monthly_amount;
           const protectionCost = 0; // Protection cost not stored separately in current schema
@@ -178,9 +202,12 @@ export const useEnhancedRentals = (filters: RentalFilters = {}) => {
             total_amount: totalAmount,
             status: rental.status,
             computed_status: computedStatus,
+            approval_status: rental.approval_status,
+            payment_status: rental.payment_status,
             duration_months: durationMonths,
             initial_payment: initialPaymentAmount,
             payment_mode: rental.payment_mode,
+            created_at: rental.created_at,
             customer: rental.customers as any,
             vehicle: rental.vehicles as any,
           };
@@ -245,7 +272,7 @@ export const useEnhancedRentals = (filters: RentalFilters = {}) => {
         total: enhancedRentals.length,
         active: enhancedRentals.filter(r => r.computed_status === "Active").length,
         closed: enhancedRentals.filter(r => r.computed_status === "Closed").length,
-        upcoming: enhancedRentals.filter(r => r.computed_status === "Upcoming").length,
+        pending: enhancedRentals.filter(r => r.computed_status === "Pending").length,
         avgDuration: enhancedRentals.length > 0
           ? Math.round(enhancedRentals.reduce((sum, r) => sum + r.duration_months, 0) / enhancedRentals.length)
           : 0

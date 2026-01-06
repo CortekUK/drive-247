@@ -37,24 +37,62 @@ function formatCurrency(amount: number | null): string {
     return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(amount);
 }
 
-// Process template variables
+// Process template variables - ALL AVAILABLE VARIABLES
 function processTemplate(template: string, rental: any, customer: any, vehicle: any, tenant: any): string {
     const variables: Record<string, string> = {
-        customer_name: customer?.name || 'Customer',
+        // ===== CUSTOMER DETAILS =====
+        customer_name: customer?.name || '',
         customer_email: customer?.email || '',
         customer_phone: customer?.phone || '',
+        customer_type: customer?.customer_type || '',
+        customer_id_number: customer?.id_number || '',
+        customer_license_number: customer?.license_number || '',
+        customer_address: customer?.address || '', // Note: May not exist in all setups
+        // Next of Kin
+        nok_name: customer?.nok_full_name || '',
+        nok_phone: customer?.nok_phone || '',
+        nok_email: customer?.nok_email || '',
+        nok_address: customer?.nok_address || '',
+        nok_relationship: customer?.nok_relationship || '',
+
+        // ===== VEHICLE DETAILS =====
         vehicle_make: vehicle?.make || '',
         vehicle_model: vehicle?.model || '',
-        vehicle_reg: vehicle?.reg || 'N/A',
-        rental_number: rental?.id?.substring(0, 8)?.toUpperCase() || 'N/A',
+        vehicle_year: vehicle?.year?.toString() || '',
+        vehicle_reg: vehicle?.reg || '',
+        vehicle_color: vehicle?.color || vehicle?.colour || '',
+        vehicle_fuel_type: vehicle?.fuel_type || '',
+        vehicle_description: vehicle?.description || '',
+        vehicle_daily_rent: formatCurrency(vehicle?.daily_rent),
+        vehicle_weekly_rent: formatCurrency(vehicle?.weekly_rent),
+        vehicle_monthly_rent: formatCurrency(vehicle?.monthly_rent),
+
+        // ===== RENTAL DETAILS =====
+        rental_number: rental?.rental_number || rental?.id?.substring(0, 8)?.toUpperCase() || '',
+        rental_id: rental?.id || '',
         rental_start_date: formatDate(rental?.start_date),
         rental_end_date: rental?.end_date ? formatDate(rental.end_date) : 'Ongoing',
         monthly_amount: formatCurrency(rental?.monthly_amount),
+        rental_amount: formatCurrency(rental?.monthly_amount), // Alias
         rental_period_type: rental?.rental_period_type || 'Monthly',
+        pickup_location: rental?.pickup_location || '',
+        return_location: rental?.return_location || '',
+        pickup_time: rental?.pickup_time || '',
+        return_time: rental?.return_time || '',
+        promo_code: rental?.promo_code || '',
+
+        // ===== COMPANY/TENANT DETAILS =====
         company_name: tenant?.company_name || 'Drive 247',
         company_email: tenant?.contact_email || '',
-        company_phone: tenant?.contact_phone || '',
+        company_phone: tenant?.contact_phone || tenant?.phone || '',
+        company_address: tenant?.address || '',
+        admin_name: tenant?.admin_name || '',
+        admin_email: tenant?.admin_email || '',
+
+        // ===== DATES =====
         agreement_date: formatDate(new Date()),
+        today_date: formatDate(new Date()),
+        current_date: formatDate(new Date()),
     };
 
     let result = template;
@@ -297,12 +335,12 @@ export async function POST(request: NextRequest) {
         const customer = rental?.customers || { name: body.customerName, email: body.customerEmail };
         const vehicle = rental?.vehicles || { make: '', model: '', reg: 'N/A' };
 
-        // Fetch tenant
+        // Fetch tenant - fetch all fields for template variables
         let tenant = null;
         if (body.tenantId) {
             const { data: tenantData } = await supabase
                 .from('tenants')
-                .select('company_name, contact_email, contact_phone')
+                .select('company_name, contact_email, contact_phone, phone, address, admin_name, admin_email')
                 .eq('id', body.tenantId)
                 .single();
             tenant = tenantData;

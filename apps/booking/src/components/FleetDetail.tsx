@@ -139,20 +139,6 @@ export default function FleetDetail() {
       const { data: inclusionsData } = await inclusionsQuery.order("display_order");
 
       setServiceInclusions(inclusionsData || []);
-
-      // Load pricing extras
-      let extrasQuery = supabase
-        .from("pricing_extras")
-        .select("*")
-        .eq("is_active", true);
-
-      if (tenant?.id) {
-        extrasQuery = extrasQuery.eq("tenant_id", tenant.id);
-      }
-
-      const { data: extrasData } = await extrasQuery;
-
-      setPricingExtras(extrasData || []);
     } catch (error) {
       console.error("Error loading vehicle:", error);
       toast.error("Failed to load vehicle details");

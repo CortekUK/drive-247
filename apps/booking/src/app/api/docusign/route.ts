@@ -39,25 +39,62 @@ function formatCurrency(amount: number | null): string {
     return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(amount);
 }
 
-// Process template variables
+// Process template variables - ALL AVAILABLE VARIABLES
 function processTemplate(template: string, rental: any, customer: any, vehicle: any, tenant: any): string {
     const variables: Record<string, string> = {
-        customer_name: customer?.name || 'Customer',
+        // ===== CUSTOMER DETAILS =====
+        customer_name: customer?.name || '',
         customer_email: customer?.email || '',
         customer_phone: customer?.phone || '',
+        customer_type: customer?.customer_type || '',
+        customer_id_number: customer?.id_number || '',
+        customer_license_number: customer?.license_number || '',
+        customer_address: customer?.address || '', // Note: May not exist in all setups
+        // Next of Kin
+        nok_name: customer?.nok_full_name || '',
+        nok_phone: customer?.nok_phone || '',
+        nok_email: customer?.nok_email || '',
+        nok_address: customer?.nok_address || '',
+        nok_relationship: customer?.nok_relationship || '',
+
+        // ===== VEHICLE DETAILS =====
         vehicle_make: vehicle?.make || '',
         vehicle_model: vehicle?.model || '',
         vehicle_year: vehicle?.year?.toString() || '',
-        vehicle_reg: vehicle?.reg || 'N/A',
-        rental_number: rental?.id?.substring(0, 8)?.toUpperCase() || 'N/A',
+        vehicle_reg: vehicle?.reg || '',
+        vehicle_color: vehicle?.color || vehicle?.colour || '',
+        vehicle_fuel_type: vehicle?.fuel_type || '',
+        vehicle_description: vehicle?.description || '',
+        vehicle_daily_rent: formatCurrency(vehicle?.daily_rent),
+        vehicle_weekly_rent: formatCurrency(vehicle?.weekly_rent),
+        vehicle_monthly_rent: formatCurrency(vehicle?.monthly_rent),
+
+        // ===== RENTAL DETAILS =====
+        rental_number: rental?.rental_number || rental?.id?.substring(0, 8)?.toUpperCase() || '',
+        rental_id: rental?.id || '',
         rental_start_date: formatDate(rental?.start_date),
         rental_end_date: rental?.end_date ? formatDate(rental.end_date) : 'Ongoing',
         monthly_amount: formatCurrency(rental?.monthly_amount),
+        rental_amount: formatCurrency(rental?.monthly_amount), // Alias
         rental_period_type: rental?.rental_period_type || 'Monthly',
+        pickup_location: rental?.pickup_location || '',
+        return_location: rental?.return_location || '',
+        pickup_time: rental?.pickup_time || '',
+        return_time: rental?.return_time || '',
+        promo_code: rental?.promo_code || '',
+
+        // ===== COMPANY/TENANT DETAILS =====
         company_name: tenant?.company_name || 'Drive 247',
         company_email: tenant?.contact_email || '',
-        company_phone: tenant?.contact_phone || '',
+        company_phone: tenant?.contact_phone || tenant?.phone || '',
+        company_address: tenant?.address || '',
+        admin_name: tenant?.admin_name || '',
+        admin_email: tenant?.admin_email || '',
+
+        // ===== DATES =====
         agreement_date: formatDate(new Date()),
+        today_date: formatDate(new Date()),
+        current_date: formatDate(new Date()),
     };
 
     let result = template;
@@ -290,7 +327,6 @@ async function createEnvelope(
                 envelopeEvents: [
                     { envelopeEventStatusCode: 'sent' },
                     { envelopeEventStatusCode: 'delivered' },
-                    { envelopeEventStatusCode: 'signed' },
                     { envelopeEventStatusCode: 'completed' },
                     { envelopeEventStatusCode: 'declined' },
                     { envelopeEventStatusCode: 'voided' }
@@ -321,16 +357,16 @@ async function createEnvelope(
 
         if (!response.ok) {
             console.error('Envelope creation failed:', text);
-            return null;
+            return { error: text, status: response.status };
         }
 
         const result = JSON.parse(text);
         console.log('Envelope ID:', result.envelopeId);
-        return result.envelopeId;
+        return { envelopeId: result.envelopeId };
 
-    } catch (error) {
+    } catch (error: any) {
         console.error('createEnvelope error:', error);
-        return null;
+        return { error: error?.message || 'Unknown error' };
     }
 }
 
@@ -356,13 +392,13 @@ export async function POST(request: NextRequest) {
         // Initialize Supabase to fetch rental data and admin template
         const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-        // Fetch rental with related data
+        // Fetch rental with related data - fetch all fields for template variables
         const { data: rental, error: rentalError } = await supabase
             .from('rentals')
             .select(`
         *,
-        customers:customer_id (id, name, email, phone, address, customer_type),
-        vehicles:vehicle_id (id, reg, make, model, year)
+        customers:customer_id (*),
+        vehicles:vehicle_id (*)
       `)
             .eq('id', body.rentalId)
             .single();
@@ -398,11 +434,11 @@ export async function POST(request: NextRequest) {
             }
         }
 
-        // Fetch tenant info if we have an ID
+        // Fetch tenant info if we have an ID - fetch all fields for template variables
         if (tenantId) {
             const { data: tenantData } = await supabase
                 .from('tenants')
-                .select('company_name, contact_email, contact_phone')
+                .select('company_name, contact_email, contact_phone, phone, address, admin_name, admin_email')
                 .eq('id', tenantId)
                 .single();
             tenant = tenantData;
@@ -474,7 +510,7 @@ export async function POST(request: NextRequest) {
         }
 
         // 3. Create Envelope
-        const envelopeId = await createEnvelope(
+        const envelopeResult = await createEnvelope(
             accessToken,
             accountInfo,
             documentBase64,
@@ -483,9 +519,15 @@ export async function POST(request: NextRequest) {
             body.rentalId
         );
 
-        if (!envelopeId) {
-            return NextResponse.json({ ok: false, error: 'Failed to create envelope' }, { status: 500 });
+        if (!envelopeResult || envelopeResult.error) {
+            return NextResponse.json({
+                ok: false,
+                error: 'Failed to create envelope',
+                detail: envelopeResult?.error || 'Unknown error'
+            }, { status: 500 });
         }
+
+        const envelopeId = envelopeResult.envelopeId;
 
         // 4. Update rental with DocuSign info
         console.log('Updating rental with DocuSign envelope info...');

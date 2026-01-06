@@ -304,8 +304,66 @@ serve(async (req) => {
       console.log('Admin SMS result:', results.adminSMS);
     }
 
+    // Create in-app notifications for admin users
+    let inAppNotificationResult = { success: false, count: 0, error: null as string | null };
+    if (data.tenantId) {
+      try {
+        // Get admin/head_admin users for this tenant
+        const { data: adminUsers, error: adminUsersError } = await supabase
+          .from('app_users')
+          .select('id')
+          .eq('tenant_id', data.tenantId)
+          .in('role', ['admin', 'head_admin']);
+
+        if (adminUsersError) {
+          console.error('Error fetching admin users:', adminUsersError);
+          inAppNotificationResult.error = adminUsersError.message;
+        } else if (adminUsers && adminUsers.length > 0) {
+          // Create notifications for each admin user
+          const notifications = adminUsers.map(user => ({
+            user_id: user.id,
+            tenant_id: data.tenantId,
+            title: 'New Booking Pending',
+            message: `${data.customerName} booked ${data.vehicleName} for ${data.pickupDate} - ${data.returnDate}. Amount: $${data.amount}`,
+            type: 'booking_new',
+            is_read: false,
+            link: `/rentals/${data.rentalId}`,
+            metadata: {
+              rental_id: data.rentalId,
+              customer_name: data.customerName,
+              customer_email: data.customerEmail,
+              vehicle_name: data.vehicleName,
+              vehicle_reg: data.vehicleReg,
+              booking_ref: data.bookingRef,
+              amount: data.amount,
+            },
+          }));
+
+          const { error: insertError } = await supabase
+            .from('notifications')
+            .insert(notifications);
+
+          if (insertError) {
+            console.error('Error creating in-app notifications:', insertError);
+            inAppNotificationResult.error = insertError.message;
+          } else {
+            inAppNotificationResult.success = true;
+            inAppNotificationResult.count = notifications.length;
+            console.log(`Created ${notifications.length} in-app notifications for admin users`);
+          }
+        } else {
+          console.log('No admin users found for tenant:', data.tenantId);
+        }
+      } catch (notifyError: any) {
+        console.error('Error creating in-app notifications:', notifyError);
+        inAppNotificationResult.error = notifyError.message;
+      }
+    } else {
+      console.log('No tenantId provided, skipping in-app notifications');
+    }
+
     return new Response(
-      JSON.stringify({ success: true, results }),
+      JSON.stringify({ success: true, results: { ...results, inAppNotifications: inAppNotificationResult } }),
       {
         status: 200,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },

@@ -16,7 +16,6 @@ import { AddPaymentDialog } from "@/components/shared/dialogs/add-payment-dialog
 import { useToast } from "@/hooks/use-toast";
 import { useTenant } from "@/contexts/TenantContext";
 import { useRentalTotals } from "@/hooks/use-rental-ledger-data";
-import { useRentalInitialFee } from "@/hooks/use-rental-initial-fee";
 import { RentalLedger } from "@/components/rentals/rental-ledger";
 import { KeyHandoverSection } from "@/components/rentals/key-handover-section";
 import { CancelRentalDialog } from "@/components/shared/dialogs/cancel-rental-dialog";
@@ -31,6 +30,7 @@ interface Rental {
   status: string;
   computed_status?: string;
   document_status?: string;
+  docusign_envelope_id?: string;
   signed_document_id?: string;
   insurance_status?: string;
   payment_mode?: string;
@@ -55,6 +55,7 @@ const RentalDetail = () => {
   const [showCancelDialog, setShowCancelDialog] = useState(false);
   const [showRejectionDialog, setShowRejectionDialog] = useState(false);
   const [showApproveDialog, setShowApproveDialog] = useState(false);
+  const [showDocuSignWarning, setShowDocuSignWarning] = useState(false);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [showCloseDialog, setShowCloseDialog] = useState(false);
   const [isApproving, setIsApproving] = useState(false);
@@ -88,7 +89,6 @@ const RentalDetail = () => {
   });
 
   const { data: rentalTotals } = useRentalTotals(id);
-  const { data: initialFee } = useRentalInitialFee(id);
 
   // Scroll to ledger section if hash is present (wait for data to load)
   useEffect(() => {
@@ -491,44 +491,79 @@ const RentalDetail = () => {
   const totalPayments = rentalTotals?.totalPayments || 0;
   const outstandingBalance = rentalTotals?.outstanding || 0;
 
-  // Compute rental status dynamically based on dates and status
+  // Compute rental status based on approval_status, payment_status, AND key handover
   const computeStatus = (rental: Rental): string => {
+    if (rental.status === 'Cancelled') return 'Cancelled';
     if (rental.status === 'Closed') return 'Closed';
-    if (rental.status === 'Pending') return 'Pending';
+    if (rental.approval_status === 'rejected') return 'Rejected';
 
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const startDate = new Date(rental.start_date);
-    startDate.setHours(0, 0, 0, 0);
-
-    if (startDate > today) {
-      return 'Upcoming';
+    // Only show as Active if ALL conditions are met:
+    // 1. approval_status is approved
+    // 2. payment_status is fulfilled
+    // 3. key handover is completed
+    if (rental.approval_status === 'approved' && rental.payment_status === 'fulfilled' && isKeyHandoverCompleted) {
+      return 'Active';
     }
 
-    return 'Active';
+    // Otherwise show as Pending
+    return 'Pending';
   };
 
-  const displayStatus = rental.computed_status || computeStatus(rental);
+  const displayStatus = computeStatus(rental);
+
+  // Check if DocuSign is signed
+  const isDocuSignSigned = rental?.document_status === 'completed' || rental?.document_status === 'signed';
+  const hasDocuSign = !!rental?.docusign_envelope_id;
+
+  // Handle Approve button click - check DocuSign first
+  const handleApproveClick = () => {
+    if (hasDocuSign && !isDocuSignSigned) {
+      // DocuSign sent but not signed - show warning
+      setShowDocuSignWarning(true);
+    } else {
+      // No DocuSign or already signed - proceed to approval
+      setShowApproveDialog(true);
+    }
+  };
 
   // Function to view DocuSign agreement
   const handleViewAgreement = async () => {
     setLoadingDocuSignDoc(true);
+
+    // Open window immediately to avoid popup blocker
+    const newWindow = window.open('about:blank', '_blank');
+
     try {
       // If we have a signed document, open it directly
       if (signedDocument?.file_url) {
         const { data } = supabase.storage
           .from('customer-documents')
           .getPublicUrl(signedDocument.file_url);
-        window.open(data.publicUrl, '_blank');
+        if (newWindow) {
+          newWindow.location.href = data.publicUrl;
+        }
         return;
       }
 
-      // Otherwise, fetch from DocuSign
-      const { data, error } = await supabase.functions.invoke('get-docusign-document', {
-        body: { rentalId: id }
+      // Show loading message in new window
+      if (newWindow) {
+        newWindow.document.write('<html><head><title>Loading Agreement...</title></head><body style="display:flex;justify-content:center;align-items:center;height:100vh;font-family:system-ui;"><p>Loading agreement...</p></body></html>');
+      }
+
+      // Fetch from DocuSign via local API route
+      const response = await fetch('/api/docusign/view', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          rentalId: id,
+          envelopeId: rental?.docusign_envelope_id
+        }),
       });
 
-      if (error || !data?.ok) {
+      const data = await response.json();
+
+      if (!response.ok || !data?.ok) {
+        if (newWindow) newWindow.close();
         toast({
           title: "Error",
           description: data?.error || "Failed to get document",
@@ -537,13 +572,15 @@ const RentalDetail = () => {
         return;
       }
 
-      // If we got a stored URL, open it
+      // If we got a stored URL, redirect to it
       if (data.documentUrl) {
-        window.open(data.documentUrl, '_blank');
+        if (newWindow) {
+          newWindow.location.href = data.documentUrl;
+        }
         return;
       }
 
-      // If we got base64 PDF, create blob and open
+      // If we got base64 PDF, create blob and display
       if (data.documentBase64) {
         const byteCharacters = atob(data.documentBase64);
         const byteNumbers = new Array(byteCharacters.length);
@@ -553,9 +590,12 @@ const RentalDetail = () => {
         const byteArray = new Uint8Array(byteNumbers);
         const blob = new Blob([byteArray], { type: 'application/pdf' });
         const url = URL.createObjectURL(blob);
-        window.open(url, '_blank');
+        if (newWindow) {
+          newWindow.location.href = url;
+        }
       }
     } catch (err: any) {
+      if (newWindow) newWindow.close();
       toast({
         title: "Error",
         description: err?.message || "Failed to view agreement",
@@ -605,7 +645,7 @@ const RentalDetail = () => {
               <Button
                 variant="default"
                 className="bg-green-600 hover:bg-green-700"
-                onClick={() => setShowApproveDialog(true)}
+                onClick={handleApproveClick}
               >
                 <Check className="h-4 w-4 mr-2" />
                 Approve
@@ -628,7 +668,7 @@ const RentalDetail = () => {
             </>
           )}
 
-          {/* Active Rental - Show Add Payment, Add Fine, Close, Cancel buttons */}
+          {/* Active Rental - Show Add Payment, Add Fine, Close, Cancel, Delete buttons */}
           {rental.status === 'Active' && (
             <>
               <Button variant="outline" onClick={() => setShowAddPayment(true)}>
@@ -647,11 +687,20 @@ const RentalDetail = () => {
                 Close
               </Button>
               <Button
-                variant="destructive"
+                variant="outline"
+                className="text-destructive"
                 onClick={() => setShowCancelDialog(true)}
               >
                 <Ban className="h-4 w-4 mr-2" />
                 Cancel
+              </Button>
+              <Button
+                variant="outline"
+                className="text-destructive"
+                onClick={() => setShowDeleteDialog(true)}
+              >
+                <Trash2 className="h-4 w-4 mr-2" />
+                Delete
               </Button>
             </>
           )}
@@ -735,9 +784,6 @@ const RentalDetail = () => {
             <div className="bg-muted/30 rounded-lg p-4 space-y-1">
               <p className="text-xs uppercase tracking-wider text-muted-foreground">{rental.rental_period_type || 'Monthly'} Amount</p>
               <p className="text-lg font-semibold">${Number(rental.monthly_amount).toLocaleString()}</p>
-              {initialFee && (
-                <p className="text-sm text-muted-foreground">Initial Fee: ${Number(initialFee.amount).toLocaleString()}</p>
-              )}
             </div>
           </div>
 
@@ -769,16 +815,16 @@ const RentalDetail = () => {
                 <Badge
                   variant="outline"
                   className={
-                    rental.status === 'Active'
+                    displayStatus === 'Active'
                       ? 'bg-emerald-950/50 text-emerald-300 border-emerald-800'
-                      : rental.status === 'Closed'
+                      : displayStatus === 'Closed'
                       ? 'bg-slate-800/50 text-slate-300 border-slate-700'
-                      : rental.status === 'Cancelled'
+                      : displayStatus === 'Cancelled' || displayStatus === 'Rejected'
                       ? 'bg-red-950/50 text-red-300 border-red-800'
                       : 'bg-amber-950/50 text-amber-300 border-amber-800'
                   }
                 >
-                  {rental.status}
+                  {displayStatus}
                 </Badge>
               </div>
               <div className="text-center p-3 bg-muted/20 rounded-lg">
@@ -944,7 +990,7 @@ const RentalDetail = () => {
                           title: "DocuSign Sent",
                           description: "Rental agreement has been sent via DocuSign",
                         });
-                        queryClient.invalidateQueries({ queryKey: ["rental", id] });
+                        queryClient.invalidateQueries({ queryKey: ["rental", id, tenant?.id] });
                       }
                     } catch (error: any) {
                       toast({
@@ -964,7 +1010,7 @@ const RentalDetail = () => {
               )}
 
               {/* Check Status Button - show when sent but not signed */}
-              {(rental as any).docusign_envelope_id && rental.document_status !== 'signed' && !rental.signed_document_id && (
+              {rental.docusign_envelope_id && rental.document_status !== 'signed' && !rental.signed_document_id && (
                 <Button
                   variant="ghost"
                   size="sm"
@@ -976,7 +1022,7 @@ const RentalDetail = () => {
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({
                           rentalId: id,
-                          envelopeId: (rental as any).docusign_envelope_id,
+                          envelopeId: rental.docusign_envelope_id,
                         }),
                       });
 
@@ -987,7 +1033,7 @@ const RentalDetail = () => {
                           title: "Status Updated",
                           description: `Document status: ${statusData.status}`,
                         });
-                        queryClient.invalidateQueries({ queryKey: ["rental", id] });
+                        queryClient.invalidateQueries({ queryKey: ["rental", id, tenant?.id] });
                       } else {
                         toast({
                           title: "Check Failed",
@@ -1723,35 +1769,63 @@ const RentalDetail = () => {
         />
       )}
 
+      {/* DocuSign Not Signed Warning Dialog */}
+      <AlertDialog open={showDocuSignWarning} onOpenChange={setShowDocuSignWarning}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2 text-amber-600">
+              <AlertTriangle className="h-5 w-5" />
+              DocuSign Not Signed
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              The rental agreement has been sent but has not been signed by the customer yet.
+              <span className="block mt-2 font-medium">
+                Do you still want to approve this booking without a signed agreement?
+              </span>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>No, Wait for Signature</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-amber-600 hover:bg-amber-700"
+              onClick={() => {
+                setShowDocuSignWarning(false);
+                setShowApproveDialog(true);
+              }}
+            >
+              Yes, Approve Anyway
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
       {/* Approve Confirmation Dialog */}
       <AlertDialog open={showApproveDialog} onOpenChange={setShowApproveDialog}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Approve Booking</AlertDialogTitle>
             <AlertDialogDescription>
+              Are you sure you want to approve this booking for {rental?.customers?.name}?
+              {rental?.payment_mode === 'manual' && rental?.payment_status === 'pending' && (
+                <span className="block mt-2 text-amber-600">
+                  This will capture the payment hold on the customer's card.
+                </span>
+              )}
               {!isKeyHandoverCompleted ? (
-                <span className="block text-amber-500">
-                  <strong>Key handover required:</strong> Please complete the vehicle collection (key handover) before approving this booking. Scroll down to the Key Handover section to mark keys as handed over.
+                <span className="block mt-2 text-blue-500">
+                  <strong>Note:</strong> The rental will remain "Pending" until key handover is completed.
                 </span>
               ) : (
-                <>
-                  Are you sure you want to approve this booking for {rental?.customers?.name}?
-                  {rental?.payment_mode === 'manual' && rental?.payment_status === 'pending' && (
-                    <span className="block mt-2 text-amber-600">
-                      This will capture the payment hold on the customer's card.
-                    </span>
-                  )}
-                  <span className="block mt-2">
-                    The rental will become active and the customer will be notified.
-                  </span>
-                </>
+                <span className="block mt-2">
+                  The rental will become active and the customer will be notified.
+                </span>
               )}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel disabled={isApproving}>Cancel</AlertDialogCancel>
             <AlertDialogAction
-              disabled={isApproving || !isKeyHandoverCompleted}
+              disabled={isApproving}
               onClick={async (e) => {
                 e.preventDefault();
                 setIsApproving(true);
@@ -1767,15 +1841,21 @@ const RentalDetail = () => {
                     if (captureError) throw captureError;
                   }
 
-                  // Update rental
+                  // Update rental - only set to Active if key handover is also completed
+                  const rentalUpdateData: any = {
+                    approval_status: 'approved',
+                    payment_status: 'fulfilled',
+                    updated_at: new Date().toISOString(),
+                  };
+
+                  // Only set status to Active if key handover is completed
+                  if (isKeyHandoverCompleted) {
+                    rentalUpdateData.status = 'Active';
+                  }
+
                   await supabase
                     .from('rentals')
-                    .update({
-                      approval_status: 'approved',
-                      payment_status: 'fulfilled',
-                      status: 'Active',
-                      updated_at: new Date().toISOString(),
-                    })
+                    .update(rentalUpdateData)
                     .eq('id', id);
 
                   // Send approval email
@@ -1792,12 +1872,15 @@ const RentalDetail = () => {
 
                   toast({
                     title: "Booking Approved",
-                    description: "Rental is now active and customer notified",
+                    description: isKeyHandoverCompleted
+                      ? "Rental is now active and customer notified"
+                      : "Booking approved. Rental will become active after key handover.",
                   });
 
-                  queryClient.invalidateQueries({ queryKey: ['rental', id] });
+                  queryClient.invalidateQueries({ queryKey: ['rental', id, tenant?.id] });
                   queryClient.invalidateQueries({ queryKey: ['rentals-list'] });
-                  queryClient.invalidateQueries({ queryKey: ['rental-payment', id] });
+                  queryClient.invalidateQueries({ queryKey: ['enhanced-rentals'] });
+                  queryClient.invalidateQueries({ queryKey: ['rental-payment', id, tenant?.id] });
                   setShowApproveDialog(false);
                 } catch (error: any) {
                   toast({
@@ -1860,8 +1943,9 @@ const RentalDetail = () => {
                     description: "Rental has been closed and vehicle is now available.",
                   });
 
-                  queryClient.invalidateQueries({ queryKey: ["rental", id] });
+                  queryClient.invalidateQueries({ queryKey: ["rental", id, tenant?.id] });
                   queryClient.invalidateQueries({ queryKey: ["rentals-list"] });
+                  queryClient.invalidateQueries({ queryKey: ["enhanced-rentals"] });
                   queryClient.invalidateQueries({ queryKey: ["vehicles-list"] });
                   setShowCloseDialog(false);
                 } catch (error) {
@@ -1918,25 +2002,85 @@ const RentalDetail = () => {
                       .eq("tenant_id", tenant?.id);
                   }
 
-                  // Delete the rental
+                  // Delete related records first (to avoid foreign key constraints)
+                  // Include tenant_id for RLS policies
+
+                  // 1. Delete payment applications (get payment IDs first)
+                  const { data: payments } = await supabase
+                    .from("payments")
+                    .select("id")
+                    .eq("rental_id", id)
+                    .eq("tenant_id", tenant?.id);
+
+                  if (payments && payments.length > 0) {
+                    const paymentIds = payments.map(p => p.id);
+                    await supabase
+                      .from("payment_applications")
+                      .delete()
+                      .in("payment_id", paymentIds);
+                  }
+
+                  // 2. Delete payments
                   await supabase
+                    .from("payments")
+                    .delete()
+                    .eq("rental_id", id)
+                    .eq("tenant_id", tenant?.id);
+
+                  // 3. Delete ledger entries
+                  await supabase
+                    .from("ledger_entries")
+                    .delete()
+                    .eq("rental_id", id)
+                    .eq("tenant_id", tenant?.id);
+
+                  // 4. Delete invoices
+                  await supabase
+                    .from("invoices")
+                    .delete()
+                    .eq("rental_id", id)
+                    .eq("tenant_id", tenant?.id);
+
+                  // 5. Delete fines
+                  await supabase
+                    .from("fines")
+                    .delete()
+                    .eq("rental_id", id)
+                    .eq("tenant_id", tenant?.id);
+
+                  // 6. Delete reminders
+                  await supabase
+                    .from("reminders")
+                    .delete()
+                    .eq("rental_id", id)
+                    .eq("tenant_id", tenant?.id);
+
+                  // 6. Finally delete the rental
+                  const { error: deleteError } = await supabase
                     .from("rentals")
                     .delete()
                     .eq("id", id)
                     .eq("tenant_id", tenant?.id);
+
+                  if (deleteError) {
+                    throw deleteError;
+                  }
 
                   toast({
                     title: "Rental Deleted",
                     description: "The rental has been permanently deleted.",
                   });
 
+                  // Invalidate all rental-related queries
+                  queryClient.invalidateQueries({ queryKey: ["enhanced-rentals"] });
                   queryClient.invalidateQueries({ queryKey: ["rentals-list"] });
                   queryClient.invalidateQueries({ queryKey: ["vehicles-list"] });
                   router.push("/rentals");
-                } catch (error) {
+                } catch (error: any) {
+                  console.error("Delete error:", error);
                   toast({
                     title: "Error",
-                    description: "Failed to delete rental.",
+                    description: error?.message || "Failed to delete rental.",
                     variant: "destructive",
                   });
                 } finally {

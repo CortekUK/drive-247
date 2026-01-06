@@ -46,41 +46,42 @@ export default function BookingCheckoutStep({
   const [sendingDocuSign, setSendingDocuSign] = useState(false);
 
   // Calculate rental period type based on duration
+  // Pricing tiers: > 30 days = monthly, 7-30 days = weekly, < 7 days = daily
   const calculateRentalPeriodType = (): "Daily" | "Weekly" | "Monthly" => {
     const days = rentalDuration.days;
-    if (days >= 30) return "Monthly";
+    if (days > 30) return "Monthly";
     if (days >= 7) return "Weekly";
     return "Daily";
   };
 
-  // Calculate monthly amount based on period type and vehicle pricing
+  // Calculate rental amount based on period type and vehicle pricing (pro-rata)
   const calculateMonthlyAmount = (): number => {
-    const periodType = calculateRentalPeriodType();
     const days = rentalDuration.days;
+    const dailyRent = selectedVehicle.daily_rent || 0;
+    const weeklyRent = selectedVehicle.weekly_rent || 0;
+    const monthlyRent = selectedVehicle.monthly_rent || 0;
 
-    if (periodType === "Monthly") {
-      // Use monthly rate if available, otherwise calculate from daily
-      return selectedVehicle.monthly_rent || (selectedVehicle.daily_rent || 50) * 30;
-    } else if (periodType === "Weekly") {
-      // Use weekly rate if available, otherwise calculate from daily
-      const weeks = Math.ceil(days / 7);
-      return (selectedVehicle.weekly_rent || (selectedVehicle.daily_rent || 50) * 7) * weeks;
-    } else {
-      // Daily rate
-      return (selectedVehicle.daily_rent || 50) * days;
+    // Pricing tiers (pro-rata):
+    // > 30 days: monthly rate (days/30 × monthly_rent)
+    // 7-30 days: weekly rate (days/7 × weekly_rent)
+    // < 7 days: daily rate (days × daily_rent)
+    if (days > 30 && monthlyRent > 0) {
+      return (days / 30) * monthlyRent;
+    } else if (days >= 7 && days <= 30 && weeklyRent > 0) {
+      return (days / 7) * weeklyRent;
+    } else if (dailyRent > 0) {
+      return days * dailyRent;
+    } else if (weeklyRent > 0) {
+      return (days / 7) * weeklyRent;
+    } else if (monthlyRent > 0) {
+      return (days / 30) * monthlyRent;
     }
-  };
-
-  const calculateTaxesAndFees = () => {
-    return (vehicleTotal * 0.10) + 50; // 10% tax + $50 service fee
+    return 0;
   };
 
   const calculateGrandTotal = () => {
-    const taxesAndFees = calculateTaxesAndFees();
-    return vehicleTotal + taxesAndFees;
+    return vehicleTotal; // Just the rental price, no additional fees
   };
-
-  const depositAmount = 500; // Fixed deposit
 
   // Function to get booking payment mode
   const getBookingMode = async (): Promise<'manual' | 'auto'> => {
@@ -374,13 +375,37 @@ export default function BookingCheckoutStep({
         console.log('🔗 Linking verification to customer:', formData.verificationSessionId);
         console.log('🔗 Customer ID to link:', customer.id);
 
-        // Query the verification record by session_id only (don't filter by tenant_id
-        // because the webhook creates the record without tenant_id for booking flow)
-        const { data: verification, error: verificationQueryError } = await supabase
+        // Query the verification record by session_id first (primary method)
+        // If not found, fallback to querying by id for backward compatibility
+        let verification = null;
+        let verificationQueryError = null;
+
+        // Try session_id first
+        const { data: sessionData, error: sessionError } = await supabase
           .from('identity_verifications')
           .select('*')
           .eq('session_id', formData.verificationSessionId)
           .maybeSingle();
+
+        if (sessionData) {
+          verification = sessionData;
+          console.log('🔍 Found verification by session_id');
+        } else {
+          // Fallback: try querying by id (for older verifications without session_id)
+          console.log('🔍 No match by session_id, trying by id...');
+          const { data: idData, error: idError } = await supabase
+            .from('identity_verifications')
+            .select('*')
+            .eq('id', formData.verificationSessionId)
+            .maybeSingle();
+
+          if (idData) {
+            verification = idData;
+            console.log('🔍 Found verification by id (fallback)');
+          } else {
+            verificationQueryError = sessionError || idError;
+          }
+        }
 
         console.log('🔍 Query result - verification:', verification);
         console.log('🔍 Query result - error:', verificationQueryError);
@@ -509,8 +534,6 @@ export default function BookingCheckoutStep({
       console.log('⏳ Vehicle status unchanged - awaiting admin approval');
 
       // Step 4: Create invoice (with fallback to local if DB fails)
-      let invoiceNotes = `Security deposit of $${depositAmount.toLocaleString()} will be held during the rental period.`;
-
       const invoice = await createInvoiceWithFallback({
         rental_id: rental.id,
         customer_id: customer.id,
@@ -520,9 +543,9 @@ export default function BookingCheckoutStep({
         subtotal: vehicleTotal,
         rental_fee: vehicleTotal,
         protection_fee: 0,
-        tax_amount: calculateTaxesAndFees(),
+        tax_amount: 0,
         total_amount: calculateGrandTotal(),
-        notes: invoiceNotes,
+        notes: '',
         tenant_id: tenant?.id,
       });
 
@@ -746,24 +769,14 @@ export default function BookingCheckoutStep({
             <h3 className="text-lg font-semibold text-gradient-metal mb-4">Price Summary</h3>
 
             <div className="space-y-3">
-              <div className="flex justify-between text-sm">
+              <div className="flex justify-between text-sm pb-3 border-b border-border">
                 <span className="text-muted-foreground">Rental ({rentalDuration.days} days)</span>
                 <span className="font-medium">${vehicleTotal.toLocaleString()}</span>
               </div>
 
-              <div className="flex justify-between text-sm">
-                <span className="text-muted-foreground">Taxes & Fees</span>
-                <span className="font-medium">${calculateTaxesAndFees().toLocaleString()}</span>
-              </div>
-
-              <div className="flex justify-between text-sm pb-3 border-b border-border">
-                <span className="text-muted-foreground">Security Deposit (hold)</span>
-                <span className="font-medium">${depositAmount.toLocaleString()}</span>
-              </div>
-
               <div className="pt-3 border-t border-accent/30">
                 <div className="flex justify-between items-center">
-                  <span className="text-lg font-semibold">Total Due Today</span>
+                  <span className="text-lg font-semibold">Total</span>
                   <span className="text-2xl font-bold text-accent">
                     ${calculateGrandTotal().toLocaleString()}
                   </span>
@@ -771,7 +784,7 @@ export default function BookingCheckoutStep({
               </div>
 
               <p className="text-xs text-muted-foreground mt-4">
-                You'll receive a digital receipt immediately. Deposit is held, not charged.
+                You'll receive a digital receipt immediately.
               </p>
             </div>
 

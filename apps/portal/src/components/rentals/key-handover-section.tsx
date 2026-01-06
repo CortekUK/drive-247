@@ -32,14 +32,17 @@ export const KeyHandoverSection = ({ rentalId, rentalStatus }: KeyHandoverSectio
     uploadPhoto,
     deletePhoto,
     markKeyHanded,
+    unmarkKeyHanded,
     updateNotes,
     isLoading,
     isUploading,
     isDeleting,
     isMarkingHanded,
+    isUnmarkingHanded,
   } = useKeyHandover(rentalId);
 
   const [confirmHandover, setConfirmHandover] = useState<HandoverType | null>(null);
+  const [confirmUndo, setConfirmUndo] = useState<HandoverType | null>(null);
   const [givingNotes, setGivingNotes] = useState<string>("");
   const [receivingNotes, setReceivingNotes] = useState<string>("");
 
@@ -65,6 +68,13 @@ export const KeyHandoverSection = ({ rentalId, rentalStatus }: KeyHandoverSectio
     if (confirmHandover) {
       markKeyHanded.mutate(confirmHandover);
       setConfirmHandover(null);
+    }
+  };
+
+  const handleConfirmUndo = () => {
+    if (confirmUndo) {
+      unmarkKeyHanded.mutate(confirmUndo);
+      setConfirmUndo(null);
     }
   };
 
@@ -137,15 +147,20 @@ export const KeyHandoverSection = ({ rentalId, rentalStatus }: KeyHandoverSectio
               </p>
             )}
 
-            {/* Key Handed Button */}
-            {!givingCompleted && !isClosed && (
+            {/* Key Handed Toggle Button */}
+            {!isClosed && (
               <Button
-                onClick={() => setConfirmHandover("giving")}
-                disabled={isMarkingHanded}
+                onClick={() => givingCompleted ? setConfirmUndo("giving") : setConfirmHandover("giving")}
+                disabled={isMarkingHanded || isUnmarkingHanded}
+                variant={givingCompleted ? "outline" : "default"}
                 className="w-full"
               >
                 <KeyRound className="h-4 w-4 mr-2" />
-                {isMarkingHanded ? "Processing..." : "Confirm "}
+                {isMarkingHanded || isUnmarkingHanded
+                  ? "Processing..."
+                  : givingCompleted
+                    ? "Undo Collection"
+                    : "Confirm Collection"}
               </Button>
             )}
 
@@ -216,15 +231,20 @@ export const KeyHandoverSection = ({ rentalId, rentalStatus }: KeyHandoverSectio
               </p>
             )}
 
-            {/* Key Received Button */}
-            {!receivingCompleted && givingCompleted && !isClosed && (
+            {/* Key Received Toggle Button */}
+            {givingCompleted && !isClosed && (
               <Button
-                onClick={() => setConfirmHandover("receiving")}
-                disabled={isMarkingHanded}
+                onClick={() => receivingCompleted ? setConfirmUndo("receiving") : setConfirmHandover("receiving")}
+                disabled={isMarkingHanded || isUnmarkingHanded}
+                variant={receivingCompleted ? "outline" : "default"}
                 className="w-full"
               >
                 <Key className="h-4 w-4 mr-2" />
-                {isMarkingHanded ? "Processing..." : "Confirm "}
+                {isMarkingHanded || isUnmarkingHanded
+                  ? "Processing..."
+                  : receivingCompleted
+                    ? "Undo Return"
+                    : "Confirm Return"}
               </Button>
             )}
 
@@ -244,18 +264,24 @@ export const KeyHandoverSection = ({ rentalId, rentalStatus }: KeyHandoverSectio
             <AlertDialogHeader>
               <AlertDialogTitle>
                 {confirmHandover === "giving"
-                  ? "Confirm Key Handover"
-                  : "Confirm Key Receipt"}
+                  ? "Confirm Vehicle Collection"
+                  : "Confirm Vehicle Return"}
               </AlertDialogTitle>
               <AlertDialogDescription>
                 {confirmHandover === "giving" ? (
                   <>
-                    Are you sure you want to mark the key as handed over?
+                    Are you sure you want to mark the vehicle as collected?
                     <br />
-                    <strong>This will change the rental status to Active.</strong>
+                    <span className="text-muted-foreground text-sm">
+                      The rental will become active once both this and admin approval are completed.
+                    </span>
                   </>
                 ) : (
-                  "Are you sure you want to mark the key as received?"
+                  <>
+                    Are you sure you want to mark the vehicle as returned?
+                    <br />
+                    <strong>This will close the rental and mark the vehicle as available.</strong>
+                  </>
                 )}
               </AlertDialogDescription>
             </AlertDialogHeader>
@@ -263,6 +289,38 @@ export const KeyHandoverSection = ({ rentalId, rentalStatus }: KeyHandoverSectio
               <AlertDialogCancel>Cancel</AlertDialogCancel>
               <AlertDialogAction onClick={handleConfirmHandover}>
                 Confirm
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+
+        {/* Undo Confirmation Dialog */}
+        <AlertDialog open={!!confirmUndo} onOpenChange={() => setConfirmUndo(null)}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>
+                {confirmUndo === "giving"
+                  ? "Undo Vehicle Collection"
+                  : "Undo Vehicle Return"}
+              </AlertDialogTitle>
+              <AlertDialogDescription>
+                {confirmUndo === "giving" ? (
+                  <>
+                    Are you sure you want to undo the vehicle collection?
+                    <br />
+                    <span className="text-muted-foreground text-sm">
+                      If the rental was active, it will be reverted to pending status.
+                    </span>
+                  </>
+                ) : (
+                  "Are you sure you want to undo the vehicle return?"
+                )}
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancel</AlertDialogCancel>
+              <AlertDialogAction onClick={handleConfirmUndo} className="bg-amber-600 hover:bg-amber-700">
+                Undo
               </AlertDialogAction>
             </AlertDialogFooter>
           </AlertDialogContent>

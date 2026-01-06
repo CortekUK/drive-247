@@ -435,15 +435,6 @@ const MultiStepBookingWidget = () => {
 
     const { data: vehiclesData } = await vehiclesQuery;
 
-    // Build query for pricing extras with tenant filtering
-    // Note: pricing_extras may not be in generated Supabase types but exists in DB
-    const extrasQuery = (supabase as any)
-      .from("pricing_extras")
-      .select("*")
-      .eq("tenant_id", tenant.id);
-
-    const { data: extrasData } = await extrasQuery;
-
     // Build query for blocked dates with tenant filtering
     const blockedDatesQuery = supabase
       .from("blocked_dates")
@@ -472,7 +463,6 @@ const MultiStepBookingWidget = () => {
         }));
       }
     }
-    if (extrasData) setExtras(extrasData as unknown as PricingExtra[]);
     if (blockedDatesData) {
       // Store all blocked dates (global + vehicle-specific)
       setAllBlockedDates(blockedDatesData);
@@ -940,20 +930,26 @@ const MultiStepBookingWidget = () => {
       const dropoff = new Date(formData.dropoffDate);
       rentalDays = Math.max(1, Math.ceil((dropoff.getTime() - pickup.getTime()) / (1000 * 60 * 60 * 24)));
 
-      // Calculate based on rental period
-      if (rentalDays >= 30) {
-        // Monthly rent
-        const months = Math.floor(rentalDays / 30);
-        const remainingDays = rentalDays % 30;
-        rentalPrice = months * (selectedVehicle.monthly_rent || 0) + remainingDays * (selectedVehicle.daily_rent || 0);
-      } else if (rentalDays >= 7) {
-        // Weekly rent
-        const weeks = Math.floor(rentalDays / 7);
-        const remainingDays = rentalDays % 7;
-        rentalPrice = weeks * (selectedVehicle.weekly_rent || 0) + remainingDays * (selectedVehicle.daily_rent || 0);
-      } else {
-        // Daily rent
-        rentalPrice = rentalDays * (selectedVehicle.daily_rent || 0);
+      const dailyRent = selectedVehicle.daily_rent || 0;
+      const weeklyRent = selectedVehicle.weekly_rent || 0;
+      const monthlyRent = selectedVehicle.monthly_rent || 0;
+
+      // Pricing tiers (pro-rata):
+      // > 30 days: monthly rate (days/30 × monthly_rent)
+      // 7-30 days: weekly rate (days/7 × weekly_rent)
+      // < 7 days: daily rate (days × daily_rent)
+      if (rentalDays > 30 && monthlyRent > 0) {
+        rentalPrice = (rentalDays / 30) * monthlyRent;
+      } else if (rentalDays >= 7 && rentalDays <= 30 && weeklyRent > 0) {
+        rentalPrice = (rentalDays / 7) * weeklyRent;
+      } else if (dailyRent > 0) {
+        rentalPrice = rentalDays * dailyRent;
+      } else if (weeklyRent > 0) {
+        // Fallback: estimate from weekly if no daily
+        rentalPrice = (rentalDays / 7) * weeklyRent;
+      } else if (monthlyRent > 0) {
+        // Fallback: estimate from monthly if no daily/weekly
+        rentalPrice = (rentalDays / 30) * monthlyRent;
       }
     }
     const extrasTotal = selectedExtras.reduce((sum, extraId) => {
@@ -1103,6 +1099,18 @@ const MultiStepBookingWidget = () => {
         error
       } = await supabase.from("rentals").insert(rentalData).select().single();
       if (error) throw error;
+
+      // Update vehicle status to Rented (even for pending rentals)
+      let vehicleUpdateQuery = supabase
+        .from("vehicles")
+        .update({ status: "Rented" })
+        .eq("id", formData.vehicleId);
+
+      if (tenant?.id) {
+        vehicleUpdateQuery = vehicleUpdateQuery.eq("tenant_id", tenant.id);
+      }
+
+      await vehicleUpdateQuery;
 
       // Generate reference using timestamp
       const reference = `SDS-${Date.now().toString(36).toUpperCase()}`;
@@ -1366,19 +1374,22 @@ const MultiStepBookingWidget = () => {
     const weeklyRent = vehicle.weekly_rent || 0;
     const monthlyRent = vehicle.monthly_rent || 0;
 
-    if (days >= 28 && monthlyRent > 0) {
-      const months = Math.floor(days / 30);
-      const remainingDays = days % 30;
-      total = months * monthlyRent + (dailyRent > 0 ? remainingDays * dailyRent : 0);
-    } else if (days >= 7 && weeklyRent > 0) {
-      const weeks = Math.floor(days / 7);
-      const remainingDays = days % 7;
-      total = weeks * weeklyRent + (dailyRent > 0 ? remainingDays * dailyRent : 0);
+    // Pricing tiers (pro-rata):
+    // > 30 days: monthly rate (days/30 × monthly_rent)
+    // 7-30 days: weekly rate (days/7 × weekly_rent)
+    // < 7 days: daily rate (days × daily_rent)
+    if (days > 30 && monthlyRent > 0) {
+      total = (days / 30) * monthlyRent;
+    } else if (days >= 7 && days <= 30 && weeklyRent > 0) {
+      total = (days / 7) * weeklyRent;
     } else if (dailyRent > 0) {
       total = days * dailyRent;
+    } else if (weeklyRent > 0) {
+      // Fallback: estimate from weekly if no daily
+      total = (days / 7) * weeklyRent;
     } else if (monthlyRent > 0) {
-      // Fallback: estimate daily from monthly
-      total = (monthlyRent / 30) * days;
+      // Fallback: estimate from monthly if no daily/weekly
+      total = (days / 30) * monthlyRent;
     }
     return {
       total,
@@ -1387,6 +1398,7 @@ const MultiStepBookingWidget = () => {
   };
 
   // Get the appropriate price display based on rental duration
+  // Pricing tiers: > 30 days = monthly, 7-30 days = weekly, < 7 days = daily
   const getDynamicPriceDisplay = (vehicle: Vehicle): { price: number; label: string; secondaryPrices: string[] } => {
     const duration = calculateRentalDuration();
     const days = duration?.days || 0;
@@ -1395,14 +1407,14 @@ const MultiStepBookingWidget = () => {
     const weeklyRent = vehicle.weekly_rent || 0;
     const monthlyRent = vehicle.monthly_rent || 0;
 
-    // Determine primary price based on duration
-    if (days >= 28 && monthlyRent > 0) {
+    // Determine primary price based on duration (matching pricing tiers)
+    if (days > 30 && monthlyRent > 0) {
       // Monthly rental - show monthly price as primary
       const secondaryPrices: string[] = [];
       if (weeklyRent > 0) secondaryPrices.push(`$${weeklyRent} / week`);
       if (dailyRent > 0) secondaryPrices.push(`$${dailyRent} / day`);
       return { price: monthlyRent, label: '/ month', secondaryPrices };
-    } else if (days >= 7 && weeklyRent > 0) {
+    } else if (days >= 7 && days <= 30 && weeklyRent > 0) {
       // Weekly rental - show weekly price as primary
       const secondaryPrices: string[] = [];
       if (dailyRent > 0) secondaryPrices.push(`$${dailyRent} / day`);

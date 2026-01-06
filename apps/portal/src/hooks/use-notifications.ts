@@ -20,24 +20,31 @@ export function useNotifications() {
   const queryClient = useQueryClient();
   const { tenant } = useTenant();
 
-  // Fetch notifications for current user
+  // Check if user is admin (can see all tenant notifications)
+  const isAdmin = appUser?.role === 'admin' || appUser?.role === 'head_admin';
+
+  // Fetch notifications for current user and tenant
   const { data: notifications, isLoading } = useQuery({
-    queryKey: ["notifications", tenant?.id, appUser?.id],
+    queryKey: ["notifications", tenant?.id, appUser?.id, isAdmin],
     queryFn: async () => {
-      if (!appUser?.id) return [];
+      if (!appUser?.id || !tenant?.id) {
+        return [];
+      }
 
       let query = supabase
         .from("notifications")
         .select("*")
-        .or(`user_id.eq.${appUser.id},user_id.is.null`)
-        .order("created_at", { ascending: false })
-        .limit(50);
+        .eq("tenant_id", tenant.id);
 
-      if (tenant?.id) {
-        query = query.eq("tenant_id", tenant.id);
+      // Admins see ALL notifications for the tenant they're viewing
+      // Non-admins only see notifications addressed to them or broadcasts
+      if (!isAdmin) {
+        query = query.or(`user_id.eq.${appUser.id},user_id.is.null`);
       }
 
-      const { data, error } = await query;
+      const { data, error } = await query
+        .order("created_at", { ascending: false })
+        .limit(50);
 
       if (error) {
         console.error("Error fetching notifications:", error);
@@ -47,7 +54,7 @@ export function useNotifications() {
       return data as Notification[];
     },
     enabled: !!appUser?.id && !!tenant,
-    refetchInterval: 30000, // Refetch every 30 seconds
+    refetchInterval: 30000,
   });
 
   // Count of unread notifications

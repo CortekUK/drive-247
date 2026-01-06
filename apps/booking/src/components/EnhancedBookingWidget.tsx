@@ -75,23 +75,13 @@ const EnhancedBookingWidget = () => {
       .eq("status", "Available")
       .order("reg");
 
-    let extrasQuery = supabase
-      .from("pricing_extras")
-      .select("*")
-      .eq("is_active", true);
-
     if (tenant?.id) {
       vehiclesQuery = vehiclesQuery.eq("tenant_id", tenant.id);
-      extrasQuery = extrasQuery.eq("tenant_id", tenant.id);
     }
 
-    const [vehiclesRes, extrasRes] = await Promise.all([
-      vehiclesQuery,
-      extrasQuery
-    ]);
+    const { data: vehiclesData } = await vehiclesQuery;
 
-    if (vehiclesRes.data) setVehicles(vehiclesRes.data);
-    if (extrasRes.data) setPricingExtras(extrasRes.data);
+    if (vehiclesData) setVehicles(vehiclesData);
   };
 
   const calculatePriceBreakdown = () => {
@@ -222,12 +212,25 @@ const EnhancedBookingWidget = () => {
 
     const { error } = await supabase.from("rentals").insert(rentalData);
 
-    setLoading(false);
-
     if (error) {
       toast.error("Failed to submit booking");
+      setLoading(false);
       return;
     }
+
+    // Update vehicle status to Rented (even for pending rentals)
+    let vehicleUpdateQuery = supabase
+      .from("vehicles")
+      .update({ status: "Rented" })
+      .eq("id", selectedVehicle.id);
+
+    if (tenant?.id) {
+      vehicleUpdateQuery = vehicleUpdateQuery.eq("tenant_id", tenant.id);
+    }
+
+    await vehicleUpdateQuery;
+
+    setLoading(false);
 
     setConfirmedBooking({
       pickupLocation: formData.pickupLocation,

@@ -86,21 +86,6 @@ const BookingCheckout = () => {
 
       if (vError) throw vError;
       setVehicleDetails(vehicle);
-
-      // Load extras
-      let extrasQuery = supabase
-        .from("pricing_extras")
-        .select("*")
-        .eq("is_active", true);
-
-      if (tenant?.id) {
-        extrasQuery = extrasQuery.eq("tenant_id", tenant.id);
-      }
-
-      const { data: extrasData, error: eError } = await extrasQuery;
-
-      if (eError) throw eError;
-      setExtras(extrasData || []);
     } catch (error: any) {
       toast.error("Failed to load booking details");
       console.error(error);
@@ -242,7 +227,9 @@ const BookingCheckout = () => {
         start_date: pickupDate,
         end_date: returnDate,
         monthly_amount: monthlyAmount,
-        status: "Active"
+        status: "Pending",
+        approval_status: "pending",
+        payment_status: "pending"
       };
 
       if (tenant?.id) {

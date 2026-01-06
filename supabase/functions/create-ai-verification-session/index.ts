@@ -132,6 +132,9 @@ async function createSessionForCustomer(
     const qrUrl = buildQRUrl(tenantSlug, qrToken);
     const expiresAt = new Date(Date.now() + 15 * 60 * 1000); // 15 minutes
 
+    // Generate a unique session_id for this verification (used for linking after booking)
+    const sessionId = crypto.randomUUID();
+
     // Create verification record
     const verificationData: any = {
       customer_id: customerId,
@@ -139,6 +142,7 @@ async function createSessionForCustomer(
       provider: 'ai',
       verification_provider: 'ai',
       external_user_id: customerId,
+      session_id: sessionId, // Set session_id for consistency with Veriff flow
       status: 'init',
       review_status: 'init',
       qr_session_token: qrToken,
@@ -166,11 +170,11 @@ async function createSessionForCustomer(
       .update({ identity_verification_status: 'pending' })
       .eq('id', customerId);
 
-    console.log('AI verification session created successfully:', verification.id);
+    console.log('AI verification session created successfully:', verification.id, 'session_id:', sessionId);
 
     return {
       ok: true,
-      sessionId: verification.id,
+      sessionId: sessionId, // Return the session_id for linking, not the record id
       qrToken: qrToken,
       qrUrl: qrUrl,
       expiresAt: expiresAt.toISOString(),
@@ -214,6 +218,9 @@ async function createSessionForBooking(
     const qrUrl = buildQRUrl(tenantSlug, qrToken);
     const expiresAt = new Date(Date.now() + 15 * 60 * 1000); // 15 minutes
 
+    // Generate a unique session_id for this verification (used for linking after booking)
+    const sessionId = crypto.randomUUID();
+
     // Create verification record without customer_id (will be auto-linked by email when rental is created)
     const vendorData = `booking_${customerEmail}_${Date.now()}`;
     const verificationData: any = {
@@ -221,6 +228,7 @@ async function createSessionForBooking(
       provider: 'ai',
       verification_provider: 'ai',
       external_user_id: vendorData,
+      session_id: sessionId, // Set session_id for linking during checkout
       customer_email: customerEmail.toLowerCase().trim(), // Store email for auto-linking
       status: 'init',
       review_status: 'init',
@@ -246,11 +254,11 @@ async function createSessionForBooking(
       };
     }
 
-    console.log('AI booking verification session created successfully:', verification.id);
+    console.log('AI booking verification session created successfully:', verification.id, 'session_id:', sessionId);
 
     return {
       ok: true,
-      sessionId: verification.id,
+      sessionId: sessionId, // Return the session_id for linking during checkout
       qrToken: qrToken,
       qrUrl: qrUrl,
       expiresAt: expiresAt.toISOString(),

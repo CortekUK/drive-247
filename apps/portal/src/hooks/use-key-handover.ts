@@ -196,13 +196,41 @@ export function useKeyHandover(rentalId: string | undefined) {
     },
   });
 
-  // Mark key as handed (updates rental status to Active)
+  // Mark key as handed (updates rental status to Active only if approved)
   const markKeyHanded = useMutation({
     mutationFn: async (type: HandoverType) => {
       if (!rentalId) throw new Error("Rental ID required");
 
+      // Ensure handover record exists first
+      let handover = getHandover(type);
+      if (!handover) {
+        // Create the handover record if it doesn't exist
+        const { data: existing } = await supabase
+          .from("rental_key_handovers")
+          .select("id")
+          .eq("rental_id", rentalId)
+          .eq("handover_type", type)
+          .maybeSingle();
+
+        if (existing) {
+          handover = existing as any;
+        } else {
+          const { data: newHandover, error: createError } = await supabase
+            .from("rental_key_handovers")
+            .insert({
+              rental_id: rentalId,
+              handover_type: type,
+              tenant_id: tenant?.id,
+            })
+            .select()
+            .single();
+
+          if (createError) throw createError;
+          handover = newHandover as any;
+        }
+      }
+
       // Update handover record with handed_at timestamp
-      const handover = getHandover(type);
       if (handover) {
         await supabase
           .from("rental_key_handovers")
@@ -210,14 +238,28 @@ export function useKeyHandover(rentalId: string | undefined) {
           .eq("id", handover.id);
       }
 
-      // If giving key, update rental status to Active
+      // If giving key, check if rental is approved before setting to Active
       if (type === "giving") {
-        const { error } = await supabase
+        // First, get the rental to check approval status
+        const { data: rental } = await supabase
           .from("rentals")
-          .update({ status: "Active" })
-          .eq("id", rentalId);
+          .select("approval_status, payment_status")
+          .eq("id", rentalId)
+          .single();
 
-        if (error) throw error;
+        // Only set to Active if rental is approved AND payment is fulfilled
+        if (rental?.approval_status === 'approved' && rental?.payment_status === 'fulfilled') {
+          const { error } = await supabase
+            .from("rentals")
+            .update({ status: "Active" })
+            .eq("id", rentalId);
+
+          if (error) throw error;
+
+          return { type, becameActive: true };
+        }
+
+        return { type, becameActive: false };
       }
 
       // If receiving key, update rental status to Closed and vehicle to Available
@@ -246,19 +288,99 @@ export function useKeyHandover(rentalId: string | undefined) {
         }
       }
 
+      return { type, becameActive: false };
+    },
+    onSuccess: ({ type, becameActive }) => {
+      queryClient.invalidateQueries({ queryKey: ["key-handovers", rentalId] });
+      queryClient.invalidateQueries({ queryKey: ["rental", rentalId] });
+      queryClient.invalidateQueries({ queryKey: ["rentals-list"] });
+      queryClient.invalidateQueries({ queryKey: ["enhanced-rentals"] });
+      queryClient.invalidateQueries({ queryKey: ["vehicles-list"] });
+
+      if (type === "giving") {
+        toast({
+          title: "Key Handed Over",
+          description: becameActive
+            ? "Rental is now active."
+            : "Key handover recorded. Rental will become active once approved.",
+        });
+      } else {
+        toast({
+          title: "Key Received",
+          description: "Rental is now closed.",
+        });
+      }
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Error",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  // Undo key handed (toggle off)
+  const unmarkKeyHanded = useMutation({
+    mutationFn: async (type: HandoverType) => {
+      if (!rentalId) throw new Error("Rental ID required");
+
+      // Find the handover record
+      let handover = getHandover(type);
+      if (!handover) {
+        // Try to fetch from database
+        const { data: existing } = await supabase
+          .from("rental_key_handovers")
+          .select("id")
+          .eq("rental_id", rentalId)
+          .eq("handover_type", type)
+          .maybeSingle();
+
+        if (existing) {
+          handover = existing as any;
+        }
+      }
+
+      // Update handover record to clear handed_at timestamp
+      if (handover) {
+        await supabase
+          .from("rental_key_handovers")
+          .update({ handed_at: null })
+          .eq("id", handover.id);
+      }
+
+      // If undoing giving key, revert rental status from Active to Pending
+      if (type === "giving") {
+        // Check current status - only revert if it was Active
+        const { data: rental } = await supabase
+          .from("rentals")
+          .select("status")
+          .eq("id", rentalId)
+          .single();
+
+        if (rental?.status === 'Active') {
+          const { error } = await supabase
+            .from("rentals")
+            .update({ status: "Pending" })
+            .eq("id", rentalId);
+
+          if (error) throw error;
+        }
+      }
+
       return { type };
     },
     onSuccess: ({ type }) => {
       queryClient.invalidateQueries({ queryKey: ["key-handovers", rentalId] });
       queryClient.invalidateQueries({ queryKey: ["rental", rentalId] });
       queryClient.invalidateQueries({ queryKey: ["rentals-list"] });
-      queryClient.invalidateQueries({ queryKey: ["vehicles-list"] });
+      queryClient.invalidateQueries({ queryKey: ["enhanced-rentals"] });
 
       toast({
-        title: type === "giving" ? "Key Handed Over" : "Key Received",
+        title: type === "giving" ? "Key Handover Undone" : "Key Receipt Undone",
         description: type === "giving"
-          ? "Rental is now active."
-          : "Rental is now closed.",
+          ? "Vehicle collection has been unmarked."
+          : "Vehicle return has been unmarked.",
       });
     },
     onError: (error: Error) => {
@@ -298,9 +420,11 @@ export function useKeyHandover(rentalId: string | undefined) {
     uploadPhoto,
     deletePhoto,
     markKeyHanded,
+    unmarkKeyHanded,
     updateNotes,
     isUploading: uploadPhoto.isPending,
     isDeleting: deletePhoto.isPending,
     isMarkingHanded: markKeyHanded.isPending,
+    isUnmarkingHanded: unmarkKeyHanded.isPending,
   };
 }
