@@ -216,11 +216,18 @@ async function createEnvelope(
     documentBase64: string,
     email: string,
     name: string,
-    rentalId: string
+    rentalId: string,
+    companyName?: string // Tenant company name for branding
 ): Promise<string | null> {
     try {
+        // Use tenant company name in subject and email body
+        const senderName = companyName || 'Drive 247';
+        const emailSubject = `${senderName} - Rental Agreement - Ref: ${rentalId.substring(0, 8).toUpperCase()}`;
+        const emailBlurb = `Dear ${name},\n\nPlease review and sign your rental agreement from ${senderName}.\n\nThis document requires your signature to complete your vehicle rental booking.\n\nThank you,\n${senderName}`;
+
         const envelope = {
-            emailSubject: `Rental Agreement - Ref: ${rentalId.substring(0, 8).toUpperCase()}`,
+            emailSubject,
+            emailBlurb,
             documents: [{
                 documentBase64,
                 name: 'Rental Agreement.txt',
@@ -347,14 +354,14 @@ export async function POST(request: NextRequest) {
             return NextResponse.json({ ok: false, error: 'Failed to get DocuSign account' }, { status: 500 });
         }
 
-        // Create envelope
         const envelopeId = await createEnvelope(
             accessToken,
             accountInfo,
             documentBase64,
             body.customerEmail,
             body.customerName,
-            body.rentalId
+            body.rentalId,
+            tenant?.company_name // Pass tenant company name for branding
         );
 
         if (!envelopeId) {

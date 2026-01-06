@@ -28,8 +28,7 @@ interface VerificationResult {
   first_name?: string | null;
   last_name?: string | null;
   document_number?: string | null;
-  review_result?: string;
-  ai_face_match_score?: number;
+  review_result?: string | null;
 }
 
 // Generate a real QR code URL using quickchart.io API
@@ -83,12 +82,18 @@ export default function AIVerificationQR({
 
       const { data, error } = await supabase
         .from('identity_verifications')
-        .select('status, review_status, review_result, first_name, last_name, document_number, ai_face_match_score')
+        .select('status, review_status, review_result, first_name, last_name, document_number')
         .eq('id', sessionId)
-        .single();
+        .maybeSingle();
 
       if (error) {
         console.error('Status check error:', error);
+        setStatus('pending');
+        return;
+      }
+
+      // Handle case where no record is found yet
+      if (!data) {
         setStatus('pending');
         return;
       }

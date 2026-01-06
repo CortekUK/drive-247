@@ -398,7 +398,7 @@ export const usePageContent = (slug: string) => {
             query = query.eq("tenant_id", tenantId);
           }
 
-          return query.single();
+          return query.maybeSingle();
         };
 
         let result;
@@ -409,8 +409,8 @@ export const usePageContent = (slug: string) => {
           result = await fetchPage(tenant.id);
           console.log(`[CMS] Loaded content for ${slug} (tenant: ${tenant.id}):`, result.data ? 'found' : 'not found');
 
-          // 2. If not found, try global content (tenant_id IS NULL) - NOT content from other tenants
-          if (result.error?.code === "PGRST116") {
+          // 2. If not found (data is null), try global content (tenant_id IS NULL) - NOT content from other tenants
+          if (!result.data && !result.error) {
             console.log(`[CMS] No tenant-specific content for ${slug}, trying global (tenant_id IS NULL)...`);
             result = await supabase
               .from("cms_pages")
@@ -428,7 +428,7 @@ export const usePageContent = (slug: string) => {
               .eq("slug", slug)
               .eq("status", "published")
               .is("tenant_id", null)
-              .single();
+              .maybeSingle();
           }
 
           // Note: We intentionally do NOT fall back to content from other tenants.
@@ -453,7 +453,7 @@ export const usePageContent = (slug: string) => {
             .eq("slug", slug)
             .eq("status", "published")
             .is("tenant_id", null)
-            .single();
+            .maybeSingle();
         }
 
         const { data: page, error } = result;

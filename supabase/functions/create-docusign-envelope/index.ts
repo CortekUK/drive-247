@@ -393,13 +393,21 @@ async function sendEnvelope(
   documentBase64: string,
   customerEmail: string,
   customerName: string,
-  rentalId: string
+  rentalId: string,
+  companyName?: string // Tenant company name for branding
 ): Promise<{ envelopeId: string } | null> {
   try {
     console.log('Creating DocuSign envelope...');
+    console.log('Company Name for branding:', companyName || 'Not provided');
+
+    // Use tenant company name in subject and email body
+    const senderName = companyName || 'Drive 247';
+    const emailSubject = `${senderName} - Rental Agreement - Ref: ${rentalId.substring(0, 8).toUpperCase()}`;
+    const emailBlurb = `Dear ${customerName},\n\nPlease review and sign your rental agreement from ${senderName}.\n\nThis document requires your signature to complete your vehicle rental booking.\n\nThank you,\n${senderName}`;
 
     const envelope = {
-      emailSubject: `Rental Agreement - Ref: ${rentalId.substring(0, 8).toUpperCase()}`,
+      emailSubject,
+      emailBlurb,
       documents: [{
         documentBase64,
         name: 'Rental Agreement.txt',
@@ -538,6 +546,18 @@ serve(async (req) => {
     console.log('Vehicle:', vehicle?.make, vehicle?.model, vehicle?.reg);
     console.log('Tenant ID:', tenantId);
 
+    // Fetch tenant info for company name branding
+    let tenantCompanyName: string | null = null;
+    if (tenantId) {
+      const { data: tenantData } = await supabase
+        .from('tenants')
+        .select('company_name')
+        .eq('id', tenantId)
+        .single();
+      tenantCompanyName = tenantData?.company_name || null;
+      console.log('Tenant Company Name:', tenantCompanyName);
+    }
+
     // Generate document (uses admin template if available)
     let doc: string;
     if (tenantId) {
@@ -567,8 +587,8 @@ serve(async (req) => {
       );
     }
 
-    // Send envelope
-    const result = await sendEnvelope(accessToken, ACCOUNT_ID, BASE_URL, doc, email, name, rentalId);
+    // Send envelope with tenant company name for branding
+    const result = await sendEnvelope(accessToken, ACCOUNT_ID, BASE_URL, doc, email, name, rentalId, tenantCompanyName || undefined);
 
     if (!result) {
       return new Response(
