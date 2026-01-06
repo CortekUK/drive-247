@@ -365,6 +365,7 @@ const Contact = () => {
                     className={`${errors.name ? 'border-destructive focus-visible:ring-destructive' : ''} h-12`}
                     aria-invalid={!!errors.name}
                     aria-describedby={errors.name ? "name-error" : undefined}
+                    autoComplete="off"
                   />
                   {errors.name && (
                     <p id="name-error" className="text-sm text-destructive flex items-center gap-1" role="alert">
@@ -388,6 +389,7 @@ const Contact = () => {
                     }}
                     onBlur={() => validateField('email', formData.email)}
                     className={`${errors.email ? 'border-destructive focus-visible:ring-destructive' : ''} h-12`}
+                    autoComplete="off"
                     aria-invalid={!!errors.email}
                     aria-describedby={errors.email ? "email-error" : undefined}
                   />
@@ -416,6 +418,7 @@ const Contact = () => {
                     className={`${errors.phone ? 'border-destructive focus-visible:ring-destructive' : ''} h-12`}
                     aria-invalid={!!errors.phone}
                     aria-describedby={errors.phone ? "phone-error" : undefined}
+                    autoComplete="off"
                   />
                   {errors.phone && (
                     <p id="phone-error" className="text-sm text-destructive flex items-center gap-1" role="alert">
@@ -553,7 +556,7 @@ const Contact = () => {
         </div>
       </section>
 
-      <PWAInstall title={content.pwa_install?.title} description={content.pwa_install?.description} />
+      {/* <PWAInstall title={content.pwa_install?.title} description={content.pwa_install?.description} /> */}
 
       <Footer />
     </div>
