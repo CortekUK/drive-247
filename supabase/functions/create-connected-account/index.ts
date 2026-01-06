@@ -2,10 +2,14 @@ import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.57.4'
 import Stripe from 'https://esm.sh/stripe@14.21.0?target=deno'
 
-const stripeSecretKey = Deno.env.get('STRIPE_SECRET_KEY') || '';
-const isTestMode = stripeSecretKey.startsWith('sk_test_');
+// Always use live key for Stripe Connect onboarding
+const stripeLiveKey = Deno.env.get('STRIPE_LIVE_SECRET_KEY') || '';
 
-const stripe = new Stripe(stripeSecretKey, {
+if (!stripeLiveKey || !stripeLiveKey.startsWith('sk_live_')) {
+  console.error('STRIPE_LIVE_SECRET_KEY is not configured or is not a live key');
+}
+
+const stripe = new Stripe(stripeLiveKey, {
   apiVersion: '2023-10-16',
   httpClient: Stripe.createFetchHttpClient(),
 })
@@ -24,11 +28,11 @@ serve(async (req) => {
   }
 
   try {
-    // Block test mode for Stripe Connect onboarding
-    if (isTestMode) {
+    // Verify live key is configured
+    if (!stripeLiveKey || !stripeLiveKey.startsWith('sk_live_')) {
       return new Response(
-        JSON.stringify({ error: 'Stripe Connect onboarding is only available in live mode. Ask your platform manager to switch to live mode.' }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 403 }
+        JSON.stringify({ error: 'Stripe Connect is not properly configured. Please contact your platform administrator.' }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 503 }
       )
     }
 
