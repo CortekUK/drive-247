@@ -84,16 +84,17 @@ export function useNotifications() {
   // Mark all notifications as read
   const markAllAsRead = useMutation({
     mutationFn: async () => {
-      if (!appUser?.id) return;
+      if (!appUser?.id || !tenant?.id) return;
 
       let query = supabase
         .from("notifications")
         .update({ is_read: true })
-        .or(`user_id.eq.${appUser.id},user_id.is.null`)
+        .eq("tenant_id", tenant.id)
         .eq("is_read", false);
 
-      if (tenant?.id) {
-        query = query.eq("tenant_id", tenant.id);
+      // Non-admins can only mark their own notifications + broadcasts
+      if (!isAdmin) {
+        query = query.or(`user_id.eq.${appUser.id},user_id.is.null`);
       }
 
       const { error } = await query;
@@ -101,7 +102,7 @@ export function useNotifications() {
       if (error) throw error;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["notifications", tenant?.id, appUser?.id] });
+      queryClient.invalidateQueries({ queryKey: ["notifications", tenant?.id, appUser?.id, isAdmin] });
     },
   });
 
@@ -129,15 +130,16 @@ export function useNotifications() {
   // Clear all notifications
   const clearAll = useMutation({
     mutationFn: async () => {
-      if (!appUser?.id) return;
+      if (!appUser?.id || !tenant?.id) return;
 
       let query = supabase
         .from("notifications")
         .delete()
-        .or(`user_id.eq.${appUser.id},user_id.is.null`);
+        .eq("tenant_id", tenant.id);
 
-      if (tenant?.id) {
-        query = query.eq("tenant_id", tenant.id);
+      // Non-admins can only delete their own notifications + broadcasts
+      if (!isAdmin) {
+        query = query.or(`user_id.eq.${appUser.id},user_id.is.null`);
       }
 
       const { error } = await query;
@@ -145,7 +147,7 @@ export function useNotifications() {
       if (error) throw error;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["notifications", tenant?.id, appUser?.id] });
+      queryClient.invalidateQueries({ queryKey: ["notifications", tenant?.id, appUser?.id, isAdmin] });
     },
   });
 

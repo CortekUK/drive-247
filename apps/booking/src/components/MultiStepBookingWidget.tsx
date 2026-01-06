@@ -153,6 +153,64 @@ const MultiStepBookingWidget = () => {
   useEffect(() => {
     loadData();
 
+    // DEV MODE: Listen for dev jump panel events (only in development)
+    if (process.env.NODE_ENV === 'development') {
+      const handleDevJump = async (e: CustomEvent<{
+        step: number;
+        formData: typeof formData;
+        vehicleId: string | null;
+        setVerified: boolean;
+        setInsuranceVerified: boolean;
+      }>) => {
+        const { step, formData: newFormData, vehicleId, setVerified, setInsuranceVerified } = e.detail;
+        console.log('🔧 DEV MODE: Jumping to step', step, { vehicleId, setVerified, setInsuranceVerified });
+
+        // Update form data with vehicle ID
+        setFormData(prev => ({ ...prev, ...newFormData }));
+
+        // Set verification states if needed
+        if (setVerified) {
+          setVerificationStatus('verified');
+          setVerificationSessionId('dev-mock-session-' + Date.now());
+        }
+
+        if (setInsuranceVerified) {
+          setHasInsurance(true);
+          setUploadedDocumentId('dev-mock-document');
+        }
+
+        // For step 2+, ensure we have the vehicle in our list
+        // If vehicles aren't loaded yet, load them first
+        if (vehicleId && step >= 2) {
+          // Trigger vehicle load if not already loaded
+          await loadData();
+        }
+
+        // Jump to step
+        setCurrentStep(step);
+      };
+
+      const handleDevVerification = (e: CustomEvent<{ verified: boolean }>) => {
+        if (e.detail.verified) {
+          setVerificationStatus('verified');
+          setVerificationSessionId('dev-mock-session-' + Date.now());
+        } else {
+          setVerificationStatus('init');
+          setVerificationSessionId(null);
+        }
+      };
+
+      window.addEventListener('dev-jump-to-step', handleDevJump as EventListener);
+      window.addEventListener('dev-set-verification', handleDevVerification as EventListener);
+
+      return () => {
+        window.removeEventListener('dev-jump-to-step', handleDevJump as EventListener);
+        window.removeEventListener('dev-set-verification', handleDevVerification as EventListener);
+      };
+    }
+  }, []);
+
+  useEffect(() => {
     // Load view mode from localStorage
     const savedViewMode = localStorage.getItem('viewMode');
     if (savedViewMode === 'grid' || savedViewMode === 'list') {

@@ -10,6 +10,7 @@ import { ThemeInitializer } from '@/components/ThemeInitializer';
 import GDPRConsent from '@/components/GDPRConsent';
 import ScrollToTopOnNavigate from '@/components/ScrollToTopOnNavigate';
 import { TenantProvider } from '@/contexts/TenantContext';
+import DevJumpPanel from '@/components/DevJumpPanel';
 
 const inter = Inter({ subsets: ['latin'] });
 
@@ -62,6 +63,7 @@ export default function RootLayout({
                   <Sonner />
                   <ScrollToTopOnNavigate />
                   <GDPRConsent />
+                  <DevJumpPanel />
                   {children}
                 </TooltipProvider>
               </ThemeInitializer>

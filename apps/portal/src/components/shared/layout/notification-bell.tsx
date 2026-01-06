@@ -92,6 +92,7 @@ export const NotificationBell = () => {
     markAsRead,
     markAllAsRead,
     deleteNotification,
+    clearAll,
   } = useNotifications();
 
   const handleNotificationClick = (notification: Notification) => {
@@ -125,17 +126,30 @@ export const NotificationBell = () => {
         {/* Header */}
         <div className="flex items-center justify-between px-4 py-3 border-b">
           <h3 className="font-semibold">Notifications</h3>
-          {unreadCount > 0 && (
-            <Button
-              variant="ghost"
-              size="sm"
-              className="text-xs h-7"
-              onClick={() => markAllAsRead.mutate()}
-            >
-              <CheckCheck className="h-3.5 w-3.5 mr-1" />
-              Mark all read
-            </Button>
-          )}
+          <div className="flex items-center gap-1">
+            {unreadCount > 0 && (
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-7 w-7"
+                onClick={() => markAllAsRead.mutate()}
+                title="Mark all as read"
+              >
+                <CheckCheck className="h-4 w-4" />
+              </Button>
+            )}
+            {notifications.length > 0 && (
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-7 w-7 text-destructive hover:text-destructive"
+                onClick={() => clearAll.mutate()}
+                title="Clear all"
+              >
+                <Trash2 className="h-4 w-4" />
+              </Button>
+            )}
+          </div>
         </div>
 
         {/* Content */}

@@ -141,26 +141,41 @@ serve(async (req) => {
       }
     }
 
-    // Get OpenAI API key
+    // Get API key - prefer OpenRouter, fallback to OpenAI
+    const openrouterApiKey = Deno.env.get('OPENROUTER_API_KEY');
     const openaiApiKey = Deno.env.get('OPENAI_API_KEY');
-    if (!openaiApiKey) {
-      throw new Error('OPENAI_API_KEY not configured');
+
+    const apiKey = openrouterApiKey || openaiApiKey;
+    const apiBaseUrl = openrouterApiKey
+      ? 'https://openrouter.ai/api/v1/chat/completions'
+      : 'https://api.openai.com/v1/chat/completions';
+
+    if (!apiKey) {
+      throw new Error('No API key configured (OPENROUTER_API_KEY or OPENAI_API_KEY)');
     }
 
     let openaiResponse;
 
     if (isPdf && textContent.length > 50) {
       // For PDFs with extracted text, use text-based analysis
-      console.log('Calling OpenAI with extracted PDF text...');
+      console.log('Calling AI API with extracted PDF text...');
 
-      openaiResponse = await fetch('https://api.openai.com/v1/chat/completions', {
+      const headers: Record<string, string> = {
+        'Authorization': `Bearer ${apiKey}`,
+        'Content-Type': 'application/json',
+      };
+      if (openrouterApiKey) {
+        headers['HTTP-Referer'] = 'https://drive-247.com';
+        headers['X-Title'] = 'Drive247 Insurance Scanner';
+      }
+
+      const modelName = openrouterApiKey ? 'openai/gpt-4o' : 'gpt-4o';
+
+      openaiResponse = await fetch(apiBaseUrl, {
         method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${openaiApiKey}`,
-          'Content-Type': 'application/json',
-        },
+        headers,
         body: JSON.stringify({
-          model: 'gpt-4o',
+          model: modelName,
           messages: [
             {
               role: 'system',
@@ -191,17 +206,25 @@ ${textContent.substring(0, 15000)}`
       });
     } else {
       // For images, use Vision API
-      console.log('Calling OpenAI Vision API with image...');
+      console.log('Calling AI Vision API with image...');
       const base64Data = btoa(String.fromCharCode(...new Uint8Array(arrayBuffer)));
 
-      openaiResponse = await fetch('https://api.openai.com/v1/chat/completions', {
+      const headers: Record<string, string> = {
+        'Authorization': `Bearer ${apiKey}`,
+        'Content-Type': 'application/json',
+      };
+      if (openrouterApiKey) {
+        headers['HTTP-Referer'] = 'https://drive-247.com';
+        headers['X-Title'] = 'Drive247 Insurance Scanner';
+      }
+
+      const modelName = openrouterApiKey ? 'openai/gpt-4o' : 'gpt-4o';
+
+      openaiResponse = await fetch(apiBaseUrl, {
         method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${openaiApiKey}`,
-          'Content-Type': 'application/json',
-        },
+        headers,
         body: JSON.stringify({
-          model: 'gpt-4o',
+          model: modelName,
           messages: [
             {
               role: 'system',

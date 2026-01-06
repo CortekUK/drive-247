@@ -9,14 +9,19 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 npm run dev
 
 # Development (specific app)
-npm run dev:booking    # port 8080
+npm run dev:booking    # port 3000
 npm run dev:portal     # port 3001
-npm run dev:admin      # port 3003
 npm run dev:web        # port 3002
+npm run dev:admin      # port 3003
 
 # Build & Lint
 npm run build
 npm run lint
+
+# Testing (within app directories)
+cd apps/booking && npm run test        # run tests once
+cd apps/booking && npm run test:watch  # watch mode
+cd apps/portal && npm run test         # portal tests
 ```
 
 ## Architecture Overview
@@ -25,17 +30,10 @@ This is a **Turborepo monorepo** for Drive247, a car rental platform with multi-
 
 ### Apps
 
-- **booking**: Customer-facing booking interface (Next.js 15)
-- **portal**: Multi-tenant admin portal for rental operators (Next.js 16)
-- **admin**: Super-admin dashboard (Next.js 15)
-- **web**: Marketing/landing page (Next.js 15)
-- **client**: Shared client library
-
-### Packages
-
-- **config**: Shared configuration
-- **types**: Shared TypeScript types
-- **ui**: Shared UI components
+- **booking**: Customer-facing booking interface (Next.js 15, React 18)
+- **portal**: Multi-tenant admin portal for rental operators (Next.js 16, React 18)
+- **admin**: Super-admin dashboard (Next.js 16, React 19)
+- **web**: Marketing/landing page (Next.js 16, React 19)
 
 ## Tech Stack
 
@@ -51,23 +49,34 @@ This is a **Turborepo monorepo** for Drive247, a car rental platform with multi-
 
 Tenant identification via subdomain: `{tenant}.portal.drive-247.com`
 
-- Middleware extracts tenant slug from hostname and injects via `x-tenant-slug` header
-- `TenantContext` provides client-side tenant state
+- Middleware (`apps/portal/src/middleware.ts`) extracts tenant slug from hostname and injects via `x-tenant-slug` header
+- `TenantContext` (`apps/portal/src/contexts/TenantContext.tsx`) provides client-side tenant state
 - Supabase RLS enforces data isolation per tenant
+- Dev fallback: On localhost, defaults to `drive-247` tenant
 
 ## Key Patterns
 
 ### Supabase Client
 ```typescript
 import { supabase } from "@/integrations/supabase/client";
-// Types auto-generated in lib/supabase/types.ts
+// Types auto-generated in integrations/supabase/types.ts
 ```
 
+### React Query Hooks
+Custom hooks in `apps/portal/src/hooks/` wrap Supabase queries with React Query. Convention:
+- Named `use-{entity}.ts` or `use-{entity}-{action}.ts`
+- Query keys include `tenant?.id` for proper cache isolation: `["entity-name", tenant?.id, ...params]`
+- Most hooks require tenant context via `useTenant()`
+
 ### Form Schemas
-Zod schemas live in `client-schemas/` directories within each app, organized by feature (customers, rentals, etc.).
+Zod schemas live in `client-schemas/` directories within each app, organized by feature (customers, rentals, vehicles, etc.).
 
 ### Edge Functions
-Supabase Functions in `supabase/functions/` handle webhooks (Stripe, DocuSign, Veriff), notifications, and admin operations.
+Supabase Functions in `supabase/functions/` handle:
+- Webhooks: Stripe, DocuSign, Veriff
+- Notifications: AWS SES email, AWS SNS SMS
+- Admin operations: user management, data cleanup
+- Shared utilities in `supabase/functions/_shared/`
 
 ## Environment Variables
 
