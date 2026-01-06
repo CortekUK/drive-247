@@ -70,11 +70,8 @@ export function StripeConnectSettings() {
     },
     onSuccess: (data) => {
       if (data?.onboardingUrl) {
-        window.open(data.onboardingUrl, '_blank');
-        toast({
-          title: 'Onboarding Link Generated',
-          description: 'A new tab has been opened to complete Stripe onboarding.',
-        });
+        // Navigate in same tab to avoid popup blocker
+        window.location.href = data.onboardingUrl;
       }
       queryClient.invalidateQueries({ queryKey: ['tenant-stripe-status'] });
     },
