@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Link2, CheckCircle2, AlertCircle, ExternalLink, Loader2, RefreshCw, Copy } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
+import { useTenant } from '@/contexts/TenantContext';
 
 interface StripeConnectStatus {
   stripe_account_id: string | null;
@@ -18,34 +19,24 @@ interface StripeConnectStatus {
 export function StripeConnectSettings() {
   const queryClient = useQueryClient();
   const [isGeneratingLink, setIsGeneratingLink] = useState(false);
+  const { tenant: tenantContext } = useTenant();
 
   // Get current tenant's Stripe Connect status
   const { data: tenantStatus, isLoading } = useQuery({
-    queryKey: ['tenant-stripe-status'],
+    queryKey: ['tenant-stripe-status', tenantContext?.id],
     queryFn: async () => {
-      // Get current user's tenant
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) throw new Error('Not authenticated');
-
-      const { data: appUser, error: userError } = await supabase
-        .from('app_users')
-        .select('tenant_id')
-        .eq('id', user.id)
-        .single();
-
-      if (userError || !appUser?.tenant_id) {
-        throw new Error('Could not find tenant');
-      }
+      if (!tenantContext?.id) throw new Error('No tenant context');
 
       const { data: tenant, error: tenantError } = await supabase
         .from('tenants')
-        .select('id, stripe_account_id, stripe_onboarding_complete, stripe_account_status, company_name')
-        .eq('id', appUser.tenant_id)
+        .select('id, stripe_account_id, stripe_onboarding_complete, stripe_account_status, company_name, contact_email')
+        .eq('id', tenantContext.id)
         .single();
 
       if (tenantError) throw tenantError;
       return tenant;
     },
+    enabled: !!tenantContext?.id,
   });
 
   // Generate onboarding link mutation
@@ -58,7 +49,7 @@ export function StripeConnectSettings() {
         const { data, error } = await supabase.functions.invoke('create-connected-account', {
           body: {
             tenantId: tenantStatus.id,
-            email: '', // Will use tenant email from database
+            email: tenantStatus.contact_email || `admin@${tenantStatus.company_name?.toLowerCase().replace(/\s+/g, '')}.com`,
             businessName: tenantStatus.company_name,
           },
         });
