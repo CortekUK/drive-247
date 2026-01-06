@@ -240,12 +240,42 @@ export function useKeyHandover(rentalId: string | undefined) {
 
       // If giving key, check if rental is approved before setting to Active
       if (type === "giving") {
-        // First, get the rental to check approval status
-        const { data: rental } = await supabase
+        // First, get the rental with customer and vehicle info for notifications
+        const { data: rental, error: rentalError } = await supabase
           .from("rentals")
-          .select("approval_status, payment_status")
+          .select(`
+            approval_status,
+            payment_status,
+            booking_reference,
+            start_date,
+            end_date,
+            customer:customers(
+              id,
+              first_name,
+              last_name,
+              email,
+              phone
+            ),
+            vehicle:vehicles(
+              id,
+              make,
+              model,
+              registration_number,
+              color
+            )
+          `)
           .eq("id", rentalId)
           .single();
+
+        if (rentalError) {
+          console.error('Error fetching rental for key handover:', rentalError);
+        }
+        console.log('Key handover - rental data:', {
+          approval_status: rental?.approval_status,
+          payment_status: rental?.payment_status,
+          hasCustomer: !!rental?.customer,
+          hasVehicle: !!rental?.vehicle
+        });
 
         // Only set to Active if rental is approved AND payment is fulfilled
         if (rental?.approval_status === 'approved' && rental?.payment_status === 'fulfilled') {
@@ -255,6 +285,51 @@ export function useKeyHandover(rentalId: string | undefined) {
             .eq("id", rentalId);
 
           if (error) throw error;
+
+          // Send rental started notification to customer
+          try {
+            const customer = rental.customer as { first_name: string; last_name: string; email: string; phone: string } | null;
+            const vehicle = rental.vehicle as { make: string; model: string; registration_number: string; color: string } | null;
+
+            console.log('Rental started - preparing notification:', {
+              customerEmail: customer?.email,
+              vehicleMake: vehicle?.make,
+              tenantId: tenant?.id
+            });
+
+            if (customer?.email && vehicle) {
+              const notifyPayload = {
+                customerName: `${customer.first_name} ${customer.last_name}`,
+                customerEmail: customer.email,
+                customerPhone: customer.phone,
+                vehicleName: `${vehicle.make} ${vehicle.model}`,
+                vehicleReg: vehicle.registration_number,
+                vehicleMake: vehicle.make,
+                vehicleModel: vehicle.model,
+                vehicleColor: vehicle.color,
+                bookingRef: rental.booking_reference || rentalId,
+                startDate: rental.start_date ? new Date(rental.start_date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : '',
+                endDate: rental.end_date ? new Date(rental.end_date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : '',
+                tenantId: tenant?.id,
+              };
+              console.log('Invoking notify-rental-started with payload:', notifyPayload);
+
+              const { data: notifyResult, error: notifyError } = await supabase.functions.invoke('notify-rental-started', {
+                body: notifyPayload,
+              });
+
+              if (notifyError) {
+                console.error('Rental started notification error:', notifyError);
+              } else {
+                console.log('Rental started notification result:', notifyResult);
+              }
+            } else {
+              console.warn('Missing customer email or vehicle data for notification');
+            }
+          } catch (notifyError) {
+            console.error('Failed to send rental started notification:', notifyError);
+            // Don't throw - notification failure shouldn't block the handover
+          }
 
           return { type, becameActive: true };
         }
@@ -292,6 +367,7 @@ export function useKeyHandover(rentalId: string | undefined) {
     },
     onSuccess: ({ type, becameActive }) => {
       queryClient.invalidateQueries({ queryKey: ["key-handovers", rentalId] });
+      queryClient.invalidateQueries({ queryKey: ["key-handover-status", rentalId] });
       queryClient.invalidateQueries({ queryKey: ["rental", rentalId] });
       queryClient.invalidateQueries({ queryKey: ["rentals-list"] });
       queryClient.invalidateQueries({ queryKey: ["enhanced-rentals"] });
@@ -372,6 +448,7 @@ export function useKeyHandover(rentalId: string | undefined) {
     },
     onSuccess: ({ type }) => {
       queryClient.invalidateQueries({ queryKey: ["key-handovers", rentalId] });
+      queryClient.invalidateQueries({ queryKey: ["key-handover-status", rentalId] });
       queryClient.invalidateQueries({ queryKey: ["rental", rentalId] });
       queryClient.invalidateQueries({ queryKey: ["rentals-list"] });
       queryClient.invalidateQueries({ queryKey: ["enhanced-rentals"] });

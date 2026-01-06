@@ -565,7 +565,6 @@ const CreateRental = () => {
           driver_age_range: data.driver_age_range || null,
           promo_code: data.promo_code || null,
           insurance_status: data.insurance_status || "pending",
-          notes: data.notes || null,
         })
         .select()
         .single();
@@ -1384,8 +1383,8 @@ const CreateRental = () => {
                   {/* Helper Info */}
                   <div className="bg-muted/50 p-4 rounded-lg">
                     <p className="text-sm text-muted-foreground">
-                      <strong>Note:</strong> Rental will start as &quot;Pending&quot; until the DocuSign agreement is signed.
-                      Once signed, the rental becomes &quot;Active&quot; and the vehicle is marked as &quot;Rented&quot;.
+                      <strong>Note:</strong> Rental will start as &quot;Pending&quot;. It becomes &quot;Active&quot; once approved and key handover is completed.
+                      The vehicle will be marked as &quot;Rented&quot; immediately.
                     </p>
                   </div>
 
