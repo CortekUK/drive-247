@@ -556,37 +556,75 @@ const RentalDetail = () => {
         return;
       }
 
-      // Otherwise, fetch from DocuSign
-      const { data, error } = await supabase.functions.invoke('get-docusign-document', {
-        body: { rentalId: id }
+      // Try DocuSign if we have an envelope
+      if ((rental as any).docusign_envelope_id) {
+        try {
+          const { data, error } = await supabase.functions.invoke('get-docusign-document', {
+            body: { rentalId: id }
+          });
+
+          if (!error && data?.ok) {
+            // If we got a stored URL, open it
+            if (data.documentUrl) {
+              window.open(data.documentUrl, '_blank');
+              return;
+            }
+
+            // If we got base64 PDF, create blob and open
+            if (data.documentBase64) {
+              const byteCharacters = atob(data.documentBase64);
+              const byteNumbers = new Array(byteCharacters.length);
+              for (let i = 0; i < byteCharacters.length; i++) {
+                byteNumbers[i] = byteCharacters.charCodeAt(i);
+              }
+              const byteArray = new Uint8Array(byteNumbers);
+              const blob = new Blob([byteArray], { type: 'application/pdf' });
+              const url = URL.createObjectURL(blob);
+              window.open(url, '_blank');
+              return;
+            }
+          }
+        } catch (docusignErr) {
+          console.log('DocuSign fetch failed, falling back to preview API');
+        }
+      }
+
+      // Fallback: Generate preview from admin template
+      const previewResponse = await fetch('/api/agreement/preview', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          rentalId: id,
+          tenantId: tenant?.id,
+        }),
       });
 
-      if (error || !data?.ok) {
+      const previewData = await previewResponse.json();
+
+      if (!previewResponse.ok || !previewData?.ok) {
         toast({
           title: "Error",
-          description: data?.error || "Failed to get document",
+          description: previewData?.error || "Failed to generate agreement preview",
           variant: "destructive",
         });
         return;
       }
 
-      // If we got a stored URL, open it
-      if (data.documentUrl) {
-        window.open(data.documentUrl, '_blank');
-        return;
-      }
-
-      // If we got base64 PDF, create blob and open
-      if (data.documentBase64) {
-        const byteCharacters = atob(data.documentBase64);
-        const byteNumbers = new Array(byteCharacters.length);
-        for (let i = 0; i < byteCharacters.length; i++) {
-          byteNumbers[i] = byteCharacters.charCodeAt(i);
-        }
-        const byteArray = new Uint8Array(byteNumbers);
-        const blob = new Blob([byteArray], { type: 'application/pdf' });
+      // Open HTML as a printable page (which can be saved as PDF)
+      if (previewData.html) {
+        const blob = new Blob([previewData.html], { type: 'text/html' });
         const url = URL.createObjectURL(blob);
-        window.open(url, '_blank');
+        const printWindow = window.open(url, '_blank');
+
+        // Auto-trigger print dialog for PDF saving
+        if (printWindow) {
+          printWindow.onload = () => {
+            // Add a slight delay to ensure content loads
+            setTimeout(() => {
+              printWindow.print();
+            }, 500);
+          };
+        }
       }
     } catch (err: any) {
       toast({
