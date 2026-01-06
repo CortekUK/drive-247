@@ -77,7 +77,8 @@ export const useEnhancedRentals = (filters: RentalFilters = {}) => {
     sortBy = "start_date",
     sortOrder = "desc",
     page = 1,
-    pageSize = ITEMS_PER_PAGE
+    pageSize = ITEMS_PER_PAGE,
+    captureStatus
   } = filters;
 
   // Create a stable query key by serializing Date objects to strings
@@ -97,7 +98,8 @@ export const useEnhancedRentals = (filters: RentalFilters = {}) => {
     sortBy,
     sortOrder,
     page,
-    pageSize
+    pageSize,
+    captureStatus
   ];
 
   return useQuery({
@@ -153,13 +155,13 @@ export const useEnhancedRentals = (filters: RentalFilters = {}) => {
       const rentalIds = rentalsData?.map((r: any) => r.id) || [];
       const { data: initialPayments } = await supabase
         .from("payments")
-        .select("rental_id, amount")
+        .select("rental_id, amount, capture_status")
         .eq("tenant_id", tenant.id)
         .in("rental_id", rentalIds)
         .eq("payment_type", "InitialFee");
 
       const initialPaymentMap = new Map(
-        initialPayments?.map(p => [p.rental_id, p.amount]) || []
+        initialPayments?.map(p => [p.rental_id, { amount: p.amount, capture_status: p.capture_status }]) || []
       );
 
       // Transform and filter data - skip rentals with missing customer or vehicle
@@ -168,26 +170,16 @@ export const useEnhancedRentals = (filters: RentalFilters = {}) => {
         .map((rental: any) => {
           const periodType = 'Monthly';
           const durationMonths = calculateDuration(rental.start_date, rental.end_date, periodType);
-
-          // Compute status based on database status field
-          // Active status is only set in DB when BOTH approval AND key handover are completed
-          // So we trust the DB status field for Active
-          let computedStatus: string;
-          if (rental.status === 'Cancelled') {
-            computedStatus = 'Cancelled';
-          } else if (rental.status === 'Closed') {
-            computedStatus = 'Closed';
-          } else if (rental.status === 'Active') {
-            // Trust the DB - Active means both approval and key handover are done
-            computedStatus = 'Active';
-          } else if (rental.approval_status === 'rejected') {
-            computedStatus = 'Rejected';
-          } else {
-            // Not yet active (pending approval or key handover)
-            computedStatus = 'Pending';
-          }
-
-          const initialPaymentAmount = initialPaymentMap.get(rental.id) || null;
+          const computedStatus = getRentalStatus(rental.start_date, rental.end_date, rental.status);
+          const initialPaymentData = initialPaymentMap.get(rental.id);
+          const initialPaymentAmount = initialPaymentData?.amount || null;
+          const paymentCaptureStatus = initialPaymentData?.capture_status || null;
+=======
+          const computedStatus = getRentalStatus(rental.start_date, rental.end_date, rental.status);
+          const initialPaymentData = initialPaymentMap.get(rental.id);
+          const initialPaymentAmount = initialPaymentData?.amount || null;
+          const paymentCaptureStatus = initialPaymentData?.capture_status || null;
+>>>>>>> b7fb88f (UI for mobile mode fixed for booking and portal)
           const totalAmount = rental.monthly_amount;
           const protectionCost = 0; // Protection cost not stored separately in current schema
 
@@ -206,8 +198,11 @@ export const useEnhancedRentals = (filters: RentalFilters = {}) => {
             payment_status: rental.payment_status,
             duration_months: durationMonths,
             initial_payment: initialPaymentAmount,
-            payment_mode: rental.payment_mode,
-            created_at: rental.created_at,
+<<<<<<< HEAD
+            payment_capture_status: paymentCaptureStatus,
+=======
+            payment_capture_status: paymentCaptureStatus,
+>>>>>>> b7fb88f (UI for mobile mode fixed for booking and portal)
             customer: rental.customers as any,
             vehicle: rental.vehicles as any,
           };
@@ -258,6 +253,13 @@ export const useEnhancedRentals = (filters: RentalFilters = {}) => {
           if (initialPayment !== "all") {
             if (initialPayment === "set" && !rental.initial_payment) return false;
             if (initialPayment === "missing" && rental.initial_payment) return false;
+          }
+
+          // Apply capture status filter
+          if (captureStatus) {
+            if (captureStatus === "requires_capture" && (rental as any).payment_capture_status !== "requires_capture") {
+              return false;
+            }
           }
 
           return true;

@@ -797,30 +797,34 @@ const CreateRental = () => {
   const isPastStartDate = watchedValues.start_date && isBefore(watchedValues.start_date, todayAtMidnight);
 
   return (
-    <div className="container mx-auto p-6 space-y-6">
+    <div className="container mx-auto p-4 md:p-6 space-y-6 min-h-screen">
       {/* Header */}
-      <div className="flex items-center gap-4">
-        <Button variant="outline" onClick={() => router.push("/rentals")}>
+      <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
+        <Button 
+          variant="outline" 
+          onClick={() => router.push("/rentals")} 
+          className="w-fit border-primary/20 hover:border-primary/40 hover:bg-primary/5 transition-all duration-200"
+        >
           <ArrowLeft className="h-4 w-4 mr-2" />
           Back to Rentals
         </Button>
         <div>
-          <h1 className="text-3xl font-bold">Create New Rental</h1>
-          <p className="text-muted-foreground">Set up a new rental agreement</p>
+          <h1 className="text-2xl sm:text-3xl font-bold">Create New Rental</h1>
+          <p className="text-sm sm:text-base text-muted-foreground">Set up a new rental agreement</p>
         </div>
       </div>
 
       {/* Two-column layout: Form + Contract Summary */}
-      <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Form */}
-        <div className="xl:col-span-2">
-          <Card>
+        <div className="lg:col-span-2">
+          <Card className="h-fit">
             <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <FileText className="h-5 w-5 text-primary" />
+              <CardTitle className="flex items-center gap-2 text-lg sm:text-xl">
+                <FileText className="h-5 w-5 text-primary flex-shrink-0" />
                 Rental Agreement Details
               </CardTitle>
-              <CardDescription>
+              <CardDescription className="text-sm">
                 Fill in the details to create a new rental agreement. Monthly charges will be automatically generated.
               </CardDescription>
             </CardHeader>
@@ -849,13 +853,16 @@ const CreateRental = () => {
                                 <SelectValue placeholder="Select customer" />
                               </SelectTrigger>
                             </FormControl>
-                            <SelectContent>
+                            <SelectContent className="max-w-[calc(100vw-2rem)]">
                               {customers?.map((customer) => {
                                 const customerType = customer.customer_type;
                                 const contact = customer.email || customer.phone;
                                 return (
-                                  <SelectItem key={customer.id} value={customer.id}>
-                                    {customer.name} • {contact || customerType}
+                                  <SelectItem key={customer.id} value={customer.id} className="whitespace-normal break-words">
+                                    <div className="flex flex-col gap-0.5">
+                                      <span className="font-medium">{customer.name}</span>
+                                      <span className="text-xs text-muted-foreground">{contact || customerType}</span>
+                                    </div>
                                   </SelectItem>
                                 );
                               })}
@@ -878,10 +885,13 @@ const CreateRental = () => {
                                 <SelectValue placeholder="Select vehicle" />
                               </SelectTrigger>
                             </FormControl>
-                            <SelectContent>
+                            <SelectContent className="max-w-[calc(100vw-2rem)]">
                               {vehicles?.map((vehicle) => (
-                                <SelectItem key={vehicle.id} value={vehicle.id}>
-                                  {vehicle.reg} • {vehicle.make} {vehicle.model}
+                                <SelectItem key={vehicle.id} value={vehicle.id} className="whitespace-normal break-words">
+                                  <div className="flex flex-col gap-0.5">
+                                    <span className="font-medium">{vehicle.reg}</span>
+                                    <span className="text-xs text-muted-foreground">{vehicle.make} {vehicle.model}</span>
+                                  </div>
                                 </SelectItem>
                               ))}
                             </SelectContent>
@@ -1294,23 +1304,25 @@ const CreateRental = () => {
 
                   {/* Insurance Verification */}
                   <div className="space-y-4 pt-4 border-t">
-                    <div className="flex items-center justify-between">
+                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
                       <div className="flex items-center gap-2">
-                        <Shield className="h-4 w-4 text-muted-foreground" />
+                        <Shield className="h-4 w-4 text-muted-foreground flex-shrink-0" />
                         <h3 className="font-medium">Insurance Verification</h3>
                       </div>
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-2 flex-wrap">
                         <Button
                           type="button"
                           variant="outline"
                           size="sm"
                           onClick={() => setShowInsuranceUpload(true)}
+                          className="whitespace-nowrap"
                         >
                           <Upload className="h-4 w-4 mr-2" />
-                          {insuranceDocId ? "Certificate Uploaded" : "Upload Certificate"}
+                          <span className="hidden sm:inline">{insuranceDocId ? "Certificate Uploaded" : "Upload Certificate"}</span>
+                          <span className="sm:hidden">{insuranceDocId ? "Uploaded" : "Upload"}</span>
                         </Button>
                         {insuranceDocId && (
-                          <span className="text-sm text-green-600">✓ Uploaded</span>
+                          <span className="text-sm text-green-600 whitespace-nowrap">✓ Uploaded</span>
                         )}
                       </div>
                     </div>
@@ -1390,13 +1402,23 @@ const CreateRental = () => {
 
                   {/* Submit */}
                   <div className="flex justify-end gap-2 pt-4">
-                    <Button type="button" variant="outline" onClick={() => router.push("/rentals")}>
+                    <Button 
+                      type="button" 
+                      variant="outline" 
+                      onClick={() => router.push("/rentals")}
+                      className="border-muted-foreground/20 hover:border-muted-foreground/40 hover:bg-muted/50 transition-all duration-200"
+                    >
                       Cancel
                     </Button>
                     <Button
                       type="submit"
-                      disabled={loading || !isFormValid || !isCustomerVerified}
-                      className="bg-gradient-primary"
+<<<<<<< HEAD
+                      disabled={loading || !isFormValid}
+                      className="bg-gradient-primary text-white hover:opacity-90 transition-all duration-200 shadow-md hover:shadow-lg"
+=======
+                      disabled={loading || !isFormValid}
+                      className="bg-gradient-primary text-white hover:opacity-90 transition-all duration-200 shadow-md hover:shadow-lg"
+>>>>>>> b7fb88f (UI for mobile mode fixed for booking and portal)
                     >
                       <Save className="h-4 w-4 mr-2" />
                       {loading ? "Creating..." : !isCustomerVerified ? "Verification Required" : "Create Rental"}
@@ -1409,15 +1431,33 @@ const CreateRental = () => {
         </div>
 
         {/* Contract Summary Panel */}
-        <div className="xl:col-span-1">
-          <ContractSummary
-            customer={selectedCustomer}
-            vehicle={selectedVehicle}
-            startDate={watchedValues.start_date}
-            endDate={watchedValues.end_date}
-            rentalPeriodType={watchedValues.rental_period_type}
-            monthlyAmount={watchedValues.monthly_amount}
-          />
+<<<<<<< HEAD
+        <div className="lg:col-span-1">
+          <div className="sticky top-6">
+            <ContractSummary
+              customer={selectedCustomer}
+              vehicle={selectedVehicle}
+              startDate={watchedValues.start_date}
+              endDate={watchedValues.end_date}
+              rentalPeriodType={watchedValues.rental_period_type}
+              monthlyAmount={watchedValues.monthly_amount}
+              initialFee={watchedValues.initial_fee}
+            />
+          </div>
+=======
+        <div className="lg:col-span-1">
+          <div className="sticky top-6">
+            <ContractSummary
+              customer={selectedCustomer}
+              vehicle={selectedVehicle}
+              startDate={watchedValues.start_date}
+              endDate={watchedValues.end_date}
+              rentalPeriodType={watchedValues.rental_period_type}
+              monthlyAmount={watchedValues.monthly_amount}
+              initialFee={watchedValues.initial_fee}
+            />
+          </div>
+>>>>>>> b7fb88f (UI for mobile mode fixed for booking and portal)
         </div>
       </div>
 

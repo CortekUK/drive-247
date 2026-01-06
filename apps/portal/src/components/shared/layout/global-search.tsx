@@ -193,20 +193,20 @@ export const GlobalSearch = ({ open, onOpenChange }: GlobalSearchProps) => {
   return (
     <CommandDialog open={open} onOpenChange={onOpenChange}>
       <Command shouldFilter={false} className="rounded-xl shadow-2xl overflow-hidden">
-        <div className="flex items-center gap-3 border-b px-5 py-4 bg-gradient-to-r from-background via-muted/5 to-background">
-          <div className="p-2 rounded-lg bg-primary/10">
-            <Search className="h-4 w-4 shrink-0 text-primary" />
+        <div className="flex items-center gap-2 sm:gap-3 border-b px-3 sm:px-5 py-3 sm:py-4 bg-gradient-to-r from-background via-muted/5 to-background">
+          <div className="p-2 rounded-lg bg-primary/10 flex-shrink-0">
+            <Search className="h-4 w-4 text-primary" />
           </div>
           <CommandInput
             placeholder="Type to search customers, vehicles, rentals, and more..."
             value={query}
             onValueChange={setQuery}
-            className="flex h-10 w-full bg-transparent text-base outline-none placeholder:text-muted-foreground/50 disabled:cursor-not-allowed disabled:opacity-50"
+            className="flex h-10 w-full bg-transparent text-sm sm:text-base outline-none placeholder:text-muted-foreground/50 disabled:cursor-not-allowed disabled:opacity-50 min-w-0"
           />
-          <div className="flex items-center gap-2 shrink-0 border-l pl-3">
+          <div className="flex items-center gap-2 flex-shrink-0 border-l pl-2 sm:pl-3">
             <Select value={entityFilter} onValueChange={setEntityFilter}>
-              <SelectTrigger className="w-32 h-9 text-xs font-medium border-border/60 hover:border-primary/50 transition-colors bg-background shadow-sm">
-                <Filter className="h-3.5 w-3.5 mr-1.5" />
+              <SelectTrigger className="w-24 sm:w-32 h-9 text-xs font-medium border-border/60 hover:border-primary/50 transition-colors bg-background shadow-sm">
+                <Filter className="h-3.5 w-3.5 mr-1 sm:mr-1.5" />
                 <SelectValue />
               </SelectTrigger>
               <SelectContent className="rounded-lg">
