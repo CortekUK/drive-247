@@ -2,7 +2,10 @@ import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.57.4'
 import Stripe from 'https://esm.sh/stripe@14.21.0?target=deno'
 
-const stripe = new Stripe(Deno.env.get('STRIPE_SECRET_KEY') || '', {
+const stripeSecretKey = Deno.env.get('STRIPE_SECRET_KEY') || '';
+const isTestMode = stripeSecretKey.startsWith('sk_test_');
+
+const stripe = new Stripe(stripeSecretKey, {
   apiVersion: '2023-10-16',
   httpClient: Stripe.createFetchHttpClient(),
 })
@@ -21,6 +24,14 @@ serve(async (req) => {
   }
 
   try {
+    // Block test mode for Stripe Connect onboarding
+    if (isTestMode) {
+      return new Response(
+        JSON.stringify({ error: 'Stripe Connect onboarding is only available in live mode. Please contact your administrator.' }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 403 }
+      )
+    }
+
     const { tenantId, returnUrl, refreshUrl } = await req.json()
 
     if (!tenantId) {
