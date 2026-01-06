@@ -193,7 +193,7 @@ export function StripeConnectSettings() {
                   : 'text-gray-600'
               }`}>
                 {isConnected
-                  ? 'Your Stripe account is fully connected. Payments will be deposited directly to your bank account.'
+                  ? 'Your Stripe account is fully connected. Please wait for confirmation from your platform host to proceed with payments.'
                   : isPending
                   ? 'Please complete the Stripe onboarding process to start receiving payments.'
                   : isRestricted
