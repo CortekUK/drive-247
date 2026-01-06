@@ -27,7 +27,7 @@ serve(async (req) => {
     // Block test mode for Stripe Connect onboarding
     if (isTestMode) {
       return new Response(
-        JSON.stringify({ error: 'Stripe Connect onboarding is only available in live mode. Please contact your administrator.' }),
+        JSON.stringify({ error: 'Stripe Connect onboarding is only available in live mode. Ask your platform manager to switch to live mode.' }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 403 }
       )
     }
