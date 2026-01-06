@@ -38,14 +38,14 @@ export const RecentActivity = () => {
   const { data: activities = [], isLoading } = useRecentActivity();
 
   return (
-    <Card className="shadow-card rounded-lg">
+    <Card className="shadow-card rounded-lg overflow-hidden">
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
           <Activity className="h-5 w-5 text-primary" />
           Recent Activity
         </CardTitle>
       </CardHeader>
-      <CardContent>
+      <CardContent className="overflow-hidden">
         {isLoading ? (
           <div className="space-y-4">
             {[...Array(4)].map((_, i) => (
@@ -69,27 +69,27 @@ export const RecentActivity = () => {
             <p className="text-xs text-muted-foreground mt-1">Activity will appear here as you use the system</p>
           </div>
         ) : (
-          <ScrollArea className="h-[400px] pr-4">
-            <div className="space-y-4">
+          <ScrollArea className="h-[400px] pr-2">
+            <div className="space-y-3">
               {activities.map((activity) => (
-              <div key={activity.id} className="flex items-center space-x-4 p-3 rounded-lg hover:bg-muted/50 transition-all duration-200">
-                <div className="p-2 bg-gradient-subtle rounded-full">
+              <div key={activity.id} className="flex items-start gap-2 p-2.5 rounded-lg hover:bg-muted/50 transition-all duration-200 overflow-hidden">
+                <div className="p-2 bg-gradient-subtle rounded-full flex-shrink-0">
                   <ActivityIcon type={activity.type} />
                 </div>
-                <div className="flex-1">
-                  <p className="text-sm font-medium">{activity.description}</p>
-                  <div className="flex items-center gap-2 mt-1">
+                <div className="flex-1 min-w-0 overflow-hidden pr-1">
+                  <p className="text-sm font-medium line-clamp-2 break-all">{activity.description}</p>
+                  <div className="flex items-center gap-1.5 mt-1 overflow-hidden">
                     {activity.customer && (
-                      <span className="text-metadata text-muted-foreground">{activity.customer}</span>
+                      <span className="text-xs text-muted-foreground truncate block max-w-full">{activity.customer}</span>
                     )}
                     {activity.amount && (
-                      <span className="text-metadata font-semibold text-success">${activity.amount}</span>
+                      <span className="text-xs font-semibold text-success whitespace-nowrap flex-shrink-0">${activity.amount}</span>
                     )}
                   </div>
                 </div>
-                <div className="text-right">
+                <div className="flex flex-col items-end gap-1 flex-shrink-0">
                   <StatusBadge status={activity.status} />
-                  <p className="text-metadata text-muted-foreground mt-1">{activity.time}</p>
+                  <p className="text-xs text-muted-foreground whitespace-nowrap">{activity.time}</p>
                 </div>
               </div>
               ))}

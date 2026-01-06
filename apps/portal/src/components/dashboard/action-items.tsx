@@ -240,23 +240,27 @@ export const ActionItems = () => {
   return (
     <div className="space-y-4">
       {/* Current Month Billing - Featured */}
-      <Card className="shadow-card rounded-lg border-2 border-primary/20 bg-gradient-to-br from-primary/5 to-transparent">
-        <CardHeader className="pb-4">
-          <div className="flex items-center gap-3">
+      <Card className="shadow-lg rounded-xl border border-primary/20 bg-gradient-to-br from-primary/5 via-background to-background overflow-hidden">
+        <CardHeader className="pb-4 bg-gradient-to-r from-primary/10 to-transparent">
+          <div className="flex items-center justify-between">
             <div>
-              <CardTitle className="text-2xl font-bold">Performance Overview</CardTitle>
-              <CardDescription className="text-base">
+              <CardTitle className="text-xl sm:text-2xl font-bold bg-gradient-to-r from-primary to-primary/70 bg-clip-text text-transparent">
+                Performance Overview
+              </CardTitle>
+              <CardDescription className="text-sm sm:text-base">
                 {monthName}
               </CardDescription>
             </div>
           </div>
         </CardHeader>
-        <CardContent>
+        <CardContent className="p-4 sm:p-6">
           <div>
-            {/* Progress Graph - Full Width */}
+            {/* Progress Graph - Responsive */}
             <div className="relative">
-              <h4 className="text-sm font-semibold text-foreground mb-4">Overall Performance - Revenue, Costs & Profit</h4>
-              <div className="relative rounded-lg bg-gradient-to-br from-primary/5 to-transparent p-4 border border-primary/10">
+              <h4 className="text-xs sm:text-sm font-semibold text-foreground mb-3 sm:mb-4">
+                Revenue, Costs & Net Profit
+              </h4>
+              <div className="relative rounded-xl bg-gradient-to-br from-muted/30 to-background p-3 sm:p-4 border border-border/50 backdrop-blur-sm">
                 {(() => {
                   const hasRealData = currentMonthBilling?.dailyEarnings && currentMonthBilling.dailyEarnings.length > 0;
                   const chartData = hasRealData ? currentMonthBilling.dailyEarnings : [
@@ -268,90 +272,98 @@ export const ActionItems = () => {
                   ];
                   return (
                   <>
-                    <ResponsiveContainer width="100%" height={350}>
-                      <LineChart data={chartData}>
+                    <ResponsiveContainer width="100%" height={280} className="sm:h-[320px]">
+                      <LineChart data={chartData} margin={{ top: 5, right: 10, left: 0, bottom: 5 }}>
                         <defs>
                           <linearGradient id="colorRevenue" x1="0" y1="0" x2="0" y2="1">
-                            <stop offset="5%" stopColor="#10b981" stopOpacity={0.3}/>
-                            <stop offset="95%" stopColor="#10b981" stopOpacity={0}/>
+                            <stop offset="5%" stopColor="#10b981" stopOpacity={0.4}/>
+                            <stop offset="95%" stopColor="#10b981" stopOpacity={0.05}/>
                           </linearGradient>
                           <linearGradient id="colorCost" x1="0" y1="0" x2="0" y2="1">
-                            <stop offset="5%" stopColor="#ef4444" stopOpacity={0.3}/>
-                            <stop offset="95%" stopColor="#ef4444" stopOpacity={0}/>
+                            <stop offset="5%" stopColor="#ef4444" stopOpacity={0.4}/>
+                            <stop offset="95%" stopColor="#ef4444" stopOpacity={0.05}/>
                           </linearGradient>
                           <linearGradient id="colorProfit" x1="0" y1="0" x2="0" y2="1">
-                            <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.3}/>
-                            <stop offset="95%" stopColor="#3b82f6" stopOpacity={0}/>
+                            <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.4}/>
+                            <stop offset="95%" stopColor="#3b82f6" stopOpacity={0.05}/>
                           </linearGradient>
                         </defs>
-                        <CartesianGrid strokeDasharray="3 3" stroke="#374151" opacity={0.2} />
+                        <CartesianGrid strokeDasharray="3 3" stroke="#374151" opacity={0.15} vertical={false} />
                         <XAxis
                           dataKey="date"
-                          tick={{ fill: '#9ca3af', fontSize: 10 }}
+                          tick={{ fill: '#9ca3af', fontSize: 11 }}
                           stroke="#4b5563"
+                          strokeOpacity={0.3}
                           tickFormatter={(value) => format(new Date(value), 'MMM d')}
+                          axisLine={false}
                         />
                         <YAxis
-                          tick={{ fill: '#9ca3af', fontSize: 10 }}
+                          tick={{ fill: '#9ca3af', fontSize: 11 }}
                           stroke="#4b5563"
+                          strokeOpacity={0.3}
                           tickFormatter={(value) => `$${value}`}
+                          axisLine={false}
                         />
                         <Tooltip
                           cursor={{ stroke: '#4b5563', strokeWidth: 1, strokeDasharray: '5 5' }}
                           contentStyle={{
-                            backgroundColor: '#1f2937',
-                            border: '2px solid #4b5563',
-                            borderRadius: '8px',
-                            color: '#e5e7eb',
-                            boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)'
+                            backgroundColor: 'hsl(var(--popover))',
+                            border: '1px solid hsl(var(--border))',
+                            borderRadius: '12px',
+                            color: 'hsl(var(--popover-foreground))',
+                            boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05)',
+                            padding: '12px'
                           }}
-                          labelStyle={{ color: '#9ca3af', fontWeight: 'bold', marginBottom: '8px' }}
-                          itemStyle={{ color: '#e5e7eb' }}
+                          labelStyle={{ color: 'hsl(var(--muted-foreground))', fontWeight: '600', marginBottom: '8px', fontSize: '12px' }}
+                          itemStyle={{ color: 'hsl(var(--foreground))', fontSize: '12px', padding: '4px 0' }}
                           labelFormatter={(value) => format(new Date(value), 'MMM d, yyyy')}
-                          formatter={(value: number) => `$${value.toLocaleString()}`}
+                          formatter={(value: number) => [`$${value.toLocaleString()}`, '']}
                         />
                         <Line
                           type="monotone"
                           dataKey="revenue"
                           stroke="#10b981"
-                          strokeWidth={3}
+                          strokeWidth={2.5}
                           name="Revenue"
-                          dot={{ fill: '#10b981', strokeWidth: 2, r: 3, stroke: '#1f2937' }}
-                          activeDot={{ r: 6, fill: '#10b981', stroke: '#1f2937', strokeWidth: 2 }}
+                          dot={{ fill: '#10b981', strokeWidth: 2, r: 4, stroke: 'hsl(var(--background))' }}
+                          activeDot={{ r: 6, fill: '#10b981', stroke: 'hsl(var(--background))', strokeWidth: 3 }}
+                          fill="url(#colorRevenue)"
                         />
                         <Line
                           type="monotone"
                           dataKey="cost"
                           stroke="#ef4444"
-                          strokeWidth={3}
+                          strokeWidth={2.5}
                           name="Costs"
-                          dot={{ fill: '#ef4444', strokeWidth: 2, r: 3, stroke: '#1f2937' }}
-                          activeDot={{ r: 6, fill: '#ef4444', stroke: '#1f2937', strokeWidth: 2 }}
+                          dot={{ fill: '#ef4444', strokeWidth: 2, r: 4, stroke: 'hsl(var(--background))' }}
+                          activeDot={{ r: 6, fill: '#ef4444', stroke: 'hsl(var(--background))', strokeWidth: 3 }}
+                          fill="url(#colorCost)"
                         />
                         <Line
                           type="monotone"
                           dataKey="profit"
                           stroke="#3b82f6"
-                          strokeWidth={3}
+                          strokeWidth={2.5}
                           name="Net Profit"
-                          dot={{ fill: '#3b82f6', strokeWidth: 2, r: 3, stroke: '#1f2937' }}
-                          activeDot={{ r: 6, fill: '#3b82f6', stroke: '#1f2937', strokeWidth: 2 }}
+                          dot={{ fill: '#3b82f6', strokeWidth: 2, r: 4, stroke: 'hsl(var(--background))' }}
+                          activeDot={{ r: 6, fill: '#3b82f6', stroke: 'hsl(var(--background))', strokeWidth: 3 }}
+                          fill="url(#colorProfit)"
                         />
                       </LineChart>
                     </ResponsiveContainer>
-                    {/* Legend */}
-                    <div className="mt-4 flex items-center justify-center gap-6 text-xs">
+                    {/* Legend - Responsive */}
+                    <div className="mt-4 flex flex-wrap items-center justify-center gap-4 sm:gap-6 text-xs">
                       <div className="flex items-center gap-2">
-                        <div className="w-3 h-3 rounded-full bg-success"></div>
-                        <span className="text-muted-foreground">Revenue</span>
+                        <div className="w-3 h-3 rounded-full bg-success shadow-sm"></div>
+                        <span className="text-muted-foreground font-medium">Revenue</span>
                       </div>
                       <div className="flex items-center gap-2">
-                        <div className="w-3 h-3 rounded-full bg-destructive"></div>
-                        <span className="text-muted-foreground">Costs</span>
+                        <div className="w-3 h-3 rounded-full bg-destructive shadow-sm"></div>
+                        <span className="text-muted-foreground font-medium">Costs</span>
                       </div>
                       <div className="flex items-center gap-2">
-                        <div className="w-3 h-3 rounded-full bg-blue-500"></div>
-                        <span className="text-muted-foreground">Net Profit</span>
+                        <div className="w-3 h-3 rounded-full bg-blue-500 shadow-sm"></div>
+                        <span className="text-muted-foreground font-medium">Net Profit</span>
                       </div>
                     </div>
                   </>
@@ -373,16 +385,18 @@ export const ActionItems = () => {
           </CardHeader>
           <CardContent>
             <Tabs defaultValue="new" className="w-full">
-              <TabsList className="grid w-full grid-cols-2 mb-4">
-                <TabsTrigger value="new" className="flex items-center gap-2">
-                  <Clock className="h-4 w-4" />
-                  New Bookings
-                  <Badge variant="secondary" className="ml-1">{newBookings.length}</Badge>
+              <TabsList className="grid w-full grid-cols-2 mb-4 h-auto">
+                <TabsTrigger value="new" className="flex items-center gap-1 justify-center py-2.5 px-2 whitespace-nowrap overflow-hidden">
+                  <Clock className="h-4 w-4 flex-shrink-0" />
+                  <span className="hidden md:inline text-sm">New Bookings</span>
+                  <span className="md:hidden text-sm">New</span>
+                  <Badge variant="secondary" className="ml-1 flex-shrink-0 text-xs">{newBookings.length}</Badge>
                 </TabsTrigger>
-                <TabsTrigger value="pending" className="flex items-center gap-2">
-                  <CheckCircle2 className="h-4 w-4" />
-                  Pending Approval
-                  <Badge variant="destructive" className="ml-1">{pendingBookings.length}</Badge>
+                <TabsTrigger value="pending" className="flex items-center gap-1 justify-center py-2.5 px-2 whitespace-nowrap overflow-hidden">
+                  <CheckCircle2 className="h-4 w-4 flex-shrink-0" />
+                  <span className="hidden md:inline text-sm">Pending Approval</span>
+                  <span className="md:hidden text-sm">Pending</span>
+                  <Badge variant="destructive" className="ml-1 flex-shrink-0 text-xs">{pendingBookings.length}</Badge>
                 </TabsTrigger>
               </TabsList>
 

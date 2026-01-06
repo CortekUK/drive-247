@@ -89,10 +89,12 @@ export default function DashboardLayout({
       <SidebarProvider>
         <AppSidebar />
         <SidebarInset className="overflow-x-hidden">
-          <header className="flex h-16 shrink-0 items-center gap-2 border-b px-4">
-            <SidebarTrigger className="-ml-1" />
-            <HeaderSearch />
-            <div className="ml-auto flex items-center gap-2">
+          <header className="flex h-16 shrink-0 items-center gap-2 border-b px-2 sm:px-4">
+            <SidebarTrigger className="-ml-1 flex-shrink-0" />
+            <div className="flex-1 min-w-0 max-w-2xl">
+              <HeaderSearch />
+            </div>
+            <div className="ml-auto flex items-center gap-1 sm:gap-2 flex-shrink-0">
               <NotificationBell />
               <ThemeToggle />
               <UserMenu />

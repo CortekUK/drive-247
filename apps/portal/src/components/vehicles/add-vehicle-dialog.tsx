@@ -298,9 +298,10 @@ export const AddVehicleDialog = ({ open, onOpenChange }: AddVehicleDialogProps) 
     <Dialog open={currentOpen} onOpenChange={handleOpenChange}>
       {!isControlled && (
         <DialogTrigger asChild>
-          <Button className="bg-gradient-primary text-primary-foreground hover:opacity-90 transition-all duration-200 rounded-lg focus:ring-2 focus:ring-primary">
-            <Plus className="mr-2 h-4 w-4" />
-            Add Vehicle
+          <Button className="bg-gradient-primary text-primary-foreground hover:opacity-90 transition-all duration-200 rounded-lg focus:ring-2 focus:ring-primary whitespace-nowrap">
+            <Plus className="mr-1 sm:mr-2 h-4 w-4 flex-shrink-0" />
+            <span className="hidden sm:inline">Add Vehicle</span>
+            <span className="sm:hidden">Add</span>
           </Button>
         </DialogTrigger>
       )}

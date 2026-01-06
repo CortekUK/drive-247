@@ -166,7 +166,7 @@ export default function RemindersPageEnhanced() {
   return (
     <div className="container mx-auto py-8 space-y-6">
       {/* Header */}
-      <div className="flex justify-between items-start">
+      <div className="flex flex-col sm:flex-row justify-between sm:items-start gap-4">
         <div>
           <h1 className="text-3xl font-bold mb-2">Reminders</h1>
           <p className="text-sm text-muted-foreground">
@@ -174,11 +174,12 @@ export default function RemindersPageEnhanced() {
           </p>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 w-full sm:w-auto flex-wrap">
           <Button
             variant="outline"
             size="sm"
             onClick={() => setShowFilters(!showFilters)}
+            className="flex-1 sm:flex-none"
           >
             <Filter className="h-4 w-4 mr-2" />
             Filters
@@ -189,6 +190,7 @@ export default function RemindersPageEnhanced() {
             size="sm"
             onClick={exportReminders}
             disabled={reminders.length === 0}
+            className="flex-1 sm:flex-none"
           >
             <Download className="h-4 w-4 mr-2" />
             Export
@@ -199,6 +201,7 @@ export default function RemindersPageEnhanced() {
             size="sm"
             onClick={() => generateReminders.mutate()}
             disabled={generateReminders.isPending}
+            className="flex-1 sm:flex-none"
           >
             <Play className="h-4 w-4 mr-2" />
             {generateReminders.isPending ? 'Generating...' : 'Generate'}

@@ -343,7 +343,7 @@ export default function PromotionsManager() {
   return (
     <div className="space-y-4 md:space-y-6 p-4 md:p-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-3xl font-display font-bold text-gradient-metal">
             Promotions
@@ -354,7 +354,7 @@ export default function PromotionsManager() {
         </div>
         <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
           <DialogTrigger asChild>
-            <Button onClick={resetForm}>
+            <Button onClick={resetForm} className="w-full sm:w-auto">
               <Plus className="w-4 h-4 mr-2" />
               Add Promotion
             </Button>

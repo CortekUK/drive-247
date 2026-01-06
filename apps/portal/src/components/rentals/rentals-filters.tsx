@@ -70,30 +70,34 @@ export const RentalsFilters = ({ filters, onFiltersChange, onClearFilters }: Ren
   return (
     <div className="space-y-4">
       {/* Quick Filter Buttons */}
-      <div className="flex gap-2 mb-4">
+      <div className="flex gap-2 mb-4 flex-wrap">
         <Button
           variant={filters.status === 'Pending' ? 'default' : 'outline'}
           size="sm"
           onClick={() => updateFilter('status', filters.status === 'Pending' ? 'all' : 'Pending')}
+          className="whitespace-nowrap"
         >
-          <Clock className="mr-2 h-4 w-4" />
-          New Bookings
-          {filters.status === 'Pending' && <X className="ml-2 h-3 w-3" />}
+          <Clock className="mr-2 h-4 w-4 flex-shrink-0" />
+          <span className="hidden xs:inline">New Bookings</span>
+          <span className="xs:hidden">New</span>
+          {filters.status === 'Pending' && <X className="ml-2 h-3 w-3 flex-shrink-0" />}
         </Button>
         <Button
           variant={filters.captureStatus === 'requires_capture' ? 'default' : 'outline'}
           size="sm"
           onClick={() => updateFilter('captureStatus', filters.captureStatus === 'requires_capture' ? undefined : 'requires_capture')}
+          className="whitespace-nowrap"
         >
-          <AlertCircle className="mr-2 h-4 w-4" />
-          Pending Approval
-          {filters.captureStatus === 'requires_capture' && <X className="ml-2 h-3 w-3" />}
+          <AlertCircle className="mr-2 h-4 w-4 flex-shrink-0" />
+          <span className="hidden xs:inline">Pending Approval</span>
+          <span className="xs:hidden">Pending</span>
+          {filters.captureStatus === 'requires_capture' && <X className="ml-2 h-3 w-3 flex-shrink-0" />}
         </Button>
       </div>
 
       {/* Search and main filters */}
       <div className="flex flex-wrap gap-4 items-center">
-        <div className="relative flex-1 min-w-[300px]">
+        <div className="relative flex-1 min-w-[200px] sm:min-w-[300px]">
           <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
           <Input
             placeholder="Search by customer, vehicle reg, or rental #..."
@@ -104,10 +108,10 @@ export const RentalsFilters = ({ filters, onFiltersChange, onClearFilters }: Ren
         </div>
         
         <Select value={filters.status || "all"} onValueChange={(value) => updateFilter("status", value)}>
-          <SelectTrigger className="w-[150px]">
+          <SelectTrigger className="w-full sm:w-[150px]">
             <SelectValue placeholder="Status" />
           </SelectTrigger>
-          <SelectContent>
+          <SelectContent className="max-w-[calc(100vw-2rem)]">
             <SelectItem value="all">All Status</SelectItem>
             <SelectItem value="pending">Pending</SelectItem>
             <SelectItem value="active">Active</SelectItem>
@@ -117,24 +121,24 @@ export const RentalsFilters = ({ filters, onFiltersChange, onClearFilters }: Ren
         </Select>
 
         <Select value={filters.customerType || "all"} onValueChange={(value) => updateFilter("customerType", value)}>
-          <SelectTrigger className="w-[150px]">
+          <SelectTrigger className="w-full sm:w-[150px]">
             <SelectValue placeholder="Customer Type" />
           </SelectTrigger>
-          <SelectContent>
+          <SelectContent className="max-w-[calc(100vw-2rem)]">
             <SelectItem value="all">All Types</SelectItem>
             <SelectItem value="Individual">Individual</SelectItem>
             <SelectItem value="Company">Company</SelectItem>
           </SelectContent>
         </Select>
 
-        <div className="flex gap-2 items-center">
-          <span className="text-sm text-muted-foreground">Duration (mo):</span>
+        <div className="flex gap-2 items-center flex-wrap w-full sm:w-auto">
+          <span className="text-sm text-muted-foreground whitespace-nowrap">Duration (mo):</span>
           <Input
             type="number"
             placeholder="Min"
             value={localDurationMin}
             onChange={(e) => setLocalDurationMin(e.target.value)}
-            className="w-[80px]"
+            className="w-[70px] sm:w-[80px]"
             min="0"
           />
           <span className="text-muted-foreground">–</span>
@@ -143,7 +147,7 @@ export const RentalsFilters = ({ filters, onFiltersChange, onClearFilters }: Ren
             placeholder="Max"
             value={localDurationMax}
             onChange={(e) => setLocalDurationMax(e.target.value)}
-            className="w-[80px]"
+            className="w-[70px] sm:w-[80px]"
             min="0"
           />
         </div>

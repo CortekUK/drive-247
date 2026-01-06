@@ -525,11 +525,11 @@ const Settings = () => {
                 {/* Light Theme Preview */}
                 <div className="p-4 border rounded-lg" style={{ backgroundColor: brandingForm.light_background_color || '#F5F3EE' }}>
                   <p className="text-sm font-medium mb-3" style={{ color: '#1A2B25' }}>Light Mode Preview</p>
-                  <div className="flex items-center gap-3">
+                  <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
                     <button
                       type="button"
                       style={{ backgroundColor: brandingForm.light_primary_color || brandingForm.primary_color }}
-                      className="inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium h-10 px-4 py-2 text-white hover:opacity-90 transition-opacity"
+                      className="inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium h-10 px-3 sm:px-4 py-2 text-white hover:opacity-90 transition-opacity"
                     >
                       Primary
                     </button>
@@ -540,7 +540,7 @@ const Settings = () => {
                         color: brandingForm.light_secondary_color || brandingForm.secondary_color,
                         backgroundColor: 'transparent'
                       }}
-                      className="inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium h-10 px-4 py-2 border-2 hover:opacity-90 transition-opacity"
+                      className="inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium h-10 px-3 sm:px-4 py-2 border-2 hover:opacity-90 transition-opacity"
                     >
                       Secondary
                     </button>
@@ -603,11 +603,11 @@ const Settings = () => {
                 {/* Dark Theme Preview */}
                 <div className="p-4 border rounded-lg" style={{ backgroundColor: brandingForm.dark_background_color || '#1A2B25' }}>
                   <p className="text-sm font-medium mb-3" style={{ color: '#F5F3EE' }}>Dark Mode Preview</p>
-                  <div className="flex items-center gap-3">
+                  <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
                     <button
                       type="button"
                       style={{ backgroundColor: brandingForm.dark_primary_color || brandingForm.primary_color }}
-                      className="inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium h-10 px-4 py-2 text-white hover:opacity-90 transition-opacity"
+                      className="inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium h-10 px-3 sm:px-4 py-2 text-white hover:opacity-90 transition-opacity"
                     >
                       Primary
                     </button>
@@ -618,7 +618,7 @@ const Settings = () => {
                         color: brandingForm.dark_secondary_color || brandingForm.secondary_color,
                         backgroundColor: 'transparent'
                       }}
-                      className="inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium h-10 px-4 py-2 border-2 hover:opacity-90 transition-opacity"
+                      className="inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium h-10 px-3 sm:px-4 py-2 border-2 hover:opacity-90 transition-opacity"
                     >
                       Secondary
                     </button>
@@ -808,10 +808,10 @@ const Settings = () => {
           </Card>
 
           {/* Save Button */}
-          <div className="flex justify-between items-center">
+          <div className="flex flex-col sm:flex-row justify-between items-stretch sm:items-center gap-3">
             <AlertDialog>
               <AlertDialogTrigger asChild>
-                <Button variant="outline" className="text-destructive border-destructive hover:bg-destructive/10">
+                <Button variant="outline" className="text-destructive border-destructive hover:bg-destructive/10 w-full sm:w-auto">
                   Reset All to Defaults
                 </Button>
               </AlertDialogTrigger>
@@ -881,7 +881,7 @@ const Settings = () => {
             <Button
               onClick={handleSaveBranding}
               disabled={isSavingBranding}
-              className="min-w-[120px]"
+              className="min-w-[120px] w-full sm:w-auto"
             >
               {isSavingBranding ? (
                 <>
@@ -913,11 +913,11 @@ const Settings = () => {
             </CardHeader>
             <CardContent className="space-y-6">
               <div className="space-y-4">
-                <div className="flex items-center justify-between p-4 border rounded-lg">
-                  <div className="space-y-1">
-                    <div className="flex items-center gap-2">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 border rounded-lg">
+                  <div className="space-y-1 min-w-0 flex-1">
+                    <div className="flex items-center gap-2 flex-wrap">
                       <h4 className="font-medium">Payment Due Today</h4>
-                      <Badge variant="secondary" className="text-xs">In-App Only</Badge>
+                      <Badge variant="secondary" className="text-xs whitespace-nowrap">In-App Only</Badge>
                     </div>
                     <p className="text-sm text-muted-foreground">
                       Send reminders for payments due today
@@ -927,14 +927,15 @@ const Settings = () => {
                     checked={settings?.reminder_due_today ?? true}
                     onCheckedChange={() => toggleReminder('reminder_due_today')}
                     disabled={isUpdating}
+                    className="flex-shrink-0"
                   />
                 </div>
 
-                <div className="flex items-center justify-between p-4 border rounded-lg">
-                  <div className="space-y-1">
-                    <div className="flex items-center gap-2">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 border rounded-lg">
+                  <div className="space-y-1 min-w-0 flex-1">
+                    <div className="flex items-center gap-2 flex-wrap">
                       <h4 className="font-medium">Payment Overdue (1 Day)</h4>
-                      <Badge variant="secondary" className="text-xs">In-App Only</Badge>
+                      <Badge variant="secondary" className="text-xs whitespace-nowrap">In-App Only</Badge>
                     </div>
                     <p className="text-sm text-muted-foreground">
                       Send reminders 1 day after payment due date
@@ -944,14 +945,15 @@ const Settings = () => {
                     checked={settings?.reminder_overdue_1d ?? true}
                     onCheckedChange={() => toggleReminder('reminder_overdue_1d')}
                     disabled={isUpdating}
+                    className="flex-shrink-0"
                   />
                 </div>
 
-                <div className="flex items-center justify-between p-4 border rounded-lg">
-                  <div className="space-y-1">
-                    <div className="flex items-center gap-2">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 border rounded-lg">
+                  <div className="space-y-1 min-w-0 flex-1">
+                    <div className="flex items-center gap-2 flex-wrap">
                       <h4 className="font-medium">Payment Overdue (Multiple Days)</h4>
-                      <Badge variant="secondary" className="text-xs">In-App Only</Badge>
+                      <Badge variant="secondary" className="text-xs whitespace-nowrap">In-App Only</Badge>
                     </div>
                     <p className="text-sm text-muted-foreground">
                       Send reminders for payments overdue by multiple days
@@ -961,14 +963,15 @@ const Settings = () => {
                     checked={settings?.reminder_overdue_multi ?? true}
                     onCheckedChange={() => toggleReminder('reminder_overdue_multi')}
                     disabled={isUpdating}
+                    className="flex-shrink-0"
                   />
                 </div>
 
-                <div className="flex items-center justify-between p-4 border rounded-lg">
-                  <div className="space-y-1">
-                    <div className="flex items-center gap-2">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 border rounded-lg">
+                  <div className="space-y-1 min-w-0 flex-1">
+                    <div className="flex items-center gap-2 flex-wrap">
                       <h4 className="font-medium">Payment Due Soon (2 Days)</h4>
-                      <Badge variant="secondary" className="text-xs">In-App Only</Badge>
+                      <Badge variant="secondary" className="text-xs whitespace-nowrap">In-App Only</Badge>
                     </div>
                     <p className="text-sm text-muted-foreground">
                       Send reminders 2 days before payment due date
@@ -978,6 +981,7 @@ const Settings = () => {
                     checked={settings?.reminder_due_soon_2d ?? false}
                     onCheckedChange={() => toggleReminder('reminder_due_soon_2d')}
                     disabled={isUpdating}
+                    className="flex-shrink-0"
                   />
                 </div>
               </div>
@@ -1166,13 +1170,15 @@ const Settings = () => {
                 Create and manage agreement templates that will be used when sending rental contracts via DocuSign.
                 Each tenant can have their own customized template with variable placeholders for customer, vehicle, and rental information.
               </p>
-              <Button
-                onClick={() => router.push('/settings/agreement-templates')}
-                className="flex items-center gap-2"
-              >
-                <FileText className="h-4 w-4" />
-                Manage Agreement Templates
-              </Button>
+              <div className="flex justify-center">
+                <Button
+                  onClick={() => router.push('/settings/agreement-templates')}
+                  className="flex items-center gap-2 w-full sm:w-64"
+                >
+                  <FileText className="h-4 w-4" />
+                  Manage Agreement Templates
+                </Button>
+              </div>
             </CardContent>
           </Card>
         </TabsContent>

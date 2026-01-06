@@ -71,7 +71,8 @@ export const useEnhancedRentals = (filters: RentalFilters = {}) => {
     sortBy = "start_date",
     sortOrder = "desc",
     page = 1,
-    pageSize = ITEMS_PER_PAGE
+    pageSize = ITEMS_PER_PAGE,
+    captureStatus
   } = filters;
 
   // Create a stable query key by serializing Date objects to strings
@@ -90,7 +91,8 @@ export const useEnhancedRentals = (filters: RentalFilters = {}) => {
     sortBy,
     sortOrder,
     page,
-    pageSize
+    pageSize,
+    captureStatus
   ];
 
   return useQuery({
@@ -145,13 +147,13 @@ export const useEnhancedRentals = (filters: RentalFilters = {}) => {
       const rentalIds = rentalsData?.map((r: any) => r.id) || [];
       const { data: initialPayments } = await supabase
         .from("payments")
-        .select("rental_id, amount")
+        .select("rental_id, amount, capture_status")
         .eq("tenant_id", tenant.id)
         .in("rental_id", rentalIds)
         .eq("payment_type", "InitialFee");
 
       const initialPaymentMap = new Map(
-        initialPayments?.map(p => [p.rental_id, p.amount]) || []
+        initialPayments?.map(p => [p.rental_id, { amount: p.amount, capture_status: p.capture_status }]) || []
       );
 
       // Transform and filter data
@@ -160,7 +162,9 @@ export const useEnhancedRentals = (filters: RentalFilters = {}) => {
           const periodType = 'Monthly';
           const durationMonths = calculateDuration(rental.start_date, rental.end_date, periodType);
           const computedStatus = getRentalStatus(rental.start_date, rental.end_date, rental.status);
-          const initialPaymentAmount = initialPaymentMap.get(rental.id) || null;
+          const initialPaymentData = initialPaymentMap.get(rental.id);
+          const initialPaymentAmount = initialPaymentData?.amount || null;
+          const paymentCaptureStatus = initialPaymentData?.capture_status || null;
           const totalAmount = rental.monthly_amount;
           const protectionCost = 0; // Protection cost not stored separately in current schema
 
@@ -177,6 +181,7 @@ export const useEnhancedRentals = (filters: RentalFilters = {}) => {
             computed_status: computedStatus,
             duration_months: durationMonths,
             initial_payment: initialPaymentAmount,
+            payment_capture_status: paymentCaptureStatus,
             customer: rental.customers as any,
             vehicle: rental.vehicles as any,
           };
@@ -217,6 +222,13 @@ export const useEnhancedRentals = (filters: RentalFilters = {}) => {
           if (initialPayment !== "all") {
             if (initialPayment === "set" && !rental.initial_payment) return false;
             if (initialPayment === "missing" && rental.initial_payment) return false;
+          }
+
+          // Apply capture status filter
+          if (captureStatus) {
+            if (captureStatus === "requires_capture" && (rental as any).payment_capture_status !== "requires_capture") {
+              return false;
+            }
           }
 
           return true;
