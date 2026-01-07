@@ -36,7 +36,7 @@ serve(async (req) => {
       )
     }
 
-    const { tenantId, email, businessName, returnUrl, refreshUrl } = await req.json()
+    const { tenantId, email, businessName, country, returnUrl, refreshUrl } = await req.json()
 
     if (!tenantId || !email) {
       return new Response(
@@ -71,6 +71,7 @@ serve(async (req) => {
     if (!stripeAccountId) {
       const account = await stripe.accounts.create({
         type: 'express',
+        country: country || 'US', // Default to US
         email: email,
         business_type: 'company',
         company: {
