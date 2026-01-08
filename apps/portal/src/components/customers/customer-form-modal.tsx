@@ -83,7 +83,7 @@ export const CustomerFormModal = ({ open, onOpenChange, customer }: CustomerForm
     setBlockWarning(null);
     if (customer) {
       const hasNextOfKin = customer.nok_full_name || customer.nok_relationship ||
-                          customer.nok_phone || customer.nok_email || customer.nok_address;
+        customer.nok_phone || customer.nok_email || customer.nok_address;
       setShowNextOfKin(!!hasNextOfKin);
 
       form.reset({
@@ -124,6 +124,46 @@ export const CustomerFormModal = ({ open, onOpenChange, customer }: CustomerForm
       });
     }
   }, [customer, form]);
+
+  // DEV MODE: Listen for dev panel fill event (only in development)
+  useEffect(() => {
+    if (process.env.NODE_ENV !== 'development') return;
+
+    const handleDevFill = (e: CustomEvent<{
+      customer_type?: 'Individual' | 'Company';
+      name: string;
+      email: string;
+      phone: string;
+      license_number: string;
+      id_number: string;
+      status?: 'Active' | 'Inactive';
+      whatsapp_opt_in?: boolean;
+      high_switcher?: boolean;
+      notes?: string;
+    }>) => {
+      const data = e.detail;
+      // Fill basic fields
+      form.setValue('name', data.name);
+      form.setValue('email', data.email);
+      form.setValue('phone', data.phone);
+      form.setValue('license_number', data.license_number);
+      form.setValue('id_number', data.id_number || '');
+
+      // Fill additional fields if provided
+      if (data.customer_type) form.setValue('customer_type', data.customer_type);
+      if (data.status) form.setValue('status', data.status);
+      if (data.whatsapp_opt_in !== undefined) form.setValue('whatsapp_opt_in', data.whatsapp_opt_in);
+      if (data.high_switcher !== undefined) form.setValue('high_switcher', data.high_switcher);
+      if (data.notes) form.setValue('notes', data.notes);
+
+      // Trigger validation
+      form.trigger();
+      console.log('🔧 DEV: Customer form filled with data:', data);
+    };
+
+    window.addEventListener('dev-fill-customer-form', handleDevFill as EventListener);
+    return () => window.removeEventListener('dev-fill-customer-form', handleDevFill as EventListener);
+  }, [form]);
 
   // Check if license or ID is blocked when values change (blocking is only by license, not email)
   const checkBlockedIdentity = async (identityNumber: string) => {
@@ -290,7 +330,7 @@ export const CustomerFormModal = ({ open, onOpenChange, customer }: CustomerForm
             if (blockedCustomer) {
               const matchedField =
                 (data.license_number && blockedCustomer.license_number === data.license_number) ? 'license' :
-                'ID number';
+                  'ID number';
 
               toast({
                 title: "Blocked Identity",
@@ -632,8 +672,8 @@ export const CustomerFormModal = ({ open, onOpenChange, customer }: CustomerForm
                 <FormItem>
                   <FormLabel>Notes</FormLabel>
                   <FormControl>
-                    <Textarea 
-                      placeholder="Optional notes about this customer..." 
+                    <Textarea
+                      placeholder="Optional notes about this customer..."
                       {...field}
                       className="input-focus resize-none"
                       rows={3}
@@ -745,7 +785,7 @@ export const CustomerFormModal = ({ open, onOpenChange, customer }: CustomerForm
                       <FormItem>
                         <FormLabel>Address</FormLabel>
                         <FormControl>
-                          <Textarea 
+                          <Textarea
                             placeholder="Enter full address..."
                             {...field}
                             className="input-focus resize-none"
@@ -761,17 +801,17 @@ export const CustomerFormModal = ({ open, onOpenChange, customer }: CustomerForm
             </Collapsible>
 
             <div className="flex justify-end gap-2 pt-4">
-              <Button 
-                type="button" 
-                variant="outline" 
+              <Button
+                type="button"
+                variant="outline"
                 onClick={() => onOpenChange(false)}
                 disabled={loading}
               >
                 Cancel
               </Button>
-              <Button 
-                type="submit" 
-                disabled={loading} 
+              <Button
+                type="submit"
+                disabled={loading}
                 className="bg-gradient-primary rounded-lg transition-all duration-200 focus:ring-2 focus:ring-primary"
               >
                 {loading ? (isEditing ? "Updating..." : "Adding...") : (isEditing ? "Update Customer" : "Add Customer")}

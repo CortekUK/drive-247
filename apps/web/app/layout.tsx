@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import "./globals.css";
+import DevPanel from "@/components/DevPanel";
 
 export const metadata: Metadata = {
   title: "Cortek Drive - Multi-Tenant Rental Management Platform",
@@ -15,6 +16,7 @@ export default function RootLayout({
     <html lang="en" className="dark">
       <body>
         {children}
+        <DevPanel />
       </body>
     </html>
   );

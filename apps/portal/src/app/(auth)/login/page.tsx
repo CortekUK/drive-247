@@ -115,7 +115,7 @@ function LoginPageContent() {
     if (!rateLimitCheck.allowed) {
       setError(
         getRateLimitMessage() ||
-          "Too many failed attempts. Please try again later."
+        "Too many failed attempts. Please try again later."
       );
       return;
     }

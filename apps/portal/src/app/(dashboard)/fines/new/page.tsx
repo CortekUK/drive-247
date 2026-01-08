@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
@@ -76,6 +76,48 @@ const CreateFine = () => {
       form.setValue("due_date", newDueDate);
     }
   };
+
+  // DEV MODE: Listen for dev panel fill events (only in development)
+  useEffect(() => {
+    if (process.env.NODE_ENV !== 'development') return;
+
+    const handleDevFillFine = (e: CustomEvent<{
+      type: 'PCN' | 'Speeding' | 'Other';
+      vehicle_id: string;
+      customer_id: string;
+      reference_no: string;
+      issue_date: Date;
+      due_date: Date;
+      amount: number;
+      liability: 'Customer' | 'Company';
+      notes: string;
+    }>) => {
+      const data = e.detail;
+      console.log('🔧 DEV MODE: Filling fine form with:', data);
+
+      // Set form values
+      form.setValue('type', data.type);
+      form.setValue('vehicle_id', data.vehicle_id);
+      form.setValue('customer_id', data.customer_id);
+      form.setValue('reference_no', data.reference_no);
+      form.setValue('issue_date', new Date(data.issue_date));
+      form.setValue('due_date', new Date(data.due_date));
+      form.setValue('amount', data.amount);
+      form.setValue('liability', data.liability);
+      form.setValue('notes', data.notes);
+
+      // Trigger form validation
+      form.trigger();
+
+      toast({
+        title: "Form Auto-Filled",
+        description: "Fine form auto-filled by Dev Panel",
+      });
+    };
+
+    window.addEventListener('dev-fill-fine-form', handleDevFillFine as EventListener);
+    return () => window.removeEventListener('dev-fill-fine-form', handleDevFillFine as EventListener);
+  }, [form, toast]);
 
   // Fetch all customers and vehicles for searchable dropdowns
   const { data: customers } = useQuery({

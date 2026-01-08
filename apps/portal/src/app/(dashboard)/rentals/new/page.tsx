@@ -345,6 +345,56 @@ const CreateRental = () => {
     }
   }, [selectedVehicleId, watchedValues.rental_period_type, vehicles, form]);
 
+  // DEV MODE: Listen for dev panel fill events (only in development)
+  useEffect(() => {
+    if (process.env.NODE_ENV !== 'development') return;
+
+    const handleDevFillRental = (e: CustomEvent<{
+      customer_id: string;
+      vehicle_id: string;
+      start_date: Date;
+      end_date: Date;
+      rental_period_type: string;
+      monthly_amount: number;
+      pickup_location?: string;
+      return_location?: string;
+      pickup_time?: string;
+      return_time?: string;
+    }>) => {
+      const data = e.detail;
+      console.log('🔧 DEV MODE: Filling rental form with:', data);
+
+      // Set form values
+      form.setValue('customer_id', data.customer_id);
+      form.setValue('vehicle_id', data.vehicle_id);
+      form.setValue('start_date', new Date(data.start_date));
+      form.setValue('end_date', new Date(data.end_date));
+      form.setValue('rental_period_type', data.rental_period_type as "Daily" | "Weekly" | "Monthly");
+      form.setValue('monthly_amount', data.monthly_amount);
+
+      if (data.pickup_location) {
+        form.setValue('pickup_location', data.pickup_location);
+      }
+      if (data.return_location) {
+        form.setValue('return_location', data.return_location);
+      }
+      if (data.pickup_time) {
+        form.setValue('pickup_time', data.pickup_time);
+      }
+      if (data.return_time) {
+        form.setValue('return_time', data.return_time);
+      }
+
+      // Trigger form validation
+      form.trigger();
+
+      sonnerToast.success('Rental form auto-filled by Dev Panel');
+    };
+
+    window.addEventListener('dev-fill-rental-form', handleDevFillRental as EventListener);
+    return () => window.removeEventListener('dev-fill-rental-form', handleDevFillRental as EventListener);
+  }, [form]);
+
   // Auto-update end date based on rental period type and start date
   useEffect(() => {
     const startDate = watchedValues.start_date;
@@ -1087,8 +1137,8 @@ const CreateRental = () => {
                         const descriptionText = periodType === "Daily"
                           ? "Must be at least 1 day after start date"
                           : periodType === "Weekly"
-                          ? "Must be at least 1 week after start date"
-                          : "Must be at least 1 month after start date";
+                            ? "Must be at least 1 week after start date"
+                            : "Must be at least 1 month after start date";
 
                         return (
                           <FormItem>
@@ -1138,11 +1188,11 @@ const CreateRental = () => {
                       render={({ field }) => {
                         const periodType = watchedValues.rental_period_type || "Monthly";
                         const label = periodType === "Daily" ? "Daily Amount *" :
-                                     periodType === "Weekly" ? "Weekly Amount *" :
-                                     "Monthly Amount *";
+                          periodType === "Weekly" ? "Weekly Amount *" :
+                            "Monthly Amount *";
                         const placeholder = periodType === "Daily" ? "Daily rental amount" :
-                                           periodType === "Weekly" ? "Weekly rental amount" :
-                                           "Monthly rental amount";
+                          periodType === "Weekly" ? "Weekly rental amount" :
+                            "Monthly rental amount";
                         return (
                           <FormItem>
                             <FormLabel>{label}</FormLabel>

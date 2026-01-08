@@ -200,12 +200,53 @@ const MultiStepBookingWidget = () => {
         }
       };
 
+      // Handle dev panel insurance auto-upload
+      const handleDevUploadInsurance = async (e: CustomEvent<{
+        file: File;
+        fileName: string;
+        autoVerify: boolean;
+      }>) => {
+        const { file, autoVerify } = e.detail;
+        console.log('🔧 DEV MODE: Auto-uploading insurance...', file.name);
+
+        // Set insurance state to trigger the upload flow
+        setHasInsurance(true);
+
+        // Open the upload dialog with the file pre-loaded
+        setShowUploadDialog(true);
+
+        // If autoVerify, just mark as verified without actual upload
+        if (autoVerify) {
+          setTimeout(() => {
+            setUploadedDocumentId('dev-mock-insurance-' + Date.now());
+            setShowUploadDialog(false);
+            console.log('🔧 DEV MODE: Insurance auto-verified');
+          }, 500);
+        }
+      };
+
+      // Handle dev panel skip insurance (mark verified directly)
+      const handleDevSetInsurance = (e: CustomEvent<{ verified: boolean; documentId?: string }>) => {
+        if (e.detail.verified) {
+          setHasInsurance(true);
+          setUploadedDocumentId(e.detail.documentId || 'dev-mock-insurance-' + Date.now());
+          console.log('🔧 DEV MODE: Insurance marked as verified');
+        } else {
+          setHasInsurance(null);
+          setUploadedDocumentId(null);
+        }
+      };
+
       window.addEventListener('dev-jump-to-step', handleDevJump as EventListener);
       window.addEventListener('dev-set-verification', handleDevVerification as EventListener);
+      window.addEventListener('dev-upload-insurance', handleDevUploadInsurance as EventListener);
+      window.addEventListener('dev-set-insurance', handleDevSetInsurance as EventListener);
 
       return () => {
         window.removeEventListener('dev-jump-to-step', handleDevJump as EventListener);
         window.removeEventListener('dev-set-verification', handleDevVerification as EventListener);
+        window.removeEventListener('dev-upload-insurance', handleDevUploadInsurance as EventListener);
+        window.removeEventListener('dev-set-insurance', handleDevSetInsurance as EventListener);
       };
     }
   }, []);
