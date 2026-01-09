@@ -144,6 +144,13 @@ const MultiStepBookingWidget = () => {
     qrUrl: string;
     expiresAt: Date;
   } | null>(null);
+  const [promoDetails, setPromoDetails] = useState<{
+    code: string;
+    type: "percentage" | "fixed_amount";
+    value: number;
+    id: string;
+  } | null>(null);
+  const [promoError, setPromoError] = useState<string | null>(null);
   const [locationCoords, setLocationCoords] = useState({
     pickupLat: null as number | null,
     pickupLon: null as number | null,
@@ -1014,14 +1021,90 @@ const MultiStepBookingWidget = () => {
       const extra = extras.find(e => e.id === extraId);
       return sum + (extra?.price || 0);
     }, 0);
-    const totalPrice = rentalPrice + extrasTotal;
+
+    // Apply promo code logic
+    let discountedRentalPrice = rentalPrice;
+    let discountAmount = 0;
+
+    if (promoDetails && selectedVehicle) {
+      // Validate fixed amount check: "Fixed amount off" < "Vehicle Price"
+      // Note: We check against the Rental Price, not just daily rate, as the discount applies to the booking total (usually)
+      // Or does it apply to the daily rate? The requirement says "actual booking amount for the vehicle > promo code concession"
+
+      // Usually promo applies to the rental cost (excluding extras)
+      const basePrice = rentalPrice;
+
+      if (promoDetails.type === "fixed_amount") {
+        if (basePrice > promoDetails.value) {
+          discountAmount = promoDetails.value;
+          discountedRentalPrice = Math.max(0, basePrice - discountAmount);
+        }
+        // If basePrice <= value, we don't apply it here (or treat as 0). 
+        // We will handle the UI error display in the vehicle card loop.
+      } else if (promoDetails.type === "percentage") {
+        discountAmount = (basePrice * promoDetails.value) / 100;
+        discountedRentalPrice = Math.max(0, basePrice - discountAmount);
+      }
+    }
+
+    const totalPrice = discountedRentalPrice + extrasTotal;
     return {
       rentalPrice,
+      discountedRentalPrice,
+      discountAmount,
       rentalDays,
       extrasTotal,
       totalPrice
     };
   };
+
+  const validatePromoCode = async (code: string) => {
+    if (!code || !tenant?.id) return;
+
+    setLoading(true);
+    setPromoError(null);
+    setPromoDetails(null);
+
+    try {
+      const { data, error } = await supabase
+        .from('promocodes')
+        .select('*')
+        .eq('code', code)
+        .eq('tenant_id', tenant.id)
+        .maybeSingle();
+
+      if (error) throw error;
+
+      if (!data) {
+        setPromoError("Invalid promo code");
+        return;
+      }
+
+      // Check expiry
+      if (data.expires_at && new Date(data.expires_at) < new Date()) {
+        setPromoError("Promo code has expired");
+        return;
+      }
+
+      // Check usage limits (if implemented, but schema has max_users)
+      // For now, we'll assume available if returned. Could add detailed check.
+
+      setPromoDetails({
+        code: data.code,
+        type: data.type === 'value' ? 'fixed_amount' : 'percentage', // Map DB type to internal type
+        value: data.value,
+        id: data.id
+      });
+      toast.success("Promo code applied!");
+
+    } catch (err) {
+      console.error("Promo validation error:", err);
+      setPromoError("Failed to validate promo code");
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleSubmit = async () => {
     if (!validateStep3()) {
       return;
@@ -1144,7 +1227,10 @@ const MultiStepBookingWidget = () => {
         monthly_amount: priceBreakdown?.totalPrice || 0,
         notes: formData.specialRequests ? sanitizeTextArea(formData.specialRequests) : null,
         status: "Pending",
-        source: "booking"
+        source: "booking",
+        // Add promo details
+        promo_code: promoDetails?.code || null,
+        discount_applied: priceBreakdown?.discountAmount || 0
       };
 
       // Add tenant_id if tenant context exists
@@ -1208,6 +1294,8 @@ const MultiStepBookingWidget = () => {
       returnLocationId: "",
       verificationSessionId: "",
     });
+    setPromoDetails(null);
+    setPromoError(null);
     setSelectedExtras([]);
     setCalculatedDistance(null);
     setDistanceOverride(false);
@@ -2485,6 +2573,40 @@ const MultiStepBookingWidget = () => {
               )}
               {errors.driverDOB && <p className="text-sm text-destructive">{errors.driverDOB}</p>}
             </div>
+
+            {/* Row 4: Promo Code */}
+            <div className="space-y-2 max-w-md">
+              <Label htmlFor="promoCode" className="font-medium">Promo Code (Optional)</Label>
+              <div className="flex gap-2">
+                <Input
+                  id="promoCode"
+                  placeholder="Enter code"
+                  value={formData.promoCode}
+                  onChange={(e) => {
+                    setFormData({ ...formData, promoCode: e.target.value });
+                    setPromoError(null);
+                    if (!e.target.value) setPromoDetails(null);
+                  }}
+                  className={cn("h-12", promoError ? "border-destructive" : promoDetails ? "border-green-500" : "")}
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="h-12 px-4"
+                  onClick={() => validatePromoCode(formData.promoCode)}
+                  disabled={loading || !formData.promoCode}
+                >
+                  Apply
+                </Button>
+              </div>
+              {promoError && <p className="text-sm text-destructive">{promoError}</p>}
+              {promoDetails && (
+                <p className="text-sm text-green-600 font-medium flex items-center gap-1">
+                  <Check className="w-4 h-4" />
+                  Code applied: {promoDetails.type === 'percentage' ? `${promoDetails.value}% off` : `$${promoDetails.value} off`}
+                </p>
+              )}
+            </div>
           </div>
 
           <Button
@@ -2699,6 +2821,27 @@ const MultiStepBookingWidget = () => {
                     const blockStatus = isVehicleBlockedForPeriod(vehicle.id);
                     const isBlocked = blockStatus.blocked;
 
+                    // Promo Logic for Display
+                    let displayPrice = estimation?.total || 0;
+                    let originalPrice = displayPrice;
+                    let hasDiscount = false;
+                    let promoErrorMsg = null;
+
+                    if (promoDetails && estimation) {
+                      if (promoDetails.type === 'fixed_amount') {
+                        if (estimation.total > promoDetails.value) {
+                          displayPrice = estimation.total - promoDetails.value;
+                          hasDiscount = true;
+                        } else {
+                          promoErrorMsg = "Promo code cannot be applied on this vehicle price";
+                        }
+                      } else if (promoDetails.type === 'percentage') {
+                        const discount = (estimation.total * promoDetails.value) / 100;
+                        displayPrice = estimation.total - discount;
+                        hasDiscount = true;
+                      }
+                    }
+
                     // Hide blocked/unavailable vehicles completely
                     if (isBlocked) return null;
 
@@ -2840,17 +2983,24 @@ const MultiStepBookingWidget = () => {
                                 <div className="flex items-end justify-between gap-4 mt-4">
                                   <div className="space-y-1">
                                     <div className="flex items-baseline gap-2">
-                                      <span className="text-3xl font-bold text-primary">
-                                        ${priceDisplay.price}
-                                      </span>
+                                      {hasDiscount ? (
+                                        <>
+                                          <span className="text-base text-muted-foreground line-through">${Number(originalPrice).toFixed(0)}</span>
+                                          <span className="text-3xl font-bold text-green-600">${Number(displayPrice).toFixed(0)}</span>
+                                        </>
+                                      ) : (
+                                        <span className="text-3xl font-bold text-primary">${priceDisplay.price}</span>
+                                      )}
                                       <span className="text-sm text-muted-foreground">{priceDisplay.label}</span>
                                     </div>
+                                    {promoErrorMsg && <p className="text-xs text-destructive">{promoErrorMsg}</p>}
                                     {priceDisplay.secondaryPrices.length > 0 && (
                                       <p className="text-xs text-muted-foreground">
                                         {priceDisplay.secondaryPrices.join(' • ')}
                                       </p>
                                     )}
                                   </div>
+
 
                                   <Button
                                     className={cn("w-40 h-11 font-medium transition-colors",
@@ -3018,11 +3168,21 @@ const MultiStepBookingWidget = () => {
                             return (
                               <div className="space-y-1">
                                 <div className="flex items-baseline justify-between">
-                                  <span className="text-2xl font-bold text-primary">
-                                    ${priceDisplay.price}
-                                  </span>
+                                  {hasDiscount ? (
+                                    <div className="flex flex-col items-end w-full">
+                                      <div className="flex items-center gap-2">
+                                        <span className="text-xs text-muted-foreground line-through">${Number(originalPrice).toFixed(0)}</span>
+                                        <span className="text-2xl font-bold text-green-600">${Number(displayPrice).toFixed(0)}</span>
+                                      </div>
+                                    </div>
+                                  ) : (
+                                    <span className="text-2xl font-bold text-primary">
+                                      ${priceDisplay.price}
+                                    </span>
+                                  )}
                                   <span className="text-sm text-muted-foreground">{priceDisplay.label}</span>
                                 </div>
+                                {promoErrorMsg && <p className="text-xs text-destructive text-right">{promoErrorMsg}</p>}
                                 {priceDisplay.secondaryPrices.length > 0 && (
                                   <p className="text-xs text-muted-foreground">
                                     {priceDisplay.secondaryPrices.join(' • ')}
@@ -3117,9 +3277,37 @@ const MultiStepBookingWidget = () => {
                         {selectedVehicle.make && selectedVehicle.model ? `${selectedVehicle.make} ${selectedVehicle.model}` : selectedVehicle.make || selectedVehicle.model || selectedVehicle.reg}
                       </p>
                       <p className="text-xs text-muted-foreground">{estimatedBooking.days} days</p>
-                      <p className="text-lg font-bold text-primary mt-1">
-                        ${estimatedBooking.total.toFixed(0)}
-                      </p>
+                      {(() => {
+                        let displayPrice = estimatedBooking.total;
+                        let originalPrice = displayPrice;
+                        let hasDiscount = false;
+
+                        if (promoDetails) {
+                          if (promoDetails.type === 'fixed_amount') {
+                            if (displayPrice > promoDetails.value) {
+                              displayPrice = displayPrice - promoDetails.value;
+                              hasDiscount = true;
+                            }
+                          } else if (promoDetails.type === 'percentage') {
+                            const discount = (displayPrice * promoDetails.value) / 100;
+                            displayPrice = displayPrice - discount;
+                            hasDiscount = true;
+                          }
+                        }
+
+                        return hasDiscount ? (
+                          <div className="mt-1 flex items-baseline gap-2">
+                            <span className="text-xs text-muted-foreground line-through">${originalPrice.toFixed(0)}</span>
+                            <span className="text-lg font-bold text-green-600">
+                              ${displayPrice.toFixed(0)}
+                            </span>
+                          </div>
+                        ) : (
+                          <p className="text-lg font-bold text-primary mt-1">
+                            ${estimatedBooking.total.toFixed(0)}
+                          </p>
+                        );
+                      })()}
                     </div>
                   </div>
                   <p className="text-xs text-muted-foreground">
@@ -3867,10 +4055,10 @@ const MultiStepBookingWidget = () => {
         </div>}
 
       </div>
-    </Card>
+    </Card >
 
     {/* Insurance Upload Dialog */}
-    <InsuranceUploadDialog
+    < InsuranceUploadDialog
       open={showUploadDialog}
       onOpenChange={setShowUploadDialog}
       onUploadComplete={async (documentId, fileUrl) => {
