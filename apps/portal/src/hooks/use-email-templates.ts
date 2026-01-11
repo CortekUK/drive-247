@@ -90,52 +90,29 @@ export const useEmailTemplates = () => {
         throw new Error('No tenant ID available');
       }
 
-      // Check if template already exists for this key
-      const existing = customTemplates?.find(t => t.template_key === input.template_key);
+      // Use Edge Function to bypass RLS
+      const { data, error } = await supabase.functions.invoke('manage-email-template', {
+        body: {
+          action: 'create',
+          tenantId: tenant.id,
+          templateKey: input.template_key,
+          templateName: input.template_name,
+          subject: input.subject,
+          templateContent: input.template_content,
+        },
+      });
 
-      if (existing) {
-        // Update existing template
-        const { data, error } = await supabase
-          .from('email_templates')
-          .update({
-            template_name: input.template_name,
-            subject: input.subject,
-            template_content: input.template_content,
-            updated_at: new Date().toISOString(),
-          })
-          .eq('id', existing.id)
-          .eq('tenant_id', tenant.id)
-          .select()
-          .single();
-
-        if (error) {
-          console.error('[EmailTemplates] Error updating template:', error);
-          throw error;
-        }
-
-        return data;
-      } else {
-        // Create new template
-        const { data, error } = await supabase
-          .from('email_templates')
-          .insert({
-            tenant_id: tenant.id,
-            template_key: input.template_key,
-            template_name: input.template_name,
-            subject: input.subject,
-            template_content: input.template_content,
-            is_active: true,
-          })
-          .select()
-          .single();
-
-        if (error) {
-          console.error('[EmailTemplates] Error creating template:', error);
-          throw error;
-        }
-
-        return data;
+      if (error) {
+        console.error('[EmailTemplates] Error calling manage-email-template:', error);
+        throw new Error(error.message || 'Failed to save template');
       }
+
+      if (!data?.success) {
+        console.error('[EmailTemplates] Function returned error:', data?.error);
+        throw new Error(data?.error || 'Failed to save template');
+      }
+
+      return data.data;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['email-templates', tenant?.id] });
@@ -160,15 +137,23 @@ export const useEmailTemplates = () => {
         throw new Error('No tenant ID available');
       }
 
-      const { error } = await supabase
-        .from('email_templates')
-        .delete()
-        .eq('template_key', templateKey)
-        .eq('tenant_id', tenant.id);
+      // Use Edge Function to bypass RLS
+      const { data, error } = await supabase.functions.invoke('manage-email-template', {
+        body: {
+          action: 'delete',
+          tenantId: tenant.id,
+          templateKey: templateKey,
+        },
+      });
 
       if (error) {
-        console.error('[EmailTemplates] Error resetting template:', error);
-        throw error;
+        console.error('[EmailTemplates] Error calling manage-email-template:', error);
+        throw new Error(error.message || 'Failed to reset template');
+      }
+
+      if (!data?.success) {
+        console.error('[EmailTemplates] Function returned error:', data?.error);
+        throw new Error(data?.error || 'Failed to reset template');
       }
     },
     onSuccess: () => {

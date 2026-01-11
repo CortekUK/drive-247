@@ -139,7 +139,7 @@ serve(async (req) => {
         error: error.message || 'Failed to schedule refund'
       }),
       {
-        status: 400,
+        status: 200, // Return 200 to avoid FunctionsHttpError, success: false indicates failure
         headers: { ...corsHeaders, 'Content-Type': 'application/json' }
       }
     );

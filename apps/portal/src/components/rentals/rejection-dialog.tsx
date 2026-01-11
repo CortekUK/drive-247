@@ -26,7 +26,8 @@ import {
   Eye,
   ChevronRight,
   ChevronLeft,
-  XCircle
+  XCircle,
+  RefreshCw
 } from "lucide-react";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
@@ -77,30 +78,122 @@ export default function RejectionDialog({
   const [renderedEmail, setRenderedEmail] = useState<{ subject: string; html: string } | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [renderingEmail, setRenderingEmail] = useState(false);
+  const [fetchedPaymentIntentId, setFetchedPaymentIntentId] = useState<string | null>(null);
+  const [isFetchingPaymentIntent, setIsFetchingPaymentIntent] = useState(false);
 
   const isPaymentCaptured = payment?.capture_status === 'captured';
   const isPreAuth = payment?.capture_status === 'requires_capture';
-  const hasStripePaymentIntent = !!payment?.stripe_payment_intent_id;
+  // Use either the original payment intent from props OR the one we fetched
+  const effectivePaymentIntentId = payment?.stripe_payment_intent_id || fetchedPaymentIntentId;
+  const hasStripePaymentIntent = !!effectivePaymentIntentId;
   const canProcessStripeRefund = isPaymentCaptured && hasStripePaymentIntent;
   const showRefundTab = isPaymentCaptured && !isPreAuth; // Show refund tab for any captured payment
   const refundAmount = payment?.amount || 0;
 
+  // Auto-fetch payment intent ID when dialog opens and it's missing
+  useEffect(() => {
+    const fetchPaymentIntent = async () => {
+      if (!open || !payment?.id) return;
+      if (payment?.stripe_payment_intent_id) return; // Already have it
+      if (fetchedPaymentIntentId) return; // Already fetched it
+      if (isFetchingPaymentIntent) return; // Already fetching
+
+      console.log('Auto-fetching payment intent for payment:', payment.id);
+      setIsFetchingPaymentIntent(true);
+
+      try {
+        const { data, error } = await supabase.functions.invoke('fetch-payment-intent', {
+          body: {
+            paymentId: payment.id,
+            tenantId: tenant?.id,
+          },
+        });
+
+        if (error) {
+          console.error('Error fetching payment intent:', error);
+          return;
+        }
+
+        if (data?.success && data?.paymentIntentId) {
+          console.log('Successfully fetched payment intent:', data.paymentIntentId);
+          setFetchedPaymentIntentId(data.paymentIntentId);
+          // Invalidate payment queries so the payment record is refreshed
+          queryClient.invalidateQueries({ queryKey: ['rental', rental.id] });
+        } else if (data?.error) {
+          console.warn('Could not fetch payment intent:', data.error);
+        }
+      } catch (err) {
+        console.error('Failed to fetch payment intent:', err);
+      } finally {
+        setIsFetchingPaymentIntent(false);
+      }
+    };
+
+    fetchPaymentIntent();
+  }, [open, payment?.id, payment?.stripe_payment_intent_id, fetchedPaymentIntentId, tenant?.id]);
+
+  // Reset fetched payment intent when dialog closes
+  useEffect(() => {
+    if (!open) {
+      setFetchedPaymentIntentId(null);
+    }
+  }, [open]);
+
   // Fetch rejection email templates for this tenant
   const { data: templates } = useQuery({
-    queryKey: ['email-templates', 'rejection', tenant?.id],
+    queryKey: ['email-templates', 'booking_rejected', tenant?.id],
     queryFn: async () => {
       if (!tenant?.id) return [];
 
+      // Try to fetch custom template for this tenant
       const { data, error } = await supabase
         .from('email_templates')
         .select('*')
-        .eq('category', 'rejection')
+        .eq('template_key', 'booking_rejected')
         .eq('is_active', true)
         .eq('tenant_id', tenant.id)
-        .order('name', { ascending: true });
+        .order('template_name', { ascending: true });
 
-      if (error) throw error;
-      return data || [];
+      if (error) {
+        console.error('[RejectionDialog] Error fetching templates:', error);
+        // Return default template if fetch fails
+        return [{
+          id: 'default-rejection',
+          tenant_id: tenant.id,
+          template_key: 'booking_rejected',
+          template_name: 'Default Rejection Email',
+          subject: 'Booking Update - {{rental_number}}',
+          template_content: `<p>Dear {{customer_name}},</p>
+<p>We regret to inform you that your booking request ({{rental_number}}) for {{vehicle_make}} {{vehicle_model}} has been declined.</p>
+<p><strong>Reason:</strong> {{rejection_reason}}</p>
+<p>If you have any questions, please contact us at {{company_email}} or {{company_phone}}.</p>
+<p>Best regards,<br/>The {{company_name}} Team</p>`,
+          is_active: true,
+          created_at: null,
+          updated_at: null,
+        }];
+      }
+
+      // If no custom templates, return a default one
+      if (!data || data.length === 0) {
+        return [{
+          id: 'default-rejection',
+          tenant_id: tenant.id,
+          template_key: 'booking_rejected',
+          template_name: 'Default Rejection Email',
+          subject: 'Booking Update - {{rental_number}}',
+          template_content: `<p>Dear {{customer_name}},</p>
+<p>We regret to inform you that your booking request ({{rental_number}}) for {{vehicle_make}} {{vehicle_model}} has been declined.</p>
+<p><strong>Reason:</strong> {{rejection_reason}}</p>
+<p>If you have any questions, please contact us at {{company_email}} or {{company_phone}}.</p>
+<p>Best regards,<br/>The {{company_name}} Team</p>`,
+          is_active: true,
+          created_at: null,
+          updated_at: null,
+        }];
+      }
+
+      return data;
     },
     enabled: open && !!tenant?.id,
   });
@@ -132,38 +225,51 @@ export default function RejectionDialog({
     setRenderingEmail(true);
     try {
       const template = templates?.find(t => t.id === selectedTemplateId);
-      if (!template) return;
+      if (!template) {
+        throw new Error('Template not found');
+      }
 
-      const variables = {
-        customerName: rental.customer?.name || 'Customer',
-        bookingRef: rental.id.substring(0, 8).toUpperCase(),
-        rejectionReason: rejectionReason || 'We were unable to verify all required information.',
-        refundAmount: refundAmount.toFixed(2),
-        vehicleName: `${rental.vehicle?.make} ${rental.vehicle?.model}` || 'Vehicle',
-        pickupDate: rental.start_date ? format(new Date(rental.start_date), 'MMMM dd, yyyy') : 'N/A',
-        returnDate: rental.end_date ? format(new Date(rental.end_date), 'MMMM dd, yyyy') : 'N/A',
-        totalAmount: rental.monthly_amount?.toFixed(2) || '0.00',
+      // Get template content and subject
+      const templateContent = template.template_content || '';
+      const templateSubject = template.subject || 'Booking Update';
+
+      // Build variables for replacement - using template format {{variable_name}}
+      const variables: Record<string, string> = {
+        customer_name: rental.customer?.name || 'Customer',
+        customer_email: rental.customer?.email || '',
+        rental_number: rental.id.substring(0, 8).toUpperCase(),
+        rejection_reason: rejectionReason || 'We were unable to verify all required information.',
+        refund_amount: `$${refundAmount.toFixed(2)}`,
+        vehicle_make: rental.vehicle?.make || '',
+        vehicle_model: rental.vehicle?.model || '',
+        vehicle_reg: rental.vehicle?.reg || '',
+        rental_start_date: rental.start_date ? format(new Date(rental.start_date), 'MMMM dd, yyyy') : 'N/A',
+        rental_end_date: rental.end_date ? format(new Date(rental.end_date), 'MMMM dd, yyyy') : 'N/A',
+        rental_amount: `$${(rental.monthly_amount || 0).toFixed(2)}`,
+        company_name: (tenant as any)?.name || 'Our Company',
+        company_email: (tenant as any)?.email || '',
+        company_phone: (tenant as any)?.phone || '',
       };
 
-      const { data, error } = await supabase.functions.invoke('render-email-template', {
-        body: {
-          templateBody: template.body,
-          templateSubject: template.subject,
-          variables,
-        }
-      });
+      // Render template by replacing variables
+      let renderedContent = templateContent;
+      let renderedSubject = templateSubject;
 
-      if (error) throw error;
+      for (const [key, value] of Object.entries(variables)) {
+        const placeholder = `{{${key}}}`;
+        renderedContent = renderedContent.replace(new RegExp(placeholder.replace(/[{}]/g, '\\$&'), 'g'), value);
+        renderedSubject = renderedSubject.replace(new RegExp(placeholder.replace(/[{}]/g, '\\$&'), 'g'), value);
+      }
 
       setRenderedEmail({
-        subject: data.subject,
-        html: data.html,
+        subject: renderedSubject,
+        html: renderedContent,
       });
     } catch (error: any) {
       console.error('Email render error:', error);
       toast({
         title: "Preview Error",
-        description: "Failed to render email preview",
+        description: error.message || "Failed to render email preview",
         variant: "destructive",
       });
     } finally {
@@ -186,7 +292,7 @@ export default function RejectionDialog({
       // Step 1: Handle payment/refund
       if (isPreAuth) {
         // Cancel pre-authorization
-        const { error: cancelError } = await supabase.functions.invoke('cancel-booking-preauth', {
+        const { data: cancelData, error: cancelError } = await supabase.functions.invoke('cancel-booking-preauth', {
           body: {
             paymentId: payment?.id,
             tenantId: tenant?.id,
@@ -195,9 +301,10 @@ export default function RejectionDialog({
         });
 
         if (cancelError) throw cancelError;
+        if (cancelData && !cancelData.success) throw new Error(cancelData.error || 'Failed to cancel pre-authorization');
       } else if ((canProcessStripeRefund || manualPaymentIntentId.startsWith('pi_')) && refundAmount > 0 && refundTiming === 'now') {
-        // Process Stripe refund - either from existing payment intent or manually entered one
-        const paymentIntentId = hasStripePaymentIntent ? payment?.stripe_payment_intent_id : manualPaymentIntentId;
+        // Process Stripe refund - either from existing payment intent, fetched one, or manually entered one
+        const paymentIntentId = hasStripePaymentIntent ? effectivePaymentIntentId : manualPaymentIntentId;
 
         // If using manual payment intent, first save it to the payment record
         if (!hasStripePaymentIntent && manualPaymentIntentId && payment?.id) {
@@ -225,7 +332,7 @@ export default function RejectionDialog({
         if (refundData && !refundData.success) throw new Error(refundData.error || 'Refund failed');
       } else if (canProcessStripeRefund && refundAmount > 0 && refundTiming === 'scheduled' && scheduledDate) {
         // Schedule refund via schedule-refund function
-        const { error: scheduleError } = await supabase.functions.invoke('schedule-refund', {
+        const { data: scheduleData, error: scheduleError } = await supabase.functions.invoke('schedule-refund', {
           body: {
             paymentId: payment?.id,
             refundAmount,
@@ -236,6 +343,7 @@ export default function RejectionDialog({
         });
 
         if (scheduleError) throw scheduleError;
+        if (scheduleData && !scheduleData.success) throw new Error(scheduleData.error || 'Failed to schedule refund');
       } else if (isPaymentCaptured && !hasStripePaymentIntent && refundTiming === 'manual') {
         // Payment captured but no Stripe payment intent - mark as pending manual refund
         console.log('Payment captured without Stripe payment intent - marked for manual refund');
@@ -487,6 +595,16 @@ export default function RejectionDialog({
               {canProcessStripeRefund ? (
                 /* Stripe-linked payment - show automatic refund options */
                 <>
+                  {/* Show the synced payment intent ID */}
+                  <Alert className="border-green-200 bg-green-50 dark:bg-green-950/30">
+                    <AlertDescription className="text-green-800 dark:text-green-200">
+                      <div className="flex items-center gap-2">
+                        <Badge variant="outline" className="border-green-500 text-green-700">Stripe Linked</Badge>
+                        <span className="text-sm">Payment Intent: <code className="bg-green-100 dark:bg-green-900 px-1 rounded text-xs">{effectivePaymentIntentId}</code></span>
+                      </div>
+                    </AlertDescription>
+                  </Alert>
+
                   <RadioGroup
                     value={refundTiming}
                     onValueChange={(value) => setRefundTiming(value as "now" | "scheduled" | "manual")}
@@ -559,16 +677,54 @@ export default function RejectionDialog({
               ) : (
                 /* Non-Stripe payment - need to link payment intent */
                 <>
-                  <Alert className="border-blue-200 bg-blue-50 dark:bg-blue-950/30">
-                    <AlertTriangle className="h-4 w-4 text-blue-600" />
-                    <AlertDescription className="text-blue-800 dark:text-blue-200">
-                      <p className="font-medium mb-1">Link Stripe Payment for Automatic Refund</p>
-                      <p className="text-sm">
-                        This payment record is not linked to Stripe. To process an automatic refund,
-                        enter the Payment Intent ID from your Stripe Dashboard.
-                      </p>
-                    </AlertDescription>
-                  </Alert>
+                  {isFetchingPaymentIntent ? (
+                    <Alert className="border-yellow-200 bg-yellow-50 dark:bg-yellow-950/30">
+                      <Loader2 className="h-4 w-4 text-yellow-600 animate-spin" />
+                      <AlertDescription className="text-yellow-800 dark:text-yellow-200">
+                        <p className="font-medium mb-1">Syncing with Stripe...</p>
+                        <p className="text-sm">
+                          Automatically fetching Payment Intent ID from Stripe checkout session.
+                        </p>
+                      </AlertDescription>
+                    </Alert>
+                  ) : (
+                    <Alert className="border-blue-200 bg-blue-50 dark:bg-blue-950/30">
+                      <AlertTriangle className="h-4 w-4 text-blue-600" />
+                      <AlertDescription className="text-blue-800 dark:text-blue-200">
+                        <p className="font-medium mb-1">Link Stripe Payment for Automatic Refund</p>
+                        <p className="text-sm mb-2">
+                          This payment record is not linked to Stripe. To process an automatic refund,
+                          enter the Payment Intent ID from your Stripe Dashboard.
+                        </p>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="text-blue-700 border-blue-300 hover:bg-blue-100"
+                          onClick={async () => {
+                            setIsFetchingPaymentIntent(true);
+                            try {
+                              const { data, error } = await supabase.functions.invoke('fetch-payment-intent', {
+                                body: { paymentId: payment?.id, tenantId: tenant?.id }
+                              });
+                              if (data?.success && data?.paymentIntentId) {
+                                setFetchedPaymentIntentId(data.paymentIntentId);
+                                toast({ title: "Synced", description: "Payment Intent ID fetched successfully!" });
+                              } else {
+                                toast({ title: "Could not sync", description: data?.error || "Please enter ID manually", variant: "destructive" });
+                              }
+                            } catch (err) {
+                              toast({ title: "Sync failed", description: "Please enter Payment Intent ID manually", variant: "destructive" });
+                            } finally {
+                              setIsFetchingPaymentIntent(false);
+                            }
+                          }}
+                        >
+                          <RefreshCw className="h-3 w-3 mr-1" />
+                          Try Auto-Sync from Stripe
+                        </Button>
+                      </AlertDescription>
+                    </Alert>
+                  )}
 
                   <RadioGroup
                     value={refundTiming}
@@ -670,7 +826,7 @@ export default function RejectionDialog({
                   <SelectContent>
                     {templates?.map((template) => (
                       <SelectItem key={template.id} value={template.id}>
-                        {template.name}
+                        {template.template_name}
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -687,15 +843,15 @@ export default function RejectionDialog({
                       <div className="space-y-2 text-sm">
                         <div>
                           <span className="text-muted-foreground">Name:</span>{' '}
-                          <span className="font-medium">{template.name}</span>
+                          <span className="font-medium">{template.template_name}</span>
                         </div>
                         <div>
                           <span className="text-muted-foreground">Subject:</span>{' '}
                           <span className="font-medium">{template.subject}</span>
                         </div>
                         <div>
-                          <span className="text-muted-foreground">Category:</span>{' '}
-                          <Badge variant="secondary">{template.category}</Badge>
+                          <span className="text-muted-foreground">Type:</span>{' '}
+                          <Badge variant="secondary">{template.template_key}</Badge>
                         </div>
                       </div>
                     );

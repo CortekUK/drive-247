@@ -305,6 +305,29 @@ serve(async (req) => {
             }
           }
         }
+
+        // BACKFILL: Ensure stripe_payment_intent_id is saved for ALL matching payments
+        // This catches any race conditions where the payment record was created after the webhook
+        if (session.payment_intent && session.id) {
+          const { data: backfilledPayments, error: backfillError } = await supabase
+            .from("payments")
+            .update({
+              stripe_payment_intent_id: session.payment_intent as string,
+              updated_at: new Date().toISOString(),
+            })
+            .eq("stripe_checkout_session_id", session.id)
+            .is("stripe_payment_intent_id", null)
+            .select("id");
+
+          if (!backfillError && backfilledPayments && backfilledPayments.length > 0) {
+            console.log(
+              "Backfilled stripe_payment_intent_id for",
+              backfilledPayments.length,
+              "payments with session:",
+              session.id
+            );
+          }
+        }
         break;
       }
 
@@ -421,6 +444,77 @@ serve(async (req) => {
 
             console.log("Cancelled expired checkout rental:", rentalId);
           }
+        }
+        break;
+      }
+
+      case "charge.refunded": {
+        const charge = event.data.object as Stripe.Charge;
+        console.log("Charge refunded:", charge.id, "for payment_intent:", charge.payment_intent);
+
+        if (!charge.payment_intent) {
+          console.log("No payment_intent on charge, skipping");
+          break;
+        }
+
+        // Find payment by payment_intent
+        const { data: payment } = await supabase
+          .from("payments")
+          .select("id, rental_id, tenant_id, amount")
+          .eq("stripe_payment_intent_id", charge.payment_intent as string)
+          .single();
+
+        if (payment) {
+          console.log("Found payment for refund:", payment.id);
+
+          const refundAmount = charge.amount_refunded / 100;
+          const isFullRefund = refundAmount >= payment.amount;
+
+          // Update payment status
+          const { error: updateError } = await supabase
+            .from("payments")
+            .update({
+              refund_status: "completed",
+              status: isFullRefund ? "Refunded" : "Partial Refund",
+              refund_processed_at: new Date().toISOString(),
+              refund_amount: refundAmount,
+              updated_at: new Date().toISOString(),
+            })
+            .eq("id", payment.id);
+
+          if (updateError) {
+            console.error("Failed to update payment refund status:", updateError);
+          } else {
+            console.log("Updated payment", payment.id, "with refund status");
+          }
+
+          // Create portal notification
+          if (payment.tenant_id) {
+            const { error: notificationError } = await supabase
+              .from("notifications")
+              .insert({
+                tenant_id: payment.tenant_id,
+                type: "refund_processed",
+                title: "Refund Processed",
+                message: `Refund of $${refundAmount.toFixed(2)} has been processed successfully`,
+                data: {
+                  payment_id: payment.id,
+                  rental_id: payment.rental_id,
+                  refund_amount: refundAmount,
+                  stripe_charge_id: charge.id,
+                },
+                is_read: false,
+              });
+
+            if (notificationError) {
+              // Notification table might not exist, log but don't fail
+              console.warn("Could not create notification (table may not exist):", notificationError.message);
+            } else {
+              console.log("Created refund notification for tenant:", payment.tenant_id);
+            }
+          }
+        } else {
+          console.log("No payment found for payment_intent:", charge.payment_intent);
         }
         break;
       }

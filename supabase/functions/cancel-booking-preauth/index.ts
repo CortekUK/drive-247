@@ -55,7 +55,7 @@ serve(async (req) => {
       return new Response(
         JSON.stringify({ success: false, error: "Payment not found" }),
         {
-          status: 404,
+          status: 200, // Return 200 to avoid FunctionsHttpError, success: false indicates failure
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         }
       );
@@ -91,7 +91,7 @@ serve(async (req) => {
           error: `Payment cannot be cancelled. Current status: ${payment.capture_status}`,
         }),
         {
-          status: 400,
+          status: 200, // Return 200 to avoid FunctionsHttpError, success: false indicates failure
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         }
       );
@@ -233,7 +233,7 @@ serve(async (req) => {
         error: errorMessage,
       }),
       {
-        status: 500,
+        status: 200, // Return 200 to avoid FunctionsHttpError, success: false indicates failure
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       }
     );

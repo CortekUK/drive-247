@@ -36,7 +36,9 @@
       "Bash(taskkill //F //PID 20896)",
       "Bash(git checkout:*)",
       "Bash(find:*)",
-      "Bash(git rm:*)"
+      "Bash(git rm:*)",
+      "Bash(npm run lint:*)",
+      "Bash(npx next lint)"
     ],
     "deny": [],
     "ask": []

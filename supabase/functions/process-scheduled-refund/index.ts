@@ -106,16 +106,37 @@ serve(async (req) => {
       // - Do NOT set reverse_transfer
 
       let stripeRefund;
-      if (stripeAccountId) {
-        // Direct charge on connected account - refund directly on connected account
-        console.log('Creating Stripe refund on connected account:', stripeAccountId);
-        stripeRefund = await stripe.refunds.create(refundParams, { stripeAccount: stripeAccountId });
-      } else {
-        // Platform charge - refund on platform
-        console.log('Creating Stripe refund on platform');
+      let platformError: Error | null = null;
+      let connectedError: Error | null = null;
+
+      // Try platform account FIRST (destination charges create PaymentIntents on platform)
+      try {
+        console.log('Trying Stripe refund on platform account');
         stripeRefund = await stripe.refunds.create(refundParams);
+        console.log('Stripe refund created on platform:', stripeRefund.id);
+      } catch (platformErr: any) {
+        console.log('Refund on platform account failed:', platformErr.message);
+        platformError = platformErr;
       }
-      console.log('Stripe refund created:', stripeRefund.id);
+
+      // If platform failed and we have a connected account, try that
+      if (!stripeRefund && stripeAccountId) {
+        try {
+          console.log('Trying Stripe refund on connected account:', stripeAccountId);
+          stripeRefund = await stripe.refunds.create(refundParams, { stripeAccount: stripeAccountId });
+          console.log('Stripe refund created on connected account:', stripeRefund.id);
+        } catch (connectedErr: any) {
+          console.log('Refund on connected account failed:', connectedErr.message);
+          connectedError = connectedErr;
+        }
+      }
+
+      if (!stripeRefund) {
+        if (platformError && connectedError) {
+          throw new Error(`Refund failed on both platform (${platformError.message}) and connected account (${connectedError.message})`);
+        }
+        throw platformError || connectedError || new Error('Failed to create refund');
+      }
 
       // Update payment record
       await supabase
@@ -283,7 +304,7 @@ serve(async (req) => {
         error: error.message || 'Failed to process scheduled refunds'
       }),
       {
-        status: 500,
+        status: 200, // Return 200 to avoid FunctionsHttpError, success: false indicates failure
         headers: { ...corsHeaders, 'Content-Type': 'application/json' }
       }
     );
