@@ -377,8 +377,14 @@ export default function BookingCheckoutStep({
 
         // Query the verification record by session_id first (primary method)
         // If not found, fallback to querying by id for backward compatibility
-        let verification = null;
-        let verificationQueryError = null;
+        let verification: {
+          id: string;
+          session_id: string | null;
+          customer_id: string | null;
+          review_result: string | null;
+          [key: string]: unknown;
+        } | null = null;
+        let verificationQueryError: unknown = null;
 
         // Try session_id first
         const { data: sessionData, error: sessionError } = await supabase
@@ -770,7 +776,7 @@ export default function BookingCheckoutStep({
 
             <div className="space-y-3">
               <div className="flex justify-between text-sm pb-3 border-b border-border">
-                <span className="text-muted-foreground">Rental ({rentalDuration.days} days)</span>
+                <span className="text-muted-foreground">Rental ({rentalDuration.formatted})</span>
                 <span className="font-medium">${vehicleTotal.toLocaleString()}</span>
               </div>
 
