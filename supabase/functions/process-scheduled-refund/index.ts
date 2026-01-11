@@ -7,6 +7,14 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+interface ImmediateRefundRequest {
+  paymentId: string;
+  paymentIntentId?: string; // Can be provided directly if not in payment record
+  amount?: number;
+  reason?: string;
+  tenantId?: string;
+}
+
 serve(async (req) => {
   // Handle CORS preflight
   if (req.method === 'OPTIONS') {
@@ -14,8 +22,6 @@ serve(async (req) => {
   }
 
   try {
-    console.log('Processing scheduled refunds...');
-
     // Initialize Supabase client
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
@@ -29,6 +35,118 @@ serve(async (req) => {
     const stripe = new Stripe(stripeSecretKey, {
       apiVersion: '2023-10-16',
     });
+
+    // Check if this is an immediate refund request (has paymentId in body)
+    let requestBody: ImmediateRefundRequest | null = null;
+    try {
+      requestBody = await req.json();
+    } catch {
+      // No body or invalid JSON - this is a scheduled refund batch request
+      requestBody = null;
+    }
+
+    // IMMEDIATE REFUND: Process a single refund right now
+    if (requestBody?.paymentId) {
+      console.log('Processing immediate refund for payment:', requestBody.paymentId);
+
+      // Get payment details
+      const { data: payment, error: paymentError } = await supabase
+        .from('payments')
+        .select('*, rentals(tenant_id, customer_id)')
+        .eq('id', requestBody.paymentId)
+        .single();
+
+      if (paymentError || !payment) {
+        throw new Error(`Payment not found: ${paymentError?.message || 'Unknown error'}`);
+      }
+
+      // Use provided paymentIntentId or fall back to the one in payment record
+      const paymentIntentId = requestBody.paymentIntentId || payment.stripe_payment_intent_id;
+
+      if (!paymentIntentId) {
+        throw new Error('Payment has no Stripe payment intent. Please provide one from Stripe Dashboard.');
+      }
+
+      // Get tenant's Stripe Connect account
+      const tenantId = requestBody.tenantId || payment.tenant_id || payment.rentals?.tenant_id;
+      let stripeAccountId: string | null = null;
+
+      if (tenantId) {
+        const { data: tenant } = await supabase
+          .from('tenants')
+          .select('stripe_account_id, stripe_onboarding_complete')
+          .eq('id', tenantId)
+          .single();
+
+        if (tenant?.stripe_account_id && tenant?.stripe_onboarding_complete) {
+          stripeAccountId = tenant.stripe_account_id;
+          console.log('Using Stripe Connect account:', stripeAccountId);
+        }
+      }
+
+      const stripeOptions = stripeAccountId ? { stripeAccount: stripeAccountId } : undefined;
+      const refundAmount = requestBody.amount || payment.amount;
+
+      // Process refund via Stripe
+      const refundParams: Stripe.RefundCreateParams = {
+        payment_intent: paymentIntentId,
+        amount: Math.round(refundAmount * 100), // Convert to cents
+        reason: 'requested_by_customer',
+        metadata: {
+          payment_id: payment.id,
+          reason: requestBody.reason || 'Refund requested'
+        }
+      };
+
+      // For Stripe Connect with destination charges (platform creates charge):
+      // - Create refund on platform WITHOUT stripeAccount option
+      // - Set reverse_transfer: true to pull money back from connected account
+      // For direct charges (connected account creates charge):
+      // - Create refund on connected account WITH stripeAccount option
+      // - Do NOT set reverse_transfer
+
+      let stripeRefund;
+      if (stripeAccountId) {
+        // Direct charge on connected account - refund directly on connected account
+        console.log('Creating Stripe refund on connected account:', stripeAccountId);
+        stripeRefund = await stripe.refunds.create(refundParams, { stripeAccount: stripeAccountId });
+      } else {
+        // Platform charge - refund on platform
+        console.log('Creating Stripe refund on platform');
+        stripeRefund = await stripe.refunds.create(refundParams);
+      }
+      console.log('Stripe refund created:', stripeRefund.id);
+
+      // Update payment record
+      await supabase
+        .from('payments')
+        .update({
+          refund_status: 'completed',
+          refund_processed_at: new Date().toISOString(),
+          stripe_refund_id: stripeRefund.id,
+          status: refundAmount >= payment.amount ? 'Refunded' : 'Partial Refund',
+          refund_amount: refundAmount,
+          refund_reason: requestBody.reason || 'Refund requested'
+        })
+        .eq('id', payment.id);
+
+      return new Response(
+        JSON.stringify({
+          success: true,
+          message: 'Refund processed successfully',
+          refundId: stripeRefund.id,
+          amount: stripeRefund.amount / 100,
+          status: stripeRefund.status
+        }),
+        {
+          status: 200,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        }
+      );
+    }
+
+    // SCHEDULED REFUNDS: Batch process refunds due today
+    console.log('Processing scheduled refunds...');
 
     // Get refunds due today
     const { data: refundsDue, error: queryError } = await supabase

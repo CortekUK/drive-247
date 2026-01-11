@@ -70,18 +70,34 @@ serve(async (req) => {
           // Pre-auth mode: Just log - payment is held, not captured
           console.log("Pre-auth checkout completed, awaiting admin approval");
 
-          // Update payment record if it exists
-          const paymentId = session.metadata?.payment_id;
-          if (paymentId) {
-            await supabase
+          // Update payment record - look up by stripe_checkout_session_id since payment_id
+          // is not in metadata (Stripe doesn't allow updating session metadata after creation)
+          const { data: existingPaymentRecord, error: paymentLookupError } = await supabase
+            .from("payments")
+            .select("id")
+            .eq("stripe_checkout_session_id", session.id)
+            .single();
+
+          if (existingPaymentRecord) {
+            const { error: updateError } = await supabase
               .from("payments")
               .update({
-                stripe_checkout_session_id: session.id,
                 stripe_payment_intent_id: session.payment_intent as string,
                 updated_at: new Date().toISOString(),
               })
-              .eq("id", paymentId);
+              .eq("id", existingPaymentRecord.id);
+
+            if (updateError) {
+              console.error("Failed to update payment with stripe_payment_intent_id:", updateError);
+            } else {
+              console.log("Updated payment", existingPaymentRecord.id, "with stripe_payment_intent_id:", session.payment_intent);
+            }
+          } else if (paymentLookupError) {
+            console.log("No existing payment record found for session:", session.id, paymentLookupError.message);
           }
+
+          // Get paymentId for notification (from lookup or metadata fallback)
+          const paymentId = existingPaymentRecord?.id || session.metadata?.payment_id;
 
           // Send booking pending notification emails
           try {

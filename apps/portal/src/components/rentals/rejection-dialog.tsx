@@ -3,9 +3,11 @@
 import { useState, useEffect } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Calendar } from "@/components/ui/calendar";
@@ -40,6 +42,7 @@ interface RejectionDialogProps {
       email?: string;
     };
     vehicle?: {
+      id?: string;
       make?: string;
       model?: string;
       reg?: string;
@@ -66,8 +69,10 @@ export default function RejectionDialog({
   const { tenant } = useTenant();
   const [activeTab, setActiveTab] = useState("reason");
   const [rejectionReason, setRejectionReason] = useState("");
-  const [refundTiming, setRefundTiming] = useState<"now" | "scheduled">("now");
+  const [refundTiming, setRefundTiming] = useState<"now" | "scheduled" | "manual">("now");
   const [scheduledDate, setScheduledDate] = useState<Date>();
+  const [manualRefundConfirmed, setManualRefundConfirmed] = useState(false);
+  const [manualPaymentIntentId, setManualPaymentIntentId] = useState("");
   const [selectedTemplateId, setSelectedTemplateId] = useState<string>("");
   const [renderedEmail, setRenderedEmail] = useState<{ subject: string; html: string } | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -75,23 +80,29 @@ export default function RejectionDialog({
 
   const isPaymentCaptured = payment?.capture_status === 'captured';
   const isPreAuth = payment?.capture_status === 'requires_capture';
+  const hasStripePaymentIntent = !!payment?.stripe_payment_intent_id;
+  const canProcessStripeRefund = isPaymentCaptured && hasStripePaymentIntent;
+  const showRefundTab = isPaymentCaptured && !isPreAuth; // Show refund tab for any captured payment
   const refundAmount = payment?.amount || 0;
 
-  // Fetch rejection email templates
+  // Fetch rejection email templates for this tenant
   const { data: templates } = useQuery({
-    queryKey: ['email-templates', 'rejection'],
+    queryKey: ['email-templates', 'rejection', tenant?.id],
     queryFn: async () => {
+      if (!tenant?.id) return [];
+
       const { data, error } = await supabase
         .from('email_templates')
         .select('*')
         .eq('category', 'rejection')
         .eq('is_active', true)
+        .eq('tenant_id', tenant.id)
         .order('name', { ascending: true });
 
       if (error) throw error;
       return data || [];
     },
-    enabled: open,
+    enabled: open && !!tenant?.id,
   });
 
   // Auto-select first template when templates load
@@ -101,7 +112,14 @@ export default function RejectionDialog({
     }
   }, [templates, selectedTemplateId]);
 
-  // Render email preview when template or reason changes
+  // Clear rendered email when leaving preview tab (ensures fresh render on return)
+  useEffect(() => {
+    if (activeTab !== 'preview') {
+      setRenderedEmail(null);
+    }
+  }, [activeTab]);
+
+  // Render email preview when entering preview tab or when dependencies change
   useEffect(() => {
     if (activeTab === 'preview' && selectedTemplateId) {
       renderEmailPreview();
@@ -170,38 +188,67 @@ export default function RejectionDialog({
         // Cancel pre-authorization
         const { error: cancelError } = await supabase.functions.invoke('cancel-booking-preauth', {
           body: {
-            paymentIntentId: payment?.stripe_payment_intent_id,
-            rentalId: rental.id,
+            paymentId: payment?.id,
+            tenantId: tenant?.id,
             reason: rejectionReason || 'Booking rejected by admin',
           }
         });
 
         if (cancelError) throw cancelError;
-      } else if (isPaymentCaptured && refundAmount > 0) {
-        // Process or schedule refund
-        if (refundTiming === 'now') {
-          // Immediate refund via process-refund function
-          const { error: refundError } = await supabase.functions.invoke('process-scheduled-refund', {
-            body: {
-              paymentId: payment?.id,
-              amount: refundAmount,
-              reason: rejectionReason || 'Booking rejected by admin',
-            }
-          });
+      } else if ((canProcessStripeRefund || manualPaymentIntentId.startsWith('pi_')) && refundAmount > 0 && refundTiming === 'now') {
+        // Process Stripe refund - either from existing payment intent or manually entered one
+        const paymentIntentId = hasStripePaymentIntent ? payment?.stripe_payment_intent_id : manualPaymentIntentId;
 
-          if (refundError) throw refundError;
-        } else if (refundTiming === 'scheduled' && scheduledDate) {
-          // Schedule refund via schedule-refund function
-          const { error: scheduleError } = await supabase.functions.invoke('schedule-refund', {
-            body: {
-              paymentId: payment?.id,
-              refundAmount,
-              scheduledDate: scheduledDate.toISOString(),
-              reason: rejectionReason || 'Booking rejected by admin',
-            }
-          });
+        // If using manual payment intent, first save it to the payment record
+        if (!hasStripePaymentIntent && manualPaymentIntentId && payment?.id) {
+          await supabase
+            .from('payments')
+            .update({
+              stripe_payment_intent_id: manualPaymentIntentId,
+              updated_at: new Date().toISOString(),
+            })
+            .eq('id', payment.id);
+        }
 
-          if (scheduleError) throw scheduleError;
+        // Process immediate refund
+        const { data: refundData, error: refundError } = await supabase.functions.invoke('process-scheduled-refund', {
+          body: {
+            paymentId: payment?.id,
+            paymentIntentId: paymentIntentId, // Pass the payment intent directly
+            amount: refundAmount,
+            reason: rejectionReason || 'Booking rejected by admin',
+            tenantId: tenant?.id,
+          }
+        });
+
+        if (refundError) throw refundError;
+        if (refundData && !refundData.success) throw new Error(refundData.error || 'Refund failed');
+      } else if (canProcessStripeRefund && refundAmount > 0 && refundTiming === 'scheduled' && scheduledDate) {
+        // Schedule refund via schedule-refund function
+        const { error: scheduleError } = await supabase.functions.invoke('schedule-refund', {
+          body: {
+            paymentId: payment?.id,
+            refundAmount,
+            scheduledDate: scheduledDate.toISOString(),
+            reason: rejectionReason || 'Booking rejected by admin',
+            tenantId: tenant?.id,
+          }
+        });
+
+        if (scheduleError) throw scheduleError;
+      } else if (isPaymentCaptured && !hasStripePaymentIntent && refundTiming === 'manual') {
+        // Payment captured but no Stripe payment intent - mark as pending manual refund
+        console.log('Payment captured without Stripe payment intent - marked for manual refund');
+        if (payment?.id) {
+          await supabase
+            .from('payments')
+            .update({
+              refund_status: 'pending_manual',
+              refund_reason: rejectionReason || 'Booking rejected - manual refund required',
+              refund_amount: refundAmount,
+              updated_at: new Date().toISOString(),
+            })
+            .eq('id', payment.id);
         }
       }
 
@@ -236,11 +283,11 @@ export default function RejectionDialog({
       if (rentalError) throw rentalError;
 
       // Step 3: Mark vehicle as available
-      if (rental.vehicle) {
+      if (rental.vehicle?.id) {
         let vehicleQuery = supabase
           .from('vehicles')
           .update({ status: 'Available' })
-          .eq('id', rental.vehicle);
+          .eq('id', rental.vehicle.id);
 
         if (tenant?.id) {
           vehicleQuery = vehicleQuery.eq('tenant_id', tenant.id);
@@ -249,53 +296,38 @@ export default function RejectionDialog({
         await vehicleQuery;
       }
 
-      // Step 4: Send rejection email
-      const template = templates?.find(t => t.id === selectedTemplateId);
-      if (template && rental.customer?.email) {
-        const variables = {
-          customerName: rental.customer?.name || 'Customer',
-          bookingRef: rental.id.substring(0, 8).toUpperCase(),
-          rejectionReason: rejectionReason || 'We were unable to verify all required information.',
-          refundAmount: refundAmount.toFixed(2),
-          vehicleName: `${rental.vehicle?.make} ${rental.vehicle?.model}` || 'Vehicle',
-          pickupDate: rental.start_date ? format(new Date(rental.start_date), 'MMMM dd, yyyy') : 'N/A',
-          returnDate: rental.end_date ? format(new Date(rental.end_date), 'MMMM dd, yyyy') : 'N/A',
-          totalAmount: rental.monthly_amount?.toFixed(2) || '0.00',
-        };
-
-        const { data: renderedData, error: renderError } = await supabase.functions.invoke('render-email-template', {
+      // Step 4: Send rejection email (use already-rendered email from preview)
+      if (rental.customer?.email && renderedEmail) {
+        await supabase.functions.invoke('notify-booking-rejected', {
           body: {
-            templateBody: template.body,
-            templateSubject: template.subject,
-            variables,
+            customerEmail: rental.customer.email,
+            customerName: rental.customer.name,
+            vehicleName: `${rental.vehicle?.make} ${rental.vehicle?.model}`,
+            bookingRef: rental.id.substring(0, 8).toUpperCase(),
+            rejectionReason: rejectionReason || 'We were unable to verify all required information.',
+            refundAmount: refundAmount,
+            emailSubject: renderedEmail.subject,
+            emailBody: renderedEmail.html,
+            tenantId: tenant?.id,
           }
+        }).catch(err => {
+          console.warn('Failed to send rejection email:', err);
         });
-
-        if (renderError) {
-          console.error('Email render error:', renderError);
-        } else {
-          // Send via notify-booking-rejected function
-          await supabase.functions.invoke('notify-booking-rejected', {
-            body: {
-              customerEmail: rental.customer.email,
-              customerName: rental.customer.name,
-              vehicleName: `${rental.vehicle?.make} ${rental.vehicle?.model}`,
-              bookingRef: rental.id.substring(0, 8).toUpperCase(),
-              rejectionReason: rejectionReason || 'We were unable to verify all required information.',
-              refundAmount: refundAmount,
-              emailSubject: renderedData.subject,
-              emailBody: renderedData.html,
-            }
-          }).catch(err => {
-            console.warn('Failed to send rejection email:', err);
-          });
-        }
       }
 
       // Success!
+      let successDescription = 'Booking has been rejected.';
+      if (refundTiming === 'scheduled') {
+        successDescription = 'Booking has been rejected and refund scheduled.';
+      } else if (refundTiming === 'manual') {
+        successDescription = 'Booking has been rejected. Manual refund of $' + refundAmount.toLocaleString() + ' is pending.';
+      } else if (canProcessStripeRefund && refundTiming === 'now') {
+        successDescription = 'Booking has been rejected and refund processed.';
+      }
+
       toast({
         title: "Booking Rejected",
-        description: `Booking has been rejected${refundTiming === 'scheduled' ? ' and refund scheduled' : ''}.`,
+        description: successDescription,
       });
 
       // Invalidate queries
@@ -321,6 +353,8 @@ export default function RejectionDialog({
     setRejectionReason("");
     setRefundTiming("now");
     setScheduledDate(undefined);
+    setManualRefundConfirmed(false);
+    setManualPaymentIntentId("");
     setSelectedTemplateId("");
     setRenderedEmail(null);
     onOpenChange(false);
@@ -329,8 +363,10 @@ export default function RejectionDialog({
   const canProceedToNextTab = () => {
     if (activeTab === "reason") return true; // Reason is optional
     if (activeTab === "refund") {
-      if (!isPaymentCaptured) return true; // Skip refund if not captured
       if (refundTiming === "scheduled" && !scheduledDate) return false;
+      if (refundTiming === "manual" && !manualRefundConfirmed) return false;
+      // For non-Stripe payments wanting automatic refund, require payment intent ID
+      if (!hasStripePaymentIntent && refundTiming === "now" && !manualPaymentIntentId.startsWith("pi_")) return false;
       return true;
     }
     if (activeTab === "template") return !!selectedTemplateId;
@@ -339,7 +375,7 @@ export default function RejectionDialog({
 
   const goToNextTab = () => {
     if (activeTab === "reason") {
-      if (isPaymentCaptured) {
+      if (showRefundTab) {
         setActiveTab("refund");
       } else {
         setActiveTab("template");
@@ -355,7 +391,7 @@ export default function RejectionDialog({
     if (activeTab === "preview") {
       setActiveTab("template");
     } else if (activeTab === "template") {
-      if (isPaymentCaptured) {
+      if (showRefundTab) {
         setActiveTab("refund");
       } else {
         setActiveTab("reason");
@@ -385,7 +421,7 @@ export default function RejectionDialog({
             </TabsTrigger>
             <TabsTrigger
               value="refund"
-              disabled={!isPaymentCaptured}
+              disabled={!showRefundTab}
               className="text-xs"
             >
               2. Refund
@@ -448,74 +484,171 @@ export default function RejectionDialog({
                 </p>
               </div>
 
-              <RadioGroup
-                value={refundTiming}
-                onValueChange={(value) => setRefundTiming(value as "now" | "scheduled")}
-              >
-                <div className="flex items-center space-x-2 border rounded-lg p-4 cursor-pointer hover:bg-gray-50">
-                  <RadioGroupItem value="now" id="now" />
-                  <Label htmlFor="now" className="cursor-pointer flex-1">
-                    <div className="font-medium">Refund Now</div>
-                    <div className="text-sm text-muted-foreground">
-                      Process the refund immediately via Stripe
+              {canProcessStripeRefund ? (
+                /* Stripe-linked payment - show automatic refund options */
+                <>
+                  <RadioGroup
+                    value={refundTiming}
+                    onValueChange={(value) => setRefundTiming(value as "now" | "scheduled" | "manual")}
+                  >
+                    <div className="flex items-center space-x-2 border rounded-lg p-4 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800">
+                      <RadioGroupItem value="now" id="now" />
+                      <Label htmlFor="now" className="cursor-pointer flex-1">
+                        <div className="font-medium">Refund Now</div>
+                        <div className="text-sm text-muted-foreground">
+                          Process the refund immediately via Stripe
+                        </div>
+                      </Label>
                     </div>
-                  </Label>
-                </div>
 
-                <div className="flex items-center space-x-2 border rounded-lg p-4 cursor-pointer hover:bg-gray-50">
-                  <RadioGroupItem value="scheduled" id="scheduled" />
-                  <Label htmlFor="scheduled" className="cursor-pointer flex-1">
-                    <div className="font-medium">Schedule Refund</div>
-                    <div className="text-sm text-muted-foreground">
-                      Schedule the refund for a future date (integrates with reminders)
+                    <div className="flex items-center space-x-2 border rounded-lg p-4 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800">
+                      <RadioGroupItem value="scheduled" id="scheduled" />
+                      <Label htmlFor="scheduled" className="cursor-pointer flex-1">
+                        <div className="font-medium">Schedule Refund</div>
+                        <div className="text-sm text-muted-foreground">
+                          Schedule the refund for a future date
+                        </div>
+                      </Label>
                     </div>
-                  </Label>
-                </div>
-              </RadioGroup>
+                  </RadioGroup>
 
-              {refundTiming === "scheduled" && (
-                <div className="space-y-2 pl-6">
-                  <Label>Refund Date</Label>
-                  <Popover>
-                    <PopoverTrigger asChild>
-                      <Button
-                        variant="outline"
-                        className={cn(
-                          "w-full justify-start text-left font-normal",
-                          !scheduledDate && "text-muted-foreground"
-                        )}
-                      >
-                        <CalendarIcon className="mr-2 h-4 w-4" />
-                        {scheduledDate ? format(scheduledDate, "PPP") : "Pick a date"}
-                      </Button>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-auto p-0" align="start">
-                      <Calendar
-                        mode="single"
-                        selected={scheduledDate}
-                        onSelect={setScheduledDate}
-                        disabled={(date) => date < new Date()}
-                        initialFocus
-                      />
-                    </PopoverContent>
-                  </Popover>
-                  {!scheduledDate && (
-                    <p className="text-xs text-red-500">
-                      Please select a refund date to continue
-                    </p>
+                  {refundTiming === "scheduled" && (
+                    <div className="space-y-2 pl-6">
+                      <Label>Refund Date</Label>
+                      <Popover>
+                        <PopoverTrigger asChild>
+                          <Button
+                            variant="outline"
+                            className={cn(
+                              "w-full justify-start text-left font-normal",
+                              !scheduledDate && "text-muted-foreground"
+                            )}
+                          >
+                            <CalendarIcon className="mr-2 h-4 w-4" />
+                            {scheduledDate ? format(scheduledDate, "PPP") : "Pick a date"}
+                          </Button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-auto p-0" align="start">
+                          <Calendar
+                            mode="single"
+                            selected={scheduledDate}
+                            onSelect={setScheduledDate}
+                            disabled={(date) => date < new Date()}
+                            initialFocus
+                          />
+                        </PopoverContent>
+                      </Popover>
+                      {!scheduledDate && (
+                        <p className="text-xs text-red-500">
+                          Please select a refund date to continue
+                        </p>
+                      )}
+                    </div>
                   )}
-                </div>
+
+                  <Alert>
+                    <AlertDescription className="text-sm">
+                      {refundTiming === "now" ? (
+                        <p>The refund will be processed immediately and typically appears in the customer's account within 5-10 business days.</p>
+                      ) : (
+                        <p>The refund will be scheduled and processed automatically on the selected date.</p>
+                      )}
+                    </AlertDescription>
+                  </Alert>
+                </>
+              ) : (
+                /* Non-Stripe payment - need to link payment intent */
+                <>
+                  <Alert className="border-blue-200 bg-blue-50 dark:bg-blue-950/30">
+                    <AlertTriangle className="h-4 w-4 text-blue-600" />
+                    <AlertDescription className="text-blue-800 dark:text-blue-200">
+                      <p className="font-medium mb-1">Link Stripe Payment for Automatic Refund</p>
+                      <p className="text-sm">
+                        This payment record is not linked to Stripe. To process an automatic refund,
+                        enter the Payment Intent ID from your Stripe Dashboard.
+                      </p>
+                    </AlertDescription>
+                  </Alert>
+
+                  <RadioGroup
+                    value={refundTiming}
+                    onValueChange={(value) => {
+                      setRefundTiming(value as "now" | "scheduled" | "manual");
+                      if (value !== "manual") setManualRefundConfirmed(false);
+                    }}
+                  >
+                    <div className="flex items-center space-x-2 border rounded-lg p-4 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800">
+                      <RadioGroupItem value="now" id="link-refund" />
+                      <Label htmlFor="link-refund" className="cursor-pointer flex-1">
+                        <div className="font-medium">Refund via Stripe</div>
+                        <div className="text-sm text-muted-foreground">
+                          Enter the Payment Intent ID from Stripe to process automatic refund
+                        </div>
+                      </Label>
+                    </div>
+
+                    <div className="flex items-center space-x-2 border rounded-lg p-4 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800">
+                      <RadioGroupItem value="manual" id="manual" />
+                      <Label htmlFor="manual" className="cursor-pointer flex-1">
+                        <div className="font-medium">I will process the refund manually</div>
+                        <div className="text-sm text-muted-foreground">
+                          Handle the refund outside this system (bank transfer, cash, etc.)
+                        </div>
+                      </Label>
+                    </div>
+                  </RadioGroup>
+
+                  {refundTiming === "now" && (
+                    <div className="space-y-3 pl-6 border-l-2 border-blue-400 ml-2">
+                      <div className="space-y-2">
+                        <Label htmlFor="payment-intent-id">Stripe Payment Intent ID</Label>
+                        <Input
+                          id="payment-intent-id"
+                          value={manualPaymentIntentId}
+                          onChange={(e) => setManualPaymentIntentId(e.target.value.trim())}
+                          placeholder="pi_xxxxxxxxxxxxxxxx"
+                          className="font-mono"
+                        />
+                        <p className="text-xs text-muted-foreground">
+                          Find this in Stripe Dashboard → Payments → Click on the payment → Copy the Payment Intent ID (starts with "pi_")
+                        </p>
+                      </div>
+                      {manualPaymentIntentId && !manualPaymentIntentId.startsWith("pi_") && (
+                        <p className="text-xs text-red-500">
+                          Payment Intent ID must start with "pi_"
+                        </p>
+                      )}
+                      {manualPaymentIntentId.startsWith("pi_") && (
+                        <Alert className="border-green-200 bg-green-50 dark:bg-green-950/30">
+                          <AlertDescription className="text-green-800 dark:text-green-200 text-sm">
+                            Refund of <strong>${refundAmount.toLocaleString()}</strong> will be processed automatically via Stripe.
+                          </AlertDescription>
+                        </Alert>
+                      )}
+                    </div>
+                  )}
+
+                  {refundTiming === "manual" && (
+                    <div className="space-y-3 pl-6 border-l-2 border-amber-400 ml-2">
+                      <div className="flex items-start space-x-3">
+                        <Checkbox
+                          id="manual-confirm"
+                          checked={manualRefundConfirmed}
+                          onCheckedChange={(checked) => setManualRefundConfirmed(checked === true)}
+                        />
+                        <Label htmlFor="manual-confirm" className="text-sm cursor-pointer">
+                          I confirm that I will process the refund of <strong>${refundAmount.toLocaleString()}</strong> manually.
+                        </Label>
+                      </div>
+                      {!manualRefundConfirmed && (
+                        <p className="text-xs text-red-500">
+                          Please confirm to continue
+                        </p>
+                      )}
+                    </div>
+                  )}
+                </>
               )}
-
-              <Alert>
-                <AlertDescription className="text-sm">
-                  {refundTiming === "now" ? (
-                    <p>The refund will be processed immediately and typically appears in the customer's account within 5-10 business days.</p>
-                  ) : (
-                    <p>The refund will be scheduled and processed automatically on the selected date. A reminder will be created for tracking.</p>
-                  )}
-                </AlertDescription>
-              </Alert>
             </div>
           </TabsContent>
 
@@ -570,10 +703,19 @@ export default function RejectionDialog({
                 </div>
               )}
 
+              {/* Show rejection reason preview */}
+              {rejectionReason && (
+                <div className="border rounded-lg p-4 bg-amber-50 border-amber-200">
+                  <h4 className="font-semibold text-sm mb-2 text-amber-800">Rejection Reason (will be included in email)</h4>
+                  <p className="text-sm text-amber-900">{rejectionReason}</p>
+                </div>
+              )}
+
               <Alert>
                 <Mail className="h-4 w-4" />
                 <AlertDescription>
-                  The email will be sent to <strong>{rental.customer?.email || 'customer email'}</strong> with your rejection reason included.
+                  The email will be sent to <strong>{rental.customer?.email || 'customer email'}</strong>
+                  {rejectionReason ? ' with the rejection reason shown above.' : ' with a default rejection message.'}
                 </AlertDescription>
               </Alert>
             </div>
@@ -587,6 +729,19 @@ export default function RejectionDialog({
               </div>
             ) : renderedEmail ? (
               <div className="space-y-4">
+                {/* Show what rejection reason is being used */}
+                <div className="border rounded-lg p-3 bg-amber-50 border-amber-200">
+                  <div className="flex items-start gap-2">
+                    <AlertTriangle className="h-4 w-4 text-amber-600 mt-0.5 flex-shrink-0" />
+                    <div className="text-sm">
+                      <span className="font-medium text-amber-800">Rejection Reason:</span>{' '}
+                      <span className="text-amber-900">
+                        {rejectionReason || 'We were unable to verify all required information. (default)'}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
                 <div>
                   <Label className="text-sm text-muted-foreground">Subject Line</Label>
                   <div className="border rounded-lg p-3 bg-muted/30 font-medium">
