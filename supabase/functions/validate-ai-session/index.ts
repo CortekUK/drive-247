@@ -51,6 +51,7 @@ serve(async (req) => {
       .from('identity_verifications')
       .select(`
         id,
+        session_id,
         status,
         review_status,
         qr_session_expires_at,
@@ -143,7 +144,7 @@ serve(async (req) => {
 
     const response: ValidateSessionResponse = {
       ok: true,
-      sessionId: verification.id,
+      sessionId: verification.session_id || verification.id, // Use session_id for consistency with desktop
       tenantSlug,
       tenantName,
       tenantLogo,

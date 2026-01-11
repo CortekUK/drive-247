@@ -9,6 +9,7 @@ interface CancelRefundParams {
   refundAmount?: number;
   reason: string;
   cancelledBy: string;
+  tenantId?: string;
 }
 
 interface CancelRefundResult {

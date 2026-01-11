@@ -62,6 +62,32 @@ export default function VerifyPage() {
   const [processingMessage, setProcessingMessage] = useState('');
   const [verificationResult, setVerificationResult] = useState<any>(null);
 
+  // Sync verification step to database for real-time updates on desktop
+  const syncStepToDatabase = useCallback(async (
+    newStep: string,
+    uploadProgress?: { document_front?: boolean; document_back?: boolean; selfie?: boolean }
+  ) => {
+    if (!sessionData?.sessionId) return;
+
+    try {
+      const updateData: any = {
+        verification_step: newStep,
+        updated_at: new Date().toISOString()
+      };
+
+      if (uploadProgress) {
+        updateData.upload_progress = uploadProgress;
+      }
+
+      await supabase
+        .from('identity_verifications')
+        .update(updateData)
+        .eq('session_id', sessionData.sessionId);
+    } catch (err) {
+      console.error('Failed to sync step:', err);
+    }
+  }, [sessionData?.sessionId]);
+
   // Validate session on mount
   useEffect(() => {
     if (token) {
@@ -76,6 +102,27 @@ export default function VerifyPage() {
     };
   }, []);
 
+  // Sync step changes to database for real-time desktop updates
+  useEffect(() => {
+    if (!sessionData?.sessionId) return;
+
+    // Map internal step to database step
+    const stepMap: Record<VerificationStep, string> = {
+      'loading': 'init',
+      'error': 'init',
+      'document-front': 'document_front',
+      'document-back': 'document_back',
+      'selfie': 'selfie',
+      'processing': 'processing',
+      'success': 'completed',
+      'failed': 'completed',
+      'review': 'completed'
+    };
+
+    const dbStep = stepMap[step] || step;
+    syncStepToDatabase(dbStep);
+  }, [step, sessionData?.sessionId, syncStepToDatabase]);
+
   const validateSession = async () => {
     try {
       const { data, error } = await supabase.functions.invoke('validate-ai-session', {
@@ -89,6 +136,20 @@ export default function VerifyPage() {
       }
 
       setSessionData(data);
+
+      // Mark QR as scanned in database immediately
+      try {
+        await supabase
+          .from('identity_verifications')
+          .update({
+            verification_step: 'qr_scanned',
+            updated_at: new Date().toISOString()
+          })
+          .eq('session_id', data.sessionId);
+      } catch (syncErr) {
+        console.error('Failed to sync QR scan:', syncErr);
+      }
+
       setStep('document-front');
     } catch (err) {
       console.error('Session validation error:', err);
@@ -199,12 +260,18 @@ export default function VerifyPage() {
     if (step === 'document-front') {
       setDocumentFrontImage(blob);
       setDocumentFrontPreview(previewUrl);
+      // Sync capture to database
+      syncStepToDatabase('document_front_captured', { document_front: true });
     } else if (step === 'document-back') {
       setDocumentBackImage(blob);
       setDocumentBackPreview(previewUrl);
+      // Sync capture to database
+      syncStepToDatabase('document_back_captured', { document_front: true, document_back: true });
     } else if (step === 'selfie') {
       setSelfieImage(blob);
       setSelfiePreview(previewUrl);
+      // Sync capture to database
+      syncStepToDatabase('selfie_captured', { document_front: true, document_back: !!documentBackImage, selfie: true });
     }
 
     stopCamera();
@@ -304,6 +371,9 @@ export default function VerifyPage() {
     setStep('processing');
     setProcessingMessage('Uploading documents...');
 
+    // Sync uploading state to database
+    syncStepToDatabase('uploading');
+
     try {
       const documentFrontPath = await uploadImage(documentFrontImage, 'document-front');
       if (!documentFrontPath) throw new Error('Failed to upload document');
@@ -319,6 +389,9 @@ export default function VerifyPage() {
       if (!selfiePath) throw new Error('Failed to upload selfie');
 
       setProcessingMessage('Verifying your identity...');
+      // Sync processing state to database
+      syncStepToDatabase('processing');
+
       const { data, error } = await supabase.functions.invoke('process-ai-verification', {
         body: { sessionId: sessionData.sessionId, documentFrontPath, documentBackPath, selfiePath }
       });

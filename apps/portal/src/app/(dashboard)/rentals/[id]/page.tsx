@@ -152,6 +152,43 @@ const RentalDetail = () => {
 
   const isKeyHandoverCompleted = !!keyHandoverStatus?.handed_at;
 
+  // Sync DB status to 'Active' if all conditions are met but DB status is still 'Pending'
+  // This handles edge cases where the status update might have failed
+  useEffect(() => {
+    const syncStatusToActive = async () => {
+      if (!rental || !tenant?.id) return;
+
+      // Check if rental should be Active but DB status is not
+      const shouldBeActive =
+        rental.status !== 'Active' &&
+        rental.status !== 'Closed' &&
+        rental.status !== 'Cancelled' &&
+        rental.approval_status === 'approved' &&
+        rental.payment_status === 'fulfilled' &&
+        isKeyHandoverCompleted;
+
+      if (shouldBeActive) {
+        console.log('Syncing rental status to Active (was:', rental.status, ')');
+        const { error } = await supabase
+          .from('rentals')
+          .update({ status: 'Active', updated_at: new Date().toISOString() })
+          .eq('id', rental.id)
+          .eq('tenant_id', tenant.id);
+
+        if (error) {
+          console.error('Failed to sync status:', error);
+        } else {
+          // Invalidate queries to refresh the data
+          queryClient.invalidateQueries({ queryKey: ['rental', rental.id] });
+          queryClient.invalidateQueries({ queryKey: ['rentals-list'] });
+          queryClient.invalidateQueries({ queryKey: ['enhanced-rentals'] });
+        }
+      }
+    };
+
+    syncStatusToActive();
+  }, [rental?.id, rental?.status, rental?.approval_status, rental?.payment_status, isKeyHandoverCompleted, tenant?.id]);
+
   // Fetch signed document if available
   const { data: signedDocument } = useQuery({
     queryKey: ["signed-document", rental?.signed_document_id],
@@ -640,7 +677,7 @@ const RentalDetail = () => {
         </div>
         <div className="flex gap-2">
           {/* Pending Rental - Show Approve, Reject, Delete buttons */}
-          {rental.status === 'Pending' && (
+          {displayStatus === 'Pending' && (
             <>
               <Button
                 variant="default"
@@ -669,7 +706,7 @@ const RentalDetail = () => {
           )}
 
           {/* Active Rental - Show Add Payment, Add Fine, Close, Cancel, Delete buttons */}
-          {rental.status === 'Active' && (
+          {displayStatus === 'Active' && (
             <>
               <Button variant="outline" onClick={() => setShowAddPayment(true)}>
                 <Plus className="h-4 w-4 mr-2" />
@@ -705,8 +742,8 @@ const RentalDetail = () => {
             </>
           )}
 
-          {/* Closed/Cancelled Rental - Show Delete button */}
-          {(rental.status === 'Closed' || rental.status === 'Cancelled') && (
+          {/* Closed/Cancelled/Rejected Rental - Show Delete button */}
+          {(displayStatus === 'Closed' || displayStatus === 'Cancelled' || displayStatus === 'Rejected') && (
             <Button
               variant="outline"
               className="text-destructive"
@@ -1128,20 +1165,42 @@ const RentalDetail = () => {
               <div className="space-y-4">
                 {insuranceDocuments.map((doc: any) => {
                   const validationScore = doc.ai_validation_score || 0;
+                  const confidenceScore = doc.ai_confidence_score || 0;
                   const extractedData = doc.ai_extracted_data || {};
+                  const verificationDecision = doc.verification_decision || extractedData?.verificationDecision;
+                  const reviewReasons = doc.review_reasons || extractedData?.reviewReasons || [];
+                  const fraudRiskScore = doc.fraud_risk_score ?? extractedData?.fraudRiskScore;
 
                   const getScoreColor = (score: number) => {
-                    if (score >= 0.7) return 'green';
-                    if (score >= 0.4) return 'yellow';
+                    if (score >= 0.85) return 'green';
+                    if (score >= 0.60) return 'yellow';
                     return 'red';
                   };
 
                   const getScoreLabel = (score: number) => {
-                    if (score >= 0.7) return 'Valid Document';
-                    if (score >= 0.4) return 'Review Required';
+                    if (score >= 0.85) return 'Verified';
+                    if (score >= 0.60) return 'Review Needed';
                     return 'Low Confidence';
                   };
 
+                  const getDecisionDisplay = (decision: string | undefined) => {
+                    switch (decision) {
+                      case 'auto_approved':
+                        return { label: 'Auto-Approved', color: 'bg-green-600', icon: CheckCircle };
+                      case 'auto_rejected':
+                        return { label: 'Rejected', color: 'bg-red-600', icon: XCircle };
+                      case 'pending_review':
+                        return { label: 'Pending Review', color: 'bg-yellow-600', icon: AlertTriangle };
+                      case 'manually_approved':
+                        return { label: 'Manually Approved', color: 'bg-green-600', icon: CheckCircle };
+                      case 'manually_rejected':
+                        return { label: 'Manually Rejected', color: 'bg-red-600', icon: XCircle };
+                      default:
+                        return null;
+                    }
+                  };
+
+                  const decisionDisplay = getDecisionDisplay(verificationDecision);
                   const scoreColor = getScoreColor(validationScore);
 
                   return (
@@ -1164,11 +1223,43 @@ const RentalDetail = () => {
                           {doc.isUnlinked && (
                             <Badge variant="outline" className="text-yellow-600 border-yellow-500">Unlinked</Badge>
                           )}
+                          {/* Verification Decision Badge */}
+                          {decisionDisplay && (
+                            <Badge className={decisionDisplay.color}>
+                              <decisionDisplay.icon className="h-3 w-3 mr-1" />
+                              {decisionDisplay.label}
+                            </Badge>
+                          )}
                         </div>
                         <span className="text-sm text-muted-foreground">
                           Uploaded: {doc.uploaded_at ? new Date(doc.uploaded_at).toLocaleDateString() : 'N/A'}
                         </span>
                       </div>
+
+                      {/* Fraud Risk Warning */}
+                      {fraudRiskScore !== undefined && fraudRiskScore >= 0.5 && (
+                        <Alert className="border-red-500/50 bg-red-500/10">
+                          <AlertTriangle className="h-4 w-4 text-red-600" />
+                          <AlertDescription className="text-sm text-red-700">
+                            <strong>High Fraud Risk ({Math.round(fraudRiskScore * 100)}%):</strong> This document has been flagged for additional verification.
+                          </AlertDescription>
+                        </Alert>
+                      )}
+
+                      {/* Review Reasons */}
+                      {reviewReasons && reviewReasons.length > 0 && (
+                        <Alert className="border-yellow-500/50 bg-yellow-500/10">
+                          <AlertTriangle className="h-4 w-4 text-yellow-600" />
+                          <AlertDescription className="text-sm">
+                            <strong className="text-yellow-700">Review Required:</strong>
+                            <ul className="list-disc list-inside mt-1 text-yellow-700">
+                              {reviewReasons.map((reason: string, i: number) => (
+                                <li key={i}>{reason}</li>
+                              ))}
+                            </ul>
+                          </AlertDescription>
+                        </Alert>
+                      )}
 
                       {/* Validation Score Card - similar to Face Match Score */}
                       {doc.ai_scan_status === 'completed' && doc.ai_validation_score !== null && (
@@ -1284,35 +1375,80 @@ const RentalDetail = () => {
                               <span className="font-medium">{extractedData.policyNumber}</span>
                             </div>
                           )}
-                          {extractedData.startDate && (
+                          {extractedData.policyHolderName && (
                             <div>
-                              <span className="text-muted-foreground">Start Date:</span>{' '}
-                              <span className="font-medium">{extractedData.startDate}</span>
+                              <span className="text-muted-foreground">Policy Holder:</span>{' '}
+                              <span className="font-medium">{extractedData.policyHolderName}</span>
                             </div>
                           )}
-                          {extractedData.endDate && (
+                          {extractedData.coverageType && (
                             <div>
-                              <span className="text-muted-foreground">End Date:</span>{' '}
-                              <span className="font-medium">{extractedData.endDate}</span>
+                              <span className="text-muted-foreground">Coverage Type:</span>{' '}
+                              <span className="font-medium">{extractedData.coverageType}</span>
                             </div>
                           )}
-                          {extractedData.coverageAmount && (
+                          {(extractedData.effectiveDate || extractedData.startDate) && (
                             <div>
-                              <span className="text-muted-foreground">Coverage:</span>{' '}
-                              <span className="font-medium">${extractedData.coverageAmount.toLocaleString()}</span>
+                              <span className="text-muted-foreground">Effective Date:</span>{' '}
+                              <span className="font-medium">{extractedData.effectiveDate || extractedData.startDate}</span>
+                            </div>
+                          )}
+                          {(extractedData.expirationDate || extractedData.endDate) && (
+                            <div className="flex items-center gap-1">
+                              <span className="text-muted-foreground">Expiration Date:</span>{' '}
+                              <span className="font-medium">{extractedData.expirationDate || extractedData.endDate}</span>
+                              {extractedData.isExpired && (
+                                <Badge variant="destructive" className="text-xs ml-1">EXPIRED</Badge>
+                              )}
+                            </div>
+                          )}
+                          {extractedData.documentType && (
+                            <div>
+                              <span className="text-muted-foreground">Document Type:</span>{' '}
+                              <span className="font-medium">{extractedData.documentType}</span>
+                            </div>
+                          )}
+                          {extractedData.coverageLimits?.liability && (
+                            <div>
+                              <span className="text-muted-foreground">Liability:</span>{' '}
+                              <span className="font-medium">${extractedData.coverageLimits.liability.toLocaleString()}</span>
+                            </div>
+                          )}
+                          {extractedData.coverageLimits?.collision && (
+                            <div>
+                              <span className="text-muted-foreground">Collision:</span>{' '}
+                              <span className="font-medium">${extractedData.coverageLimits.collision.toLocaleString()}</span>
+                            </div>
+                          )}
+                          {extractedData.coverageLimits?.comprehensive && (
+                            <div>
+                              <span className="text-muted-foreground">Comprehensive:</span>{' '}
+                              <span className="font-medium">${extractedData.coverageLimits.comprehensive.toLocaleString()}</span>
                             </div>
                           )}
                         </div>
-                        {doc.ai_confidence_score !== null && (
-                          <div className="text-xs text-muted-foreground pt-2 border-t">
-                            Extraction Confidence: {(doc.ai_confidence_score * 100).toFixed(0)}%
+                        {/* Confidence and validation notes */}
+                        <div className="flex items-center justify-between pt-2 border-t text-xs text-muted-foreground">
+                          {confidenceScore > 0 && (
+                            <span>Extraction Confidence: {Math.round(confidenceScore * 100)}%</span>
+                          )}
+                          {extractedData.isValidDocument !== undefined && (
+                            <span className={extractedData.isValidDocument ? 'text-green-600' : 'text-red-600'}>
+                              {extractedData.isValidDocument ? 'Valid Document' : 'Document Issues Detected'}
+                            </span>
+                          )}
+                        </div>
+                        {/* Validation Notes */}
+                        {extractedData.validationNotes && Array.isArray(extractedData.validationNotes) && extractedData.validationNotes.length > 0 && (
+                          <div className="text-xs text-muted-foreground pt-1">
+                            <span className="font-medium">Notes:</span> {extractedData.validationNotes.join(', ')}
                           </div>
                         )}
                       </div>
                     )}
 
                     {/* AI Scan Errors */}
-                    {doc.ai_scan_errors && doc.ai_scan_errors.length > 0 && (
+                    {doc.ai_scan_errors && Array.isArray(doc.ai_scan_errors) && doc.ai_scan_errors.length > 0 && (
                       <Alert variant="destructive">
                         <AlertTriangle className="h-4 w-4" />
                         <AlertDescription className="text-xs">
@@ -1829,6 +1965,16 @@ const RentalDetail = () => {
                     if (captureError) throw captureError;
                   }
 
+                  // Query DB directly for key handover status (don't rely on React Query cache)
+                  const { data: keyHandover } = await supabase
+                    .from('rental_key_handovers')
+                    .select('handed_at')
+                    .eq('rental_id', id)
+                    .eq('handover_type', 'giving')
+                    .maybeSingle();
+
+                  const keyHandoverDone = !!keyHandover?.handed_at;
+
                   // Update rental - only set to Active if key handover is also completed
                   const rentalUpdateData: any = {
                     approval_status: 'approved',
@@ -1837,7 +1983,7 @@ const RentalDetail = () => {
                   };
 
                   // Only set status to Active if key handover is completed
-                  if (isKeyHandoverCompleted) {
+                  if (keyHandoverDone) {
                     rentalUpdateData.status = 'Active';
                   }
 
@@ -1858,9 +2004,28 @@ const RentalDetail = () => {
                     }
                   }).catch(err => console.warn('Failed to send approval email:', err));
 
+                  // If rental became Active (key handover was already done), send rental started notification
+                  if (keyHandoverDone) {
+                    await supabase.functions.invoke('notify-rental-started', {
+                      body: {
+                        customerName: rental?.customers?.name,
+                        customerEmail: rental?.customers?.email,
+                        customerPhone: rental?.customers?.phone,
+                        vehicleName: `${rental?.vehicles?.make} ${rental?.vehicles?.model}`,
+                        vehicleReg: rental?.vehicles?.reg,
+                        vehicleMake: rental?.vehicles?.make,
+                        vehicleModel: rental?.vehicles?.model,
+                        bookingRef: id.substring(0, 8).toUpperCase(),
+                        startDate: rental?.start_date ? new Date(rental.start_date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : '',
+                        endDate: rental?.end_date ? new Date(rental.end_date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : '',
+                        tenantId: tenant?.id,
+                      }
+                    }).catch(err => console.warn('Failed to send rental started email:', err));
+                  }
+
                   toast({
                     title: "Booking Approved",
-                    description: isKeyHandoverCompleted
+                    description: keyHandoverDone
                       ? "Rental is now active and customer notified"
                       : "Booking approved. Rental will become active after key handover.",
                   });
@@ -1869,6 +2034,7 @@ const RentalDetail = () => {
                   queryClient.invalidateQueries({ queryKey: ['rentals-list'] });
                   queryClient.invalidateQueries({ queryKey: ['enhanced-rentals'] });
                   queryClient.invalidateQueries({ queryKey: ['rental-payment', id, tenant?.id] });
+                  queryClient.invalidateQueries({ queryKey: ['key-handover-status', id] });
                   setShowApproveDialog(false);
                 } catch (error: any) {
                   toast({
@@ -1981,77 +2147,14 @@ const RentalDetail = () => {
                 e.preventDefault();
                 setIsDeleting(true);
                 try {
-                  // Release vehicle if it was reserved
-                  if (rental?.vehicles?.id) {
-                    await supabase
-                      .from("vehicles")
-                      .update({ status: "Available" })
-                      .eq("id", rental.vehicles.id)
-                      .eq("tenant_id", tenant?.id);
-                  }
-
-                  // Delete related records first (to avoid foreign key constraints)
-                  // Include tenant_id for RLS policies
-
-                  // 1. Delete payment applications (get payment IDs first)
-                  const { data: payments } = await supabase
-                    .from("payments")
-                    .select("id")
-                    .eq("rental_id", id)
-                    .eq("tenant_id", tenant?.id);
-
-                  if (payments && payments.length > 0) {
-                    const paymentIds = payments.map(p => p.id);
-                    await supabase
-                      .from("payment_applications")
-                      .delete()
-                      .in("payment_id", paymentIds);
-                  }
-
-                  // 2. Delete payments
-                  await supabase
-                    .from("payments")
-                    .delete()
-                    .eq("rental_id", id)
-                    .eq("tenant_id", tenant?.id);
-
-                  // 3. Delete ledger entries
-                  await supabase
-                    .from("ledger_entries")
-                    .delete()
-                    .eq("rental_id", id)
-                    .eq("tenant_id", tenant?.id);
-
-                  // 4. Delete invoices
-                  await supabase
-                    .from("invoices")
-                    .delete()
-                    .eq("rental_id", id)
-                    .eq("tenant_id", tenant?.id);
-
-                  // 5. Delete fines
-                  await supabase
-                    .from("fines")
-                    .delete()
-                    .eq("rental_id", id)
-                    .eq("tenant_id", tenant?.id);
-
-                  // 6. Delete reminders
-                  await supabase
-                    .from("reminders")
-                    .delete()
-                    .eq("rental_id", id)
-                    .eq("tenant_id", tenant?.id);
-
-                  // 6. Finally delete the rental
-                  const { error: deleteError } = await supabase
-                    .from("rentals")
-                    .delete()
-                    .eq("id", id)
-                    .eq("tenant_id", tenant?.id);
+                  // Use the database function to delete rental and all related records
+                  const { error: deleteError } = await supabase.rpc("delete_rental_cascade", {
+                    rental_uuid: id,
+                  });
 
                   if (deleteError) {
-                    throw deleteError;
+                    console.error("Error deleting rental:", deleteError);
+                    throw new Error(`Failed to delete rental: ${deleteError.message}`);
                   }
 
                   toast({

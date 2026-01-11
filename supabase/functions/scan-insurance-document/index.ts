@@ -8,14 +8,57 @@ const corsHeaders = {
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
 };
 
-interface ExtractedData {
-  policyNumber: string | null;
+// GPT-5 model for better accuracy
+const AI_MODEL = 'gpt-5-2025-08-07';
+const OPENAI_API_URL = 'https://api.openai.com/v1/chat/completions';
+
+// Confidence thresholds for auto-decisions
+const THRESHOLDS = {
+  AUTO_APPROVE: 0.85,    // 85%+ = auto approve
+  NEEDS_REVIEW: 0.60,    // 60-85% = human review
+  AUTO_REJECT: 0.60      // <60% = request resubmission
+};
+
+/**
+ * Enhanced extracted data structure with industry-standard fields
+ */
+interface ExtractedInsuranceData {
+  // Core Fields
   provider: string | null;
-  startDate: string | null;
-  endDate: string | null;
-  coverageAmount: number | null;
-  isValid: boolean;
-  validationNotes: string;
+  policyNumber: string | null;
+  policyHolderName: string | null;
+
+  // Dates
+  effectiveDate: string | null;      // YYYY-MM-DD (renamed from startDate)
+  expirationDate: string | null;     // YYYY-MM-DD (renamed from endDate)
+
+  // Coverage Details
+  coverageType: string | null;       // "Comprehensive", "Liability", "Full Coverage", etc.
+  coverageLimits: {
+    liability: number | null;
+    collision: number | null;
+    comprehensive: number | null;
+  } | null;
+
+  // Validation Results
+  isValidDocument: boolean;
+  isExpired: boolean;
+
+  // Metadata
+  documentType: string;              // "Certificate", "Policy", "Declaration Page", "ID Card"
+  validationNotes: string[];
+  needsManualReview: boolean;
+  reviewReasons: string[];
+}
+
+/**
+ * Fraud detection results
+ */
+interface FraudCheckResult {
+  isExpired: boolean;
+  hasInconsistentDates: boolean;
+  suspiciousIndicators: string[];
+  fraudRiskScore: number;
 }
 
 serve(async (req) => {
@@ -31,7 +74,7 @@ serve(async (req) => {
     documentId = body.documentId;
     const fileUrl = body.fileUrl; // Optional - will be looked up from database if not provided
 
-    console.log('Starting AI scan for document:', documentId, 'fileUrl:', fileUrl);
+    console.log('[INSURANCE-AI] Starting scan for document:', documentId);
 
     if (!documentId) {
       throw new Error('Missing documentId');
@@ -48,23 +91,24 @@ serve(async (req) => {
       .update({ ai_scan_status: 'processing' })
       .eq('id', documentId);
 
-    console.log('Updated status to processing');
+    console.log('[INSURANCE-AI] Status updated to processing');
 
     // Get document record to find the actual file URL
     const { data: docRecord, error: docError } = await supabase
       .from('customer_documents')
-      .select('file_url, mime_type')
+      .select('file_url, mime_type, file_name')
       .eq('id', documentId)
       .single();
 
     if (docError) {
-      console.error('Document record error:', docError);
+      console.error('[INSURANCE-AI] Document record error:', docError);
       throw new Error(`Failed to get document record: ${docError.message}`);
     }
 
-    const actualFileUrl = docRecord?.file_url || fileUrl;
+    const actualFileUrl = fileUrl || docRecord?.file_url;
     const mimeType = docRecord?.mime_type || 'application/pdf';
-    console.log('File URL:', actualFileUrl, 'MIME type:', mimeType);
+    const fileName = docRecord?.file_name || 'unknown';
+    console.log('[INSURANCE-AI] Processing:', fileName, 'Type:', mimeType);
 
     // Download document from Supabase Storage
     const { data: fileData, error: downloadError } = await supabase.storage
@@ -72,7 +116,7 @@ serve(async (req) => {
       .download(actualFileUrl);
 
     if (downloadError) {
-      console.error('Download error:', JSON.stringify(downloadError));
+      console.error('[INSURANCE-AI] Download error:', JSON.stringify(downloadError));
       throw new Error(`Failed to download document: ${JSON.stringify(downloadError)}`);
     }
 
@@ -80,7 +124,7 @@ serve(async (req) => {
       throw new Error('No file data returned from storage');
     }
 
-    console.log('Document downloaded successfully, size:', fileData.size);
+    console.log('[INSURANCE-AI] Document downloaded, size:', fileData.size);
 
     const arrayBuffer = await fileData.arrayBuffer();
     const isPdf = mimeType === 'application/pdf' || actualFileUrl.toLowerCase().endsWith('.pdf');
@@ -89,7 +133,7 @@ serve(async (req) => {
 
     if (isPdf) {
       // Extract text from PDF using unpdf
-      console.log('Extracting text from PDF...');
+      console.log('[INSURANCE-AI] Extracting text from PDF...');
       try {
         const uint8Array = new Uint8Array(arrayBuffer);
         const pdf = await getDocumentProxy(uint8Array);
@@ -98,24 +142,28 @@ serve(async (req) => {
         const textPages: string[] = [];
         for (let i = 1; i <= pdf.numPages; i++) {
           const page = await pdf.getPage(i);
-          const textContent = await page.getTextContent();
-          const pageText = textContent.items
+          const content = await page.getTextContent();
+          const pageText = content.items
             .map((item: any) => item.str)
             .join(' ');
           textPages.push(pageText);
         }
         textContent = textPages.join('\n\n');
-        console.log('PDF text extracted, length:', textContent.length);
+        console.log('[INSURANCE-AI] PDF text extracted, length:', textContent.length);
       } catch (pdfError: any) {
-        console.error('PDF extraction error:', pdfError);
-        // If PDF extraction fails, mark for manual review
+        console.error('[INSURANCE-AI] PDF extraction error:', pdfError);
+        // If PDF extraction fails, mark for manual review with VALID status
         await supabase
           .from('customer_documents')
           .update({
-            ai_scan_status: 'needs_review',
+            ai_scan_status: 'pending', // Use valid status, not 'needs_review'
             ai_extracted_data: {
-              note: 'Could not extract text from PDF. Please verify manually.',
-              error: pdfError.message
+              needsManualReview: true,
+              reviewReasons: ['Could not extract text from PDF - manual verification required'],
+              validationNotes: ['PDF extraction failed: ' + pdfError.message],
+              isValidDocument: false,
+              isExpired: false,
+              documentType: 'Unknown'
             },
             ai_validation_score: 0.5,
             ai_confidence_score: 0.5,
@@ -127,176 +175,152 @@ serve(async (req) => {
           JSON.stringify({
             success: true,
             data: {
-              extractedData: { note: 'PDF extraction failed - manual review required' },
+              extractedData: { needsManualReview: true, reviewReasons: ['PDF extraction failed'] },
               validationScore: 0.5,
               confidenceScore: 0.5,
               requiresManualReview: true
             }
           }),
-          {
-            status: 200,
-            headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-          }
+          { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
       }
     }
 
-    // Get API key - prefer OpenRouter, fallback to OpenAI
-    const openrouterApiKey = Deno.env.get('OPENROUTER_API_KEY');
+    // Get OpenAI API key
     const openaiApiKey = Deno.env.get('OPENAI_API_KEY');
-
-    const apiKey = openrouterApiKey || openaiApiKey;
-    const apiBaseUrl = openrouterApiKey
-      ? 'https://openrouter.ai/api/v1/chat/completions'
-      : 'https://api.openai.com/v1/chat/completions';
-
-    if (!apiKey) {
-      throw new Error('No API key configured (OPENROUTER_API_KEY or OPENAI_API_KEY)');
+    if (!openaiApiKey) {
+      throw new Error('OPENAI_API_KEY not configured');
     }
+
+    // Build the AI prompt for comprehensive extraction
+    const systemPrompt = `You are an expert insurance document verification specialist. Your task is to:
+1. Verify if the document is a legitimate insurance document
+2. Extract all relevant policy information accurately
+3. Check for signs of document tampering or fraud
+4. Determine if the policy is currently valid (not expired)
+
+Be thorough but only extract data you are confident about. If unsure, use null.`;
+
+    const extractionPrompt = `Analyze this insurance document and extract information. Return ONLY valid JSON (no markdown, no code blocks):
+
+{
+  "provider": "Insurance company name or null",
+  "policyNumber": "Policy/Certificate number or null",
+  "policyHolderName": "Name of insured person/entity or null",
+  "effectiveDate": "YYYY-MM-DD start date or null",
+  "expirationDate": "YYYY-MM-DD end date or null",
+  "coverageType": "Type of coverage (Comprehensive, Liability, Full Coverage, etc.) or null",
+  "coverageLimits": {
+    "liability": numeric limit or null,
+    "collision": numeric limit or null,
+    "comprehensive": numeric limit or null
+  },
+  "isValidDocument": true if this appears to be a legitimate insurance document,
+  "isExpired": true if expiration date is in the past,
+  "documentType": "Certificate" | "Policy" | "Declaration Page" | "ID Card" | "Unknown",
+  "validationNotes": ["array of observations about the document"],
+  "needsManualReview": true if document quality is poor or data is unclear,
+  "reviewReasons": ["reasons why manual review is needed, if any"],
+  "suspiciousIndicators": ["any signs of tampering, inconsistency, or fraud"]
+}
+
+IMPORTANT:
+- Dates must be in YYYY-MM-DD format
+- Coverage amounts should be numbers without currency symbols
+- If the document is NOT an insurance document, set isValidDocument to false
+- Check if dates are logically consistent (expiration after effective date)
+- Flag any suspicious patterns or quality issues`;
 
     let openaiResponse;
 
     if (isPdf && textContent.length > 50) {
       // For PDFs with extracted text, use text-based analysis
-      console.log('Calling AI API with extracted PDF text...');
+      console.log('[INSURANCE-AI] Using GPT-5 text analysis...');
 
-      const headers: Record<string, string> = {
-        'Authorization': `Bearer ${apiKey}`,
-        'Content-Type': 'application/json',
-      };
-      if (openrouterApiKey) {
-        headers['HTTP-Referer'] = 'https://drive-247.com';
-        headers['X-Title'] = 'Drive247 Insurance Scanner';
-      }
-
-      const modelName = openrouterApiKey ? 'openai/gpt-4o' : 'gpt-4o';
-
-      openaiResponse = await fetch(apiBaseUrl, {
+      openaiResponse = await fetch(OPENAI_API_URL, {
         method: 'POST',
-        headers,
+        headers: {
+          'Authorization': `Bearer ${openaiApiKey}`,
+          'Content-Type': 'application/json',
+        },
         body: JSON.stringify({
-          model: modelName,
+          model: AI_MODEL,
           messages: [
-            {
-              role: 'system',
-              content: 'You are an expert at analyzing insurance documents. Extract structured information from the provided text accurately.'
-            },
-            {
-              role: 'user',
-              content: `Analyze this insurance document text and extract the following information. Return ONLY valid JSON without any markdown formatting or code blocks:
-{
-  "policyNumber": "string or null",
-  "provider": "string or null",
-  "startDate": "YYYY-MM-DD or null",
-  "endDate": "YYYY-MM-DD or null",
-  "coverageAmount": number or null,
-  "isValid": boolean,
-  "validationNotes": "string describing any issues or confirmations"
-}
-
-If any field cannot be determined, use null. Be strict and only extract data you are confident about.
-
-DOCUMENT TEXT:
-${textContent.substring(0, 15000)}`
-            }
+            { role: 'system', content: systemPrompt },
+            { role: 'user', content: `${extractionPrompt}\n\nDOCUMENT TEXT:\n${textContent.substring(0, 15000)}` }
           ],
-          max_tokens: 1000,
-          temperature: 0.2
+          max_completion_tokens: 2000,
+          temperature: 0.1
         })
       });
     } else {
       // For images, use Vision API
-      console.log('Calling AI Vision API with image...');
+      console.log('[INSURANCE-AI] Using GPT-5 Vision analysis...');
       const base64Data = btoa(String.fromCharCode(...new Uint8Array(arrayBuffer)));
 
-      const headers: Record<string, string> = {
-        'Authorization': `Bearer ${apiKey}`,
-        'Content-Type': 'application/json',
-      };
-      if (openrouterApiKey) {
-        headers['HTTP-Referer'] = 'https://drive-247.com';
-        headers['X-Title'] = 'Drive247 Insurance Scanner';
-      }
-
-      const modelName = openrouterApiKey ? 'openai/gpt-4o' : 'gpt-4o';
-
-      openaiResponse = await fetch(apiBaseUrl, {
+      openaiResponse = await fetch(OPENAI_API_URL, {
         method: 'POST',
-        headers,
+        headers: {
+          'Authorization': `Bearer ${openaiApiKey}`,
+          'Content-Type': 'application/json',
+        },
         body: JSON.stringify({
-          model: modelName,
+          model: AI_MODEL,
           messages: [
-            {
-              role: 'system',
-              content: 'You are an expert at analyzing insurance documents. Extract structured information from the provided document image accurately.'
-            },
+            { role: 'system', content: systemPrompt },
             {
               role: 'user',
               content: [
-                {
-                  type: 'text',
-                  text: `Analyze this insurance document and extract the following information. Return ONLY valid JSON without any markdown formatting or code blocks:
-{
-  "policyNumber": "string or null",
-  "provider": "string or null",
-  "startDate": "YYYY-MM-DD or null",
-  "endDate": "YYYY-MM-DD or null",
-  "coverageAmount": number or null,
-  "isValid": boolean,
-  "validationNotes": "string describing any issues or confirmations"
-}
-
-If any field cannot be determined, use null. Be strict and only extract data you are confident about.`
-                },
-                {
-                  type: 'image_url',
-                  image_url: {
-                    url: `data:${mimeType};base64,${base64Data}`
-                  }
-                }
+                { type: 'text', text: extractionPrompt },
+                { type: 'image_url', image_url: { url: `data:${mimeType};base64,${base64Data}` } }
               ]
             }
           ],
-          max_tokens: 1000,
-          temperature: 0.2
+          max_completion_tokens: 2000,
+          temperature: 0.1
         })
       });
     }
 
     if (!openaiResponse.ok) {
       const errorText = await openaiResponse.text();
-      console.error('OpenAI API error:', errorText);
+      console.error('[INSURANCE-AI] OpenAI API error:', errorText);
       throw new Error(`OpenAI API error: ${openaiResponse.status} - ${errorText}`);
     }
 
     const openaiData = await openaiResponse.json();
-    console.log('OpenAI response received');
-
     const aiResponseContent = openaiData.choices[0]?.message?.content;
+
     if (!aiResponseContent) {
       throw new Error('No content in OpenAI response');
     }
 
-    console.log('OpenAI raw response:', aiResponseContent.substring(0, 200));
+    console.log('[INSURANCE-AI] AI response received, parsing...');
 
     // Parse extracted JSON (remove any markdown formatting if present)
     const cleanedText = aiResponseContent.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
 
-    let extractedData: ExtractedData;
+    let extractedData: ExtractedInsuranceData;
     try {
       extractedData = JSON.parse(cleanedText);
     } catch (parseError) {
-      console.log('Could not parse AI response as JSON, marking for manual review');
+      console.log('[INSURANCE-AI] JSON parse failed, marking for manual review');
 
       await supabase
         .from('customer_documents')
         .update({
-          ai_scan_status: 'needs_review',
+          ai_scan_status: 'pending', // Use valid status
           ai_extracted_data: {
-            note: 'AI could not extract structured data from this document',
-            raw_response: aiResponseContent.substring(0, 500)
+            needsManualReview: true,
+            reviewReasons: ['AI could not extract structured data - manual verification required'],
+            validationNotes: ['Parse error - raw response logged'],
+            isValidDocument: false,
+            isExpired: false,
+            documentType: 'Unknown',
+            rawResponse: aiResponseContent.substring(0, 500)
           },
           ai_validation_score: 0,
+          ai_confidence_score: 0,
           scanned_at: new Date().toISOString()
         })
         .eq('id', documentId);
@@ -305,46 +329,75 @@ If any field cannot be determined, use null. Be strict and only extract data you
         JSON.stringify({
           success: true,
           data: {
-            extractedData: { note: 'Document requires manual review' },
+            extractedData: { needsManualReview: true },
             validationScore: 0,
             confidenceScore: 0,
             requiresManualReview: true
           }
         }),
-        {
-          status: 200,
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-        }
+        { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    console.log('Extracted data:', extractedData);
+    console.log('[INSURANCE-AI] Extracted data:', JSON.stringify(extractedData).substring(0, 200));
 
-    // Calculate validation score (0.0 - 1.0)
-    const validationScore = calculateValidationScore(extractedData);
-    console.log('Calculated validation score:', validationScore);
+    // Perform fraud checks
+    const fraudCheck = performFraudChecks(extractedData);
+    console.log('[INSURANCE-AI] Fraud check result:', fraudCheck);
 
-    // Default confidence score
-    const confidenceScore = 0.85;
+    // Calculate validation score
+    const validationScore = calculateValidationScore(extractedData, fraudCheck);
+    console.log('[INSURANCE-AI] Validation score:', validationScore);
 
-    // Update document with AI results
+    // Calculate confidence score based on data completeness
+    const confidenceScore = calculateConfidenceScore(extractedData);
+    console.log('[INSURANCE-AI] Confidence score:', confidenceScore);
+
+    // Determine verification decision based on thresholds
+    let verificationDecision: string;
+    if (validationScore >= THRESHOLDS.AUTO_APPROVE && !extractedData.needsManualReview && fraudCheck.fraudRiskScore < 0.3) {
+      verificationDecision = 'auto_approved';
+    } else if (validationScore < THRESHOLDS.AUTO_REJECT || fraudCheck.fraudRiskScore >= 0.7) {
+      verificationDecision = 'auto_rejected';
+    } else {
+      verificationDecision = 'pending_review';
+    }
+
+    // Add fraud indicators to review reasons
+    if (fraudCheck.suspiciousIndicators.length > 0) {
+      extractedData.reviewReasons = [
+        ...(extractedData.reviewReasons || []),
+        ...fraudCheck.suspiciousIndicators
+      ];
+      extractedData.needsManualReview = true;
+    }
+
+    // Update document with AI results - populate both JSON and dedicated columns
     const { error: updateError } = await supabase
       .from('customer_documents')
       .update({
         ai_scan_status: 'completed',
-        ai_extracted_data: extractedData,
+        ai_extracted_data: {
+          ...extractedData,
+          fraudRiskScore: fraudCheck.fraudRiskScore,
+          verificationDecision
+        },
         ai_confidence_score: confidenceScore,
         ai_validation_score: validationScore,
+        // Dedicated columns for better querying
+        verification_decision: verificationDecision,
+        review_reasons: extractedData.reviewReasons?.length > 0 ? extractedData.reviewReasons : null,
+        fraud_risk_score: fraudCheck.fraudRiskScore,
         scanned_at: new Date().toISOString()
       })
       .eq('id', documentId);
 
     if (updateError) {
-      console.error('Update error:', updateError);
+      console.error('[INSURANCE-AI] Update error:', updateError);
       throw updateError;
     }
 
-    console.log('Document updated successfully');
+    console.log('[INSURANCE-AI] Document scan completed successfully. Decision:', verificationDecision);
 
     return new Response(
       JSON.stringify({
@@ -352,19 +405,19 @@ If any field cannot be determined, use null. Be strict and only extract data you
         data: {
           extractedData,
           validationScore,
-          confidenceScore
+          confidenceScore,
+          verificationDecision,
+          fraudRiskScore: fraudCheck.fraudRiskScore,
+          requiresManualReview: extractedData.needsManualReview || verificationDecision === 'pending_review'
         }
       }),
-      {
-        status: 200,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-      }
+      { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
 
   } catch (error: any) {
-    console.error('AI scan error:', error.message || error);
+    console.error('[INSURANCE-AI] Scan error:', error.message || error);
 
-    // Try to update document with error status
+    // Update document with error status
     if (documentId) {
       try {
         const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
@@ -375,11 +428,16 @@ If any field cannot be determined, use null. Be strict and only extract data you
           .from('customer_documents')
           .update({
             ai_scan_status: 'failed',
-            ai_scan_errors: [error.message || 'Unknown error occurred']
+            ai_scan_errors: [error.message || 'Unknown error occurred'],
+            ai_extracted_data: {
+              needsManualReview: true,
+              reviewReasons: ['AI scan failed - manual verification required'],
+              error: error.message
+            }
           })
           .eq('id', documentId);
       } catch (updateError) {
-        console.error('Failed to update error status:', updateError);
+        console.error('[INSURANCE-AI] Failed to update error status:', updateError);
       }
     }
 
@@ -388,28 +446,89 @@ If any field cannot be determined, use null. Be strict and only extract data you
         success: false,
         error: error.message || 'AI scanning failed'
       }),
-      {
-        status: 500,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-      }
+      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   }
 });
 
 /**
+ * Perform basic fraud detection checks
+ */
+function performFraudChecks(data: ExtractedInsuranceData): FraudCheckResult {
+  const suspiciousIndicators: string[] = [];
+  let fraudRiskScore = 0;
+
+  // Check 1: Expired policy
+  const isExpired = data.isExpired || (data.expirationDate && new Date(data.expirationDate) < new Date());
+  if (isExpired) {
+    suspiciousIndicators.push('Policy appears to be expired');
+    fraudRiskScore += 0.3;
+  }
+
+  // Check 2: Inconsistent dates (expiration before effective)
+  let hasInconsistentDates = false;
+  if (data.effectiveDate && data.expirationDate) {
+    const effectiveDate = new Date(data.effectiveDate);
+    const expirationDate = new Date(data.expirationDate);
+    if (expirationDate <= effectiveDate) {
+      hasInconsistentDates = true;
+      suspiciousIndicators.push('Expiration date is before or same as effective date');
+      fraudRiskScore += 0.4;
+    }
+  }
+
+  // Check 3: Not a valid insurance document
+  if (!data.isValidDocument) {
+    suspiciousIndicators.push('Document does not appear to be a valid insurance document');
+    fraudRiskScore += 0.5;
+  }
+
+  // Check 4: Missing critical information
+  if (!data.policyNumber && !data.provider) {
+    suspiciousIndicators.push('Missing both policy number and provider - possibly incomplete or fake document');
+    fraudRiskScore += 0.3;
+  }
+
+  // Check 5: Any suspicious indicators from AI
+  if (data.validationNotes) {
+    const suspiciousNotes = data.validationNotes.filter(note =>
+      note.toLowerCase().includes('tamper') ||
+      note.toLowerCase().includes('alter') ||
+      note.toLowerCase().includes('suspicious') ||
+      note.toLowerCase().includes('fake') ||
+      note.toLowerCase().includes('invalid')
+    );
+    if (suspiciousNotes.length > 0) {
+      suspiciousIndicators.push(...suspiciousNotes);
+      fraudRiskScore += 0.2 * suspiciousNotes.length;
+    }
+  }
+
+  // Cap fraud risk score at 1.0
+  fraudRiskScore = Math.min(fraudRiskScore, 1.0);
+
+  return {
+    isExpired: isExpired || false,
+    hasInconsistentDates,
+    suspiciousIndicators,
+    fraudRiskScore: Math.round(fraudRiskScore * 100) / 100
+  };
+}
+
+/**
  * Calculate validation score based on data completeness and validity
  * Returns a score between 0.0 and 1.0
  */
-function calculateValidationScore(data: ExtractedData): number {
+function calculateValidationScore(data: ExtractedInsuranceData, fraudCheck: FraudCheckResult): number {
   let score = 0;
 
   const weights = {
-    policyNumber: 0.25,
-    provider: 0.15,
-    startDate: 0.2,
-    endDate: 0.2,
-    coverageAmount: 0.15,
-    isValid: 0.05
+    policyNumber: 0.25,        // Must have policy number
+    provider: 0.20,            // Must identify carrier
+    effectiveDate: 0.15,       // Must have start date
+    expirationDate: 0.25,      // Must have end date & not expired
+    coverageLimits: 0.10,      // Should have coverage amounts
+    isValidDocument: 0.05      // Document authenticity
   };
 
   // Policy number present
@@ -422,28 +541,64 @@ function calculateValidationScore(data: ExtractedData): number {
     score += weights.provider;
   }
 
-  // Start date present and valid
-  if (data.startDate && isValidDate(data.startDate)) {
-    score += weights.startDate;
+  // Effective date present and valid
+  if (data.effectiveDate && isValidDate(data.effectiveDate)) {
+    score += weights.effectiveDate;
   }
 
-  // End date present, valid, and in the future
-  if (data.endDate && isValidDate(data.endDate) && isFutureDate(data.endDate)) {
-    score += weights.endDate;
+  // Expiration date present, valid, and in the future
+  if (data.expirationDate && isValidDate(data.expirationDate) && isFutureDate(data.expirationDate)) {
+    score += weights.expirationDate;
   }
 
-  // Coverage amount present and reasonable
-  if (data.coverageAmount && data.coverageAmount > 0) {
-    score += weights.coverageAmount;
+  // Coverage limits present
+  if (data.coverageLimits) {
+    const hasAnyLimit = data.coverageLimits.liability || data.coverageLimits.collision || data.coverageLimits.comprehensive;
+    if (hasAnyLimit) {
+      score += weights.coverageLimits;
+    }
   }
 
   // Document marked as valid
-  if (data.isValid) {
-    score += weights.isValid;
+  if (data.isValidDocument) {
+    score += weights.isValidDocument;
   }
+
+  // Penalize for fraud indicators
+  score = score * (1 - fraudCheck.fraudRiskScore * 0.5);
 
   // Round to 2 decimal places
   return Math.round(score * 100) / 100;
+}
+
+/**
+ * Calculate confidence score based on how much data was extracted
+ */
+function calculateConfidenceScore(data: ExtractedInsuranceData): number {
+  let fieldsExtracted = 0;
+  const totalFields = 7;
+
+  if (data.provider) fieldsExtracted++;
+  if (data.policyNumber) fieldsExtracted++;
+  if (data.policyHolderName) fieldsExtracted++;
+  if (data.effectiveDate) fieldsExtracted++;
+  if (data.expirationDate) fieldsExtracted++;
+  if (data.coverageType) fieldsExtracted++;
+  if (data.coverageLimits && (data.coverageLimits.liability || data.coverageLimits.collision || data.coverageLimits.comprehensive)) {
+    fieldsExtracted++;
+  }
+
+  const baseConfidence = fieldsExtracted / totalFields;
+
+  // Boost confidence if document is valid
+  const validityBoost = data.isValidDocument ? 0.1 : 0;
+
+  // Reduce confidence if manual review needed
+  const reviewPenalty = data.needsManualReview ? 0.15 : 0;
+
+  const finalConfidence = Math.min(Math.max(baseConfidence + validityBoost - reviewPenalty, 0), 1);
+
+  return Math.round(finalConfidence * 100) / 100;
 }
 
 /**

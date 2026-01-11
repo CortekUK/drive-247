@@ -15,7 +15,10 @@ const PAGE_ORDER = ["home", "about", "fleet", "reviews", "promotions", "contact"
 
 export default function CMS() {
   const router = useRouter();
-  const { pages, isLoading } = useCMSPages();
+  const { pages, isLoading, error, tenant } = useCMSPages();
+
+  // Debug logging
+  console.log("CMS Debug:", { tenant: tenant?.slug, tenantId: tenant?.id, pagesCount: pages.length, error });
 
   // Sort pages according to navigation order
   const sortedPages = useMemo(() => {

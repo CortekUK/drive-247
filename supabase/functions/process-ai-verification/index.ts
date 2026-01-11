@@ -109,12 +109,15 @@ serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     );
 
-    // Verify the session exists and is pending
+    // Verify the session exists and is pending (query by session_id, not id)
     const { data: verification, error: verificationError } = await supabaseClient
       .from('identity_verifications')
       .select('id, customer_id, tenant_id, status')
-      .eq('id', sessionId)
+      .eq('session_id', sessionId)
       .single();
+
+    // Store the record ID for subsequent updates
+    const recordId = verification?.id;
 
     if (verificationError || !verification) {
       return new Response(
@@ -133,7 +136,7 @@ serve(async (req) => {
         status: 'processing',
         updated_at: new Date().toISOString()
       })
-      .eq('id', sessionId);
+      .eq('id', recordId);
 
     // Get public URLs for the images
     const bucket = 'customer-documents';
@@ -164,7 +167,7 @@ serve(async (req) => {
           ai_face_match_result: 'error',
           updated_at: new Date().toISOString()
         })
-        .eq('id', sessionId);
+        .eq('id', recordId);
 
       return new Response(
         JSON.stringify({
@@ -205,7 +208,7 @@ serve(async (req) => {
           selfie_image_url: selfieUrl,
           updated_at: new Date().toISOString()
         })
-        .eq('id', sessionId);
+        .eq('id', recordId);
 
       return new Response(
         JSON.stringify({
@@ -277,7 +280,7 @@ serve(async (req) => {
     await supabaseClient
       .from('identity_verifications')
       .update(updateData)
-      .eq('id', sessionId);
+      .eq('id', recordId);
 
     // Update customer status if customer_id exists
     if (verification.customer_id) {
@@ -317,7 +320,7 @@ serve(async (req) => {
             review_result: 'RED',
             rejection_reason: `Blocked identity: ${blockedCheck.reason}`
           })
-          .eq('id', sessionId);
+          .eq('id', recordId);
 
         if (verification.customer_id) {
           await supabaseClient

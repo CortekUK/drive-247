@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -25,6 +25,9 @@ export default function InsuranceUploadDialog({ open, onOpenChange, onUploadComp
   const [files, setFiles] = useState<File[]>([]);
   const [uploading, setUploading] = useState(false);
   const [dragActive, setDragActive] = useState(false);
+
+  // Ref for synchronous double-click prevention (state updates are async)
+  const isUploadingRef = useRef(false);
 
   const validateFile = (file: File): string | null => {
     if (!ALLOWED_TYPES.includes(file.type)) {
@@ -117,17 +120,28 @@ export default function InsuranceUploadDialog({ open, onOpenChange, onUploadComp
   };
 
   const handleUpload = async () => {
+    // GUARD: Prevent double-click using ref (synchronous check)
+    // State updates are async, so checking `uploading` state alone isn't enough
+    if (isUploadingRef.current) {
+      console.log('[INSURANCE-UPLOAD] Upload already in progress, ignoring duplicate click');
+      return;
+    }
+
     if (files.length === 0) {
       toast.error("Please select at least one file to upload");
       return;
     }
 
+    // Set ref immediately (synchronous) to block any subsequent clicks
+    isUploadingRef.current = true;
     setUploading(true);
+
     try {
-      // Get booking context from localStorage
-      const bookingContext = typeof window !== 'undefined'
-        ? JSON.parse(localStorage.getItem('booking_context') || '{}')
-        : {};
+      // Clear any stale pending docs from previous abandoned sessions
+      // This prevents accumulation of orphaned document references
+      if (typeof window !== 'undefined') {
+        localStorage.removeItem('pending_insurance_docs');
+      }
 
       const uploadedDocIds: string[] = [];
       const uploadedFilePaths: string[] = [];
@@ -223,60 +237,16 @@ export default function InsuranceUploadDialog({ open, onOpenChange, onUploadComp
         uploadedDocIds.push(docData.id);
         uploadedFilePaths.push(filePath);
 
-        // Trigger AI verification for this document
-        console.log('[INSURANCE-UPLOAD] Triggering AI verification for document:', docData.id);
-        try {
-          const verifyResponse = await fetch('/api/verify-insurance', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              documentId: docData.id,
-              fileUrl: filePath,
-              fileName: file.name,
-              mimeType: file.type
-            })
-          });
-
-          const verifyResult = await verifyResponse.json();
-          console.log('[INSURANCE-UPLOAD] AI Verification Result:', verifyResult);
-
-          if (verifyResult.status === 'rejected') {
-            console.log('[INSURANCE-UPLOAD] Document REJECTED:', verifyResult.rejectionReason);
-            // Show warning but don't block - let user proceed with manual review
-            toast.warning('Document requires review', {
-              duration: 6000,
-              description: 'Our team will verify your insurance document shortly.'
-            });
-            // Don't return - allow user to proceed, manual review will happen
-          } else if (verifyResult.status === 'approved') {
-            console.log('[INSURANCE-UPLOAD] Document APPROVED');
-            const extractedData = verifyResult.extractedData;
-            if (extractedData?.provider || extractedData?.policyNumber) {
-              toast.success('✓ Insurance Verified', {
-                duration: 5000,
-                description: `${extractedData.provider || 'Insurance'} • Policy: ${extractedData.policyNumber || 'Confirmed'}`
-              });
-            } else {
-              toast.success('✓ Insurance document verified!', { duration: 4000 });
-            }
-          } else {
-            console.log('[INSURANCE-UPLOAD] Document pending review');
-            toast.info('Document uploaded', {
-              duration: 4000,
-              description: 'Verification in progress...'
-            });
-          }
-        } catch (verifyError: unknown) {
-          console.error('[INSURANCE-UPLOAD] Verification API error:', verifyError);
-          // Continue anyway - manual review will be needed
-          toast.info('Document uploaded for review', { duration: 3000 });
-        }
+        console.log('[INSURANCE-UPLOAD] Document uploaded successfully:', docData.id);
+        // AI verification will be triggered via onUploadComplete callback
+        // which calls the scan-insurance-document edge function
       }
 
-      // Only show this if multiple files, otherwise the verification toast is enough
-      if (files.length > 1) {
-        toast.success(`${files.length} documents uploaded!`);
-      }
+      // Show upload success message
+      toast.success('Document uploaded', {
+        duration: 4000,
+        description: 'AI verification in progress...'
+      });
 
       // Return first document ID and file path for AI scanning
       onUploadComplete(uploadedDocIds[0], uploadedFilePaths[0]);
@@ -288,6 +258,8 @@ export default function InsuranceUploadDialog({ open, onOpenChange, onUploadComp
       console.error('Upload error:', error);
       toast.error(error.message || "Failed to upload documents");
     } finally {
+      // Reset both ref and state
+      isUploadingRef.current = false;
       setUploading(false);
     }
   };

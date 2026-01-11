@@ -6,14 +6,19 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { toast } from 'sonner';
 import {
-  QrCode,
   Clock,
   CheckCircle,
   RefreshCw,
   Smartphone,
   Loader2,
-  AlertCircle
+  AlertCircle,
+  Camera,
+  FileCheck,
+  User,
+  Upload,
+  Sparkles
 } from 'lucide-react';
+import { cn } from '@/lib/utils';
 
 interface AIVerificationQRProps {
   sessionId: string;
@@ -32,6 +37,39 @@ interface VerificationResult {
   ai_face_match_score?: number;
 }
 
+interface VerificationData {
+  status: string;
+  review_status: string | null;
+  review_result: string | null;
+  first_name: string | null;
+  last_name: string | null;
+  document_number: string | null;
+  ai_face_match_score: number | null;
+  verification_step: string | null;
+  upload_progress: {
+    document_front?: boolean;
+    document_back?: boolean;
+    selfie?: boolean;
+  } | null;
+  document_front_url: string | null;
+  selfie_image_url: string | null;
+}
+
+// Step configuration for display
+const STEP_CONFIG = {
+  init: { label: 'Waiting for scan', icon: Smartphone, progress: 0 },
+  qr_scanned: { label: 'QR Code scanned', icon: CheckCircle, progress: 10 },
+  document_front: { label: 'Capturing ID front', icon: Camera, progress: 20 },
+  document_front_captured: { label: 'ID front captured', icon: FileCheck, progress: 35 },
+  document_back: { label: 'Capturing ID back', icon: Camera, progress: 45 },
+  document_back_captured: { label: 'ID back captured', icon: FileCheck, progress: 55 },
+  selfie: { label: 'Taking selfie', icon: User, progress: 65 },
+  selfie_captured: { label: 'Selfie captured', icon: FileCheck, progress: 75 },
+  uploading: { label: 'Uploading images', icon: Upload, progress: 85 },
+  processing: { label: 'Verifying identity', icon: Sparkles, progress: 95 },
+  completed: { label: 'Verification complete', icon: CheckCircle, progress: 100 },
+};
+
 // Generate a real QR code URL using quickchart.io API
 function getQRCodeUrl(text: string, size: number = 300): string {
   return `https://quickchart.io/qr?text=${encodeURIComponent(text)}&size=${size}&margin=3&dark=000000&light=ffffff&ecLevel=M&format=png`;
@@ -46,12 +84,18 @@ export default function AIVerificationQR({
   onRetry
 }: AIVerificationQRProps) {
   const [timeRemaining, setTimeRemaining] = useState<number>(0);
-  const [status, setStatus] = useState<'pending' | 'checking' | 'verified' | 'expired' | 'failed'>('pending');
-  const [isPolling, setIsPolling] = useState(true);
-  const pollIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const [status, setStatus] = useState<'pending' | 'verified' | 'expired' | 'failed'>('pending');
+  const [currentStep, setCurrentStep] = useState<string>('init');
+  const [verificationData, setVerificationData] = useState<VerificationData | null>(null);
+  const subscriptionRef = useRef<any>(null);
+  const hasCalledOnVerified = useRef(false);
 
   // Generate QR code URL using external API for reliable scanning
   const qrCodeImageUrl = getQRCodeUrl(qrUrl, 300);
+
+  // Get step display info
+  const stepInfo = STEP_CONFIG[currentStep as keyof typeof STEP_CONFIG] || STEP_CONFIG.init;
+  const StepIcon = stepInfo.icon;
 
   // Calculate remaining time
   useEffect(() => {
@@ -63,7 +107,6 @@ export default function AIVerificationQR({
 
       if (remaining === 0 && status === 'pending') {
         setStatus('expired');
-        setIsPolling(false);
         onExpired();
       }
     };
@@ -74,66 +117,83 @@ export default function AIVerificationQR({
     return () => clearInterval(timer);
   }, [expiresAt, status, onExpired]);
 
-  // Poll for verification status
-  const checkStatus = useCallback(async () => {
-    if (!isPolling || status !== 'pending') return;
+  // Handle verification data changes
+  const handleVerificationUpdate = useCallback((data: VerificationData) => {
+    setVerificationData(data);
 
-    try {
-      setStatus('checking');
+    // Update current step
+    if (data.verification_step) {
+      setCurrentStep(data.verification_step);
+    }
 
+    // Check for completion
+    if (data.status === 'completed' && !hasCalledOnVerified.current) {
+      hasCalledOnVerified.current = true;
+
+      if (data.review_result === 'GREEN') {
+        setStatus('verified');
+        onVerified(data);
+        toast.success('Identity verified successfully!');
+      } else if (data.review_result === 'RED') {
+        setStatus('failed');
+        toast.error('Identity verification failed');
+      } else if (data.review_result === 'RETRY') {
+        // Manual review needed - still allow to proceed
+        setStatus('verified');
+        onVerified(data);
+        toast.info('Verification submitted for review');
+      }
+    }
+  }, [onVerified]);
+
+  // Set up Supabase Realtime subscription
+  useEffect(() => {
+    if (status !== 'pending') return;
+
+    // First, do an initial fetch to get current state
+    const fetchInitialState = async () => {
       const { data, error } = await supabase
         .from('identity_verifications')
-        .select('status, review_status, review_result, first_name, last_name, document_number, ai_face_match_score')
-        .eq('id', sessionId)
+        .select('status, review_status, review_result, first_name, last_name, document_number, ai_face_match_score, verification_step, upload_progress, document_front_url, selfie_image_url')
+        .eq('session_id', sessionId)
         .single();
 
-      if (error) {
-        console.error('Status check error:', error);
-        setStatus('pending');
-        return;
+      if (!error && data) {
+        handleVerificationUpdate(data as VerificationData);
       }
+    };
 
-      if (data.status === 'completed') {
-        setIsPolling(false);
+    fetchInitialState();
 
-        if (data.review_result === 'GREEN') {
-          setStatus('verified');
-          onVerified(data);
-          toast.success('Identity verified successfully!');
-        } else if (data.review_result === 'RED') {
-          setStatus('failed');
-          toast.error('Identity verification failed');
-        } else if (data.review_result === 'RETRY') {
-          setStatus('pending');
-          toast.info('Verification needs manual review');
-          onVerified(data); // Still notify parent
+    // Subscribe to realtime changes
+    const channel = supabase
+      .channel(`verification-${sessionId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'identity_verifications',
+          filter: `session_id=eq.${sessionId}`
+        },
+        (payload) => {
+          console.log('Realtime update received:', payload.new);
+          handleVerificationUpdate(payload.new as VerificationData);
         }
-      } else {
-        setStatus('pending');
+      )
+      .subscribe((status) => {
+        console.log('Realtime subscription status:', status);
+      });
+
+    subscriptionRef.current = channel;
+
+    // Cleanup subscription on unmount
+    return () => {
+      if (subscriptionRef.current) {
+        supabase.removeChannel(subscriptionRef.current);
       }
-    } catch (err) {
-      console.error('Status check error:', err);
-      setStatus('pending');
-    }
-  }, [sessionId, isPolling, status, onVerified]);
-
-  // Set up polling
-  useEffect(() => {
-    if (isPolling && status === 'pending') {
-      // Initial check after 5 seconds
-      const initialTimeout = setTimeout(checkStatus, 5000);
-
-      // Then poll every 3 seconds
-      pollIntervalRef.current = setInterval(checkStatus, 3000);
-
-      return () => {
-        clearTimeout(initialTimeout);
-        if (pollIntervalRef.current) {
-          clearInterval(pollIntervalRef.current);
-        }
-      };
-    }
-  }, [isPolling, status, checkStatus]);
+    };
+  }, [sessionId, status, handleVerificationUpdate]);
 
   // Format time remaining
   const formatTime = (seconds: number): string => {
@@ -141,6 +201,26 @@ export default function AIVerificationQR({
     const secs = seconds % 60;
     return `${mins}:${secs.toString().padStart(2, '0')}`;
   };
+
+  // Handle retry - properly cleanup and call parent
+  const handleRetry = useCallback(() => {
+    // Cleanup subscription
+    if (subscriptionRef.current) {
+      supabase.removeChannel(subscriptionRef.current);
+      subscriptionRef.current = null;
+    }
+
+    // Reset state
+    hasCalledOnVerified.current = false;
+    setStatus('pending');
+    setCurrentStep('init');
+    setVerificationData(null);
+
+    // Call parent retry handler
+    if (onRetry) {
+      onRetry();
+    }
+  }, [onRetry]);
 
   // Render expired state
   if (status === 'expired') {
@@ -154,12 +234,10 @@ export default function AIVerificationQR({
           </CardDescription>
         </CardHeader>
         <CardContent className="text-center">
-          {onRetry && (
-            <Button onClick={onRetry}>
-              <RefreshCw className="mr-2 h-4 w-4" />
-              Get New QR Code
-            </Button>
-          )}
+          <Button onClick={handleRetry}>
+            <RefreshCw className="mr-2 h-4 w-4" />
+            Get New QR Code
+          </Button>
         </CardContent>
       </Card>
     );
@@ -192,79 +270,165 @@ export default function AIVerificationQR({
           </CardDescription>
         </CardHeader>
         <CardContent className="text-center">
-          {onRetry && (
-            <Button onClick={onRetry} variant="outline">
-              <RefreshCw className="mr-2 h-4 w-4" />
-              Try Again
-            </Button>
-          )}
+          <Button onClick={handleRetry} variant="outline">
+            <RefreshCw className="mr-2 h-4 w-4" />
+            Try Again
+          </Button>
         </CardContent>
       </Card>
     );
   }
 
-  // Render QR code
+  // Check if user has scanned QR (any step beyond init)
+  const hasScanned = currentStep !== 'init';
+
+  // Render QR code with real-time progress
   return (
     <Card className="w-full max-w-md mx-auto">
       <CardHeader className="text-center pb-2">
         <div className="flex items-center justify-center gap-2 text-primary mb-2">
           <Smartphone className="h-5 w-5" />
-          <span className="text-sm font-medium">Scan with your phone</span>
+          <span className="text-sm font-medium">
+            {hasScanned ? 'Verification in progress' : 'Scan with your phone'}
+          </span>
         </div>
         <CardTitle className="text-lg">Identity Verification</CardTitle>
         <CardDescription>
-          Scan this QR code with your phone camera to verify your identity
+          {hasScanned
+            ? 'Complete the verification steps on your phone'
+            : 'Scan this QR code with your phone camera to verify your identity'
+          }
         </CardDescription>
       </CardHeader>
       <CardContent className="flex flex-col items-center">
-        {/* QR Code */}
-        <div className="relative bg-white p-4 rounded-lg shadow-sm mb-4">
-          <img
-            src={qrCodeImageUrl}
-            alt="Verification QR Code"
-            className="w-64 h-64"
-            style={{ imageRendering: 'pixelated' }}
-          />
+        {/* Show QR Code when not scanned, or show progress when scanned */}
+        {!hasScanned ? (
+          <>
+            {/* QR Code */}
+            <div className="relative bg-white p-4 rounded-lg shadow-sm mb-4">
+              <img
+                src={qrCodeImageUrl}
+                alt="Verification QR Code"
+                className="w-64 h-64"
+                style={{ imageRendering: 'pixelated' }}
+              />
+            </div>
 
-          {/* Status overlay when checking */}
-          {status === 'checking' && (
-            <div className="absolute inset-0 bg-white/80 flex items-center justify-center rounded-lg">
-              <div className="text-center">
-                <Loader2 className="h-8 w-8 animate-spin text-primary mx-auto mb-2" />
-                <p className="text-sm text-muted-foreground">Checking status...</p>
+            {/* Timer */}
+            <div className="flex items-center gap-2 text-sm text-muted-foreground mb-4">
+              <Clock className="h-4 w-4" />
+              <span>Expires in {formatTime(timeRemaining)}</span>
+            </div>
+
+            {/* Instructions */}
+            <div className="text-center text-sm text-muted-foreground space-y-2">
+              <p className="font-medium">How to verify:</p>
+              <ol className="text-left space-y-1 pl-4">
+                <li>1. Open your phone's camera</li>
+                <li>2. Point it at the QR code</li>
+                <li>3. Tap the link that appears</li>
+                <li>4. Follow the prompts to take photos</li>
+              </ol>
+            </div>
+
+            {/* Manual URL option */}
+            <details className="mt-4 w-full">
+              <summary className="text-xs text-muted-foreground cursor-pointer hover:text-foreground">
+                Can't scan? Click for manual link
+              </summary>
+              <div className="mt-2 p-2 bg-muted rounded text-xs break-all">
+                <a href={qrUrl} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">
+                  {qrUrl}
+                </a>
+              </div>
+            </details>
+          </>
+        ) : (
+          <>
+            {/* Real-time Progress Display */}
+            <div className="w-full space-y-6">
+              {/* Progress bar */}
+              <div className="w-full">
+                <div className="flex justify-between items-center mb-2">
+                  <span className="text-sm font-medium text-muted-foreground">Progress</span>
+                  <span className="text-sm font-medium text-primary">{stepInfo.progress}%</span>
+                </div>
+                <div className="w-full h-2 bg-muted rounded-full overflow-hidden">
+                  <div
+                    className="h-full bg-primary transition-all duration-500 ease-out rounded-full"
+                    style={{ width: `${stepInfo.progress}%` }}
+                  />
+                </div>
+              </div>
+
+              {/* Current step indicator */}
+              <div className="flex items-center justify-center gap-3 py-4 px-4 bg-muted/50 rounded-lg">
+                <div className={cn(
+                  "w-12 h-12 rounded-full flex items-center justify-center",
+                  currentStep === 'completed' ? 'bg-green-500/20' : 'bg-primary/20'
+                )}>
+                  {currentStep === 'uploading' || currentStep === 'processing' ? (
+                    <Loader2 className={cn(
+                      "h-6 w-6 animate-spin",
+                      currentStep === 'completed' ? 'text-green-500' : 'text-primary'
+                    )} />
+                  ) : (
+                    <StepIcon className={cn(
+                      "h-6 w-6",
+                      currentStep === 'completed' ? 'text-green-500' : 'text-primary'
+                    )} />
+                  )}
+                </div>
+                <div className="text-left">
+                  <p className="font-medium">{stepInfo.label}</p>
+                  <p className="text-sm text-muted-foreground">
+                    {currentStep === 'processing' ? 'This may take a few seconds...' : 'Continue on your phone'}
+                  </p>
+                </div>
+              </div>
+
+              {/* Step indicators */}
+              <div className="flex justify-between items-center px-2">
+                {[
+                  { key: 'qr_scanned', label: 'Scanned' },
+                  { key: 'document_front_captured', label: 'ID Front' },
+                  { key: 'selfie_captured', label: 'Selfie' },
+                  { key: 'completed', label: 'Done' }
+                ].map((s, index) => {
+                  const stepProgress = STEP_CONFIG[s.key as keyof typeof STEP_CONFIG]?.progress || 0;
+                  const isComplete = stepInfo.progress >= stepProgress;
+                  const isCurrent = currentStep === s.key ||
+                    (currentStep.includes(s.key.replace('_captured', '')) && !currentStep.includes('captured'));
+
+                  return (
+                    <div key={s.key} className="flex flex-col items-center">
+                      <div className={cn(
+                        "w-8 h-8 rounded-full flex items-center justify-center text-xs font-medium transition-all",
+                        isComplete ? 'bg-primary text-primary-foreground' :
+                        isCurrent ? 'bg-primary/20 text-primary border-2 border-primary' :
+                        'bg-muted text-muted-foreground'
+                      )}>
+                        {isComplete ? <CheckCircle className="h-4 w-4" /> : index + 1}
+                      </div>
+                      <span className={cn(
+                        "text-xs mt-1",
+                        isComplete ? 'text-primary font-medium' : 'text-muted-foreground'
+                      )}>
+                        {s.label}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Timer (still show while in progress) */}
+              <div className="flex items-center justify-center gap-2 text-sm text-muted-foreground">
+                <Clock className="h-4 w-4" />
+                <span>Session expires in {formatTime(timeRemaining)}</span>
               </div>
             </div>
-          )}
-        </div>
-
-        {/* Timer */}
-        <div className="flex items-center gap-2 text-sm text-muted-foreground mb-4">
-          <Clock className="h-4 w-4" />
-          <span>Expires in {formatTime(timeRemaining)}</span>
-        </div>
-
-        {/* Instructions */}
-        <div className="text-center text-sm text-muted-foreground space-y-2">
-          <p className="font-medium">How to verify:</p>
-          <ol className="text-left space-y-1 pl-4">
-            <li>1. Open your phone's camera</li>
-            <li>2. Point it at the QR code</li>
-            <li>3. Tap the link that appears</li>
-            <li>4. Follow the prompts to take photos</li>
-          </ol>
-        </div>
-
-        {/* Manual URL option */}
-        <details className="mt-4 w-full">
-          <summary className="text-xs text-muted-foreground cursor-pointer hover:text-foreground">
-            Can't scan? Click for manual link
-          </summary>
-          <div className="mt-2 p-2 bg-muted rounded text-xs break-all">
-            <a href={qrUrl} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">
-              {qrUrl}
-            </a>
-          </div>
-        </details>
+          </>
+        )}
       </CardContent>
     </Card>
   );

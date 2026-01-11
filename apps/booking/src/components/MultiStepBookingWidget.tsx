@@ -883,6 +883,11 @@ const MultiStepBookingWidget = () => {
       return;
     }
 
+    // Clear any existing session data first (important for retry functionality)
+    setAiSessionData(null);
+    setVerificationStatus('init');
+    setVerificationSessionId(null);
+
     setIsVerifying(true);
 
     try {

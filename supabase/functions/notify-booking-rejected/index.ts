@@ -22,6 +22,9 @@ interface NotifyRequest {
   returnDate?: string;
   reason?: string;
   tenantId?: string;
+  // Pre-rendered email (from rejection dialog preview)
+  emailSubject?: string;
+  emailBody?: string;
 }
 
 const getRejectionEmailHtml = (data: NotifyRequest) => `
@@ -161,11 +164,17 @@ serve(async (req) => {
       customerSMS: null as any,
     };
 
-    // Build customer email using template service if tenantId is provided
-    let customerSubject = `Booking Update - Reference: ${data.bookingRef} | DRIVE 247`;
-    let customerHtml = getRejectionEmailHtml(data);
+    // Build customer email - use pre-rendered if provided, otherwise render from template
+    let customerSubject: string;
+    let customerHtml: string;
 
-    if (data.tenantId) {
+    if (data.emailSubject && data.emailBody) {
+      // Use pre-rendered email from rejection dialog
+      customerSubject = data.emailSubject;
+      customerHtml = data.emailBody;
+      console.log('Using pre-rendered email from rejection dialog');
+    } else if (data.tenantId) {
+      // Render from template service
       try {
         const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
         const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
@@ -190,7 +199,13 @@ serve(async (req) => {
         console.log('Using custom/default email template for customer');
       } catch (templateError) {
         console.warn('Error rendering email template, using fallback:', templateError);
+        customerSubject = `Booking Update - Reference: ${data.bookingRef} | DRIVE 247`;
+        customerHtml = getRejectionEmailHtml(data);
       }
+    } else {
+      // Fallback to hardcoded template
+      customerSubject = `Booking Update - Reference: ${data.bookingRef} | DRIVE 247`;
+      customerHtml = getRejectionEmailHtml(data);
     }
 
     // Send customer email

@@ -17,6 +17,7 @@ interface CancelRequest {
   paymentId: string;
   rejectedBy?: string;
   reason?: string;
+  tenantId?: string;
 }
 
 serve(async (req) => {
@@ -32,11 +33,11 @@ serve(async (req) => {
     );
 
     const body: CancelRequest = await req.json();
-    const { paymentId, rejectedBy, reason } = body;
+    const { paymentId, rejectedBy, reason, tenantId: requestTenantId } = body;
 
     console.log("Cancelling pre-auth for payment:", paymentId);
 
-    // 1. Get payment details
+    // 1. Get payment details including tenant_id
     const { data: payment, error: paymentError } = await supabase
       .from("payments")
       .select(
@@ -60,7 +61,26 @@ serve(async (req) => {
       );
     }
 
-    // 2. Check if payment can be cancelled
+    // 2. Get tenant's Stripe Connect account (if configured)
+    const tenantId = requestTenantId || payment.tenant_id;
+    let stripeAccountId: string | null = null;
+
+    if (tenantId) {
+      const { data: tenant } = await supabase
+        .from("tenants")
+        .select("stripe_account_id, stripe_onboarding_complete")
+        .eq("id", tenantId)
+        .single();
+
+      if (tenant?.stripe_account_id && tenant?.stripe_onboarding_complete) {
+        stripeAccountId = tenant.stripe_account_id;
+        console.log("Using Stripe Connect account:", stripeAccountId);
+      } else {
+        console.log("No Stripe Connect account configured for tenant:", tenantId);
+      }
+    }
+
+    // 3. Check if payment can be cancelled
     if (
       payment.capture_status &&
       payment.capture_status !== "requires_capture"
@@ -77,14 +97,18 @@ serve(async (req) => {
       );
     }
 
-    // 3. Get the Stripe checkout session to find the PaymentIntent
+    // Stripe options for Connect account (if applicable)
+    const stripeOptions = stripeAccountId ? { stripeAccount: stripeAccountId } : undefined;
+
+    // 4. Get the Stripe checkout session to find the PaymentIntent
     let paymentIntentId = payment.stripe_payment_intent_id;
 
     if (!paymentIntentId && payment.stripe_checkout_session_id) {
       // Retrieve PaymentIntent from checkout session
       try {
         const session = await stripe.checkout.sessions.retrieve(
-          payment.stripe_checkout_session_id
+          payment.stripe_checkout_session_id,
+          stripeOptions
         );
         paymentIntentId = session.payment_intent as string;
       } catch (sessionError) {
@@ -92,18 +116,20 @@ serve(async (req) => {
       }
     }
 
-    // 4. Cancel the PaymentIntent in Stripe (if exists)
+    // 5. Cancel the PaymentIntent in Stripe (if exists)
     if (paymentIntentId) {
-      console.log("Cancelling Stripe payment intent:", paymentIntentId);
+      console.log("Cancelling Stripe payment intent:", paymentIntentId, stripeAccountId ? `(Connect: ${stripeAccountId})` : '');
       try {
         const cancelledPaymentIntent = await stripe.paymentIntents.cancel(
-          paymentIntentId
+          paymentIntentId,
+          undefined,
+          stripeOptions
         );
         console.log(
           "Stripe payment intent cancelled:",
           cancelledPaymentIntent.status
         );
-      } catch (stripeError) {
+      } catch (stripeError: any) {
         // If already cancelled or expired, that's fine
         if (
           stripeError.code !== "payment_intent_unexpected_state" &&
@@ -115,7 +141,7 @@ serve(async (req) => {
       }
     }
 
-    // 5. Update payment record
+    // 6. Update payment record
     const { error: updatePaymentError } = await supabase
       .from("payments")
       .update({
@@ -133,7 +159,7 @@ serve(async (req) => {
       console.error("Failed to update payment:", updatePaymentError);
     }
 
-    // 6. Update rental status to Cancelled
+    // 7. Update rental status to Cancelled
     if (payment.rental_id) {
       const { error: rentalUpdateError } = await supabase
         .from("rentals")
@@ -147,7 +173,7 @@ serve(async (req) => {
         console.error("Failed to update rental:", rentalUpdateError);
       }
 
-      // 7. Ensure vehicle stays Available (it should already be)
+      // 8. Ensure vehicle stays Available (it should already be)
       if (payment.rental?.vehicle_id) {
         const { error: vehicleUpdateError } = await supabase
           .from("vehicles")
@@ -163,7 +189,7 @@ serve(async (req) => {
       }
     }
 
-    // 8. Cancel any unpaid charges for this rental
+    // 9. Cancel any unpaid charges for this rental
     if (payment.rental_id) {
       const { error: chargeUpdateError } = await supabase
         .from("charges")

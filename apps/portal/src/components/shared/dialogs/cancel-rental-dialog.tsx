@@ -14,6 +14,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { useCancelRental } from "@/hooks/use-cancel-rental";
 import { useAuth } from "@/stores/auth-store";
+import { useTenant } from "@/contexts/TenantContext";
 import { AlertTriangle, Loader2 } from "lucide-react";
 
 interface CancelRentalDialogProps {
@@ -40,6 +41,7 @@ export function CancelRentalDialog({
   payment,
 }: CancelRentalDialogProps) {
   const { user } = useAuth();
+  const { tenant } = useTenant();
   const cancelRental = useCancelRental();
 
   const [refundType, setRefundType] = useState<"full" | "partial" | "none">("full");
@@ -61,6 +63,7 @@ export function CancelRentalDialog({
       refundAmount: refundType === "partial" ? parseFloat(refundAmount) : undefined,
       reason: reason.trim(),
       cancelledBy: user?.id || "unknown",
+      tenantId: tenant?.id,
     };
 
     await cancelRental.mutateAsync(params);
