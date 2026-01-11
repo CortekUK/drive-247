@@ -85,13 +85,13 @@ export class NotificationService {
   }
 
   /**
-   * Create in-app notifications for multiple users
+   * Create in-app notifications for multiple users with deduplication
    * @param userIds Array of user IDs
    * @param title Notification title
    * @param message Notification message
    * @param type Notification type
    * @param link Optional link
-   * @param metadata Optional metadata
+   * @param metadata Optional metadata - if contains rental_id, used for deduplication
    */
   async createBulkInAppNotifications(
     userIds: string[],
@@ -102,6 +102,29 @@ export class NotificationService {
     metadata?: Record<string, any>,
     tenantId?: string
   ): Promise<void> {
+    // Deduplication: Check if notifications already exist for this rental_id or payment_id
+    const dedupeKey = metadata?.rental_id || metadata?.payment_id;
+    if (dedupeKey && tenantId) {
+      try {
+        // Check for existing notifications with the same type and rental/payment ID
+        const { data: existing } = await supabase
+          .from("notifications")
+          .select("id, user_id")
+          .eq("tenant_id", tenantId)
+          .eq("type", type)
+          .contains("metadata", { rental_id: dedupeKey })
+          .limit(1);
+
+        if (existing && existing.length > 0) {
+          console.log(`Skipping duplicate notifications for ${type} with key ${dedupeKey} - already exists`);
+          return;
+        }
+      } catch (dedupeErr) {
+        // If deduplication check fails, proceed with creation
+        console.warn("Deduplication check failed, proceeding:", dedupeErr);
+      }
+    }
+
     const notifications = userIds.map((userId) => ({
       user_id: userId,
       title,
