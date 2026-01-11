@@ -683,13 +683,15 @@ const RentalDetail = () => {
                 variant="default"
                 className="bg-green-600 hover:bg-green-700"
                 onClick={handleApproveClick}
+                disabled={rental.approval_status === 'approved'}
               >
                 <Check className="h-4 w-4 mr-2" />
-                Approve
+                {rental.approval_status === 'approved' ? 'Approved' : 'Approve'}
               </Button>
               <Button
                 variant="destructive"
                 onClick={() => setShowRejectionDialog(true)}
+                disabled={rental.approval_status === 'approved'}
               >
                 <Ban className="h-4 w-4 mr-2" />
                 Reject

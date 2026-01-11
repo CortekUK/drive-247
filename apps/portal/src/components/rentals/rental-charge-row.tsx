@@ -31,7 +31,9 @@ export const RentalChargeRow = ({ charge }: RentalChargeRowProps) => {
   return (
     <TableRow className="hover:bg-muted/50">
       <TableCell className="font-medium">
-        {formatInTimeZone(new Date(charge.entry_date), 'Europe/London', "dd MMM yyyy")}
+        {charge.rental_start_date
+          ? formatInTimeZone(new Date(charge.rental_start_date), 'Europe/London', "dd MMM yyyy")
+          : '-'}
       </TableCell>
       <TableCell>{charge.category}</TableCell>
       <TableCell>

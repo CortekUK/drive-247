@@ -6,7 +6,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { supabase } from "@/integrations/supabase/client";
-import { useTenant } from "@/contexts/TenantContext";
 import { toast } from "sonner";
 import { Upload, FileText, X, Loader2, AlertCircle } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -21,13 +20,21 @@ const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
 const ALLOWED_TYPES = ['application/pdf', 'image/jpeg', 'image/jpg', 'image/png'];
 
 export default function InsuranceUploadDialog({ open, onOpenChange, onUploadComplete }: Props) {
-  const { tenant } = useTenant();
   const [files, setFiles] = useState<File[]>([]);
   const [uploading, setUploading] = useState(false);
   const [dragActive, setDragActive] = useState(false);
 
   // Ref for synchronous double-click prevention (state updates are async)
   const isUploadingRef = useRef(false);
+
+  /**
+   * Handle cancel - just close the dialog, no cleanup needed
+   * since we only store files in storage (not DB) until checkout
+   */
+  const handleCancel = () => {
+    setFiles([]);
+    onOpenChange(false);
+  };
 
   const validateFile = (file: File): string | null => {
     if (!ALLOWED_TYPES.includes(file.type)) {
@@ -137,22 +144,16 @@ export default function InsuranceUploadDialog({ open, onOpenChange, onUploadComp
     setUploading(true);
 
     try {
-      // Clear any stale pending docs from previous abandoned sessions
-      // This prevents accumulation of orphaned document references
-      if (typeof window !== 'undefined') {
-        localStorage.removeItem('pending_insurance_docs');
-      }
-
-      const uploadedDocIds: string[] = [];
       const uploadedFilePaths: string[] = [];
 
-      // Upload each file
+      // Upload each file to storage only - NO database writes
+      // Customer and document records will be created at checkout
       for (const file of files) {
         const fileName = `${Date.now()}-${file.name.replace(/[^a-zA-Z0-9.-]/g, '_')}`;
         const filePath = `insurance/${fileName}`;
 
         // Upload to Supabase Storage
-        const { data: uploadData, error: uploadError } = await supabase.storage
+        const { error: uploadError } = await supabase.storage
           .from('customer-documents')
           .upload(filePath, file, {
             cacheControl: '3600',
@@ -164,92 +165,33 @@ export default function InsuranceUploadDialog({ open, onOpenChange, onUploadComp
           throw new Error(`Failed to upload ${file.name}: ${uploadError.message}`);
         }
 
-        // Get public URL
-        const { data: { publicUrl } } = supabase.storage
-          .from('customer-documents')
-          .getPublicUrl(filePath);
-
-        // Create a temporary customer record for the insurance document
-        // This will be linked to the actual customer when booking is created
-        // Use unique email to avoid duplicate constraint violations
-        const uniqueEmail = `pending-${Date.now()}-${Math.random().toString(36).substring(7)}@temp.booking`;
-        const customerData: any = {
-          name: 'Pending Booking',
-          email: uniqueEmail,
-          phone: '0000000000',
-          type: 'Individual'
-        };
-
-        if (tenant?.id) {
-          customerData.tenant_id = tenant.id;
-        }
-
-        const { data: tempCustomer, error: customerError } = await supabase
-          .from('customers')
-          .insert(customerData)
-          .select()
-          .single();
-
-        if (customerError) {
-          console.error('Error creating temp customer:', customerError);
-          throw new Error(`Failed to create temporary record: ${customerError.message}`);
-        }
-
-        // Create customer_documents record with temp customer
-        const docInsertData: any = {
-          customer_id: tempCustomer.id,
-          document_type: 'Insurance Certificate',
-          document_name: file.name,
-          file_url: filePath,
+        // Store file metadata in localStorage for later use at checkout
+        // No temp customer or document records are created in the database
+        const pendingFileInfo = {
+          file_path: filePath,
           file_name: file.name,
           file_size: file.size,
           mime_type: file.type,
-          ai_scan_status: 'pending',
           uploaded_at: new Date().toISOString()
         };
+        const existingFiles = JSON.parse(localStorage.getItem('pending_insurance_files') || '[]');
+        existingFiles.push(pendingFileInfo);
+        localStorage.setItem('pending_insurance_files', JSON.stringify(existingFiles));
 
-        if (tenant?.id) {
-          docInsertData.tenant_id = tenant.id;
-        }
-
-        const { data: docData, error: docError } = await supabase
-          .from('customer_documents')
-          .insert(docInsertData)
-          .select()
-          .single();
-
-        if (docError) {
-          console.error('Database error:', docError);
-          throw new Error(`Failed to save document record: ${docError.message}`);
-        }
-
-        // Store the temp customer ID and document ID in localStorage
-        // so we can link them to the real customer later
-        const tempDocInfo = {
-          temp_customer_id: tempCustomer.id,
-          document_id: docData.id,
-          file_url: filePath
-        };
-        const existingDocs = JSON.parse(localStorage.getItem('pending_insurance_docs') || '[]');
-        existingDocs.push(tempDocInfo);
-        localStorage.setItem('pending_insurance_docs', JSON.stringify(existingDocs));
-
-        uploadedDocIds.push(docData.id);
         uploadedFilePaths.push(filePath);
 
-        console.log('[INSURANCE-UPLOAD] Document uploaded successfully:', docData.id);
-        // AI verification will be triggered via onUploadComplete callback
-        // which calls the scan-insurance-document edge function
+        console.log('[INSURANCE-UPLOAD] File uploaded to storage:', filePath);
       }
 
       // Show upload success message
       toast.success('Document uploaded', {
         duration: 4000,
-        description: 'AI verification in progress...'
+        description: 'Document will be linked to your booking at checkout.'
       });
 
-      // Return first document ID and file path for AI scanning
-      onUploadComplete(uploadedDocIds[0], uploadedFilePaths[0]);
+      // Return file path (no document ID since we haven't created the record yet)
+      // The parent component can use this for preview or AI scanning
+      onUploadComplete('pending', uploadedFilePaths[0]);
 
       // Reset state
       setFiles([]);
@@ -348,7 +290,7 @@ export default function InsuranceUploadDialog({ open, onOpenChange, onUploadComp
           <div className="flex gap-3 pt-4">
             <Button
               variant="outline"
-              onClick={() => onOpenChange(false)}
+              onClick={handleCancel}
               disabled={uploading}
               className="flex-1"
             >
