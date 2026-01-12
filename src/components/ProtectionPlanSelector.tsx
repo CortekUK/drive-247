@@ -50,6 +50,104 @@ const TierIcon = ({ tier, className }: { tier: string; className?: string }) => 
   }
 };
 
+// Fallback protection plans when database has no plans
+const FALLBACK_PLANS: ProtectionPlan[] = [
+  {
+    id: 'basic',
+    name: 'basic',
+    display_name: 'Basic Protection',
+    description: 'Essential collision coverage for peace of mind during the rental period. Covers physical damages to the rental vehicle when there is an accident with another vehicle. Primary Insurance for accidents between vehicles.',
+    price_per_day: 30,
+    price_per_week: 180,
+    price_per_month: 700,
+    deductible_amount: 1000,
+    max_coverage_amount: 35000,
+    tier: 'basic',
+    features: [
+      'Collision Damage Warranty',
+      'Up to $35,000 in Collision Damage Coverage',
+      'Maximum Coverage: $35,000 / $25,000',
+    ],
+    exclusions: [
+      '24/7 Roadside Assistance',
+      'Theft Protection',
+      'Basic Third-Party Liability',
+      'Non-rental vehicle damage',
+      'Personal belongings',
+      'Interior damage',
+      'Off-road use',
+      'Mechanical issues, theft, vandalism, single car accidents',
+      'Commercial use (Uber, Lyft, DoorDash)',
+    ],
+    coverage_details: {},
+    icon_name: 'shield',
+    color_theme: '#60A5FA',
+    display_order: 1,
+  },
+  {
+    id: 'standard',
+    name: 'standard',
+    display_name: 'Standard Protection',
+    description: 'Collision and Liability coverage for worry-free travel',
+    price_per_day: 50,
+    price_per_week: 300,
+    price_per_month: 1100,
+    deductible_amount: 1000,
+    max_coverage_amount: 50000,
+    tier: 'standard',
+    features: [
+      '$1,000 Collision / $0 Liability Deductible',
+      'Up to $35,000 in Collision Damage Coverage',
+      'State minimum liability coverage',
+      'Third-Party liability coverage when you are at fault in an accident',
+    ],
+    exclusions: [
+      '24/7 Premium Roadside Assistance',
+      'Comprehensive Theft Protection',
+      'Windshield & Glass Coverage',
+      'Personal belongings',
+      'Off-road use',
+      'DUI incidents',
+      'Commercial use (Uber, Lyft, DoorDash)',
+    ],
+    coverage_details: {},
+    icon_name: 'shield-check',
+    color_theme: '#22C55E',
+    display_order: 2,
+  },
+  {
+    id: 'premium',
+    name: 'premium',
+    display_name: 'Premium Protection + SLI',
+    description: 'Top-tier protection with zero deductible, maximum coverage limits, and Supplemental Liability Insurance up to $1,000,000',
+    price_per_day: 80,
+    price_per_week: 480,
+    price_per_month: 1800,
+    deductible_amount: 0,
+    max_coverage_amount: 1000000,
+    tier: 'premium',
+    features: [
+      'Zero Deductible Coverage',
+      'Supplemental Liability Insurance (SLI) - Up to $1,000,000',
+      'Covers third-party bodily injury & property damage claims',
+      'VIP 24/7 Concierge Roadside',
+      'Comprehensive Theft Protection',
+      'Complete Glass Coverage',
+      'Personal Effects Coverage',
+      'Interior Protection',
+    ],
+    exclusions: [
+      'Off-road use',
+      'DUI incidents',
+      'Racing or competitive events',
+    ],
+    coverage_details: {},
+    icon_name: 'crown',
+    color_theme: '#F59E0B',
+    display_order: 3,
+  },
+];
+
 const ProtectionPlanSelector = ({ selectedPlanId, onSelectPlan, rentalDays }: ProtectionPlanSelectorProps) => {
   const [plans, setPlans] = useState<ProtectionPlan[]>([]);
   const [loading, setLoading] = useState(true);
@@ -68,9 +166,12 @@ const ProtectionPlanSelector = ({ selectedPlanId, onSelectPlan, rentalDays }: Pr
         .order("display_order", { ascending: true });
 
       if (error) throw error;
-      setPlans(data || []);
+      // Use fallback plans if no plans found in database
+      setPlans(data && data.length > 0 ? data : FALLBACK_PLANS);
     } catch (error) {
       console.error("Error loading protection plans:", error);
+      // Use fallback plans on error
+      setPlans(FALLBACK_PLANS);
     } finally {
       setLoading(false);
     }
