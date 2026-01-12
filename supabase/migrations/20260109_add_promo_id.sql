@@ -1,0 +1,1 @@
+ALTER TABLE public.promocodes ADD COLUMN IF NOT EXISTS promo_id INTEGER DEFAULT 1;

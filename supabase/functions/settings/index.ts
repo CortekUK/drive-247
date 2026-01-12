@@ -182,6 +182,12 @@ serve(async (req) => {
         });
       }
 
+  // Use appUser.tenant_id as fallback if settings don't have tenant_id
+  // For super admins (who have null tenant_id), try to get tenant from org_id lookup
+  let auditTenantId = tenantId || appUser.tenant_id;
+      
+  // If still no tenant_id (super admin case), try to find a tenant by org_id
+>>>>>>> 00f2a14 (audit logs fixed)
       // ✨ 2. Get the authenticated user and app_user (MOVED HERE - BEFORE validation)
       const authHeader = req.headers.get('Authorization');
       if (!authHeader) {
@@ -312,11 +318,7 @@ serve(async (req) => {
         tenantId = data.tenant_id || appUser.tenant_id;
       }
 
-      // Use appUser.tenant_id as fallback if settings don't have tenant_id
-      // For super admins (who have null tenant_id), try to get tenant from org_id lookup
-      let auditTenantId = tenantId || appUser.tenant_id;
-      
-      // If still no tenant_id (super admin case), try to find a tenant by org_id
+  // If still no tenant_id (super admin case), try to find a tenant by org_id
       if (!auditTenantId && updatedSettings?.org_id) {
         console.log('🔍 No tenant_id, trying to find tenant by org_id:', updatedSettings.org_id);
         const { data: orgTenant } = await serviceClient
@@ -334,6 +336,7 @@ serve(async (req) => {
       if (!auditTenantId && appUser.is_super_admin) {
         auditTenantId = 'ffbc48dc-a264-47cc-9ae1-2cd4f400b662'; // Drive 247 tenant
         console.log('🔍 Using default Drive 247 tenant for super admin');
+      }
       }
 
       // Create audit log entry using service client (bypasses RLS)

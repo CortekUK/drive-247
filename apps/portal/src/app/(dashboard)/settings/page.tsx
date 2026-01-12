@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { supabase } from '@/integrations/supabase/client';
@@ -14,10 +14,15 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
-import { Settings as SettingsIcon, Building2, Bell, Zap, Upload, Save, Loader2, Database, AlertTriangle, Trash2, CreditCard, Palette, Link2, CheckCircle2, AlertCircle, ExternalLink, MapPin, FileText, Car, Mail, ShieldX } from 'lucide-react';
+import { Calendar } from '@/components/ui/calendar';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { format } from 'date-fns';
+import { Calendar as CalendarIcon, Settings as SettingsIcon, Building2, Bell, Zap, Upload, Save, Loader2, Database, AlertTriangle, Trash2, CreditCard, Palette, Link2, CheckCircle2, AlertCircle, ExternalLink, MapPin, FileText, Car, Mail, ShieldX, FilePenLine } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
 import { useOrgSettings } from '@/hooks/use-org-settings';
 import { useTenantBranding } from '@/hooks/use-tenant-branding';
+import { useTenant } from '@/contexts/TenantContext';
 import { useRentalSettings } from '@/hooks/use-rental-settings';
 import { LogoUploadWithResize } from '@/components/settings/logo-upload-with-resize';
 import { FaviconUpload } from '@/components/settings/favicon-upload';
@@ -49,6 +54,9 @@ const Settings = () => {
     updateBranding: updateOrgBranding,
     isUpdating
   } = useOrgSettings();
+
+  // Get tenant context for ID
+  const { tenant } = useTenant();
 
   // Use tenant branding hook for multi-tenant branding updates
   const {
@@ -177,6 +185,272 @@ const Settings = () => {
       return data;
     },
   });
+
+  // Promo Code State
+  const [promoForm, setPromoForm] = useState({
+    name: '',
+    code: '',
+    promo_id: 1,
+    type: 'percentage',
+    value: '',
+    created_at: new Date(),
+    expires_at: new Date(new Date().setMonth(new Date().getMonth() + 1)),
+    max_users: '',
+  });
+
+  // Fetch Promo Codes (moved up for use in generator)
+  const { data: promoCodes, isLoading: isLoadingPromos, refetch: refetchPromos } = useQuery({
+    queryKey: ['promocodes'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('promocodes')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (error) {
+        console.error('Error fetching promocodes:', error);
+        return [];
+      }
+      return data || [];
+    },
+  });
+
+  // Generate promo code based on new logic: {promo_id}{name_3chars}{value}
+  const generatePromoCode = useCallback(() => {
+    if (!promoForm.name || !promoForm.value) return;
+
+    // 1. Get first 3 chars of name (or less)
+    const namePart = promoForm.name.substring(0, 3).toUpperCase().replace(/[^A-Z0-9]/g, '');
+    const valPart = promoForm.value; // Percentage or value amount
+
+    // 2. Loop to find unique ID
+    let currentId = 1;
+    let uniqueCode = '';
+
+    // Create a set of existing codes for fast lookup
+    const existingCodes = new Set(promoCodes?.map((p: any) => p.code) || []);
+
+    while (true) {
+      // Logic: {promo_id}{namePart}{valPart}
+      // Example: 1SUM10, 2SUM10, etc.
+      const candidateCode = `${currentId}${namePart}${valPart}`;
+
+      if (!existingCodes.has(candidateCode)) {
+        uniqueCode = candidateCode;
+        break;
+      }
+      currentId++;
+      // Safety break to prevent infinite loops (unlikely but good practice)
+      if (currentId > 10000) break;
+    }
+
+    setPromoForm(prev => ({
+      ...prev,
+      code: uniqueCode,
+      promo_id: currentId
+    }));
+  }, [promoForm.name, promoForm.value, promoCodes]);
+
+  // Auto-generate code when relevant fields change
+  useEffect(() => {
+    generatePromoCode();
+  }, [promoForm.name, promoForm.value, promoCodes, generatePromoCode]);
+
+  // Create Promo Code Mutation
+  const createPromoMutation = useMutation({
+    mutationFn: async (newPromo: typeof promoForm) => {
+      if (!tenant?.id) throw new Error('Tenant ID not found');
+
+      const { data, error } = await supabase
+        .from('promocodes')
+        .insert({
+          name: newPromo.name,
+          code: newPromo.code,
+          promo_id: newPromo.promo_id,
+          type: newPromo.type,
+          value: parseFloat(newPromo.value),
+          created_at: format(newPromo.created_at, 'yyyy-MM-dd'),
+          expires_at: format(newPromo.expires_at, 'yyyy-MM-dd'),
+          max_users: parseInt(newPromo.max_users) || 1,
+          tenant_id: tenant.id
+        })
+        .select();
+
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => {
+      toast({
+        title: "Success",
+        description: "Promo code created successfully",
+      });
+      // Reset form
+      setPromoForm({
+        name: '',
+        code: '',
+        promo_id: 1, // Reset logic handled by generator anyway
+        type: 'percentage',
+        value: '',
+        created_at: new Date(),
+        expires_at: new Date(new Date().setMonth(new Date().getMonth() + 1)),
+        max_users: '',
+      });
+      // generatePromoCode(); // useEffect will trigger this
+      refetchPromos();
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to create promo code",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const handleCreatePromo = () => {
+    if (!promoForm.name || !promoForm.value || !promoForm.max_users) {
+      toast({
+        title: "Validation Error",
+        description: "Please fill in all required fields",
+        variant: "destructive",
+      });
+      return;
+    }
+    createPromoMutation.mutate(promoForm);
+  };
+
+  // Edit & Delete State
+  const [editingPromo, setEditingPromo] = useState<any>(null);
+  const [deletingPromo, setDeletingPromo] = useState<any>(null);
+
+  // Regenerate Code on Edit
+  const regenerateEditCode = useCallback(() => {
+    if (!editingPromo?.name || !editingPromo?.value) return;
+
+    // Use same generator logic
+    const namePart = editingPromo.name.substring(0, 3).toUpperCase().replace(/[^A-Z0-9]/g, '');
+    const valPart = editingPromo.value;
+
+    // Existing codes WITHOUT the current one (normally we'd exclude current ID, but logic below finds new slot anyway)
+    // Actually, we must exclude the current promo's *original* code from the "taken" list if we want to allow it to keep its spot 
+    // IF the code hasn't changed pattern. But here we assume pattern matches.
+    // Simpler: Just check all other promos.
+    const otherPromos = promoCodes?.filter((p: any) => p.id !== editingPromo.id) || [];
+    const existingCodes = new Set(otherPromos.map((p: any) => p.code));
+
+    let currentId = 1;
+    let uniqueCode = '';
+
+    while (true) {
+      const candidateCode = `${currentId}${namePart}${valPart}`;
+      if (!existingCodes.has(candidateCode)) {
+        uniqueCode = candidateCode;
+        break;
+      }
+      currentId++;
+      if (currentId > 10000) break;
+    }
+
+    // Only update if changed prevents infinite loops and unnecessary renders
+    if (editingPromo.code !== uniqueCode || editingPromo.promo_id !== currentId) {
+      setEditingPromo((prev: any) => ({
+        ...prev,
+        code: uniqueCode,
+        promo_id: currentId
+      }));
+    }
+  }, [editingPromo?.name, editingPromo?.value, promoCodes, editingPromo?.id]);
+
+  // Effect to trigger regeneration on edit field changes
+  useEffect(() => {
+    if (editingPromo) {
+      // Debounce or just check strict equality? 
+      // We need to avoid infinite loop where setEditingPromo triggers this effect again.
+      // The dependency array includes name/value. setEditingPromo updates code/id, so safe.
+      regenerateEditCode();
+    }
+  }, [editingPromo?.name, editingPromo?.value, regenerateEditCode]);
+
+  // Update Promo Mutation
+  const updatePromoMutation = useMutation({
+    mutationFn: async (updatedPromo: any) => {
+      if (!tenant?.id) throw new Error('Tenant ID not found');
+
+      const { data, error } = await supabase
+        .from('promocodes')
+        .update({
+          name: updatedPromo.name,
+          code: updatedPromo.code,         // Update code
+          promo_id: updatedPromo.promo_id, // Update promo_id
+          type: updatedPromo.type,
+          value: parseFloat(updatedPromo.value),
+          expires_at: format(new Date(updatedPromo.expires_at), 'yyyy-MM-dd'),
+          max_users: parseInt(updatedPromo.max_users) || 1
+        })
+        .eq('id', updatedPromo.id)
+        .select();
+
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => {
+      toast({
+        title: "Success",
+        description: "Promo code updated successfully",
+      });
+      setEditingPromo(null);
+      refetchPromos();
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to update promo code",
+        variant: "destructive",
+      });
+    },
+  });
+
+  // Delete Promo Mutation
+  const deletePromoMutation = useMutation({
+    mutationFn: async (id: string) => {
+      if (!tenant?.id) throw new Error('Tenant ID not found');
+
+      const { error } = await supabase
+        .from('promocodes')
+        .delete()
+        .eq('id', id);
+
+      if (error) throw error;
+      return id;
+    },
+    onSuccess: () => {
+      toast({
+        title: "Success",
+        description: "Promo code deleted successfully",
+      });
+      setDeletingPromo(null);
+      refetchPromos();
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to delete promo code",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const handleUpdatePromo = () => {
+    if (!editingPromo.name || !editingPromo.value || !editingPromo.max_users) {
+      toast({
+        title: "Validation Error",
+        description: "Please fill in all required fields",
+        variant: "destructive",
+      });
+      return;
+    }
+    updatePromoMutation.mutate(editingPromo);
+  };
 
   const handleCompanyProfileSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -1049,15 +1323,15 @@ const Settings = () => {
                   {/* Automated Mode Card */}
                   <div
                     className={`flex-1 p-4 border-2 rounded-lg cursor-pointer transition-all ${settings?.payment_mode === 'automated'
-                        ? 'border-primary bg-primary/5'
-                        : 'border-border hover:border-primary/50'
+                      ? 'border-primary bg-primary/5'
+                      : 'border-border hover:border-primary/50'
                       }`}
                     onClick={() => setPaymentMode('automated')}
                   >
                     <div className="flex items-start gap-3">
                       <div className={`w-4 h-4 rounded-full border-2 mt-0.5 flex items-center justify-center ${settings?.payment_mode === 'automated'
-                          ? 'border-primary'
-                          : 'border-muted-foreground'
+                        ? 'border-primary'
+                        : 'border-muted-foreground'
                         }`}>
                         {settings?.payment_mode === 'automated' && (
                           <div className="w-2 h-2 rounded-full bg-primary" />
@@ -1078,15 +1352,15 @@ const Settings = () => {
                   {/* Manual Mode Card */}
                   <div
                     className={`flex-1 p-4 border-2 rounded-lg cursor-pointer transition-all ${settings?.payment_mode === 'manual'
-                        ? 'border-primary bg-primary/5'
-                        : 'border-border hover:border-primary/50'
+                      ? 'border-primary bg-primary/5'
+                      : 'border-border hover:border-primary/50'
                       }`}
                     onClick={() => setPaymentMode('manual')}
                   >
                     <div className="flex items-start gap-3">
                       <div className={`w-4 h-4 rounded-full border-2 mt-0.5 flex items-center justify-center ${settings?.payment_mode === 'manual'
-                          ? 'border-primary'
-                          : 'border-muted-foreground'
+                        ? 'border-primary'
+                        : 'border-muted-foreground'
                         }`}>
                         {settings?.payment_mode === 'manual' && (
                           <div className="w-2 h-2 rounded-full bg-primary" />
@@ -1107,20 +1381,20 @@ const Settings = () => {
 
                 {/* Current Mode Info */}
                 <div className={`p-4 rounded-lg ${settings?.payment_mode === 'manual'
-                    ? 'bg-orange-50 border border-orange-200'
-                    : 'bg-green-50 border border-green-200'
+                  ? 'bg-orange-50 border border-orange-200'
+                  : 'bg-green-50 border border-green-200'
                   }`}>
                   <div className="flex items-start gap-3">
                     <div className={`w-8 h-8 rounded-full flex items-center justify-center ${settings?.payment_mode === 'manual'
-                        ? 'bg-orange-100 text-orange-600'
-                        : 'bg-green-100 text-green-600'
+                      ? 'bg-orange-100 text-orange-600'
+                      : 'bg-green-100 text-green-600'
                       }`}>
                       <CreditCard className="h-4 w-4" />
                     </div>
                     <div>
                       <h4 className={`font-medium ${settings?.payment_mode === 'manual'
-                          ? 'text-orange-800'
-                          : 'text-green-800'
+                        ? 'text-orange-800'
+                        : 'text-green-800'
                         }`}>
                         {settings?.payment_mode === 'manual'
                           ? 'Manual Approval is Active'
@@ -1128,8 +1402,8 @@ const Settings = () => {
                         }
                       </h4>
                       <p className={`text-sm mt-1 ${settings?.payment_mode === 'manual'
-                          ? 'text-orange-700'
-                          : 'text-green-700'
+                        ? 'text-orange-700'
+                        : 'text-green-700'
                         }`}>
                         {settings?.payment_mode === 'manual'
                           ? 'New payments will appear in the Payments page with "Pending Review" status. Accept or reject each payment to proceed with the rental.'
@@ -1219,6 +1493,8 @@ const Settings = () => {
                 </div>
               </div>
 
+
+
               {/* Save Button */}
               <Button
                 onClick={async () => {
@@ -1242,6 +1518,365 @@ const Settings = () => {
               </Button>
             </CardContent>
           </Card>
+
+          {/* Promocode Card UI */}
+          <Card className="mt-8">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <span className="inline-block bg-primary/10 rounded-full p-2">
+                  <Zap className="h-5 w-5 text-primary" />
+                </span>
+                Promocode
+              </CardTitle>
+              <CardDescription>
+                Create and manage promocodes for your customers
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              {/* Promocode Name */}
+              <div className="space-y-2">
+                <Label htmlFor="promo_name">Promocode Name</Label>
+                <Input
+                  id="promo_name"
+                  placeholder="e.g. WINTER2026"
+                  className="max-w-md"
+                  value={promoForm.name}
+                  onChange={(e) => setPromoForm(prev => ({ ...prev, name: e.target.value }))}
+                />
+              </div>
+
+              {/* Creation and Expiration Dates */}
+              <div className="flex flex-col md:flex-row gap-4">
+                <div className="space-y-2 w-full md:w-1/2">
+                  <Label>Creation Date</Label>
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <Button
+                        variant={"outline"}
+                        className={`w-full justify-start text-left font-normal ${!promoForm.created_at && "text-muted-foreground"}`}
+                      >
+                        <CalendarIcon className="mr-2 h-4 w-4" />
+                        {promoForm.created_at ? format(promoForm.created_at, "PPP") : <span>Pick a date</span>}
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-auto p-0" align="start">
+                      <Calendar
+                        mode="single"
+                        selected={promoForm.created_at}
+                        onSelect={(date) => date && setPromoForm(prev => ({ ...prev, created_at: date }))}
+                        initialFocus
+                      />
+                    </PopoverContent>
+                  </Popover>
+                </div>
+                <div className="space-y-2 w-full md:w-1/2">
+                  <Label>Expiration Date</Label>
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <Button
+                        variant={"outline"}
+                        className={`w-full justify-start text-left font-normal ${!promoForm.expires_at && "text-muted-foreground"}`}
+                      >
+                        <CalendarIcon className="mr-2 h-4 w-4" />
+                        {promoForm.expires_at ? format(promoForm.expires_at, "PPP") : <span>Pick a date</span>}
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-auto p-0" align="start">
+                      <Calendar
+                        mode="single"
+                        selected={promoForm.expires_at}
+                        onSelect={(date) => date && setPromoForm(prev => ({ ...prev, expires_at: date }))}
+                        initialFocus
+                      />
+                    </PopoverContent>
+                  </Popover>
+                </div>
+              </div>
+
+              {/* Type Selection */}
+              <div className="flex flex-col md:flex-row gap-4">
+                <div className="space-y-2 w-full md:w-1/2">
+                  <Label htmlFor="promo_type">Type</Label>
+                  <Select
+                    value={promoForm.type}
+                    onValueChange={(val) => setPromoForm(prev => ({ ...prev, type: val }))}
+                  >
+                    <SelectTrigger id="promo_type" className="max-w-md">
+                      <SelectValue placeholder="Select type" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="percentage">Percentage</SelectItem>
+                      <SelectItem value="value">Value</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2 w-full md:w-1/2">
+                  <Label htmlFor="promo_type_value">Type Value</Label>
+                  <Input
+                    id="promo_type_value"
+                    placeholder={promoForm.type === 'percentage' ? "e.g. 10 (for 10%)" : "e.g. 20.00"}
+                    className="max-w-md"
+                    value={promoForm.value}
+                    onChange={(e) => setPromoForm(prev => ({ ...prev, value: e.target.value }))}
+                    type="number"
+                  />
+                </div>
+              </div>
+
+              {/* Autogenerated Promocode Value */}
+              <div className="space-y-2">
+                <Label htmlFor="promo_code_value">Promocode (Autogenerated)</Label>
+                <div className="flex gap-2 max-w-md">
+                  <Input
+                    id="promo_code_value"
+                    value={promoForm.code}
+                    readOnly
+                    className="bg-muted"
+                  />
+                  <Button variant="outline" size="icon" onClick={generatePromoCode} title="Regenerate Code">
+                    <Zap className="h-4 w-4" />
+                  </Button>
+                </div>
+              </div>
+
+              {/* Max Users Field */}
+              <div className="space-y-2">
+                <Label htmlFor="promo_max_users">Max Users</Label>
+                <Input
+                  id="promo_max_users"
+                  type="number"
+                  placeholder="e.g. 100"
+                  className="max-w-md"
+                  value={promoForm.max_users}
+                  onChange={(e) => setPromoForm(prev => ({ ...prev, max_users: e.target.value }))}
+                />
+              </div>
+
+              {/* Add Button */}
+              <div className="pt-2">
+                <Button
+                  onClick={handleCreatePromo}
+                  disabled={createPromoMutation.isPending}
+                  className="w-full md:w-auto"
+                >
+                  {createPromoMutation.isPending ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Creating...
+                    </>
+                  ) : (
+                    <>
+                      <Save className="mr-2 h-4 w-4" />
+                      Add Promo Code
+                    </>
+                  )}
+                </Button>
+              </div>
+
+              <Separator className="my-6" />
+
+              {/* Promo Codes List */}
+              <div className="space-y-4">
+                <Label className="text-base">All Promo Codes</Label>
+                <div className="border rounded-lg overflow-hidden">
+                  <div className="overflow-x-auto">
+                    <table className="min-w-full text-sm">
+                      <thead className="bg-muted/50">
+                        <tr>
+                          <th className="p-3 text-left font-semibold">Name</th>
+                          <th className="p-3 text-left font-semibold">Type</th>
+                          <th className="p-3 text-left font-semibold">Value</th>
+                          <th className="p-3 text-left font-semibold">Created</th>
+                          <th className="p-3 text-left font-semibold">Expires</th>
+                          <th className="p-3 text-left font-semibold">Max Users</th>
+                          <th className="p-3 text-left font-semibold">Code</th>
+                          <th className="p-3 text-right font-semibold">Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {isLoadingPromos ? (
+                          <tr>
+                            <td colSpan={8} className="p-4 text-center text-muted-foreground">
+                              <Loader2 className="h-5 w-5 animate-spin mx-auto mb-2" />
+                              Loading promo codes...
+                            </td>
+                          </tr>
+                        ) : promoCodes && promoCodes.length > 0 ? (
+                          promoCodes.map((promo: any) => (
+                            <tr key={promo.id} className="border-t hover:bg-muted/50 transition-colors">
+                              <td className="p-3 font-medium">{promo.name}</td>
+                              <td className="p-3 capitalize">{promo.type}</td>
+                              <td className="p-3">
+                                {promo.type === 'percentage' ? `${promo.value}%` : `$${Number(promo.value).toFixed(2)}`}
+                              </td>
+                              <td className="p-3 text-muted-foreground">{promo.created_at}</td>
+                              <td className="p-3 text-muted-foreground">{promo.expires_at}</td>
+                              <td className="p-3">{promo.max_users}</td>
+                              <td className="p-3">
+                                <Badge variant="outline" className="font-mono">{promo.code}</Badge>
+                              </td>
+                              <td className="p-3 text-right">
+                                <div className="flex justify-end gap-2">
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-8 w-8 text-muted-foreground hover:text-primary"
+                                    onClick={() => setEditingPromo({
+                                      ...promo,
+                                      // Ensure dates are date objects for calendar
+                                      expires_at: new Date(promo.expires_at)
+                                    })}
+                                  >
+                                    <FilePenLine className="h-4 w-4" />
+                                  </Button>
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                                    onClick={() => setDeletingPromo(promo)}
+                                  >
+                                    <Trash2 className="h-4 w-4" />
+                                  </Button>
+                                </div>
+                              </td>
+                            </tr>
+                          ))
+                        ) : (
+                          <tr>
+                            <td colSpan={8} className="p-8 text-center text-muted-foreground">
+                              No promo codes found. Create one to get started.
+                            </td>
+                          </tr>
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Edit Promo Dialog */}
+          <Dialog open={!!editingPromo} onOpenChange={(open) => !open && setEditingPromo(null)}>
+            <DialogContent className="sm:max-w-[600px]">
+              <DialogHeader>
+                <DialogTitle>Edit Promo Code</DialogTitle>
+                <DialogDescription>
+                  Update the details of your promo code. Code string cannot be changed.
+                </DialogDescription>
+              </DialogHeader>
+              {editingPromo && (
+                <div className="space-y-6 py-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="edit_name">Name</Label>
+                    <Input
+                      id="edit_name"
+                      value={editingPromo.name}
+                      onChange={(e) => setEditingPromo({ ...editingPromo, name: e.target.value })}
+                    />
+                  </div>
+
+                  <div className="flex gap-4">
+                    <div className="space-y-2 w-1/2">
+                      <Label>Expiration Date</Label>
+                      <Popover>
+                        <PopoverTrigger asChild>
+                          <Button
+                            variant={"outline"}
+                            className="w-full justify-start text-left font-normal"
+                          >
+                            <CalendarIcon className="mr-2 h-4 w-4" />
+                            {editingPromo.expires_at ? format(editingPromo.expires_at, "PPP") : <span>Pick a date</span>}
+                          </Button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-auto p-0" align="start">
+                          <Calendar
+                            mode="single"
+                            selected={editingPromo.expires_at}
+                            onSelect={(date) => date && setEditingPromo({ ...editingPromo, expires_at: date })}
+                            initialFocus
+                          />
+                        </PopoverContent>
+                      </Popover>
+                    </div>
+                    <div className="space-y-2 w-1/2">
+                      <Label htmlFor="edit_max_users">Max Users</Label>
+                      <Input
+                        id="edit_max_users"
+                        type="number"
+                        value={editingPromo.max_users}
+                        onChange={(e) => setEditingPromo({ ...editingPromo, max_users: e.target.value })}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="flex gap-4">
+                    <div className="space-y-2 w-1/2">
+                      <Label htmlFor="edit_type">Type</Label>
+                      <Select
+                        value={editingPromo.type}
+                        onValueChange={(val) => setEditingPromo({ ...editingPromo, type: val })}
+                      >
+                        <SelectTrigger id="edit_type">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="percentage">Percentage</SelectItem>
+                          <SelectItem value="value">Value</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-2 w-1/2">
+                      <Label htmlFor="edit_value">Value</Label>
+                      <Input
+                        id="edit_value"
+                        type="number"
+                        value={editingPromo.value}
+                        onChange={(e) => setEditingPromo({ ...editingPromo, value: e.target.value })}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label>Promo Code (Read Only)</Label>
+                    <Input value={editingPromo.code} readOnly className="bg-muted" />
+                  </div>
+                </div>
+              )}
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setEditingPromo(null)}>Cancel</Button>
+                <Button onClick={handleUpdatePromo} disabled={updatePromoMutation.isPending}>
+                  {updatePromoMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                  Save Changes
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+
+          {/* Delete Confirmation Dialog */}
+          <AlertDialog open={!!deletingPromo} onOpenChange={(open) => !open && setDeletingPromo(null)}>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle className="text-destructive flex items-center gap-2">
+                  <AlertTriangle className="h-5 w-5" />
+                  Delete Promo Code?
+                </AlertDialogTitle>
+                <AlertDialogDescription>
+                  Are you sure you want to delete the promo code <strong>{deletingPromo?.name}</strong>?
+                  This action cannot be undone and may affect active users trying to use this code.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                <AlertDialogAction
+                  className="bg-destructive hover:bg-destructive/90"
+                  onClick={() => deletingPromo && deletePromoMutation.mutate(deletingPromo.id)}
+                >
+                  {deletePromoMutation.isPending ? "Deleting..." : "Delete Promo Code"}
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
         </TabsContent>
 
         {/* Agreement Tab */}

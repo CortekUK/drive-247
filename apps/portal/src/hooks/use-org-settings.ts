@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from '@/hooks/use-toast';
+import { useTenant } from '@/contexts/TenantContext';
 
 export interface OrgSettings {
   id?: string;
@@ -50,6 +51,7 @@ export interface OrgSettings {
 // Custom hook for organisation settings
 export const useOrgSettings = () => {
   const queryClient = useQueryClient();
+  const { tenant } = useTenant();
 
   // Fetch settings query with fallback defaults
   const {
