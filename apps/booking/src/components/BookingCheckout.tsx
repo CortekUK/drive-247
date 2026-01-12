@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -10,7 +10,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { supabase } from "@/integrations/supabase/client";
 import { useTenant } from "@/contexts/TenantContext";
 import { toast } from "sonner";
-import { ArrowLeft, Check, Shield, CreditCard } from "lucide-react";
+import { ArrowLeft, Check, Shield } from "lucide-react";
 import Navigation from "@/components/Navigation";
 import Footer from "@/components/Footer";
 import SEO from "@/components/SEO";
@@ -51,6 +51,7 @@ const BookingCheckout = () => {
     licenseNumber: "",
     agreeTerms: false
   });
+
 
   // Extract booking context
   const pickupDate = searchParams?.get("pickup") || "";
@@ -202,7 +203,38 @@ const BookingCheckout = () => {
         customer = newCustomer;
       }
 
-      // Step 2: Check if Individual customer already has active rental
+      // Step 2: Link any pending insurance documents to the customer
+      const pendingInsuranceFiles = JSON.parse(localStorage.getItem('pending_insurance_files') || '[]');
+      for (const fileInfo of pendingInsuranceFiles) {
+        const docInsertData: any = {
+          customer_id: customer.id,
+          document_type: 'Insurance Certificate',
+          document_name: fileInfo.file_name,
+          file_url: fileInfo.file_path,
+          file_name: fileInfo.file_name,
+          file_size: fileInfo.file_size,
+          mime_type: fileInfo.mime_type,
+          ai_scan_status: 'pending',
+          uploaded_at: fileInfo.uploaded_at
+        };
+
+        if (tenant?.id) {
+          docInsertData.tenant_id = tenant.id;
+        }
+
+        const { error: docError } = await supabase
+          .from('customer_documents')
+          .insert(docInsertData);
+
+        if (docError) {
+          console.error('Failed to link insurance document:', docError);
+          // Don't throw - continue with booking
+        } else {
+          console.log('[CHECKOUT] Insurance document linked to customer:', customer.id);
+        }
+      }
+
+      // Step 3: Check if Individual customer already has active rental
       if (customer.customer_type === "Individual") {
         const { data: activeRentals, error: checkError } = await supabase
           .from("rentals")
@@ -216,11 +248,10 @@ const BookingCheckout = () => {
         }
       }
 
-      // Step 3: Calculate monthly amount
-      const days = calculateRentalDays();
+      // Step 4: Calculate monthly amount
       const monthlyAmount = vehicleDetails.monthly_rent || calculateVehiclePrice();
 
-      // Step 4: Create rental
+      // Step 5: Create rental
       const rentalData: any = {
         customer_id: customer.id,
         vehicle_id: vehicleId,
@@ -244,7 +275,7 @@ const BookingCheckout = () => {
 
       if (rentalError) throw rentalError;
 
-      // Step 5: Update vehicle status to Rented
+      // Step 6: Update vehicle status to Rented
       let vehicleUpdateQuery = supabase
         .from("vehicles")
         .update({ status: "Rented" })
@@ -261,11 +292,16 @@ const BookingCheckout = () => {
         // Don't throw - rental is already created
       }
 
-      // Step 6: Generate rental charges (let database triggers handle this)
-      await supabase.rpc("backfill_rental_charges_first_month_only").catch(err => {
+      // Step 7: Generate rental charges (let database triggers handle this)
+      try {
+        await supabase.rpc("backfill_rental_charges_first_month_only");
+      } catch (err) {
         console.error("Failed to generate charges:", err);
         // Don't throw - rental is created
-      });
+      }
+
+      // Clear pending insurance files from localStorage since booking is complete
+      localStorage.removeItem('pending_insurance_files');
 
       // Show confirmation screen
       setConfirmedBooking({

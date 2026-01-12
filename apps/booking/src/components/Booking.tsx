@@ -22,6 +22,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Calendar } from "@/components/ui/calendar";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
+import { supabase } from "@/integrations/supabase/client";
 
 const TIMEZONE = "America/Los_Angeles";
 const MIN_RENTAL_DAYS = 30;
@@ -93,6 +94,7 @@ export default function Booking() {
       customerType: undefined,
     },
   });
+
 
   // Load from localStorage on mount
   useEffect(() => {

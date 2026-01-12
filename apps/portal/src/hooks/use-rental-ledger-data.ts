@@ -10,6 +10,7 @@ export interface RentalCharge {
   remaining_amount: number;
   category: string;
   allocations: PaymentAllocation[];
+  rental_start_date: string | null;
 }
 
 export interface PaymentAllocation {
@@ -47,10 +48,13 @@ export const useRentalCharges = (rentalId: string | undefined) => {
     queryFn: async () => {
       if (!rentalId) return [];
 
-      // Get all charges for this rental
+      // Get all charges for this rental with rental start_date
       let chargesQuery = supabase
         .from("ledger_entries")
-        .select("*")
+        .select(`
+          *,
+          rentals!rental_id(start_date)
+        `)
         .eq("rental_id", rentalId)
         .eq("type", "Charge")
         .order("due_date", { ascending: false });
@@ -92,6 +96,7 @@ export const useRentalCharges = (rentalId: string | undefined) => {
         amount: charge.amount,
         remaining_amount: charge.remaining_amount,
         category: charge.category,
+        rental_start_date: charge.rentals?.start_date || null,
         allocations: applications
           .filter(app => app.charge_entry_id === charge.id)
           .map(app => ({
