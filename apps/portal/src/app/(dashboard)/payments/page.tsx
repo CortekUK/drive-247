@@ -167,24 +167,24 @@ const PaymentsList = () => {
   return (
     <div className="container mx-auto p-6 space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-3xl font-bold">Payments</h1>
           <p className="text-muted-foreground">
             Record customer payments — automatically allocated to outstanding charges using FIFO
           </p>
         </div>
-        <div className="flex gap-2">
-          <Button variant="outline" onClick={handleExportCSV}>
-            <Download className="h-4 w-4 mr-2" />
+        <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
+          <Button variant="outline" onClick={handleExportCSV} className="w-full sm:w-auto whitespace-nowrap">
+            <Download className="h-4 w-4 mr-2 flex-shrink-0" />
             Export CSV
           </Button>
           <AddPaymentDialog
             open={showAddDialog}
             onOpenChange={setShowAddDialog}
           />
-          <Button onClick={() => setShowAddDialog(true)} className="bg-gradient-primary">
-            <Plus className="h-4 w-4 mr-2" />
+          <Button onClick={() => setShowAddDialog(true)} className="bg-gradient-primary w-full sm:w-auto whitespace-nowrap">
+            <Plus className="h-4 w-4 mr-2 flex-shrink-0" />
             Record Payment
           </Button>
         </div>
@@ -427,11 +427,11 @@ const PaymentsList = () => {
 
               {/* Pagination */}
               {totalPages > 1 && (
-                <div className="flex items-center justify-between mt-4">
+                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mt-4 gap-3">
                   <div className="text-sm text-muted-foreground">
                     Page {page} of {totalPages}
                   </div>
-                  <div className="flex gap-2">
+                  <div className="flex gap-2 w-full sm:w-auto flex-wrap justify-center sm:justify-end">
                     <Button
                       variant="outline"
                       size="sm"

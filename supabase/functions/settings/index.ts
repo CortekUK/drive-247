@@ -210,7 +210,7 @@ serve(async (req) => {
         .eq('auth_user_id', user.id)
         .single();
 
-      if (appUserError || !appUser) {
+      if (appUserError || !appUser) {   
         console.error('Failed to fetch app_user:', appUserError);
         console.error('Looking for auth_user_id:', user.id);
         throw new Error('User not found in app_users table');

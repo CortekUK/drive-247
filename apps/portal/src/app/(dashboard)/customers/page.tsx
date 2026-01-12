@@ -502,12 +502,12 @@ const CustomersList = () => {
   return (
     <div className="container mx-auto p-6 space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-3xl font-bold">Customers</h1>
           <p className="text-muted-foreground">Manage customer accounts and view balance status</p>
         </div>
-        <Button className="bg-gradient-primary" onClick={handleAddCustomer}>
+        <Button className="bg-gradient-primary w-full sm:w-auto" onClick={handleAddCustomer}>
           <Plus className="h-4 w-4 mr-2" />
           Add Customer
         </Button>
@@ -599,11 +599,11 @@ const CustomersList = () => {
           </div>
 
           {/* Results info */}
-          <div className="flex items-center justify-between mb-4">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-4 gap-3">
             <p className="text-sm text-muted-foreground">
               Showing {startIndex + 1}-{endIndex} of {totalCustomers} customers
             </p>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 w-full sm:w-auto flex-wrap justify-center sm:justify-end">
               <Button
                 variant="outline"
                 size="sm"
@@ -612,7 +612,7 @@ const CustomersList = () => {
               >
                 Previous
               </Button>
-              <span className="text-sm text-muted-foreground">
+              <span className="text-sm text-muted-foreground whitespace-nowrap">
                 Page {currentPage} of {totalPages}
               </span>
               <Button

@@ -207,30 +207,163 @@ export const ActionItems = () => {
 
   return (
     <div className="space-y-4">
-      {/* Performance Overview */}
-      <Card className="shadow-card rounded-lg border-2 border-primary/20 bg-gradient-to-br from-primary/5 to-transparent">
-        <CardHeader className="pb-4">
+<<<<<<< HEAD
+      {/* Current Month Billing - Featured */}
+      <Card className="shadow-lg rounded-xl border border-primary/20 bg-gradient-to-br from-primary/5 via-background to-background overflow-hidden">
+        <CardHeader className="pb-4 bg-gradient-to-r from-primary/10 to-transparent">
+=======
+      {/* Current Month Billing - Featured */}
+      <Card className="shadow-lg rounded-xl border border-primary/20 bg-gradient-to-br from-primary/5 via-background to-background overflow-hidden">
+        <CardHeader className="pb-4 bg-gradient-to-r from-primary/10 to-transparent">
+>>>>>>> b7fb88f (UI for mobile mode fixed for booking and portal)
           <div className="flex items-center justify-between">
             <div>
-              <CardTitle className="text-2xl font-bold">Performance Overview</CardTitle>
-              <CardDescription className="text-base">
+              <CardTitle className="text-xl sm:text-2xl font-bold bg-gradient-to-r from-primary to-primary/70 bg-clip-text text-transparent">
+                Performance Overview
+              </CardTitle>
+              <CardDescription className="text-sm sm:text-base">
                 {monthName}
               </CardDescription>
             </div>
           </div>
         </CardHeader>
-        <CardContent>
-          {/* Summary Stats */}
-          <div className="grid grid-cols-3 gap-4 mb-6">
-            <div className="p-4 rounded-lg bg-green-500/10 border border-green-500/20">
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-sm text-muted-foreground">Revenue</span>
-                {performanceData?.revenueChange !== 0 && (
-                  <Badge variant="outline" className={performanceData?.revenueChange > 0 ? "text-green-500 border-green-500/30" : "text-red-500 border-red-500/30"}>
-                    {performanceData?.revenueChange > 0 ? <TrendingUp className="h-3 w-3 mr-1" /> : <TrendingDown className="h-3 w-3 mr-1" />}
-                    {Math.abs(performanceData?.revenueChange || 0)}%
-                  </Badge>
-                )}
+<<<<<<< HEAD
+        <CardContent className="p-4 sm:p-6">
+          <div>
+            {/* Progress Graph - Responsive */}
+            <div className="relative">
+              <h4 className="text-xs sm:text-sm font-semibold text-foreground mb-3 sm:mb-4">
+                Revenue, Costs & Net Profit
+              </h4>
+              <div className="relative rounded-xl bg-gradient-to-br from-muted/30 to-background p-3 sm:p-4 border border-border/50 backdrop-blur-sm">
+                {(() => {
+                  const hasRealData = currentMonthBilling?.dailyEarnings && currentMonthBilling.dailyEarnings.length > 0;
+                  const chartData = hasRealData ? currentMonthBilling.dailyEarnings : [
+                    { date: '2025-12-01', revenue: 1200, cost: 400, profit: 800 },
+                    { date: '2025-12-05', revenue: 2800, cost: 950, profit: 1850 },
+                    { date: '2025-12-10', revenue: 4500, cost: 1500, profit: 3000 },
+                    { date: '2025-12-15', revenue: 6200, cost: 2100, profit: 4100 },
+                    { date: '2025-12-20', revenue: 8500, cost: 2800, profit: 5700 },
+                  ];
+                  // ...existing code...
+=======
+        <CardContent className="p-4 sm:p-6">
+          <div>
+            {/* Progress Graph - Responsive */}
+            <div className="relative">
+              <h4 className="text-xs sm:text-sm font-semibold text-foreground mb-3 sm:mb-4">
+                Revenue, Costs & Net Profit
+              </h4>
+              <div className="relative rounded-xl bg-gradient-to-br from-muted/30 to-background p-3 sm:p-4 border border-border/50 backdrop-blur-sm">
+                {(() => {
+                  const hasRealData = currentMonthBilling?.dailyEarnings && currentMonthBilling.dailyEarnings.length > 0;
+                  const chartData = hasRealData ? currentMonthBilling.dailyEarnings : [
+                    { date: '2025-12-01', revenue: 1200, cost: 400, profit: 800 },
+                    { date: '2025-12-05', revenue: 2800, cost: 950, profit: 1850 },
+                    { date: '2025-12-10', revenue: 4500, cost: 1500, profit: 3000 },
+                    { date: '2025-12-15', revenue: 6200, cost: 2100, profit: 4100 },
+                    { date: '2025-12-20', revenue: 8500, cost: 2800, profit: 5700 },
+                  ];
+                  return (
+                  <>
+                    <ResponsiveContainer width="100%" height={280} className="sm:h-[320px]">
+                      <LineChart data={chartData} margin={{ top: 5, right: 10, left: 0, bottom: 5 }}>
+                        <defs>
+                          <linearGradient id="colorRevenue" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="5%" stopColor="#10b981" stopOpacity={0.4}/>
+                            <stop offset="95%" stopColor="#10b981" stopOpacity={0.05}/>
+                          </linearGradient>
+                          <linearGradient id="colorCost" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="5%" stopColor="#ef4444" stopOpacity={0.4}/>
+                            <stop offset="95%" stopColor="#ef4444" stopOpacity={0.05}/>
+                          </linearGradient>
+                          <linearGradient id="colorProfit" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.4}/>
+                            <stop offset="95%" stopColor="#3b82f6" stopOpacity={0.05}/>
+                          </linearGradient>
+                        </defs>
+                        <CartesianGrid strokeDasharray="3 3" stroke="#374151" opacity={0.15} vertical={false} />
+                        <XAxis
+                          dataKey="date"
+                          tick={{ fill: '#9ca3af', fontSize: 11 }}
+                          stroke="#4b5563"
+                          strokeOpacity={0.3}
+                          tickFormatter={(value) => format(new Date(value), 'MMM d')}
+                          axisLine={false}
+                        />
+                        <YAxis
+                          tick={{ fill: '#9ca3af', fontSize: 11 }}
+                          stroke="#4b5563"
+                          strokeOpacity={0.3}
+                          tickFormatter={(value) => `$${value}`}
+                          axisLine={false}
+                        />
+                        <Tooltip
+                          cursor={{ stroke: '#4b5563', strokeWidth: 1, strokeDasharray: '5 5' }}
+                          contentStyle={{
+                            backgroundColor: 'hsl(var(--popover))',
+                            border: '1px solid hsl(var(--border))',
+                            borderRadius: '12px',
+                            color: 'hsl(var(--popover-foreground))',
+                            boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05)',
+                            padding: '12px'
+                          }}
+                          labelStyle={{ color: 'hsl(var(--muted-foreground))', fontWeight: '600', marginBottom: '8px', fontSize: '12px' }}
+                          itemStyle={{ color: 'hsl(var(--foreground))', fontSize: '12px', padding: '4px 0' }}
+                          labelFormatter={(value) => format(new Date(value), 'MMM d, yyyy')}
+                          formatter={(value: number) => [`$${value.toLocaleString()}`, '']}
+                        />
+                        <Line
+                          type="monotone"
+                          dataKey="revenue"
+                          stroke="#10b981"
+                          strokeWidth={2.5}
+                          name="Revenue"
+                          dot={{ fill: '#10b981', strokeWidth: 2, r: 4, stroke: 'hsl(var(--background))' }}
+                          activeDot={{ r: 6, fill: '#10b981', stroke: 'hsl(var(--background))', strokeWidth: 3 }}
+                          fill="url(#colorRevenue)"
+                        />
+                        <Line
+                          type="monotone"
+                          dataKey="cost"
+                          stroke="#ef4444"
+                          strokeWidth={2.5}
+                          name="Costs"
+                          dot={{ fill: '#ef4444', strokeWidth: 2, r: 4, stroke: 'hsl(var(--background))' }}
+                          activeDot={{ r: 6, fill: '#ef4444', stroke: 'hsl(var(--background))', strokeWidth: 3 }}
+                          fill="url(#colorCost)"
+                        />
+                        <Line
+                          type="monotone"
+                          dataKey="profit"
+                          stroke="#3b82f6"
+                          strokeWidth={2.5}
+                          name="Net Profit"
+                          dot={{ fill: '#3b82f6', strokeWidth: 2, r: 4, stroke: 'hsl(var(--background))' }}
+                          activeDot={{ r: 6, fill: '#3b82f6', stroke: 'hsl(var(--background))', strokeWidth: 3 }}
+                          fill="url(#colorProfit)"
+                        />
+                      </LineChart>
+                    </ResponsiveContainer>
+                    {/* Legend - Responsive */}
+                    <div className="mt-4 flex flex-wrap items-center justify-center gap-4 sm:gap-6 text-xs">
+                      <div className="flex items-center gap-2">
+                        <div className="w-3 h-3 rounded-full bg-success shadow-sm"></div>
+                        <span className="text-muted-foreground font-medium">Revenue</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <div className="w-3 h-3 rounded-full bg-destructive shadow-sm"></div>
+                        <span className="text-muted-foreground font-medium">Costs</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <div className="w-3 h-3 rounded-full bg-blue-500 shadow-sm"></div>
+                        <span className="text-muted-foreground font-medium">Net Profit</span>
+                      </div>
+                    </div>
+                  </>
+                  );
+                })()}
+>>>>>>> b7fb88f (UI for mobile mode fixed for booking and portal)
               </div>
               <p className="text-2xl font-bold text-green-500">
                 ${(performanceData?.totalRevenue || 0).toLocaleString()}
@@ -356,6 +489,182 @@ export const ActionItems = () => {
           </div>
         </CardContent>
       </Card>
+
+      {/* Action Items Row */}
+      <div className="grid gap-4 lg:grid-cols-[2fr_1fr]">
+<<<<<<< HEAD
+=======
+
+      {/* Action Items Row */}
+      <div className="grid gap-4 lg:grid-cols-[2fr_1fr]">
+        {/* Bookings Section with Tabs */}
+        <Card className="shadow-card rounded-lg">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-lg font-semibold">Bookings</CardTitle>
+            <CardDescription>Manage new and pending bookings</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Tabs defaultValue="new" className="w-full">
+              <TabsList className="grid w-full grid-cols-2 mb-4 h-auto">
+                <TabsTrigger value="new" className="flex items-center gap-1 justify-center py-2.5 px-2 whitespace-nowrap overflow-hidden">
+                  <Clock className="h-4 w-4 flex-shrink-0" />
+                  <span className="hidden md:inline text-sm">New Bookings</span>
+                  <span className="md:hidden text-sm">New</span>
+                  <Badge variant="secondary" className="ml-1 flex-shrink-0 text-xs">{newBookings.length}</Badge>
+                </TabsTrigger>
+                <TabsTrigger value="pending" className="flex items-center gap-1 justify-center py-2.5 px-2 whitespace-nowrap overflow-hidden">
+                  <CheckCircle2 className="h-4 w-4 flex-shrink-0" />
+                  <span className="hidden md:inline text-sm">Pending Approval</span>
+                  <span className="md:hidden text-sm">Pending</span>
+                  <Badge variant="destructive" className="ml-1 flex-shrink-0 text-xs">{pendingBookings.length}</Badge>
+                </TabsTrigger>
+              </TabsList>
+
+              {/* New Bookings Tab */}
+              <TabsContent value="new" className="mt-0">
+                <div className="h-[400px] overflow-y-auto pr-2 space-y-3">
+                  {newBookings.length === 0 ? (
+                    <div className="text-center py-12 text-sm text-muted-foreground">
+                      No new bookings in the last 3 days
+                    </div>
+                  ) : (
+                    newBookings.map((booking: any) => (
+                      <div
+                        key={booking.id}
+                        className="p-3 rounded-lg border border-border hover:bg-muted/50 cursor-pointer transition-colors"
+                        onClick={() => router.push(`/rentals/${booking.id}`)}
+                      >
+                        <div className="flex justify-between items-start mb-2">
+                          <p className="text-sm font-medium truncate">{booking.customer_name}</p>
+                          <Badge variant={
+                            booking.status === 'active' ? 'default' :
+                            booking.status === 'pending_approval' ? 'destructive' :
+                            'secondary'
+                          } className="text-xs">
+                            {booking.status.replace('_', ' ')}
+                          </Badge>
+                        </div>
+                        <div className="flex justify-between items-center text-xs text-muted-foreground mb-1">
+                          <span>{booking.vehicle_reg}</span>
+                          <span className="font-semibold text-primary">
+                            ${booking.total_amount.toLocaleString()}
+                          </span>
+                        </div>
+                        <div className="text-xs text-muted-foreground">
+                          Created {format(new Date(booking.created_at), 'MMM d, h:mm a')}
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </TabsContent>
+
+              {/* Pending Approval Tab */}
+              <TabsContent value="pending" className="mt-0">
+                <div className="h-[400px] overflow-y-auto pr-2 space-y-3">
+                  {pendingBookings.length === 0 ? (
+                    <div className="text-center py-12 text-sm text-muted-foreground">
+                      No pending approvals
+                    </div>
+                  ) : (
+                    pendingBookings.map((booking) => (
+                      <div
+                        key={booking.id}
+                        className="p-3 rounded-lg border border-border hover:bg-muted/50 cursor-pointer transition-colors"
+                        onClick={() => router.push(`/pending-bookings`)}
+                      >
+                        <div className="flex justify-between items-start mb-1">
+                          <p className="text-sm font-medium truncate">{booking.customer_name}</p>
+                          <span className="text-xs text-muted-foreground whitespace-nowrap ml-2">
+                            {format(new Date(booking.created_at), 'MMM d')}
+                          </span>
+                        </div>
+                        <div className="flex justify-between items-center text-xs text-muted-foreground">
+                          <span>{booking.vehicle_reg}</span>
+                          <span className="font-semibold text-primary">
+                            ${booking.total_amount.toLocaleString()}
+                          </span>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+                {pendingBookings.length > 0 && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="w-full mt-3"
+                    onClick={() => router.push('/pending-bookings')}
+                  >
+                    View All Pending
+                  </Button>
+                )}
+              </TabsContent>
+            </Tabs>
+          </CardContent>
+        </Card>
+
+        {/* Reminders Section */}
+        <Card className="shadow-card rounded-lg">
+          <CardHeader className="pb-3">
+            <div className="flex items-center justify-between">
+              <div>
+                <CardTitle className="text-lg font-semibold flex items-center gap-2">
+                  <Bell className="h-5 w-5 text-warning" />
+                  Urgent Reminders
+                </CardTitle>
+                <CardDescription>Very urgent or near</CardDescription>
+              </div>
+              <Badge variant="outline" className="h-6 border-warning text-warning">
+                {urgentReminders.length}
+              </Badge>
+            </div>
+          </CardHeader>
+          <CardContent>
+            <div className="h-[400px] overflow-y-auto pr-2 space-y-3">
+              {urgentReminders.length === 0 ? (
+                <div className="text-center py-12 text-sm text-muted-foreground">
+                  No urgent reminders
+                </div>
+              ) : (
+                urgentReminders.map((reminder) => (
+                  <div
+                    key={reminder.id}
+                    className="p-3 rounded-lg border border-border hover:bg-muted/50 cursor-pointer transition-colors"
+                    onClick={() => router.push(`/reminders`)}
+                  >
+                    <div className="flex items-start justify-between mb-1">
+                      <p className="text-sm font-medium truncate flex-1">{reminder.title}</p>
+                      <AlertCircle className={`h-4 w-4 ml-2 shrink-0 ${
+                        reminder.severity === 'critical' ? 'text-destructive' :
+                        reminder.severity === 'warning' ? 'text-warning' :
+                        'text-muted-foreground'
+                      }`} />
+                    </div>
+                    <div className="flex justify-between items-center text-xs text-muted-foreground">
+                      <span>{reminder.vehicle_reg || 'General'}</span>
+                      <span className="font-medium">
+                        Due {format(new Date(reminder.due_on), 'MMM d')}
+                      </span>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+            {urgentReminders.length > 0 && (
+              <Button
+                variant="ghost"
+                size="sm"
+                className="w-full mt-3"
+                onClick={() => router.push('/reminders')}
+              >
+                View All Reminders
+              </Button>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+>>>>>>> b7fb88f (UI for mobile mode fixed for booking and portal)
     </div>
   );
 };
