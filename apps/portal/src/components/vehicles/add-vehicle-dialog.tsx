@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -23,6 +23,7 @@ import { useTenant } from "@/contexts/TenantContext";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
 import { addVehicleDialogSchema, type AddVehicleDialogFormValues } from "@/client-schemas/vehicles/add-vehicle-dialog";
+import { toast as sonnerToast } from "sonner";
 
 type VehicleFormData = AddVehicleDialogFormValues;
 
@@ -67,6 +68,55 @@ export const AddVehicleDialog = ({ open, onOpenChange }: AddVehicleDialogProps) 
       description: "",
     },
   });
+
+  // DEV MODE: Listen for dev panel fill events (only in development)
+  useEffect(() => {
+    if (process.env.NODE_ENV !== 'development') return;
+
+    const handleDevFillVehicle = (e: CustomEvent<{
+      reg: string;
+      vin?: string;
+      make: string;
+      model: string;
+      year: number;
+      colour: string;
+      fuel_type: 'Petrol' | 'Diesel' | 'Hybrid' | 'Electric';
+      purchase_price?: number;
+      daily_rent: number;
+      weekly_rent: number;
+      monthly_rent: number;
+      acquisition_type: 'Purchase' | 'Finance';
+      acquisition_date: Date;
+      description?: string;
+    }>) => {
+      const data = e.detail;
+      console.log('🔧 DEV MODE: Filling vehicle form with:', data);
+
+      // Set form values
+      form.setValue('reg', data.reg);
+      if (data.vin) form.setValue('vin', data.vin);
+      form.setValue('make', data.make);
+      form.setValue('model', data.model);
+      form.setValue('year', data.year);
+      form.setValue('colour', data.colour);
+      form.setValue('fuel_type', data.fuel_type);
+      if (data.purchase_price) form.setValue('purchase_price', data.purchase_price);
+      form.setValue('daily_rent', data.daily_rent);
+      form.setValue('weekly_rent', data.weekly_rent);
+      form.setValue('monthly_rent', data.monthly_rent);
+      form.setValue('acquisition_type', data.acquisition_type);
+      form.setValue('acquisition_date', new Date(data.acquisition_date));
+      if (data.description) form.setValue('description', data.description);
+
+      // Trigger form validation
+      form.trigger();
+
+      sonnerToast.success('Vehicle form auto-filled by Dev Panel');
+    };
+
+    window.addEventListener('dev-fill-vehicle-form', handleDevFillVehicle as EventListener);
+    return () => window.removeEventListener('dev-fill-vehicle-form', handleDevFillVehicle as EventListener);
+  }, [form]);
 
   const handleOpenChange = (newOpen: boolean) => {
     if (onOpenChange) {
@@ -441,7 +491,7 @@ export const AddVehicleDialog = ({ open, onOpenChange }: AddVehicleDialogProps) 
                       </FormItem>
                     )}
                   />
-                  
+
                   <FormField
                     control={form.control}
                     name="model"
@@ -455,7 +505,7 @@ export const AddVehicleDialog = ({ open, onOpenChange }: AddVehicleDialogProps) 
                       </FormItem>
                     )}
                   />
-                  
+
                   <FormField
                     control={form.control}
                     name="year"
@@ -982,7 +1032,7 @@ export const AddVehicleDialog = ({ open, onOpenChange }: AddVehicleDialogProps) 
                     <ShieldCheck className="h-5 w-5 text-primary" />
                     Compliance
                   </h3>
-                  
+
                   <FormField
                     control={form.control}
                     name="has_logbook"
@@ -1083,7 +1133,7 @@ export const AddVehicleDialog = ({ open, onOpenChange }: AddVehicleDialogProps) 
                           <FormItem>
                             <FormLabel>Spare Key Notes</FormLabel>
                             <FormControl>
-                              <Textarea 
+                              <Textarea
                                 placeholder="Additional notes about spare key location or details..."
                                 className="resize-none"
                                 {...field}
@@ -1150,30 +1200,30 @@ export const AddVehicleDialog = ({ open, onOpenChange }: AddVehicleDialogProps) 
                     control={form.control}
                     name="security_notes"
                     render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Security Notes</FormLabel>
-                          <FormControl>
-                            <Textarea 
-                              placeholder="Additional security information..."
-                              className="resize-none"
-                              {...field}
-                            />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                     />
+                      <FormItem>
+                        <FormLabel>Security Notes</FormLabel>
+                        <FormControl>
+                          <Textarea
+                            placeholder="Additional security information..."
+                            className="resize-none"
+                            {...field}
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
                 </div>
               </div>
             </ScrollArea>
-            
+
             <div className="flex justify-end gap-2 px-4 py-2 border-t flex-shrink-0">
               <Button type="button" variant="outline" onClick={() => handleOpenChange(false)}>
                 Cancel
               </Button>
-              <Button 
-                type="submit" 
-                disabled={loading} 
+              <Button
+                type="submit"
+                disabled={loading}
                 className="bg-gradient-primary rounded-lg transition-all duration-200 focus:ring-2 focus:ring-primary"
               >
                 {loading ? "Adding..." : "Add Vehicle"}

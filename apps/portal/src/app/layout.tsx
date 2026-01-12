@@ -8,6 +8,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { useEffect, useState } from "react";
 import { useAuthStore } from "@/stores/auth-store";
 import { TenantProvider } from "@/contexts/TenantContext";
+import DevPanel from "@/components/shared/DevPanel";
 import "@/global.css";
 
 const queryClient = new QueryClient({
@@ -95,6 +96,7 @@ export default function RootLayout({
                     <Toaster />
                     <Sonner />
                     {children}
+                    <DevPanel />
                   </GlobalKeyboardShortcuts>
                 </TooltipProvider>
               </ThemeProvider>
