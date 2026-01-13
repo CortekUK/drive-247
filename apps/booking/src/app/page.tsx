@@ -15,7 +15,7 @@ import MultiStepBookingWidget from '@/components/MultiStepBookingWidget';
 import HeroCarousel from '@/components/HeroCarousel';
 import { Phone } from 'lucide-react';
 
-import { usePageContent, defaultHomeContent, mergeWithDefaults, defaultHomeCarouselImages } from '@/hooks/usePageContent';
+import { usePageContent, defaultHomeContent, mergeWithDefaults, defaultHomeCarouselImages, type CarouselMediaItem } from '@/hooks/usePageContent';
 import { Button } from '@/components/ui/button';
 import { useEffect, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
@@ -32,10 +32,27 @@ export default function Home() {
   const { data: rawContent } = usePageContent('home');
   const content = mergeWithDefaults(rawContent, defaultHomeContent);
 
-  // Hero carousel images - use CMS images if set, otherwise use defaults
-  const heroCarouselImages = content.home_hero?.carousel_images?.length
-    ? content.home_hero.carousel_images
-    : defaultHomeCarouselImages;
+  // Hero carousel media - prefer new carousel_media format, fall back to carousel_images, then defaults
+  const heroCarouselMedia: CarouselMediaItem[] | undefined = (() => {
+    // Debug: log what we're receiving from CMS
+    console.log('[Hero] home_hero content:', content.home_hero);
+    console.log('[Hero] carousel_media:', content.home_hero?.carousel_media);
+    console.log('[Hero] carousel_images:', content.home_hero?.carousel_images);
+
+    // First, try new carousel_media format
+    if (content.home_hero?.carousel_media?.length) {
+      console.log('[Hero] Using carousel_media format');
+      return content.home_hero.carousel_media;
+    }
+    // Fall back to old carousel_images format (convert to media items)
+    if (content.home_hero?.carousel_images?.length) {
+      console.log('[Hero] Using carousel_images format (legacy)');
+      return content.home_hero.carousel_images.map(url => ({ url, type: 'image' as const }));
+    }
+    // Use defaults
+    console.log('[Hero] Using default images');
+    return defaultHomeCarouselImages.map(url => ({ url, type: 'image' as const }));
+  })();
 
   // Handle hash scrolling on page load
   useEffect(() => {
@@ -113,7 +130,7 @@ export default function Home() {
       {/* Hero Section with Carousel */}
       <section className="relative min-h-screen">
         <HeroCarousel
-          images={heroCarouselImages}
+          media={heroCarouselMedia}
           autoPlayInterval={5000}
           overlayStrength="medium"
           showScrollIndicator={true}

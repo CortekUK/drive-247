@@ -208,12 +208,21 @@ export interface ExtrasContent {
   footer_text: string;
 }
 
+// Carousel Media Item for mixed image/video carousel
+export interface CarouselMediaItem {
+  url: string;
+  type: 'image' | 'video';
+  alt?: string;
+  thumbnail?: string;
+}
+
 // Home Page Content Types
 export interface HomeHeroContent {
   headline: string;
   subheading: string;
   background_image?: string;
-  carousel_images?: string[];
+  carousel_images?: string[]; // Kept for backwards compatibility
+  carousel_media?: CarouselMediaItem[]; // New: mixed media array
   phone_number: string;
   phone_cta_text: string;
   book_cta_text: string;
@@ -376,6 +385,9 @@ export const usePageContent = (slug: string) => {
     queryFn: async (): Promise<PageContent | null> => {
       try {
         // Helper function to fetch page with optional tenant filter
+        // TEMP: Also fetch draft pages for development testing
+        const isDev = typeof window !== 'undefined' && window.location.hostname.includes('localhost');
+
         const fetchPage = async (tenantId: string | null) => {
           let query = supabase
             .from("cms_pages")
@@ -390,8 +402,12 @@ export const usePageContent = (slug: string) => {
                 is_visible
               )
             `)
-            .eq("slug", slug)
-            .eq("status", "published");
+            .eq("slug", slug);
+
+          // In dev mode, fetch both draft and published; in prod, only published
+          if (!isDev) {
+            query = query.eq("status", "published");
+          }
 
           // Filter by tenant if provided
           if (tenantId) {
@@ -412,7 +428,7 @@ export const usePageContent = (slug: string) => {
           // 2. If not found, try global content (tenant_id IS NULL) - NOT content from other tenants
           if (result.error?.code === "PGRST116") {
             console.log(`[CMS] No tenant-specific content for ${slug}, trying global (tenant_id IS NULL)...`);
-            result = await supabase
+            let globalQuery = supabase
               .from("cms_pages")
               .select(`
                 id,
@@ -426,9 +442,13 @@ export const usePageContent = (slug: string) => {
                 )
               `)
               .eq("slug", slug)
-              .eq("status", "published")
-              .is("tenant_id", null)
-              .single();
+              .is("tenant_id", null);
+
+            if (!isDev) {
+              globalQuery = globalQuery.eq("status", "published");
+            }
+
+            result = await globalQuery.single();
           }
 
           // Note: We intentionally do NOT fall back to content from other tenants.
@@ -437,7 +457,7 @@ export const usePageContent = (slug: string) => {
         } else {
           // No tenant context - only fetch global content (tenant_id IS NULL)
           console.log(`[CMS] No tenant context, fetching global content for ${slug}...`);
-          result = await supabase
+          let noTenantQuery = supabase
             .from("cms_pages")
             .select(`
               id,
@@ -451,9 +471,13 @@ export const usePageContent = (slug: string) => {
               )
             `)
             .eq("slug", slug)
-            .eq("status", "published")
-            .is("tenant_id", null)
-            .single();
+            .is("tenant_id", null);
+
+          if (!isDev) {
+            noTenantQuery = noTenantQuery.eq("status", "published");
+          }
+
+          result = await noTenantQuery.single();
         }
 
         const { data: page, error } = result;
