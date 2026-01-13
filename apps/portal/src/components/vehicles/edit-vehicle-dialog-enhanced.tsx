@@ -54,6 +54,7 @@ interface Vehicle {
   has_remote_immobiliser?: boolean;
   security_notes?: string | null;
   description?: string | null;
+  security_deposit?: number | null;
 }
 
 interface EditVehicleDialogProps {
@@ -103,6 +104,7 @@ export const EditVehicleDialogEnhanced = ({ vehicle, open, onOpenChange }: EditV
       has_remote_immobiliser: vehicle.has_remote_immobiliser || false,
       security_notes: vehicle.security_notes || "",
       description: vehicle.description || "",
+      security_deposit: vehicle.security_deposit ?? undefined,
     },
   });
 
@@ -150,6 +152,7 @@ export const EditVehicleDialogEnhanced = ({ vehicle, open, onOpenChange }: EditV
         has_tracker: data.has_tracker,
         has_remote_immobiliser: data.has_remote_immobiliser,
         security_notes: data.security_notes || null,
+        security_deposit: data.security_deposit || null,
       };
 
       // Add type-specific fields
@@ -462,7 +465,7 @@ export const EditVehicleDialogEnhanced = ({ vehicle, open, onOpenChange }: EditV
                 <h3 className="font-semibold text-sm">Rental Rates</h3>
               </div>
 
-              <div className="grid grid-cols-3 gap-4">
+              <div className="grid grid-cols-4 gap-4">
                 <FormField
                   control={form.control}
                   name="daily_rent"
@@ -545,6 +548,36 @@ export const EditVehicleDialogEnhanced = ({ vehicle, open, onOpenChange }: EditV
                           }}
                           onKeyDown={(e) => {
                             // Prevent negative sign, e, and E
+                            if (e.key === '-' || e.key === 'e' || e.key === 'E') {
+                              e.preventDefault();
+                            }
+                          }}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="security_deposit"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Deposit ($)</FormLabel>
+                      <FormControl>
+                        <Input
+                          type="number"
+                          step="0.01"
+                          min="0"
+                          placeholder="Optional"
+                          {...field}
+                          value={field.value ?? ''}
+                          onChange={(e) => {
+                            const value = e.target.value;
+                            field.onChange(value === '' ? undefined : parseFloat(value));
+                          }}
+                          onKeyDown={(e) => {
                             if (e.key === '-' || e.key === 'e' || e.key === 'E') {
                               e.preventDefault();
                             }

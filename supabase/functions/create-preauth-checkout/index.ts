@@ -104,13 +104,10 @@ serve(async (req) => {
       description: `Vehicle Rental: ${body.vehicleName} (${body.pickupDate} - ${body.returnDate})`,
     }
 
-    // If tenant has Stripe Connect, route payment to their account
-    // Transfer happens when payment is captured (approved)
+    // For direct charges: create checkout session on connected account
+    const stripeOptions = stripeAccountId ? { stripeAccount: stripeAccountId } : undefined;
     if (stripeAccountId) {
-      paymentIntentData.transfer_data = {
-        destination: stripeAccountId,
-      }
-      console.log('Transfer will be routed to connected account:', stripeAccountId)
+      console.log('Creating checkout session on connected account:', stripeAccountId)
     }
 
     // Create Stripe Checkout Session (this creates the PaymentIntent internally)
@@ -143,7 +140,7 @@ serve(async (req) => {
         preauth_mode: 'true',
         stripe_account_id: stripeAccountId || '',
       },
-    })
+    }, stripeOptions)
 
     console.log('Pre-auth checkout session created:', session.id)
 

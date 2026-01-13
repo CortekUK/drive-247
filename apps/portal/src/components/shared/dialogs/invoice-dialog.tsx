@@ -15,6 +15,8 @@ interface InvoiceDialogProps {
     due_date?: string;
     subtotal: number;
     tax_amount: number;
+    service_fee?: number;
+    security_deposit?: number;
     total_amount: number;
     notes?: string;
   };
@@ -133,8 +135,20 @@ const PrintableInvoice = ({ invoice, customer, vehicle, rental, protectionPlan }
             )}
             {invoice.tax_amount > 0 && (
               <tr className="border-b border-gray-300">
-                <td className="p-3 text-sm">Taxes & Fees</td>
+                <td className="p-3 text-sm">Tax</td>
                 <td className="p-3 text-sm text-right">{formatCurrency(invoice.tax_amount)}</td>
+              </tr>
+            )}
+            {(invoice.service_fee ?? 0) > 0 && (
+              <tr className="border-b border-gray-300">
+                <td className="p-3 text-sm">Service Fee</td>
+                <td className="p-3 text-sm text-right">{formatCurrency(invoice.service_fee ?? 0)}</td>
+              </tr>
+            )}
+            {(invoice.security_deposit ?? 0) > 0 && (
+              <tr className="border-b border-gray-300">
+                <td className="p-3 text-sm">Security Deposit</td>
+                <td className="p-3 text-sm text-right">{formatCurrency(invoice.security_deposit ?? 0)}</td>
               </tr>
             )}
             <tr className="bg-gray-100">
@@ -307,8 +321,20 @@ export const InvoiceDialog = ({
                   )}
                   {invoice.tax_amount > 0 && (
                     <tr className="border-b">
-                      <td className="p-3 text-sm">Taxes & Fees</td>
+                      <td className="p-3 text-sm">Tax</td>
                       <td className="p-3 text-sm text-right">{formatCurrency(invoice.tax_amount)}</td>
+                    </tr>
+                  )}
+                  {(invoice.service_fee ?? 0) > 0 && (
+                    <tr className="border-b">
+                      <td className="p-3 text-sm">Service Fee</td>
+                      <td className="p-3 text-sm text-right">{formatCurrency(invoice.service_fee ?? 0)}</td>
+                    </tr>
+                  )}
+                  {(invoice.security_deposit ?? 0) > 0 && (
+                    <tr className="border-b">
+                      <td className="p-3 text-sm">Security Deposit</td>
+                      <td className="p-3 text-sm text-right">{formatCurrency(invoice.security_deposit ?? 0)}</td>
                     </tr>
                   )}
                   <tr className="bg-muted/50">

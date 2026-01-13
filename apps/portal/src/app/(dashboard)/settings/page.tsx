@@ -9,6 +9,8 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
@@ -18,7 +20,7 @@ import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { format } from 'date-fns';
-import { Calendar as CalendarIcon, Settings as SettingsIcon, Building2, Bell, Zap, Upload, Save, Loader2, Database, AlertTriangle, Trash2, CreditCard, Palette, Link2, CheckCircle2, AlertCircle, ExternalLink, MapPin, FileText, Car, Mail, ShieldX, FilePenLine } from 'lucide-react';
+import { Calendar as CalendarIcon, Settings as SettingsIcon, Building2, Bell, Zap, Upload, Save, Loader2, Database, AlertTriangle, Trash2, CreditCard, Palette, Link2, CheckCircle2, AlertCircle, ExternalLink, MapPin, FileText, Car, Mail, ShieldX, FilePenLine, Receipt, Banknote, Shield } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
 import { useOrgSettings } from '@/hooks/use-org-settings';
 import { useTenantBranding } from '@/hooks/use-tenant-branding';
@@ -75,6 +77,12 @@ const Settings = () => {
   // Rental settings form state
   const [rentalForm, setRentalForm] = useState({
     minimum_rental_age: 18,
+    tax_enabled: false,
+    tax_percentage: 0,
+    service_fee_enabled: false,
+    service_fee_amount: 0,
+    deposit_mode: 'global' as 'global' | 'per_vehicle',
+    global_deposit_amount: 0,
   });
 
   // Sync rental form with loaded settings
@@ -82,6 +90,12 @@ const Settings = () => {
     if (rentalSettings) {
       setRentalForm({
         minimum_rental_age: rentalSettings.minimum_rental_age ?? 18,
+        tax_enabled: rentalSettings.tax_enabled ?? false,
+        tax_percentage: rentalSettings.tax_percentage ?? 0,
+        service_fee_enabled: rentalSettings.service_fee_enabled ?? false,
+        service_fee_amount: rentalSettings.service_fee_amount ?? 0,
+        deposit_mode: rentalSettings.deposit_mode ?? 'global',
+        global_deposit_amount: rentalSettings.global_deposit_amount ?? 0,
       });
     }
   }, [rentalSettings]);
@@ -1519,6 +1533,270 @@ const Settings = () => {
                   <Save className="h-4 w-4" />
                 )}
                 Save
+              </Button>
+            </CardContent>
+          </Card>
+
+          {/* Tax Configuration Card */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Receipt className="h-5 w-5 text-primary" />
+                Tax Configuration
+              </CardTitle>
+              <CardDescription>
+                Configure tax settings for customer bookings
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              <div className="flex items-center justify-between p-4 border rounded-lg">
+                <div className="space-y-1">
+                  <h4 className="font-medium">Enable Tax</h4>
+                  <p className="text-sm text-muted-foreground">
+                    Add tax as a separate line item on customer invoices
+                  </p>
+                </div>
+                <Switch
+                  checked={rentalForm.tax_enabled ?? false}
+                  onCheckedChange={(checked) => {
+                    setRentalForm(prev => ({ ...prev, tax_enabled: checked }));
+                  }}
+                />
+              </div>
+
+              {rentalForm.tax_enabled && (
+                <div className="space-y-2">
+                  <Label htmlFor="tax_percentage">Tax Rate (%)</Label>
+                  <div className="flex items-center gap-4">
+                    <Input
+                      id="tax_percentage"
+                      type="number"
+                      min="0"
+                      max="100"
+                      step="0.01"
+                      value={rentalForm.tax_percentage ?? 0}
+                      onChange={(e) => {
+                        const value = parseFloat(e.target.value) || 0;
+                        setRentalForm(prev => ({
+                          ...prev,
+                          tax_percentage: Math.max(0, Math.min(100, value))
+                        }));
+                      }}
+                      className="w-32"
+                    />
+                    <span className="text-sm text-muted-foreground">%</span>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Tax is added on top of the rental amount
+                  </p>
+                </div>
+              )}
+
+              <Button
+                onClick={async () => {
+                  try {
+                    await updateRentalSettings({
+                      tax_enabled: rentalForm.tax_enabled,
+                      tax_percentage: rentalForm.tax_percentage,
+                    });
+                  } catch (error) {
+                    console.error('Failed to update tax settings:', error);
+                  }
+                }}
+                disabled={isUpdatingRentalSettings}
+                className="flex items-center gap-2"
+              >
+                {isUpdatingRentalSettings ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Save className="h-4 w-4" />
+                )}
+                Save Tax Settings
+              </Button>
+            </CardContent>
+          </Card>
+
+          {/* Service Fee Configuration Card */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Banknote className="h-5 w-5 text-primary" />
+                Service Fee
+              </CardTitle>
+              <CardDescription>
+                Configure a fixed service fee for customer bookings
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              <div className="flex items-center justify-between p-4 border rounded-lg">
+                <div className="space-y-1">
+                  <h4 className="font-medium">Enable Service Fee</h4>
+                  <p className="text-sm text-muted-foreground">
+                    Add a fixed service fee to customer invoices
+                  </p>
+                </div>
+                <Switch
+                  checked={rentalForm.service_fee_enabled ?? false}
+                  onCheckedChange={(checked) => {
+                    setRentalForm(prev => ({ ...prev, service_fee_enabled: checked }));
+                  }}
+                />
+              </div>
+
+              {rentalForm.service_fee_enabled && (
+                <div className="space-y-2">
+                  <Label htmlFor="service_fee_amount">Service Fee Amount</Label>
+                  <div className="flex items-center gap-4">
+                    <div className="relative">
+                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">$</span>
+                      <Input
+                        id="service_fee_amount"
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        value={rentalForm.service_fee_amount ?? 0}
+                        onChange={(e) => {
+                          const value = parseFloat(e.target.value) || 0;
+                          setRentalForm(prev => ({
+                            ...prev,
+                            service_fee_amount: Math.max(0, value)
+                          }));
+                        }}
+                        className="w-32 pl-7"
+                      />
+                    </div>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Fixed amount added to each booking
+                  </p>
+                </div>
+              )}
+
+              <Button
+                onClick={async () => {
+                  try {
+                    await updateRentalSettings({
+                      service_fee_enabled: rentalForm.service_fee_enabled,
+                      service_fee_amount: rentalForm.service_fee_amount,
+                    });
+                  } catch (error) {
+                    console.error('Failed to update service fee settings:', error);
+                  }
+                }}
+                disabled={isUpdatingRentalSettings}
+                className="flex items-center gap-2"
+              >
+                {isUpdatingRentalSettings ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Save className="h-4 w-4" />
+                )}
+                Save Service Fee Settings
+              </Button>
+            </CardContent>
+          </Card>
+
+          {/* Security Deposit Configuration Card */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Shield className="h-5 w-5 text-primary" />
+                Security Deposit
+              </CardTitle>
+              <CardDescription>
+                Configure security deposit for customer bookings
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              {/* Deposit Mode Selection */}
+              <RadioGroup
+                value={rentalForm.deposit_mode}
+                onValueChange={(value) => setRentalForm(prev => ({
+                  ...prev,
+                  deposit_mode: value as 'global' | 'per_vehicle'
+                }))}
+                className="space-y-3"
+              >
+                <div className="flex items-center space-x-3 p-4 border rounded-lg cursor-pointer hover:bg-muted/50"
+                  onClick={() => setRentalForm(prev => ({ ...prev, deposit_mode: 'global' }))}>
+                  <RadioGroupItem value="global" id="deposit-global" />
+                  <Label htmlFor="deposit-global" className="flex-1 cursor-pointer">
+                    <div className="font-medium">Global Deposit</div>
+                    <div className="text-sm text-muted-foreground">
+                      Same deposit amount for all vehicles
+                    </div>
+                  </Label>
+                </div>
+                <div className="flex items-center space-x-3 p-4 border rounded-lg cursor-pointer hover:bg-muted/50"
+                  onClick={() => setRentalForm(prev => ({ ...prev, deposit_mode: 'per_vehicle' }))}>
+                  <RadioGroupItem value="per_vehicle" id="deposit-per-vehicle" />
+                  <Label htmlFor="deposit-per-vehicle" className="flex-1 cursor-pointer">
+                    <div className="font-medium">Per-Vehicle Deposit</div>
+                    <div className="text-sm text-muted-foreground">
+                      Set deposit amount individually for each vehicle
+                    </div>
+                  </Label>
+                </div>
+              </RadioGroup>
+
+              {/* Global Deposit Amount (only when mode is global) */}
+              {rentalForm.deposit_mode === 'global' && (
+                <div className="space-y-2">
+                  <Label htmlFor="global_deposit_amount">Global Deposit Amount</Label>
+                  <div className="flex items-center gap-4">
+                    <div className="relative">
+                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">$</span>
+                      <Input
+                        id="global_deposit_amount"
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        value={rentalForm.global_deposit_amount ?? 0}
+                        onChange={(e) => {
+                          const value = parseFloat(e.target.value) || 0;
+                          setRentalForm(prev => ({
+                            ...prev,
+                            global_deposit_amount: Math.max(0, value)
+                          }));
+                        }}
+                        className="w-32 pl-7"
+                      />
+                    </div>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    This amount will be applied to all bookings
+                  </p>
+                </div>
+              )}
+
+              {rentalForm.deposit_mode === 'per_vehicle' && (
+                <Alert>
+                  <AlertDescription>
+                    Set deposit amounts when adding or editing vehicles. Vehicles without a deposit will show $0.
+                  </AlertDescription>
+                </Alert>
+              )}
+
+              <Button
+                onClick={async () => {
+                  try {
+                    await updateRentalSettings({
+                      deposit_mode: rentalForm.deposit_mode,
+                      global_deposit_amount: rentalForm.global_deposit_amount,
+                    });
+                  } catch (error) {
+                    console.error('Failed to update deposit settings:', error);
+                  }
+                }}
+                disabled={isUpdatingRentalSettings}
+                className="flex items-center gap-2"
+              >
+                {isUpdatingRentalSettings ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Save className="h-4 w-4" />
+                )}
+                Save Deposit Settings
               </Button>
             </CardContent>
           </Card>

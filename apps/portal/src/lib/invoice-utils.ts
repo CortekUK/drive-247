@@ -9,6 +9,8 @@ export interface InvoiceData {
   due_date?: Date;
   subtotal: number;
   tax_amount?: number;
+  service_fee?: number;
+  security_deposit?: number;
   total_amount: number;
   notes?: string;
   tenant_id?: string;
@@ -24,6 +26,8 @@ export interface Invoice {
   due_date?: string;
   subtotal: number;
   tax_amount: number;
+  service_fee?: number;
+  security_deposit?: number;
   total_amount: number;
   status: string;
   notes?: string;
@@ -77,6 +81,8 @@ export const createInvoice = async (data: InvoiceData): Promise<Invoice> => {
       due_date: data.due_date ? format(data.due_date, 'yyyy-MM-dd') : null,
       subtotal: data.subtotal,
       tax_amount: data.tax_amount || 0,
+      service_fee: data.service_fee || 0,
+      security_deposit: data.security_deposit || 0,
       total_amount: data.total_amount,
       status: 'pending',
       notes: data.notes,

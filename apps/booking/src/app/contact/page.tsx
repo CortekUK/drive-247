@@ -142,7 +142,7 @@ const Contact = () => {
           phone: formData.phone,
           subject: formData.subject,
           message: formData.message,
-          adminEmail: 'ilyasghulam32@gmail.com'
+          adminEmail: contactSettings.email
         }
       });
 

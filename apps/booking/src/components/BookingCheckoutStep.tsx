@@ -79,8 +79,34 @@ export default function BookingCheckoutStep({
     return 0;
   };
 
+  // Calculate tax amount based on tenant settings
+  const calculateTaxAmount = (): number => {
+    if (!tenant?.tax_enabled || !tenant?.tax_percentage) {
+      return 0;
+    }
+    return vehicleTotal * (tenant.tax_percentage / 100);
+  };
+
+  // Calculate service fee based on tenant settings
+  const calculateServiceFee = (): number => {
+    if (!tenant?.service_fee_enabled || !tenant?.service_fee_amount) {
+      return 0;
+    }
+    return tenant.service_fee_amount;
+  };
+
+  // Calculate security deposit based on tenant settings
+  const calculateSecurityDeposit = (): number => {
+    if (tenant?.deposit_mode === 'per_vehicle') {
+      // Per-vehicle deposit: use the vehicle's security_deposit field
+      return selectedVehicle?.security_deposit ?? 0;
+    }
+    // Global deposit mode (default)
+    return tenant?.global_deposit_amount ?? 0;
+  };
+
   const calculateGrandTotal = () => {
-    return vehicleTotal; // Just the rental price, no additional fees
+    return vehicleTotal + calculateTaxAmount() + calculateServiceFee() + calculateSecurityDeposit();
   };
 
   // Function to get booking payment mode
@@ -549,7 +575,9 @@ export default function BookingCheckoutStep({
         subtotal: vehicleTotal,
         rental_fee: vehicleTotal,
         protection_fee: 0,
-        tax_amount: 0,
+        tax_amount: calculateTaxAmount(),
+        service_fee: calculateServiceFee(),
+        security_deposit: calculateSecurityDeposit(),
         total_amount: calculateGrandTotal(),
         notes: '',
         tenant_id: tenant?.id,
@@ -779,6 +807,30 @@ export default function BookingCheckoutStep({
                 <span className="text-muted-foreground">Rental ({rentalDuration.formatted})</span>
                 <span className="font-medium">${vehicleTotal.toLocaleString()}</span>
               </div>
+
+              {/* Tax line item - only show when tax is enabled */}
+              {tenant?.tax_enabled && tenant?.tax_percentage > 0 && (
+                <div className="flex justify-between text-sm">
+                  <span className="text-muted-foreground">Tax ({tenant.tax_percentage}%)</span>
+                  <span className="font-medium">${calculateTaxAmount().toFixed(2)}</span>
+                </div>
+              )}
+
+              {/* Service fee line item - only show when enabled */}
+              {tenant?.service_fee_enabled && tenant?.service_fee_amount > 0 && (
+                <div className="flex justify-between text-sm">
+                  <span className="text-muted-foreground">Service Fee</span>
+                  <span className="font-medium">${calculateServiceFee().toFixed(2)}</span>
+                </div>
+              )}
+
+              {/* Security deposit line item - only show when > 0 */}
+              {calculateSecurityDeposit() > 0 && (
+                <div className="flex justify-between text-sm">
+                  <span className="text-muted-foreground">Security Deposit</span>
+                  <span className="font-medium">${calculateSecurityDeposit().toFixed(2)}</span>
+                </div>
+              )}
 
               <div className="pt-3 border-t border-accent/30">
                 <div className="flex justify-between items-center">

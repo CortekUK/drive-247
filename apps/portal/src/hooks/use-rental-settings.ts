@@ -10,6 +10,12 @@ export interface RentalSettings {
   minimum_rental_age: number | null;
   require_identity_verification: boolean | null;
   require_insurance_upload: boolean | null;
+  tax_enabled: boolean | null;
+  tax_percentage: number | null;
+  service_fee_enabled: boolean | null;
+  service_fee_amount: number | null;
+  deposit_mode: 'global' | 'per_vehicle' | null;
+  global_deposit_amount: number | null;
 }
 
 const DEFAULT_RENTAL_SETTINGS: RentalSettings = {
@@ -19,6 +25,12 @@ const DEFAULT_RENTAL_SETTINGS: RentalSettings = {
   minimum_rental_age: 18,
   require_identity_verification: true,
   require_insurance_upload: false,
+  tax_enabled: false,
+  tax_percentage: 0,
+  service_fee_enabled: false,
+  service_fee_amount: 0,
+  deposit_mode: 'global',
+  global_deposit_amount: 0,
 };
 
 /**
@@ -55,7 +67,13 @@ export const useRentalSettings = () => {
           booking_lead_time_hours,
           minimum_rental_age,
           require_identity_verification,
-          require_insurance_upload
+          require_insurance_upload,
+          tax_enabled,
+          tax_percentage,
+          service_fee_enabled,
+          service_fee_amount,
+          deposit_mode,
+          global_deposit_amount
         `)
         .eq('id', tenant.id)
         .single();
@@ -92,7 +110,13 @@ export const useRentalSettings = () => {
           booking_lead_time_hours,
           minimum_rental_age,
           require_identity_verification,
-          require_insurance_upload
+          require_insurance_upload,
+          tax_enabled,
+          tax_percentage,
+          service_fee_enabled,
+          service_fee_amount,
+          deposit_mode,
+          global_deposit_amount
         `);
 
       if (error) {

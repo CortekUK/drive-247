@@ -143,15 +143,11 @@ serve(async (req) => {
           refundResult = { type: "cancelled", message: "Pre-authorization hold released" };
         } else if (paymentIntent.status === "succeeded") {
           // Captured payment: Process refund
+          // For direct charges, refund is created on the connected account
           let refundParams: Stripe.RefundCreateParams = {
             payment_intent: paymentIntentId,
             reason: "requested_by_customer",
           };
-
-          // For Stripe Connect: reverse the transfer to pull money from tenant
-          if (stripeAccountId) {
-            refundParams.reverse_transfer = true;
-          }
 
           if (refundType === "partial" && refundAmount) {
             refundParams.amount = Math.round(refundAmount * 100); // Convert to cents

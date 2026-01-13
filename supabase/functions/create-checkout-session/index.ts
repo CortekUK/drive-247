@@ -146,16 +146,10 @@ serve(async (req) => {
       },
     }
 
-    // If tenant has Stripe Connect, route payment to their account
-    if (stripeAccountId) {
-      sessionConfig.payment_intent_data = {
-        transfer_data: {
-          destination: stripeAccountId,
-        },
-      }
-    }
+    // For direct charges: create checkout session on connected account
+    const stripeOptions = stripeAccountId ? { stripeAccount: stripeAccountId } : undefined;
 
-    const session = await stripe.checkout.sessions.create(sessionConfig)
+    const session = await stripe.checkout.sessions.create(sessionConfig, stripeOptions)
 
     return new Response(
       JSON.stringify({ sessionId: session.id, url: session.url }),

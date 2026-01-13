@@ -73,13 +73,33 @@ serve(async (req) => {
       );
     }
 
-    // 3. Get the Stripe checkout session to find the PaymentIntent
+    // 3. Get tenant's Stripe Connect account for direct charges
+    const tenantId = payment.tenant_id || payment.rental?.tenant_id;
+    let stripeAccountId: string | null = null;
+
+    if (tenantId) {
+      const { data: tenant } = await supabase
+        .from("tenants")
+        .select("stripe_account_id, stripe_onboarding_complete")
+        .eq("id", tenantId)
+        .single();
+
+      if (tenant?.stripe_account_id && tenant?.stripe_onboarding_complete) {
+        stripeAccountId = tenant.stripe_account_id;
+        console.log("Using Stripe Connect account:", stripeAccountId);
+      }
+    }
+
+    const stripeOptions = stripeAccountId ? { stripeAccount: stripeAccountId } : undefined;
+
+    // 4. Get the Stripe checkout session to find the PaymentIntent
     let paymentIntentId = payment.stripe_payment_intent_id;
 
     if (!paymentIntentId && payment.stripe_checkout_session_id) {
-      // Retrieve PaymentIntent from checkout session
+      // Retrieve PaymentIntent from checkout session (on connected account for direct charges)
       const session = await stripe.checkout.sessions.retrieve(
-        payment.stripe_checkout_session_id
+        payment.stripe_checkout_session_id,
+        stripeOptions
       );
       paymentIntentId = session.payment_intent as string;
     }
@@ -97,10 +117,12 @@ serve(async (req) => {
       );
     }
 
-    // 4. Capture the payment in Stripe
-    console.log("Capturing Stripe payment intent:", paymentIntentId);
+    // 5. Capture the payment in Stripe (on connected account for direct charges)
+    console.log("Capturing Stripe payment intent:", paymentIntentId, stripeAccountId ? `(Connect: ${stripeAccountId})` : '');
     const capturedPaymentIntent = await stripe.paymentIntents.capture(
-      paymentIntentId
+      paymentIntentId,
+      undefined,
+      stripeOptions
     );
 
     if (capturedPaymentIntent.status !== "succeeded") {
@@ -118,7 +140,7 @@ serve(async (req) => {
 
     console.log("Stripe payment captured successfully");
 
-    // 5. Update payment record
+    // 6. Update payment record
     const { error: updatePaymentError } = await supabase
       .from("payments")
       .update({
@@ -137,7 +159,7 @@ serve(async (req) => {
       // Don't fail - Stripe already captured, just log the error
     }
 
-    // 6. Update rental status to Active
+    // 7. Update rental status to Active
     if (payment.rental_id) {
       const { error: rentalUpdateError } = await supabase
         .from("rentals")
@@ -151,7 +173,7 @@ serve(async (req) => {
         console.error("Failed to update rental:", rentalUpdateError);
       }
 
-      // 7. Update vehicle status to Rented
+      // 8. Update vehicle status to Rented
       if (payment.rental?.vehicle_id) {
         const { error: vehicleUpdateError } = await supabase
           .from("vehicles")
@@ -167,7 +189,7 @@ serve(async (req) => {
       }
     }
 
-    // 8. Apply payment to charges
+    // 9. Apply payment to charges
     try {
       const { data: applyResult, error: applyError } = await supabase.functions.invoke(
         "apply-payment",

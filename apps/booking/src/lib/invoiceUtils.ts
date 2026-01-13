@@ -11,6 +11,8 @@ export interface InvoiceData {
   rental_fee?: number;
   protection_fee?: number;
   tax_amount?: number;
+  service_fee?: number;
+  security_deposit?: number;
   total_amount: number;
   notes?: string;
   tenant_id?: string;
@@ -28,6 +30,8 @@ export interface Invoice {
   rental_fee?: number;
   protection_fee?: number;
   tax_amount: number;
+  service_fee?: number;
+  security_deposit?: number;
   total_amount: number;
   status: string;
   notes?: string;
@@ -67,6 +71,8 @@ export const createInvoice = async (data: InvoiceData): Promise<Invoice> => {
     rental_fee: data.rental_fee || data.subtotal,
     protection_fee: data.protection_fee || 0,
     tax_amount: data.tax_amount || 0,
+    service_fee: data.service_fee || 0,
+    security_deposit: data.security_deposit || 0,
     total_amount: data.total_amount,
     status: 'pending',
     notes: data.notes,
@@ -109,6 +115,8 @@ export const createLocalInvoice = (data: InvoiceData): Invoice => {
     rental_fee: data.rental_fee || data.subtotal,
     protection_fee: data.protection_fee || 0,
     tax_amount: data.tax_amount || 0,
+    service_fee: data.service_fee || 0,
+    security_deposit: data.security_deposit || 0,
     total_amount: data.total_amount,
     status: 'pending',
     notes: data.notes,

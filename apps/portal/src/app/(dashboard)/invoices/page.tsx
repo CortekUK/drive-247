@@ -6,11 +6,20 @@ import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { FileText, Eye } from "lucide-react";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { FileText, Eye, MoreVertical, Trash2, Mail } from "lucide-react";
 import { format } from "date-fns";
 import { formatCurrency } from "@/lib/invoice-utils";
 import { InvoiceDialog } from "@/components/shared/dialogs/invoice-dialog";
 import { EmptyState } from "@/components/shared/data-display/empty-state";
+import { DeleteInvoiceDialog } from "@/components/invoices/delete-invoice-dialog";
+import { SendInvoiceEmailDialog } from "@/components/invoices/send-invoice-email-dialog";
+import { useTenant } from "@/contexts/TenantContext";
 
 interface Invoice {
   id: string;
@@ -45,12 +54,15 @@ interface Invoice {
 }
 
 const InvoicesList = () => {
+  const { tenant } = useTenant();
   const [selectedInvoice, setSelectedInvoice] = useState<Invoice | null>(null);
-  console.log("selectedInvoice", selectedInvoice);
   const [showInvoiceDialog, setShowInvoiceDialog] = useState(false);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [sendEmailDialogOpen, setSendEmailDialogOpen] = useState(false);
+  const [selectedInvoiceForAction, setSelectedInvoiceForAction] = useState<Invoice | null>(null);
 
   const { data: invoices, isLoading } = useQuery({
-    queryKey: ["invoices-list"],
+    queryKey: ["invoices-list", tenant?.id],
     queryFn: async () => {
       const { data, error } = await supabase
         .from("invoices" as any)
@@ -69,6 +81,7 @@ const InvoicesList = () => {
       if (error) throw error;
       return data as any as Invoice[];
     },
+    enabled: !!tenant?.id,
   });
 
   const handleViewInvoice = (invoice: Invoice) => {
@@ -136,13 +149,43 @@ const InvoicesList = () => {
                         {formatCurrency(invoice.total_amount)}
                       </TableCell>
                       <TableCell>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => handleViewInvoice(invoice)}
-                        >
-                          <Eye className="h-4 w-4" />
-                        </Button>
+                        <div className="flex items-center gap-1">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleViewInvoice(invoice)}
+                          >
+                            <Eye className="h-4 w-4" />
+                          </Button>
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button variant="ghost" size="sm">
+                                <MoreVertical className="h-4 w-4" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                              <DropdownMenuItem
+                                onClick={() => {
+                                  setSelectedInvoiceForAction(invoice);
+                                  setSendEmailDialogOpen(true);
+                                }}
+                              >
+                                <Mail className="h-4 w-4 mr-2" />
+                                Send Email
+                              </DropdownMenuItem>
+                              <DropdownMenuItem
+                                className="text-destructive focus:text-destructive"
+                                onClick={() => {
+                                  setSelectedInvoiceForAction(invoice);
+                                  setDeleteDialogOpen(true);
+                                }}
+                              >
+                                <Trash2 className="h-4 w-4 mr-2" />
+                                Delete
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        </div>
                       </TableCell>
                     </TableRow>
                   ))}
@@ -184,6 +227,20 @@ const InvoicesList = () => {
           }}
         />
       )}
+
+      {/* Delete Invoice Dialog */}
+      <DeleteInvoiceDialog
+        open={deleteDialogOpen}
+        onOpenChange={setDeleteDialogOpen}
+        invoice={selectedInvoiceForAction}
+      />
+
+      {/* Send Invoice Email Dialog */}
+      <SendInvoiceEmailDialog
+        open={sendEmailDialogOpen}
+        onOpenChange={setSendEmailDialogOpen}
+        invoice={selectedInvoiceForAction}
+      />
     </div>
   );
 };

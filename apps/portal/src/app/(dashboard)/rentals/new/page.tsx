@@ -30,6 +30,7 @@ import { InvoiceDialog } from "@/components/shared/dialogs/invoice-dialog";
 import { createInvoice, Invoice } from "@/lib/invoice-utils";
 import { sendBookingNotification, sendPaymentVerificationNotification } from "@/lib/notifications";
 import { useOrgSettings } from "@/hooks/use-org-settings";
+import { useRentalSettings } from "@/hooks/use-rental-settings";
 import { useBlockedDates } from "@/hooks/use-blocked-dates";
 import { InsuranceUploadDialog } from "@/components/shared/dialogs/insurance-upload-dialog";
 import { LocationPicker } from "@/components/ui/location-picker";
@@ -106,6 +107,36 @@ const CreateRental = () => {
   // Get payment mode from org settings
   const { settings: orgSettings } = useOrgSettings();
   const isManualPaymentMode = orgSettings?.payment_mode === 'manual';
+
+  // Get rental settings for tax configuration
+  const { settings: rentalSettings } = useRentalSettings();
+
+  // Tax calculation helper
+  const calculateTaxAmount = (amount: number): number => {
+    if (!rentalSettings?.tax_enabled || !rentalSettings?.tax_percentage) {
+      return 0;
+    }
+    return amount * (rentalSettings.tax_percentage / 100);
+  };
+
+  // Service fee calculation helper
+  const calculateServiceFee = (): number => {
+    if (!rentalSettings?.service_fee_enabled || !rentalSettings?.service_fee_amount) {
+      return 0;
+    }
+    return rentalSettings.service_fee_amount;
+  };
+
+  // Security deposit calculation helper
+  const calculateSecurityDeposit = (vehicleId?: string): number => {
+    if (rentalSettings?.deposit_mode === 'per_vehicle' && vehicleId) {
+      // Per-vehicle deposit mode: get deposit from the selected vehicle
+      const vehicle = vehicles?.find(v => v.id === vehicleId);
+      return (vehicle as any)?.security_deposit ?? 0;
+    }
+    // Global deposit mode
+    return rentalSettings?.global_deposit_amount ?? 0;
+  };
 
   // Get all blocked dates (global and vehicle-specific)
   const { blockedDates } = useBlockedDates();
@@ -308,7 +339,7 @@ const CreateRental = () => {
     queryFn: async () => {
       let query = (supabase as any)
         .from("vehicles")
-        .select("id, reg, make, model, daily_rent, weekly_rent, monthly_rent")
+        .select("id, reg, make, model, daily_rent, weekly_rent, monthly_rent, security_deposit")
         .eq("status", "Available");
 
       if (tenant?.id) {
@@ -696,6 +727,10 @@ const CreateRental = () => {
       let invoiceCreated = false;
       try {
         const invoiceNotes = `Monthly rental fee for ${selectedVehicle?.make} ${selectedVehicle?.model} (${vehicleReg})`;
+        const taxAmount = calculateTaxAmount(data.monthly_amount);
+        const serviceFee = calculateServiceFee();
+        const securityDeposit = calculateSecurityDeposit(data.vehicle_id);
+        const totalAmount = data.monthly_amount + taxAmount + serviceFee + securityDeposit;
 
         const invoice = await createInvoice({
           rental_id: rental.id,
@@ -704,8 +739,10 @@ const CreateRental = () => {
           invoice_date: data.start_date,
           due_date: addMonths(data.start_date, 1),
           subtotal: data.monthly_amount,
-          tax_amount: 0,
-          total_amount: data.monthly_amount,
+          tax_amount: taxAmount,
+          service_fee: serviceFee,
+          security_deposit: securityDeposit,
+          total_amount: totalAmount,
           notes: invoiceNotes,
           tenant_id: tenant?.id,
         });
@@ -1462,13 +1499,8 @@ const CreateRental = () => {
                     </Button>
                     <Button
                       type="submit"
-<<<<<<< HEAD
                       disabled={loading || !isFormValid}
                       className="bg-gradient-primary text-white hover:opacity-90 transition-all duration-200 shadow-md hover:shadow-lg"
-=======
-                      disabled={loading || !isFormValid}
-                      className="bg-gradient-primary text-white hover:opacity-90 transition-all duration-200 shadow-md hover:shadow-lg"
->>>>>>> b7fb88f (UI for mobile mode fixed for booking and portal)
                     >
                       <Save className="h-4 w-4 mr-2" />
                       {loading ? "Creating..." : !isCustomerVerified ? "Verification Required" : "Create Rental"}
@@ -1481,7 +1513,6 @@ const CreateRental = () => {
         </div>
 
         {/* Contract Summary Panel */}
-<<<<<<< HEAD
         <div className="lg:col-span-1">
           <div className="sticky top-6">
             <ContractSummary
@@ -1494,20 +1525,6 @@ const CreateRental = () => {
               initialFee={watchedValues.initial_fee}
             />
           </div>
-=======
-        <div className="lg:col-span-1">
-          <div className="sticky top-6">
-            <ContractSummary
-              customer={selectedCustomer}
-              vehicle={selectedVehicle}
-              startDate={watchedValues.start_date}
-              endDate={watchedValues.end_date}
-              rentalPeriodType={watchedValues.rental_period_type}
-              monthlyAmount={watchedValues.monthly_amount}
-              initialFee={watchedValues.initial_fee}
-            />
-          </div>
->>>>>>> b7fb88f (UI for mobile mode fixed for booking and portal)
         </div>
       </div>
 

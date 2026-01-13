@@ -53,6 +53,16 @@ serve(async (req) => {
 
     console.log("Stripe webhook received:", event.type);
 
+    // For direct charges with Stripe Connect, events from connected accounts
+    // will have event.account set to the connected account ID
+    const connectedAccountId = (event as any).account as string | undefined;
+    if (connectedAccountId) {
+      console.log("Event from connected account:", connectedAccountId);
+    }
+
+    // stripeOptions for any Stripe API calls that need to target the connected account
+    const stripeOptions = connectedAccountId ? { stripeAccount: connectedAccountId } : undefined;
+
     switch (event.type) {
       case "checkout.session.completed": {
         const session = event.data.object as Stripe.Checkout.Session;

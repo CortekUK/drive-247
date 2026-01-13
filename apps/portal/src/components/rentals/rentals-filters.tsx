@@ -133,10 +133,6 @@ export const RentalsFilters = ({ filters, onFiltersChange, onClearFilters }: Ren
 
         <div className="flex gap-2 items-center flex-wrap w-full sm:w-auto">
           <span className="text-sm text-muted-foreground whitespace-nowrap">Duration (mo):</span>
-=======
-        <div className="flex gap-2 items-center flex-wrap w-full sm:w-auto">
-          <span className="text-sm text-muted-foreground whitespace-nowrap">Duration (mo):</span>
->>>>>>> b7fb88f (UI for mobile mode fixed for booking and portal)
           <Input
             type="number"
             placeholder="Min"

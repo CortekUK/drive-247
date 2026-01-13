@@ -174,12 +174,6 @@ export const useEnhancedRentals = (filters: RentalFilters = {}) => {
           const initialPaymentData = initialPaymentMap.get(rental.id);
           const initialPaymentAmount = initialPaymentData?.amount || null;
           const paymentCaptureStatus = initialPaymentData?.capture_status || null;
-=======
-          const computedStatus = getRentalStatus(rental.start_date, rental.end_date, rental.status);
-          const initialPaymentData = initialPaymentMap.get(rental.id);
-          const initialPaymentAmount = initialPaymentData?.amount || null;
-          const paymentCaptureStatus = initialPaymentData?.capture_status || null;
->>>>>>> b7fb88f (UI for mobile mode fixed for booking and portal)
           const totalAmount = rental.monthly_amount;
           const protectionCost = 0; // Protection cost not stored separately in current schema
 
@@ -198,11 +192,7 @@ export const useEnhancedRentals = (filters: RentalFilters = {}) => {
             payment_status: rental.payment_status,
             duration_months: durationMonths,
             initial_payment: initialPaymentAmount,
-<<<<<<< HEAD
             payment_capture_status: paymentCaptureStatus,
-=======
-            payment_capture_status: paymentCaptureStatus,
->>>>>>> b7fb88f (UI for mobile mode fixed for booking and portal)
             customer: rental.customers as any,
             vehicle: rental.vehicles as any,
           };

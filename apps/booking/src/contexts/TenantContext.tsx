@@ -69,6 +69,18 @@ export interface Tenant {
 
   // Integration settings
   integration_veriff: boolean | null;
+
+  // Tax settings
+  tax_enabled: boolean | null;
+  tax_percentage: number | null;
+
+  // Service fee settings
+  service_fee_enabled: boolean | null;
+  service_fee_amount: number | null;
+
+  // Deposit settings
+  deposit_mode: 'global' | 'per_vehicle' | null;
+  global_deposit_amount: number | null;
 }
 
 interface TenantContextType {
@@ -169,7 +181,10 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
                 min_rental_days, max_rental_days, booking_lead_time_hours, minimum_rental_age,
                 require_identity_verification, require_insurance_upload, payment_mode,
                 pickup_location_mode, return_location_mode, fixed_pickup_address, fixed_return_address,
-                integration_veriff
+                integration_veriff,
+                tax_enabled, tax_percentage,
+                service_fee_enabled, service_fee_amount,
+                deposit_mode, global_deposit_amount
               `)
               .eq('slug', defaultSlug)
               .eq('status', 'active')
@@ -249,7 +264,13 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
           return_location_mode,
           fixed_pickup_address,
           fixed_return_address,
-          integration_veriff
+          integration_veriff,
+          tax_enabled,
+          tax_percentage,
+          service_fee_enabled,
+          service_fee_amount,
+          deposit_mode,
+          global_deposit_amount
         `)
         .eq('slug', slug)
         .eq('status', 'active')

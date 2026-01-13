@@ -98,45 +98,9 @@ serve(async (req) => {
         }
       };
 
-      // For Stripe Connect with destination charges (platform creates charge):
-      // - Create refund on platform WITHOUT stripeAccount option
-      // - Set reverse_transfer: true to pull money back from connected account
-      // For direct charges (connected account creates charge):
-      // - Create refund on connected account WITH stripeAccount option
-      // - Do NOT set reverse_transfer
-
-      let stripeRefund;
-      let platformError: Error | null = null;
-      let connectedError: Error | null = null;
-
-      // Try platform account FIRST (destination charges create PaymentIntents on platform)
-      try {
-        console.log('Trying Stripe refund on platform account');
-        stripeRefund = await stripe.refunds.create(refundParams);
-        console.log('Stripe refund created on platform:', stripeRefund.id);
-      } catch (platformErr: any) {
-        console.log('Refund on platform account failed:', platformErr.message);
-        platformError = platformErr;
-      }
-
-      // If platform failed and we have a connected account, try that
-      if (!stripeRefund && stripeAccountId) {
-        try {
-          console.log('Trying Stripe refund on connected account:', stripeAccountId);
-          stripeRefund = await stripe.refunds.create(refundParams, { stripeAccount: stripeAccountId });
-          console.log('Stripe refund created on connected account:', stripeRefund.id);
-        } catch (connectedErr: any) {
-          console.log('Refund on connected account failed:', connectedErr.message);
-          connectedError = connectedErr;
-        }
-      }
-
-      if (!stripeRefund) {
-        if (platformError && connectedError) {
-          throw new Error(`Refund failed on both platform (${platformError.message}) and connected account (${connectedError.message})`);
-        }
-        throw platformError || connectedError || new Error('Failed to create refund');
-      }
+      // For direct charges: create refund on connected account
+      console.log('Processing Stripe refund', stripeAccountId ? `on connected account: ${stripeAccountId}` : 'on platform');
+      const stripeRefund = await stripe.refunds.create(refundParams, stripeOptions);
 
       // Update payment record
       await supabase
@@ -207,20 +171,42 @@ serve(async (req) => {
           .update({ refund_status: 'processing' })
           .eq('id', refund.payment_id);
 
-        // Process refund via Stripe
+        // Get tenant's Stripe Connect account for this refund
+        // First get tenant_id from payment record
+        const { data: paymentRecord } = await supabase
+          .from('payments')
+          .select('tenant_id')
+          .eq('id', refund.payment_id)
+          .single();
+
+        let batchStripeAccountId: string | null = null;
+        if (paymentRecord?.tenant_id) {
+          const { data: tenant } = await supabase
+            .from('tenants')
+            .select('stripe_account_id, stripe_onboarding_complete')
+            .eq('id', paymentRecord.tenant_id)
+            .single();
+
+          if (tenant?.stripe_account_id && tenant?.stripe_onboarding_complete) {
+            batchStripeAccountId = tenant.stripe_account_id;
+          }
+        }
+
+        const batchStripeOptions = batchStripeAccountId ? { stripeAccount: batchStripeAccountId } : undefined;
+
+        // Process refund via Stripe (on connected account for direct charges)
+        console.log(`Creating refund`, batchStripeAccountId ? `on connected account: ${batchStripeAccountId}` : 'on platform');
         const stripeRefund = await stripe.refunds.create({
           payment_intent: refund.stripe_payment_intent_id,
           amount: Math.round(refund.refund_amount * 100), // Convert to cents
           reason: 'requested_by_customer',
-          // For Stripe Connect: reverse the transfer to pull money from tenant
-          reverse_transfer: true,
           metadata: {
             payment_id: refund.payment_id,
             customer_id: refund.customer_id,
             rental_id: refund.rental_id,
             reason: refund.refund_reason
           }
-        });
+        }, batchStripeOptions);
 
         console.log(`Stripe refund created: ${stripeRefund.id}`);
 

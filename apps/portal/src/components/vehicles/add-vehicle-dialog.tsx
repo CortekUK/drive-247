@@ -66,6 +66,7 @@ export const AddVehicleDialog = ({ open, onOpenChange }: AddVehicleDialogProps) 
       has_remote_immobiliser: false,
       security_notes: "",
       description: "",
+      security_deposit: undefined,
     },
   });
 
@@ -211,6 +212,7 @@ export const AddVehicleDialog = ({ open, onOpenChange }: AddVehicleDialogProps) 
         has_remote_immobiliser: data.has_remote_immobiliser,
         security_notes: data.security_notes || null,
         description: data.description || null,
+        security_deposit: data.security_deposit || null,
       };
 
       // Add type-specific fields
@@ -625,7 +627,7 @@ export const AddVehicleDialog = ({ open, onOpenChange }: AddVehicleDialogProps) 
                   />
                 </div>
 
-                <div className="grid grid-cols-3 gap-3">
+                <div className="grid grid-cols-4 gap-3">
                   <FormField
                     control={form.control}
                     name="daily_rent"
@@ -705,6 +707,30 @@ export const AddVehicleDialog = ({ open, onOpenChange }: AddVehicleDialogProps) 
                               if (e.key === '.' || e.key === ',') {
                                 e.preventDefault();
                               }
+                            }}
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    control={form.control}
+                    name="security_deposit"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Deposit ($)</FormLabel>
+                        <FormControl>
+                          <Input
+                            type="number"
+                            min="0"
+                            placeholder="Optional"
+                            {...field}
+                            value={field.value ?? ""}
+                            onChange={(e) => {
+                              const value = e.target.value;
+                              field.onChange(value === "" ? undefined : parseFloat(value));
                             }}
                           />
                         </FormControl>

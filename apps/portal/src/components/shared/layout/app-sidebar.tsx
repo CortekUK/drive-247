@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Car, Users, FileText, CreditCard, LayoutDashboard, Bell, BarChart3, AlertCircle, TrendingUp, Settings, Ban, Receipt, FolderOpen, UserX, Globe, History, Clock } from "lucide-react";
+import { Car, Users, FileText, CreditCard, LayoutDashboard, Bell, BarChart3, AlertCircle, TrendingUp, Settings, Ban, Receipt, FolderOpen, UserX, Globe, History, Clock, UsersRound } from "lucide-react";
 import { Sidebar, SidebarContent, SidebarGroup, SidebarGroupContent, SidebarGroupLabel, SidebarHeader, SidebarMenu, SidebarMenuButton, SidebarMenuItem, SidebarFooter, useSidebar } from "@/components/ui/sidebar";
 import { useReminderStats } from "@/hooks/use-reminders";
 import { useOrgSettings } from "@/hooks/use-org-settings";
@@ -106,8 +106,14 @@ export function AppSidebar() {
     icon: TrendingUp
   }];
 
-  // Settings navigation - filter based on super admin status
-  const allSettingsNavigation = [{
+  // Settings navigation - filter based on super admin status and role
+  const allSettingsNavigation: Array<{
+    name: string;
+    href: string;
+    icon: any;
+    superAdminOnly?: boolean;
+    headAdminOnly?: boolean;
+  }> = [{
     name: "Audit Logs",
     href: "/audit-logs",
     icon: History
@@ -116,14 +122,21 @@ export function AppSidebar() {
     href: "/cms",
     icon: Globe
   }, {
+    name: "Manage Users",
+    href: "/users",
+    icon: UsersRound,
+    headAdminOnly: true
+  }, {
     name: "Settings",
     href: "/settings",
     icon: Settings
   }];
 
-  const settingsNavigation = allSettingsNavigation.filter(item =>
-    !item.superAdminOnly || appUser?.is_super_admin
-  );
+  const settingsNavigation = allSettingsNavigation.filter(item => {
+    if (item.superAdminOnly && !appUser?.is_super_admin) return false;
+    if (item.headAdminOnly && appUser?.role !== 'head_admin') return false;
+    return true;
+  });
   const isActive = (path: string) => {
     if (path === "/") {
       return pathname === "/";
