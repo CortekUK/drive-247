@@ -5,18 +5,21 @@ import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import Navigation from "@/components/Navigation";
 import Footer from "@/components/Footer";
-import { Clock, Mail, Phone, Calendar, Car, Loader2 } from "lucide-react";
+import { Clock, Mail, Phone, Calendar, Car, Loader2, User, Home } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { format } from "date-fns";
+import { useCustomerAuthStore } from "@/stores/customer-auth-store";
 
 const BookingPendingContent = () => {
   const searchParams = useSearchParams();
+  const { customerUser } = useCustomerAuthStore();
   const [bookingDetails, setBookingDetails] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const sessionId = searchParams?.get("session_id");
   const rentalId = searchParams?.get("rental_id");
+  const isAuthenticated = !!customerUser;
 
   useEffect(() => {
     const fetchBookingDetails = async () => {
@@ -200,16 +203,36 @@ const BookingPendingContent = () => {
 
                 {/* Action Buttons */}
                 <div className="flex flex-col sm:flex-row gap-4 justify-center">
-                  <Link href="/">
-                    <Button variant="outline" className="w-full sm:w-auto">
-                      Return Home
-                    </Button>
-                  </Link>
-                  <Link href="/booking">
-                    <Button className="w-full sm:w-auto gradient-accent">
-                      Book Another Vehicle
-                    </Button>
-                  </Link>
+                  {isAuthenticated ? (
+                    <>
+                      <Link href="/portal/bookings">
+                        <Button className="w-full sm:w-auto gradient-accent">
+                          <User className="w-4 h-4 mr-2" />
+                          Go to My Portal
+                        </Button>
+                      </Link>
+                      <Link href="/">
+                        <Button variant="outline" className="w-full sm:w-auto">
+                          <Home className="w-4 h-4 mr-2" />
+                          Return Home
+                        </Button>
+                      </Link>
+                    </>
+                  ) : (
+                    <>
+                      <Link href="/">
+                        <Button variant="outline" className="w-full sm:w-auto">
+                          <Home className="w-4 h-4 mr-2" />
+                          Return Home
+                        </Button>
+                      </Link>
+                      <Link href="/">
+                        <Button className="w-full sm:w-auto gradient-accent">
+                          Book Another Vehicle
+                        </Button>
+                      </Link>
+                    </>
+                  )}
                 </div>
               </>
             )}

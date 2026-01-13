@@ -5,20 +5,23 @@ import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import Navigation from "@/components/Navigation";
 import Footer from "@/components/Footer";
-import { CheckCircle, Download, Mail, Loader2 } from "lucide-react";
+import { CheckCircle, Download, Mail, Loader2, User, Home } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import { useTenant } from "@/contexts/TenantContext";
+import { useCustomerAuthStore } from "@/stores/customer-auth-store";
 
 const BookingSuccessContent = () => {
   const searchParams = useSearchParams();
   const { tenant } = useTenant();
+  const { customerUser } = useCustomerAuthStore();
   const [bookingDetails, setBookingDetails] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const sessionId = searchParams?.get("session_id");
   const rentalId = searchParams?.get("rental_id");
+  const isAuthenticated = !!customerUser;
 
   useEffect(() => {
     const updateRentalStatus = async () => {
@@ -373,16 +376,36 @@ const BookingSuccessContent = () => {
                 </div>
 
                 <div className="flex flex-col sm:flex-row gap-4 justify-center">
-                  <Link href="/">
-                    <Button className="gradient-accent hover-lift w-full sm:w-auto">
-                      Return to Home
-                    </Button>
-                  </Link>
-                  <Link href="/contact">
-                    <Button variant="outline" className="w-full sm:w-auto">
-                      Contact Support
-                    </Button>
-                  </Link>
+                  {isAuthenticated ? (
+                    <>
+                      <Link href="/portal/bookings">
+                        <Button className="gradient-accent hover-lift w-full sm:w-auto">
+                          <User className="w-4 h-4 mr-2" />
+                          Go to My Portal
+                        </Button>
+                      </Link>
+                      <Link href="/">
+                        <Button variant="outline" className="w-full sm:w-auto">
+                          <Home className="w-4 h-4 mr-2" />
+                          Return to Home
+                        </Button>
+                      </Link>
+                    </>
+                  ) : (
+                    <>
+                      <Link href="/">
+                        <Button className="gradient-accent hover-lift w-full sm:w-auto">
+                          <Home className="w-4 h-4 mr-2" />
+                          Return to Home
+                        </Button>
+                      </Link>
+                      <Link href="/contact">
+                        <Button variant="outline" className="w-full sm:w-auto">
+                          Contact Support
+                        </Button>
+                      </Link>
+                    </>
+                  )}
                 </div>
               </>
             )}
