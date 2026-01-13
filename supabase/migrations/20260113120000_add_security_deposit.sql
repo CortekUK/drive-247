@@ -4,8 +4,15 @@ ALTER TABLE public.tenants
   ADD COLUMN IF NOT EXISTS global_deposit_amount numeric(10,2) DEFAULT 0;
 
 -- Add constraint for deposit mode values
-ALTER TABLE public.tenants
-  ADD CONSTRAINT deposit_mode_values CHECK (deposit_mode IN ('global', 'per_vehicle'));
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint WHERE conname = 'deposit_mode_values'
+  ) THEN
+    ALTER TABLE public.tenants
+      ADD CONSTRAINT deposit_mode_values CHECK (deposit_mode IN ('global', 'per_vehicle'));
+  END IF;
+END $$;
 
 -- Add security deposit to vehicles table
 ALTER TABLE public.vehicles

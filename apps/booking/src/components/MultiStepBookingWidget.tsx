@@ -29,6 +29,9 @@ import { usePageContent, defaultHomeContent, mergeWithDefaults } from "@/hooks/u
 import { canCustomerBook } from "@/lib/tenantQueries";
 import { sanitizeName, sanitizeEmail, sanitizePhone, sanitizeLocation, sanitizeTextArea, isInputSafe } from "@/lib/sanitize";
 import { createVeriffFrame, MESSAGES } from "@veriff/incontext-sdk";
+import { useCustomerAuthStore } from "@/stores/customer-auth-store";
+import { useCustomerVerification } from "@/hooks/use-customer-verification";
+import { AuthPromptDialog } from "@/components/booking/AuthPromptDialog";
 interface VehiclePhoto {
   photo_url: string;
 }
@@ -68,6 +71,21 @@ interface BlockedDate {
 }
 const MultiStepBookingWidget = () => {
   const { tenant } = useTenant();
+
+  // Customer authentication state
+  const { customerUser, session, loading: authLoading, initialized: authInitialized } = useCustomerAuthStore();
+  const { data: customerVerification, isLoading: verificationLoading } = useCustomerVerification();
+  const [showAuthDialog, setShowAuthDialog] = useState(false);
+  const [isCustomerDataPopulated, setIsCustomerDataPopulated] = useState(false);
+
+  // Check if user is authenticated with valid session
+  const isAuthenticated = !!customerUser && !!session;
+  // Check if authenticated user is already verified
+  const isCustomerAlreadyVerified = customerVerification?.review_result === 'GREEN' ||
+    customerVerification?.status === 'approved' ||
+    customerVerification?.status === 'verified' ||
+    customerUser?.customer?.identity_verification_status === 'verified';
+
   const [currentStep, setCurrentStep] = useState(1);
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
   const [extras, setExtras] = useState<PricingExtra[]>([]);
@@ -450,11 +468,31 @@ const MultiStepBookingWidget = () => {
   }, [tenant?.id]);
 
   // Restore form data from sessionStorage on mount (preserves data when navigating away)
+  // But clear stale customer data if a different user is now logged in
   useEffect(() => {
     const savedFormData = sessionStorage.getItem('booking_form_data');
     if (savedFormData) {
       try {
         const parsed = JSON.parse(savedFormData);
+
+        // Check if the saved data belongs to a different user
+        // If an authenticated user is logged in and the saved email doesn't match, clear customer-specific fields
+        if (isAuthenticated && customerUser?.customer?.email) {
+          const savedEmail = parsed.customerEmail?.toLowerCase?.() || '';
+          const currentEmail = customerUser.customer.email.toLowerCase();
+
+          if (savedEmail && savedEmail !== currentEmail) {
+            console.log('🧹 Clearing stale customer data from sessionStorage (different user)');
+            // Clear customer-specific fields but keep trip/vehicle data
+            delete parsed.customerName;
+            delete parsed.customerEmail;
+            delete parsed.customerPhone;
+            delete parsed.customerType;
+            delete parsed.licenseNumber;
+            delete parsed.verificationSessionId;
+          }
+        }
+
         // Merge with existing formData to preserve verification data
         setFormData(prev => ({ ...prev, ...parsed }));
         console.log('✅ Restored form data from sessionStorage');
@@ -481,7 +519,7 @@ const MultiStepBookingWidget = () => {
         console.error('Failed to restore extras:', e);
       }
     }
-  }, []);
+  }, [isAuthenticated, customerUser?.customer?.email]);
 
   // Persist form data to sessionStorage on every change
   useEffect(() => {
@@ -503,6 +541,98 @@ const MultiStepBookingWidget = () => {
       sessionStorage.setItem('booking_selected_extras', JSON.stringify(selectedExtras));
     }
   }, [selectedExtras]);
+
+  // Auto-populate customer data when authenticated user reaches Step 4
+  // IMPORTANT: For authenticated users, ALWAYS use their account data, overwriting any stale cached data
+  useEffect(() => {
+    // Only auto-populate once and only when on step 4 with authenticated user
+    if (currentStep === 4 && isAuthenticated && !isCustomerDataPopulated && !authLoading && authInitialized) {
+      const customer = customerUser?.customer;
+      if (customer) {
+        console.log('✅ Auto-populating form with authenticated customer data:', customer.name);
+
+        // Build update object with available customer data
+        // For authenticated users, ALWAYS overwrite with their actual account data
+        // This ensures we don't show stale cached data from sessionStorage
+        const updates: Partial<typeof formData> = {};
+
+        // Always use authenticated user's data (overwrite any stale cached values)
+        if (customer.name) {
+          updates.customerName = customer.name;
+        }
+        if (customer.email) {
+          updates.customerEmail = customer.email;
+        }
+        if (customer.phone) {
+          updates.customerPhone = customer.phone;
+        }
+        if (customer.customer_type) {
+          updates.customerType = customer.customer_type;
+        }
+
+        // If customer is already verified, also set verification status
+        if (isCustomerAlreadyVerified) {
+          setVerificationStatus('verified');
+          // Store the verification session ID if available
+          if (customerVerification?.session_id) {
+            setVerificationSessionId(customerVerification.session_id);
+            updates.verificationSessionId = customerVerification.session_id;
+          }
+          // Set license number from verification if available
+          if (customerVerification?.document_number) {
+            updates.licenseNumber = customerVerification.document_number;
+          }
+
+          // Also clear any stale localStorage verification data that doesn't match
+          const savedVerifiedName = localStorage.getItem('verifiedCustomerName');
+          if (savedVerifiedName && savedVerifiedName !== customer.name) {
+            console.log('🧹 Clearing stale verification localStorage (name mismatch)');
+            localStorage.removeItem('verificationSessionId');
+            localStorage.removeItem('verificationStatus');
+            localStorage.removeItem('verificationTimestamp');
+            localStorage.removeItem('verificationToken');
+            localStorage.removeItem('verifiedCustomerName');
+            localStorage.removeItem('verifiedLicenseNumber');
+            localStorage.removeItem('verificationVendorData');
+          }
+        }
+
+        // Apply updates - this overwrites any stale data
+        if (Object.keys(updates).length > 0) {
+          setFormData(prev => ({ ...prev, ...updates }));
+        }
+
+        setIsCustomerDataPopulated(true);
+      }
+    }
+  }, [currentStep, isAuthenticated, isCustomerDataPopulated, authLoading, authInitialized, customerUser, customerVerification, isCustomerAlreadyVerified]);
+
+  // Reset populated flag when user logs out
+  useEffect(() => {
+    if (!isAuthenticated && isCustomerDataPopulated) {
+      setIsCustomerDataPopulated(false);
+    }
+  }, [isAuthenticated, isCustomerDataPopulated]);
+
+  // Check for session expiry when reaching Step 4
+  // If user was authenticated but session expired, show auth dialog
+  useEffect(() => {
+    if (currentStep === 4 && authInitialized && !authLoading) {
+      // Check if there's evidence of previous authentication but no current session
+      const hadPreviousSession = sessionStorage.getItem('booking_had_auth_session') === 'true';
+
+      if (hadPreviousSession && !isAuthenticated) {
+        // Session expired, show auth dialog
+        console.log('🔐 Session expired, prompting for re-authentication');
+        setShowAuthDialog(true);
+        // Clear the flag to avoid repeated prompts
+        sessionStorage.removeItem('booking_had_auth_session');
+      } else if (isAuthenticated) {
+        // Mark that user had an authenticated session
+        sessionStorage.setItem('booking_had_auth_session', 'true');
+      }
+    }
+  }, [currentStep, authInitialized, authLoading, isAuthenticated]);
 
   // Warn user about unsaved data when leaving page
   useEffect(() => {
@@ -3762,6 +3892,31 @@ const MultiStepBookingWidget = () => {
             </h3>
           </div>
 
+          {/* Authenticated User Banner */}
+          {isAuthenticated && isCustomerDataPopulated && (
+            <div className="bg-primary/5 border border-primary/20 rounded-lg p-4">
+              <div className="flex items-center gap-3">
+                <div className="p-2 rounded-full bg-primary/10">
+                  <UserCheck className="w-5 h-5 text-primary" />
+                </div>
+                <div className="flex-1">
+                  <p className="text-sm font-medium text-foreground">
+                    Welcome back, {customerUser?.customer?.name}!
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    Your details have been auto-filled from your account.
+                    {isCustomerAlreadyVerified && ' Your ID is already verified.'}
+                  </p>
+                </div>
+                {isCustomerAlreadyVerified && (
+                  <Badge variant="default" className="bg-green-500 hover:bg-green-500/90 text-white">
+                    <CheckCircle className="w-3 h-3 mr-1" /> Verified
+                  </Badge>
+                )}
+              </div>
+            </div>
+          )}
+
           {/* Form Fields */}
           <div className="space-y-8">
             {/* Row 1: Customer Name & Email */}
@@ -3781,12 +3936,20 @@ const MultiStepBookingWidget = () => {
                     validateField('customerName', value);
                   }}
                   placeholder="Enter your full name"
-                  className={cn("h-12 focus-visible:ring-primary", verificationStatus === 'verified' && "bg-muted cursor-not-allowed")}
-                  disabled={verificationStatus === 'verified'}
+                  className={cn(
+                    "h-12 focus-visible:ring-primary",
+                    (verificationStatus === 'verified' || (isAuthenticated && isCustomerAlreadyVerified)) && "bg-muted cursor-not-allowed"
+                  )}
+                  disabled={verificationStatus === 'verified' || (isAuthenticated && isCustomerAlreadyVerified)}
                 />
-                {verificationStatus === 'verified' && (
+                {verificationStatus === 'verified' && !isCustomerAlreadyVerified && (
                   <p className="text-xs text-green-600 flex items-center gap-1">
                     <CheckCircle className="w-3 h-3" /> Verified from ID document
+                  </p>
+                )}
+                {isAuthenticated && isCustomerDataPopulated && isCustomerAlreadyVerified && (
+                  <p className="text-xs text-green-600 flex items-center gap-1">
+                    <CheckCircle className="w-3 h-3" /> From your verified account
                   </p>
                 )}
                 {errors.customerName && <p className="text-sm text-destructive">{errors.customerName}</p>}
@@ -3808,8 +3971,17 @@ const MultiStepBookingWidget = () => {
                     validateField('customerEmail', value);
                   }}
                   placeholder="your@email.com"
-                  className="h-12 focus-visible:ring-primary"
+                  className={cn(
+                    "h-12 focus-visible:ring-primary",
+                    isAuthenticated && isCustomerDataPopulated && "bg-muted/50"
+                  )}
+                  readOnly={isAuthenticated && isCustomerDataPopulated}
                 />
+                {isAuthenticated && isCustomerDataPopulated && (
+                  <p className="text-xs text-muted-foreground flex items-center gap-1">
+                    <UserCheck className="w-3 h-3" /> From your account
+                  </p>
+                )}
                 {errors.customerEmail && <p className="text-sm text-destructive">{errors.customerEmail}</p>}
               </div>
             </div>
@@ -3823,6 +3995,7 @@ const MultiStepBookingWidget = () => {
                   value={formData.customerPhone}
                   defaultCountry="GB"
                   onChange={value => {
+                    // Allow phone changes even for authenticated users (they might want to use different phone)
                     setFormData({
                       ...formData,
                       customerPhone: value
@@ -3833,6 +4006,11 @@ const MultiStepBookingWidget = () => {
                   error={!!errors.customerPhone}
                   className="h-12"
                 />
+                {isAuthenticated && isCustomerDataPopulated && formData.customerPhone && (
+                  <p className="text-xs text-muted-foreground flex items-center gap-1">
+                    <UserCheck className="w-3 h-3" /> From your account (editable)
+                  </p>
+                )}
                 {errors.customerPhone && <p className="text-sm text-destructive">{errors.customerPhone}</p>}
               </div>
 
@@ -3867,7 +4045,62 @@ const MultiStepBookingWidget = () => {
                 <strong>Required:</strong> To ensure security and compliance, all customers must complete identity verification before proceeding with their rental.
               </p>
 
-              {verificationStatus === 'init' && (
+              {/* Already Verified from Account - Show green success state */}
+              {isAuthenticated && isCustomerAlreadyVerified && verificationStatus === 'verified' && (
+                <div className="bg-green-500/10 border border-green-500/20 rounded-lg p-4 sm:p-5">
+                  <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
+                    <div className="flex items-start gap-3 flex-1">
+                      <div className="p-2 rounded-full bg-green-500/20 flex-shrink-0">
+                        <Shield className="w-6 h-6 text-green-500" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm sm:text-base font-semibold mb-1 text-green-600 dark:text-green-500">
+                          Already Verified
+                        </p>
+                        <p className="text-xs sm:text-sm text-muted-foreground">
+                          Your identity has been verified from your account. You don't need to verify again.
+                        </p>
+                        {customerVerification && (
+                          <div className="mt-3 grid grid-cols-2 gap-3 text-xs">
+                            {customerVerification.document_type && (
+                              <div>
+                                <span className="text-muted-foreground">Document Type:</span>
+                                <p className="font-medium capitalize">{customerVerification.document_type.replace('_', ' ')}</p>
+                              </div>
+                            )}
+                            {customerVerification.document_number && (
+                              <div>
+                                <span className="text-muted-foreground">Document Number:</span>
+                                <p className="font-medium">****{customerVerification.document_number.slice(-4)}</p>
+                              </div>
+                            )}
+                            {customerVerification.verification_provider && (
+                              <div>
+                                <span className="text-muted-foreground">Verified via:</span>
+                                <p className="font-medium capitalize">
+                                  {customerVerification.verification_provider === 'ai' ? 'AI Verification' : 'Veriff'}
+                                </p>
+                              </div>
+                            )}
+                            {customerVerification.ai_face_match_score && (
+                              <div>
+                                <span className="text-muted-foreground">Face Match:</span>
+                                <p className="font-medium">{Math.round(customerVerification.ai_face_match_score * 100)}%</p>
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                    <Badge variant="default" className="bg-green-500 hover:bg-green-500/90 text-white self-start">
+                      <CheckCircle className="w-3 h-3 mr-1" /> Verified
+                    </Badge>
+                  </div>
+                </div>
+              )}
+
+              {/* Not verified yet - show verification required */}
+              {verificationStatus === 'init' && !isCustomerAlreadyVerified && (
                 <div className="bg-destructive/10 border border-destructive/20 rounded-lg p-3 sm:p-4">
                   <div className="flex items-start gap-2 sm:gap-3">
                     <AlertCircle className="w-5 h-5 text-destructive mt-0.5 flex-shrink-0" />
@@ -3995,7 +4228,9 @@ const MultiStepBookingWidget = () => {
                 </>
               )}
 
-              {verificationStatus === 'verified' && (
+              {/* Show this verification box ONLY for non-authenticated users who verified during this session */}
+              {/* Authenticated users with existing verification see the "Already Verified" box above instead */}
+              {verificationStatus === 'verified' && !(isAuthenticated && isCustomerAlreadyVerified) && (
                 <div className="bg-green-500/10 border border-green-500/20 rounded-lg p-3 sm:p-4">
                   <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
                     <div className="flex items-start gap-2 sm:gap-3 flex-1">
@@ -4133,6 +4368,22 @@ const MultiStepBookingWidget = () => {
         } finally {
           setScanningDocument(false);
         }
+      }}
+    />
+
+    {/* Auth Prompt Dialog for session expiry */}
+    <AuthPromptDialog
+      open={showAuthDialog}
+      onOpenChange={setShowAuthDialog}
+      prefillEmail={formData.customerEmail}
+      onSkip={() => {
+        setShowAuthDialog(false);
+        // User chose to continue as guest
+      }}
+      onSuccess={() => {
+        setShowAuthDialog(false);
+        // Re-populate data after successful auth
+        setIsCustomerDataPopulated(false);
       }}
     />
   </>;
