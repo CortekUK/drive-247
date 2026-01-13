@@ -1,15 +1,34 @@
 'use client';
 
+import { useState, useMemo } from 'react';
 import { useCustomerRentals } from '@/hooks/use-customer-rentals';
 import { RentalCard } from '@/components/customer-portal/RentalCard';
 import { Card } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
-import { History, ArrowLeft } from 'lucide-react';
+import { History, ArrowLeft, ArrowUpDown } from 'lucide-react';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 
 export default function BookingHistoryPage() {
   const { data: rentals, isLoading } = useCustomerRentals('past');
+  const [sortOrder, setSortOrder] = useState<'newest' | 'oldest'>('newest');
+
+  // Sort rentals based on user selection
+  const sortedRentals = useMemo(() => {
+    if (!rentals) return [];
+    return [...rentals].sort((a, b) => {
+      const dateA = new Date(a.start_date).getTime();
+      const dateB = new Date(b.start_date).getTime();
+      return sortOrder === 'newest' ? dateB - dateA : dateA - dateB;
+    });
+  }, [rentals, sortOrder]);
 
   return (
     <div className="space-y-6">
@@ -28,6 +47,22 @@ export default function BookingHistoryPage() {
         </div>
       </div>
 
+      {/* Sort Filter */}
+      {rentals && rentals.length > 1 && (
+        <div className="flex items-center justify-end gap-2">
+          <ArrowUpDown className="h-4 w-4 text-muted-foreground" />
+          <Select value={sortOrder} onValueChange={(value: 'newest' | 'oldest') => setSortOrder(value)}>
+            <SelectTrigger className="w-[180px]">
+              <SelectValue placeholder="Sort by" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="newest">Most Recent First</SelectItem>
+              <SelectItem value="oldest">Oldest First</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+      )}
+
       {/* Past Rentals */}
       {isLoading ? (
         <div className="space-y-4">
@@ -44,9 +79,9 @@ export default function BookingHistoryPage() {
             </Card>
           ))}
         </div>
-      ) : rentals && rentals.length > 0 ? (
+      ) : sortedRentals && sortedRentals.length > 0 ? (
         <div className="space-y-4">
-          {rentals.map((rental) => (
+          {sortedRentals.map((rental) => (
             <RentalCard key={rental.id} rental={rental} />
           ))}
         </div>

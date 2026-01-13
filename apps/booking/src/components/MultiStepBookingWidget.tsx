@@ -300,14 +300,16 @@ const MultiStepBookingWidget = () => {
     if (savedVerificationSessionId && savedVerificationStatus && !isExpired) {
       setVerificationSessionId(savedVerificationSessionId);
       setVerificationStatus(savedVerificationStatus);
+      // Only restore verification session ID and license number from localStorage
+      // DO NOT restore customerName here - it will be handled by auth auto-populate for authenticated users
+      // This prevents localStorage data from overwriting the authenticated user's actual account data
       setFormData(prev => ({
         ...prev,
         verificationSessionId: savedVerificationSessionId,
-        // Restore verified data if available
-        ...(savedVerifiedName && { customerName: savedVerifiedName }),
+        // Only restore license number (not name - that comes from auth or will be entered by user)
         ...(savedLicenseNumber && { licenseNumber: savedLicenseNumber }),
       }));
-      console.log('✅ Loaded verification from localStorage:', savedVerificationSessionId, savedVerificationStatus, savedVerifiedName);
+      console.log('✅ Loaded verification session from localStorage:', savedVerificationSessionId, savedVerificationStatus);
     } else if (isExpired && savedVerificationSessionId) {
       // Clear expired verification data
       console.log('🕐 Verification data expired, clearing...');
@@ -468,34 +470,29 @@ const MultiStepBookingWidget = () => {
   }, [tenant?.id]);
 
   // Restore form data from sessionStorage on mount (preserves data when navigating away)
-  // But clear stale customer data if a different user is now logged in
+  // For authenticated users, we DO NOT restore customer personal data (name, email)
+  // because that will be handled by the auth auto-populate effect with their actual account data
   useEffect(() => {
     const savedFormData = sessionStorage.getItem('booking_form_data');
     if (savedFormData) {
       try {
         const parsed = JSON.parse(savedFormData);
 
-        // Check if the saved data belongs to a different user
-        // If an authenticated user is logged in and the saved email doesn't match, clear customer-specific fields
-        if (isAuthenticated && customerUser?.customer?.email) {
-          const savedEmail = parsed.customerEmail?.toLowerCase?.() || '';
-          const currentEmail = customerUser.customer.email.toLowerCase();
-
-          if (savedEmail && savedEmail !== currentEmail) {
-            console.log('🧹 Clearing stale customer data from sessionStorage (different user)');
-            // Clear customer-specific fields but keep trip/vehicle data
-            delete parsed.customerName;
-            delete parsed.customerEmail;
-            delete parsed.customerPhone;
-            delete parsed.customerType;
-            delete parsed.licenseNumber;
-            delete parsed.verificationSessionId;
-          }
+        // For authenticated users, ALWAYS clear customer personal fields from sessionStorage
+        // Their actual data will come from the auth auto-populate effect
+        // This ensures we never show stale data from a previous verification or different session
+        if (isAuthenticated && customerUser?.customer) {
+          console.log('🔐 Authenticated user detected - clearing sessionStorage customer data to use account data');
+          delete parsed.customerName;
+          delete parsed.customerEmail;
+          // Keep phone and customerType as they might be editable
+          // delete parsed.licenseNumber; // Keep license from verification
+          // delete parsed.verificationSessionId; // Keep verification session
         }
 
-        // Merge with existing formData to preserve verification data
+        // Merge with existing formData to preserve verification data and trip details
         setFormData(prev => ({ ...prev, ...parsed }));
-        console.log('✅ Restored form data from sessionStorage');
+        console.log('✅ Restored form data from sessionStorage (customer data excluded for auth users)');
       } catch (e) {
         console.error('Failed to restore form data:', e);
       }
@@ -570,7 +567,19 @@ const MultiStepBookingWidget = () => {
           updates.customerType = customer.customer_type;
         }
 
-        // If customer is already verified, also set verification status
+        // For authenticated users, ALWAYS clear localStorage verification data
+        // Their verification status comes from their account, not localStorage
+        // This prevents stale localStorage data from a different session/user from affecting the UI
+        console.log('🧹 Clearing localStorage verification for authenticated user');
+        localStorage.removeItem('verificationSessionId');
+        localStorage.removeItem('verificationStatus');
+        localStorage.removeItem('verificationTimestamp');
+        localStorage.removeItem('verificationToken');
+        localStorage.removeItem('verifiedCustomerName');
+        localStorage.removeItem('verifiedLicenseNumber');
+        localStorage.removeItem('verificationVendorData');
+
+        // If customer is already verified from their account, set verification status
         if (isCustomerAlreadyVerified) {
           setVerificationStatus('verified');
           // Store the verification session ID if available
@@ -582,19 +591,11 @@ const MultiStepBookingWidget = () => {
           if (customerVerification?.document_number) {
             updates.licenseNumber = customerVerification.document_number;
           }
-
-          // Also clear any stale localStorage verification data that doesn't match
-          const savedVerifiedName = localStorage.getItem('verifiedCustomerName');
-          if (savedVerifiedName && savedVerifiedName !== customer.name) {
-            console.log('🧹 Clearing stale verification localStorage (name mismatch)');
-            localStorage.removeItem('verificationSessionId');
-            localStorage.removeItem('verificationStatus');
-            localStorage.removeItem('verificationTimestamp');
-            localStorage.removeItem('verificationToken');
-            localStorage.removeItem('verifiedCustomerName');
-            localStorage.removeItem('verifiedLicenseNumber');
-            localStorage.removeItem('verificationVendorData');
-          }
+        } else {
+          // User is authenticated but NOT verified yet - reset verification state to init
+          // This ensures they go through verification process fresh
+          setVerificationStatus('init');
+          setVerificationSessionId('');
         }
 
         // Apply updates - this overwrites any stale data
@@ -613,6 +614,99 @@ const MultiStepBookingWidget = () => {
       setIsCustomerDataPopulated(false);
     }
   }, [isAuthenticated, isCustomerDataPopulated]);
+
+  // Handle mid-booking sign-in: When user signs in during booking flow (any step),
+  // immediately update their data and verification status
+  // This handles the case: user skips auth at step 4, goes to step 5, then signs in
+  useEffect(() => {
+    // Only trigger when user becomes authenticated AND we haven't populated yet
+    // AND we're past the initial loading state
+    if (isAuthenticated && !isCustomerDataPopulated && authInitialized && !authLoading && !verificationLoading) {
+      const customer = customerUser?.customer;
+      if (customer) {
+        console.log('🔐 Mid-booking sign-in detected, syncing user data:', customer.name);
+
+        // Build update object with customer data
+        const updates: Partial<typeof formData> = {};
+
+        if (customer.name) {
+          updates.customerName = customer.name;
+        }
+        if (customer.email) {
+          updates.customerEmail = customer.email;
+        }
+        if (customer.phone) {
+          updates.customerPhone = customer.phone;
+        }
+        if (customer.customer_type) {
+          updates.customerType = customer.customer_type;
+        }
+
+        // For authenticated users, ALWAYS clear localStorage verification data
+        // Their verification status comes from their account, not localStorage
+        console.log('🧹 Clearing localStorage verification for authenticated user (mid-booking sign-in)');
+        localStorage.removeItem('verificationSessionId');
+        localStorage.removeItem('verificationStatus');
+        localStorage.removeItem('verificationTimestamp');
+        localStorage.removeItem('verificationToken');
+        localStorage.removeItem('verifiedCustomerName');
+        localStorage.removeItem('verifiedLicenseNumber');
+        localStorage.removeItem('verificationVendorData');
+
+        // Check if user is already verified from their account
+        if (isCustomerAlreadyVerified) {
+          console.log('✅ User has existing verification, setting verified status');
+          setVerificationStatus('verified');
+
+          if (customerVerification?.session_id) {
+            setVerificationSessionId(customerVerification.session_id);
+            updates.verificationSessionId = customerVerification.session_id;
+          }
+          if (customerVerification?.document_number) {
+            updates.licenseNumber = customerVerification.document_number;
+          }
+        } else {
+          // User is authenticated but NOT verified yet - reset verification state
+          setVerificationStatus('init');
+          setVerificationSessionId('');
+        }
+
+        // Apply updates
+        if (Object.keys(updates).length > 0) {
+          setFormData(prev => ({ ...prev, ...updates }));
+        }
+
+        setIsCustomerDataPopulated(true);
+      }
+    }
+  }, [isAuthenticated, isCustomerDataPopulated, authInitialized, authLoading, verificationLoading, customerUser, customerVerification, isCustomerAlreadyVerified]);
+
+  // When customerVerification data loads/changes after sign-in, update verification status
+  // This handles async loading of verification data after authentication
+  useEffect(() => {
+    if (isAuthenticated && isCustomerDataPopulated && !verificationLoading && customerVerification) {
+      // Check if we need to update verification status based on newly loaded data
+      const isVerified = customerVerification.review_result === 'GREEN' ||
+        customerVerification.status === 'approved' ||
+        customerVerification.status === 'verified';
+
+      if (isVerified && verificationStatus !== 'verified') {
+        console.log('✅ Verification data loaded, updating status to verified');
+        setVerificationStatus('verified');
+
+        if (customerVerification.session_id) {
+          setVerificationSessionId(customerVerification.session_id);
+        }
+        if (customerVerification.document_number && !formData.licenseNumber) {
+          setFormData(prev => ({
+            ...prev,
+            licenseNumber: customerVerification.document_number || '',
+            verificationSessionId: customerVerification.session_id || ''
+          }));
+        }
+      }
+    }
+  }, [isAuthenticated, isCustomerDataPopulated, verificationLoading, customerVerification, verificationStatus]);
 
   // Check for session expiry when reaching Step 4
   // If user was authenticated but session expired, show auth dialog
@@ -4382,8 +4476,15 @@ const MultiStepBookingWidget = () => {
       }}
       onSuccess={() => {
         setShowAuthDialog(false);
-        // Re-populate data after successful auth
+        // Reset flags to trigger re-sync of user data and verification
+        // The useEffect hooks will detect auth change and fetch fresh data
         setIsCustomerDataPopulated(false);
+        // Reset verification status to 'init' so it gets recalculated from user's account
+        // If user has existing verification, it will be set to 'verified' by the effect
+        if (verificationStatus !== 'verified') {
+          setVerificationStatus('init');
+        }
+        console.log('🔐 Auth success, triggering data re-sync');
       }}
     />
   </>;

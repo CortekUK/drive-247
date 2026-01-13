@@ -1,12 +1,20 @@
 'use client';
 
+import { useState, useMemo } from 'react';
 import { useCustomerRentals, useCustomerRentalStats } from '@/hooks/use-customer-rentals';
 import { RentalCard } from '@/components/customer-portal/RentalCard';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Car, DollarSign, History, CalendarCheck } from 'lucide-react';
+import { Car, DollarSign, History, CalendarCheck, ArrowUpDown } from 'lucide-react';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 
 function StatCard({
   title,
@@ -38,6 +46,17 @@ function StatCard({
 export default function CurrentBookingsPage() {
   const { data: rentals, isLoading } = useCustomerRentals('current');
   const { data: stats } = useCustomerRentalStats();
+  const [sortOrder, setSortOrder] = useState<'newest' | 'oldest'>('newest');
+
+  // Sort rentals based on user selection
+  const sortedRentals = useMemo(() => {
+    if (!rentals) return [];
+    return [...rentals].sort((a, b) => {
+      const dateA = new Date(a.start_date).getTime();
+      const dateB = new Date(b.start_date).getTime();
+      return sortOrder === 'newest' ? dateB - dateA : dateA - dateB;
+    });
+  }, [rentals, sortOrder]);
 
   return (
     <div className="space-y-6">
@@ -83,7 +102,23 @@ export default function CurrentBookingsPage() {
 
       {/* Current Rentals */}
       <div>
-        <h2 className="text-lg font-semibold mb-4">Current Bookings</h2>
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-lg font-semibold">Current Bookings</h2>
+          {rentals && rentals.length > 1 && (
+            <div className="flex items-center gap-2">
+              <ArrowUpDown className="h-4 w-4 text-muted-foreground" />
+              <Select value={sortOrder} onValueChange={(value: 'newest' | 'oldest') => setSortOrder(value)}>
+                <SelectTrigger className="w-[180px]">
+                  <SelectValue placeholder="Sort by" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="newest">Most Recent First</SelectItem>
+                  <SelectItem value="oldest">Oldest First</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+        </div>
 
         {isLoading ? (
           <div className="space-y-4">
@@ -100,9 +135,9 @@ export default function CurrentBookingsPage() {
               </Card>
             ))}
           </div>
-        ) : rentals && rentals.length > 0 ? (
+        ) : sortedRentals && sortedRentals.length > 0 ? (
           <div className="space-y-4">
-            {rentals.map((rental) => (
+            {sortedRentals.map((rental) => (
               <RentalCard key={rental.id} rental={rental} />
             ))}
           </div>
