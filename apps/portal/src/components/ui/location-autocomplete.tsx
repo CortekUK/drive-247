@@ -7,7 +7,7 @@ import { MapPin, Loader2 } from "lucide-react";
 interface LocationAutocompleteProps {
   id?: string;
   value: string;
-  onChange: (value: string) => void;
+  onChange: (value: string, lat?: number, lon?: number) => void;
   placeholder?: string;
   className?: string;
   disabled?: boolean;
@@ -131,7 +131,7 @@ export function LocationAutocomplete({
   };
 
   const handleSelectSuggestion = (suggestion: PhotonResult) => {
-    onChange(suggestion.display_name);
+    onChange(suggestion.display_name, parseFloat(suggestion.lat), parseFloat(suggestion.lon));
     setSuggestions([]);
     setShowSuggestions(false);
   };

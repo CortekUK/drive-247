@@ -5,6 +5,7 @@ import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useTenant } from '@/contexts/TenantContext';
 import LocationAutocomplete from '@/components/LocationAutocomplete';
+import LocationAutocompleteWithRadius from '@/components/LocationAutocompleteWithRadius';
 import {
   Select,
   SelectContent,
@@ -40,6 +41,7 @@ interface LocationPickerProps {
  * - 'fixed': Shows read-only fixed address from tenant settings
  * - 'custom': Shows LocationAutocomplete for free-form address entry
  * - 'multiple': Shows dropdown to select from predefined locations
+ * - 'area_around': Shows autocomplete filtered by radius from user's live location
  */
 export default function LocationPicker({
   type,
@@ -164,6 +166,28 @@ export default function LocationPicker({
           ))}
         </SelectContent>
       </Select>
+    );
+  }
+
+  // Mode: Area Around - show autocomplete with geolocation filtering
+  if (mode === 'area_around') {
+    const radiusKm =
+      type === 'pickup'
+        ? tenant?.pickup_area_radius_km
+        : tenant?.return_area_radius_km;
+
+    return (
+      <LocationAutocompleteWithRadius
+        id={`${type}Location`}
+        value={value}
+        onChange={(address, lat, lon) => onChange(address, undefined, lat, lon)}
+        placeholder={placeholder || `Enter ${type} address`}
+        className={className}
+        disabled={disabled}
+        radiusKm={radiusKm ?? 25}
+        centerLat={tenant?.area_center_lat}
+        centerLon={tenant?.area_center_lon}
+      />
     );
   }
 
