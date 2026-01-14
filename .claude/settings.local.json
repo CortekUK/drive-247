@@ -38,7 +38,9 @@
       "Bash(find:*)",
       "Bash(git rm:*)",
       "Bash(npm run lint:*)",
-      "Bash(npx next lint)"
+      "Bash(npx next lint)",
+      "Bash(node scripts/update-cms-content.js:*)",
+      "Bash(npm run build:*)"
     ],
     "deny": [],
     "ask": []

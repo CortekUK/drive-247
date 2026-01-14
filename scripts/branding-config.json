@@ -156,6 +156,62 @@
         "meta_title": "San Diego Weekly Car Rentals - Affordable Weekly & Monthly Rentals",
         "meta_description": "Affordable weekly and monthly car rentals in San Diego. Quality vehicles at competitive rates for extended rentals. Book your ride today!"
       }
+    },
+    {
+      "slug": "jangramrentals",
+      "app_name": "Jangram Car Rental",
+      "colors": {
+        "primary_color": "#223331",
+        "secondary_color": "#223331",
+        "accent_color": "#E9B63E",
+        "light_primary_color": null,
+        "light_secondary_color": null,
+        "light_accent_color": null,
+        "light_background_color": null,
+        "light_header_footer_color": null,
+        "dark_primary_color": null,
+        "dark_secondary_color": null,
+        "dark_accent_color": null,
+        "dark_background_color": null,
+        "dark_header_footer_color": null
+      },
+      "seo": {
+        "meta_title": "Jangram Car Rental - Tesla & Car Rentals in Denver",
+        "meta_description": "Premium Tesla and car rentals in Denver, Colorado. Featuring Tesla EVs, economy cars, and RAV-4 SUVs. Available 24/7. Book your ride today!"
+      },
+      "contact": {
+        "phone": "+17205078414",
+        "address": "Denver, Colorado"
+      }
+    },
+    {
+      "slug": "revtekrentals",
+      "app_name": "RevTek Rentals",
+      "logo_path": "./logos/revtek.png",
+      "favicon_path": "./logos/revtek.png",
+      "colors": {
+        "primary_color": "#0EA5E9",
+        "secondary_color": "#1E3A5F",
+        "accent_color": "#38BDF8",
+        "light_primary_color": "#0EA5E9",
+        "light_secondary_color": "#1E3A5F",
+        "light_accent_color": "#38BDF8",
+        "light_background_color": "#FFFFFF",
+        "light_header_footer_color": "#1E3A5F",
+        "dark_primary_color": "#38BDF8",
+        "dark_secondary_color": "#0EA5E9",
+        "dark_accent_color": "#7DD3FC",
+        "dark_background_color": "#0F172A",
+        "dark_header_footer_color": "#1E293B"
+      },
+      "seo": {
+        "meta_title": "RevTek Rentals - Quality Car Rentals in Jacksonville",
+        "meta_description": "Quality mid-tier car rentals in Jacksonville, Florida. Reliable vehicles at competitive rates. Book your ride today!"
+      },
+      "contact": {
+        "phone": "+19043202299",
+        "address": "Jacksonville, Florida"
+      }
     }
   ]
 }

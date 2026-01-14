@@ -152,6 +152,34 @@ const TENANT_CONTENT = {
     hours: "24/7",
     specialty: "Full fleet - Economy, SUV, Minivan & Luxury vehicles including Audi & BMW",
     region: "Miami"
+  },
+
+  // JANGRAM CAR RENTAL
+  jangramrentals: {
+    name: "Jangram Car Rental",
+    shortName: "Jangram",
+    tagline: "Tesla & Car Rentals in Denver",
+    phone: "+1 (720) 507-8414",
+    phoneDisplay: "(720) 507-8414",
+    email: "Niv.turo@gmail.com",
+    location: "Denver, Colorado",
+    hours: "24/7",
+    specialty: "Tesla EVs, economy cars, and RAV-4 SUVs",
+    region: "Denver"
+  },
+
+  // REVTEK RENTALS
+  revtekrentals: {
+    name: "RevTek Rentals",
+    shortName: "RevTek",
+    tagline: "Quality Car Rentals in Jacksonville",
+    phone: "+1 (904) 320-2299",
+    phoneDisplay: "(904) 320-2299",
+    email: "revtekrentals@gmail.com",
+    location: "Jacksonville, Florida",
+    hours: "24/7",
+    specialty: "Quality mid-tier vehicles at competitive rates",
+    region: "Jacksonville"
   }
 };
 
