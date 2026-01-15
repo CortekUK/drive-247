@@ -271,7 +271,7 @@ function LoginPageContent() {
                 <img
                   src={logoUrl}
                   alt={appName}
-                  className="h-32 w-32 object-cover transition-transform duration-300 hover:scale-105"
+                  className="h-32 w-auto max-w-[160px] object-contain transition-transform duration-300 hover:scale-105"
                   style={{
                     filter: "drop-shadow(0 2px 8px rgba(198, 162, 86, 0.2))",
                     imageRendering: "crisp-edges",
