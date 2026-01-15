@@ -210,7 +210,7 @@ export const InvoiceDialog = ({
       </div>
 
       <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto scrollbar-hide" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
+        <DialogContent className="max-w-3xl w-[95vw] max-h-[90vh] overflow-y-auto scrollbar-hide" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
           <DialogHeader>
             <div className="flex items-center justify-between">
               <DialogTitle className="flex items-center gap-2">
@@ -228,7 +228,7 @@ export const InvoiceDialog = ({
             </div>
 
             {/* Invoice Details */}
-            <div className="grid grid-cols-2 gap-6">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
               <div>
                 <h3 className="font-semibold mb-2">Bill To:</h3>
                 <div className="text-sm space-y-1">
@@ -237,7 +237,7 @@ export const InvoiceDialog = ({
                   {customer.phone && <p>{customer.phone}</p>}
                 </div>
               </div>
-              <div className="text-right">
+              <div className="sm:text-right">
                 <h3 className="font-semibold mb-2">Invoice Details:</h3>
                 <div className="text-sm space-y-1">
                   <p><span className="text-muted-foreground">Invoice #:</span> <strong>{invoice.invoice_number}</strong></p>
@@ -252,7 +252,7 @@ export const InvoiceDialog = ({
             {/* Vehicle & Rental Info */}
             <div className="border rounded-lg p-4 bg-muted/30">
               <h3 className="font-semibold mb-3">Rental Information</h3>
-              <div className="grid grid-cols-2 gap-4 text-sm">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 text-sm">
                 <div>
                   <p className="text-muted-foreground">Vehicle:</p>
                   <p className="font-medium">{vehicleName}</p>
@@ -334,8 +334,8 @@ export const InvoiceDialog = ({
           </div>
 
           {/* Action Buttons */}
-          <div className="flex justify-between items-center border-t pt-4">
-            <Button variant="outline" onClick={handlePrint}>
+          <div className="flex flex-col-reverse sm:flex-row sm:justify-between items-stretch sm:items-center gap-3 border-t pt-4">
+            <Button variant="outline" onClick={handlePrint} className="w-full sm:w-auto">
               <Download className="h-4 w-4 mr-2" />
               Print / Save PDF
             </Button>
@@ -346,7 +346,7 @@ export const InvoiceDialog = ({
                   onSignAgreement();
                 }
               }}
-              className="gradient-accent"
+              className="gradient-accent w-full sm:w-auto"
             >
               Continue to Sign Agreement
               <ArrowRight className="h-4 w-4 ml-2" />
