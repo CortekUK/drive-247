@@ -27,6 +27,7 @@ import AIVerificationQR from "./AIVerificationQR";
 import { stripePromise } from "@/config/stripe";
 import { usePageContent, defaultHomeContent, mergeWithDefaults } from "@/hooks/usePageContent";
 import { useWorkingHours } from "@/hooks/useWorkingHours";
+import { isInsuranceExemptTenant } from "@/config/tenant-config";
 import { canCustomerBook } from "@/lib/tenantQueries";
 import { sanitizeName, sanitizeEmail, sanitizePhone, sanitizeLocation, sanitizeTextArea, isInputSafe } from "@/lib/sanitize";
 import { createVeriffFrame, MESSAGES } from "@veriff/incontext-sdk";
@@ -70,6 +71,7 @@ interface BlockedDate {
 const MultiStepBookingWidget = () => {
   const { tenant } = useTenant();
   const workingHours = useWorkingHours();
+  const skipInsurance = isInsuranceExemptTenant(tenant?.id);
   const [currentStep, setCurrentStep] = useState(1);
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
   const [extras, setExtras] = useState<PricingExtra[]>([]);
@@ -2195,7 +2197,12 @@ const MultiStepBookingWidget = () => {
           sortBy
         }
       }));
-      setCurrentStep(3); // Go to insurance verification
+      // Skip insurance step for exempt tenants (like Kedic Services)
+      if (skipInsurance) {
+        setCurrentStep(4); // Skip directly to customer details
+      } else {
+        setCurrentStep(3); // Go to insurance verification
+      }
     }
   };
 
@@ -2325,41 +2332,34 @@ const MultiStepBookingWidget = () => {
         {/* Enhanced Progress Indicator */}
         <div className="w-full overflow-x-auto py-4">
           <div className="flex items-center justify-between relative min-w-[280px]">
-            {[{
-              step: 1,
-              label: "Trip",
-              fullLabel: "Trip Details"
-            }, {
-              step: 2,
-              label: "Vehicle",
-              fullLabel: "Choose Vehicle"
-            }, {
-              step: 3,
-              label: "Insurance",
-              fullLabel: "Insurance Verification"
-            }, {
-              step: 4,
-              label: "Details",
-              fullLabel: "Customer Details"
-            }, {
-              step: 5,
-              label: "Review",
-              fullLabel: "Review & Confirm"
-            }].map(({
+            {/* Dynamic steps based on whether tenant is insurance exempt */}
+            {(skipInsurance ? [
+              { step: 1, displayStep: 1, label: "Trip", fullLabel: "Trip Details" },
+              { step: 2, displayStep: 2, label: "Vehicle", fullLabel: "Choose Vehicle" },
+              { step: 4, displayStep: 3, label: "Details", fullLabel: "Customer Details" },
+              { step: 5, displayStep: 4, label: "Review", fullLabel: "Review & Confirm" }
+            ] : [
+              { step: 1, displayStep: 1, label: "Trip", fullLabel: "Trip Details" },
+              { step: 2, displayStep: 2, label: "Vehicle", fullLabel: "Choose Vehicle" },
+              { step: 3, displayStep: 3, label: "Insurance", fullLabel: "Insurance Verification" },
+              { step: 4, displayStep: 4, label: "Details", fullLabel: "Customer Details" },
+              { step: 5, displayStep: 5, label: "Review", fullLabel: "Review & Confirm" }
+            ]).map(({
               step,
+              displayStep,
               label,
               fullLabel
-            }, index) => <div key={step} className="flex flex-col items-center flex-1 relative z-10">
-                <div className={cn("bk-step__node flex items-center justify-center w-10 h-10 sm:w-12 sm:h-12 md:w-14 md:h-14 rounded-full border-2 transition-all", currentStep >= step ? 'bg-primary border-primary shadow-glow' : 'border-border bg-muted', currentStep === step && 'bk-step__node--active shadow-glow')} aria-label={`Step ${step} of 5: ${fullLabel}`} aria-current={currentStep === step ? "step" : undefined}>
+            }, index, arr) => <div key={step} className="flex flex-col items-center flex-1 relative z-10">
+                <div className={cn("bk-step__node flex items-center justify-center w-10 h-10 sm:w-12 sm:h-12 md:w-14 md:h-14 rounded-full border-2 transition-all", currentStep >= step ? 'bg-primary border-primary shadow-glow' : 'border-border bg-muted', currentStep === step && 'bk-step__node--active shadow-glow')} aria-label={`Step ${displayStep} of ${arr.length}: ${fullLabel}`} aria-current={currentStep === step ? "step" : undefined}>
                   {currentStep > step ? <Check className="w-4 h-4 sm:w-5 sm:h-5 md:w-6 md:h-6 text-primary-foreground" /> : <span className={cn("text-base sm:text-lg md:text-xl font-bold", currentStep === step ? "text-primary-foreground" : "text-muted-foreground")}>
-                    {step}
+                    {displayStep}
                   </span>}
                 </div>
                 <span className={`mt-1.5 sm:mt-2 text-[10px] sm:text-xs md:text-sm font-medium text-center leading-tight ${currentStep >= step ? 'text-primary' : 'text-muted-foreground'}`}>
                   <span className="hidden sm:inline">{fullLabel}</span>
                   <span className="sm:hidden">{label}</span>
                 </span>
-                {index < 4 && <div className={cn("bk-step__line absolute top-5 sm:top-6 md:top-7 left-[calc(50%+20px)] sm:left-[calc(50%+24px)] md:left-[calc(50%+28px)] w-[calc(100%-40px)] sm:w-[calc(100%-48px)] md:w-[calc(100%-56px)] h-0.5", currentStep > step ? 'bg-primary' : 'bg-border')} />}
+                {index < arr.length - 1 && <div className={cn("bk-step__line absolute top-5 sm:top-6 md:top-7 left-[calc(50%+20px)] sm:left-[calc(50%+24px)] md:left-[calc(50%+28px)] w-[calc(100%-40px)] sm:w-[calc(100%-48px)] md:w-[calc(100%-56px)] h-0.5", currentStep > step ? 'bg-primary' : 'bg-border')} />}
               </div>)}
           </div>
         </div>
@@ -3404,8 +3404,8 @@ const MultiStepBookingWidget = () => {
           </div>
         </div>}
 
-        {/* Step 3: Insurance Verification */}
-        {currentStep === 3 && <div className="space-y-8 animate-fade-in">
+        {/* Step 3: Insurance Verification (skipped for insurance-exempt tenants) */}
+        {currentStep === 3 && !skipInsurance && <div className="space-y-8 animate-fade-in">
           {/* Header */}
           <div className="text-center space-y-2">
             <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-primary/10 mb-4">
@@ -4078,7 +4078,7 @@ const MultiStepBookingWidget = () => {
           {/* Navigation Buttons */}
           <div className="flex flex-col sm:flex-row gap-3 sm:gap-4">
             <Button
-              onClick={() => setCurrentStep(3)}
+              onClick={() => setCurrentStep(skipInsurance ? 2 : 3)}
               variant="outline"
               className="w-full sm:flex-1 h-11 sm:h-12 border-primary text-primary hover:bg-primary/10 font-semibold text-sm sm:text-base"
               size="lg"

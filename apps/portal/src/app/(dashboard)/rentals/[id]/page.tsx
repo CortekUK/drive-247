@@ -15,6 +15,7 @@ import { FileText, ArrowLeft, DollarSign, Plus, X, Send, Download, Ban, Check, A
 import { AddPaymentDialog } from "@/components/shared/dialogs/add-payment-dialog";
 import { useToast } from "@/hooks/use-toast";
 import { useTenant } from "@/contexts/TenantContext";
+import { isInsuranceExemptTenant } from "@/config/tenant-config";
 import { useRentalTotals } from "@/hooks/use-rental-ledger-data";
 import { RentalLedger } from "@/components/rentals/rental-ledger";
 import { KeyHandoverSection } from "@/components/rentals/key-handover-section";
@@ -49,6 +50,7 @@ const RentalDetail = () => {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const { tenant } = useTenant();
+  const skipInsurance = isInsuranceExemptTenant(tenant?.id);
   const [showAddPayment, setShowAddPayment] = useState(false);
   const [sendingDocuSign, setSendingDocuSign] = useState(false);
   const [checkingDocuSignStatus, setCheckingDocuSignStatus] = useState(false);
@@ -1089,14 +1091,15 @@ const RentalDetail = () => {
         </CardContent>
       </Card>
 
-      {/* Insurance Verification Card */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Shield className="h-5 w-5" />
-            Insurance Verification
-          </CardTitle>
-        </CardHeader>
+      {/* Insurance Verification Card - Hidden for insurance-exempt tenants like Kedic Services */}
+      {!skipInsurance && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Shield className="h-5 w-5" />
+              Insurance Verification
+            </CardTitle>
+          </CardHeader>
         <CardContent className="space-y-4">
           <div className="flex items-center justify-between">
             <p className="text-sm text-muted-foreground">Upload customer's insurance documents for verification</p>
@@ -1531,7 +1534,8 @@ const RentalDetail = () => {
             </div>
           )}
         </CardContent>
-      </Card>
+        </Card>
+      )}
 
       {/* Identity Verification Section - Always show */}
       <Card>

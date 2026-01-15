@@ -1,7 +1,8 @@
 "use client";
 
 // Main Insurance Management Page - Complete Implementation
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
@@ -58,6 +59,7 @@ import {
 import { exportInsuranceToCSV } from "@/lib/csv-export";
 import { type InsurancePolicyStatus } from "@/lib/insurance-utils";
 import { useTenant } from "@/contexts/TenantContext";
+import { isInsuranceExemptTenant } from "@/config/tenant-config";
 
 type SortField = "customer" | "vehicle" | "policy_number" | "provider" | "start_date" | "expiry_date" | "status" | "docs_count";
 type SortDirection = "asc" | "desc";
@@ -87,6 +89,20 @@ export default function InsuranceListEnhanced() {
   const { policies, stats, isLoading, error } = useInsuranceData(filters);
   const queryClient = useQueryClient();
   const { tenant } = useTenant();
+  const router = useRouter();
+
+  // Redirect insurance-exempt tenants (like Kedic Services) away from this page
+  useEffect(() => {
+    if (isInsuranceExemptTenant(tenant?.id)) {
+      toast.error("Insurance management is not available for this tenant");
+      router.replace("/");
+    }
+  }, [tenant?.id, router]);
+
+  // Don't render content for exempt tenants
+  if (isInsuranceExemptTenant(tenant?.id)) {
+    return null;
+  }
 
   // Mutations
   const recalculateStatusMutation = useMutation({
