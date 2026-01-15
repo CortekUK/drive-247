@@ -15,7 +15,7 @@ import { Badge } from "@/components/ui/badge";
 import { supabase } from "@/integrations/supabase/client";
 import { useTenant } from "@/contexts/TenantContext";
 import { toast } from "sonner";
-import { ChevronRight, ChevronLeft, Check, Baby, Coffee, MapPin, UserCheck, Car, Crown, TrendingUp, Users as GroupIcon, Calculator, Shield, CheckCircle, CalendarIcon, Clock, Search, Grid3x3, List, SlidersHorizontal, X, AlertCircle, FileCheck, RefreshCw, Upload } from "lucide-react";
+import { ChevronRight, ChevronLeft, Check, Baby, Coffee, MapPin, UserCheck, Car, Crown, TrendingUp, Users as GroupIcon, Calculator, Shield, CheckCircle, CalendarIcon, Clock, Search, Grid3x3, List, SlidersHorizontal, X, AlertCircle, FileCheck, RefreshCw, Upload, Gauge } from "lucide-react";
 import { format, differenceInHours } from "date-fns";
 import { cn } from "@/lib/utils";
 import BookingConfirmation from "./BookingConfirmation";
@@ -54,6 +54,7 @@ interface Vehicle {
   photo_url?: string | null;
   vehicle_photos?: VehiclePhoto[];
   description?: string | null;
+  allowed_mileage?: number | null;
 }
 interface PricingExtra {
   id: string;
@@ -3013,6 +3014,10 @@ const MultiStepBookingWidget = () => {
                                     {isRollsRoyce && <Crown className="w-5 h-5 text-primary" />}
                                   </h4>
                                   {vehicle.colour && <p className="text-xs text-muted-foreground mt-1">{vehicle.colour}</p>}
+                                  <div className="flex items-center gap-1 text-xs text-muted-foreground mt-1">
+                                    <Gauge className="h-3 w-3" />
+                                    <span>{vehicle.allowed_mileage ? `${vehicle.allowed_mileage.toLocaleString()} mi/mo` : 'Unlimited miles'}</span>
+                                  </div>
                                 </div>
                                 {isSelected && <div className="w-6 h-6 bg-primary rounded-full flex items-center justify-center">
                                   <Check className="w-4 h-4 text-black" />
@@ -3224,6 +3229,12 @@ const MultiStepBookingWidget = () => {
                           {/* Spec Bar */}
                           <div className="flex items-center gap-4 text-xs text-muted-foreground pb-3 border-b border-border/50">
                             <span title="Registration">{vehicle.reg}</span>
+                            <span className="flex items-center gap-1" title="Mileage Allowance">
+                              <Gauge className="h-3 w-3" />
+                              {vehicle.allowed_mileage
+                                ? `${vehicle.allowed_mileage.toLocaleString()} mi/mo`
+                                : 'Unlimited'}
+                            </span>
                           </div>
 
                           {/* Price Section */}
