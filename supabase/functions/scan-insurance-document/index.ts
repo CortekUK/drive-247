@@ -383,7 +383,9 @@ IMPORTANT:
       extractedData.needsManualReview = true;
     }
 
-    // Update document with AI results - populate both JSON and dedicated columns
+    // Update document with AI results
+    // Note: fraud_risk_score, verification_decision, and review_reasons columns
+    // may not exist yet - they're optional and data is stored in ai_extracted_data JSON
     const { error: updateError } = await supabase
       .from('customer_documents')
       .update({
@@ -395,10 +397,6 @@ IMPORTANT:
         },
         ai_confidence_score: confidenceScore,
         ai_validation_score: validationScore,
-        // Dedicated columns for better querying
-        verification_decision: verificationDecision,
-        review_reasons: extractedData.reviewReasons?.length > 0 ? extractedData.reviewReasons : null,
-        fraud_risk_score: fraudCheck.fraudRiskScore,
         scanned_at: new Date().toISOString()
       })
       .eq('id', documentId);

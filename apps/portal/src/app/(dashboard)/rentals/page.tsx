@@ -26,7 +26,7 @@ import {
 } from "lucide-react";
 import { useEnhancedRentals, RentalFilters } from "@/hooks/use-enhanced-rentals";
 import { RentalsFilters } from "@/components/rentals/rentals-filters";
-import { formatDuration } from "@/lib/rental-utils";
+import { formatDuration, formatRentalDuration } from "@/lib/rental-utils";
 import {
   Pagination,
   PaginationContent,
@@ -117,7 +117,7 @@ const RentalsList = () => {
           `${rental.vehicle.reg} (${rental.vehicle.make} ${rental.vehicle.model})`,
           rental.start_date,
           rental.end_date || "",
-          formatDuration(rental.duration_months, rental.rental_period_type),
+          formatRentalDuration(rental.start_date, rental.end_date),
           rental.rental_period_type || "Monthly",
           `$${rental.monthly_amount}`,
           rental.protection_cost > 0 ? `$${rental.protection_cost}` : "—",
@@ -293,7 +293,7 @@ const RentalsList = () => {
                             : "—"}
                         </TableCell>
                         <TableCell>
-                          {formatDuration(rental.duration_months, rental.rental_period_type)}
+                          {formatRentalDuration(rental.start_date, rental.end_date)}
                         </TableCell>
                         <TableCell>
                           <Badge

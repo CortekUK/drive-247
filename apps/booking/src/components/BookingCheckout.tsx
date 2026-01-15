@@ -205,7 +205,28 @@ const BookingCheckout = () => {
 
       // Step 2: Link any pending insurance documents to the customer
       const pendingInsuranceFiles = JSON.parse(localStorage.getItem('pending_insurance_files') || '[]');
-      for (const fileInfo of pendingInsuranceFiles) {
+
+      // Deduplicate files by file_path to prevent duplicate inserts
+      const uniqueFiles = Array.from(
+        new Map(pendingInsuranceFiles.map((file: any) => [file.file_path, file])).values()
+      );
+
+      console.log(`[CHECKOUT] Processing ${uniqueFiles.length} unique insurance documents (${pendingInsuranceFiles.length} total in localStorage)`);
+
+      for (const fileInfo of uniqueFiles) {
+        // Check if this document already exists for this customer
+        const { data: existingDoc } = await supabase
+          .from('customer_documents')
+          .select('id')
+          .eq('customer_id', customer.id)
+          .eq('file_url', fileInfo.file_path)
+          .maybeSingle();
+
+        if (existingDoc) {
+          console.log('[CHECKOUT] Document already exists, skipping:', fileInfo.file_name);
+          continue;
+        }
+
         const docInsertData: any = {
           customer_id: customer.id,
           document_type: 'Insurance Certificate',
@@ -229,7 +250,7 @@ const BookingCheckout = () => {
           .single();
 
         if (docError) {
-          console.error('Failed to link insurance document:', docError);
+          console.error('[CHECKOUT] Failed to link insurance document:', docError);
           // Don't throw - continue with booking
         } else {
           console.log('[CHECKOUT] Insurance document linked to customer:', customer.id);
@@ -257,6 +278,10 @@ const BookingCheckout = () => {
           }
         }
       }
+
+      // Clear localStorage immediately after processing to prevent duplicates on retry
+      localStorage.removeItem('pending_insurance_files');
+      console.log('[CHECKOUT] Cleared pending_insurance_files from localStorage');
 
       // Step 3: Check if Individual customer already has active rental
       if (customer.customer_type === "Individual") {
@@ -324,8 +349,7 @@ const BookingCheckout = () => {
         // Don't throw - rental is created
       }
 
-      // Clear pending insurance files from localStorage since booking is complete
-      localStorage.removeItem('pending_insurance_files');
+      // Pending insurance files already cleared after processing (see Step 2)
 
       // Show confirmation screen
       setConfirmedBooking({

@@ -213,12 +213,14 @@ const RentalDetail = () => {
 
   // Fetch insurance documents with AI scanning results
   // Documents may be linked by rental_id, customer_id, or still be unlinked (from temp customers)
-  const { data: insuranceDocuments, data: unlinkedDocs } = useQuery({
+  const { data: insuranceDocuments } = useQuery({
     queryKey: ["rental-insurance-docs", id, rental?.customers?.id, tenant?.id],
     queryFn: async () => {
-      const results: any[] = [];
+      // Collect all potential document IDs to avoid showing duplicates
+      const seenDocIds = new Set<string>();
+      const allDocs: any[] = [];
 
-      // First try to find by rental_id (direct link)
+      // First try to find by rental_id (direct link) - highest priority
       if (tenant?.id) {
         const { data: rentalDocs } = await supabase
           .from("customer_documents")
@@ -229,11 +231,16 @@ const RentalDetail = () => {
           .order("uploaded_at", { ascending: false });
 
         if (rentalDocs && rentalDocs.length > 0) {
-          return rentalDocs;
+          rentalDocs.forEach(doc => {
+            if (!seenDocIds.has(doc.id)) {
+              seenDocIds.add(doc.id);
+              allDocs.push(doc);
+            }
+          });
         }
       }
 
-      // Try by customer_id
+      // Then try by customer_id (exclude documents already linked to OTHER rentals)
       if (rental?.customers?.id && tenant?.id) {
         const { data: customerDocs } = await supabase
           .from("customer_documents")
@@ -241,32 +248,44 @@ const RentalDetail = () => {
           .eq("customer_id", rental.customers.id)
           .eq("document_type", "Insurance Certificate")
           .eq("tenant_id", tenant.id)
+          .is("rental_id", null) // Only show if not linked to a rental yet
           .order("uploaded_at", { ascending: false });
 
         if (customerDocs && customerDocs.length > 0) {
-          return customerDocs;
+          customerDocs.forEach(doc => {
+            if (!seenDocIds.has(doc.id)) {
+              seenDocIds.add(doc.id);
+              allDocs.push(doc);
+            }
+          });
         }
       }
 
-      // Fallback: Show all unlinked insurance documents for this tenant
-      // These may be orphaned from bookings where the linking failed
-      if (tenant?.id) {
+      // Fallback: Show unlinked insurance documents for this tenant ONLY if no docs found yet
+      if (allDocs.length === 0 && tenant?.id) {
         const { data: unlinkedDocs } = await supabase
           .from("customer_documents")
           .select("*, customers!customer_documents_customer_id_fkey(email)")
           .eq("document_type", "Insurance Certificate")
           .eq("tenant_id", tenant.id)
           .is("rental_id", null)
+          .is("customer_id", null)
           .order("uploaded_at", { ascending: false })
           .limit(10);
 
         // Mark these as unlinked so UI can show appropriate message
         if (unlinkedDocs && unlinkedDocs.length > 0) {
-          return unlinkedDocs.map(doc => ({ ...doc, isUnlinked: true }));
+          unlinkedDocs.forEach(doc => {
+            if (!seenDocIds.has(doc.id)) {
+              seenDocIds.add(doc.id);
+              allDocs.push({ ...doc, isUnlinked: true });
+            }
+          });
         }
       }
 
-      return [];
+      console.log(`[RENTAL-DOCS] Found ${allDocs.length} unique insurance documents for rental ${id}`);
+      return allDocs;
     },
     enabled: !!id && !!tenant?.id,
   });

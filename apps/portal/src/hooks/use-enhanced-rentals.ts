@@ -193,6 +193,8 @@ export const useEnhancedRentals = (filters: RentalFilters = {}) => {
             duration_months: durationMonths,
             initial_payment: initialPaymentAmount,
             payment_capture_status: paymentCaptureStatus,
+            created_at: rental.created_at,
+            payment_mode: rental.payment_mode,
             customer: rental.customers as any,
             vehicle: rental.vehicles as any,
           };
