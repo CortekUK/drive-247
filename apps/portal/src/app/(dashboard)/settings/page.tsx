@@ -20,7 +20,7 @@ import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { format } from 'date-fns';
-import { Calendar as CalendarIcon, Settings as SettingsIcon, Building2, Bell, Zap, Upload, Save, Loader2, Database, AlertTriangle, Trash2, CreditCard, Palette, Link2, CheckCircle2, AlertCircle, ExternalLink, MapPin, FileText, Car, Mail, ShieldX, FilePenLine, Receipt, Banknote, Shield } from 'lucide-react';
+import { Calendar as CalendarIcon, Settings as SettingsIcon, Building2, Bell, Zap, Upload, Save, Loader2, Database, AlertTriangle, Trash2, CreditCard, Palette, Link2, CheckCircle2, AlertCircle, ExternalLink, MapPin, FileText, Car, Mail, ShieldX, FilePenLine, Receipt, Banknote, Shield, Copy, Check } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
 import { useOrgSettings } from '@/hooks/use-org-settings';
 import { useTenantBranding } from '@/hooks/use-tenant-branding';
@@ -1995,7 +1995,20 @@ const Settings = () => {
                               <td className="p-3 text-muted-foreground">{promo.expires_at}</td>
                               <td className="p-3">{promo.max_users}</td>
                               <td className="p-3">
-                                <Badge variant="outline" className="font-mono">{promo.code}</Badge>
+                                <div className="flex items-center gap-2">
+                                  <Badge variant="outline" className="font-mono">{promo.code}</Badge>
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-6 w-6 text-muted-foreground hover:text-primary"
+                                    onClick={() => {
+                                      navigator.clipboard.writeText(promo.code);
+                                      toast({ title: "Copied!", description: "Promo code copied to clipboard" });
+                                    }}
+                                  >
+                                    <Copy className="h-3.5 w-3.5" />
+                                  </Button>
+                                </div>
                               </td>
                               <td className="p-3 text-right">
                                 <div className="flex justify-end gap-2">
