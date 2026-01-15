@@ -40,7 +40,8 @@
       "Bash(npm run lint:*)",
       "Bash(npx next lint)",
       "Bash(node scripts/update-cms-content.js:*)",
-      "Bash(npm run build:*)"
+      "Bash(npm run build:*)",
+      "Bash(npx next build:*)"
     ],
     "deny": [],
     "ask": []

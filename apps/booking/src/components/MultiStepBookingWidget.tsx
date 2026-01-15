@@ -1112,12 +1112,13 @@ const MultiStepBookingWidget = () => {
     setPromoDetails(null);
 
     try {
-      const { data, error } = await supabase
+      // Cast to any to bypass TypeScript as promocodes table is not yet in generated types
+      const { data, error } = await (supabase as any)
         .from('promocodes')
         .select('*')
         .eq('code', code)
         .eq('tenant_id', tenant.id)
-        .maybeSingle();
+        .maybeSingle() as { data: { code: string; type: string; value: number; expires_at: string | null; id: string } | null; error: any };
 
       if (error) throw error;
 
@@ -1127,7 +1128,8 @@ const MultiStepBookingWidget = () => {
       }
 
       // Check expiry
-      if (data.expires_at && new Date(data.expires_at) < new Date()) {
+      const promoData = data as { code: string; type: string; value: number; expires_at: string | null; id: string };
+      if (promoData.expires_at && new Date(promoData.expires_at) < new Date()) {
         setPromoError("Promo code has expired");
         return;
       }
@@ -1136,10 +1138,10 @@ const MultiStepBookingWidget = () => {
       // For now, we'll assume available if returned. Could add detailed check.
 
       setPromoDetails({
-        code: data.code,
-        type: data.type === 'value' ? 'fixed_amount' : 'percentage', // Map DB type to internal type
-        value: data.value,
-        id: data.id
+        code: promoData.code,
+        type: promoData.type === 'value' ? 'fixed_amount' : 'percentage', // Map DB type to internal type
+        value: promoData.value,
+        id: promoData.id
       });
       toast.success("Promo code applied!");
 
@@ -1194,7 +1196,8 @@ const MultiStepBookingWidget = () => {
         customerId = existingCustomer.id;
         // Update existing customer with DOB if provided
         if (formData.driverDOB) {
-          await supabase
+          // Cast to any as date_of_birth is not in the generated types yet
+          await (supabase as any)
             .from("customers")
             .update({ date_of_birth: formData.driverDOB })
             .eq("id", existingCustomer.id);
@@ -2874,7 +2877,7 @@ const MultiStepBookingWidget = () => {
                     let displayPrice = estimation?.total || 0;
                     let originalPrice = displayPrice;
                     let hasDiscount = false;
-                    let promoErrorMsg = null;
+                    let promoErrorMsg: string | null = null;
 
                     if (promoDetails && estimation) {
                       if (promoDetails.type === 'fixed_amount') {

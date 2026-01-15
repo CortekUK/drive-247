@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { getDocumentProxy } from "npm:unpdf";
+import { encode as base64Encode } from "https://deno.land/std@0.190.0/encoding/base64.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -8,8 +9,8 @@ const corsHeaders = {
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
 };
 
-// GPT-5 model for better accuracy
-const AI_MODEL = 'gpt-5-2025-08-07';
+// GPT-4o model for multimodal document analysis
+const AI_MODEL = 'gpt-4o';
 const OPENAI_API_URL = 'https://api.openai.com/v1/chat/completions';
 
 // Confidence thresholds for auto-decisions
@@ -186,11 +187,13 @@ serve(async (req) => {
       }
     }
 
-    // Get OpenAI API key
+    // Get OpenAI API keys (primary and fallback)
     const openaiApiKey = Deno.env.get('OPENAI_API_KEY');
-    if (!openaiApiKey) {
+    const openaiApiKeyFallback = Deno.env.get('OPENAI_API_KEY_FALLBACK');
+    if (!openaiApiKey && !openaiApiKeyFallback) {
       throw new Error('OPENAI_API_KEY not configured');
     }
+    console.log('[INSURANCE-AI] OpenAI API key configured:', openaiApiKey ? 'Primary' : 'Fallback only');
 
     // Build the AI prompt for comprehensive extraction
     const systemPrompt = `You are an expert insurance document verification specialist. Your task is to:
@@ -231,61 +234,69 @@ IMPORTANT:
 - Check if dates are logically consistent (expiration after effective date)
 - Flag any suspicious patterns or quality issues`;
 
+    // Helper function to make OpenAI API call
+    const makeOpenAICall = async (apiKey: string, isPdfText: boolean, base64Data?: string) => {
+      const requestBody = isPdfText ? {
+        model: AI_MODEL,
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: `${extractionPrompt}\n\nDOCUMENT TEXT:\n${textContent.substring(0, 15000)}` }
+        ],
+        max_completion_tokens: 2000,
+        temperature: 0.1
+      } : {
+        model: AI_MODEL,
+        messages: [
+          { role: 'system', content: systemPrompt },
+          {
+            role: 'user',
+            content: [
+              { type: 'text', text: extractionPrompt },
+              { type: 'image_url', image_url: { url: `data:${mimeType};base64,${base64Data}` } }
+            ]
+          }
+        ],
+        max_completion_tokens: 2000,
+        temperature: 0.1
+      };
+
+      return fetch(OPENAI_API_URL, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${apiKey}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(requestBody)
+      });
+    };
+
     let openaiResponse;
+    const isPdfText = isPdf && textContent.length > 50;
+    // Use Deno's base64 encoder to avoid stack overflow with large files
+    const base64Data = !isPdfText ? base64Encode(new Uint8Array(arrayBuffer)) : undefined;
 
-    if (isPdf && textContent.length > 50) {
-      // For PDFs with extracted text, use text-based analysis
-      console.log('[INSURANCE-AI] Using GPT-5 text analysis...');
+    console.log('[INSURANCE-AI] Using GPT-4o', isPdfText ? 'text analysis...' : 'Vision analysis...');
 
-      openaiResponse = await fetch(OPENAI_API_URL, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${openaiApiKey}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          model: AI_MODEL,
-          messages: [
-            { role: 'system', content: systemPrompt },
-            { role: 'user', content: `${extractionPrompt}\n\nDOCUMENT TEXT:\n${textContent.substring(0, 15000)}` }
-          ],
-          max_completion_tokens: 2000,
-          temperature: 0.1
-        })
-      });
-    } else {
-      // For images, use Vision API
-      console.log('[INSURANCE-AI] Using GPT-5 Vision analysis...');
-      const base64Data = btoa(String.fromCharCode(...new Uint8Array(arrayBuffer)));
+    // Try primary key first
+    if (openaiApiKey) {
+      console.log('[INSURANCE-AI] Attempting with primary API key...');
+      openaiResponse = await makeOpenAICall(openaiApiKey, isPdfText, base64Data);
 
-      openaiResponse = await fetch(OPENAI_API_URL, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${openaiApiKey}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          model: AI_MODEL,
-          messages: [
-            { role: 'system', content: systemPrompt },
-            {
-              role: 'user',
-              content: [
-                { type: 'text', text: extractionPrompt },
-                { type: 'image_url', image_url: { url: `data:${mimeType};base64,${base64Data}` } }
-              ]
-            }
-          ],
-          max_completion_tokens: 2000,
-          temperature: 0.1
-        })
-      });
+      if (!openaiResponse.ok && openaiApiKeyFallback) {
+        const errorText = await openaiResponse.text();
+        console.error('[INSURANCE-AI] Primary key failed:', openaiResponse.status, errorText);
+        console.log('[INSURANCE-AI] Retrying with fallback API key...');
+        openaiResponse = await makeOpenAICall(openaiApiKeyFallback, isPdfText, base64Data);
+      }
+    } else if (openaiApiKeyFallback) {
+      console.log('[INSURANCE-AI] Using fallback API key (no primary)...');
+      openaiResponse = await makeOpenAICall(openaiApiKeyFallback, isPdfText, base64Data);
     }
 
-    if (!openaiResponse.ok) {
-      const errorText = await openaiResponse.text();
+    if (!openaiResponse || !openaiResponse.ok) {
+      const errorText = openaiResponse ? await openaiResponse.text() : 'No response';
       console.error('[INSURANCE-AI] OpenAI API error:', errorText);
-      throw new Error(`OpenAI API error: ${openaiResponse.status} - ${errorText}`);
+      throw new Error(`OpenAI API error: ${openaiResponse?.status || 'unknown'} - ${errorText}`);
     }
 
     const openaiData = await openaiResponse.json();
