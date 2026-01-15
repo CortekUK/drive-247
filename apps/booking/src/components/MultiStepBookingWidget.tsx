@@ -4102,6 +4102,7 @@ const MultiStepBookingWidget = () => {
               formatted: '1 day'
             }}
             vehicleTotal={estimatedBooking?.total || 0}
+            promoDetails={promoDetails}
             onBack={() => setCurrentStep(4)}
           />
         </div>}
