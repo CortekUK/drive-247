@@ -206,25 +206,25 @@ export function StripeConnectSettings() {
       </CardHeader>
       <CardContent className="space-y-6">
         {/* Stripe Mode Toggle */}
-        <div className="p-4 rounded-lg border bg-gradient-to-r from-blue-50 to-purple-50 border-blue-200">
+        <div className="p-4 rounded-lg border bg-gradient-to-r from-blue-50 to-purple-50 border-blue-200 dark:from-blue-950/30 dark:to-purple-950/30 dark:border-blue-800">
           <div className="flex items-center justify-between">
             <div className="flex-1">
               <h4 className="font-medium flex items-center gap-2">
                 {tenantStatus?.stripe_mode === 'live' ? (
                   <>
-                    <Zap className="h-4 w-4 text-green-600" />
-                    <span>Live Mode</span>
-                    <Badge className="bg-green-600 hover:bg-green-700">LIVE</Badge>
+                    <Zap className="h-4 w-4 text-green-600 dark:text-green-400" />
+                    <span className="dark:text-white">Live Mode</span>
+                    <Badge className="bg-green-600 hover:bg-green-700 dark:bg-green-500 dark:hover:bg-green-600">LIVE</Badge>
                   </>
                 ) : (
                   <>
-                    <TestTube2 className="h-4 w-4 text-blue-600" />
-                    <span>Test Mode</span>
-                    <Badge className="bg-blue-600 hover:bg-blue-700">TEST</Badge>
+                    <TestTube2 className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+                    <span className="dark:text-white">Test Mode</span>
+                    <Badge className="bg-blue-600 hover:bg-blue-700 dark:bg-blue-500 dark:hover:bg-blue-600">TEST</Badge>
                   </>
                 )}
               </h4>
-              <p className="text-sm text-muted-foreground mt-1">
+              <p className="text-sm text-muted-foreground mt-1 dark:text-gray-300">
                 {tenantStatus?.stripe_mode === 'live'
                   ? 'Accepting real payments with live Stripe keys'
                   : 'Using test Stripe keys - only test cards accepted (4242 4242 4242 4242)'}
@@ -236,7 +236,7 @@ export function StripeConnectSettings() {
                 size="sm"
                 onClick={() => handleModeToggle('test')}
                 disabled={tenantStatus?.stripe_mode === 'test' || updateStripeMutation.isPending}
-                className={tenantStatus?.stripe_mode === 'test' ? 'bg-blue-600 hover:bg-blue-700' : ''}
+                className={tenantStatus?.stripe_mode === 'test' ? 'bg-blue-600 hover:bg-blue-700 dark:bg-blue-500 dark:hover:bg-blue-600' : 'dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-800'}
               >
                 <TestTube2 className="h-4 w-4 mr-1" />
                 Test
@@ -246,7 +246,7 @@ export function StripeConnectSettings() {
                 size="sm"
                 onClick={() => handleModeToggle('live')}
                 disabled={tenantStatus?.stripe_mode === 'live' || updateStripeMutation.isPending}
-                className={tenantStatus?.stripe_mode === 'live' ? 'bg-green-600 hover:bg-green-700' : ''}
+                className={tenantStatus?.stripe_mode === 'live' ? 'bg-green-600 hover:bg-green-700 dark:bg-green-500 dark:hover:bg-green-600' : 'dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-800'}
               >
                 <Zap className="h-4 w-4 mr-1" />
                 Live
@@ -258,22 +258,22 @@ export function StripeConnectSettings() {
         {/* Status Display */}
         <div className={`p-4 rounded-lg border ${
           isConnected
-            ? 'bg-green-50 border-green-200'
+            ? 'bg-green-50 border-green-200 dark:bg-green-950/30 dark:border-green-800'
             : isPending
-            ? 'bg-yellow-50 border-yellow-200'
+            ? 'bg-yellow-50 border-yellow-200 dark:bg-yellow-950/30 dark:border-yellow-800'
             : isRestricted
-            ? 'bg-red-50 border-red-200'
-            : 'bg-gray-50 border-gray-200'
+            ? 'bg-red-50 border-red-200 dark:bg-red-950/30 dark:border-red-800'
+            : 'bg-gray-50 border-gray-200 dark:bg-gray-900/50 dark:border-gray-700'
         }`}>
           <div className="flex items-start gap-3">
             <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
               isConnected
-                ? 'bg-green-100 text-green-600'
+                ? 'bg-green-100 text-green-600 dark:bg-green-900/50 dark:text-green-400'
                 : isPending
-                ? 'bg-yellow-100 text-yellow-600'
+                ? 'bg-yellow-100 text-yellow-600 dark:bg-yellow-900/50 dark:text-yellow-400'
                 : isRestricted
-                ? 'bg-red-100 text-red-600'
-                : 'bg-gray-100 text-gray-600'
+                ? 'bg-red-100 text-red-600 dark:bg-red-900/50 dark:text-red-400'
+                : 'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400'
             }`}>
               {isConnected ? (
                 <CheckCircle2 className="h-5 w-5" />
@@ -285,12 +285,12 @@ export function StripeConnectSettings() {
               <div className="flex items-center gap-2">
                 <h4 className={`font-medium ${
                   isConnected
-                    ? 'text-green-800'
+                    ? 'text-green-800 dark:text-green-300'
                     : isPending
-                    ? 'text-yellow-800'
+                    ? 'text-yellow-800 dark:text-yellow-300'
                     : isRestricted
-                    ? 'text-red-800'
-                    : 'text-gray-800'
+                    ? 'text-red-800 dark:text-red-300'
+                    : 'text-gray-800 dark:text-gray-300'
                 }`}>
                   {isConnected
                     ? 'Stripe Connected'
@@ -307,12 +307,12 @@ export function StripeConnectSettings() {
               </div>
               <p className={`text-sm mt-1 ${
                 isConnected
-                  ? 'text-green-700'
+                  ? 'text-green-700 dark:text-green-400'
                   : isPending
-                  ? 'text-yellow-700'
+                  ? 'text-yellow-700 dark:text-yellow-400'
                   : isRestricted
-                  ? 'text-red-700'
-                  : 'text-gray-600'
+                  ? 'text-red-700 dark:text-red-400'
+                  : 'text-gray-600 dark:text-gray-400'
               }`}>
                 {isConnected
                   ? 'Your Stripe account is fully connected. Please wait for confirmation from your platform host to proceed with payments.'
@@ -330,24 +330,24 @@ export function StripeConnectSettings() {
         {/* Account Details */}
         {tenantStatus?.stripe_account_id && (
           <div className="space-y-3">
-            <h4 className="font-medium">Account Details</h4>
+            <h4 className="font-medium dark:text-white">Account Details</h4>
             <div className="grid gap-3">
-              <div className="flex items-center justify-between p-3 bg-muted rounded-lg">
+              <div className="flex items-center justify-between p-3 bg-muted rounded-lg dark:bg-gray-900/50 dark:border dark:border-gray-800">
                 <div>
-                  <p className="text-sm text-muted-foreground">Account ID</p>
-                  <p className="font-mono text-sm">{tenantStatus.stripe_account_id}</p>
+                  <p className="text-sm text-muted-foreground dark:text-gray-400">Account ID</p>
+                  <p className="font-mono text-sm dark:text-gray-200">{tenantStatus.stripe_account_id}</p>
                 </div>
-                <Button variant="ghost" size="sm" onClick={copyAccountId}>
+                <Button variant="ghost" size="sm" onClick={copyAccountId} className="dark:hover:bg-gray-800">
                   <Copy className="h-4 w-4" />
                 </Button>
               </div>
-              <div className="flex items-center justify-between p-3 bg-muted rounded-lg">
+              <div className="flex items-center justify-between p-3 bg-muted rounded-lg dark:bg-gray-900/50 dark:border dark:border-gray-800">
                 <div>
-                  <p className="text-sm text-muted-foreground">Payouts</p>
-                  <p className="font-medium">{isConnected ? 'Enabled' : 'Disabled'}</p>
+                  <p className="text-sm text-muted-foreground dark:text-gray-400">Payouts</p>
+                  <p className="font-medium dark:text-gray-200">{isConnected ? 'Enabled' : 'Disabled'}</p>
                 </div>
                 {isConnected && (
-                  <Badge variant="secondary" className="bg-green-100 text-green-700">Active</Badge>
+                  <Badge variant="secondary" className="bg-green-100 text-green-700 dark:bg-green-900/50 dark:text-green-400">Active</Badge>
                 )}
               </div>
             </div>
@@ -392,23 +392,23 @@ export function StripeConnectSettings() {
         </div>
 
         {/* Info Box */}
-        <div className="bg-muted/50 p-4 rounded-lg">
-          <h4 className="font-medium mb-2">How Stripe Connect Works</h4>
-          <ul className="text-sm text-muted-foreground space-y-2">
+        <div className="bg-muted/50 p-4 rounded-lg dark:bg-gray-900/50 dark:border dark:border-gray-800">
+          <h4 className="font-medium mb-2 dark:text-white">How Stripe Connect Works</h4>
+          <ul className="text-sm text-muted-foreground dark:text-gray-300 space-y-2">
             <li className="flex items-start gap-2">
-              <span className="text-primary mt-0.5">1.</span>
+              <span className="text-primary dark:text-blue-400 mt-0.5">1.</span>
               <span>Click "Set Up Stripe Connect" to begin the onboarding process</span>
             </li>
             <li className="flex items-start gap-2">
-              <span className="text-primary mt-0.5">2.</span>
+              <span className="text-primary dark:text-blue-400 mt-0.5">2.</span>
               <span>Complete Stripe's verification (business info, bank account, ID)</span>
             </li>
             <li className="flex items-start gap-2">
-              <span className="text-primary mt-0.5">3.</span>
+              <span className="text-primary dark:text-blue-400 mt-0.5">3.</span>
               <span>Once verified, customer payments go directly to your bank account</span>
             </li>
             <li className="flex items-start gap-2">
-              <span className="text-primary mt-0.5">4.</span>
+              <span className="text-primary dark:text-blue-400 mt-0.5">4.</span>
               <span>Stripe handles payouts automatically on your schedule</span>
             </li>
           </ul>
