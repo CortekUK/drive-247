@@ -1,11 +1,6 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.57.4'
-import Stripe from 'https://esm.sh/stripe@14.21.0?target=deno'
-
-const stripe = new Stripe(Deno.env.get('STRIPE_SECRET_KEY') || '', {
-  apiVersion: '2023-10-16',
-  httpClient: Stripe.createFetchHttpClient(),
-})
+import { getStripeClient, getConnectAccountId, type StripeMode } from '../_shared/stripe-client.ts'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -41,13 +36,14 @@ serve(async (req) => {
     let tenantId: string | null = bodyTenantId || null
     let companyName = 'Drive 917'
     let currencyCode = 'usd'
-    let stripeAccountId: string | null = null
+    let stripeMode: StripeMode = 'test' // Default to test mode for safety
+    let tenantData: any = null
 
     // Try to get tenant by slug first, then by ID, then from rental
     if (slug) {
       const { data: tenant, error: tenantError } = await supabaseClient
         .from('tenants')
-        .select('id, company_name, currency_code, stripe_account_id, stripe_onboarding_complete')
+        .select('id, company_name, currency_code, stripe_mode, stripe_account_id, stripe_onboarding_complete')
         .eq('slug', slug)
         .eq('status', 'active')
         .single()
@@ -56,18 +52,15 @@ serve(async (req) => {
         tenantId = tenant.id
         companyName = tenant.company_name || companyName
         currencyCode = (tenant.currency_code || 'USD').toLowerCase()
-
-        // Only use Stripe Connect if tenant has completed onboarding
-        if (tenant.stripe_account_id && tenant.stripe_onboarding_complete) {
-          stripeAccountId = tenant.stripe_account_id
-          console.log('Using Stripe Connect account from slug:', stripeAccountId)
-        }
+        stripeMode = (tenant.stripe_mode as StripeMode) || 'test'
+        tenantData = tenant
+        console.log('Tenant loaded from slug:', tenantId, 'mode:', stripeMode)
       }
     } else if (tenantId) {
       // Lookup tenant by ID if slug not provided
       const { data: tenant, error: tenantError } = await supabaseClient
         .from('tenants')
-        .select('id, company_name, currency_code, stripe_account_id, stripe_onboarding_complete')
+        .select('id, company_name, currency_code, stripe_mode, stripe_account_id, stripe_onboarding_complete')
         .eq('id', tenantId)
         .eq('status', 'active')
         .single()
@@ -75,11 +68,9 @@ serve(async (req) => {
       if (tenant && !tenantError) {
         companyName = tenant.company_name || companyName
         currencyCode = (tenant.currency_code || 'USD').toLowerCase()
-
-        if (tenant.stripe_account_id && tenant.stripe_onboarding_complete) {
-          stripeAccountId = tenant.stripe_account_id
-          console.log('Using Stripe Connect account from tenantId:', stripeAccountId)
-        }
+        stripeMode = (tenant.stripe_mode as StripeMode) || 'test'
+        tenantData = tenant
+        console.log('Tenant loaded from ID:', tenantId, 'mode:', stripeMode)
       }
     } else if (rentalId) {
       // Fallback: get tenant from rental
@@ -94,23 +85,27 @@ serve(async (req) => {
 
         const { data: tenant } = await supabaseClient
           .from('tenants')
-          .select('company_name, currency_code, stripe_account_id, stripe_onboarding_complete')
+          .select('company_name, currency_code, stripe_mode, stripe_account_id, stripe_onboarding_complete')
           .eq('id', tenantId)
           .single()
 
         if (tenant) {
           companyName = tenant.company_name || companyName
           currencyCode = (tenant.currency_code || 'USD').toLowerCase()
-
-          if (tenant.stripe_account_id && tenant.stripe_onboarding_complete) {
-            stripeAccountId = tenant.stripe_account_id
-            console.log('Using Stripe Connect account from rental:', stripeAccountId)
-          }
+          stripeMode = (tenant.stripe_mode as StripeMode) || 'test'
+          tenantData = tenant
+          console.log('Tenant loaded from rental:', tenantId, 'mode:', stripeMode)
         }
       }
     }
 
-    console.log('Checkout session - tenantId:', tenantId, 'stripeAccountId:', stripeAccountId)
+    // Get Stripe client for the tenant's mode
+    const stripe = getStripeClient(stripeMode)
+
+    // Determine which Connect account to use based on tenant mode
+    const stripeAccountId = tenantData ? getConnectAccountId(tenantData) : null
+
+    console.log('Checkout session - tenantId:', tenantId, 'mode:', stripeMode, 'connectAccount:', stripeAccountId)
 
     // Create Stripe Checkout Session
     const sessionConfig: any = {
@@ -143,11 +138,17 @@ serve(async (req) => {
         customer_name: customerName,
         tenant_id: tenantId,
         tenant_slug: slug,
+        stripe_mode: stripeMode, // Track which mode was used
       },
     }
 
     // For direct charges: create checkout session on connected account
     const stripeOptions = stripeAccountId ? { stripeAccount: stripeAccountId } : undefined;
+    if (stripeAccountId) {
+      console.log(`Creating checkout session on connected account (${stripeMode} mode):`, stripeAccountId)
+    } else {
+      console.log(`Creating checkout session on platform account (${stripeMode} mode)`)
+    }
 
     const session = await stripe.checkout.sessions.create(sessionConfig, stripeOptions)
 

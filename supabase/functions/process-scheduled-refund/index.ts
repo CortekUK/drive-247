@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import Stripe from "https://esm.sh/stripe@14.21.0?target=deno";
+import { getStripeClient, getConnectAccountId, type StripeMode } from '../_shared/stripe-client.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -26,15 +27,6 @@ serve(async (req) => {
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
-
-    // Initialize Stripe
-    const stripeSecretKey = Deno.env.get('STRIPE_SECRET_KEY');
-    if (!stripeSecretKey) {
-      throw new Error('STRIPE_SECRET_KEY not configured');
-    }
-    const stripe = new Stripe(stripeSecretKey, {
-      apiVersion: '2023-10-16',
-    });
 
     // Check if this is an immediate refund request (has paymentId in body)
     let requestBody: ImmediateRefundRequest | null = null;
@@ -67,23 +59,27 @@ serve(async (req) => {
         throw new Error('Payment has no Stripe payment intent. Please provide one from Stripe Dashboard.');
       }
 
-      // Get tenant's Stripe Connect account
+      // Get tenant's Stripe mode and Connect account
       const tenantId = requestBody.tenantId || payment.tenant_id || payment.rentals?.tenant_id;
+      let stripeMode: StripeMode = 'test'; // Default to test
       let stripeAccountId: string | null = null;
 
       if (tenantId) {
         const { data: tenant } = await supabase
           .from('tenants')
-          .select('stripe_account_id, stripe_onboarding_complete')
+          .select('stripe_mode, stripe_account_id, stripe_onboarding_complete')
           .eq('id', tenantId)
           .single();
 
-        if (tenant?.stripe_account_id && tenant?.stripe_onboarding_complete) {
-          stripeAccountId = tenant.stripe_account_id;
-          console.log('Using Stripe Connect account:', stripeAccountId);
+        if (tenant) {
+          stripeMode = (tenant.stripe_mode as StripeMode) || 'test';
+          stripeAccountId = getConnectAccountId(tenant);
+          console.log('Tenant mode:', stripeMode, 'Connect account:', stripeAccountId);
         }
       }
 
+      // Get Stripe client for the tenant's mode
+      const stripe = getStripeClient(stripeMode);
       const stripeOptions = stripeAccountId ? { stripeAccount: stripeAccountId } : undefined;
       const refundAmount = requestBody.amount || payment.amount;
 
@@ -171,32 +167,35 @@ serve(async (req) => {
           .update({ refund_status: 'processing' })
           .eq('id', refund.payment_id);
 
-        // Get tenant's Stripe Connect account for this refund
-        // First get tenant_id from payment record
+        // Get tenant's Stripe mode and Connect account for this refund
         const { data: paymentRecord } = await supabase
           .from('payments')
           .select('tenant_id')
           .eq('id', refund.payment_id)
           .single();
 
+        let batchStripeMode: StripeMode = 'test';
         let batchStripeAccountId: string | null = null;
         if (paymentRecord?.tenant_id) {
           const { data: tenant } = await supabase
             .from('tenants')
-            .select('stripe_account_id, stripe_onboarding_complete')
+            .select('stripe_mode, stripe_account_id, stripe_onboarding_complete')
             .eq('id', paymentRecord.tenant_id)
             .single();
 
-          if (tenant?.stripe_account_id && tenant?.stripe_onboarding_complete) {
-            batchStripeAccountId = tenant.stripe_account_id;
+          if (tenant) {
+            batchStripeMode = (tenant.stripe_mode as StripeMode) || 'test';
+            batchStripeAccountId = getConnectAccountId(tenant);
           }
         }
 
+        // Get Stripe client for this tenant's mode
+        const batchStripe = getStripeClient(batchStripeMode);
         const batchStripeOptions = batchStripeAccountId ? { stripeAccount: batchStripeAccountId } : undefined;
 
         // Process refund via Stripe (on connected account for direct charges)
-        console.log(`Creating refund`, batchStripeAccountId ? `on connected account: ${batchStripeAccountId}` : 'on platform');
-        const stripeRefund = await stripe.refunds.create({
+        console.log(`Creating refund (${batchStripeMode} mode)`, batchStripeAccountId ? `on connected account: ${batchStripeAccountId}` : 'on platform');
+        const stripeRefund = await batchStripe.refunds.create({
           payment_intent: refund.stripe_payment_intent_id,
           amount: Math.round(refund.refund_amount * 100), // Convert to cents
           reason: 'requested_by_customer',
