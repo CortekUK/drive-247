@@ -13,6 +13,8 @@ export interface InvoiceData {
   tax_amount?: number;
   service_fee?: number;
   security_deposit?: number;
+  discount_amount?: number;
+  promo_code?: string | null;
   total_amount: number;
   notes?: string;
   tenant_id?: string;
@@ -32,6 +34,8 @@ export interface Invoice {
   tax_amount: number;
   service_fee?: number;
   security_deposit?: number;
+  discount_amount?: number;
+  promo_code?: string | null;
   total_amount: number;
   status: string;
   notes?: string;
@@ -73,6 +77,8 @@ export const createInvoice = async (data: InvoiceData): Promise<Invoice> => {
     tax_amount: data.tax_amount || 0,
     service_fee: data.service_fee || 0,
     security_deposit: data.security_deposit || 0,
+    discount_amount: data.discount_amount || 0,
+    promo_code: data.promo_code || null,
     total_amount: data.total_amount,
     status: 'pending',
     notes: data.notes,
@@ -117,6 +123,8 @@ export const createLocalInvoice = (data: InvoiceData): Invoice => {
     tax_amount: data.tax_amount || 0,
     service_fee: data.service_fee || 0,
     security_deposit: data.security_deposit || 0,
+    discount_amount: data.discount_amount || 0,
+    promo_code: data.promo_code || null,
     total_amount: data.total_amount,
     status: 'pending',
     notes: data.notes,

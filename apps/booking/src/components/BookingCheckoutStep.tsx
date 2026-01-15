@@ -14,6 +14,13 @@ import { format } from "date-fns";
 import { InvoiceDialog } from "@/components/InvoiceDialog";
 import { createInvoiceWithFallback, Invoice } from "@/lib/invoiceUtils";
 
+interface PromoDetails {
+  code: string;
+  type: "percentage" | "fixed_amount";
+  value: number;
+  id: string;
+}
+
 interface BookingCheckoutStepProps {
   formData: any;
   selectedVehicle: any;
@@ -22,7 +29,8 @@ interface BookingCheckoutStepProps {
     days: number;
     formatted: string;
   };
-  vehicleTotal: number;
+  vehicleTotal: number; // Original price before promo discount
+  promoDetails?: PromoDetails | null;
   onBack: () => void;
 }
 
@@ -32,6 +40,7 @@ export default function BookingCheckoutStep({
   extras,
   rentalDuration,
   vehicleTotal,
+  promoDetails,
   onBack
 }: BookingCheckoutStepProps) {
   const router = useRouter();
@@ -79,20 +88,51 @@ export default function BookingCheckoutStep({
     return 0;
   };
 
-  // Calculate tax amount based on tenant settings
+  // Calculate promo discount amount
+  const calculatePromoDiscount = (): number => {
+    if (!promoDetails) return 0;
+
+    if (promoDetails.type === 'fixed_amount') {
+      // Fixed amount discount, but not more than the vehicle total
+      return Math.min(promoDetails.value, vehicleTotal);
+    } else if (promoDetails.type === 'percentage') {
+      // Percentage discount
+      return (vehicleTotal * promoDetails.value) / 100;
+    }
+    return 0;
+  };
+
+  // Calculate discounted vehicle total (after promo code)
+  const calculateDiscountedVehicleTotal = (): number => {
+    return vehicleTotal - calculatePromoDiscount();
+  };
+
+  // Calculate tax amount based on tenant settings (applied to discounted price)
   const calculateTaxAmount = (): number => {
     if (!tenant?.tax_enabled || !tenant?.tax_percentage) {
       return 0;
     }
-    return vehicleTotal * (tenant.tax_percentage / 100);
+    // Tax is calculated on the discounted price
+    return calculateDiscountedVehicleTotal() * (tenant.tax_percentage / 100);
   };
 
-  // Calculate service fee based on tenant settings
+  // Calculate service fee based on tenant settings (supports both fixed and percentage)
   const calculateServiceFee = (): number => {
-    if (!tenant?.service_fee_enabled || !tenant?.service_fee_amount) {
+    if (!tenant?.service_fee_enabled) {
       return 0;
     }
-    return tenant.service_fee_amount;
+
+    // Check for percentage type service fee
+    const feeType = (tenant as any)?.service_fee_type || 'fixed_amount';
+    const feeValue = (tenant as any)?.service_fee_value ?? tenant?.service_fee_amount ?? 0;
+
+    if (feeType === 'percentage') {
+      // Percentage service fee (calculated on discounted vehicle total)
+      return (calculateDiscountedVehicleTotal() * feeValue) / 100;
+    } else {
+      // Fixed amount service fee
+      return feeValue;
+    }
   };
 
   // Calculate security deposit based on tenant settings
@@ -106,7 +146,8 @@ export default function BookingCheckoutStep({
   };
 
   const calculateGrandTotal = () => {
-    return vehicleTotal + calculateTaxAmount() + calculateServiceFee() + calculateSecurityDeposit();
+    // Grand total = discounted vehicle price + tax + service fee + security deposit
+    return calculateDiscountedVehicleTotal() + calculateTaxAmount() + calculateServiceFee() + calculateSecurityDeposit();
   };
 
   // Function to get booking payment mode
@@ -566,20 +607,25 @@ export default function BookingCheckoutStep({
       console.log('⏳ Vehicle status unchanged - awaiting admin approval');
 
       // Step 4: Create invoice (with fallback to local if DB fails)
+      const promoDiscount = calculatePromoDiscount();
+      const discountedVehicleTotal = calculateDiscountedVehicleTotal();
+
       const invoice = await createInvoiceWithFallback({
         rental_id: rental.id,
         customer_id: customer.id,
         vehicle_id: selectedVehicle.id,
         invoice_date: new Date(),
         due_date: new Date(formData.pickupDate),
-        subtotal: vehicleTotal,
-        rental_fee: vehicleTotal,
+        subtotal: vehicleTotal, // Original price before discount
+        rental_fee: discountedVehicleTotal, // Discounted rental fee
         protection_fee: 0,
         tax_amount: calculateTaxAmount(),
         service_fee: calculateServiceFee(),
         security_deposit: calculateSecurityDeposit(),
         total_amount: calculateGrandTotal(),
-        notes: '',
+        discount_amount: promoDiscount,
+        promo_code: promoDetails?.code || null,
+        notes: promoDetails ? `Promo code applied: ${promoDetails.code} (${promoDetails.type === 'percentage' ? `${promoDetails.value}%` : `$${promoDetails.value}`} off)` : '',
         tenant_id: tenant?.id,
       });
 
@@ -803,10 +849,39 @@ export default function BookingCheckoutStep({
             <h3 className="text-lg font-semibold text-gradient-metal mb-4">Price Summary</h3>
 
             <div className="space-y-3">
-              <div className="flex justify-between text-sm pb-3 border-b border-border">
+              {/* Original rental price */}
+              <div className="flex justify-between text-sm">
                 <span className="text-muted-foreground">Rental ({rentalDuration.formatted})</span>
-                <span className="font-medium">${vehicleTotal.toLocaleString()}</span>
+                <span className={`font-medium ${promoDetails ? 'line-through text-muted-foreground' : ''}`}>
+                  ${vehicleTotal.toFixed(2)}
+                </span>
               </div>
+
+              {/* Promo discount line item - only show when applied */}
+              {promoDetails && calculatePromoDiscount() > 0 && (
+                <div className="flex justify-between text-sm text-green-600">
+                  <span>
+                    Promo ({promoDetails.code})
+                    <span className="text-xs ml-1">
+                      ({promoDetails.type === 'percentage' ? `${promoDetails.value}%` : `$${promoDetails.value}`} off)
+                    </span>
+                  </span>
+                  <span className="font-medium">-${calculatePromoDiscount().toFixed(2)}</span>
+                </div>
+              )}
+
+              {/* Discounted subtotal - show when promo is applied */}
+              {promoDetails && calculatePromoDiscount() > 0 && (
+                <div className="flex justify-between text-sm pb-3 border-b border-border">
+                  <span className="text-muted-foreground">Subtotal</span>
+                  <span className="font-medium text-green-600">${calculateDiscountedVehicleTotal().toFixed(2)}</span>
+                </div>
+              )}
+
+              {/* Border when no promo */}
+              {(!promoDetails || calculatePromoDiscount() === 0) && (
+                <div className="pb-3 border-b border-border" />
+              )}
 
               {/* Tax line item - only show when tax is enabled */}
               {tenant?.tax_enabled && tenant?.tax_percentage > 0 && (
@@ -817,9 +892,14 @@ export default function BookingCheckoutStep({
               )}
 
               {/* Service fee line item - only show when enabled */}
-              {tenant?.service_fee_enabled && tenant?.service_fee_amount > 0 && (
+              {tenant?.service_fee_enabled && calculateServiceFee() > 0 && (
                 <div className="flex justify-between text-sm">
-                  <span className="text-muted-foreground">Service Fee</span>
+                  <span className="text-muted-foreground">
+                    Service Fee
+                    {(tenant as any)?.service_fee_type === 'percentage' && (
+                      <span className="text-xs ml-1">({(tenant as any)?.service_fee_value || 0}%)</span>
+                    )}
+                  </span>
                   <span className="font-medium">${calculateServiceFee().toFixed(2)}</span>
                 </div>
               )}
@@ -836,7 +916,7 @@ export default function BookingCheckoutStep({
                 <div className="flex justify-between items-center">
                   <span className="text-lg font-semibold">Total</span>
                   <span className="text-2xl font-bold text-accent">
-                    ${calculateGrandTotal().toLocaleString()}
+                    ${calculateGrandTotal().toFixed(2)}
                   </span>
                 </div>
               </div>
@@ -866,7 +946,7 @@ export default function BookingCheckoutStep({
                 ) : (
                   <>
                     <CreditCard className="w-4 h-4 mr-2" />
-                    Confirm & Pay ${calculateGrandTotal().toLocaleString()}
+                    Confirm & Pay ${calculateGrandTotal().toFixed(2)}
                   </>
                 )}
               </Button>
