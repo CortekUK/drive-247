@@ -2549,109 +2549,112 @@ const MultiStepBookingWidget = () => {
               </div>
             </div>
 
-            {/* Row 3: Driver DOB */}
-            <div className="space-y-2">
-              <Label className="font-medium">Date of Birth *</Label>
-              <div className="grid grid-cols-3 gap-2 max-w-md">
-                {/* Month Select */}
-                <Select
-                  value={formData.driverDOB ? (new Date(formData.driverDOB).getMonth() + 1).toString().padStart(2, '0') : ""}
-                  onValueChange={(month) => {
-                    const currentDate = formData.driverDOB ? new Date(formData.driverDOB) : new Date(2000, 0, 1);
-                    const newDate = new Date(currentDate.getFullYear(), parseInt(month) - 1, Math.min(currentDate.getDate(), new Date(currentDate.getFullYear(), parseInt(month), 0).getDate()));
-                    const dateStr = format(newDate, "yyyy-MM-dd");
-                    setFormData({ ...formData, driverDOB: dateStr });
-                    validateField('driverDOB', dateStr);
-                  }}
-                >
-                  <SelectTrigger className={cn("h-12", errors.driverDOB && "border-destructive")}>
-                    <SelectValue placeholder="Month" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'].map((month, i) => (
-                      <SelectItem key={i} value={(i + 1).toString().padStart(2, '0')}>{month}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                {/* Day Select */}
-                <Select
-                  value={formData.driverDOB ? new Date(formData.driverDOB).getDate().toString() : ""}
-                  onValueChange={(day) => {
-                    const currentDate = formData.driverDOB ? new Date(formData.driverDOB) : new Date(2000, 0, 1);
-                    const newDate = new Date(currentDate.getFullYear(), currentDate.getMonth(), parseInt(day));
-                    const dateStr = format(newDate, "yyyy-MM-dd");
-                    setFormData({ ...formData, driverDOB: dateStr });
-                    validateField('driverDOB', dateStr);
-                  }}
-                >
-                  <SelectTrigger className={cn("h-12", errors.driverDOB && "border-destructive")}>
-                    <SelectValue placeholder="Day" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {Array.from({ length: 31 }, (_, i) => (
-                      <SelectItem key={i + 1} value={(i + 1).toString()}>{i + 1}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                {/* Year Select */}
-                <Select
-                  value={formData.driverDOB ? new Date(formData.driverDOB).getFullYear().toString() : ""}
-                  onValueChange={(year) => {
-                    const currentDate = formData.driverDOB ? new Date(formData.driverDOB) : new Date(2000, 0, 1);
-                    const newDate = new Date(parseInt(year), currentDate.getMonth(), Math.min(currentDate.getDate(), new Date(parseInt(year), currentDate.getMonth() + 1, 0).getDate()));
-                    const dateStr = format(newDate, "yyyy-MM-dd");
-                    setFormData({ ...formData, driverDOB: dateStr });
-                    validateField('driverDOB', dateStr);
-                  }}
-                >
-                  <SelectTrigger className={cn("h-12", errors.driverDOB && "border-destructive")}>
-                    <SelectValue placeholder="Year" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {Array.from({ length: 100 }, (_, i) => new Date().getFullYear() - (tenant?.minimum_rental_age || 18) - i).map((year) => (
-                      <SelectItem key={year} value={year.toString()}>{year}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+            {/* Row 3: Driver DOB and Promo Code */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {/* Date of Birth */}
+              <div className="space-y-2">
+                <Label className="font-medium">Date of Birth *</Label>
+                <div className="grid grid-cols-3 gap-2">
+                  {/* Month Select */}
+                  <Select
+                    value={formData.driverDOB ? (new Date(formData.driverDOB).getMonth() + 1).toString().padStart(2, '0') : ""}
+                    onValueChange={(month) => {
+                      const currentDate = formData.driverDOB ? new Date(formData.driverDOB) : new Date(2000, 0, 1);
+                      const newDate = new Date(currentDate.getFullYear(), parseInt(month) - 1, Math.min(currentDate.getDate(), new Date(currentDate.getFullYear(), parseInt(month), 0).getDate()));
+                      const dateStr = format(newDate, "yyyy-MM-dd");
+                      setFormData({ ...formData, driverDOB: dateStr });
+                      validateField('driverDOB', dateStr);
+                    }}
+                  >
+                    <SelectTrigger className={cn("h-12", errors.driverDOB && "border-destructive")}>
+                      <SelectValue placeholder="Month" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'].map((month, i) => (
+                        <SelectItem key={i} value={(i + 1).toString().padStart(2, '0')}>{month}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  {/* Day Select */}
+                  <Select
+                    value={formData.driverDOB ? new Date(formData.driverDOB).getDate().toString() : ""}
+                    onValueChange={(day) => {
+                      const currentDate = formData.driverDOB ? new Date(formData.driverDOB) : new Date(2000, 0, 1);
+                      const newDate = new Date(currentDate.getFullYear(), currentDate.getMonth(), parseInt(day));
+                      const dateStr = format(newDate, "yyyy-MM-dd");
+                      setFormData({ ...formData, driverDOB: dateStr });
+                      validateField('driverDOB', dateStr);
+                    }}
+                  >
+                    <SelectTrigger className={cn("h-12", errors.driverDOB && "border-destructive")}>
+                      <SelectValue placeholder="Day" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {Array.from({ length: 31 }, (_, i) => (
+                        <SelectItem key={i + 1} value={(i + 1).toString()}>{i + 1}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  {/* Year Select */}
+                  <Select
+                    value={formData.driverDOB ? new Date(formData.driverDOB).getFullYear().toString() : ""}
+                    onValueChange={(year) => {
+                      const currentDate = formData.driverDOB ? new Date(formData.driverDOB) : new Date(2000, 0, 1);
+                      const newDate = new Date(parseInt(year), currentDate.getMonth(), Math.min(currentDate.getDate(), new Date(parseInt(year), currentDate.getMonth() + 1, 0).getDate()));
+                      const dateStr = format(newDate, "yyyy-MM-dd");
+                      setFormData({ ...formData, driverDOB: dateStr });
+                      validateField('driverDOB', dateStr);
+                    }}
+                  >
+                    <SelectTrigger className={cn("h-12", errors.driverDOB && "border-destructive")}>
+                      <SelectValue placeholder="Year" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {Array.from({ length: 100 }, (_, i) => new Date().getFullYear() - (tenant?.minimum_rental_age || 18) - i).map((year) => (
+                        <SelectItem key={year} value={year.toString()}>{year}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                {formData.driverDOB && (
+                  <p className="text-sm text-muted-foreground">Age: <span className={cn("font-medium", errors.driverDOB ? "text-destructive" : "text-foreground")}>{calculateAge(new Date(formData.driverDOB))} years old</span></p>
+                )}
+                {errors.driverDOB && <p className="text-sm text-destructive">{errors.driverDOB}</p>}
               </div>
-              {formData.driverDOB && (
-                <p className="text-sm text-muted-foreground">Age: <span className={cn("font-medium", errors.driverDOB ? "text-destructive" : "text-foreground")}>{calculateAge(new Date(formData.driverDOB))} years old</span></p>
-              )}
-              {errors.driverDOB && <p className="text-sm text-destructive">{errors.driverDOB}</p>}
-            </div>
 
-            {/* Row 4: Promo Code */}
-            <div className="space-y-2 max-w-md">
-              <Label htmlFor="promoCode" className="font-medium">Promo Code (Optional)</Label>
-              <div className="flex gap-2">
-                <Input
-                  id="promoCode"
-                  placeholder="Enter code"
-                  value={formData.promoCode}
-                  onChange={(e) => {
-                    setFormData({ ...formData, promoCode: e.target.value });
-                    setPromoError(null);
-                    if (!e.target.value) setPromoDetails(null);
-                  }}
-                  className={cn("h-12", promoError ? "border-destructive" : promoDetails ? "border-green-500" : "")}
-                />
-                <Button
-                  type="button"
-                  variant="outline"
-                  className="h-12 px-4"
-                  onClick={() => validatePromoCode(formData.promoCode)}
-                  disabled={loading || !formData.promoCode}
-                >
-                  Apply
-                </Button>
+              {/* Promo Code */}
+              <div className="space-y-2">
+                <Label htmlFor="promoCode" className="font-medium">Promo Code (Optional)</Label>
+                <div className="flex gap-2">
+                  <Input
+                    id="promoCode"
+                    placeholder="Enter code"
+                    value={formData.promoCode}
+                    onChange={(e) => {
+                      setFormData({ ...formData, promoCode: e.target.value });
+                      setPromoError(null);
+                      if (!e.target.value) setPromoDetails(null);
+                    }}
+                    className={cn("h-12", promoError ? "border-destructive" : promoDetails ? "border-green-500" : "")}
+                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="h-12 px-4"
+                    onClick={() => validatePromoCode(formData.promoCode)}
+                    disabled={loading || !formData.promoCode}
+                  >
+                    Apply
+                  </Button>
+                </div>
+                {promoError && <p className="text-sm text-destructive">{promoError}</p>}
+                {promoDetails && (
+                  <p className="text-sm text-green-600 font-medium flex items-center gap-1">
+                    <Check className="w-4 h-4" />
+                    Code applied: {promoDetails.type === 'percentage' ? `${promoDetails.value}% off` : `$${promoDetails.value} off`}
+                  </p>
+                )}
               </div>
-              {promoError && <p className="text-sm text-destructive">{promoError}</p>}
-              {promoDetails && (
-                <p className="text-sm text-green-600 font-medium flex items-center gap-1">
-                  <Check className="w-4 h-4" />
-                  Code applied: {promoDetails.type === 'percentage' ? `${promoDetails.value}% off` : `$${promoDetails.value} off`}
-                </p>
-              )}
             </div>
           </div>
 
