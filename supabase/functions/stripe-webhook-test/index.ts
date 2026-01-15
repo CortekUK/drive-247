@@ -31,16 +31,38 @@ serve(async (req) => {
 
     const signature = req.headers.get("stripe-signature");
     const body = await req.text();
-    const webhookSecret = Deno.env.get("STRIPE_TEST_WEBHOOK_SECRET");
+    const platformSecret = Deno.env.get("STRIPE_TEST_WEBHOOK_SECRET");
+    const connectSecret = Deno.env.get("STRIPE_TEST_CONNECT_WEBHOOK_SECRET");
 
     let event: Stripe.Event;
 
-    // Verify webhook signature if secret is configured
-    if (webhookSecret && signature) {
-      try {
-        event = stripe.webhooks.constructEvent(body, signature, webhookSecret);
-      } catch (err) {
-        console.error("[TEST MODE] Webhook signature verification failed:", err.message);
+    // Verify webhook signature - try platform secret first, then Connect secret
+    if (signature && (platformSecret || connectSecret)) {
+      let verified = false;
+
+      // Try platform secret first
+      if (platformSecret) {
+        try {
+          event = stripe.webhooks.constructEvent(body, signature, platformSecret);
+          verified = true;
+          console.log("[TEST MODE] Verified with platform webhook secret");
+        } catch (err) {
+          // Platform secret didn't work, try Connect secret
+        }
+      }
+
+      // Try Connect secret if platform secret didn't work
+      if (!verified && connectSecret) {
+        try {
+          event = stripe.webhooks.constructEvent(body, signature, connectSecret);
+          verified = true;
+          console.log("[TEST MODE] Verified with Connect webhook secret");
+        } catch (err) {
+          console.error("[TEST MODE] Webhook signature verification failed with both secrets:", err.message);
+        }
+      }
+
+      if (!verified) {
         return new Response(
           JSON.stringify({ error: "Invalid signature" }),
           {

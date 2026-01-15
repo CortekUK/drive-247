@@ -152,6 +152,70 @@ serve(async (req) => {
 
     const session = await stripe.checkout.sessions.create(sessionConfig, stripeOptions)
 
+    // CRITICAL FIX: Save stripe_checkout_session_id to payment record
+    // This allows the webhook to find and update the payment when checkout completes
+    if (referenceId) {
+      // First try to update existing payment record (portal flow)
+      const { data: updatedPayment, error: updateError } = await supabaseClient
+        .from('payments')
+        .update({
+          stripe_checkout_session_id: session.id,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('rental_id', referenceId)
+        .is('stripe_checkout_session_id', null)
+        .select('id')
+
+      if (updateError) {
+        console.error('Failed to update payment with session ID:', updateError)
+      } else if (updatedPayment && updatedPayment.length > 0) {
+        console.log('✅ Updated existing payment with session ID:', updatedPayment[0].id, 'session:', session.id)
+      } else {
+        // No existing payment found - create one (booking app flow)
+        console.log('No existing payment found, creating new payment record for rental:', referenceId)
+
+        // Get rental details
+        const { data: rental } = await supabaseClient
+          .from('rentals')
+          .select('customer_id, vehicle_id, monthly_amount, tenant_id')
+          .eq('id', referenceId)
+          .single()
+
+        if (rental) {
+          const paymentAmount = Math.round(totalAmount * 100) / 100 // From checkout session
+          const today = new Date().toISOString().split('T')[0]
+
+          const { data: createdPayment, error: createError } = await supabaseClient
+            .from('payments')
+            .insert({
+              rental_id: referenceId,
+              customer_id: rental.customer_id,
+              vehicle_id: rental.vehicle_id,
+              tenant_id: rental.tenant_id || tenantId,
+              amount: paymentAmount,
+              payment_date: today,
+              method: 'Card',
+              payment_type: 'Payment',
+              status: 'Applied',
+              verification_status: 'pending',
+              stripe_checkout_session_id: session.id, // ✅ Save it!
+              capture_status: 'requires_capture', // ✅ Valid value!
+              booking_source: 'website',
+              created_at: new Date().toISOString(),
+              updated_at: new Date().toISOString(),
+            })
+            .select('id')
+            .single()
+
+          if (createError) {
+            console.error('Failed to create payment record:', createError)
+          } else {
+            console.log('✅ Created new payment with session ID:', createdPayment.id, 'session:', session.id)
+          }
+        }
+      }
+    }
+
     return new Response(
       JSON.stringify({ sessionId: session.id, url: session.url }),
       {

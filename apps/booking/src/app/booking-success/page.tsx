@@ -63,39 +63,99 @@ const BookingSuccessContent = () => {
             toast.error(errorMessage, { duration: 8000 });
           }
 
-          // Step 1.5: Create payment record (only on successful payment)
+          // Step 1.5: Sync payment with Stripe payment_intent_id
+          // The payment record is created by create-checkout-session, we just need to sync the payment_intent_id
           const pendingPaymentDetailsStr = localStorage.getItem('pendingPaymentDetails');
 
-          if (pendingPaymentDetailsStr) {
+          if (pendingPaymentDetailsStr && sessionId) {
             try {
               const paymentDetails = JSON.parse(pendingPaymentDetailsStr);
-              console.log('💳 Creating payment record after successful Stripe payment...');
+              console.log('💳 Syncing payment with Stripe payment_intent_id...');
 
               // Verify this payment is for the correct rental
               if (paymentDetails.rental_id === rentalId) {
-                const today = new Date().toISOString().split('T')[0];
-
-                const { data: paymentRecord, error: paymentError } = await supabase
+                // First, check if payment already exists (created by create-checkout-session)
+                const { data: existingPayment } = await supabase
                   .from("payments")
-                  .insert({
-                    amount: paymentDetails.amount,
-                    customer_id: paymentDetails.customer_id,
-                    rental_id: paymentDetails.rental_id,
-                    vehicle_id: paymentDetails.vehicle_id,
-                    payment_date: today,
-                    payment_type: "Payment",
-                    method: "Card",
-                    status: "Applied", // Payment was captured by Stripe
-                    is_early: false,
-                    remaining_amount: paymentDetails.amount, // Will be reduced by apply-payment
-                    apply_from_date: paymentDetails.apply_from_date || today,
-                    tenant_id: tenant?.id || paymentDetails.tenant_id,
-                    verification_status: "auto_approved",
-                    capture_status: "captured",
-                    booking_source: "website",
-                  })
-                  .select()
+                  .select("id, stripe_checkout_session_id, stripe_payment_intent_id")
+                  .eq("rental_id", rentalId)
+                  .not("stripe_checkout_session_id", "is", null)
                   .single();
+
+                let paymentRecord = existingPayment;
+
+                // If no payment exists yet (edge case), create one
+                if (!existingPayment) {
+                  console.log('⚠️ No existing payment found, creating one...');
+                  const today = new Date().toISOString().split('T')[0];
+
+                  const { data: newPayment, error: createError } = await supabase
+                    .from("payments")
+                    .insert({
+                      amount: paymentDetails.amount,
+                      customer_id: paymentDetails.customer_id,
+                      rental_id: paymentDetails.rental_id,
+                      vehicle_id: paymentDetails.vehicle_id,
+                      payment_date: today,
+                      payment_type: "Payment",
+                      method: "Card",
+                      status: "Applied",
+                      is_early: false,
+                      remaining_amount: paymentDetails.amount,
+                      apply_from_date: paymentDetails.apply_from_date || today,
+                      tenant_id: tenant?.id || paymentDetails.tenant_id,
+                      verification_status: "auto_approved",
+                      capture_status: "captured",
+                      booking_source: "website",
+                      stripe_checkout_session_id: sessionId,
+                    })
+                    .select()
+                    .single();
+
+                  if (createError) {
+                    console.error("❌ Failed to create payment record:", createError);
+                  } else {
+                    paymentRecord = newPayment;
+                  }
+                }
+
+                // Sync payment_intent_id from Stripe if not already set
+                if (paymentRecord && !paymentRecord.stripe_payment_intent_id) {
+                  console.log('🔄 Syncing payment_intent_id from Stripe...');
+                  try {
+                    // Get tenant info for Stripe Connect
+                    const { data: rentalData } = await supabase
+                      .from("rentals")
+                      .select("tenant_id, tenant:tenants(stripe_account_id, stripe_mode)")
+                      .eq("id", rentalId)
+                      .single();
+
+                    const syncBody: any = {
+                      paymentId: paymentRecord.id,
+                      checkoutSessionId: paymentRecord.stripe_checkout_session_id || sessionId,
+                      mode: rentalData?.tenant?.stripe_mode || 'test',
+                    };
+
+                    if (rentalData?.tenant?.stripe_account_id) {
+                      syncBody.connectedAccountId = rentalData.tenant.stripe_account_id;
+                    }
+
+                    const { data: syncResult, error: syncError } = await supabase.functions.invoke('sync-payment-intent', {
+                      body: syncBody
+                    });
+
+                    if (syncError) {
+                      console.error("❌ Failed to sync payment_intent_id:", syncError);
+                    } else {
+                      console.log('✅ Payment synced with Stripe:', syncResult);
+                      paymentRecord = { ...paymentRecord, stripe_payment_intent_id: syncResult.payment_intent_id };
+                    }
+                  } catch (syncErr) {
+                    console.error("❌ Error syncing payment_intent_id:", syncErr);
+                  }
+                }
+
+                const paymentError = null; // For compatibility with existing code below
 
                 if (paymentError) {
                   console.error("❌ Failed to create payment record:", paymentError);
