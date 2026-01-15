@@ -4117,10 +4117,18 @@ const MultiStepBookingWidget = () => {
       onUploadComplete={async (documentId, fileUrl) => {
         // documentId is the database record ID, fileUrl is the storage path
         setUploadedDocumentId(documentId);
-        setScanningDocument(true);
         setShowUploadDialog(false);
 
-        // Trigger AI document review
+        // Skip AI scanning if documentId is 'pending' (file uploaded but no DB record yet)
+        // AI scanning will happen after checkout when the document record is created
+        if (documentId === 'pending') {
+          console.log('[INSURANCE] File uploaded to storage, AI scanning will happen at checkout');
+          toast.success("Document uploaded! It will be verified during checkout.");
+          return;
+        }
+
+        // Trigger AI document review for documents with actual database records
+        setScanningDocument(true);
         try {
           const { data, error } = await supabase.functions.invoke('scan-insurance-document', {
             body: { documentId, fileUrl }

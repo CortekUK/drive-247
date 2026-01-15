@@ -9,7 +9,7 @@ const corsHeaders = {
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
 };
 
-// GPT-4o model for multimodal document analysis
+// GPT-4o model for multimodal document analysis (supports vision + text)
 const AI_MODEL = 'gpt-4o';
 const OPENAI_API_URL = 'https://api.openai.com/v1/chat/completions';
 
