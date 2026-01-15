@@ -222,15 +222,39 @@ const BookingCheckout = () => {
           docInsertData.tenant_id = tenant.id;
         }
 
-        const { error: docError } = await supabase
+        const { data: insertedDoc, error: docError } = await supabase
           .from('customer_documents')
-          .insert(docInsertData);
+          .insert(docInsertData)
+          .select('id, file_url')
+          .single();
 
         if (docError) {
           console.error('Failed to link insurance document:', docError);
           // Don't throw - continue with booking
         } else {
           console.log('[CHECKOUT] Insurance document linked to customer:', customer.id);
+
+          // Trigger AI scanning for the uploaded document
+          if (insertedDoc?.id) {
+            try {
+              console.log('[CHECKOUT] Triggering AI scan for document:', insertedDoc.id);
+              supabase.functions.invoke('scan-insurance-document', {
+                body: {
+                  documentId: insertedDoc.id,
+                  fileUrl: insertedDoc.file_url
+                }
+              }).then(({ data, error }) => {
+                if (error) {
+                  console.error('[CHECKOUT] AI scan failed:', error);
+                } else {
+                  console.log('[CHECKOUT] AI scan completed:', data);
+                }
+              });
+            } catch (scanError) {
+              console.error('[CHECKOUT] Failed to trigger AI scan:', scanError);
+              // Don't throw - scanning is optional
+            }
+          }
         }
       }
 

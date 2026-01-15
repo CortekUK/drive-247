@@ -6,19 +6,32 @@ import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Link2, CheckCircle2, AlertCircle, ExternalLink, Loader2, RefreshCw, Copy } from 'lucide-react';
+import { Link2, CheckCircle2, AlertCircle, ExternalLink, Loader2, RefreshCw, Copy, TestTube2, Zap } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
 import { useTenant } from '@/contexts/TenantContext';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 
 interface StripeConnectStatus {
   stripe_account_id: string | null;
   stripe_onboarding_complete: boolean;
   stripe_account_status: string | null;
+  stripe_mode: 'test' | 'live';
 }
 
 export function StripeConnectSettings() {
   const queryClient = useQueryClient();
   const [isGeneratingLink, setIsGeneratingLink] = useState(false);
+  const [showModeWarning, setShowModeWarning] = useState(false);
+  const [pendingMode, setPendingMode] = useState<'test' | 'live' | null>(null);
   const { tenant: tenantContext } = useTenant();
 
   // Get current tenant's Stripe Connect status
@@ -29,7 +42,7 @@ export function StripeConnectSettings() {
 
       const { data: tenant, error: tenantError } = await supabase
         .from('tenants')
-        .select('id, stripe_account_id, stripe_onboarding_complete, stripe_account_status, company_name, contact_email')
+        .select('id, stripe_account_id, stripe_onboarding_complete, stripe_account_status, stripe_mode, company_name, contact_email')
         .eq('id', tenantContext.id)
         .single();
 
@@ -93,6 +106,68 @@ export function StripeConnectSettings() {
     }
   };
 
+  // Update Stripe mode mutation
+  const updateStripeMutation = useMutation({
+    mutationFn: async (newMode: 'test' | 'live') => {
+      if (!tenantStatus?.id) throw new Error('Tenant not found');
+
+      // Safety check: can't switch to live mode without completed onboarding
+      if (newMode === 'live' && !tenantStatus.stripe_onboarding_complete) {
+        throw new Error('You must complete Stripe Connect onboarding before switching to live mode');
+      }
+
+      const { error } = await supabase
+        .from('tenants')
+        .update({ stripe_mode: newMode })
+        .eq('id', tenantStatus.id);
+
+      if (error) throw error;
+      return newMode;
+    },
+    onSuccess: (newMode) => {
+      queryClient.invalidateQueries({ queryKey: ['tenant-stripe-status'] });
+      toast({
+        title: 'Stripe Mode Updated',
+        description: `Successfully switched to ${newMode} mode. ${
+          newMode === 'live'
+            ? 'All new payments will use live Stripe keys and charge real money.'
+            : 'All new payments will use test Stripe keys with test cards only.'
+        }`,
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: 'Error',
+        description: error.message || 'Failed to update Stripe mode',
+        variant: 'destructive',
+      });
+    },
+  });
+
+  const handleModeToggle = (newMode: 'test' | 'live') => {
+    // Safety check: can't switch to live without onboarding
+    if (newMode === 'live' && !tenantStatus?.stripe_onboarding_complete) {
+      toast({
+        title: 'Onboarding Required',
+        description: 'You must complete Stripe Connect onboarding before switching to live mode',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    // Show warning dialog
+    setPendingMode(newMode);
+    setShowModeWarning(true);
+  };
+
+  const confirmModeSwitch = async () => {
+    if (pendingMode) {
+      await updateStripeMutation.mutateAsync(pendingMode);
+    }
+    setShowModeWarning(false);
+    setPendingMode(null);
+  };
+
   const copyAccountId = () => {
     if (tenantStatus?.stripe_account_id) {
       navigator.clipboard.writeText(tenantStatus.stripe_account_id);
@@ -130,6 +205,56 @@ export function StripeConnectSettings() {
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">
+        {/* Stripe Mode Toggle */}
+        <div className="p-4 rounded-lg border bg-gradient-to-r from-blue-50 to-purple-50 border-blue-200">
+          <div className="flex items-center justify-between">
+            <div className="flex-1">
+              <h4 className="font-medium flex items-center gap-2">
+                {tenantStatus?.stripe_mode === 'live' ? (
+                  <>
+                    <Zap className="h-4 w-4 text-green-600" />
+                    <span>Live Mode</span>
+                    <Badge className="bg-green-600 hover:bg-green-700">LIVE</Badge>
+                  </>
+                ) : (
+                  <>
+                    <TestTube2 className="h-4 w-4 text-blue-600" />
+                    <span>Test Mode</span>
+                    <Badge className="bg-blue-600 hover:bg-blue-700">TEST</Badge>
+                  </>
+                )}
+              </h4>
+              <p className="text-sm text-muted-foreground mt-1">
+                {tenantStatus?.stripe_mode === 'live'
+                  ? 'Accepting real payments with live Stripe keys'
+                  : 'Using test Stripe keys - only test cards accepted (4242 4242 4242 4242)'}
+              </p>
+            </div>
+            <div className="flex gap-2">
+              <Button
+                variant={tenantStatus?.stripe_mode === 'test' ? 'default' : 'outline'}
+                size="sm"
+                onClick={() => handleModeToggle('test')}
+                disabled={tenantStatus?.stripe_mode === 'test' || updateStripeMutation.isPending}
+                className={tenantStatus?.stripe_mode === 'test' ? 'bg-blue-600 hover:bg-blue-700' : ''}
+              >
+                <TestTube2 className="h-4 w-4 mr-1" />
+                Test
+              </Button>
+              <Button
+                variant={tenantStatus?.stripe_mode === 'live' ? 'default' : 'outline'}
+                size="sm"
+                onClick={() => handleModeToggle('live')}
+                disabled={tenantStatus?.stripe_mode === 'live' || updateStripeMutation.isPending}
+                className={tenantStatus?.stripe_mode === 'live' ? 'bg-green-600 hover:bg-green-700' : ''}
+              >
+                <Zap className="h-4 w-4 mr-1" />
+                Live
+              </Button>
+            </div>
+          </div>
+        </div>
+
         {/* Status Display */}
         <div className={`p-4 rounded-lg border ${
           isConnected
@@ -289,6 +414,86 @@ export function StripeConnectSettings() {
           </ul>
         </div>
       </CardContent>
+
+      {/* Mode Switch Warning Dialog */}
+      <AlertDialog open={showModeWarning} onOpenChange={setShowModeWarning}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2">
+              {pendingMode === 'live' ? (
+                <>
+                  <Zap className="h-5 w-5 text-yellow-600" />
+                  Switch to Live Mode?
+                </>
+              ) : (
+                <>
+                  <TestTube2 className="h-5 w-5 text-blue-600" />
+                  Switch to Test Mode?
+                </>
+              )}
+            </AlertDialogTitle>
+            <AlertDialogDescription className="space-y-3 pt-2">
+              {pendingMode === 'live' ? (
+                <>
+                  <p className="font-medium text-yellow-700 dark:text-yellow-500">
+                    ⚠️ Warning: This will enable REAL payments
+                  </p>
+                  <p>
+                    By switching to live mode, all new bookings will:
+                  </p>
+                  <ul className="list-disc list-inside space-y-1 text-sm">
+                    <li>Use your live Stripe Connect account</li>
+                    <li>Accept real credit cards</li>
+                    <li>Charge real money to customers</li>
+                    <li>Deposit funds to your bank account</li>
+                  </ul>
+                  <p className="text-sm font-medium text-red-600 dark:text-red-500">
+                    Make sure you have completed all testing before switching to live mode.
+                  </p>
+                </>
+              ) : (
+                <>
+                  <p className="font-medium text-blue-700 dark:text-blue-500">
+                    Switching back to test mode
+                  </p>
+                  <p>
+                    By switching to test mode, all new bookings will:
+                  </p>
+                  <ul className="list-disc list-inside space-y-1 text-sm">
+                    <li>Use test Stripe keys</li>
+                    <li>Only accept test cards (4242 4242 4242 4242)</li>
+                    <li>Route to a shared test Connect account</li>
+                    <li>Not process any real money</li>
+                  </ul>
+                  <p className="text-sm text-muted-foreground">
+                    Existing live bookings will not be affected.
+                  </p>
+                </>
+              )}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setPendingMode(null)}>
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={confirmModeSwitch}
+              className={pendingMode === 'live' ? 'bg-green-600 hover:bg-green-700' : 'bg-blue-600 hover:bg-blue-700'}
+            >
+              {updateStripeMutation.isPending ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Switching...
+                </>
+              ) : (
+                <>
+                  Yes, Switch to {pendingMode === 'live' ? 'Live' : 'Test'} Mode
+                </>
+              )}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </Card>
   );
 }
