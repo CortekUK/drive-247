@@ -20,7 +20,7 @@ import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { format } from 'date-fns';
-import { Calendar as CalendarIcon, Settings as SettingsIcon, Building2, Bell, Zap, Upload, Save, Loader2, Database, AlertTriangle, Trash2, CreditCard, Palette, Link2, CheckCircle2, AlertCircle, ExternalLink, MapPin, FileText, Car, Mail, ShieldX, FilePenLine, Receipt, Banknote, Shield } from 'lucide-react';
+import { Calendar as CalendarIcon, Settings as SettingsIcon, Building2, Bell, Zap, Upload, Save, Loader2, Database, AlertTriangle, Trash2, CreditCard, Palette, Link2, CheckCircle2, AlertCircle, ExternalLink, MapPin, FileText, Car, Mail, ShieldX, FilePenLine, Receipt, Banknote, Shield, Clock } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
 import { useOrgSettings } from '@/hooks/use-org-settings';
 import { useTenantBranding } from '@/hooks/use-tenant-branding';
@@ -83,6 +83,10 @@ const Settings = () => {
     service_fee_amount: 0,
     deposit_mode: 'global' as 'global' | 'per_vehicle',
     global_deposit_amount: 0,
+    // Working hours settings
+    working_hours_always_open: false,
+    working_hours_open: '09:00',
+    working_hours_close: '17:00',
   });
 
   // Sync rental form with loaded settings
@@ -96,6 +100,10 @@ const Settings = () => {
         service_fee_amount: rentalSettings.service_fee_amount ?? 0,
         deposit_mode: rentalSettings.deposit_mode ?? 'global',
         global_deposit_amount: rentalSettings.global_deposit_amount ?? 0,
+        // Working hours settings
+        working_hours_always_open: rentalSettings.working_hours_always_open ?? false,
+        working_hours_open: rentalSettings.working_hours_open ?? '09:00',
+        working_hours_close: rentalSettings.working_hours_close ?? '17:00',
       });
     }
   }, [rentalSettings]);
@@ -1797,6 +1805,94 @@ const Settings = () => {
                   <Save className="h-4 w-4" />
                 )}
                 Save Deposit Settings
+              </Button>
+            </CardContent>
+          </Card>
+
+          {/* Working Hours Card */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Clock className="h-5 w-5 text-primary" />
+                Working Hours
+              </CardTitle>
+              <CardDescription>
+                Set when your business accepts bookings. Customers outside these hours will see a disabled booking form.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              {/* Always Open Toggle */}
+              <div className="flex items-center justify-between p-4 border rounded-lg">
+                <div className="space-y-1">
+                  <h4 className="font-medium">24/7 Always Open</h4>
+                  <p className="text-sm text-muted-foreground">
+                    Allow bookings at any time without restrictions
+                  </p>
+                </div>
+                <Switch
+                  checked={rentalForm.working_hours_always_open ?? false}
+                  onCheckedChange={(checked) => {
+                    setRentalForm(prev => ({ ...prev, working_hours_always_open: checked }));
+                  }}
+                />
+              </div>
+
+              {/* Time Selection (shown when not 24/7) */}
+              {!rentalForm.working_hours_always_open && (
+                <div className="grid gap-4 md:grid-cols-2">
+                  <div className="space-y-2">
+                    <Label htmlFor="working_hours_open">Opening Time</Label>
+                    <Input
+                      id="working_hours_open"
+                      type="time"
+                      value={rentalForm.working_hours_open}
+                      onChange={(e) => setRentalForm(prev => ({ ...prev, working_hours_open: e.target.value }))}
+                      className="w-full"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="working_hours_close">Closing Time</Label>
+                    <Input
+                      id="working_hours_close"
+                      type="time"
+                      value={rentalForm.working_hours_close}
+                      onChange={(e) => setRentalForm(prev => ({ ...prev, working_hours_close: e.target.value }))}
+                      className="w-full"
+                    />
+                  </div>
+                </div>
+              )}
+
+              {/* Timezone Info */}
+              <Alert>
+                <AlertCircle className="h-4 w-4" />
+                <AlertDescription>
+                  Times are based on your business timezone: <strong>{tenant?.timezone || 'America/Chicago'}</strong> (Texas - Central Time)
+                </AlertDescription>
+              </Alert>
+
+              <Button
+                onClick={async () => {
+                  try {
+                    await updateRentalSettings({
+                      working_hours_enabled: true,
+                      working_hours_always_open: rentalForm.working_hours_always_open,
+                      working_hours_open: rentalForm.working_hours_open,
+                      working_hours_close: rentalForm.working_hours_close,
+                    });
+                  } catch (error) {
+                    console.error('Failed to update working hours:', error);
+                  }
+                }}
+                disabled={isUpdatingRentalSettings}
+                className="flex items-center gap-2"
+              >
+                {isUpdatingRentalSettings ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Save className="h-4 w-4" />
+                )}
+                Save Working Hours
               </Button>
             </CardContent>
           </Card>

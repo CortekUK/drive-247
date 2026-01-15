@@ -16,6 +16,11 @@ export interface RentalSettings {
   service_fee_amount: number | null;
   deposit_mode: 'global' | 'per_vehicle' | null;
   global_deposit_amount: number | null;
+  // Working hours settings
+  working_hours_enabled: boolean | null;
+  working_hours_open: string | null;
+  working_hours_close: string | null;
+  working_hours_always_open: boolean | null;
 }
 
 const DEFAULT_RENTAL_SETTINGS: RentalSettings = {
@@ -31,6 +36,11 @@ const DEFAULT_RENTAL_SETTINGS: RentalSettings = {
   service_fee_amount: 0,
   deposit_mode: 'global',
   global_deposit_amount: 0,
+  // Working hours defaults
+  working_hours_enabled: true,
+  working_hours_open: '09:00',
+  working_hours_close: '17:00',
+  working_hours_always_open: false,
 };
 
 /**
@@ -73,7 +83,11 @@ export const useRentalSettings = () => {
           service_fee_enabled,
           service_fee_amount,
           deposit_mode,
-          global_deposit_amount
+          global_deposit_amount,
+          working_hours_enabled,
+          working_hours_open,
+          working_hours_close,
+          working_hours_always_open
         `)
         .eq('id', tenant.id)
         .single();
@@ -116,7 +130,11 @@ export const useRentalSettings = () => {
           service_fee_enabled,
           service_fee_amount,
           deposit_mode,
-          global_deposit_amount
+          global_deposit_amount,
+          working_hours_enabled,
+          working_hours_open,
+          working_hours_close,
+          working_hours_always_open
         `);
 
       if (error) {
