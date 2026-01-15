@@ -20,7 +20,7 @@ import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { format } from 'date-fns';
-import { Calendar as CalendarIcon, Settings as SettingsIcon, Building2, Bell, Zap, Upload, Save, Loader2, Database, AlertTriangle, Trash2, CreditCard, Palette, Link2, CheckCircle2, AlertCircle, ExternalLink, MapPin, FileText, Car, Mail, ShieldX, FilePenLine, Receipt, Banknote, Shield } from 'lucide-react';
+import { Calendar as CalendarIcon, Settings as SettingsIcon, Building2, Bell, Zap, Upload, Save, Loader2, Database, AlertTriangle, Trash2, CreditCard, Palette, Link2, CheckCircle2, AlertCircle, ExternalLink, MapPin, FileText, Car, Mail, ShieldX, FilePenLine, Receipt, Banknote, Shield, Copy, Check } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
 import { useOrgSettings } from '@/hooks/use-org-settings';
 import { useTenantBranding } from '@/hooks/use-tenant-branding';
@@ -81,6 +81,8 @@ const Settings = () => {
     tax_percentage: 0,
     service_fee_enabled: false,
     service_fee_amount: 0,
+    service_fee_type: 'fixed_amount' as 'percentage' | 'fixed_amount',
+    service_fee_value: 0,
     deposit_mode: 'global' as 'global' | 'per_vehicle',
     global_deposit_amount: 0,
   });
@@ -94,6 +96,8 @@ const Settings = () => {
         tax_percentage: rentalSettings.tax_percentage ?? 0,
         service_fee_enabled: rentalSettings.service_fee_enabled ?? false,
         service_fee_amount: rentalSettings.service_fee_amount ?? 0,
+        service_fee_type: (rentalSettings.service_fee_type as 'percentage' | 'fixed_amount') ?? 'fixed_amount',
+        service_fee_value: rentalSettings.service_fee_value ?? rentalSettings.service_fee_amount ?? 0,
         deposit_mode: rentalSettings.deposit_mode ?? 'global',
         global_deposit_amount: rentalSettings.global_deposit_amount ?? 0,
       });
@@ -1624,7 +1628,7 @@ const Settings = () => {
                 Service Fee
               </CardTitle>
               <CardDescription>
-                Configure a fixed service fee for customer bookings
+                Configure a service fee for customer bookings
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
@@ -1632,7 +1636,7 @@ const Settings = () => {
                 <div className="space-y-1">
                   <h4 className="font-medium">Enable Service Fee</h4>
                   <p className="text-sm text-muted-foreground">
-                    Add a fixed service fee to customer invoices
+                    Add a service fee to customer invoices
                   </p>
                 </div>
                 <Switch
@@ -1644,31 +1648,66 @@ const Settings = () => {
               </div>
 
               {rentalForm.service_fee_enabled && (
-                <div className="space-y-2">
-                  <Label htmlFor="service_fee_amount">Service Fee Amount</Label>
-                  <div className="flex items-center gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="service_fee_type">Type</Label>
+                    <Select
+                      value={rentalForm.service_fee_type}
+                      onValueChange={(value: 'percentage' | 'fixed_amount') => {
+                        setRentalForm(prev => ({ ...prev, service_fee_type: value }));
+                      }}
+                    >
+                      <SelectTrigger id="service_fee_type">
+                        <SelectValue placeholder="Select type" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="percentage">Percentage</SelectItem>
+                        <SelectItem value="fixed_amount">Fixed Amount</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="service_fee_value">
+                      {rentalForm.service_fee_type === 'percentage' ? 'Type Value' : 'Type Value'}
+                    </Label>
                     <div className="relative">
-                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">$</span>
+                      {rentalForm.service_fee_type === 'fixed_amount' && (
+                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">$</span>
+                      )}
                       <Input
-                        id="service_fee_amount"
+                        id="service_fee_value"
                         type="number"
                         min="0"
-                        step="0.01"
-                        value={rentalForm.service_fee_amount ?? 0}
+                        max={rentalForm.service_fee_type === 'percentage' ? 100 : undefined}
+                        step={rentalForm.service_fee_type === 'percentage' ? '1' : '0.01'}
+                        value={rentalForm.service_fee_value ?? 0}
                         onChange={(e) => {
-                          const value = parseFloat(e.target.value) || 0;
+                          let value = parseFloat(e.target.value) || 0;
+                          // Cap percentage at 100
+                          if (rentalForm.service_fee_type === 'percentage' && value > 100) {
+                            value = 100;
+                          }
                           setRentalForm(prev => ({
                             ...prev,
+                            service_fee_value: Math.max(0, value),
+                            // Keep service_fee_amount in sync for backward compatibility
                             service_fee_amount: Math.max(0, value)
                           }));
                         }}
-                        className="w-32 pl-7"
+                        className={rentalForm.service_fee_type === 'fixed_amount' ? 'pl-7' : ''}
+                        placeholder={rentalForm.service_fee_type === 'percentage' ? 'e.g. 10 (for 10%)' : 'e.g. 25.00'}
                       />
+                      {rentalForm.service_fee_type === 'percentage' && (
+                        <span className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground">%</span>
+                      )}
                     </div>
+                    <p className="text-xs text-muted-foreground">
+                      {rentalForm.service_fee_type === 'percentage'
+                        ? 'Percentage of the rental total added as service fee'
+                        : 'Fixed amount added to each booking'}
+                    </p>
                   </div>
-                  <p className="text-xs text-muted-foreground">
-                    Fixed amount added to each booking
-                  </p>
                 </div>
               )}
 
@@ -1677,7 +1716,9 @@ const Settings = () => {
                   try {
                     await updateRentalSettings({
                       service_fee_enabled: rentalForm.service_fee_enabled,
-                      service_fee_amount: rentalForm.service_fee_amount,
+                      service_fee_amount: rentalForm.service_fee_value,
+                      service_fee_type: rentalForm.service_fee_type,
+                      service_fee_value: rentalForm.service_fee_value,
                     });
                   } catch (error) {
                     console.error('Failed to update service fee settings:', error);
@@ -1995,7 +2036,20 @@ const Settings = () => {
                               <td className="p-3 text-muted-foreground">{promo.expires_at}</td>
                               <td className="p-3">{promo.max_users}</td>
                               <td className="p-3">
-                                <Badge variant="outline" className="font-mono">{promo.code}</Badge>
+                                <div className="flex items-center gap-2">
+                                  <Badge variant="outline" className="font-mono">{promo.code}</Badge>
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-6 w-6 text-muted-foreground hover:text-primary"
+                                    onClick={() => {
+                                      navigator.clipboard.writeText(promo.code);
+                                      toast({ title: "Copied!", description: "Promo code copied to clipboard" });
+                                    }}
+                                  >
+                                    <Copy className="h-3.5 w-3.5" />
+                                  </Button>
+                                </div>
                               </td>
                               <td className="p-3 text-right">
                                 <div className="flex justify-end gap-2">

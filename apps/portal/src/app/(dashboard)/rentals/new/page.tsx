@@ -14,7 +14,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage, FormDescription } from "@/components/ui/form";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
-import { ArrowLeft, FileText, Save, AlertTriangle, MapPin, Clock, Shield, Upload, CheckCircle2, XCircle, Loader2, RefreshCw, QrCode, Smartphone, Copy } from "lucide-react";
+import { ArrowLeft, FileText, Save, AlertTriangle, MapPin, Clock, Shield, Upload, CheckCircle2, XCircle, Loader2, RefreshCw, QrCode, Smartphone, Copy, Check } from "lucide-react";
+import { cn } from "@/lib/utils";
 import { Input } from "@/components/ui/input";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from "@/components/ui/label";
@@ -96,6 +97,16 @@ const CreateRental = () => {
   const [generatedInvoice, setGeneratedInvoice] = useState<Invoice | null>(null);
   const [sendingDocuSign, setSendingDocuSign] = useState(false);
 
+  // Promo code state
+  const [promoLoading, setPromoLoading] = useState(false);
+  const [promoError, setPromoError] = useState<string | null>(null);
+  const [promoDetails, setPromoDetails] = useState<{
+    code: string;
+    type: 'percentage' | 'fixed_amount';
+    value: number;
+    id: string;
+  } | null>(null);
+
   // Verification state
   const [creatingVerification, setCreatingVerification] = useState(false);
   const [showQRModal, setShowQRModal] = useState(false);
@@ -136,6 +147,70 @@ const CreateRental = () => {
     }
     // Global deposit mode
     return rentalSettings?.global_deposit_amount ?? 0;
+  };
+
+  // Promo code validation function
+  const validatePromoCode = async (code: string) => {
+    if (!code || !tenant?.id) return;
+
+    setPromoLoading(true);
+    setPromoError(null);
+    setPromoDetails(null);
+
+    try {
+      // Use type assertion since promocodes table may not be in generated types
+      const { data, error } = await (supabase as any)
+        .from('promocodes')
+        .select('*')
+        .eq('code', code.trim())
+        .eq('tenant_id', tenant.id)
+        .maybeSingle();
+
+      if (error) throw error;
+
+      if (!data) {
+        setPromoError("Invalid promo code");
+        return;
+      }
+
+      // Check expiry
+      if (data.expires_at && new Date(data.expires_at) < new Date()) {
+        setPromoError("Promo code has expired");
+        return;
+      }
+
+      setPromoDetails({
+        code: data.code,
+        type: data.type === 'value' ? 'fixed_amount' : 'percentage',
+        value: data.value,
+        id: data.id
+      });
+      toast({
+        title: "Promo code applied!",
+        description: data.type === 'percentage'
+          ? `${data.value}% discount will be applied`
+          : `$${data.value} discount will be applied`,
+      });
+
+    } catch (err) {
+      console.error("Promo validation error:", err);
+      setPromoError("Failed to validate promo code");
+    } finally {
+      setPromoLoading(false);
+    }
+  };
+
+  // Calculate discount amount based on promo details
+  const calculateDiscount = (rentalAmount: number): number => {
+    if (!promoDetails) return 0;
+
+    if (promoDetails.type === 'fixed_amount') {
+      // Fixed amount discount - only apply if rental price > discount value
+      return rentalAmount > promoDetails.value ? promoDetails.value : 0;
+    } else {
+      // Percentage discount
+      return (rentalAmount * promoDetails.value) / 100;
+    }
   };
 
   // Get all blocked dates (global and vehicle-specific)
@@ -622,6 +697,9 @@ const CreateRental = () => {
         throw new Error(`Cannot create rental: ${blockType}. Reason: ${blockCheck.reason}`);
       }
 
+      // Calculate discount if promo code was applied
+      const discountAmount = promoDetails ? calculateDiscount(data.monthly_amount) : 0;
+
       // Create rental with Pending status (will become Active after DocuSign)
       const { data: rental, error: rentalError } = await supabase
         .from("rentals")
@@ -644,7 +722,8 @@ const CreateRental = () => {
           pickup_time: data.pickup_time || null,
           return_time: data.return_time || null,
           driver_age_range: data.driver_age_range || null,
-          promo_code: data.promo_code || null,
+          promo_code: promoDetails?.code || null,
+          discount_applied: discountAmount > 0 ? discountAmount : null,
           insurance_status: data.insurance_status || "pending",
         })
         .select()
@@ -727,10 +806,12 @@ const CreateRental = () => {
       let invoiceCreated = false;
       try {
         const invoiceNotes = `Monthly rental fee for ${selectedVehicle?.make} ${selectedVehicle?.model} (${vehicleReg})`;
-        const taxAmount = calculateTaxAmount(data.monthly_amount);
+        // Apply discount to the rental amount
+        const discountedAmount = data.monthly_amount - discountAmount;
+        const taxAmount = calculateTaxAmount(discountedAmount);
         const serviceFee = calculateServiceFee();
         const securityDeposit = calculateSecurityDeposit(data.vehicle_id);
-        const totalAmount = data.monthly_amount + taxAmount + serviceFee + securityDeposit;
+        const totalAmount = discountedAmount + taxAmount + serviceFee + securityDeposit;
 
         const invoice = await createInvoice({
           rental_id: rental.id,
@@ -738,7 +819,7 @@ const CreateRental = () => {
           vehicle_id: data.vehicle_id,
           invoice_date: data.start_date,
           due_date: addMonths(data.start_date, 1),
-          subtotal: data.monthly_amount,
+          subtotal: discountedAmount,
           tax_amount: taxAmount,
           service_fee: serviceFee,
           security_deposit: securityDeposit,
@@ -747,7 +828,12 @@ const CreateRental = () => {
           tenant_id: tenant?.id,
         });
 
-        setGeneratedInvoice(invoice);
+        // Add discount info to invoice for display
+        setGeneratedInvoice({
+          ...invoice,
+          discount_amount: discountAmount > 0 ? discountAmount : undefined,
+          promo_code: promoDetails?.code,
+        } as any);
         invoiceCreated = true;
       } catch (invoiceError) {
         console.error('Error creating invoice:', invoiceError);
@@ -1448,12 +1534,37 @@ const CreateRental = () => {
                         render={({ field }) => (
                           <FormItem>
                             <FormLabel>Promo Code</FormLabel>
-                            <FormControl>
-                              <Input
-                                {...field}
-                                placeholder="Enter promo code"
-                              />
-                            </FormControl>
+                            <div className="flex gap-2">
+                              <FormControl>
+                                <Input
+                                  {...field}
+                                  placeholder="Enter promo code"
+                                  className={cn(
+                                    promoError ? "border-destructive" : promoDetails ? "border-green-500" : ""
+                                  )}
+                                  onChange={(e) => {
+                                    field.onChange(e);
+                                    setPromoError(null);
+                                    if (!e.target.value) setPromoDetails(null);
+                                  }}
+                                />
+                              </FormControl>
+                              <Button
+                                type="button"
+                                variant="outline"
+                                onClick={() => validatePromoCode(field.value || "")}
+                                disabled={promoLoading || !field.value}
+                              >
+                                {promoLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : "Apply"}
+                              </Button>
+                            </div>
+                            {promoError && <p className="text-sm text-destructive">{promoError}</p>}
+                            {promoDetails && (
+                              <p className="text-sm text-green-600 font-medium flex items-center gap-1">
+                                <Check className="w-4 h-4" />
+                                Code applied: {promoDetails.type === 'percentage' ? `${promoDetails.value}% off` : `$${promoDetails.value} off`}
+                              </p>
+                            )}
                             <FormMessage />
                           </FormItem>
                         )}
