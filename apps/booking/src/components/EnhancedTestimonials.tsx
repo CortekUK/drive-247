@@ -3,6 +3,7 @@ import { Card } from "@/components/ui/card";
 import { Star } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { usePageContent, defaultHomeContent, mergeWithDefaults } from "@/hooks/usePageContent";
+import { useTenant } from "@/contexts/TenantContext";
 
 interface Testimonial {
   id: string;
@@ -16,14 +17,17 @@ interface Testimonial {
 const EnhancedTestimonials = () => {
   const [testimonials, setTestimonials] = useState<Testimonial[]>([]);
   const [activeIndex, setActiveIndex] = useState(0);
+  const { tenant } = useTenant();
 
   // CMS Content
   const { data: rawContent } = usePageContent("home");
   const content = mergeWithDefaults(rawContent, defaultHomeContent);
 
   useEffect(() => {
-    loadTestimonials();
-  }, []);
+    if (tenant?.id) {
+      loadTestimonials();
+    }
+  }, [tenant?.id]);
 
   useEffect(() => {
     if (testimonials.length === 0) return;
@@ -37,13 +41,15 @@ const EnhancedTestimonials = () => {
   }, [testimonials.length]);
 
   const loadTestimonials = async () => {
+    if (!tenant?.id) return;
+
     const { data } = await supabase
       .from("testimonials")
       .select("*")
+      .eq("tenant_id", tenant.id)
       .order("created_at", { ascending: false });
 
     if (data) {
-      console.log("Loaded testimonials:", data.length, data);
       setTestimonials(data);
     }
   };
@@ -54,11 +60,6 @@ const EnhancedTestimonials = () => {
   const totalPages = Math.ceil(testimonials.length / itemsPerPage);
   const startIndex = activeIndex * itemsPerPage;
   const visibleTestimonials = testimonials.slice(startIndex, startIndex + itemsPerPage);
-
-  console.log('Active Index:', activeIndex);
-  console.log('Total testimonials:', testimonials.length);
-  console.log('Total pages:', totalPages);
-  console.log('Visible testimonials:', visibleTestimonials.map(t => t.author));
 
   return (
     <section className="py-24 md:py-28 lg:py-32 bg-muted/20">

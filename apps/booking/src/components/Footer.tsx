@@ -32,7 +32,7 @@ const Footer = () => {
               <img
                 src={settings.logo_url}
                 alt={settings.logo_alt || "Drive917"}
-                className="h-20 w-32 mb-4 object-cover"
+                className="h-20 w-auto max-w-[160px] mb-4 object-contain"
               />
             ) : (
               <>
