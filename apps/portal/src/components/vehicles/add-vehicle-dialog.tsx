@@ -67,6 +67,7 @@ export const AddVehicleDialog = ({ open, onOpenChange }: AddVehicleDialogProps) 
       security_notes: "",
       description: "",
       security_deposit: undefined,
+      allowed_mileage: undefined,
     },
   });
 
@@ -213,6 +214,7 @@ export const AddVehicleDialog = ({ open, onOpenChange }: AddVehicleDialogProps) 
         security_notes: data.security_notes || null,
         description: data.description || null,
         security_deposit: data.security_deposit || null,
+        allowed_mileage: data.allowed_mileage || null,
       };
 
       // Add type-specific fields
@@ -734,6 +736,33 @@ export const AddVehicleDialog = ({ open, onOpenChange }: AddVehicleDialogProps) 
                             }}
                           />
                         </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    control={form.control}
+                    name="allowed_mileage"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Allowed Mileage</FormLabel>
+                        <FormControl>
+                          <Input
+                            type="number"
+                            min="1"
+                            placeholder="Unlimited"
+                            {...field}
+                            value={field.value ?? ""}
+                            onChange={(e) => {
+                              const value = e.target.value;
+                              field.onChange(value === "" ? undefined : parseInt(value));
+                            }}
+                          />
+                        </FormControl>
+                        <FormDescription className="text-xs">
+                          Miles/month (leave blank for unlimited)
+                        </FormDescription>
                         <FormMessage />
                       </FormItem>
                     )}
