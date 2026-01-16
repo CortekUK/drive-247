@@ -26,6 +26,7 @@ import AIScanProgress from "./ai-scan-progress";
 import AIVerificationQR from "./AIVerificationQR";
 import { stripePromise } from "@/config/stripe";
 import { usePageContent, defaultHomeContent, mergeWithDefaults } from "@/hooks/usePageContent";
+import { useWorkingHours } from "@/hooks/useWorkingHours";
 import { canCustomerBook } from "@/lib/tenantQueries";
 import { sanitizeName, sanitizeEmail, sanitizePhone, sanitizeLocation, sanitizeTextArea, isInputSafe } from "@/lib/sanitize";
 import { createVeriffFrame, MESSAGES } from "@veriff/incontext-sdk";
@@ -68,6 +69,7 @@ interface BlockedDate {
 }
 const MultiStepBookingWidget = () => {
   const { tenant } = useTenant();
+  const workingHours = useWorkingHours();
   const [currentStep, setCurrentStep] = useState(1);
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
   const [extras, setExtras] = useState<PricingExtra[]>([]);
@@ -2479,18 +2481,26 @@ const MultiStepBookingWidget = () => {
                       }} initialFocus className="pointer-events-auto" />
                     </PopoverContent>
                   </Popover>
-                  <TimePicker id="pickupTime" value={formData.pickupTime} onChange={value => {
-                    setFormData({
-                      ...formData,
-                      pickupTime: value
-                    });
-                    if (errors.pickupTime) {
-                      setErrors({
-                        ...errors,
-                        pickupTime: ""
+                  <TimePicker
+                    id="pickupTime"
+                    value={formData.pickupTime}
+                    onChange={value => {
+                      setFormData({
+                        ...formData,
+                        pickupTime: value
                       });
-                    }
-                  }} className="h-12 focus-visible:ring-primary" />
+                      if (errors.pickupTime) {
+                        setErrors({
+                          ...errors,
+                          pickupTime: ""
+                        });
+                      }
+                    }}
+                    className="h-12 focus-visible:ring-primary"
+                    businessHoursOpen={!workingHours.isAlwaysOpen ? workingHours.openTime : undefined}
+                    businessHoursClose={!workingHours.isAlwaysOpen ? workingHours.closeTime : undefined}
+                    showBusinessHoursNotice={!workingHours.isAlwaysOpen}
+                  />
                 </div>
                 {errors.pickupDate && <p className="text-sm text-destructive">{errors.pickupDate}</p>}
                 {errors.pickupTime && !errors.pickupDate && <p className="text-sm text-destructive">{errors.pickupTime}</p>}
@@ -2534,18 +2544,26 @@ const MultiStepBookingWidget = () => {
                       }} initialFocus className="pointer-events-auto" />
                     </PopoverContent>
                   </Popover>
-                  <TimePicker id="dropoffTime" value={formData.dropoffTime} onChange={value => {
-                    setFormData({
-                      ...formData,
-                      dropoffTime: value
-                    });
-                    if (errors.dropoffTime) {
-                      setErrors({
-                        ...errors,
-                        dropoffTime: ""
+                  <TimePicker
+                    id="dropoffTime"
+                    value={formData.dropoffTime}
+                    onChange={value => {
+                      setFormData({
+                        ...formData,
+                        dropoffTime: value
                       });
-                    }
-                  }} className="h-12 focus-visible:ring-primary" />
+                      if (errors.dropoffTime) {
+                        setErrors({
+                          ...errors,
+                          dropoffTime: ""
+                        });
+                      }
+                    }}
+                    className="h-12 focus-visible:ring-primary"
+                    businessHoursOpen={!workingHours.isAlwaysOpen ? workingHours.openTime : undefined}
+                    businessHoursClose={!workingHours.isAlwaysOpen ? workingHours.closeTime : undefined}
+                    showBusinessHoursNotice={!workingHours.isAlwaysOpen}
+                  />
                 </div>
                 {errors.dropoffDate && <p className="text-sm text-destructive">{errors.dropoffDate}</p>}
                 {errors.dropoffTime && !errors.dropoffDate && <p className="text-sm text-destructive">{errors.dropoffTime}</p>}
@@ -4108,10 +4126,10 @@ const MultiStepBookingWidget = () => {
         </div>}
 
       </div>
-    </Card >
+    </Card>
 
     {/* Insurance Upload Dialog */}
-    < InsuranceUploadDialog
+    <InsuranceUploadDialog
       open={showUploadDialog}
       onOpenChange={setShowUploadDialog}
       onUploadComplete={async (documentId, fileUrl) => {

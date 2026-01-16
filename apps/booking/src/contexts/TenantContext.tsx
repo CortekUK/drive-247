@@ -81,6 +81,12 @@ export interface Tenant {
   // Deposit settings
   deposit_mode: 'global' | 'per_vehicle' | null;
   global_deposit_amount: number | null;
+
+  // Working hours settings
+  working_hours_enabled: boolean | null;
+  working_hours_open: string | null;
+  working_hours_close: string | null;
+  working_hours_always_open: boolean | null;
 }
 
 interface TenantContextType {
@@ -184,7 +190,8 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
                 integration_veriff,
                 tax_enabled, tax_percentage,
                 service_fee_enabled, service_fee_amount,
-                deposit_mode, global_deposit_amount
+                deposit_mode, global_deposit_amount,
+                working_hours_enabled, working_hours_open, working_hours_close, working_hours_always_open
               `)
               .eq('slug', defaultSlug)
               .eq('status', 'active')
@@ -270,7 +277,11 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
           service_fee_enabled,
           service_fee_amount,
           deposit_mode,
-          global_deposit_amount
+          global_deposit_amount,
+          working_hours_enabled,
+          working_hours_open,
+          working_hours_close,
+          working_hours_always_open
         `)
         .eq('slug', slug)
         .eq('status', 'active')
