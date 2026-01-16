@@ -22,6 +22,7 @@ import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { useQueryClient } from "@tanstack/react-query";
 import { useTenant } from "@/contexts/TenantContext";
+import { isInsuranceExemptTenant } from "@/config/tenant-config";
 import { useCustomerActiveRentals } from "@/hooks/use-customer-active-rentals";
 import { PAYMENT_TYPES } from "@/constants";
 import { ContractSummary } from "@/components/rentals/contract-summary";
@@ -88,6 +89,7 @@ const CreateRental = () => {
   const router = useRouter();
   const { toast } = useToast();
   const { tenant } = useTenant();
+  const skipInsurance = isInsuranceExemptTenant(tenant?.id);
   const queryClient = useQueryClient();
   const [loading, setLoading] = useState(false);
   const [submitError, setSubmitError] = useState<string>("");
@@ -1475,32 +1477,34 @@ const CreateRental = () => {
                     </div>
                   </div>
 
-                  {/* Insurance Verification */}
-                  <div className="space-y-4 pt-4 border-t">
-                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-                      <div className="flex items-center gap-2">
-                        <Shield className="h-4 w-4 text-muted-foreground flex-shrink-0" />
-                        <h3 className="font-medium">Insurance Verification</h3>
+                  {/* Insurance Verification - Hidden for insurance-exempt tenants like Kedic Services */}
+                  {!skipInsurance && (
+                    <div className="space-y-4 pt-4 border-t">
+                      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                        <div className="flex items-center gap-2">
+                          <Shield className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+                          <h3 className="font-medium">Insurance Verification</h3>
+                        </div>
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setShowInsuranceUpload(true)}
+                            className="whitespace-nowrap"
+                          >
+                            <Upload className="h-4 w-4 mr-2" />
+                            <span className="hidden sm:inline">{insuranceDocId ? "Certificate Uploaded" : "Upload Certificate"}</span>
+                            <span className="sm:hidden">{insuranceDocId ? "Uploaded" : "Upload"}</span>
+                          </Button>
+                          {insuranceDocId && (
+                            <span className="text-sm text-green-600 whitespace-nowrap">✓ Uploaded</span>
+                          )}
+                        </div>
                       </div>
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <Button
-                          type="button"
-                          variant="outline"
-                          size="sm"
-                          onClick={() => setShowInsuranceUpload(true)}
-                          className="whitespace-nowrap"
-                        >
-                          <Upload className="h-4 w-4 mr-2" />
-                          <span className="hidden sm:inline">{insuranceDocId ? "Certificate Uploaded" : "Upload Certificate"}</span>
-                          <span className="sm:hidden">{insuranceDocId ? "Uploaded" : "Upload"}</span>
-                        </Button>
-                        {insuranceDocId && (
-                          <span className="text-sm text-green-600 whitespace-nowrap">✓ Uploaded</span>
-                        )}
-                      </div>
+                      <p className="text-sm text-muted-foreground">Upload customer's insurance certificate for verification</p>
                     </div>
-                    <p className="text-sm text-muted-foreground">Upload customer's insurance certificate for verification</p>
-                  </div>
+                  )}
 
                   {/* Optional Details */}
                   <div className="space-y-4 pt-4 border-t">
@@ -1672,16 +1676,18 @@ const CreateRental = () => {
         />
       )}
 
-      {/* Insurance Upload Dialog */}
-      <InsuranceUploadDialog
-        open={showInsuranceUpload}
-        onOpenChange={setShowInsuranceUpload}
-        customerId={watchedValues.customer_id}
-        onUploadComplete={(documentId) => {
-          setInsuranceDocId(documentId);
-          form.setValue("insurance_status", "uploaded");
-        }}
-      />
+      {/* Insurance Upload Dialog - Hidden for insurance-exempt tenants */}
+      {!skipInsurance && (
+        <InsuranceUploadDialog
+          open={showInsuranceUpload}
+          onOpenChange={setShowInsuranceUpload}
+          customerId={watchedValues.customer_id}
+          onUploadComplete={(documentId) => {
+            setInsuranceDocId(documentId);
+            form.setValue("insurance_status", "uploaded");
+          }}
+        />
+      )}
 
       {/* AI Verification QR Modal */}
       <Dialog
