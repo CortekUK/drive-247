@@ -250,12 +250,21 @@ export interface FleetCTAContent {
   secondary_href: string;
 }
 
+// Carousel Media Item for mixed image/video carousel
+export interface CarouselMediaItem {
+  url: string;
+  type: 'image' | 'video';
+  alt?: string;
+  thumbnail?: string; // For video thumbnails
+}
+
 // Home Page Content Types
 export interface HomeHeroContent {
   headline: string;
   subheading: string;
   background_image?: string;
-  carousel_images?: string[];
+  carousel_images?: string[]; // Kept for backwards compatibility
+  carousel_media?: CarouselMediaItem[]; // New: mixed media array
   phone_number: string;
   phone_cta_text: string;
   book_cta_text: string;

@@ -97,6 +97,15 @@ export const CMS_MEDIA = {
   /** Maximum file size for CMS media (5 MB) */
   MAX_FILE_SIZE_BYTES: 5 * 1024 * 1024,
 
+  /** Maximum file size for images in carousel (10 MB) */
+  MAX_IMAGE_SIZE_BYTES: 10 * 1024 * 1024,
+
+  /** Maximum file size for videos in carousel (50 MB) */
+  MAX_VIDEO_SIZE_BYTES: 50 * 1024 * 1024,
+
+  /** Maximum items in carousel (images + videos combined) */
+  MAX_CAROUSEL_ITEMS: 10,
+
   /** Allowed image types */
   ALLOWED_IMAGE_TYPES: [
     'image/jpeg',
@@ -105,12 +114,25 @@ export const CMS_MEDIA = {
     'image/svg+xml',
   ] as const,
 
-  /** Allowed video types */
+  /** Allowed video types (includes GIF as it behaves like video) */
   ALLOWED_VIDEO_TYPES: [
     'video/mp4',
     'video/webm',
-    'video/ogg',
+    'image/gif',
   ] as const,
+
+  /** Allowed carousel media types (images + videos) */
+  ALLOWED_CAROUSEL_TYPES: [
+    'image/jpeg',
+    'image/png',
+    'image/webp',
+    'video/mp4',
+    'video/webm',
+    'image/gif',
+  ] as const,
+
+  /** Video file extensions for URL detection */
+  VIDEO_EXTENSIONS: ['.mp4', '.webm', '.gif'] as const,
 
   /** Storage bucket name */
   BUCKET: 'cms-media',

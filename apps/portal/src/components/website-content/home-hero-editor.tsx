@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
@@ -18,8 +18,8 @@ import {
 } from "@/components/ui/form";
 import { Loader2, Save, Home } from "lucide-react";
 import { HeroImageUpload } from "@/components/website-content/hero-image-upload";
-import { CarouselImagesEditor } from "@/components/website-content/carousel-images-editor";
-import type { HomeHeroContent } from "@/types/cms";
+import { CarouselMediaEditor } from "@/components/website-content/carousel-media-editor";
+import type { HomeHeroContent, CarouselMediaItem } from "@/types/cms";
 
 interface HomeHeroEditorProps {
   content: HomeHeroContent;
@@ -48,9 +48,26 @@ const defaults = {
   book_cta_text: "Book Now",
 };
 
+// Helper to migrate old carousel_images to carousel_media format
+const migrateCarouselImages = (images: string[] | undefined): CarouselMediaItem[] => {
+  if (!images || images.length === 0) return [];
+  return images.map(url => ({ url, type: 'image' as const }));
+};
+
 export function HomeHeroEditor({ content, onSave, isSaving }: HomeHeroEditorProps) {
   const [backgroundImage, setBackgroundImage] = useState(content.background_image || "");
-  const [carouselImages, setCarouselImages] = useState<string[]>(content.carousel_images || []);
+
+  // Initialize carousel media with backwards compatibility
+  const initialCarouselMedia = useMemo(() => {
+    // If new format exists, use it
+    if (content.carousel_media && content.carousel_media.length > 0) {
+      return content.carousel_media;
+    }
+    // Otherwise, migrate from old format
+    return migrateCarouselImages(content.carousel_images);
+  }, [content.carousel_media, content.carousel_images]);
+
+  const [carouselMedia, setCarouselMedia] = useState<CarouselMediaItem[]>(initialCarouselMedia);
 
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
@@ -74,15 +91,28 @@ export function HomeHeroEditor({ content, onSave, isSaving }: HomeHeroEditorProp
       book_cta_text: content.book_cta_text || defaults.book_cta_text,
     });
     setBackgroundImage(content.background_image || "");
-    setCarouselImages(content.carousel_images || []);
+
+    // Update carousel media with backwards compatibility
+    if (content.carousel_media && content.carousel_media.length > 0) {
+      setCarouselMedia(content.carousel_media);
+    } else {
+      setCarouselMedia(migrateCarouselImages(content.carousel_images));
+    }
   }, [content, form]);
 
   const onSubmit = (data: FormValues) => {
-    onSave({
+    const contentToSave = {
       ...data,
       background_image: backgroundImage,
-      carousel_images: carouselImages.length > 0 ? carouselImages : undefined,
-    } as HomeHeroContent);
+      carousel_media: carouselMedia.length > 0 ? carouselMedia : undefined,
+      // Keep carousel_images for backwards compatibility (extract just image URLs)
+      carousel_images: carouselMedia.length > 0
+        ? carouselMedia.filter(m => m.type === 'image').map(m => m.url)
+        : undefined,
+    };
+    console.log('[HomeHeroEditor] Saving content:', contentToSave);
+    console.log('[HomeHeroEditor] carousel_media being saved:', carouselMedia);
+    onSave(contentToSave as HomeHeroContent);
   };
 
   return (
@@ -99,13 +129,13 @@ export function HomeHeroEditor({ content, onSave, isSaving }: HomeHeroEditorProp
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-6">
-            <CarouselImagesEditor
-              images={carouselImages}
-              onImagesChange={setCarouselImages}
-              label="Hero Carousel Images"
-              description="Images that rotate in the hero background. Leave empty to use default images."
+            <CarouselMediaEditor
+              media={carouselMedia}
+              onMediaChange={setCarouselMedia}
+              label="Hero Carousel Media"
+              description="Images and videos that rotate in the hero background. Leave empty to use default images."
               bucket="cms-media"
-              maxImages={10}
+              maxItems={10}
             />
 
             <Separator />
