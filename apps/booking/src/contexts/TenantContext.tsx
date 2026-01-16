@@ -62,10 +62,14 @@ export interface Tenant {
   payment_mode: string | null;
 
   // Location settings
-  pickup_location_mode: 'fixed' | 'custom' | 'multiple' | null;
-  return_location_mode: 'fixed' | 'custom' | 'multiple' | null;
+  pickup_location_mode: 'fixed' | 'custom' | 'multiple' | 'area_around' | null;
+  return_location_mode: 'fixed' | 'custom' | 'multiple' | 'area_around' | null;
   fixed_pickup_address: string | null;
   fixed_return_address: string | null;
+  pickup_area_radius_km: number | null;
+  return_area_radius_km: number | null;
+  area_center_lat: number | null;
+  area_center_lon: number | null;
 
   // Integration settings
   integration_veriff: boolean | null;
@@ -187,6 +191,7 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
                 min_rental_days, max_rental_days, booking_lead_time_hours, minimum_rental_age,
                 require_identity_verification, require_insurance_upload, payment_mode,
                 pickup_location_mode, return_location_mode, fixed_pickup_address, fixed_return_address,
+                pickup_area_radius_km, return_area_radius_km, area_center_lat, area_center_lon,
                 integration_veriff,
                 tax_enabled, tax_percentage,
                 service_fee_enabled, service_fee_amount,
@@ -271,6 +276,10 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
           return_location_mode,
           fixed_pickup_address,
           fixed_return_address,
+          pickup_area_radius_km,
+          return_area_radius_km,
+          area_center_lat,
+          area_center_lon,
           integration_veriff,
           tax_enabled,
           tax_percentage,

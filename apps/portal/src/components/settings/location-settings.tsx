@@ -45,6 +45,7 @@ import {
   Car,
   RotateCcw,
   List,
+  Locate,
 } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
 import {
@@ -86,10 +87,17 @@ export function LocationSettings() {
   // Pickup settings
   const [pickupMode, setPickupMode] = useState<LocationMode>('custom');
   const [fixedPickupAddress, setFixedPickupAddress] = useState('');
+  const [pickupAreaRadius, setPickupAreaRadius] = useState<number>(25);
 
   // Return settings
   const [returnMode, setReturnMode] = useState<LocationMode>('custom');
   const [fixedReturnAddress, setFixedReturnAddress] = useState('');
+  const [returnAreaRadius, setReturnAreaRadius] = useState<number>(25);
+
+  // Area around center point (shared for pickup & return)
+  const [areaCenterAddress, setAreaCenterAddress] = useState('');
+  const [areaCenterLat, setAreaCenterLat] = useState<number | null>(null);
+  const [areaCenterLon, setAreaCenterLon] = useState<number | null>(null);
 
   const [hasChanges, setHasChanges] = useState(false);
 
@@ -106,6 +114,14 @@ export function LocationSettings() {
       setReturnMode(locationSettings.return_location_mode || 'custom');
       setFixedPickupAddress(locationSettings.fixed_pickup_address || '');
       setFixedReturnAddress(locationSettings.fixed_return_address || '');
+      setPickupAreaRadius(locationSettings.pickup_area_radius_km ?? 25);
+      setReturnAreaRadius(locationSettings.return_area_radius_km ?? 25);
+      setAreaCenterLat(locationSettings.area_center_lat);
+      setAreaCenterLon(locationSettings.area_center_lon);
+      // Generate address display from coordinates if available
+      if (locationSettings.area_center_lat && locationSettings.area_center_lon && !areaCenterAddress) {
+        setAreaCenterAddress(`${locationSettings.area_center_lat.toFixed(4)}, ${locationSettings.area_center_lon.toFixed(4)}`);
+      }
       setHasChanges(false);
     }
   }, [locationSettings]);
@@ -118,9 +134,13 @@ export function LocationSettings() {
       pickupMode !== (locationSettings.pickup_location_mode || 'custom') ||
       returnMode !== (locationSettings.return_location_mode || 'custom') ||
       fixedPickupAddress !== (locationSettings.fixed_pickup_address || '') ||
-      fixedReturnAddress !== (locationSettings.fixed_return_address || '');
+      fixedReturnAddress !== (locationSettings.fixed_return_address || '') ||
+      pickupAreaRadius !== (locationSettings.pickup_area_radius_km ?? 25) ||
+      returnAreaRadius !== (locationSettings.return_area_radius_km ?? 25) ||
+      areaCenterLat !== locationSettings.area_center_lat ||
+      areaCenterLon !== locationSettings.area_center_lon;
     setHasChanges(changed);
-  }, [pickupMode, returnMode, fixedPickupAddress, fixedReturnAddress, locationSettings]);
+  }, [pickupMode, returnMode, fixedPickupAddress, fixedReturnAddress, pickupAreaRadius, returnAreaRadius, areaCenterLat, areaCenterLon, locationSettings]);
 
   // Filter locations by type
   const pickupLocations = locations.filter(loc => loc.is_pickup_enabled);
@@ -128,16 +148,30 @@ export function LocationSettings() {
 
   const handleSaveSettings = async () => {
     try {
+      const isAreaAroundUsed = pickupMode === 'area_around' || returnMode === 'area_around';
       await updateSettings({
         pickup_location_mode: pickupMode,
         return_location_mode: returnMode,
         fixed_pickup_address: pickupMode === 'fixed' ? fixedPickupAddress : null,
         fixed_return_address: returnMode === 'fixed' ? fixedReturnAddress : null,
+        pickup_area_radius_km: pickupMode === 'area_around' ? pickupAreaRadius : null,
+        return_area_radius_km: returnMode === 'area_around' ? returnAreaRadius : null,
+        area_center_lat: isAreaAroundUsed ? areaCenterLat : null,
+        area_center_lon: isAreaAroundUsed ? areaCenterLon : null,
       });
       setHasChanges(false);
     } catch (error) {
       // Error handled in hook
     }
+  };
+
+  const handleCenterAddressChange = (address: string, lat?: number, lon?: number) => {
+    setAreaCenterAddress(address);
+    if (lat !== undefined && lon !== undefined) {
+      setAreaCenterLat(lat);
+      setAreaCenterLon(lon);
+    }
+    setHasChanges(true);
   };
 
   const handleOpenAddDialog = (type: 'pickup' | 'return') => {
@@ -343,11 +377,10 @@ export function LocationSettings() {
           >
             {/* Fixed Address Option */}
             <div
-              className={`rounded-lg border p-3 cursor-pointer transition-all ${
-                pickupMode === 'fixed'
-                  ? 'border-accent bg-accent/10 ring-1 ring-accent'
-                  : 'border-border hover:border-muted-foreground/50'
-              }`}
+              className={`rounded-lg border p-3 cursor-pointer transition-all ${pickupMode === 'fixed'
+                ? 'border-accent bg-accent/10 ring-1 ring-accent'
+                : 'border-border hover:border-muted-foreground/50'
+                }`}
               onClick={() => { setPickupMode('fixed'); setHasChanges(true); }}
             >
               <div className="flex items-start space-x-3">
@@ -377,11 +410,10 @@ export function LocationSettings() {
 
             {/* Custom Option */}
             <div
-              className={`rounded-lg border p-3 cursor-pointer transition-all ${
-                pickupMode === 'custom'
-                  ? 'border-accent bg-accent/10 ring-1 ring-accent'
-                  : 'border-border hover:border-muted-foreground/50'
-              }`}
+              className={`rounded-lg border p-3 cursor-pointer transition-all ${pickupMode === 'custom'
+                ? 'border-accent bg-accent/10 ring-1 ring-accent'
+                : 'border-border hover:border-muted-foreground/50'
+                }`}
               onClick={() => { setPickupMode('custom'); setHasChanges(true); }}
             >
               <div className="flex items-start space-x-3">
@@ -399,11 +431,10 @@ export function LocationSettings() {
 
             {/* Multiple Select Option */}
             <div
-              className={`rounded-lg border p-3 cursor-pointer transition-all ${
-                pickupMode === 'multiple'
-                  ? 'border-accent bg-accent/10 ring-1 ring-accent'
-                  : 'border-border hover:border-muted-foreground/50'
-              }`}
+              className={`rounded-lg border p-3 cursor-pointer transition-all ${pickupMode === 'multiple'
+                ? 'border-accent bg-accent/10 ring-1 ring-accent'
+                : 'border-border hover:border-muted-foreground/50'
+                }`}
               onClick={() => { setPickupMode('multiple'); setHasChanges(true); }}
             >
               <div className="flex items-start space-x-3">
@@ -421,6 +452,72 @@ export function LocationSettings() {
               {pickupMode === 'multiple' && (
                 <div onClick={(e) => e.stopPropagation()}>
                   <LocationsTable type="pickup" locationsList={pickupLocations} />
+                </div>
+              )}
+            </div>
+
+            {/* Area Around Option */}
+            <div
+              className={`rounded-lg border p-3 cursor-pointer transition-all ${pickupMode === 'area_around'
+                ? 'border-accent bg-accent/10 ring-1 ring-accent'
+                : 'border-border hover:border-muted-foreground/50'
+                }`}
+              onClick={() => { setPickupMode('area_around'); setHasChanges(true); }}
+            >
+              <div className="flex items-start space-x-3">
+                <RadioGroupItem value="area_around" id="pickup-area_around" className="mt-0.5" />
+                <div className="flex-1">
+                  <Label htmlFor="pickup-area_around" className="font-medium cursor-pointer flex items-center gap-2">
+                    <Locate className="h-4 w-4" />
+                    Area Around
+                  </Label>
+                  <p className="text-sm text-muted-foreground">
+                    Customers search within a radius from a center point
+                  </p>
+                </div>
+              </div>
+              {pickupMode === 'area_around' && (
+                <div className="mt-3 ml-6 space-y-4" onClick={(e) => e.stopPropagation()}>
+                  <div className="space-y-2">
+                    <Label htmlFor="pickup-center" className="text-sm">
+                      Center Point Location:
+                    </Label>
+                    <LocationAutocomplete
+                      id="pickup-center"
+                      value={areaCenterAddress}
+                      onChange={handleCenterAddressChange}
+                      placeholder="Search for center location..."
+                    />
+                    {areaCenterLat && areaCenterLon && (
+                      <p className="text-xs text-muted-foreground">
+                        Coordinates: {areaCenterLat.toFixed(4)}, {areaCenterLon.toFixed(4)}
+                      </p>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <Label htmlFor="pickup-radius" className="text-sm whitespace-nowrap">
+                      Maximum Radius:
+                    </Label>
+                    <div className="flex items-center gap-2">
+                      <Input
+                        id="pickup-radius"
+                        type="number"
+                        min={1}
+                        max={25}
+                        value={pickupAreaRadius}
+                        onChange={(e) => {
+                          const value = parseInt(e.target.value) || 25;
+                          setPickupAreaRadius(Math.min(25, Math.max(1, value)));
+                          setHasChanges(true);
+                        }}
+                        className="w-20"
+                      />
+                      <span className="text-sm text-muted-foreground">km</span>
+                    </div>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Customers can only select addresses within this distance from the center point.
+                  </p>
                 </div>
               )}
             </div>
@@ -450,11 +547,10 @@ export function LocationSettings() {
           >
             {/* Fixed Address Option */}
             <div
-              className={`rounded-lg border p-3 cursor-pointer transition-all ${
-                returnMode === 'fixed'
-                  ? 'border-accent bg-accent/10 ring-1 ring-accent'
-                  : 'border-border hover:border-muted-foreground/50'
-              }`}
+              className={`rounded-lg border p-3 cursor-pointer transition-all ${returnMode === 'fixed'
+                ? 'border-accent bg-accent/10 ring-1 ring-accent'
+                : 'border-border hover:border-muted-foreground/50'
+                }`}
               onClick={() => { setReturnMode('fixed'); setHasChanges(true); }}
             >
               <div className="flex items-start space-x-3">
@@ -484,11 +580,10 @@ export function LocationSettings() {
 
             {/* Custom Option */}
             <div
-              className={`rounded-lg border p-3 cursor-pointer transition-all ${
-                returnMode === 'custom'
-                  ? 'border-accent bg-accent/10 ring-1 ring-accent'
-                  : 'border-border hover:border-muted-foreground/50'
-              }`}
+              className={`rounded-lg border p-3 cursor-pointer transition-all ${returnMode === 'custom'
+                ? 'border-accent bg-accent/10 ring-1 ring-accent'
+                : 'border-border hover:border-muted-foreground/50'
+                }`}
               onClick={() => { setReturnMode('custom'); setHasChanges(true); }}
             >
               <div className="flex items-start space-x-3">
@@ -506,11 +601,10 @@ export function LocationSettings() {
 
             {/* Multiple Select Option */}
             <div
-              className={`rounded-lg border p-3 cursor-pointer transition-all ${
-                returnMode === 'multiple'
-                  ? 'border-accent bg-accent/10 ring-1 ring-accent'
-                  : 'border-border hover:border-muted-foreground/50'
-              }`}
+              className={`rounded-lg border p-3 cursor-pointer transition-all ${returnMode === 'multiple'
+                ? 'border-accent bg-accent/10 ring-1 ring-accent'
+                : 'border-border hover:border-muted-foreground/50'
+                }`}
               onClick={() => { setReturnMode('multiple'); setHasChanges(true); }}
             >
               <div className="flex items-start space-x-3">
@@ -528,6 +622,72 @@ export function LocationSettings() {
               {returnMode === 'multiple' && (
                 <div onClick={(e) => e.stopPropagation()}>
                   <LocationsTable type="return" locationsList={returnLocations} />
+                </div>
+              )}
+            </div>
+
+            {/* Area Around Option */}
+            <div
+              className={`rounded-lg border p-3 cursor-pointer transition-all ${returnMode === 'area_around'
+                ? 'border-accent bg-accent/10 ring-1 ring-accent'
+                : 'border-border hover:border-muted-foreground/50'
+                }`}
+              onClick={() => { setReturnMode('area_around'); setHasChanges(true); }}
+            >
+              <div className="flex items-start space-x-3">
+                <RadioGroupItem value="area_around" id="return-area_around" className="mt-0.5" />
+                <div className="flex-1">
+                  <Label htmlFor="return-area_around" className="font-medium cursor-pointer flex items-center gap-2">
+                    <Locate className="h-4 w-4" />
+                    Area Around
+                  </Label>
+                  <p className="text-sm text-muted-foreground">
+                    Customers search within a radius from a center point
+                  </p>
+                </div>
+              </div>
+              {returnMode === 'area_around' && (
+                <div className="mt-3 ml-6 space-y-4" onClick={(e) => e.stopPropagation()}>
+                  <div className="space-y-2">
+                    <Label htmlFor="return-center" className="text-sm">
+                      Center Point Location:
+                    </Label>
+                    <LocationAutocomplete
+                      id="return-center"
+                      value={areaCenterAddress}
+                      onChange={handleCenterAddressChange}
+                      placeholder="Search for center location..."
+                    />
+                    {areaCenterLat && areaCenterLon && (
+                      <p className="text-xs text-muted-foreground">
+                        Coordinates: {areaCenterLat.toFixed(4)}, {areaCenterLon.toFixed(4)}
+                      </p>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <Label htmlFor="return-radius" className="text-sm whitespace-nowrap">
+                      Maximum Radius:
+                    </Label>
+                    <div className="flex items-center gap-2">
+                      <Input
+                        id="return-radius"
+                        type="number"
+                        min={1}
+                        max={25}
+                        value={returnAreaRadius}
+                        onChange={(e) => {
+                          const value = parseInt(e.target.value) || 25;
+                          setReturnAreaRadius(Math.min(25, Math.max(1, value)));
+                          setHasChanges(true);
+                        }}
+                        className="w-20"
+                      />
+                      <span className="text-sm text-muted-foreground">km</span>
+                    </div>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Customers can only select addresses within this distance from the center point.
+                  </p>
                 </div>
               )}
             </div>
