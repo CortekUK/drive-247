@@ -2717,7 +2717,7 @@ const MultiStepBookingWidget = () => {
           </div>
 
           {/* Toolbar */}
-          <Card className="p-4 bg-card/90 backdrop-blur-sm border-primary/15 sticky top-20 z-10 shadow-lg">
+          <Card className="p-4 bg-card/90 backdrop-blur-sm border-primary/15 sticky top-20 z-30 shadow-lg">
             <div className="flex flex-col gap-4">
               {/* Top Row: Search, Sort, View Toggle */}
               <div className="flex flex-col sm:flex-row gap-3">
