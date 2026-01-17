@@ -189,12 +189,13 @@ export default function BookingCheckoutStep({
       setIsProcessing(true);
 
       // Create Stripe checkout session
+      // For enquiry tenants, only charge the deposit (getPayableAmount handles this)
       const { data, error: functionError } = await supabase.functions.invoke('create-checkout-session', {
         body: {
           rentalId: createdRentalData.rental.id,
           customerEmail: formData.customerEmail,
           customerName: formData.customerName,
-          totalAmount: calculateGrandTotal(),
+          totalAmount: getPayableAmount(), // Use payable amount (deposit only for enquiry tenants)
           tenantSlug: tenant?.slug, // Pass tenant slug for Stripe Connect routing
           tenantId: tenant?.id,
         },
@@ -208,7 +209,7 @@ export default function BookingCheckoutStep({
           (window as any).gtag('event', 'redirecting_to_stripe', {
             rental_id: createdRentalData.rental.id,
             customer_id: createdRentalData.customer.id,
-            total: calculateGrandTotal(),
+            total: getPayableAmount(),
           });
         }
         window.location.href = data.url;
@@ -233,6 +234,7 @@ export default function BookingCheckoutStep({
       setIsProcessing(true);
 
       // Create Stripe pre-auth checkout session
+      // For enquiry tenants, only charge the deposit (getPayableAmount handles this)
       const { data, error: functionError } = await supabase.functions.invoke('create-preauth-checkout', {
         body: {
           rentalId: createdRentalData.rental.id,
@@ -244,7 +246,7 @@ export default function BookingCheckoutStep({
           vehicleName: selectedVehicle.make && selectedVehicle.model
             ? `${selectedVehicle.make} ${selectedVehicle.model}`
             : selectedVehicle.reg,
-          totalAmount: calculateGrandTotal(),
+          totalAmount: getPayableAmount(), // Use payable amount (deposit only for enquiry tenants)
           pickupDate: formData.pickupDate,
           returnDate: formData.dropoffDate,
           tenantId: tenant?.id, // Explicitly pass tenant_id
@@ -259,7 +261,7 @@ export default function BookingCheckoutStep({
           (window as any).gtag('event', 'redirecting_to_stripe_preauth', {
             rental_id: createdRentalData.rental.id,
             customer_id: createdRentalData.customer.id,
-            total: calculateGrandTotal(),
+            total: getPayableAmount(),
           });
         }
         window.location.href = data.url;
