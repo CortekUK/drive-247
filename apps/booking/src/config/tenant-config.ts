@@ -14,3 +14,15 @@ export const isInsuranceExemptTenant = (tenantId: string | undefined | null): bo
   if (!tenantId) return false;
   return tenantId === KEDIC_TENANT_ID;
 };
+
+/**
+ * Check if a tenant uses enquiry-based booking
+ * For these tenants:
+ * - Only security deposit is charged upfront (if any)
+ * - If no security deposit, no payment at all - rental created as enquiry
+ * - Rental charges are collected later (not upfront)
+ */
+export const isEnquiryBasedTenant = (tenantId: string | undefined | null): boolean => {
+  if (!tenantId) return false;
+  return tenantId === KEDIC_TENANT_ID;
+};

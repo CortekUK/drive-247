@@ -764,8 +764,15 @@ const CreateRental = () => {
         }
       }
 
-      // Generate only first month's charge (subsequent charges created monthly)
-      await supabase.rpc("backfill_rental_charges_first_month_only");
+      // Generate first charge for this specific rental (works for Pending status)
+      const { error: chargeError } = await supabase.rpc("generate_first_charge_for_rental", {
+        rental_id_param: rental.id
+      });
+
+      if (chargeError) {
+        console.error("Error generating first charge:", chargeError);
+        // Don't throw - rental is already created, charge can be created manually
+      }
 
       const customerName = selectedCustomer?.name || "Customer";
       const vehicleReg = selectedVehicle?.reg || "Vehicle";

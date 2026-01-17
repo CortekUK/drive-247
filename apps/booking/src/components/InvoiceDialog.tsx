@@ -35,6 +35,9 @@ interface InvoiceDialogProps {
     end_date: string;
     monthly_amount: number;
   };
+  // Enquiry-based booking props
+  isEnquiry?: boolean;
+  payableAmount?: number;
 }
 
 const formatCurrency = (amount: number) => {
@@ -173,10 +176,14 @@ export const InvoiceDialog = ({
   customer,
   vehicle,
   rental,
+  isEnquiry = false,
+  payableAmount,
 }: InvoiceDialogProps) => {
   const printRef = useRef<HTMLDivElement>(null);
   const vehicleName = vehicle.make && vehicle.model ? `${vehicle.make} ${vehicle.model}` : vehicle.reg;
   const rentalFee = invoice.subtotal;
+  // For enquiry tenants, display the payable amount (deposit only or $0)
+  const displayTotal = isEnquiry && payableAmount !== undefined ? payableAmount : invoice.total_amount;
 
   const handlePrint = useReactToPrint({
     contentRef: printRef,
@@ -277,31 +284,50 @@ export const InvoiceDialog = ({
                   </tr>
                 </thead>
                 <tbody>
-                  <tr className="border-b">
-                    <td className="p-3 text-sm">
-                      <div>
-                        <p className="font-medium">Rental Fee</p>
-                        <p className="text-xs text-muted-foreground">
-                          {vehicleName} ({vehicle.reg})
-                        </p>
-                      </div>
-                    </td>
-                    <td className="p-3 text-sm text-right font-medium">
-                      {formatCurrency(rentalFee)}
-                    </td>
-                  </tr>
-                  {invoice.tax_amount > 0 && (
+                  {/* For enquiry tenants, show rental fee as TBD */}
+                  {isEnquiry ? (
+                    <tr className="border-b">
+                      <td className="p-3 text-sm">
+                        <div>
+                          <p className="font-medium">Rental Fee</p>
+                          <p className="text-xs text-muted-foreground">
+                            {vehicleName} ({vehicle.reg})
+                          </p>
+                        </div>
+                      </td>
+                      <td className="p-3 text-sm text-right font-medium text-muted-foreground italic">
+                        To be confirmed
+                      </td>
+                    </tr>
+                  ) : (
+                    <tr className="border-b">
+                      <td className="p-3 text-sm">
+                        <div>
+                          <p className="font-medium">Rental Fee</p>
+                          <p className="text-xs text-muted-foreground">
+                            {vehicleName} ({vehicle.reg})
+                          </p>
+                        </div>
+                      </td>
+                      <td className="p-3 text-sm text-right font-medium">
+                        {formatCurrency(rentalFee)}
+                      </td>
+                    </tr>
+                  )}
+                  {/* Hide tax and service fee for enquiry tenants */}
+                  {!isEnquiry && invoice.tax_amount > 0 && (
                     <tr className="border-b">
                       <td className="p-3 text-sm">Tax</td>
                       <td className="p-3 text-sm text-right">{formatCurrency(invoice.tax_amount)}</td>
                     </tr>
                   )}
-                  {(invoice.service_fee ?? 0) > 0 && (
+                  {!isEnquiry && (invoice.service_fee ?? 0) > 0 && (
                     <tr className="border-b">
                       <td className="p-3 text-sm">Service Fee</td>
                       <td className="p-3 text-sm text-right">{formatCurrency(invoice.service_fee ?? 0)}</td>
                     </tr>
                   )}
+                  {/* Security deposit shown for both */}
                   {(invoice.security_deposit ?? 0) > 0 && (
                     <tr className="border-b">
                       <td className="p-3 text-sm">Security Deposit</td>
@@ -309,14 +335,28 @@ export const InvoiceDialog = ({
                     </tr>
                   )}
                   <tr className="bg-muted/50">
-                    <td className="p-3 text-sm font-bold">Total</td>
+                    <td className="p-3 text-sm font-bold">
+                      {isEnquiry ? 'Total Due Now' : 'Total'}
+                    </td>
                     <td className="p-3 text-lg font-bold text-right text-accent">
-                      {formatCurrency(invoice.total_amount)}
+                      {formatCurrency(displayTotal)}
                     </td>
                   </tr>
                 </tbody>
               </table>
             </div>
+
+            {/* Enquiry booking note */}
+            {isEnquiry && (
+              <div className="bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
+                <p className="text-sm text-blue-700 dark:text-blue-300 font-medium">
+                  ENQUIRY BOOKING
+                </p>
+                <p className="text-xs text-blue-600 dark:text-blue-400 mt-1">
+                  Rental charges will be confirmed after your booking is approved.
+                </p>
+              </div>
+            )}
 
             {/* Notes */}
             {invoice.notes && (
@@ -348,8 +388,17 @@ export const InvoiceDialog = ({
               }}
               className="gradient-accent w-full sm:w-auto"
             >
-              Continue to Sign Agreement
-              <ArrowRight className="h-4 w-4 ml-2" />
+              {isEnquiry && displayTotal === 0 ? (
+                <>
+                  Continue to Submit Enquiry
+                  <ArrowRight className="h-4 w-4 ml-2" />
+                </>
+              ) : (
+                <>
+                  Continue to Sign Agreement
+                  <ArrowRight className="h-4 w-4 ml-2" />
+                </>
+              )}
             </Button>
           </div>
         </DialogContent>
