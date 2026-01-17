@@ -18,9 +18,16 @@ const BookingEnquirySubmittedContent = () => {
   const rentalId = searchParams?.get("rental_id");
 
   useEffect(() => {
+    // Set a timeout to prevent infinite loading
+    const timeoutId = setTimeout(() => {
+      setLoading(false);
+    }, 5000);
+
     const fetchBookingDetails = async () => {
+      // Always show success page, even without rental details
       if (!rentalId) {
         setLoading(false);
+        clearTimeout(timeoutId);
         return;
       }
 
@@ -34,26 +41,26 @@ const BookingEnquirySubmittedContent = () => {
             vehicle:vehicles(*)
           `)
           .eq("id", rentalId)
-          .single();
+          .maybeSingle(); // Use maybeSingle to avoid error if not found
 
         if (fetchError) {
           console.error("Failed to fetch rental details:", fetchError);
-          toast.error("Unable to load booking details. Please contact support.");
+          // Don't show error toast - just show the page without details
         } else if (rental) {
           // Format rental details for display
-          const vehicleName = rental.vehicle.make && rental.vehicle.model
+          const vehicleName = rental.vehicle?.make && rental.vehicle?.model
             ? `${rental.vehicle.make} ${rental.vehicle.model}`
-            : rental.vehicle.reg;
+            : rental.vehicle?.reg || 'Vehicle';
 
           setBookingDetails({
             rental_id: rental.id,
             booking_ref: rental.id.substring(0, 8).toUpperCase(),
-            customer_name: rental.customer.name,
-            customer_email: rental.customer.email,
+            customer_name: rental.customer?.name || 'Customer',
+            customer_email: rental.customer?.email,
             vehicle_name: vehicleName,
-            vehicle_reg: rental.vehicle.reg,
-            pickup_date: format(new Date(rental.start_date), "MMM dd, yyyy"),
-            return_date: format(new Date(rental.end_date), "MMM dd, yyyy"),
+            vehicle_reg: rental.vehicle?.reg,
+            pickup_date: rental.start_date ? format(new Date(rental.start_date), "MMM dd, yyyy") : 'TBD',
+            return_date: rental.end_date ? format(new Date(rental.end_date), "MMM dd, yyyy") : 'TBD',
             rental_period_type: rental.rental_period_type,
             status: rental.status,
           });
@@ -63,13 +70,16 @@ const BookingEnquirySubmittedContent = () => {
         localStorage.removeItem('pendingPaymentDetails');
       } catch (error) {
         console.error('Error fetching booking details:', error);
-        toast.error("An error occurred. Please contact support.");
+        // Don't show error toast - just show the page without details
       } finally {
+        clearTimeout(timeoutId);
         setLoading(false);
       }
     };
 
     fetchBookingDetails();
+
+    return () => clearTimeout(timeoutId);
   }, [rentalId]);
 
   return (
