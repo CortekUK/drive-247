@@ -38,7 +38,3 @@ out/
 helper-folder
 quality-assurance
 testing-qa.env
-<<<<<<< HEAD
-.env
-=======
->>>>>>> 00f2a14 (audit logs fixed)
