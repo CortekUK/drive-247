@@ -64,6 +64,9 @@ export const createInvoice = async (data: InvoiceData): Promise<Invoice> => {
     total_amount: data.total_amount,
   });
 
+  // Note: discount_amount and promo_code are intentionally excluded from DB insert
+  // as these columns don't exist in the current invoices table schema.
+  // The total_amount already reflects any applied discounts.
   const invoiceData: any = {
     rental_id: data.rental_id,
     customer_id: data.customer_id,
@@ -77,11 +80,9 @@ export const createInvoice = async (data: InvoiceData): Promise<Invoice> => {
     tax_amount: data.tax_amount || 0,
     service_fee: data.service_fee || 0,
     security_deposit: data.security_deposit || 0,
-    discount_amount: data.discount_amount || 0,
-    promo_code: data.promo_code || null,
     total_amount: data.total_amount,
     status: 'pending',
-    notes: data.notes,
+    notes: data.notes ? `${data.notes}${data.promo_code ? ` | Promo: ${data.promo_code}` : ''}` : (data.promo_code ? `Promo: ${data.promo_code}` : undefined),
   };
 
   if (data.tenant_id) {
