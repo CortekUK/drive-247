@@ -352,7 +352,6 @@ serve(async (req) => {
       if (!auditTenantId) {
         console.warn('⚠️ Could not determine tenant_id for audit log - super admin without tenant context');
       }
-      }
 
       // Create audit log entry using service client (bypasses RLS)
       console.log('🔍 AUDIT LOG DEBUG:');
