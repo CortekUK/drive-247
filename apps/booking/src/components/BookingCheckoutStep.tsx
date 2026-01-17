@@ -605,9 +605,9 @@ export default function BookingCheckoutStep({
         rental_period_type: rentalPeriodType,
         monthly_amount: grandTotal, // Store grand total (rental + taxes + fees + protection)
         status: "Pending", // Derived from approval_status + payment_status
-        payment_mode: enquiryWithNoDeposit ? 'manual' : bookingMode, // Track payment mode (enquiry uses 'manual' - tracked via payment_status='not_required')
+        payment_mode: enquiryWithNoDeposit ? 'manual' : bookingMode, // Track payment mode
         approval_status: "pending", // Awaiting admin approval
-        payment_status: enquiryWithNoDeposit ? "not_required" : "pending", // No payment for enquiry with no deposit
+        payment_status: enquiryWithNoDeposit ? "fulfilled" : "pending", // Enquiry with no deposit: payment already satisfied
         // Location data
         pickup_location: formData.pickupLocation || null,
         pickup_location_id: formData.pickupLocationId || null,
