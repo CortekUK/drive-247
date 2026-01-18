@@ -126,19 +126,16 @@ const BookingSuccessContent = () => {
                     // Get tenant info for Stripe Connect
                     const { data: rentalData } = await supabase
                       .from("rentals")
-                      .select("tenant_id, tenant:tenants(stripe_account_id, stripe_mode)")
+                      .select("tenant_id")
                       .eq("id", rentalId)
                       .single();
 
-                    const syncBody: any = {
+                    // Pass tenantId - the edge function will derive the correct Stripe Connect account
+                    const syncBody = {
                       paymentId: paymentRecord.id,
                       checkoutSessionId: paymentRecord.stripe_checkout_session_id || sessionId,
-                      mode: rentalData?.tenant?.stripe_mode || 'test',
+                      tenantId: rentalData?.tenant_id || tenant?.id,
                     };
-
-                    if (rentalData?.tenant?.stripe_account_id) {
-                      syncBody.connectedAccountId = rentalData.tenant.stripe_account_id;
-                    }
 
                     const { data: syncResult, error: syncError } = await supabase.functions.invoke('sync-payment-intent', {
                       body: syncBody
