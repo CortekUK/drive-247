@@ -1,12 +1,15 @@
 import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import {
   Key,
   KeyRound,
-  AlertCircle
+  AlertCircle,
+  AlertTriangle
 } from "lucide-react";
+import { cn } from "@/lib/utils";
 import { useKeyHandover, HandoverType } from "@/hooks/use-key-handover";
 import { KeyHandoverPhotos } from "@/components/rentals/key-handover-photos";
 import {
@@ -23,9 +26,11 @@ import {
 interface KeyHandoverSectionProps {
   rentalId: string;
   rentalStatus: string;
+  /** Whether to highlight this section as needing action */
+  needsAction?: boolean;
 }
 
-export const KeyHandoverSection = ({ rentalId, rentalStatus }: KeyHandoverSectionProps) => {
+export const KeyHandoverSection = ({ rentalId, rentalStatus, needsAction = false }: KeyHandoverSectionProps) => {
   const {
     givingHandover,
     receivingHandover,
@@ -89,14 +94,31 @@ export const KeyHandoverSection = ({ rentalId, rentalStatus }: KeyHandoverSectio
   }
 
   return (
-    <Card>
+    <Card
+      id="key-handover-section"
+      className={cn(
+        "transition-all duration-300",
+        needsAction && "border-amber-500 border-2 shadow-lg shadow-amber-100 dark:shadow-amber-900/20"
+      )}
+    >
       <CardHeader>
-        <CardTitle className="flex items-center gap-2">
-          <Key className="h-5 w-5 text-primary" />
-          Key Handover
-        </CardTitle>
+        <div className="flex items-center justify-between">
+          <CardTitle className="flex items-center gap-2">
+            <Key className={cn("h-5 w-5", needsAction ? "text-amber-600" : "text-primary")} />
+            Key Handover
+          </CardTitle>
+          {needsAction && (
+            <Badge variant="outline" className="border-amber-500 bg-amber-50 text-amber-700 dark:bg-amber-950 dark:text-amber-400">
+              <AlertTriangle className="h-3 w-3 mr-1" />
+              Action Required
+            </Badge>
+          )}
+        </div>
         <CardDescription>
-          Document car condition before giving and after receiving keys
+          {needsAction
+            ? "Complete the vehicle collection to activate this rental"
+            : "Document car condition before giving and after receiving keys"
+          }
         </CardDescription>
       </CardHeader>
       <CardContent>

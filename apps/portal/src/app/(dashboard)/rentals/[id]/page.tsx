@@ -19,6 +19,7 @@ import { isInsuranceExemptTenant } from "@/config/tenant-config";
 import { useRentalTotals } from "@/hooks/use-rental-ledger-data";
 import { RentalLedger } from "@/components/rentals/rental-ledger";
 import { KeyHandoverSection } from "@/components/rentals/key-handover-section";
+import { KeyHandoverActionBanner } from "@/components/rentals/key-handover-action-banner";
 import { CancelRentalDialog } from "@/components/shared/dialogs/cancel-rental-dialog";
 import RejectionDialog from "@/components/rentals/rejection-dialog";
 
@@ -672,8 +673,18 @@ const RentalDetail = () => {
   };
 
 
+  // Determine if key handover needs action (approved + fulfilled but not handed over)
+  const needsKeyHandover = rental?.approval_status === 'approved' && rental?.payment_status === 'fulfilled' && !isKeyHandoverCompleted;
+
   return (
     <div className="space-y-6 py-[24px] px-[8px]">
+      {/* Key Handover Action Banner */}
+      <KeyHandoverActionBanner
+        show={needsKeyHandover}
+        customerName={rental?.customers?.name}
+        vehicleInfo={rental?.vehicles ? `${rental.vehicles.make} ${rental.vehicles.model} • ${rental.vehicles.reg}` : undefined}
+      />
+
       {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-4">
@@ -1861,7 +1872,13 @@ const RentalDetail = () => {
       </Card>
 
       {/* Key Handover Section */}
-      {id && <KeyHandoverSection rentalId={id} rentalStatus={displayStatus} />}
+      {id && (
+        <KeyHandoverSection
+          rentalId={id}
+          rentalStatus={displayStatus}
+          needsAction={needsKeyHandover}
+        />
+      )}
 
       {/* Enhanced Ledger */}
       <div id="ledger">
