@@ -47,14 +47,15 @@ export function useNotifications() {
         .limit(50);
 
       if (error) {
-        console.error("Error fetching notifications:", error);
-        return [];
+        throw new Error(error.message || "Failed to fetch notifications");
       }
 
       return data as Notification[];
     },
-    enabled: !!appUser?.id && !!tenant,
+    enabled: !!appUser?.id && !!tenant?.id,
     refetchInterval: 30000,
+    staleTime: 10000,
+    retry: 1,
   });
 
   // Count of unread notifications
