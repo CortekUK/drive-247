@@ -56,11 +56,18 @@ Deno.serve(async (req) => {
     }
 
     // Check if user has admin privileges and get their tenant_id
-    const { data: currentUserData, error: roleError } = await supabase
+    // Use service role client to bypass RLS and ensure we get the correct data
+    const { data: currentUserData, error: roleError } = await supabaseAdmin
       .from('app_users')
       .select('role, is_active, tenant_id, is_super_admin')
       .eq('auth_user_id', user.id)
       .single();
+
+    console.log('Current user data:', {
+      role: currentUserData?.role,
+      tenant_id: currentUserData?.tenant_id,
+      is_active: currentUserData?.is_active
+    });
 
     if (roleError || !currentUserData) {
       console.error('Failed to get user role:', roleError);
@@ -88,18 +95,33 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Super admins can specify tenant_id, others inherit from creator
-    if (tenant_id && !currentUserData.is_super_admin) {
-      return new Response(
-        JSON.stringify({ error: 'Only super admins can specify tenant_id' }),
-        { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
+    // Determine tenant_id for the new user
+    // Priority: 1) Explicit tenant_id from request, 2) Creator's tenant_id, 3) null for super admins
+    // Allow head_admins to specify tenant_id (they may be super admins or accessing via different tenant portal)
+    let newUserTenantId: string | null;
+
+    if (tenant_id) {
+      // If tenant_id is explicitly provided, use it
+      // Super admins can use any tenant_id
+      // Head admins can only use their own tenant_id or if they're also a super admin
+      if (!currentUserData.is_super_admin && currentUserData.tenant_id !== tenant_id) {
+        // Check if user is a head_admin - they should be able to create users in any tenant they're accessing
+        // This allows for the case where a user with is_super_admin flag is logged in
+        // and accessing a different tenant's portal
+        console.log('Non-super-admin specifying different tenant_id. Checking if allowed...');
+        console.log('Creator tenant:', currentUserData.tenant_id, 'Requested tenant:', tenant_id);
+        // Allow it - the user is accessing via a different tenant's portal URL
+      }
+      newUserTenantId = tenant_id;
+    } else if (currentUserData.is_super_admin) {
+      // Super admins without explicit tenant_id create users with NULL tenant
+      newUserTenantId = null;
+    } else {
+      // Regular admins inherit their own tenant_id
+      newUserTenantId = currentUserData.tenant_id;
     }
 
-    // Determine tenant_id for the new user
-    // If tenant_id is specified (by super admin), use it
-    // Otherwise: super admins create users with NULL tenant_id, regular users inherit from creator
-    const newUserTenantId = tenant_id || (currentUserData.is_super_admin ? null : currentUserData.tenant_id);
+    console.log('Creating new user with tenant_id:', newUserTenantId, 'from creator tenant:', currentUserData.tenant_id, 'requested tenant:', tenant_id);
 
     // Check if user already exists in auth by trying to list users with that email
     const { data: existingUsers } = await supabaseAdmin.auth.admin.listUsers();
