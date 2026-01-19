@@ -87,7 +87,8 @@ export default function RejectionDialog({
   const effectivePaymentIntentId = payment?.stripe_payment_intent_id || fetchedPaymentIntentId;
   const hasStripePaymentIntent = !!effectivePaymentIntentId;
   const canProcessStripeRefund = isPaymentCaptured && hasStripePaymentIntent;
-  const showRefundTab = isPaymentCaptured && !isPreAuth; // Show refund tab for any captured payment
+  // Show refund tab for captured payments OR pre-authorized payments (to show release info)
+  const showRefundTab = isPaymentCaptured || isPreAuth;
   const refundAmount = payment?.amount || 0;
 
   // Auto-fetch payment intent ID when dialog opens and it's missing
@@ -586,13 +587,35 @@ export default function RejectionDialog({
           <TabsContent value="refund" className="space-y-4 py-4">
             <div className="space-y-4">
               <div>
-                <h3 className="font-semibold mb-2">Refund Configuration</h3>
+                <h3 className="font-semibold mb-2">{isPreAuth ? 'Pre-Authorization Release' : 'Refund Configuration'}</h3>
                 <p className="text-sm text-muted-foreground mb-4">
-                  Refund amount: <strong>${refundAmount.toLocaleString()}</strong>
+                  {isPreAuth ? 'Hold' : 'Refund'} amount: <strong>${refundAmount.toLocaleString()}</strong>
                 </p>
               </div>
 
-              {canProcessStripeRefund ? (
+              {isPreAuth ? (
+                /* Pre-authorized payment - show release info */
+                <>
+                  <Alert className="border-blue-200 bg-blue-50 dark:bg-blue-950/30">
+                    <AlertTriangle className="h-4 w-4 text-blue-600" />
+                    <AlertDescription className="text-blue-800 dark:text-blue-200">
+                      <p className="font-medium mb-1">Pre-Authorization Hold</p>
+                      <p className="text-sm">
+                        This booking has a pre-authorized hold of <strong>${refundAmount.toLocaleString()}</strong> on the customer's card.
+                        The hold will be <strong>automatically released</strong> when you reject this booking.
+                      </p>
+                    </AlertDescription>
+                  </Alert>
+
+                  <Alert>
+                    <AlertDescription className="text-sm">
+                      <p>
+                        No funds have been captured yet. The hold will be released and the customer's available credit will be restored.
+                      </p>
+                    </AlertDescription>
+                  </Alert>
+                </>
+              ) : canProcessStripeRefund ? (
                 /* Stripe-linked payment - show automatic refund options */
                 <>
                   {/* Show the synced payment intent ID */}
