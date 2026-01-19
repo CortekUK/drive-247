@@ -1,5 +1,5 @@
 import * as React from "react"
-import { Clock, Info } from "lucide-react"
+import { Clock, Info, Globe } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -13,10 +13,13 @@ interface TimePickerProps {
   className?: string
   id?: string
   // Business hours props
-  businessHoursOpen?: string // Format: "HH:MM" (24-hour)
-  businessHoursClose?: string // Format: "HH:MM" (24-hour)
+  businessHoursOpen?: string // Format: "HH:MM" (24-hour) in tenant timezone
+  businessHoursClose?: string // Format: "HH:MM" (24-hour) in tenant timezone
   showBusinessHoursNotice?: boolean
   onBusinessHoursNoticeShown?: () => void
+  // Timezone props for cross-timezone validation
+  customerTimezone?: string // Customer's selected timezone (IANA identifier)
+  tenantTimezone?: string // Tenant's business timezone (IANA identifier)
 }
 
 /**
@@ -47,6 +50,121 @@ function formatTime12Hour(time: string): string {
   return `${hour12}:${m.toString().padStart(2, "0")} ${period}`
 }
 
+/**
+ * Convert a time from one timezone to another
+ * Returns the time in "HH:MM" format in the target timezone
+ */
+function convertTimeBetweenTimezones(
+  time: string, // "HH:MM" format
+  date: Date, // Reference date for DST calculation
+  fromTimezone: string,
+  toTimezone: string
+): string {
+  if (fromTimezone === toTimezone) return time
+
+  try {
+    const [hours, minutes] = time.split(":").map(Number)
+
+    // Create a date in the source timezone
+    const dateInSource = new Date(date)
+    dateInSource.setHours(hours, minutes, 0, 0)
+
+    // Get the time string in source timezone
+    const sourceFormatter = new Intl.DateTimeFormat('en-US', {
+      timeZone: fromTimezone,
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false,
+    })
+
+    // Get the time string in target timezone
+    const targetFormatter = new Intl.DateTimeFormat('en-US', {
+      timeZone: toTimezone,
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false,
+    })
+
+    // Calculate offset difference between timezones
+    const sourceTime = sourceFormatter.format(dateInSource)
+    const targetTime = targetFormatter.format(dateInSource)
+
+    // If both formats return the same time, the date object is already in UTC-like format
+    // We need to compute the actual offset difference
+    const sourceOffset = getTimezoneOffset(fromTimezone, date)
+    const targetOffset = getTimezoneOffset(toTimezone, date)
+    const offsetDiff = targetOffset - sourceOffset // in minutes
+
+    // Apply the offset difference
+    let totalMinutes = hours * 60 + minutes + offsetDiff
+
+    // Handle day wraparound
+    if (totalMinutes < 0) totalMinutes += 24 * 60
+    if (totalMinutes >= 24 * 60) totalMinutes -= 24 * 60
+
+    const newHours = Math.floor(totalMinutes / 60)
+    const newMinutes = totalMinutes % 60
+
+    return `${newHours.toString().padStart(2, "0")}:${newMinutes.toString().padStart(2, "0")}`
+  } catch (e) {
+    console.error("Error converting time between timezones:", e)
+    return time
+  }
+}
+
+/**
+ * Get the UTC offset in minutes for a timezone at a specific date
+ */
+function getTimezoneOffset(timezone: string, date: Date): number {
+  try {
+    // Create a formatter that outputs the offset
+    const formatter = new Intl.DateTimeFormat('en-US', {
+      timeZone: timezone,
+      timeZoneName: 'shortOffset',
+    })
+    const parts = formatter.formatToParts(date)
+    const offsetPart = parts.find(p => p.type === 'timeZoneName')?.value || 'GMT'
+
+    // Parse offset like "GMT-5", "GMT+5:30", "GMT"
+    const match = offsetPart.match(/GMT([+-])?(\d+)?(?::(\d+))?/)
+    if (!match) return 0
+
+    const sign = match[1] === '-' ? -1 : 1
+    const hours = parseInt(match[2] || '0', 10)
+    const minutes = parseInt(match[3] || '0', 10)
+
+    return sign * (hours * 60 + minutes)
+  } catch {
+    return 0
+  }
+}
+
+/**
+ * Calculate the valid time range in customer's timezone
+ * based on business hours in tenant's timezone
+ */
+function getValidTimeRangeInCustomerTimezone(
+  businessHoursOpen: string,
+  businessHoursClose: string,
+  customerTimezone: string,
+  tenantTimezone: string,
+  date: Date = new Date()
+): { open: string; close: string } {
+  const openInCustomerTz = convertTimeBetweenTimezones(
+    businessHoursOpen,
+    date,
+    tenantTimezone,
+    customerTimezone
+  )
+  const closeInCustomerTz = convertTimeBetweenTimezones(
+    businessHoursClose,
+    date,
+    tenantTimezone,
+    customerTimezone
+  )
+  return { open: openInCustomerTz, close: closeInCustomerTz }
+}
+
 export function TimePicker({
   value = "",
   onChange,
@@ -56,7 +174,9 @@ export function TimePicker({
   businessHoursOpen,
   businessHoursClose,
   showBusinessHoursNotice = false,
-  onBusinessHoursNoticeShown
+  onBusinessHoursNoticeShown,
+  customerTimezone,
+  tenantTimezone
 }: TimePickerProps) {
   const [isOpen, setIsOpen] = React.useState(false)
   const [hours, setHours] = React.useState("12")
@@ -66,6 +186,22 @@ export function TimePicker({
   const [noticeAcknowledged, setNoticeAcknowledged] = React.useState(false)
 
   const hasBusinessHours = businessHoursOpen && businessHoursClose
+
+  // Calculate business hours in customer's timezone for display
+  // If timezones are different, convert business hours
+  const needsTimezoneConversion = customerTimezone && tenantTimezone && customerTimezone !== tenantTimezone
+  const displayBusinessHours = React.useMemo(() => {
+    if (!hasBusinessHours) return null
+    if (needsTimezoneConversion) {
+      return getValidTimeRangeInCustomerTimezone(
+        businessHoursOpen!,
+        businessHoursClose!,
+        customerTimezone!,
+        tenantTimezone!
+      )
+    }
+    return { open: businessHoursOpen!, close: businessHoursClose! }
+  }, [hasBusinessHours, businessHoursOpen, businessHoursClose, customerTimezone, tenantTimezone, needsTimezoneConversion])
 
   // Parse existing value on mount or when value changes
   React.useEffect(() => {
@@ -119,8 +255,9 @@ export function TimePicker({
   }
 
   // Check if a time is within business hours (for quick select buttons)
+  // Uses timezone-converted business hours for validation
   const isQuickTimeAvailable = (h: string, m: string, p: string): boolean => {
-    if (!hasBusinessHours) return true
+    if (!hasBusinessHours || !displayBusinessHours) return true
     if (h === "" && m === "" && p === "") return true // "Now" is always available
 
     let hour24 = parseInt(h, 10)
@@ -131,12 +268,13 @@ export function TimePicker({
     }
 
     const timeString = `${hour24.toString().padStart(2, "0")}:${m}`
-    return isTimeWithinBusinessHours(timeString, businessHoursOpen!, businessHoursClose!)
+    return isTimeWithinBusinessHours(timeString, displayBusinessHours.open, displayBusinessHours.close)
   }
 
   // Check if current selection is within business hours
+  // Uses timezone-converted business hours for validation
   const isCurrentSelectionValid = (): boolean => {
-    if (!hasBusinessHours) return true
+    if (!hasBusinessHours || !displayBusinessHours) return true
 
     let hour24 = parseInt(hours, 10)
     if (isNaN(hour24)) return false
@@ -147,12 +285,13 @@ export function TimePicker({
     }
 
     const timeString = `${hour24.toString().padStart(2, "0")}:${minutes}`
-    return isTimeWithinBusinessHours(timeString, businessHoursOpen!, businessHoursClose!)
+    return isTimeWithinBusinessHours(timeString, displayBusinessHours.open, displayBusinessHours.close)
   }
 
   // Auto-correct time to nearest valid business hours
+  // Uses timezone-converted business hours for correction
   const autoCorrectToValidTime = () => {
-    if (!hasBusinessHours) return
+    if (!hasBusinessHours || !displayBusinessHours) return
 
     let hour24 = parseInt(hours, 10)
     if (isNaN(hour24)) hour24 = 9 // Default to 9 if invalid
@@ -163,8 +302,8 @@ export function TimePicker({
     }
 
     const currentMinutes = hour24 * 60 + parseInt(minutes || "0", 10)
-    const openMinutes = timeToMinutes(businessHoursOpen!)
-    const closeMinutes = timeToMinutes(businessHoursClose!)
+    const openMinutes = timeToMinutes(displayBusinessHours.open)
+    const closeMinutes = timeToMinutes(displayBusinessHours.close)
 
     let correctedMinutes: number
     if (currentMinutes < openMinutes) {
@@ -199,6 +338,7 @@ export function TimePicker({
   };
 
   // Generate quick select times based on business hours
+  // Uses timezone-converted business hours
   const getQuickSelectTimes = () => {
     const defaultTimes = [
       { label: "9:00 AM", h: "09", m: "00", p: "AM" },
@@ -209,11 +349,11 @@ export function TimePicker({
       { label: "Now", h: "", m: "", p: "" },
     ]
 
-    if (!hasBusinessHours) return defaultTimes
+    if (!hasBusinessHours || !displayBusinessHours) return defaultTimes
 
-    // Generate times within business hours
-    const openMinutes = timeToMinutes(businessHoursOpen!)
-    const closeMinutes = timeToMinutes(businessHoursClose!)
+    // Generate times within business hours (converted to customer's timezone)
+    const openMinutes = timeToMinutes(displayBusinessHours.open)
+    const closeMinutes = timeToMinutes(displayBusinessHours.close)
     const businessHoursTimes: { label: string; h: string; m: string; p: string }[] = []
 
     // Add opening time
@@ -296,19 +436,26 @@ export function TimePicker({
       </PopoverTrigger>
       <PopoverContent className="w-[280px] p-4" align="start">
         {/* Business Hours Notice */}
-        {showNotice && hasBusinessHours && (
+        {showNotice && hasBusinessHours && displayBusinessHours && (
           <div className="mb-4 p-4 bg-primary/10 border border-primary/20 rounded-lg">
             <div className="flex items-start gap-3">
               <Info className="h-5 w-5 text-primary mt-0.5 flex-shrink-0" />
               <div className="flex-1">
                 <h4 className="font-semibold text-sm mb-1">Business Hours</h4>
                 <p className="text-sm text-muted-foreground mb-3">
-                  Pickup and drop-off times are available during our business hours:
+                  Pickup and drop-off times are available during our business hours
+                  {needsTimezoneConversion && " (shown in your timezone)"}:
                 </p>
                 <div className="bg-background rounded-md p-2 mb-3 text-center">
                   <span className="font-semibold text-lg">
-                    {formatTime12Hour(businessHoursOpen!)} - {formatTime12Hour(businessHoursClose!)}
+                    {formatTime12Hour(displayBusinessHours.open)} - {formatTime12Hour(displayBusinessHours.close)}
                   </span>
+                  {needsTimezoneConversion && (
+                    <div className="flex items-center justify-center gap-1 text-xs text-muted-foreground mt-1">
+                      <Globe className="h-3 w-3" />
+                      <span>Your timezone</span>
+                    </div>
+                  )}
                 </div>
                 <Button
                   type="button"
@@ -329,10 +476,16 @@ export function TimePicker({
             <div className="text-sm font-medium">Select Time</div>
 
             {/* Business Hours Reminder */}
-            {hasBusinessHours && (
+            {hasBusinessHours && displayBusinessHours && (
               <div className="text-xs text-muted-foreground bg-muted/50 rounded-md p-2 flex items-center gap-2">
                 <Clock className="h-3 w-3" />
-                Available: {formatTime12Hour(businessHoursOpen!)} - {formatTime12Hour(businessHoursClose!)}
+                Available: {formatTime12Hour(displayBusinessHours.open)} - {formatTime12Hour(displayBusinessHours.close)}
+                {needsTimezoneConversion && (
+                  <span className="flex items-center gap-1 ml-1">
+                    <Globe className="h-3 w-3" />
+                    (your time)
+                  </span>
+                )}
               </div>
             )}
 

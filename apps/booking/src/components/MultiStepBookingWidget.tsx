@@ -31,6 +31,7 @@ import { isInsuranceExemptTenant } from "@/config/tenant-config";
 import { canCustomerBook } from "@/lib/tenantQueries";
 import { sanitizeName, sanitizeEmail, sanitizePhone, sanitizeLocation, sanitizeTextArea, isInputSafe } from "@/lib/sanitize";
 import { createVeriffFrame, MESSAGES } from "@veriff/incontext-sdk";
+import { getTimezonesByRegion, findTimezone, getDetectedTimezone } from "@/lib/timezones";
 interface VehiclePhoto {
   photo_url: string;
 }
@@ -129,6 +130,7 @@ const MultiStepBookingWidget = () => {
     customerType: "",
     licenseNumber: "",
     verificationSessionId: "",
+    customerTimezone: "", // Will be set from tenant timezone or detected browser timezone
   });
 
   // Insurance state
@@ -162,6 +164,15 @@ const MultiStepBookingWidget = () => {
     dropoffLat: null as number | null,
     dropoffLon: null as number | null
   });
+
+  // Initialize customer timezone when tenant loads - default to tenant's timezone
+  useEffect(() => {
+    if (tenant?.timezone && !formData.customerTimezone) {
+      // Default to tenant's timezone so customer sees times in business timezone by default
+      setFormData(prev => ({ ...prev, customerTimezone: tenant.timezone }));
+    }
+  }, [tenant?.timezone, formData.customerTimezone]);
+
   useEffect(() => {
     loadData();
 
@@ -1278,6 +1289,9 @@ const MultiStepBookingWidget = () => {
         return_location: sanitizeLocation(formData.dropoffLocation),
         start_date: formData.pickupDate,
         end_date: formData.dropoffDate || formData.pickupDate,
+        pickup_time: formData.pickupTime || null,
+        dropoff_time: formData.dropoffTime || null,
+        customer_timezone: formData.customerTimezone || null,
         monthly_amount: priceBreakdown?.totalPrice || 0,
         notes: formData.specialRequests ? sanitizeTextArea(formData.specialRequests) : null,
         status: "Pending",
@@ -2149,6 +2163,7 @@ const MultiStepBookingWidget = () => {
         pickupTime: formData.pickupTime,
         dropoffDate: formData.dropoffDate,
         dropoffTime: formData.dropoffTime,
+        customerTimezone: formData.customerTimezone,
         driverDOB: formData.driverDOB,
         driverAge: driverAge,
         promoCode: formData.promoCode,
@@ -2438,14 +2453,57 @@ const MultiStepBookingWidget = () => {
               </div>
             </div>
 
+            {/* Timezone Selection & Business Hours Info */}
+            <div className="space-y-4">
+              {/* Customer Timezone Selection */}
+              <div className="space-y-2">
+                <Label className="font-medium">Your Timezone</Label>
+                <Select
+                  value={formData.customerTimezone}
+                  onValueChange={(value) => setFormData({ ...formData, customerTimezone: value })}
+                >
+                  <SelectTrigger className="h-12">
+                    <SelectValue placeholder="Select your timezone">
+                      {findTimezone(formData.customerTimezone)?.label || formData.customerTimezone || 'Select timezone'}
+                    </SelectValue>
+                  </SelectTrigger>
+                  <SelectContent className="max-h-[300px]">
+                    {getTimezonesByRegion().map((group) => (
+                      <div key={group.region}>
+                        <div className="px-2 py-1.5 text-sm font-semibold text-muted-foreground bg-muted/50">
+                          {group.label}
+                        </div>
+                        {group.timezones.map((tz) => (
+                          <SelectItem key={tz.value} value={tz.value}>
+                            {tz.label}
+                          </SelectItem>
+                        ))}
+                      </div>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* Business Timezone Notice */}
+              <div className="flex items-center gap-2 p-3 bg-muted/50 rounded-lg text-sm">
+                <Clock className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+                <div>
+                  <span className="text-muted-foreground">Business operates in </span>
+                  <span className="font-medium">{findTimezone(workingHours.timezone)?.label || workingHours.timezone}</span>
+                  {!workingHours.isAlwaysOpen && (
+                    <span className="text-muted-foreground">
+                      {" "}({workingHours.formattedOpenTime} - {workingHours.formattedCloseTime})
+                    </span>
+                  )}
+                </div>
+              </div>
+            </div>
+
             {/* Row 2: Pickup & Return Datetime */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
               {/* Pickup Datetime */}
               <div className="space-y-2">
-                <div className="flex items-center gap-2">
-                  <Label className="font-medium">Pickup *</Label>
-                  <span className="text-xs text-muted-foreground px-2 py-0.5 bg-muted rounded">PST/PDT</span>
-                </div>
+                <Label className="font-medium">Pickup *</Label>
                 <div className="grid grid-cols-2 gap-2">
                   <Popover>
                     <PopoverTrigger asChild>
@@ -2501,6 +2559,8 @@ const MultiStepBookingWidget = () => {
                     businessHoursOpen={!workingHours.isAlwaysOpen ? workingHours.openTime : undefined}
                     businessHoursClose={!workingHours.isAlwaysOpen ? workingHours.closeTime : undefined}
                     showBusinessHoursNotice={!workingHours.isAlwaysOpen}
+                    customerTimezone={formData.customerTimezone}
+                    tenantTimezone={workingHours.timezone}
                   />
                 </div>
                 {errors.pickupDate && <p className="text-sm text-destructive">{errors.pickupDate}</p>}
@@ -2509,10 +2569,7 @@ const MultiStepBookingWidget = () => {
 
               {/* Return Datetime */}
               <div className="space-y-2">
-                <div className="flex items-center gap-2">
-                  <Label className="font-medium">Return *</Label>
-                  <span className="text-xs text-muted-foreground px-2 py-0.5 bg-muted rounded">PST/PDT</span>
-                </div>
+                <Label className="font-medium">Return *</Label>
                 <div className="grid grid-cols-2 gap-2">
                   <Popover>
                     <PopoverTrigger asChild>
@@ -2564,6 +2621,8 @@ const MultiStepBookingWidget = () => {
                     businessHoursOpen={!workingHours.isAlwaysOpen ? workingHours.openTime : undefined}
                     businessHoursClose={!workingHours.isAlwaysOpen ? workingHours.closeTime : undefined}
                     showBusinessHoursNotice={!workingHours.isAlwaysOpen}
+                    customerTimezone={formData.customerTimezone}
+                    tenantTimezone={workingHours.timezone}
                   />
                 </div>
                 {errors.dropoffDate && <p className="text-sm text-destructive">{errors.dropoffDate}</p>}

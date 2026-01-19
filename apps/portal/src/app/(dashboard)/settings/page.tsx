@@ -35,6 +35,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { OGImageUpload } from '@/components/settings/og-image-upload';
 import { StripeConnectSettings } from '@/components/settings/stripe-connect-settings';
 import { LocationSettings } from '@/components/settings/location-settings';
+import { getTimezonesByRegion, findTimezone } from '@/lib/timezones';
 
 const Settings = () => {
   const queryClient = useQueryClient();
@@ -89,6 +90,7 @@ const Settings = () => {
     working_hours_always_open: false,
     working_hours_open: '09:00',
     working_hours_close: '17:00',
+    timezone: 'America/Chicago',
   });
 
   // Sync rental form with loaded settings
@@ -108,9 +110,10 @@ const Settings = () => {
         working_hours_always_open: rentalSettings.working_hours_always_open ?? false,
         working_hours_open: rentalSettings.working_hours_open ?? '09:00',
         working_hours_close: rentalSettings.working_hours_close ?? '17:00',
+        timezone: tenant?.timezone ?? 'America/Chicago',
       });
     }
-  }, [rentalSettings]);
+  }, [rentalSettings, tenant?.timezone]);
 
   // Handle URL tab parameter
   useEffect(() => {
@@ -1878,6 +1881,38 @@ const Settings = () => {
                 />
               </div>
 
+              {/* Business Timezone Selection - Above time inputs */}
+              <div className="space-y-2">
+                <Label htmlFor="business_timezone">Business Timezone</Label>
+                <Select
+                  value={rentalForm.timezone}
+                  onValueChange={(value) => setRentalForm(prev => ({ ...prev, timezone: value }))}
+                >
+                  <SelectTrigger id="business_timezone" className="w-full">
+                    <SelectValue placeholder="Select your business timezone">
+                      {findTimezone(rentalForm.timezone)?.label || rentalForm.timezone}
+                    </SelectValue>
+                  </SelectTrigger>
+                  <SelectContent className="max-h-[300px]">
+                    {getTimezonesByRegion().map((group) => (
+                      <React.Fragment key={group.region}>
+                        <div className="px-2 py-1.5 text-sm font-semibold text-muted-foreground bg-muted/50">
+                          {group.label}
+                        </div>
+                        {group.timezones.map((tz) => (
+                          <SelectItem key={tz.value} value={tz.value}>
+                            {tz.label}
+                          </SelectItem>
+                        ))}
+                      </React.Fragment>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-sm text-muted-foreground">
+                  All working hours will be based on this timezone. Customers booking from different timezones will see times converted accordingly.
+                </p>
+              </div>
+
               {/* Time Selection (shown when not 24/7) */}
               {!rentalForm.working_hours_always_open && (
                 <div className="grid gap-4 md:grid-cols-2">
@@ -1904,25 +1939,33 @@ const Settings = () => {
                 </div>
               )}
 
-              {/* Timezone Info */}
-              <Alert>
-                <AlertCircle className="h-4 w-4" />
-                <AlertDescription>
-                  Times are based on your business timezone: <strong>{tenant?.timezone || 'America/Chicago'}</strong> (Texas - Central Time)
-                </AlertDescription>
-              </Alert>
-
               <Button
                 onClick={async () => {
                   try {
+                    // Update working hours settings
                     await updateRentalSettings({
                       working_hours_enabled: true,
                       working_hours_always_open: rentalForm.working_hours_always_open,
                       working_hours_open: rentalForm.working_hours_open,
                       working_hours_close: rentalForm.working_hours_close,
                     });
+                    // Update timezone in tenant table separately
+                    if (tenant?.id) {
+                      const { error } = await supabase
+                        .from('tenants')
+                        .update({ timezone: rentalForm.timezone })
+                        .eq('id', tenant.id);
+                      if (error) throw error;
+                      // Invalidate tenant cache to refresh
+                      queryClient.invalidateQueries({ queryKey: ['tenant'] });
+                    }
                   } catch (error) {
                     console.error('Failed to update working hours:', error);
+                    toast({
+                      title: "Error",
+                      description: "Failed to update working hours settings",
+                      variant: "destructive",
+                    });
                   }
                 }}
                 disabled={isUpdatingRentalSettings}
