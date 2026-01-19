@@ -342,10 +342,18 @@ const CreateRental = () => {
   const [pickupLocationId, setPickupLocationId] = useState<string | undefined>(undefined);
   const [returnLocationId, setReturnLocationId] = useState<string | undefined>(undefined);
 
-  // Watch form values for live updates
-  const watchedValues = form.watch();
-  const selectedCustomerId = watchedValues.customer_id;
-  const selectedVehicleId = watchedValues.vehicle_id;
+  // Watch specific form values for live updates - watching individual fields prevents infinite loops
+  // Using form.watch() without arguments returns a new object on every render, causing infinite loops
+  const selectedCustomerId = form.watch("customer_id");
+  const selectedVehicleId = form.watch("vehicle_id");
+  const watchedStartDate = form.watch("start_date");
+  const watchedEndDate = form.watch("end_date");
+  const watchedRentalPeriodType = form.watch("rental_period_type");
+  const watchedMonthlyAmount = form.watch("monthly_amount");
+  const watchedPickupLocation = form.watch("pickup_location");
+  const watchedPromoCode = form.watch("promo_code");
+  const watchedInsuranceStatus = form.watch("insurance_status");
+  const watchedDriverAgeRange = form.watch("driver_age_range");
 
   // Get customers and available vehicles
   const { data: customers } = useQuery({
@@ -435,7 +443,7 @@ const CreateRental = () => {
     if (selectedVehicleId && vehicles) {
       const vehicle = vehicles.find(v => v.id === selectedVehicleId);
       if (vehicle) {
-        const periodType = watchedValues.rental_period_type || "Monthly";
+        const periodType = watchedRentalPeriodType || "Monthly";
         let amount: number | undefined;
 
         if (periodType === "Daily" && vehicle.daily_rent) {
@@ -451,7 +459,7 @@ const CreateRental = () => {
         }
       }
     }
-  }, [selectedVehicleId, watchedValues.rental_period_type, vehicles, form]);
+  }, [selectedVehicleId, watchedRentalPeriodType, vehicles, form]);
 
   // DEV MODE: Listen for dev panel fill events (only in development)
   useEffect(() => {
@@ -504,29 +512,42 @@ const CreateRental = () => {
   }, [form]);
 
   // Auto-update end date based on rental period type and start date
+  // Use a ref to track previous values and prevent unnecessary updates
+  const prevStartDateRef = useRef<Date | null>(null);
+  const prevPeriodTypeRef = useRef<string | null>(null);
+
   useEffect(() => {
-    const startDate = watchedValues.start_date;
-    const periodType = watchedValues.rental_period_type;
+    const startDate = watchedStartDate;
+    const periodType = watchedRentalPeriodType;
 
     if (startDate && periodType) {
-      let newEndDate: Date;
+      // Check if values actually changed to prevent infinite loops
+      const startDateChanged = !prevStartDateRef.current ||
+        startDate.getTime() !== prevStartDateRef.current.getTime();
+      const periodTypeChanged = prevPeriodTypeRef.current !== periodType;
 
-      switch (periodType) {
-        case "Daily":
-          newEndDate = addDays(startDate, 1);
-          break;
-        case "Weekly":
-          newEndDate = addWeeks(startDate, 1);
-          break;
-        case "Monthly":
-        default:
-          newEndDate = addMonths(startDate, 1);
-          break;
+      if (startDateChanged || periodTypeChanged) {
+        let newEndDate: Date;
+
+        switch (periodType) {
+          case "Daily":
+            newEndDate = addDays(startDate, 1);
+            break;
+          case "Weekly":
+            newEndDate = addWeeks(startDate, 1);
+            break;
+          case "Monthly":
+          default:
+            newEndDate = addMonths(startDate, 1);
+            break;
+        }
+
+        prevStartDateRef.current = startDate;
+        prevPeriodTypeRef.current = periodType;
+        form.setValue("end_date", newEndDate);
       }
-
-      form.setValue("end_date", newEndDate);
     }
-  }, [watchedValues.rental_period_type, watchedValues.start_date, form]);
+  }, [watchedRentalPeriodType, watchedStartDate, form]);
 
   const selectedCustomer = customers?.find(c => c.id === selectedCustomerId);
   const selectedVehicle = vehicles?.find(v => v.id === selectedVehicleId);
@@ -976,7 +997,7 @@ const CreateRental = () => {
   const yearAgo = subYears(new Date(), 1);
 
   // Check if start date is in the past
-  const isPastStartDate = watchedValues.start_date && isBefore(watchedValues.start_date, todayAtMidnight);
+  const isPastStartDate = watchedStartDate && isBefore(watchedStartDate, todayAtMidnight);
 
   return (
     <div className="container mx-auto p-4 md:p-6 space-y-6 min-h-screen">
@@ -1264,7 +1285,7 @@ const CreateRental = () => {
                       control={form.control}
                       name="end_date"
                       render={({ field }) => {
-                        const periodType = watchedValues.rental_period_type || "Monthly";
+                        const periodType = watchedRentalPeriodType || "Monthly";
                         const getMinEndDate = (startDate: Date) => {
                           switch (periodType) {
                             case "Daily":
@@ -1292,7 +1313,7 @@ const CreateRental = () => {
                                 placeholder="Select end date"
                                 disabled={(date) => {
                                   // Disable dates before minimum end date
-                                  if (watchedValues.start_date && isBefore(date, getMinEndDate(watchedValues.start_date))) {
+                                  if (watchedStartDate && isBefore(date, getMinEndDate(watchedStartDate))) {
                                     return true;
                                   }
                                   // Disable globally blocked dates
@@ -1328,7 +1349,7 @@ const CreateRental = () => {
                       control={form.control}
                       name="monthly_amount"
                       render={({ field }) => {
-                        const periodType = watchedValues.rental_period_type || "Monthly";
+                        const periodType = watchedRentalPeriodType || "Monthly";
                         const label = periodType === "Daily" ? "Daily Amount *" :
                           periodType === "Weekly" ? "Weekly Amount *" :
                             "Monthly Amount *";
@@ -1640,11 +1661,10 @@ const CreateRental = () => {
             <ContractSummary
               customer={selectedCustomer}
               vehicle={selectedVehicle}
-              startDate={watchedValues.start_date}
-              endDate={watchedValues.end_date}
-              rentalPeriodType={watchedValues.rental_period_type}
-              monthlyAmount={watchedValues.monthly_amount}
-              initialFee={watchedValues.initial_fee}
+              startDate={watchedStartDate}
+              endDate={watchedEndDate}
+              rentalPeriodType={watchedRentalPeriodType}
+              monthlyAmount={watchedMonthlyAmount}
             />
           </div>
         </div>
@@ -1688,7 +1708,7 @@ const CreateRental = () => {
         <InsuranceUploadDialog
           open={showInsuranceUpload}
           onOpenChange={setShowInsuranceUpload}
-          customerId={watchedValues.customer_id}
+          customerId={selectedCustomerId}
           onUploadComplete={(documentId) => {
             setInsuranceDocId(documentId);
             form.setValue("insurance_status", "uploaded");
