@@ -501,14 +501,25 @@ export function LocationSettings() {
                     <div className="flex items-center gap-2">
                       <Input
                         id="pickup-radius"
-                        type="number"
-                        min={1}
-                        max={25}
+                        type="text"
+                        inputMode="numeric"
+                        pattern="[0-9]*"
                         value={pickupAreaRadius}
                         onChange={(e) => {
-                          const value = parseInt(e.target.value) || 25;
-                          setPickupAreaRadius(Math.min(25, Math.max(1, value)));
+                          const rawValue = e.target.value.replace(/[^0-9]/g, '');
+                          if (rawValue === '') {
+                            setPickupAreaRadius(0 as any);
+                          } else {
+                            const numValue = Math.min(100, Math.max(1, parseInt(rawValue)));
+                            setPickupAreaRadius(numValue);
+                          }
                           setHasChanges(true);
+                        }}
+                        onBlur={(e) => {
+                          const value = parseInt(e.target.value);
+                          if (!value || value < 1) {
+                            setPickupAreaRadius(25);
+                          }
                         }}
                         className="w-20"
                       />
@@ -671,14 +682,25 @@ export function LocationSettings() {
                     <div className="flex items-center gap-2">
                       <Input
                         id="return-radius"
-                        type="number"
-                        min={1}
-                        max={25}
+                        type="text"
+                        inputMode="numeric"
+                        pattern="[0-9]*"
                         value={returnAreaRadius}
                         onChange={(e) => {
-                          const value = parseInt(e.target.value) || 25;
-                          setReturnAreaRadius(Math.min(25, Math.max(1, value)));
+                          const rawValue = e.target.value.replace(/[^0-9]/g, '');
+                          if (rawValue === '') {
+                            setReturnAreaRadius(0 as any);
+                          } else {
+                            const numValue = Math.min(100, Math.max(1, parseInt(rawValue)));
+                            setReturnAreaRadius(numValue);
+                          }
                           setHasChanges(true);
+                        }}
+                        onBlur={(e) => {
+                          const value = parseInt(e.target.value);
+                          if (!value || value < 1) {
+                            setReturnAreaRadius(25);
+                          }
                         }}
                         className="w-20"
                       />

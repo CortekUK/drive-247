@@ -1498,16 +1498,22 @@ const Settings = () => {
                 <div className="flex items-center gap-4">
                   <Input
                     id="minimum_rental_age"
-                    type="number"
-                    min="16"
-                    max="100"
+                    type="text"
+                    inputMode="numeric"
+                    pattern="[0-9]*"
                     value={rentalForm.minimum_rental_age}
                     onChange={(e) => {
-                      const value = parseInt(e.target.value) || 16;
+                      const rawValue = e.target.value.replace(/[^0-9]/g, '');
                       setRentalForm(prev => ({
                         ...prev,
-                        minimum_rental_age: Math.max(16, Math.min(100, value))
+                        minimum_rental_age: rawValue === '' ? '' : Math.max(16, Math.min(100, parseInt(rawValue)))
                       }));
+                    }}
+                    onBlur={(e) => {
+                      const value = parseInt(e.target.value);
+                      if (!value || value < 16) {
+                        setRentalForm(prev => ({ ...prev, minimum_rental_age: 21 }));
+                      }
                     }}
                     className="w-32"
                   />
@@ -1574,17 +1580,21 @@ const Settings = () => {
                   <div className="flex items-center gap-4">
                     <Input
                       id="tax_percentage"
-                      type="number"
-                      min="0"
-                      max="100"
-                      step="0.01"
-                      value={rentalForm.tax_percentage ?? 0}
+                      type="text"
+                      inputMode="decimal"
+                      value={rentalForm.tax_percentage ?? ''}
                       onChange={(e) => {
-                        const value = parseFloat(e.target.value) || 0;
-                        setRentalForm(prev => ({
-                          ...prev,
-                          tax_percentage: Math.max(0, Math.min(100, value))
-                        }));
+                        const rawValue = e.target.value.replace(/[^0-9.]/g, '');
+                        if (rawValue === '' || rawValue === '.') {
+                          setRentalForm(prev => ({ ...prev, tax_percentage: rawValue as any }));
+                        } else {
+                          const numValue = Math.max(0, Math.min(100, parseFloat(rawValue) || 0));
+                          setRentalForm(prev => ({ ...prev, tax_percentage: numValue }));
+                        }
+                      }}
+                      onBlur={(e) => {
+                        const value = parseFloat(e.target.value);
+                        setRentalForm(prev => ({ ...prev, tax_percentage: isNaN(value) ? 0 : Math.max(0, Math.min(100, value)) }));
                       }}
                       className="w-32"
                     />
@@ -1677,22 +1687,36 @@ const Settings = () => {
                       )}
                       <Input
                         id="service_fee_value"
-                        type="number"
-                        min="0"
-                        max={rentalForm.service_fee_type === 'percentage' ? 100 : undefined}
-                        step={rentalForm.service_fee_type === 'percentage' ? '1' : '0.01'}
-                        value={rentalForm.service_fee_value ?? 0}
+                        type="text"
+                        inputMode="decimal"
+                        value={rentalForm.service_fee_value ?? ''}
                         onChange={(e) => {
-                          let value = parseFloat(e.target.value) || 0;
-                          // Cap percentage at 100
-                          if (rentalForm.service_fee_type === 'percentage' && value > 100) {
-                            value = 100;
+                          const rawValue = e.target.value.replace(/[^0-9.]/g, '');
+                          if (rawValue === '' || rawValue === '.') {
+                            setRentalForm(prev => ({
+                              ...prev,
+                              service_fee_value: rawValue as any,
+                              service_fee_amount: rawValue as any
+                            }));
+                          } else {
+                            let value = parseFloat(rawValue) || 0;
+                            if (rentalForm.service_fee_type === 'percentage' && value > 100) {
+                              value = 100;
+                            }
+                            setRentalForm(prev => ({
+                              ...prev,
+                              service_fee_value: Math.max(0, value),
+                              service_fee_amount: Math.max(0, value)
+                            }));
                           }
+                        }}
+                        onBlur={(e) => {
+                          const value = parseFloat(e.target.value);
+                          const finalValue = isNaN(value) ? 0 : Math.max(0, value);
                           setRentalForm(prev => ({
                             ...prev,
-                            service_fee_value: Math.max(0, value),
-                            // Keep service_fee_amount in sync for backward compatibility
-                            service_fee_amount: Math.max(0, value)
+                            service_fee_value: finalValue,
+                            service_fee_amount: finalValue
                           }));
                         }}
                         className={rentalForm.service_fee_type === 'fixed_amount' ? 'pl-7' : ''}
@@ -1789,16 +1813,20 @@ const Settings = () => {
                       <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">$</span>
                       <Input
                         id="global_deposit_amount"
-                        type="number"
-                        min="0"
-                        step="0.01"
-                        value={rentalForm.global_deposit_amount ?? 0}
+                        type="text"
+                        inputMode="decimal"
+                        value={rentalForm.global_deposit_amount ?? ''}
                         onChange={(e) => {
-                          const value = parseFloat(e.target.value) || 0;
-                          setRentalForm(prev => ({
-                            ...prev,
-                            global_deposit_amount: Math.max(0, value)
-                          }));
+                          const rawValue = e.target.value.replace(/[^0-9.]/g, '');
+                          if (rawValue === '' || rawValue === '.') {
+                            setRentalForm(prev => ({ ...prev, global_deposit_amount: rawValue as any }));
+                          } else {
+                            setRentalForm(prev => ({ ...prev, global_deposit_amount: Math.max(0, parseFloat(rawValue) || 0) }));
+                          }
+                        }}
+                        onBlur={(e) => {
+                          const value = parseFloat(e.target.value);
+                          setRentalForm(prev => ({ ...prev, global_deposit_amount: isNaN(value) ? 0 : Math.max(0, value) }));
                         }}
                         className="w-32 pl-7"
                       />
@@ -1940,8 +1968,12 @@ const Settings = () => {
                     placeholder={promoForm.type === 'percentage' ? "e.g. 10 (for 10%)" : "e.g. 20.00"}
                     className="max-w-md"
                     value={promoForm.value}
-                    onChange={(e) => setPromoForm(prev => ({ ...prev, value: e.target.value }))}
-                    type="number"
+                    onChange={(e) => {
+                      const rawValue = e.target.value.replace(/[^0-9.]/g, '');
+                      setPromoForm(prev => ({ ...prev, value: rawValue }));
+                    }}
+                    type="text"
+                    inputMode="decimal"
                   />
                 </div>
               </div>
@@ -1967,11 +1999,16 @@ const Settings = () => {
                 <Label htmlFor="promo_max_users">Max Users</Label>
                 <Input
                   id="promo_max_users"
-                  type="number"
+                  type="text"
+                  inputMode="numeric"
+                  pattern="[0-9]*"
                   placeholder="e.g. 100"
                   className="max-w-md"
                   value={promoForm.max_users}
-                  onChange={(e) => setPromoForm(prev => ({ ...prev, max_users: e.target.value }))}
+                  onChange={(e) => {
+                    const rawValue = e.target.value.replace(/[^0-9]/g, '');
+                    setPromoForm(prev => ({ ...prev, max_users: rawValue }));
+                  }}
                 />
               </div>
 
@@ -2139,9 +2176,14 @@ const Settings = () => {
                       <Label htmlFor="edit_max_users">Max Users</Label>
                       <Input
                         id="edit_max_users"
-                        type="number"
+                        type="text"
+                        inputMode="numeric"
+                        pattern="[0-9]*"
                         value={editingPromo.max_users}
-                        onChange={(e) => setEditingPromo({ ...editingPromo, max_users: e.target.value })}
+                        onChange={(e) => {
+                          const rawValue = e.target.value.replace(/[^0-9]/g, '');
+                          setEditingPromo({ ...editingPromo, max_users: rawValue });
+                        }}
                       />
                     </div>
                   </div>
@@ -2166,9 +2208,13 @@ const Settings = () => {
                       <Label htmlFor="edit_value">Value</Label>
                       <Input
                         id="edit_value"
-                        type="number"
+                        type="text"
+                        inputMode="decimal"
                         value={editingPromo.value}
-                        onChange={(e) => setEditingPromo({ ...editingPromo, value: e.target.value })}
+                        onChange={(e) => {
+                          const rawValue = e.target.value.replace(/[^0-9.]/g, '');
+                          setEditingPromo({ ...editingPromo, value: rawValue });
+                        }}
                       />
                     </div>
                   </div>
