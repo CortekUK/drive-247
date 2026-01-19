@@ -4190,6 +4190,9 @@ export type Database = {
           favicon_url: string | null
           fixed_pickup_address: string | null
           fixed_return_address: string | null
+          friday_close: string | null
+          friday_enabled: boolean | null
+          friday_open: string | null
           global_deposit_amount: number | null
           google_maps_url: string | null
           hero_background_url: string | null
@@ -4211,6 +4214,9 @@ export type Database = {
           meta_title: string | null
           min_rental_days: number | null
           minimum_rental_age: number | null
+          monday_close: string | null
+          monday_enabled: boolean | null
+          monday_open: string | null
           og_image_url: string | null
           payment_mode: string | null
           phone: string | null
@@ -4221,22 +4227,44 @@ export type Database = {
           require_insurance_upload: boolean | null
           return_area_radius_km: number | null
           return_location_mode: string | null
+          saturday_close: string | null
+          saturday_enabled: boolean | null
+          saturday_open: string | null
           secondary_color: string | null
           service_fee_amount: number | null
           service_fee_enabled: boolean | null
+          service_fee_type: string | null
+          service_fee_value: number | null
           slug: string
           status: string
           stripe_account_id: string | null
           stripe_account_status: string | null
+          stripe_mode: string
           stripe_onboarding_complete: boolean | null
           subscription_plan: string | null
+          sunday_close: string | null
+          sunday_enabled: boolean | null
+          sunday_open: string | null
           tax_enabled: boolean | null
           tax_percentage: number | null
           tenant_type: string | null
+          thursday_close: string | null
+          thursday_enabled: boolean | null
+          thursday_open: string | null
           timezone: string | null
           trial_ends_at: string | null
+          tuesday_close: string | null
+          tuesday_enabled: boolean | null
+          tuesday_open: string | null
           twitter_url: string | null
           updated_at: string | null
+          wednesday_close: string | null
+          wednesday_enabled: boolean | null
+          wednesday_open: string | null
+          working_hours_always_open: boolean | null
+          working_hours_close: string | null
+          working_hours_enabled: boolean | null
+          working_hours_open: string | null
         }
         Insert: {
           accent_color?: string | null
@@ -4264,6 +4292,9 @@ export type Database = {
           favicon_url?: string | null
           fixed_pickup_address?: string | null
           fixed_return_address?: string | null
+          friday_close?: string | null
+          friday_enabled?: boolean | null
+          friday_open?: string | null
           global_deposit_amount?: number | null
           google_maps_url?: string | null
           hero_background_url?: string | null
@@ -4285,6 +4316,9 @@ export type Database = {
           meta_title?: string | null
           min_rental_days?: number | null
           minimum_rental_age?: number | null
+          monday_close?: string | null
+          monday_enabled?: boolean | null
+          monday_open?: string | null
           og_image_url?: string | null
           payment_mode?: string | null
           phone?: string | null
@@ -4295,22 +4329,44 @@ export type Database = {
           require_insurance_upload?: boolean | null
           return_area_radius_km?: number | null
           return_location_mode?: string | null
+          saturday_close?: string | null
+          saturday_enabled?: boolean | null
+          saturday_open?: string | null
           secondary_color?: string | null
           service_fee_amount?: number | null
           service_fee_enabled?: boolean | null
+          service_fee_type?: string | null
+          service_fee_value?: number | null
           slug: string
           status?: string
           stripe_account_id?: string | null
           stripe_account_status?: string | null
+          stripe_mode?: string
           stripe_onboarding_complete?: boolean | null
           subscription_plan?: string | null
+          sunday_close?: string | null
+          sunday_enabled?: boolean | null
+          sunday_open?: string | null
           tax_enabled?: boolean | null
           tax_percentage?: number | null
           tenant_type?: string | null
+          thursday_close?: string | null
+          thursday_enabled?: boolean | null
+          thursday_open?: string | null
           timezone?: string | null
           trial_ends_at?: string | null
+          tuesday_close?: string | null
+          tuesday_enabled?: boolean | null
+          tuesday_open?: string | null
           twitter_url?: string | null
           updated_at?: string | null
+          wednesday_close?: string | null
+          wednesday_enabled?: boolean | null
+          wednesday_open?: string | null
+          working_hours_always_open?: boolean | null
+          working_hours_close?: string | null
+          working_hours_enabled?: boolean | null
+          working_hours_open?: string | null
         }
         Update: {
           accent_color?: string | null
@@ -4338,6 +4394,9 @@ export type Database = {
           favicon_url?: string | null
           fixed_pickup_address?: string | null
           fixed_return_address?: string | null
+          friday_close?: string | null
+          friday_enabled?: boolean | null
+          friday_open?: string | null
           global_deposit_amount?: number | null
           google_maps_url?: string | null
           hero_background_url?: string | null
@@ -4359,6 +4418,9 @@ export type Database = {
           meta_title?: string | null
           min_rental_days?: number | null
           minimum_rental_age?: number | null
+          monday_close?: string | null
+          monday_enabled?: boolean | null
+          monday_open?: string | null
           og_image_url?: string | null
           payment_mode?: string | null
           phone?: string | null
@@ -4369,22 +4431,44 @@ export type Database = {
           require_insurance_upload?: boolean | null
           return_area_radius_km?: number | null
           return_location_mode?: string | null
+          saturday_close?: string | null
+          saturday_enabled?: boolean | null
+          saturday_open?: string | null
           secondary_color?: string | null
           service_fee_amount?: number | null
           service_fee_enabled?: boolean | null
+          service_fee_type?: string | null
+          service_fee_value?: number | null
           slug?: string
           status?: string
           stripe_account_id?: string | null
           stripe_account_status?: string | null
+          stripe_mode?: string
           stripe_onboarding_complete?: boolean | null
           subscription_plan?: string | null
+          sunday_close?: string | null
+          sunday_enabled?: boolean | null
+          sunday_open?: string | null
           tax_enabled?: boolean | null
           tax_percentage?: number | null
           tenant_type?: string | null
+          thursday_close?: string | null
+          thursday_enabled?: boolean | null
+          thursday_open?: string | null
           timezone?: string | null
           trial_ends_at?: string | null
+          tuesday_close?: string | null
+          tuesday_enabled?: boolean | null
+          tuesday_open?: string | null
           twitter_url?: string | null
           updated_at?: string | null
+          wednesday_close?: string | null
+          wednesday_enabled?: boolean | null
+          wednesday_open?: string | null
+          working_hours_always_open?: boolean | null
+          working_hours_close?: string | null
+          working_hours_enabled?: boolean | null
+          working_hours_open?: string | null
         }
         Relationships: []
       }
@@ -4727,6 +4811,7 @@ export type Database = {
         Row: {
           acquisition_date: string | null
           acquisition_type: string | null
+          allowed_mileage: number | null
           balloon: number | null
           color: string | null
           colour: string | null
@@ -4775,6 +4860,7 @@ export type Database = {
         Insert: {
           acquisition_date?: string | null
           acquisition_type?: string | null
+          allowed_mileage?: number | null
           balloon?: number | null
           color?: string | null
           colour?: string | null
@@ -4823,6 +4909,7 @@ export type Database = {
         Update: {
           acquisition_date?: string | null
           acquisition_type?: string | null
+          allowed_mileage?: number | null
           balloon?: number | null
           color?: string | null
           colour?: string | null

@@ -91,6 +91,29 @@ export interface Tenant {
   working_hours_open: string | null;
   working_hours_close: string | null;
   working_hours_always_open: boolean | null;
+
+  // Per-day working hours
+  monday_enabled: boolean | null;
+  monday_open: string | null;
+  monday_close: string | null;
+  tuesday_enabled: boolean | null;
+  tuesday_open: string | null;
+  tuesday_close: string | null;
+  wednesday_enabled: boolean | null;
+  wednesday_open: string | null;
+  wednesday_close: string | null;
+  thursday_enabled: boolean | null;
+  thursday_open: string | null;
+  thursday_close: string | null;
+  friday_enabled: boolean | null;
+  friday_open: string | null;
+  friday_close: string | null;
+  saturday_enabled: boolean | null;
+  saturday_open: string | null;
+  saturday_close: string | null;
+  sunday_enabled: boolean | null;
+  sunday_open: string | null;
+  sunday_close: string | null;
 }
 
 interface TenantContextType {
@@ -150,6 +173,39 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
     loadTenant();
   }, []);
 
+  // Set up real-time subscription to listen for tenant updates
+  useEffect(() => {
+    if (!tenant?.id) return;
+
+    console.log(`[TenantContext] Setting up real-time subscription for tenant: ${tenant.id}`);
+
+    const channel = supabase
+      .channel(`tenant-${tenant.id}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'tenants',
+          filter: `id=eq.${tenant.id}`,
+        },
+        (payload) => {
+          console.log('[TenantContext] Tenant data updated via real-time:', payload.new);
+          // Update the tenant state with the new data
+          setTenant(payload.new as Tenant);
+        }
+      )
+      .subscribe((status) => {
+        console.log(`[TenantContext] Real-time subscription status: ${status}`);
+      });
+
+    // Cleanup subscription on unmount or when tenant changes
+    return () => {
+      console.log('[TenantContext] Cleaning up real-time subscription');
+      supabase.removeChannel(channel);
+    };
+  }, [tenant?.id]);
+
   const loadTenant = async () => {
     try {
       // Only run on client side
@@ -196,7 +252,14 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
                 tax_enabled, tax_percentage,
                 service_fee_enabled, service_fee_amount,
                 deposit_mode, global_deposit_amount,
-                working_hours_enabled, working_hours_open, working_hours_close, working_hours_always_open
+                working_hours_enabled, working_hours_open, working_hours_close, working_hours_always_open,
+                monday_enabled, monday_open, monday_close,
+                tuesday_enabled, tuesday_open, tuesday_close,
+                wednesday_enabled, wednesday_open, wednesday_close,
+                thursday_enabled, thursday_open, thursday_close,
+                friday_enabled, friday_open, friday_close,
+                saturday_enabled, saturday_open, saturday_close,
+                sunday_enabled, sunday_open, sunday_close
               `)
               .eq('slug', defaultSlug)
               .eq('status', 'active')
@@ -290,7 +353,28 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
           working_hours_enabled,
           working_hours_open,
           working_hours_close,
-          working_hours_always_open
+          working_hours_always_open,
+          monday_enabled,
+          monday_open,
+          monday_close,
+          tuesday_enabled,
+          tuesday_open,
+          tuesday_close,
+          wednesday_enabled,
+          wednesday_open,
+          wednesday_close,
+          thursday_enabled,
+          thursday_open,
+          thursday_close,
+          friday_enabled,
+          friday_open,
+          friday_close,
+          saturday_enabled,
+          saturday_open,
+          saturday_close,
+          sunday_enabled,
+          sunday_open,
+          sunday_close
         `)
         .eq('slug', slug)
         .eq('status', 'active')

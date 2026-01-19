@@ -35,7 +35,6 @@ import { Textarea } from '@/components/ui/textarea';
 import { OGImageUpload } from '@/components/settings/og-image-upload';
 import { StripeConnectSettings } from '@/components/settings/stripe-connect-settings';
 import { LocationSettings } from '@/components/settings/location-settings';
-import { getTimezonesByRegion, findTimezone } from '@/lib/timezones';
 
 const Settings = () => {
   const queryClient = useQueryClient();
@@ -86,11 +85,6 @@ const Settings = () => {
     service_fee_value: 0,
     deposit_mode: 'global' as 'global' | 'per_vehicle',
     global_deposit_amount: 0,
-    // Working hours settings
-    working_hours_always_open: false,
-    working_hours_open: '09:00',
-    working_hours_close: '17:00',
-    timezone: 'America/Chicago',
   });
 
   // Sync rental form with loaded settings
@@ -106,14 +100,9 @@ const Settings = () => {
         service_fee_value: rentalSettings.service_fee_value ?? rentalSettings.service_fee_amount ?? 0,
         deposit_mode: rentalSettings.deposit_mode ?? 'global',
         global_deposit_amount: rentalSettings.global_deposit_amount ?? 0,
-        // Working hours settings
-        working_hours_always_open: rentalSettings.working_hours_always_open ?? false,
-        working_hours_open: rentalSettings.working_hours_open ?? '09:00',
-        working_hours_close: rentalSettings.working_hours_close ?? '17:00',
-        timezone: tenant?.timezone ?? 'America/Chicago',
       });
     }
-  }, [rentalSettings, tenant?.timezone]);
+  }, [rentalSettings]);
 
   // Handle URL tab parameter
   useEffect(() => {
@@ -1849,134 +1838,6 @@ const Settings = () => {
                   <Save className="h-4 w-4" />
                 )}
                 Save Deposit Settings
-              </Button>
-            </CardContent>
-          </Card>
-
-          {/* Working Hours Card */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Clock className="h-5 w-5 text-primary" />
-                Working Hours
-              </CardTitle>
-              <CardDescription>
-                Set when your business accepts bookings. Customers outside these hours will see a disabled booking form.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-6">
-              {/* Always Open Toggle */}
-              <div className="flex items-center justify-between p-4 border rounded-lg">
-                <div className="space-y-1">
-                  <h4 className="font-medium">24/7 Always Open</h4>
-                  <p className="text-sm text-muted-foreground">
-                    Allow bookings at any time without restrictions
-                  </p>
-                </div>
-                <Switch
-                  checked={rentalForm.working_hours_always_open ?? false}
-                  onCheckedChange={(checked) => {
-                    setRentalForm(prev => ({ ...prev, working_hours_always_open: checked }));
-                  }}
-                />
-              </div>
-
-              {/* Business Timezone Selection - Above time inputs */}
-              <div className="space-y-2">
-                <Label htmlFor="business_timezone">Business Timezone</Label>
-                <Select
-                  value={rentalForm.timezone}
-                  onValueChange={(value) => setRentalForm(prev => ({ ...prev, timezone: value }))}
-                >
-                  <SelectTrigger id="business_timezone" className="w-full">
-                    <SelectValue placeholder="Select your business timezone">
-                      {findTimezone(rentalForm.timezone)?.label || rentalForm.timezone}
-                    </SelectValue>
-                  </SelectTrigger>
-                  <SelectContent className="max-h-[300px]">
-                    {getTimezonesByRegion().map((group) => (
-                      <React.Fragment key={group.region}>
-                        <div className="px-2 py-1.5 text-sm font-semibold text-muted-foreground bg-muted/50">
-                          {group.label}
-                        </div>
-                        {group.timezones.map((tz) => (
-                          <SelectItem key={tz.value} value={tz.value}>
-                            {tz.label}
-                          </SelectItem>
-                        ))}
-                      </React.Fragment>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <p className="text-sm text-muted-foreground">
-                  All working hours will be based on this timezone. Customers booking from different timezones will see times converted accordingly.
-                </p>
-              </div>
-
-              {/* Time Selection (shown when not 24/7) */}
-              {!rentalForm.working_hours_always_open && (
-                <div className="grid gap-4 md:grid-cols-2">
-                  <div className="space-y-2">
-                    <Label htmlFor="working_hours_open">Opening Time</Label>
-                    <Input
-                      id="working_hours_open"
-                      type="time"
-                      value={rentalForm.working_hours_open}
-                      onChange={(e) => setRentalForm(prev => ({ ...prev, working_hours_open: e.target.value }))}
-                      className="w-full"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="working_hours_close">Closing Time</Label>
-                    <Input
-                      id="working_hours_close"
-                      type="time"
-                      value={rentalForm.working_hours_close}
-                      onChange={(e) => setRentalForm(prev => ({ ...prev, working_hours_close: e.target.value }))}
-                      className="w-full"
-                    />
-                  </div>
-                </div>
-              )}
-
-              <Button
-                onClick={async () => {
-                  try {
-                    // Update working hours settings
-                    await updateRentalSettings({
-                      working_hours_enabled: true,
-                      working_hours_always_open: rentalForm.working_hours_always_open,
-                      working_hours_open: rentalForm.working_hours_open,
-                      working_hours_close: rentalForm.working_hours_close,
-                    });
-                    // Update timezone in tenant table separately
-                    if (tenant?.id) {
-                      const { error } = await supabase
-                        .from('tenants')
-                        .update({ timezone: rentalForm.timezone })
-                        .eq('id', tenant.id);
-                      if (error) throw error;
-                      // Invalidate tenant cache to refresh
-                      queryClient.invalidateQueries({ queryKey: ['tenant'] });
-                    }
-                  } catch (error) {
-                    console.error('Failed to update working hours:', error);
-                    toast({
-                      title: "Error",
-                      description: "Failed to update working hours settings",
-                      variant: "destructive",
-                    });
-                  }
-                }}
-                disabled={isUpdatingRentalSettings}
-                className="flex items-center gap-2"
-              >
-                {isUpdatingRentalSettings ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  <Save className="h-4 w-4" />
-                )}
-                Save Working Hours
               </Button>
             </CardContent>
           </Card>

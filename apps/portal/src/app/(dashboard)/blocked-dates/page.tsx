@@ -1,6 +1,7 @@
 'use client';
 
 import { BlockedDatesManager } from "@/components/blocked-dates/blocked-dates-manager";
+import { WorkingHoursCard } from "@/components/blocked-dates/working-hours-card";
 
 export default function BlockedDates() {
   return (
@@ -13,6 +14,9 @@ export default function BlockedDates() {
       </div>
 
       <BlockedDatesManager />
+
+      {/* Working Hours Section */}
+      <WorkingHoursCard />
     </div>
   );
 }

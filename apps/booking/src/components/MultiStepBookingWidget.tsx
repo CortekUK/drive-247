@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -26,7 +26,7 @@ import AIScanProgress from "./ai-scan-progress";
 import AIVerificationQR from "./AIVerificationQR";
 import { stripePromise } from "@/config/stripe";
 import { usePageContent, defaultHomeContent, mergeWithDefaults } from "@/hooks/usePageContent";
-import { useWorkingHours } from "@/hooks/useWorkingHours";
+import { useWorkingHours, getWorkingHoursForDate } from "@/hooks/useWorkingHours";
 import { isInsuranceExemptTenant } from "@/config/tenant-config";
 import { canCustomerBook } from "@/lib/tenantQueries";
 import { sanitizeName, sanitizeEmail, sanitizePhone, sanitizeLocation, sanitizeTextArea, isInputSafe } from "@/lib/sanitize";
@@ -132,6 +132,38 @@ const MultiStepBookingWidget = () => {
     verificationSessionId: "",
     customerTimezone: "", // Will be set from tenant timezone or detected browser timezone
   });
+
+  // Calculate working hours for the selected pickup date (per-day hours)
+  const pickupDateWorkingHours = useMemo(() => {
+    // If no pickup date selected, use the current day's working hours from the hook
+    if (!formData.pickupDate) {
+      return {
+        enabled: workingHours.isDayEnabled,
+        open: workingHours.openTime,
+        close: workingHours.closeTime,
+        isAlwaysOpen: workingHours.isAlwaysOpen,
+      };
+    }
+    // Get the working hours for the specific pickup date
+    const pickupDate = new Date(formData.pickupDate);
+    return getWorkingHoursForDate(pickupDate, tenant);
+  }, [formData.pickupDate, tenant, workingHours]);
+
+  // Calculate working hours for the selected dropoff date (per-day hours)
+  const dropoffDateWorkingHours = useMemo(() => {
+    // If no dropoff date selected, use the current day's working hours from the hook
+    if (!formData.dropoffDate) {
+      return {
+        enabled: workingHours.isDayEnabled,
+        open: workingHours.openTime,
+        close: workingHours.closeTime,
+        isAlwaysOpen: workingHours.isAlwaysOpen,
+      };
+    }
+    // Get the working hours for the specific dropoff date
+    const dropoffDate = new Date(formData.dropoffDate);
+    return getWorkingHoursForDate(dropoffDate, tenant);
+  }, [formData.dropoffDate, tenant, workingHours]);
 
   // Insurance state
   const [hasInsurance, setHasInsurance] = useState<boolean | null>(null);
@@ -2536,7 +2568,10 @@ const MultiStepBookingWidget = () => {
                         const today = new Date(new Date().setHours(0, 0, 0, 0));
                         const oneYearFromNow = new Date(today);
                         oneYearFromNow.setFullYear(oneYearFromNow.getFullYear() + 1);
-                        return date < today || date > oneYearFromNow || blockedDates.includes(dateStr);
+                        // Check if the day is closed based on working hours
+                        const dayWorkingHours = getWorkingHoursForDate(date, tenant);
+                        const isClosedDay = !dayWorkingHours.enabled;
+                        return date < today || date > oneYearFromNow || blockedDates.includes(dateStr) || isClosedDay;
                       }} initialFocus className="pointer-events-auto" />
                     </PopoverContent>
                   </Popover>
@@ -2556,9 +2591,9 @@ const MultiStepBookingWidget = () => {
                       }
                     }}
                     className="h-12 focus-visible:ring-primary"
-                    businessHoursOpen={!workingHours.isAlwaysOpen ? workingHours.openTime : undefined}
-                    businessHoursClose={!workingHours.isAlwaysOpen ? workingHours.closeTime : undefined}
-                    showBusinessHoursNotice={!workingHours.isAlwaysOpen}
+                    businessHoursOpen={!pickupDateWorkingHours.isAlwaysOpen && pickupDateWorkingHours.enabled ? pickupDateWorkingHours.open : undefined}
+                    businessHoursClose={!pickupDateWorkingHours.isAlwaysOpen && pickupDateWorkingHours.enabled ? pickupDateWorkingHours.close : undefined}
+                    showBusinessHoursNotice={!pickupDateWorkingHours.isAlwaysOpen && pickupDateWorkingHours.enabled}
                     customerTimezone={formData.customerTimezone}
                     tenantTimezone={workingHours.timezone}
                   />
@@ -2598,7 +2633,10 @@ const MultiStepBookingWidget = () => {
                         const oneYearFromPickup = new Date(pickupDate);
                         oneYearFromPickup.setFullYear(oneYearFromPickup.getFullYear() + 1);
                         const dateStr = format(date, "yyyy-MM-dd");
-                        return date <= pickupDate || date > oneYearFromPickup || blockedDates.includes(dateStr);
+                        // Check if the day is closed based on working hours
+                        const dayWorkingHours = getWorkingHoursForDate(date, tenant);
+                        const isClosedDay = !dayWorkingHours.enabled;
+                        return date <= pickupDate || date > oneYearFromPickup || blockedDates.includes(dateStr) || isClosedDay;
                       }} initialFocus className="pointer-events-auto" />
                     </PopoverContent>
                   </Popover>
@@ -2618,9 +2656,9 @@ const MultiStepBookingWidget = () => {
                       }
                     }}
                     className="h-12 focus-visible:ring-primary"
-                    businessHoursOpen={!workingHours.isAlwaysOpen ? workingHours.openTime : undefined}
-                    businessHoursClose={!workingHours.isAlwaysOpen ? workingHours.closeTime : undefined}
-                    showBusinessHoursNotice={!workingHours.isAlwaysOpen}
+                    businessHoursOpen={!dropoffDateWorkingHours.isAlwaysOpen && dropoffDateWorkingHours.enabled ? dropoffDateWorkingHours.open : undefined}
+                    businessHoursClose={!dropoffDateWorkingHours.isAlwaysOpen && dropoffDateWorkingHours.enabled ? dropoffDateWorkingHours.close : undefined}
+                    showBusinessHoursNotice={!dropoffDateWorkingHours.isAlwaysOpen && dropoffDateWorkingHours.enabled}
                     customerTimezone={formData.customerTimezone}
                     tenantTimezone={workingHours.timezone}
                   />
