@@ -1506,11 +1506,23 @@ const Settings = () => {
                 <div className="flex items-center gap-4">
                   <Input
                     id="minimum_rental_age"
-                    type="number"
-                    min="16"
-                    max="100"
+                    type="text"
+                    inputMode="numeric"
                     value={rentalForm.minimum_rental_age}
                     onChange={(e) => {
+                      const inputValue = e.target.value;
+                      // Allow empty string for editing
+                      if (inputValue === '') {
+                        setRentalForm(prev => ({ ...prev, minimum_rental_age: 0 }));
+                        return;
+                      }
+                      // Only allow numeric input
+                      if (!/^\d*$/.test(inputValue)) return;
+                      const value = parseInt(inputValue) || 0;
+                      setRentalForm(prev => ({ ...prev, minimum_rental_age: value }));
+                    }}
+                    onBlur={(e) => {
+                      // Enforce min/max on blur
                       const value = parseInt(e.target.value) || 16;
                       setRentalForm(prev => ({
                         ...prev,
@@ -1582,12 +1594,25 @@ const Settings = () => {
                   <div className="flex items-center gap-4">
                     <Input
                       id="tax_percentage"
-                      type="number"
-                      min="0"
-                      max="100"
-                      step="0.01"
-                      value={rentalForm.tax_percentage ?? 0}
+                      type="text"
+                      inputMode="decimal"
+                      value={rentalForm.tax_percentage ?? ''}
                       onChange={(e) => {
+                        const inputValue = e.target.value;
+                        // Allow empty string for editing
+                        if (inputValue === '') {
+                          setRentalForm(prev => ({ ...prev, tax_percentage: 0 }));
+                          return;
+                        }
+                        // Only allow numeric input with optional decimal
+                        if (!/^\d*\.?\d*$/.test(inputValue)) return;
+                        const value = parseFloat(inputValue);
+                        if (!isNaN(value)) {
+                          setRentalForm(prev => ({ ...prev, tax_percentage: value }));
+                        }
+                      }}
+                      onBlur={(e) => {
+                        // Enforce min/max on blur
                         const value = parseFloat(e.target.value) || 0;
                         setRentalForm(prev => ({
                           ...prev,
@@ -1685,21 +1710,40 @@ const Settings = () => {
                       )}
                       <Input
                         id="service_fee_value"
-                        type="number"
-                        min="0"
-                        max={rentalForm.service_fee_type === 'percentage' ? 100 : undefined}
-                        step={rentalForm.service_fee_type === 'percentage' ? '1' : '0.01'}
-                        value={rentalForm.service_fee_value ?? 0}
+                        type="text"
+                        inputMode="decimal"
+                        value={rentalForm.service_fee_value || ''}
                         onChange={(e) => {
+                          const inputValue = e.target.value;
+                          // Allow empty string for editing
+                          if (inputValue === '') {
+                            setRentalForm(prev => ({
+                              ...prev,
+                              service_fee_value: 0,
+                              service_fee_amount: 0
+                            }));
+                            return;
+                          }
+                          // Only allow numeric input with optional decimal
+                          if (!/^\d*\.?\d*$/.test(inputValue)) return;
+                          const value = parseFloat(inputValue);
+                          if (!isNaN(value)) {
+                            setRentalForm(prev => ({
+                              ...prev,
+                              service_fee_value: value,
+                              service_fee_amount: value
+                            }));
+                          }
+                        }}
+                        onBlur={(e) => {
+                          // Enforce min/max on blur
                           let value = parseFloat(e.target.value) || 0;
-                          // Cap percentage at 100
                           if (rentalForm.service_fee_type === 'percentage' && value > 100) {
                             value = 100;
                           }
                           setRentalForm(prev => ({
                             ...prev,
                             service_fee_value: Math.max(0, value),
-                            // Keep service_fee_amount in sync for backward compatibility
                             service_fee_amount: Math.max(0, value)
                           }));
                         }}
