@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -9,12 +9,11 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 
 import { Checkbox } from "@/components/ui/checkbox";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { AlertTriangle, Plus, Eye, Filter, MoreVertical, CreditCard, Ban, Receipt, Scale, ArrowUpDown } from "lucide-react";
+import { AlertTriangle, Plus, Eye, MoreVertical, CreditCard, Ban, ArrowUpDown } from "lucide-react";
 import { FineStatusBadge } from "@/components/shared/status/fine-status-badge";
 import { FineKPIs } from "@/components/fines/fine-kpis";
 import { FineFilters, FineFilterState } from "@/components/fines/fine-filters";
 import { BulkActionBar } from "@/components/fines/bulk-action-bar";
-import { AuthorityPaymentDialog } from "@/components/fines/authority-payment-dialog";
 import { useFinesData, EnhancedFine } from "@/hooks/use-fines-data";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
@@ -37,16 +36,8 @@ const FinesList = () => {
 
   const [sortBy, setSortBy] = useState('created_at');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
-  
-  const [selectedFines, setSelectedFines] = useState<string[]>([]);
 
-  // Authority payment dialog state
-  const [authorityPaymentDialog, setAuthorityPaymentDialog] = useState<{
-    open: boolean;
-    fineId?: string;
-    amount?: number;
-    reference?: string;
-  }>({ open: false });
+  const [selectedFines, setSelectedFines] = useState<string[]>([]);
 
   // Fetch fines data with current filters
   const { data: finesData, isLoading, error } = useFinesData({
@@ -108,28 +99,6 @@ const FinesList = () => {
     },
   });
 
-  const appealFineAction = useMutation({
-    mutationFn: async (fineId: string) => {
-      const { data, error } = await supabase.functions.invoke('apply-fine', {
-        body: { fineId, action: 'appeal' }
-      });
-      if (error) throw error;
-      if (!data.success) throw new Error(data.error || 'Failed to mark as appealed');
-      return data;
-    },
-    onSuccess: () => {
-      toast({ title: "Fine marked as appealed" });
-      queryClient.invalidateQueries({ queryKey: ["fines-enhanced"] });
-    },
-    onError: (error: any) => {
-      toast({
-        title: "Error",
-        description: error.message || "Failed to mark fine as appealed",
-        variant: "destructive",
-      });
-    },
-  });
-
   // Handle sorting
   const handleSort = (column: string) => {
     if (sortBy === column) {
@@ -155,9 +124,8 @@ const FinesList = () => {
 
   // Render individual fine row
   const renderFineRow = (fine: EnhancedFine) => {
-    const canCharge = fine.liability === 'Individual' || fine.liability === 'Customer' && (fine.status === 'Open' || fine.status === 'Appealed');
-    const canWaive = fine.status === 'Open' || fine.status === 'Appealed';
-    const canAppeal = fine.status === 'Open';
+    const canCharge = (fine.liability === 'Individual' || fine.liability === 'Customer') && fine.status === 'Open';
+    const canWaive = fine.status === 'Open';
 
     return (
       <TableRow
@@ -207,18 +175,11 @@ const FinesList = () => {
         </TableCell>
 
         <TableCell>
-          <div className="flex items-center gap-2">
-            <FineStatusBadge
-              status={fine.status}
-              dueDate={fine.due_date}
-              remainingAmount={fine.amount}
-            />
-            {fine.isAuthoritySettled && (
-              <Badge variant="secondary" className="text-green-700 bg-green-100 text-xs">
-                Authority Settled
-              </Badge>
-            )}
-          </div>
+          <FineStatusBadge
+            status={fine.status}
+            dueDate={fine.due_date}
+            remainingAmount={fine.amount}
+          />
         </TableCell>
 
         <TableCell className="text-left font-medium">
@@ -236,56 +197,35 @@ const FinesList = () => {
               View
             </Button>
 
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="ghost" size="sm">
-                  <MoreVertical className="h-4 w-4" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                {canCharge && (
-                  <DropdownMenuItem
-                    onClick={() => chargeFineAction.mutate(fine.id)}
-                    disabled={chargeFineAction.isPending}
-                  >
-                    <CreditCard className="h-4 w-4 mr-2" />
-                    Charge to Customer
-                  </DropdownMenuItem>
-                )}
-
-                <DropdownMenuItem
-                  onClick={() => setAuthorityPaymentDialog({
-                    open: true,
-                    fineId: fine.id,
-                    amount: fine.amount,
-                    reference: fine.reference_no || undefined,
-                  })}
-                >
-                  <Receipt className="h-4 w-4 mr-2" />
-                  Record Authority Payment
-                </DropdownMenuItem>
-
-                {canAppeal && (
-                  <DropdownMenuItem
-                    onClick={() => appealFineAction.mutate(fine.id)}
-                    disabled={appealFineAction.isPending}
-                  >
-                    <Scale className="h-4 w-4 mr-2" />
-                    Mark as Appealed
-                  </DropdownMenuItem>
-                )}
-
-                {canWaive && (
-                  <DropdownMenuItem
-                    onClick={() => waiveFineAction.mutate(fine.id)}
-                    disabled={waiveFineAction.isPending}
-                  >
-                    <Ban className="h-4 w-4 mr-2" />
-                    Waive Fine
-                  </DropdownMenuItem>
-                )}
-              </DropdownMenuContent>
-            </DropdownMenu>
+            {(canCharge || canWaive) && (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="ghost" size="sm">
+                    <MoreVertical className="h-4 w-4" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  {canCharge && (
+                    <DropdownMenuItem
+                      onClick={() => chargeFineAction.mutate(fine.id)}
+                      disabled={chargeFineAction.isPending}
+                    >
+                      <CreditCard className="h-4 w-4 mr-2" />
+                      Charge to Customer
+                    </DropdownMenuItem>
+                  )}
+                  {canWaive && (
+                    <DropdownMenuItem
+                      onClick={() => waiveFineAction.mutate(fine.id)}
+                      disabled={waiveFineAction.isPending}
+                    >
+                      <Ban className="h-4 w-4 mr-2" />
+                      Waive Fine
+                    </DropdownMenuItem>
+                  )}
+                </DropdownMenuContent>
+              </DropdownMenu>
+            )}
           </div>
         </TableCell>
       </TableRow>
@@ -367,8 +307,6 @@ const FinesList = () => {
     );
   }
 
-  
-
   return (
     <div className="container mx-auto p-6 space-y-6">
       {/* Header */}
@@ -421,15 +359,6 @@ const FinesList = () => {
           )}
         </CardContent>
       </Card>
-
-      {/* Authority Payment Dialog */}
-      <AuthorityPaymentDialog
-        open={authorityPaymentDialog.open}
-        onOpenChange={(open) => setAuthorityPaymentDialog(prev => ({ ...prev, open }))}
-        fineId={authorityPaymentDialog.fineId || ''}
-        fineAmount={authorityPaymentDialog.amount || 0}
-        fineReference={authorityPaymentDialog.reference}
-      />
     </div>
   );
 };
