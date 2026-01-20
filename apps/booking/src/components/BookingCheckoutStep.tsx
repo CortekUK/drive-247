@@ -701,12 +701,19 @@ export default function BookingCheckoutStep({
       // so we need to update both customer_id and rental_id
       try {
         // Get pending insurance docs from localStorage (stored during upload)
+        // Check BOTH localStorage keys for backwards compatibility
         const pendingDocs = typeof window !== 'undefined'
           ? JSON.parse(localStorage.getItem('pending_insurance_docs') || '[]')
           : [];
 
-        console.log('🔍 Found pending insurance docs:', pendingDocs);
+        // Also check for files stored by insurance-upload-dialog (pending_insurance_files)
+        const pendingFiles = typeof window !== 'undefined'
+          ? JSON.parse(localStorage.getItem('pending_insurance_files') || '[]')
+          : [];
 
+        console.log('🔍 Found pending insurance docs:', pendingDocs.length, 'pending files:', pendingFiles.length);
+
+        // Handle old-style pending docs (already created in DB, need linking)
         if (pendingDocs.length > 0) {
           // Update each pending document with real customer_id and rental_id
           for (const doc of pendingDocs) {
@@ -746,7 +753,78 @@ export default function BookingCheckoutStep({
           // Clear pending docs from localStorage
           localStorage.removeItem('pending_insurance_docs');
           console.log('✅ Insurance documents linked to rental and cleaned up');
-        } else {
+        }
+
+        // Handle new-style pending files (only uploaded to storage, need DB insert)
+        if (pendingFiles.length > 0) {
+          // Deduplicate files by file_path
+          const uniqueFiles = Array.from(
+            new Map(pendingFiles.map((file: any) => [file.file_path, file])).values()
+          ) as any[];
+
+          console.log(`📎 Processing ${uniqueFiles.length} unique insurance files`);
+
+          for (const fileInfo of uniqueFiles) {
+            // Check if this document already exists for this customer
+            const { data: existingDoc } = await supabase
+              .from('customer_documents')
+              .select('id')
+              .eq('customer_id', customer.id)
+              .eq('file_url', fileInfo.file_path)
+              .maybeSingle();
+
+            if (existingDoc) {
+              console.log('📎 Document already exists, skipping:', fileInfo.file_name);
+              continue;
+            }
+
+            const docInsertData: any = {
+              customer_id: customer.id,
+              document_type: 'Insurance Certificate',
+              document_name: fileInfo.file_name,
+              file_url: fileInfo.file_path,
+              file_name: fileInfo.file_name,
+              file_size: fileInfo.file_size,
+              mime_type: fileInfo.mime_type,
+              ai_scan_status: 'pending',
+              uploaded_at: fileInfo.uploaded_at
+            };
+
+            if (tenant?.id) {
+              docInsertData.tenant_id = tenant.id;
+            }
+
+            const { data: insertedDoc, error: docError } = await supabase
+              .from('customer_documents')
+              .insert(docInsertData)
+              .select('id, file_url')
+              .single();
+
+            if (docError) {
+              console.error('📎 Failed to link insurance document:', docError);
+            } else {
+              console.log('✅ Insurance document created for customer:', customer.id);
+
+              // Trigger AI scanning
+              if (insertedDoc?.id) {
+                supabase.functions.invoke('scan-insurance-document', {
+                  body: {
+                    documentId: insertedDoc.id,
+                    fileUrl: insertedDoc.file_url
+                  }
+                }).then(({ error }) => {
+                  if (error) console.error('📎 AI scan failed:', error);
+                }).catch(e => console.error('📎 AI scan error:', e));
+              }
+            }
+          }
+
+          // Clear pending files from localStorage
+          localStorage.removeItem('pending_insurance_files');
+          console.log('✅ Insurance files processed and cleaned up');
+        }
+
+        if (pendingDocs.length === 0 && pendingFiles.length === 0) {
           console.log('ℹ️ No pending insurance documents to link');
         }
       } catch (linkErr) {

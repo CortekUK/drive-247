@@ -224,6 +224,8 @@ const RentalDetail = () => {
 
   // Fetch insurance documents with AI scanning results
   // Documents may be linked by rental_id, customer_id, or still be unlinked (from temp customers)
+  // IMPORTANT: We include documents with NULL tenant_id to catch docs uploaded from booking app
+  // where tenant context might not have been available
   const { data: insuranceDocuments } = useQuery({
     queryKey: ["rental-insurance-docs", id, rental?.customers?.id, tenant?.id],
     queryFn: async () => {
@@ -232,13 +234,14 @@ const RentalDetail = () => {
       const allDocs: any[] = [];
 
       // First try to find by rental_id (direct link) - highest priority
+      // Include documents with matching tenant_id OR null tenant_id
       if (tenant?.id) {
         const { data: rentalDocs } = await supabase
           .from("customer_documents")
           .select("*")
           .eq("rental_id", id)
           .eq("document_type", "Insurance Certificate")
-          .eq("tenant_id", tenant.id)
+          .or(`tenant_id.eq.${tenant.id},tenant_id.is.null`)
           .order("uploaded_at", { ascending: false });
 
         if (rentalDocs && rentalDocs.length > 0) {
@@ -252,13 +255,14 @@ const RentalDetail = () => {
       }
 
       // Then try by customer_id (exclude documents already linked to OTHER rentals)
+      // Include documents with matching tenant_id OR null tenant_id
       if (rental?.customers?.id && tenant?.id) {
         const { data: customerDocs } = await supabase
           .from("customer_documents")
           .select("*")
           .eq("customer_id", rental.customers.id)
           .eq("document_type", "Insurance Certificate")
-          .eq("tenant_id", tenant.id)
+          .or(`tenant_id.eq.${tenant.id},tenant_id.is.null`)
           .is("rental_id", null) // Only show if not linked to a rental yet
           .order("uploaded_at", { ascending: false });
 
@@ -273,12 +277,13 @@ const RentalDetail = () => {
       }
 
       // Fallback: Show unlinked insurance documents for this tenant ONLY if no docs found yet
+      // Include documents with matching tenant_id OR null tenant_id
       if (allDocs.length === 0 && tenant?.id) {
         const { data: unlinkedDocs } = await supabase
           .from("customer_documents")
           .select("*, customers!customer_documents_customer_id_fkey(email)")
           .eq("document_type", "Insurance Certificate")
-          .eq("tenant_id", tenant.id)
+          .or(`tenant_id.eq.${tenant.id},tenant_id.is.null`)
           .is("rental_id", null)
           .is("customer_id", null)
           .order("uploaded_at", { ascending: false })
@@ -295,10 +300,11 @@ const RentalDetail = () => {
         }
       }
 
-      console.log(`[RENTAL-DOCS] Found ${allDocs.length} unique insurance documents for rental ${id}`);
+      console.log(`[RENTAL-DOCS] Found ${allDocs.length} unique insurance documents for rental ${id}, customer: ${rental?.customers?.id}`);
       return allDocs;
     },
-    enabled: !!id && !!tenant?.id,
+    // Wait for rental data to load so we have customer_id for the query
+    enabled: !!id && !!tenant?.id && !!rental?.customers?.id,
   });
 
   // Fetch identity verification for this customer (by customer_id or by email)
