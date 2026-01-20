@@ -11,12 +11,14 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
-import { FileText, ArrowLeft, DollarSign, Plus, X, Send, Download, Ban, Check, AlertTriangle, Loader2, Shield, CheckCircle, XCircle, ExternalLink, UserCheck, IdCard, Camera, FileSignature, Clock, Mail, RefreshCw, Trash2 } from "lucide-react";
+import { FileText, ArrowLeft, DollarSign, Plus, X, Send, Download, Ban, Check, AlertTriangle, Loader2, Shield, CheckCircle, XCircle, ExternalLink, UserCheck, IdCard, Camera, FileSignature, Clock, Mail, RefreshCw, Trash2, Receipt, Percent, Car, Undo2 } from "lucide-react";
 import { AddPaymentDialog } from "@/components/shared/dialogs/add-payment-dialog";
+import { RefundDialog } from "@/components/shared/dialogs/refund-dialog";
 import { useToast } from "@/hooks/use-toast";
 import { useTenant } from "@/contexts/TenantContext";
 import { isInsuranceExemptTenant } from "@/config/tenant-config";
 import { useRentalTotals } from "@/hooks/use-rental-ledger-data";
+import { useRentalInvoice } from "@/hooks/use-rental-invoice";
 import { RentalLedger } from "@/components/rentals/rental-ledger";
 import { KeyHandoverSection } from "@/components/rentals/key-handover-section";
 import { KeyHandoverActionBanner } from "@/components/rentals/key-handover-action-banner";
@@ -66,6 +68,11 @@ const RentalDetail = () => {
   const [isClosing, setIsClosing] = useState(false);
   const [loadingDocuSignDoc, setLoadingDocuSignDoc] = useState(false);
 
+  // Refund dialog states
+  const [showRefundDialog, setShowRefundDialog] = useState(false);
+  const [refundCategory, setRefundCategory] = useState<string>("");
+  const [refundTotalAmount, setRefundTotalAmount] = useState(0);
+  const [refundPaidAmount, setRefundPaidAmount] = useState(0);
 
   const { data: rental, isLoading, error: rentalError } = useQuery({
     queryKey: ["rental", id, tenant?.id],
@@ -92,6 +99,7 @@ const RentalDetail = () => {
   });
 
   const { data: rentalTotals } = useRentalTotals(id);
+  const { data: invoiceBreakdown } = useRentalInvoice(id);
 
   // Scroll to ledger section if hash is present (wait for data to load)
   useEffect(() => {
@@ -814,6 +822,158 @@ const RentalDetail = () => {
           </CardContent>
         </Card>
       </div>
+
+      {/* Payment Breakdown Cards */}
+      {invoiceBreakdown && (
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+          {/* Tax Card */}
+          <Card className="relative overflow-hidden">
+            <div className="absolute top-0 left-0 w-1 h-full bg-blue-500" />
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-medium flex items-center gap-2">
+                <Percent className="h-4 w-4 text-blue-500" />
+                Tax
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <div>
+                <p className="text-2xl font-bold">${invoiceBreakdown.taxAmount.toFixed(2)}</p>
+                <p className="text-xs text-muted-foreground">Tax charged on rental</p>
+              </div>
+              {invoiceBreakdown.taxAmount > 0 && invoiceBreakdown.rentalFee > 0 && (
+                <div className="text-xs text-muted-foreground bg-muted/50 rounded p-2">
+                  <span className="font-medium">Rate:</span> {((invoiceBreakdown.taxAmount / invoiceBreakdown.rentalFee) * 100).toFixed(1)}%
+                  <br />
+                  <span className="font-medium">Pre-tax:</span> ${invoiceBreakdown.rentalFee.toFixed(2)}
+                  <br />
+                  <span className="font-medium">After tax:</span> ${(invoiceBreakdown.rentalFee + invoiceBreakdown.taxAmount).toFixed(2)}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Service Fee Card */}
+          <Card className="relative overflow-hidden">
+            <div className="absolute top-0 left-0 w-1 h-full bg-purple-500" />
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-medium flex items-center justify-between">
+                <span className="flex items-center gap-2">
+                  <Receipt className="h-4 w-4 text-purple-500" />
+                  Service Fee
+                </span>
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <div>
+                <p className="text-2xl font-bold">${invoiceBreakdown.serviceFee.toFixed(2)}</p>
+                <p className="text-xs text-muted-foreground">Platform service fee</p>
+              </div>
+              {invoiceBreakdown.serviceFee > 0 && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="w-full text-xs"
+                  onClick={() => {
+                    setRefundCategory("Service Fee");
+                    setRefundTotalAmount(invoiceBreakdown.serviceFee);
+                    setRefundPaidAmount(invoiceBreakdown.serviceFee); // Assume fully paid for initial fee
+                    setShowRefundDialog(true);
+                  }}
+                >
+                  <Undo2 className="h-3 w-3 mr-1" />
+                  Refund
+                </Button>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Security Deposit Card */}
+          <Card className="relative overflow-hidden">
+            <div className="absolute top-0 left-0 w-1 h-full bg-amber-500" />
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-medium flex items-center justify-between">
+                <span className="flex items-center gap-2">
+                  <Shield className="h-4 w-4 text-amber-500" />
+                  Security Deposit
+                </span>
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <div>
+                <p className="text-2xl font-bold">${invoiceBreakdown.securityDeposit.toFixed(2)}</p>
+                <p className="text-xs text-muted-foreground">Refundable deposit</p>
+              </div>
+              {invoiceBreakdown.securityDeposit > 0 && (
+                <>
+                  <div className="text-xs bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded p-2">
+                    <span className="font-medium text-amber-700 dark:text-amber-400">Status:</span>{" "}
+                    <span className="text-amber-600 dark:text-amber-300">
+                      {rental.status === 'Closed' ? 'Eligible for refund' : 'Held until rental ends'}
+                    </span>
+                  </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="w-full text-xs"
+                    onClick={() => {
+                      setRefundCategory("Security Deposit");
+                      setRefundTotalAmount(invoiceBreakdown.securityDeposit);
+                      setRefundPaidAmount(invoiceBreakdown.securityDeposit);
+                      setShowRefundDialog(true);
+                    }}
+                  >
+                    <Undo2 className="h-3 w-3 mr-1" />
+                    Refund Deposit
+                  </Button>
+                </>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Rental Amount Card */}
+          <Card className="relative overflow-hidden">
+            <div className="absolute top-0 left-0 w-1 h-full bg-green-500" />
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-medium flex items-center justify-between">
+                <span className="flex items-center gap-2">
+                  <Car className="h-4 w-4 text-green-500" />
+                  Rental
+                </span>
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <div>
+                <p className="text-2xl font-bold">${invoiceBreakdown.rentalFee.toFixed(2)}</p>
+                <p className="text-xs text-muted-foreground">
+                  {rental.rental_period_type || 'Monthly'} rental charge
+                </p>
+              </div>
+              {invoiceBreakdown.rentalFee > 0 && (
+                <>
+                  <div className="text-xs text-muted-foreground bg-muted/50 rounded p-2">
+                    <span className="font-medium">Period:</span>{" "}
+                    {new Date(rental.start_date).toLocaleDateString()} - {new Date(rental.end_date).toLocaleDateString()}
+                  </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="w-full text-xs"
+                    onClick={() => {
+                      setRefundCategory("Rental");
+                      setRefundTotalAmount(invoiceBreakdown.rentalFee);
+                      setRefundPaidAmount(invoiceBreakdown.rentalFee);
+                      setShowRefundDialog(true);
+                    }}
+                  >
+                    <Undo2 className="h-3 w-3 mr-1" />
+                    Refund
+                  </Button>
+                </>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+      )}
 
       {/* Rental Details */}
       <Card>
@@ -1907,6 +2067,18 @@ const RentalDetail = () => {
             vehicle: rental.vehicles,
             monthly_amount: rental.monthly_amount,
           }}
+        />
+      )}
+
+      {/* Refund Dialog */}
+      {rental && (
+        <RefundDialog
+          open={showRefundDialog}
+          onOpenChange={setShowRefundDialog}
+          rentalId={rental.id}
+          category={refundCategory}
+          totalAmount={refundTotalAmount}
+          paidAmount={refundPaidAmount}
         />
       )}
 
