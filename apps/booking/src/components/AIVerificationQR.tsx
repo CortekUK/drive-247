@@ -52,6 +52,7 @@ interface VerificationData {
     selfie?: boolean;
   } | null;
   document_front_url: string | null;
+  document_back_url: string | null;
   selfie_image_url: string | null;
 }
 
@@ -154,7 +155,7 @@ export default function AIVerificationQR({
     const fetchInitialState = async () => {
       const { data, error } = await supabase
         .from('identity_verifications')
-        .select('status, review_status, review_result, first_name, last_name, document_number, ai_face_match_score, verification_step, upload_progress, document_front_url, selfie_image_url')
+        .select('status, review_status, review_result, first_name, last_name, document_number, ai_face_match_score, verification_step, upload_progress, document_front_url, document_back_url, selfie_image_url')
         .eq('session_id', sessionId)
         .single();
 
@@ -392,6 +393,7 @@ export default function AIVerificationQR({
                 {[
                   { key: 'qr_scanned', label: 'Scanned' },
                   { key: 'document_front_captured', label: 'ID Front' },
+                  { key: 'document_back_captured', label: 'ID Back' },
                   { key: 'selfie_captured', label: 'Selfie' },
                   { key: 'completed', label: 'Done' }
                 ].map((s, index) => {
@@ -403,15 +405,15 @@ export default function AIVerificationQR({
                   return (
                     <div key={s.key} className="flex flex-col items-center">
                       <div className={cn(
-                        "w-8 h-8 rounded-full flex items-center justify-center text-xs font-medium transition-all",
+                        "w-7 h-7 rounded-full flex items-center justify-center text-xs font-medium transition-all",
                         isComplete ? 'bg-primary text-primary-foreground' :
                         isCurrent ? 'bg-primary/20 text-primary border-2 border-primary' :
                         'bg-muted text-muted-foreground'
                       )}>
-                        {isComplete ? <CheckCircle className="h-4 w-4" /> : index + 1}
+                        {isComplete ? <CheckCircle className="h-3.5 w-3.5" /> : index + 1}
                       </div>
                       <span className={cn(
-                        "text-xs mt-1",
+                        "text-[10px] mt-1",
                         isComplete ? 'text-primary font-medium' : 'text-muted-foreground'
                       )}>
                         {s.label}
@@ -420,6 +422,77 @@ export default function AIVerificationQR({
                   );
                 })}
               </div>
+
+              {/* Uploaded Images Display */}
+              {(verificationData?.document_front_url || verificationData?.document_back_url || verificationData?.selfie_image_url) && (
+                <div className="w-full space-y-3">
+                  <p className="text-sm font-medium text-muted-foreground text-center">Uploaded Images</p>
+                  <div className="grid grid-cols-3 gap-2">
+                    {/* ID Front */}
+                    <div className="flex flex-col items-center">
+                      <div className={cn(
+                        "w-full aspect-[3/4] rounded-lg overflow-hidden border-2 bg-muted/50",
+                        verificationData?.document_front_url ? "border-primary/30" : "border-muted"
+                      )}>
+                        {verificationData?.document_front_url ? (
+                          <img
+                            src={verificationData.document_front_url}
+                            alt="ID Front"
+                            className="w-full h-full object-cover"
+                          />
+                        ) : (
+                          <div className="w-full h-full flex items-center justify-center">
+                            <Camera className="h-6 w-6 text-muted-foreground/50" />
+                          </div>
+                        )}
+                      </div>
+                      <span className="text-[10px] mt-1 text-muted-foreground">ID Front</span>
+                    </div>
+
+                    {/* ID Back */}
+                    <div className="flex flex-col items-center">
+                      <div className={cn(
+                        "w-full aspect-[3/4] rounded-lg overflow-hidden border-2 bg-muted/50",
+                        verificationData?.document_back_url ? "border-primary/30" : "border-muted"
+                      )}>
+                        {verificationData?.document_back_url ? (
+                          <img
+                            src={verificationData.document_back_url}
+                            alt="ID Back"
+                            className="w-full h-full object-cover"
+                          />
+                        ) : (
+                          <div className="w-full h-full flex items-center justify-center">
+                            <Camera className="h-6 w-6 text-muted-foreground/50" />
+                          </div>
+                        )}
+                      </div>
+                      <span className="text-[10px] mt-1 text-muted-foreground">ID Back</span>
+                    </div>
+
+                    {/* Selfie */}
+                    <div className="flex flex-col items-center">
+                      <div className={cn(
+                        "w-full aspect-[3/4] rounded-lg overflow-hidden border-2 bg-muted/50",
+                        verificationData?.selfie_image_url ? "border-primary/30" : "border-muted"
+                      )}>
+                        {verificationData?.selfie_image_url ? (
+                          <img
+                            src={verificationData.selfie_image_url}
+                            alt="Selfie"
+                            className="w-full h-full object-cover"
+                          />
+                        ) : (
+                          <div className="w-full h-full flex items-center justify-center">
+                            <User className="h-6 w-6 text-muted-foreground/50" />
+                          </div>
+                        )}
+                      </div>
+                      <span className="text-[10px] mt-1 text-muted-foreground">Selfie</span>
+                    </div>
+                  </div>
+                </div>
+              )}
 
               {/* Timer (still show while in progress) */}
               <div className="flex items-center justify-center gap-2 text-sm text-muted-foreground">

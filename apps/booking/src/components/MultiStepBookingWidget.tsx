@@ -15,7 +15,7 @@ import { Badge } from "@/components/ui/badge";
 import { supabase } from "@/integrations/supabase/client";
 import { useTenant } from "@/contexts/TenantContext";
 import { toast } from "sonner";
-import { ChevronRight, ChevronLeft, Check, Baby, Coffee, MapPin, UserCheck, Car, Crown, TrendingUp, Users as GroupIcon, Calculator, Shield, CheckCircle, CalendarIcon, Clock, Search, Grid3x3, List, SlidersHorizontal, X, AlertCircle, FileCheck, RefreshCw, Upload, Gauge } from "lucide-react";
+import { ChevronRight, ChevronLeft, Check, Baby, Coffee, MapPin, UserCheck, Car, Crown, TrendingUp, Users as GroupIcon, Calculator, Shield, CheckCircle, CalendarIcon, Clock, Search, Grid3x3, List, SlidersHorizontal, X, AlertCircle, FileCheck, RefreshCw, Upload, Gauge, User } from "lucide-react";
 import { format, differenceInHours } from "date-fns";
 import { cn } from "@/lib/utils";
 import BookingConfirmation from "./BookingConfirmation";
@@ -183,6 +183,13 @@ const MultiStepBookingWidget = () => {
     sessionId: string;
     qrUrl: string;
     expiresAt: Date;
+  } | null>(null);
+
+  // Verification images state
+  const [verificationImages, setVerificationImages] = useState<{
+    document_front_url: string | null;
+    document_back_url: string | null;
+    selfie_image_url: string | null;
   } | null>(null);
   const [promoDetails, setPromoDetails] = useState<{
     code: string;
@@ -651,7 +658,7 @@ const MultiStepBookingWidget = () => {
       // STEP 1: Try database query first
       let { data, error } = await supabase
         .from('identity_verifications')
-        .select('review_result, status, review_status, first_name, last_name, document_number, date_of_birth, external_user_id')
+        .select('review_result, status, review_status, first_name, last_name, document_number, date_of_birth, external_user_id, document_front_url, document_back_url, selfie_image_url')
         .eq('session_id', sessionId)
         .maybeSingle();
 
@@ -664,7 +671,7 @@ const MultiStepBookingWidget = () => {
         console.log('🔍 Trying email-based fallback in database...');
         const emailResult = await supabase
           .from('identity_verifications')
-          .select('review_result, status, review_status, first_name, last_name, document_number, date_of_birth, external_user_id')
+          .select('review_result, status, review_status, first_name, last_name, document_number, date_of_birth, external_user_id, document_front_url, document_back_url, selfie_image_url')
           .ilike('external_user_id', `%${formData.customerEmail}%`)
           .order('created_at', { ascending: false })
           .limit(1)
@@ -702,7 +709,14 @@ const MultiStepBookingWidget = () => {
   };
 
   // Auto-populate form with verified data from Veriff
-  const populateFormWithVerifiedData = (verificationData: { first_name?: string | null; last_name?: string | null; document_number?: string | null }) => {
+  const populateFormWithVerifiedData = (verificationData: {
+    first_name?: string | null;
+    last_name?: string | null;
+    document_number?: string | null;
+    document_front_url?: string | null;
+    document_back_url?: string | null;
+    selfie_image_url?: string | null;
+  }) => {
     const firstName = verificationData.first_name || '';
     const lastName = verificationData.last_name || '';
     const fullName = [firstName, lastName].filter(Boolean).join(' ').trim();
@@ -722,6 +736,15 @@ const MultiStepBookingWidget = () => {
 
       toast.success(`Your details have been verified and updated: ${fullName}`, { duration: 5000 });
       console.log('✅ Form populated with verified data:', { customerName: fullName, licenseNumber: verificationData.document_number });
+    }
+
+    // Store verification images if available
+    if (verificationData.document_front_url || verificationData.document_back_url || verificationData.selfie_image_url) {
+      setVerificationImages({
+        document_front_url: verificationData.document_front_url || null,
+        document_back_url: verificationData.document_back_url || null,
+        selfie_image_url: verificationData.selfie_image_url || null,
+      });
     }
   };
 
@@ -755,6 +778,7 @@ const MultiStepBookingWidget = () => {
     setVerificationSessionId(null);
     setVerificationStatus('init');
     setAiSessionData(null); // Clear AI session data too
+    setVerificationImages(null); // Clear verification images
     setFormData(prev => ({ ...prev, verificationSessionId: "", licenseNumber: "" }));
     localStorage.removeItem('verificationSessionId');
     localStorage.removeItem('verificationToken');
@@ -4236,6 +4260,68 @@ const MultiStepBookingWidget = () => {
                           <p className="text-xs text-muted-foreground mt-1">
                             License/ID: {formData.licenseNumber.slice(0, 4)}****
                           </p>
+                        )}
+
+                        {/* Verification Images */}
+                        {verificationImages && (verificationImages.document_front_url || verificationImages.document_back_url || verificationImages.selfie_image_url) && (
+                          <div className="mt-3 pt-3 border-t border-green-500/20">
+                            <p className="text-xs text-muted-foreground mb-2">Uploaded Documents</p>
+                            <div className="grid grid-cols-3 gap-2">
+                              {/* ID Front */}
+                              <div className="flex flex-col items-center">
+                                <div className={`w-full aspect-[3/4] rounded-md overflow-hidden border bg-muted/30 ${verificationImages.document_front_url ? 'border-green-500/30' : 'border-muted'}`}>
+                                  {verificationImages.document_front_url ? (
+                                    <img
+                                      src={verificationImages.document_front_url}
+                                      alt="ID Front"
+                                      className="w-full h-full object-cover"
+                                    />
+                                  ) : (
+                                    <div className="w-full h-full flex items-center justify-center">
+                                      <FileCheck className="h-4 w-4 text-muted-foreground/50" />
+                                    </div>
+                                  )}
+                                </div>
+                                <span className="text-[9px] mt-1 text-muted-foreground">ID Front</span>
+                              </div>
+
+                              {/* ID Back */}
+                              <div className="flex flex-col items-center">
+                                <div className={`w-full aspect-[3/4] rounded-md overflow-hidden border bg-muted/30 ${verificationImages.document_back_url ? 'border-green-500/30' : 'border-muted'}`}>
+                                  {verificationImages.document_back_url ? (
+                                    <img
+                                      src={verificationImages.document_back_url}
+                                      alt="ID Back"
+                                      className="w-full h-full object-cover"
+                                    />
+                                  ) : (
+                                    <div className="w-full h-full flex items-center justify-center">
+                                      <FileCheck className="h-4 w-4 text-muted-foreground/50" />
+                                    </div>
+                                  )}
+                                </div>
+                                <span className="text-[9px] mt-1 text-muted-foreground">ID Back</span>
+                              </div>
+
+                              {/* Selfie */}
+                              <div className="flex flex-col items-center">
+                                <div className={`w-full aspect-[3/4] rounded-md overflow-hidden border bg-muted/30 ${verificationImages.selfie_image_url ? 'border-green-500/30' : 'border-muted'}`}>
+                                  {verificationImages.selfie_image_url ? (
+                                    <img
+                                      src={verificationImages.selfie_image_url}
+                                      alt="Selfie"
+                                      className="w-full h-full object-cover"
+                                    />
+                                  ) : (
+                                    <div className="w-full h-full flex items-center justify-center">
+                                      <User className="h-4 w-4 text-muted-foreground/50" />
+                                    </div>
+                                  )}
+                                </div>
+                                <span className="text-[9px] mt-1 text-muted-foreground">Selfie</span>
+                              </div>
+                            </div>
+                          </div>
                         )}
                       </div>
                     </div>
