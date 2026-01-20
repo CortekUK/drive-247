@@ -23,7 +23,9 @@ import {
   ChevronRight,
   CheckCircle,
   XCircle,
-  Clock
+  Clock,
+  Undo2,
+  AlertTriangle
 } from "lucide-react";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
@@ -36,6 +38,8 @@ import { AddPaymentDialog } from "@/components/shared/dialogs/add-payment-dialog
 import { usePaymentsData, exportPaymentsCSV } from "@/hooks/use-payments-data";
 import { usePaymentVerificationActions, getVerificationStatusInfo, VerificationStatus } from "@/hooks/use-payment-verification";
 import { useOrgSettings } from "@/hooks/use-org-settings";
+import { supabase } from "@/integrations/supabase/client";
+import { useQueryClient } from "@tanstack/react-query";
 
 // Helper function to display user-friendly payment type names
 const getPaymentTypeDisplay = (paymentType: string): string => {
@@ -52,10 +56,18 @@ const getPaymentTypeDisplay = (paymentType: string): string => {
 const PaymentsList = () => {
   const router = useRouter();
   const { toast } = useToast();
+  const queryClient = useQueryClient();
   const [showAddDialog, setShowAddDialog] = useState(false);
   const [showRejectDialog, setShowRejectDialog] = useState(false);
   const [rejectPaymentId, setRejectPaymentId] = useState<string | null>(null);
   const [rejectReason, setRejectReason] = useState('');
+
+  // Reverse payment state
+  const [showReverseDialog, setShowReverseDialog] = useState(false);
+  const [reversePaymentId, setReversePaymentId] = useState<string | null>(null);
+  const [reversePaymentDetails, setReversePaymentDetails] = useState<{ amount: number; customerName: string } | null>(null);
+  const [reverseReason, setReverseReason] = useState('');
+  const [isReversing, setIsReversing] = useState(false);
 
   // Get settings and verification actions
   const { settings } = useOrgSettings();
@@ -147,6 +159,107 @@ const PaymentsList = () => {
         }
       }
     );
+  };
+
+  // Reverse payment handlers
+  const handleOpenReverseDialog = (payment: any) => {
+    // Only allow reversing manual payments (no Stripe)
+    if (payment.stripe_payment_intent_id) {
+      toast({
+        title: "Cannot Reverse",
+        description: "Stripe payments cannot be reversed. Use refund instead.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // Check if already reversed
+    if (payment.status === 'Reversed' || payment.refund_reason?.includes('[REVERSED]')) {
+      toast({
+        title: "Already Reversed",
+        description: "This payment has already been reversed.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setReversePaymentId(payment.id);
+    setReversePaymentDetails({
+      amount: payment.amount,
+      customerName: payment.customers?.name || 'Unknown Customer'
+    });
+    setReverseReason('');
+    setShowReverseDialog(true);
+  };
+
+  const handleReversePayment = async () => {
+    if (!reversePaymentId || !reverseReason.trim()) return;
+
+    setIsReversing(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('reverse-payment', {
+        body: {
+          paymentId: reversePaymentId,
+          reason: reverseReason.trim(),
+        }
+      });
+
+      if (error) throw error;
+      if (!data?.success) throw new Error(data?.error || 'Failed to reverse payment');
+
+      toast({
+        title: "Payment Reversed",
+        description: `Payment of $${reversePaymentDetails?.amount.toFixed(2)} has been reversed. ${data.details?.applicationsReversed || 0} allocations were undone.`,
+      });
+
+      // Invalidate all related queries
+      queryClient.invalidateQueries({ queryKey: ['payments-data'] });
+      queryClient.invalidateQueries({ queryKey: ['payment-summary'] });
+      queryClient.invalidateQueries({ queryKey: ['ledger-entries'] });
+      queryClient.invalidateQueries({ queryKey: ['rental-charges'] });
+      queryClient.invalidateQueries({ queryKey: ['rental-payments'] });
+      queryClient.invalidateQueries({ queryKey: ['rental-totals'] });
+      queryClient.invalidateQueries({ queryKey: ['customer-balance'] });
+
+      setShowReverseDialog(false);
+      setReversePaymentId(null);
+      setReversePaymentDetails(null);
+      setReverseReason('');
+    } catch (error: any) {
+      console.error('Reverse payment error:', error);
+      toast({
+        title: "Error",
+        description: error.message || "Failed to reverse payment",
+        variant: "destructive",
+      });
+    } finally {
+      setIsReversing(false);
+    }
+  };
+
+  // Check if a payment can be reversed (only manual payments can be reversed)
+  const canReversePayment = (payment: any) => {
+    // Must be a manual payment (no Stripe payment intent)
+    // Stripe payments have stripe_payment_intent_id and are "auto_approved"
+    if (payment.stripe_payment_intent_id) {
+      return false;
+    }
+    // Must not be already reversed
+    if (payment.status === 'Reversed') {
+      return false;
+    }
+    if (payment.refund_reason?.includes('[REVERSED]')) {
+      return false;
+    }
+    // Must not be refunded
+    if (payment.refund_status === 'completed' || payment.refund_status === 'processing') {
+      return false;
+    }
+    // Must not be a rejected payment
+    if (payment.verification_status === 'rejected') {
+      return false;
+    }
+    return true;
   };
 
   const payments = paymentsData?.payments || [];
@@ -304,6 +417,16 @@ const PaymentsList = () => {
                           </TableCell>
                           <TableCell>
                             {(() => {
+                              // Check if payment is reversed first
+                              if (payment.status === 'Reversed' || payment.refund_reason?.includes('[REVERSED]')) {
+                                return (
+                                  <Badge className="bg-orange-100 text-orange-800 border-orange-200">
+                                    <Undo2 className="h-3 w-3 mr-1" />
+                                    Reversed
+                                  </Badge>
+                                );
+                              }
+
                               const verificationStatus = payment.verification_status || 'auto_approved';
                               const statusInfo = getVerificationStatusInfo(verificationStatus);
                               return (
@@ -366,6 +489,21 @@ const PaymentsList = () => {
                                     <FileText className="h-4 w-4 mr-2" />
                                     View Ledger
                                   </DropdownMenuItem>
+                                  {/* Show Reverse Payment for non-reversed, non-refunded payments without Stripe intent */}
+                                  {!payment.stripe_payment_intent_id &&
+                                   payment.status !== 'Reversed' &&
+                                   !payment.refund_reason?.includes('[REVERSED]') &&
+                                   payment.refund_status !== 'completed' &&
+                                   payment.refund_status !== 'processing' &&
+                                   payment.verification_status !== 'rejected' && (
+                                    <DropdownMenuItem
+                                      onClick={() => handleOpenReverseDialog(payment)}
+                                      className="text-orange-600 focus:text-orange-600"
+                                    >
+                                      <Undo2 className="h-4 w-4 mr-2" />
+                                      Reverse Payment
+                                    </DropdownMenuItem>
+                                  )}
                                 </DropdownMenuContent>
                               </DropdownMenu>
                             </div>
@@ -459,6 +597,67 @@ const PaymentsList = () => {
               disabled={!rejectReason.trim() || isVerifying}
             >
               {isVerifying ? 'Rejecting...' : 'Reject Payment'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Reverse Payment Dialog */}
+      <Dialog open={showReverseDialog} onOpenChange={setShowReverseDialog}>
+        <DialogContent className="sm:max-w-[425px]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-orange-600">
+              <AlertTriangle className="h-5 w-5" />
+              Reverse Payment
+            </DialogTitle>
+            <DialogDescription>
+              This will reverse the payment of <span className="font-semibold">${reversePaymentDetails?.amount.toFixed(2)}</span> for{' '}
+              <span className="font-semibold">{reversePaymentDetails?.customerName}</span>.
+              All charge allocations will be undone and the charges will return to outstanding status.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 py-4">
+            <div className="rounded-lg bg-orange-50 dark:bg-orange-950/20 border border-orange-200 dark:border-orange-800 p-3">
+              <div className="flex gap-2">
+                <AlertTriangle className="h-4 w-4 text-orange-600 mt-0.5 flex-shrink-0" />
+                <div className="text-sm text-orange-800 dark:text-orange-200">
+                  <p className="font-medium">This action cannot be undone.</p>
+                  <p className="mt-1">The payment will be marked as reversed and all allocations to charges will be removed.</p>
+                </div>
+              </div>
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="reverse-reason">Reason for Reversal <span className="text-red-500">*</span></Label>
+              <Textarea
+                id="reverse-reason"
+                placeholder="e.g., Payment entered in error, duplicate payment, customer dispute..."
+                value={reverseReason}
+                onChange={(e) => setReverseReason(e.target.value)}
+                rows={3}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowReverseDialog(false)}>
+              Cancel
+            </Button>
+            <Button
+              variant="default"
+              className="bg-orange-600 hover:bg-orange-700"
+              onClick={handleReversePayment}
+              disabled={!reverseReason.trim() || isReversing}
+            >
+              {isReversing ? (
+                <>
+                  <Undo2 className="h-4 w-4 mr-2 animate-spin" />
+                  Reversing...
+                </>
+              ) : (
+                <>
+                  <Undo2 className="h-4 w-4 mr-2" />
+                  Reverse Payment
+                </>
+              )}
             </Button>
           </DialogFooter>
         </DialogContent>
