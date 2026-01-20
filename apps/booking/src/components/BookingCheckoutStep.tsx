@@ -668,12 +668,17 @@ export default function BookingCheckoutStep({
         total_amount: calculateGrandTotal(),
         discount_amount: promoDiscount,
         promo_code: promoDetails?.code || null,
-        notes: promoDetails ? `Promo code applied: ${promoDetails.code} (${promoDetails.type === 'percentage' ? `${promoDetails.value}%` : `$${promoDetails.value}`} off)` : '',
         tenant_id: tenant?.id,
       });
 
       console.log('✅ Invoice ready:', invoice.invoice_number);
-      setGeneratedInvoice(invoice);
+      // Augment invoice with discount info (not stored in DB but needed for display)
+      const invoiceWithDiscount = {
+        ...invoice,
+        discount_amount: promoDiscount,
+        promo_code: promoDetails?.code || null,
+      };
+      setGeneratedInvoice(invoiceWithDiscount);
 
       // Step 5: Store payment details in localStorage for success page
       // Payment record will be created ONLY after Stripe confirms successful payment
@@ -1079,6 +1084,7 @@ export default function BookingCheckoutStep({
           invoice={generatedInvoice}
           isEnquiry={isEnquiry}
           payableAmount={getPayableAmount()}
+          promoDetails={promoDetails}
           customer={{
             name: formData.customerName,
             email: formData.customerEmail,

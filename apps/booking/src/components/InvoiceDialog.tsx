@@ -19,6 +19,8 @@ interface InvoiceDialogProps {
     security_deposit?: number;
     total_amount: number;
     notes?: string;
+    discount_amount?: number;
+    promo_code?: string;
   };
   customer: {
     name: string;
@@ -38,6 +40,12 @@ interface InvoiceDialogProps {
   // Enquiry-based booking props
   isEnquiry?: boolean;
   payableAmount?: number;
+  // Promo details for display
+  promoDetails?: {
+    code: string;
+    type: "percentage" | "fixed_amount";
+    value: number;
+  } | null;
 }
 
 const formatCurrency = (amount: number) => {
@@ -48,8 +56,11 @@ const formatCurrency = (amount: number) => {
 };
 
 // Separate printable component
-const PrintableInvoice = ({ invoice, customer, vehicle, rental }: Omit<InvoiceDialogProps, "open" | "onOpenChange">) => {
+const PrintableInvoice = ({ invoice, customer, vehicle, rental, promoDetails }: Omit<InvoiceDialogProps, "open" | "onOpenChange">) => {
   const vehicleName = vehicle.make && vehicle.model ? `${vehicle.make} ${vehicle.model}` : vehicle.reg;
+  // If there's a discount, subtotal is the discounted amount, so we need to calculate original
+  const discountAmount = invoice.discount_amount || 0;
+  const originalRentalFee = invoice.subtotal + discountAmount;
   const rentalFee = invoice.subtotal;
 
   return (
@@ -120,9 +131,38 @@ const PrintableInvoice = ({ invoice, customer, vehicle, rental }: Omit<InvoiceDi
                 </div>
               </td>
               <td className="p-3 text-sm text-right font-medium">
-                {formatCurrency(rentalFee)}
+                {discountAmount > 0 ? (
+                  <span style={{ textDecoration: 'line-through', color: '#9ca3af' }}>
+                    {formatCurrency(originalRentalFee)}
+                  </span>
+                ) : (
+                  formatCurrency(rentalFee)
+                )}
               </td>
             </tr>
+            {/* Promo Discount Line */}
+            {discountAmount > 0 && promoDetails && (
+              <tr className="border-b border-gray-300" style={{ backgroundColor: '#f0fdf4' }}>
+                <td className="p-3 text-sm">
+                  <div>
+                    <p className="font-medium" style={{ color: '#16a34a' }}>Promo Discount</p>
+                    <p className="text-xs" style={{ color: '#22c55e' }}>
+                      Code: {promoDetails.code} ({promoDetails.type === 'percentage' ? `${promoDetails.value}%` : formatCurrency(promoDetails.value)} off)
+                    </p>
+                  </div>
+                </td>
+                <td className="p-3 text-sm text-right font-medium" style={{ color: '#16a34a' }}>
+                  -{formatCurrency(discountAmount)}
+                </td>
+              </tr>
+            )}
+            {/* Discounted Subtotal */}
+            {discountAmount > 0 && (
+              <tr className="border-b border-gray-300">
+                <td className="p-3 text-sm font-medium">Subtotal (after discount)</td>
+                <td className="p-3 text-sm text-right font-medium">{formatCurrency(rentalFee)}</td>
+              </tr>
+            )}
             {invoice.tax_amount > 0 && (
               <tr className="border-b border-gray-300">
                 <td className="p-3 text-sm">Tax</td>
@@ -143,7 +183,7 @@ const PrintableInvoice = ({ invoice, customer, vehicle, rental }: Omit<InvoiceDi
             )}
             <tr className="bg-gray-100">
               <td className="p-3 text-sm font-bold">Total</td>
-              <td className="p-3 text-lg font-bold text-right" style={{ color: '#06b6d4' }}>
+              <td className="p-3 text-lg font-bold text-right" style={{ color: discountAmount > 0 ? '#16a34a' : '#06b6d4' }}>
                 {formatCurrency(invoice.total_amount)}
               </td>
             </tr>
@@ -178,9 +218,13 @@ export const InvoiceDialog = ({
   rental,
   isEnquiry = false,
   payableAmount,
+  promoDetails,
 }: InvoiceDialogProps) => {
   const printRef = useRef<HTMLDivElement>(null);
   const vehicleName = vehicle.make && vehicle.model ? `${vehicle.make} ${vehicle.model}` : vehicle.reg;
+  // If there's a discount, subtotal is the discounted amount, so we need to calculate original
+  const discountAmount = invoice.discount_amount || 0;
+  const originalRentalFee = invoice.subtotal + discountAmount;
   const rentalFee = invoice.subtotal;
   // For enquiry tenants, display the payable amount (deposit only or $0)
   const displayTotal = isEnquiry && payableAmount !== undefined ? payableAmount : invoice.total_amount;
@@ -212,6 +256,7 @@ export const InvoiceDialog = ({
             customer={customer}
             vehicle={vehicle}
             rental={rental}
+            promoDetails={promoDetails}
           />
         </div>
       </div>
@@ -310,8 +355,37 @@ export const InvoiceDialog = ({
                         </div>
                       </td>
                       <td className="p-3 text-sm text-right font-medium">
-                        {formatCurrency(rentalFee)}
+                        {discountAmount > 0 ? (
+                          <span className="line-through text-muted-foreground">
+                            {formatCurrency(originalRentalFee)}
+                          </span>
+                        ) : (
+                          formatCurrency(rentalFee)
+                        )}
                       </td>
+                    </tr>
+                  )}
+                  {/* Promo Discount Line */}
+                  {!isEnquiry && discountAmount > 0 && promoDetails && (
+                    <tr className="border-b bg-green-50 dark:bg-green-950/30">
+                      <td className="p-3 text-sm">
+                        <div>
+                          <p className="font-medium text-green-600 dark:text-green-400">Promo Discount</p>
+                          <p className="text-xs text-green-500 dark:text-green-500">
+                            Code: {promoDetails.code} ({promoDetails.type === 'percentage' ? `${promoDetails.value}%` : formatCurrency(promoDetails.value)} off)
+                          </p>
+                        </div>
+                      </td>
+                      <td className="p-3 text-sm text-right font-medium text-green-600 dark:text-green-400">
+                        -{formatCurrency(discountAmount)}
+                      </td>
+                    </tr>
+                  )}
+                  {/* Discounted Subtotal */}
+                  {!isEnquiry && discountAmount > 0 && (
+                    <tr className="border-b">
+                      <td className="p-3 text-sm font-medium">Subtotal (after discount)</td>
+                      <td className="p-3 text-sm text-right font-medium">{formatCurrency(rentalFee)}</td>
                     </tr>
                   )}
                   {/* Hide tax and service fee for enquiry tenants */}
@@ -338,7 +412,7 @@ export const InvoiceDialog = ({
                     <td className="p-3 text-sm font-bold">
                       {isEnquiry ? 'Total Due Now' : 'Total'}
                     </td>
-                    <td className="p-3 text-lg font-bold text-right text-accent">
+                    <td className={`p-3 text-lg font-bold text-right ${!isEnquiry && discountAmount > 0 ? 'text-green-600 dark:text-green-400' : 'text-accent'}`}>
                       {formatCurrency(displayTotal)}
                     </td>
                   </tr>

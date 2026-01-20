@@ -82,7 +82,7 @@ export const createInvoice = async (data: InvoiceData): Promise<Invoice> => {
     security_deposit: data.security_deposit || 0,
     total_amount: data.total_amount,
     status: 'pending',
-    notes: data.notes ? `${data.notes}${data.promo_code ? ` | Promo: ${data.promo_code}` : ''}` : (data.promo_code ? `Promo: ${data.promo_code}` : undefined),
+    notes: data.notes || undefined,
   };
 
   if (data.tenant_id) {
