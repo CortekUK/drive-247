@@ -3717,69 +3717,67 @@ const MultiStepBookingWidget = () => {
             <div className="max-w-3xl mx-auto space-y-6">
               {uploadedDocumentId ? (
                 <Card className="overflow-hidden border-2 border-primary/30 bg-card">
-                  <div className="p-8">
+                  <div className="p-8 space-y-6">
+                    {/* Header with icon */}
                     <div className="flex items-start gap-6">
                       <div className="flex-shrink-0">
                         <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center">
                           <FileCheck className="w-8 h-8 text-primary" />
                         </div>
                       </div>
-                      <div className="flex-1 space-y-4">
-                        <div>
-                          <h4 className="text-xl font-semibold text-foreground mb-2">
-                            Documents Uploaded Successfully!
-                          </h4>
-                          <p className="text-muted-foreground">
-                            Our team is reviewing your insurance certificate now.
-                          </p>
-                        </div>
+                      <div className="flex-1">
+                        <h4 className="text-xl font-semibold text-foreground mb-2">
+                          Documents Uploaded Successfully!
+                        </h4>
+                        <p className="text-muted-foreground">
+                          Our team is reviewing your insurance certificate now.
+                        </p>
+                      </div>
+                    </div>
 
-                        {/* Upload Complete Progress */}
-                        <div className="bg-gradient-to-br from-primary/5 to-transparent rounded-lg p-6 border-2 border-primary/20">
-                          <div className="max-w-2xl mx-auto">
-                            <div className="text-center space-y-6">
-                              {/* Success Icon with animated background */}
-                              <div className="relative inline-block mb-4">
-                                <div className="absolute inset-0 bg-primary/10 rounded-full blur-2xl animate-pulse"></div>
-                                <div className="relative">
-                                  <CheckCircle className="h-16 w-16 mx-auto text-primary" />
-                                </div>
-                              </div>
-
-                              <h3 className="text-2xl md:text-3xl font-bold text-primary">
-                                Upload Complete!
-                              </h3>
-
-                              <p className="text-base md:text-lg text-muted-foreground max-w-lg mx-auto">
-                                Your insurance certificate is being reviewed by our team
-                              </p>
-
-                              {/* Progress Bar at 100% */}
-                              <div className="space-y-3 pt-2">
-                                <div className="w-full bg-muted rounded-full h-3 overflow-hidden">
-                                  <div className="bg-primary h-full w-full transition-all duration-500"></div>
-                                </div>
-                                <p className="text-sm font-medium text-primary">
-                                  100% complete
-                                </p>
-
-                                {/* Subtle AI indicator */}
-                                <div className="flex items-center justify-center gap-2 pt-2">
-                                  <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-primary/10 border border-primary/20">
-                                    <div className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse"></div>
-                                    <span className="text-xs text-muted-foreground">AI-assisted verification</span>
-                                  </div>
-                                </div>
-                              </div>
-                            </div>
+                    {/* Upload Complete Progress - Full width centered */}
+                    <div className="bg-gradient-to-br from-primary/5 to-transparent rounded-lg p-6 border-2 border-primary/20">
+                      <div className="flex flex-col items-center text-center space-y-6">
+                        {/* Success Icon with animated background */}
+                        <div className="relative">
+                          <div className="absolute inset-0 bg-primary/10 rounded-full blur-2xl animate-pulse"></div>
+                          <div className="relative">
+                            <CheckCircle className="h-16 w-16 text-primary" />
                           </div>
                         </div>
 
-                        <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                          <CheckCircle className="w-4 h-4 text-primary" />
-                          <span>You can continue with your booking</span>
+                        <h3 className="text-2xl md:text-3xl font-bold text-primary">
+                          Upload Complete!
+                        </h3>
+
+                        <p className="text-base md:text-lg text-muted-foreground max-w-lg">
+                          Your insurance certificate is being reviewed by our team
+                        </p>
+
+                        {/* Progress Bar at 100% */}
+                        <div className="w-full max-w-md space-y-3 pt-2">
+                          <div className="w-full bg-muted rounded-full h-3 overflow-hidden">
+                            <div className="bg-primary h-full w-full transition-all duration-500"></div>
+                          </div>
+                          <p className="text-sm font-medium text-primary">
+                            100% complete
+                          </p>
+
+                          {/* Subtle AI indicator */}
+                          <div className="flex items-center justify-center gap-2 pt-2">
+                            <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-primary/10 border border-primary/20">
+                              <div className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse"></div>
+                              <span className="text-xs text-muted-foreground">AI-assisted verification</span>
+                            </div>
+                          </div>
                         </div>
                       </div>
+                    </div>
+
+                    {/* Footer message */}
+                    <div className="flex items-center justify-center gap-2 text-sm text-muted-foreground">
+                      <CheckCircle className="w-4 h-4 text-primary" />
+                      <span>You can continue with your booking</span>
                     </div>
                   </div>
                 </Card>
