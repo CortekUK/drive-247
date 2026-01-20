@@ -47,6 +47,18 @@ export const addVehicleDialogSchema = z.object({
       path: ["contract_total"],
     });
   }
+
+  // Vehicle year cannot be greater than acquisition date year
+  if (data.year && data.acquisition_date) {
+    const acquisitionYear = data.acquisition_date.getFullYear();
+    if (data.year > acquisitionYear) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: `Vehicle year (${data.year}) cannot be greater than acquisition year (${acquisitionYear})`,
+        path: ["year"],
+      });
+    }
+  }
 }).refine((data) => {
   if (data.has_spare_key) {
     return data.spare_key_holder !== undefined;

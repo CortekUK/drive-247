@@ -241,12 +241,12 @@ export function useKeyHandover(rentalId: string | undefined) {
       // If giving key, check if rental is approved before setting to Active
       if (type === "giving") {
         // First, get the rental with customer and vehicle info for notifications
-        const { data: rental, error: rentalError } = await supabase
+        let rentalQuery = supabase
           .from("rentals")
           .select(`
+            id,
             approval_status,
             payment_status,
-            booking_reference,
             start_date,
             end_date,
             customer:customers(
@@ -264,11 +264,17 @@ export function useKeyHandover(rentalId: string | undefined) {
               color
             )
           `)
-          .eq("id", rentalId)
-          .single();
+          .eq("id", rentalId);
+
+        // Add tenant filter if available
+        if (tenant?.id) {
+          rentalQuery = rentalQuery.eq("tenant_id", tenant.id);
+        }
+
+        const { data: rental, error: rentalError } = await rentalQuery.single();
 
         if (rentalError) {
-          console.error('Error fetching rental for key handover:', rentalError);
+          console.error('Error fetching rental for key handover:', rentalError.message || rentalError);
         }
         console.log('Key handover - rental data:', {
           approval_status: rental?.approval_status,
@@ -307,7 +313,7 @@ export function useKeyHandover(rentalId: string | undefined) {
                 vehicleMake: vehicle.make,
                 vehicleModel: vehicle.model,
                 vehicleColor: vehicle.color,
-                bookingRef: rental.booking_reference || rentalId,
+                bookingRef: rentalId,
                 startDate: rental.start_date ? new Date(rental.start_date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : '',
                 endDate: rental.end_date ? new Date(rental.end_date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : '',
                 tenantId: tenant?.id,
@@ -331,18 +337,18 @@ export function useKeyHandover(rentalId: string | undefined) {
             // Don't throw - notification failure shouldn't block the handover
           }
 
-          return { type, becameActive: true };
+          return { type, becameActive: true, depositRefunded: false, depositAmount: 0 };
         }
 
-        return { type, becameActive: false };
+        return { type, becameActive: false, depositRefunded: false, depositAmount: 0 };
       }
 
-      // If receiving key, update rental status to Closed and vehicle to Available
+      // If receiving key, update rental status to Closed, vehicle to Available, and refund security deposit
       if (type === "receiving") {
-        // Get the vehicle_id from the rental
+        // Get the rental details including vehicle_id and tenant_id
         const { data: rental } = await supabase
           .from("rentals")
-          .select("vehicle_id")
+          .select("vehicle_id, tenant_id, customer_id")
           .eq("id", rentalId)
           .maybeSingle();
 
@@ -361,17 +367,65 @@ export function useKeyHandover(rentalId: string | undefined) {
             .update({ status: "Available" })
             .eq("id", rental.vehicle_id);
         }
+
+        // Auto-refund security deposit
+        // First, check if there's a security deposit that was paid
+        const { data: invoice } = await supabase
+          .from("invoices")
+          .select("security_deposit")
+          .eq("rental_id", rentalId)
+          .order("created_at", { ascending: false })
+          .limit(1)
+          .maybeSingle();
+
+        const securityDeposit = invoice?.security_deposit || 0;
+
+        if (securityDeposit > 0) {
+          console.log(`[KEY-HANDOVER] Auto-refunding security deposit: $${securityDeposit} for rental ${rentalId}`);
+
+          try {
+            // Call the process-refund edge function
+            const { data: refundResult, error: refundError } = await supabase.functions.invoke('process-refund', {
+              body: {
+                rentalId,
+                refundType: 'full',
+                refundAmount: securityDeposit,
+                category: 'Security Deposit',
+                reason: 'Automatic refund - keys returned and rental closed',
+                processedBy: 'system',
+                tenantId: rental?.tenant_id || tenant?.id,
+              }
+            });
+
+            if (refundError) {
+              console.error('[KEY-HANDOVER] Security deposit refund failed:', refundError);
+              // Don't throw - rental closure is more important than refund
+            } else {
+              console.log('[KEY-HANDOVER] Security deposit refunded successfully:', refundResult);
+            }
+          } catch (refundErr) {
+            console.error('[KEY-HANDOVER] Error processing security deposit refund:', refundErr);
+            // Don't throw - rental closure is more important
+          }
+        }
+
+        return { type, becameActive: false, depositRefunded: securityDeposit > 0, depositAmount: securityDeposit };
       }
 
-      return { type, becameActive: false };
+      return { type, becameActive: false, depositRefunded: false, depositAmount: 0 };
     },
-    onSuccess: ({ type, becameActive }) => {
+    onSuccess: ({ type, becameActive, depositRefunded, depositAmount }) => {
       queryClient.invalidateQueries({ queryKey: ["key-handovers", rentalId] });
       queryClient.invalidateQueries({ queryKey: ["key-handover-status", rentalId] });
       queryClient.invalidateQueries({ queryKey: ["rental", rentalId] });
       queryClient.invalidateQueries({ queryKey: ["rentals-list"] });
       queryClient.invalidateQueries({ queryKey: ["enhanced-rentals"] });
       queryClient.invalidateQueries({ queryKey: ["vehicles-list"] });
+      // Also invalidate payment/invoice data for refund updates
+      queryClient.invalidateQueries({ queryKey: ["rental-totals"] });
+      queryClient.invalidateQueries({ queryKey: ["rental-invoice"] });
+      queryClient.invalidateQueries({ queryKey: ["rental-payments"] });
+      queryClient.invalidateQueries({ queryKey: ["payments-data"] });
 
       if (type === "giving") {
         toast({
@@ -381,10 +435,18 @@ export function useKeyHandover(rentalId: string | undefined) {
             : "Key handover recorded. Rental will become active once approved.",
         });
       } else {
-        toast({
-          title: "Key Received",
-          description: "Rental is now closed.",
-        });
+        // Key received - rental closed
+        if (depositRefunded && depositAmount && depositAmount > 0) {
+          toast({
+            title: "Key Received & Deposit Refunded",
+            description: `Rental is now closed. Security deposit of $${depositAmount.toFixed(2)} has been refunded to the customer.`,
+          });
+        } else {
+          toast({
+            title: "Key Received",
+            description: "Rental is now closed.",
+          });
+        }
       }
     },
     onError: (error: Error) => {

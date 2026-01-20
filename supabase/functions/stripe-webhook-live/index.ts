@@ -249,12 +249,12 @@ serve(async (req) => {
                 apply_from_date: today,
                 method: "Card",
                 payment_type: "Payment",
-                status: "Pending", // Will be updated when admin approves
+                status: "Completed",
                 remaining_amount: paymentAmount,
-                verification_status: "pending", // Changed: needs admin approval
+                verification_status: "auto_approved", // Stripe verified payment
                 stripe_checkout_session_id: session.id,
                 stripe_payment_intent_id: session.payment_intent as string,
-                capture_status: "captured", // Payment is captured, just needs approval
+                capture_status: "captured",
                 booking_source: "website",
               };
 

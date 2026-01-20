@@ -197,9 +197,9 @@ serve(async (req) => {
               method: 'Card',
               payment_type: 'Payment',
               status: 'Applied',
-              verification_status: 'pending',
-              stripe_checkout_session_id: session.id, // ✅ Save it!
-              capture_status: 'requires_capture', // ✅ Valid value!
+              verification_status: 'auto_approved', // Stripe verified payment
+              stripe_checkout_session_id: session.id,
+              capture_status: 'requires_capture',
               booking_source: 'website',
               created_at: new Date().toISOString(),
               updated_at: new Date().toISOString(),

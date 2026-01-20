@@ -30,17 +30,17 @@ interface ReminderContext {
 
 function getTitleTemplate(ruleCode: string, context: ReminderContext): string {
   const templates: Record<string, (ctx: ReminderContext) => string> = {
-    // MOT reminders
-    MOT_30D: (ctx) => `MOT due soon — ${ctx.reg} (30 days)`,
-    MOT_14D: (ctx) => `MOT due soon — ${ctx.reg} (14 days)`,
-    MOT_7D: (ctx) => `MOT due soon — ${ctx.reg} (7 days)`,
-    MOT_0D: (ctx) => `MOT due today — ${ctx.reg}`,
-    
-    // TAX reminders
-    TAX_30D: (ctx) => `TAX due soon — ${ctx.reg} (30 days)`,
-    TAX_14D: (ctx) => `TAX due soon — ${ctx.reg} (14 days)`,
-    TAX_7D: (ctx) => `TAX due soon — ${ctx.reg} (7 days)`,
-    TAX_0D: (ctx) => `TAX due today — ${ctx.reg}`,
+    // Inspection reminders (MOT)
+    MOT_30D: (ctx) => `Inspection due soon — ${ctx.reg} (30 days)`,
+    MOT_14D: (ctx) => `Inspection due soon — ${ctx.reg} (14 days)`,
+    MOT_7D: (ctx) => `Inspection due soon — ${ctx.reg} (7 days)`,
+    MOT_0D: (ctx) => `Inspection due today — ${ctx.reg}`,
+
+    // Registration reminders (TAX)
+    TAX_30D: (ctx) => `Registration due soon — ${ctx.reg} (30 days)`,
+    TAX_14D: (ctx) => `Registration due soon — ${ctx.reg} (14 days)`,
+    TAX_7D: (ctx) => `Registration due soon — ${ctx.reg} (7 days)`,
+    TAX_0D: (ctx) => `Registration due today — ${ctx.reg}`,
     
     // Insurance reminders
     INS_30D: (ctx) => `Insurance expiring — ${ctx.customer_name} (${ctx.reg}) (30 days)`,
@@ -71,14 +71,14 @@ function getTitleTemplate(ruleCode: string, context: ReminderContext): string {
     IMM_FIT_0D: (ctx) => `Fit immobiliser — ${ctx.reg} (overdue)`,
     
     // Legacy codes for backward compatibility
-    VEH_MOT_30D: (ctx) => `MOT due soon — ${ctx.reg} (30 days)`,
-    VEH_MOT_14D: (ctx) => `MOT due soon — ${ctx.reg} (14 days)`,
-    VEH_MOT_7D: (ctx) => `MOT due soon — ${ctx.reg} (7 days)`,
-    VEH_MOT_0D: (ctx) => `MOT due today — ${ctx.reg}`,
-    VEH_TAX_30D: (ctx) => `TAX due soon — ${ctx.reg} (30 days)`,
-    VEH_TAX_14D: (ctx) => `TAX due soon — ${ctx.reg} (14 days)`,
-    VEH_TAX_7D: (ctx) => `TAX due soon — ${ctx.reg} (7 days)`,
-    VEH_TAX_0D: (ctx) => `TAX due today — ${ctx.reg}`,
+    VEH_MOT_30D: (ctx) => `Inspection due soon — ${ctx.reg} (30 days)`,
+    VEH_MOT_14D: (ctx) => `Inspection due soon — ${ctx.reg} (14 days)`,
+    VEH_MOT_7D: (ctx) => `Inspection due soon — ${ctx.reg} (7 days)`,
+    VEH_MOT_0D: (ctx) => `Inspection due today — ${ctx.reg}`,
+    VEH_TAX_30D: (ctx) => `Registration due soon — ${ctx.reg} (30 days)`,
+    VEH_TAX_14D: (ctx) => `Registration due soon — ${ctx.reg} (14 days)`,
+    VEH_TAX_7D: (ctx) => `Registration due soon — ${ctx.reg} (7 days)`,
+    VEH_TAX_0D: (ctx) => `Registration due today — ${ctx.reg}`,
     INS_EXP_30D: (ctx) => `Insurance expiring — ${ctx.customer_name} (${ctx.reg}) (30 days)`,
     INS_EXP_14D: (ctx) => `Insurance expiring — ${ctx.customer_name} (${ctx.reg}) (14 days)`,
     INS_EXP_7D: (ctx) => `Insurance expiring — ${ctx.customer_name} (${ctx.reg}) (7 days)`,
@@ -106,17 +106,17 @@ function getMessageTemplate(ruleCode: string, context: ReminderContext): string 
   }).format(amount);
 
   const templates: Record<string, (ctx: ReminderContext) => string> = {
-    // MOT reminders
-    MOT_30D: (ctx) => `MOT for ${ctx.reg} (${ctx.make} ${ctx.model}) due on ${ctx.due_date}. Please book test soon.`,
-    MOT_14D: (ctx) => `MOT for ${ctx.reg} (${ctx.make} ${ctx.model}) due on ${ctx.due_date}. Please book test immediately.`,
-    MOT_7D: (ctx) => `MOT for ${ctx.reg} (${ctx.make} ${ctx.model}) due on ${ctx.due_date}. Book test urgently!`,
-    MOT_0D: (ctx) => `MOT for ${ctx.reg} (${ctx.make} ${ctx.model}) due today (${ctx.due_date}). Immediate action required!`,
-    
-    // TAX reminders
-    TAX_30D: (ctx) => `TAX for ${ctx.reg} (${ctx.make} ${ctx.model}) due on ${ctx.due_date}. Renew soon.`,
-    TAX_14D: (ctx) => `TAX for ${ctx.reg} (${ctx.make} ${ctx.model}) due on ${ctx.due_date}. Renew immediately.`,
-    TAX_7D: (ctx) => `TAX for ${ctx.reg} (${ctx.make} ${ctx.model}) due on ${ctx.due_date}. Renew urgently!`,
-    TAX_0D: (ctx) => `TAX for ${ctx.reg} (${ctx.make} ${ctx.model}) due today (${ctx.due_date}). Immediate action required!`,
+    // Inspection reminders (MOT)
+    MOT_30D: (ctx) => `Inspection for ${ctx.reg} (${ctx.make} ${ctx.model}) due on ${ctx.due_date}. Please schedule inspection soon.`,
+    MOT_14D: (ctx) => `Inspection for ${ctx.reg} (${ctx.make} ${ctx.model}) due on ${ctx.due_date}. Please schedule inspection immediately.`,
+    MOT_7D: (ctx) => `Inspection for ${ctx.reg} (${ctx.make} ${ctx.model}) due on ${ctx.due_date}. Schedule inspection urgently!`,
+    MOT_0D: (ctx) => `Inspection for ${ctx.reg} (${ctx.make} ${ctx.model}) due today (${ctx.due_date}). Immediate action required!`,
+
+    // Registration reminders (TAX)
+    TAX_30D: (ctx) => `Registration for ${ctx.reg} (${ctx.make} ${ctx.model}) due on ${ctx.due_date}. Renew soon.`,
+    TAX_14D: (ctx) => `Registration for ${ctx.reg} (${ctx.make} ${ctx.model}) due on ${ctx.due_date}. Renew immediately.`,
+    TAX_7D: (ctx) => `Registration for ${ctx.reg} (${ctx.make} ${ctx.model}) due on ${ctx.due_date}. Renew urgently!`,
+    TAX_0D: (ctx) => `Registration for ${ctx.reg} (${ctx.make} ${ctx.model}) due today (${ctx.due_date}). Immediate action required!`,
     
     // Insurance reminders
     INS_30D: (ctx) => `Insurance policy ${ctx.policy_no} for ${ctx.customer_name} expires on ${ctx.due_date}. Contact ${ctx.provider} to renew.`,
@@ -147,14 +147,14 @@ function getMessageTemplate(ruleCode: string, context: ReminderContext): string 
     IMM_FIT_0D: (ctx) => `Vehicle ${ctx.reg} (${ctx.make} ${ctx.model}) is overdue for immobiliser fitting - acquired ${ctx.days_until || 0} days ago. Immediate action required!`,
     
     // Legacy codes for backward compatibility
-    VEH_MOT_30D: (ctx) => `MOT for ${ctx.reg} (${ctx.make} ${ctx.model}) due on ${ctx.due_date}. Please book test soon.`,
-    VEH_MOT_14D: (ctx) => `MOT for ${ctx.reg} (${ctx.make} ${ctx.model}) due on ${ctx.due_date}. Please book test immediately.`,
-    VEH_MOT_7D: (ctx) => `MOT for ${ctx.reg} (${ctx.make} ${ctx.model}) due on ${ctx.due_date}. Book test urgently!`,
-    VEH_MOT_0D: (ctx) => `MOT for ${ctx.reg} (${ctx.make} ${ctx.model}) due today (${ctx.due_date}). Immediate action required!`,
-    VEH_TAX_30D: (ctx) => `TAX for ${ctx.reg} (${ctx.make} ${ctx.model}) due on ${ctx.due_date}. Renew soon.`,
-    VEH_TAX_14D: (ctx) => `TAX for ${ctx.reg} (${ctx.make} ${ctx.model}) due on ${ctx.due_date}. Renew immediately.`,
-    VEH_TAX_7D: (ctx) => `TAX for ${ctx.reg} (${ctx.make} ${ctx.model}) due on ${ctx.due_date}. Renew urgently!`,
-    VEH_TAX_0D: (ctx) => `TAX for ${ctx.reg} (${ctx.make} ${ctx.model}) due today (${ctx.due_date}). Immediate action required!`,
+    VEH_MOT_30D: (ctx) => `Inspection for ${ctx.reg} (${ctx.make} ${ctx.model}) due on ${ctx.due_date}. Please schedule inspection soon.`,
+    VEH_MOT_14D: (ctx) => `Inspection for ${ctx.reg} (${ctx.make} ${ctx.model}) due on ${ctx.due_date}. Please schedule inspection immediately.`,
+    VEH_MOT_7D: (ctx) => `Inspection for ${ctx.reg} (${ctx.make} ${ctx.model}) due on ${ctx.due_date}. Schedule inspection urgently!`,
+    VEH_MOT_0D: (ctx) => `Inspection for ${ctx.reg} (${ctx.make} ${ctx.model}) due today (${ctx.due_date}). Immediate action required!`,
+    VEH_TAX_30D: (ctx) => `Registration for ${ctx.reg} (${ctx.make} ${ctx.model}) due on ${ctx.due_date}. Renew soon.`,
+    VEH_TAX_14D: (ctx) => `Registration for ${ctx.reg} (${ctx.make} ${ctx.model}) due on ${ctx.due_date}. Renew immediately.`,
+    VEH_TAX_7D: (ctx) => `Registration for ${ctx.reg} (${ctx.make} ${ctx.model}) due on ${ctx.due_date}. Renew urgently!`,
+    VEH_TAX_0D: (ctx) => `Registration for ${ctx.reg} (${ctx.make} ${ctx.model}) due today (${ctx.due_date}). Immediate action required!`,
     INS_EXP_30D: (ctx) => `Insurance policy ${ctx.policy_no} for ${ctx.customer_name} expires on ${ctx.due_date}. Contact ${ctx.provider} to renew.`,
     INS_EXP_14D: (ctx) => `Insurance policy ${ctx.policy_no} for ${ctx.customer_name} expires on ${ctx.due_date}. Renew immediately with ${ctx.provider}.`,
     INS_EXP_7D: (ctx) => `Insurance policy ${ctx.policy_no} for ${ctx.customer_name} expires on ${ctx.due_date}. Urgent renewal required!`,
@@ -199,23 +199,27 @@ serve(async (req) => {
     const today = new Date().toISOString().split('T')[0];
     let totalGenerated = 0;
 
-    // Check if reminders are enabled
-    const { data: config } = await supabase
+    // Check if reminders are enabled (default to enabled if config doesn't exist)
+    const { data: config, error: configError } = await supabase
       .from('reminder_config')
       .select('config_value')
       .eq('config_key', 'reminders.enabled')
-      .single();
+      .maybeSingle();
 
-    if (!config || config.config_value !== true) {
-      console.log('Reminders are disabled, skipping generation');
-      return new Response(JSON.stringify({ 
-        success: true, 
+    // Only skip if explicitly disabled (config exists and value is false)
+    if (config && config.config_value === false) {
+      console.log('Reminders are explicitly disabled, skipping generation');
+      return new Response(JSON.stringify({
+        success: true,
         message: 'Reminders disabled',
-        generated: 0 
+        generated: 0
       }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
+
+    // Log config status for debugging
+    console.log('Reminder config:', { config, configError });
 
     // 1. Expire old reminders
     const { data: expiredReminders, error: expireError } = await supabase
@@ -272,156 +276,165 @@ serve(async (req) => {
     }, {} as Record<string, any[]>);
 
     // 3. Generate Vehicle MOT/TAX/Immobiliser reminders
-    const { data: vehicles } = await supabase
+    const { data: vehicles, error: vehiclesError } = await supabase
       .from('vehicles')
-      .select('id, reg, make, model, mot_due_date, tax_due_date, has_remote_immobiliser, acquisition_date, tenant_id')
-      .or('mot_due_date.not.is.null,tax_due_date.not.is.null,has_remote_immobiliser.eq.false')
-      .eq('is_disposed', false);
+      .select('id, reg, make, model, mot_due_date, tax_due_date, has_remote_immobiliser, acquisition_date, tenant_id, is_disposed')
+      .or('mot_due_date.not.is.null,tax_due_date.not.is.null,has_remote_immobiliser.eq.false');
 
-    for (const vehicle of vehicles || []) {
-      // MOT reminders - select most appropriate rule
-      if (vehicle.mot_due_date && rulesByType['MOT']) {
+    if (vehiclesError) {
+      console.error('Error fetching vehicles:', vehiclesError);
+    }
+
+    // Filter out disposed vehicles (handle null as not disposed)
+    const activeVehicles = (vehicles || []).filter(v => v.is_disposed !== true);
+    console.log(`Found ${activeVehicles.length} active vehicles with MOT/TAX dates or needing immobiliser`);
+
+    for (const vehicle of activeVehicles) {
+      // MOT (Inspection) reminders - always create when mot_due_date is set
+      if (vehicle.mot_due_date) {
+        console.log(`Processing vehicle ${vehicle.reg} with mot_due_date: ${vehicle.mot_due_date}`);
         const motDate = new Date(vehicle.mot_due_date);
-        
-        // Find the most appropriate rule (smallest lead_days that meets criteria)
-        let bestRule = null;
-        for (const rule of rulesByType['MOT']) {
-          const remindDate = new Date(motDate);
-          remindDate.setDate(motDate.getDate() - rule.lead_days);
-          const remindDateStr = remindDate.toISOString().split('T')[0];
+        const daysUntilDue = Math.ceil((motDate.getTime() - new Date(today).getTime()) / (1000 * 60 * 60 * 24));
 
-          if (remindDateStr <= today) {
-            if (!bestRule || rule.lead_days < bestRule.lead_days) {
-              bestRule = rule;
-            }
-          }
+        // Determine the appropriate rule code based on days until due
+        let ruleCode: string;
+        if (daysUntilDue <= 0) {
+          ruleCode = 'MOT_0D';
+        } else if (daysUntilDue <= 7) {
+          ruleCode = 'MOT_7D';
+        } else if (daysUntilDue <= 14) {
+          ruleCode = 'MOT_14D';
+        } else {
+          ruleCode = 'MOT_30D';
         }
 
-        // Create reminder only for the best rule
-        if (bestRule) {
-          const context: ReminderContext = {
-            vehicle_id: vehicle.id,
-            reg: vehicle.reg,
-            make: vehicle.make,
-            model: vehicle.model,
-            due_date: vehicle.mot_due_date,
-            days_until: bestRule.lead_days
-          };
+        const context: ReminderContext = {
+          vehicle_id: vehicle.id,
+          reg: vehicle.reg,
+          make: vehicle.make,
+          model: vehicle.model,
+          due_date: vehicle.mot_due_date,
+          days_until: Math.max(0, daysUntilDue)
+        };
 
-          const remindDate = new Date(motDate);
-          remindDate.setDate(motDate.getDate() - bestRule.lead_days);
-          const remindDateStr = remindDate.toISOString().split('T')[0];
+        // Check if reminder already exists and is snoozed - if so, don't overwrite
+        const { data: existingReminder } = await supabase
+          .from('reminders')
+          .select('id, status')
+          .eq('object_type', 'Vehicle')
+          .eq('object_id', vehicle.id)
+          .eq('due_on', vehicle.mot_due_date)
+          .like('rule_code', 'MOT_%')
+          .maybeSingle();
 
-          // Check if reminder already exists and is snoozed - if so, don't overwrite
-          const { data: existingReminder } = await supabase
+        // Skip if reminder exists and is snoozed
+        if (existingReminder && existingReminder.status === 'snoozed') {
+          continue;
+        }
+
+        // Delete any existing MOT reminder for this vehicle/due_date to avoid duplicates
+        if (existingReminder) {
+          await supabase
             .from('reminders')
-            .select('id, status')
-            .eq('rule_code', bestRule.rule_code)
-            .eq('object_type', 'Vehicle')
-            .eq('object_id', vehicle.id)
-            .eq('due_on', vehicle.mot_due_date)
-            .eq('remind_on', remindDateStr)
-            .single();
+            .delete()
+            .eq('id', existingReminder.id);
+        }
 
-          // Skip if reminder exists and is snoozed
-          if (existingReminder && existingReminder.status === 'snoozed') {
-            continue;
-          }
+        const { error: reminderError } = await supabase
+          .from('reminders')
+          .insert({
+            rule_code: ruleCode,
+            object_type: 'Vehicle',
+            object_id: vehicle.id,
+            title: getTitleTemplate(ruleCode, context),
+            message: getMessageTemplate(ruleCode, context),
+            due_on: vehicle.mot_due_date,
+            remind_on: today,
+            severity: daysUntilDue <= 0 ? 'critical' : daysUntilDue <= 7 ? 'warning' : 'info',
+            context: context,
+            status: 'pending',
+            tenant_id: vehicle.tenant_id
+          });
 
-          const { error: reminderError } = await supabase
-            .from('reminders')
-            .upsert({
-              rule_code: bestRule.rule_code,
-              object_type: 'Vehicle',
-              object_id: vehicle.id,
-              title: getTitleTemplate(bestRule.rule_code, context),
-              message: getMessageTemplate(bestRule.rule_code, context),
-              due_on: vehicle.mot_due_date,
-              remind_on: remindDateStr,
-              severity: bestRule.severity,
-              context: context,
-              status: 'pending',
-              tenant_id: vehicle.tenant_id
-            }, {
-              onConflict: 'rule_code,object_type,object_id,due_on,remind_on'
-            });
-
-          if (!reminderError) {
-            totalGenerated++;
-          }
+        if (reminderError) {
+          console.error('Error creating MOT reminder:', reminderError);
+        } else {
+          totalGenerated++;
+          console.log(`Created Inspection reminder for ${vehicle.reg}, due in ${daysUntilDue} days`);
         }
       }
 
-      // TAX reminders - select most appropriate rule
-      if (vehicle.tax_due_date && rulesByType['TAX']) {
+      // TAX (Registration) reminders - always create when tax_due_date is set
+      if (vehicle.tax_due_date) {
+        console.log(`Processing vehicle ${vehicle.reg} with tax_due_date: ${vehicle.tax_due_date}`);
         const taxDate = new Date(vehicle.tax_due_date);
-        
-        // Find the most appropriate rule (smallest lead_days that meets criteria)
-        let bestRule = null;
-        for (const rule of rulesByType['TAX']) {
-          const remindDate = new Date(taxDate);
-          remindDate.setDate(taxDate.getDate() - rule.lead_days);
-          const remindDateStr = remindDate.toISOString().split('T')[0];
+        const daysUntilDue = Math.ceil((taxDate.getTime() - new Date(today).getTime()) / (1000 * 60 * 60 * 24));
 
-          if (remindDateStr <= today) {
-            if (!bestRule || rule.lead_days < bestRule.lead_days) {
-              bestRule = rule;
-            }
-          }
+        // Determine the appropriate rule code based on days until due
+        let ruleCode: string;
+        if (daysUntilDue <= 0) {
+          ruleCode = 'TAX_0D';
+        } else if (daysUntilDue <= 7) {
+          ruleCode = 'TAX_7D';
+        } else if (daysUntilDue <= 14) {
+          ruleCode = 'TAX_14D';
+        } else {
+          ruleCode = 'TAX_30D';
         }
 
-        // Create reminder only for the best rule
-        if (bestRule) {
-          const context: ReminderContext = {
-            vehicle_id: vehicle.id,
-            reg: vehicle.reg,
-            make: vehicle.make,
-            model: vehicle.model,
-            due_date: vehicle.tax_due_date,
-            days_until: bestRule.lead_days
-          };
+        const context: ReminderContext = {
+          vehicle_id: vehicle.id,
+          reg: vehicle.reg,
+          make: vehicle.make,
+          model: vehicle.model,
+          due_date: vehicle.tax_due_date,
+          days_until: Math.max(0, daysUntilDue)
+        };
 
-          const remindDate = new Date(taxDate);
-          remindDate.setDate(taxDate.getDate() - bestRule.lead_days);
-          const remindDateStr = remindDate.toISOString().split('T')[0];
+        // Check if reminder already exists and is snoozed - if so, don't overwrite
+        const { data: existingReminder } = await supabase
+          .from('reminders')
+          .select('id, status')
+          .eq('object_type', 'Vehicle')
+          .eq('object_id', vehicle.id)
+          .eq('due_on', vehicle.tax_due_date)
+          .like('rule_code', 'TAX_%')
+          .maybeSingle();
 
-          // Check if reminder already exists and is snoozed - if so, don't overwrite
-          const { data: existingReminder } = await supabase
+        // Skip if reminder exists and is snoozed
+        if (existingReminder && existingReminder.status === 'snoozed') {
+          continue;
+        }
+
+        // Delete any existing TAX reminder for this vehicle/due_date to avoid duplicates
+        if (existingReminder) {
+          await supabase
             .from('reminders')
-            .select('id, status')
-            .eq('rule_code', bestRule.rule_code)
-            .eq('object_type', 'Vehicle')
-            .eq('object_id', vehicle.id)
-            .eq('due_on', vehicle.tax_due_date)
-            .eq('remind_on', remindDateStr)
-            .single();
+            .delete()
+            .eq('id', existingReminder.id);
+        }
 
-          // Skip if reminder exists and is snoozed
-          if (existingReminder && existingReminder.status === 'snoozed') {
-            continue;
-          }
+        const { error: reminderError } = await supabase
+          .from('reminders')
+          .insert({
+            rule_code: ruleCode,
+            object_type: 'Vehicle',
+            object_id: vehicle.id,
+            title: getTitleTemplate(ruleCode, context),
+            message: getMessageTemplate(ruleCode, context),
+            due_on: vehicle.tax_due_date,
+            remind_on: today,
+            severity: daysUntilDue <= 0 ? 'critical' : daysUntilDue <= 7 ? 'warning' : 'info',
+            context: context,
+            status: 'pending',
+            tenant_id: vehicle.tenant_id
+          });
 
-          const { error: reminderError } = await supabase
-            .from('reminders')
-            .upsert({
-              rule_code: bestRule.rule_code,
-              object_type: 'Vehicle',
-              object_id: vehicle.id,
-              title: getTitleTemplate(bestRule.rule_code, context),
-              message: getMessageTemplate(bestRule.rule_code, context),
-              due_on: vehicle.tax_due_date,
-              remind_on: remindDateStr,
-              severity: bestRule.severity,
-              context: context,
-              status: 'pending',
-              tenant_id: vehicle.tenant_id
-            }, {
-              onConflict: 'rule_code,object_type,object_id,due_on,remind_on'
-            });
-
-          if (!reminderError) {
-            totalGenerated++;
-          }
+        if (reminderError) {
+          console.error('Error creating TAX reminder:', reminderError);
+        } else {
+          totalGenerated++;
+          console.log(`Created Registration reminder for ${vehicle.reg}, due in ${daysUntilDue} days`);
         }
       }
 

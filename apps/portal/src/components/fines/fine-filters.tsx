@@ -33,7 +33,7 @@ export const FineFilters = ({ onFiltersChange }: FineFiltersProps) => {
   const searchParams = useSearchParams();
   const router = useRouter();
   const [isOpen, setIsOpen] = useState(false);
-  
+
   const [filters, setFilters] = useState<FineFilterState>({
     status: searchParams?.getAll('status') || [],
     liability: searchParams?.getAll('liability') || [],
@@ -63,10 +63,10 @@ export const FineFilters = ({ onFiltersChange }: FineFiltersProps) => {
     const newFilters = { ...filters, [key]: value };
     setFilters(newFilters);
     onFiltersChange(newFilters);
-    
+
     // Update URL params
     const newSearchParams = new URLSearchParams(searchParams?.toString() || "");
-    
+
     if (Array.isArray(value)) {
       newSearchParams.delete(key);
       value.forEach(v => newSearchParams.append(key, v));
@@ -79,19 +79,19 @@ export const FineFilters = ({ onFiltersChange }: FineFiltersProps) => {
     } else {
       newSearchParams.delete(key);
     }
-    
+
     router.push(`?${newSearchParams.toString()}`, { scroll: false });
   };
 
   const handleStatusChange = (status: string, checked: boolean) => {
-    const newStatus = checked 
+    const newStatus = checked
       ? [...filters.status, status]
       : filters.status.filter(s => s !== status);
     updateFilter('status', newStatus);
   };
 
   const handleLiabilityChange = (liability: string, checked: boolean) => {
-    const newLiability = checked 
+    const newLiability = checked
       ? [...filters.liability, liability]
       : filters.liability.filter(l => l !== liability);
     updateFilter('liability', newLiability);
@@ -109,15 +109,15 @@ export const FineFilters = ({ onFiltersChange }: FineFiltersProps) => {
     router.push("?", { scroll: false });
   };
 
-  const hasActiveFilters = filters.status.length > 0 || 
-                          filters.liability.length > 0 || 
-                          filters.vehicleSearch || 
-                          filters.customerSearch ||
-                          filters.issueDateFrom ||
-                          filters.issueDateTo ||
-                          filters.dueDateFrom ||
-                          filters.dueDateTo ||
-                          filters.quickFilter;
+  const hasActiveFilters = filters.status.length > 0 ||
+    filters.liability.length > 0 ||
+    filters.vehicleSearch ||
+    filters.customerSearch ||
+    filters.issueDateFrom ||
+    filters.issueDateTo ||
+    filters.dueDateFrom ||
+    filters.dueDateTo ||
+    filters.quickFilter;
 
   const activeFilterCount = [
     ...filters.status,

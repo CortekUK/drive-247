@@ -197,7 +197,87 @@ const BookingCheckoutContent = () => {
         customer = newCustomer;
       }
 
-      // Step 2: Check if Individual customer already has active rental
+      // Step 2: Link any pending insurance documents to the customer
+      const pendingInsuranceFiles = JSON.parse(localStorage.getItem('pending_insurance_files') || '[]');
+
+      // Deduplicate files by file_path to prevent duplicate inserts
+      const uniqueFiles = Array.from(
+        new Map(pendingInsuranceFiles.map((file: any) => [file.file_path, file])).values()
+      ) as any[];
+
+      console.log(`[CHECKOUT] Processing ${uniqueFiles.length} unique insurance documents (${pendingInsuranceFiles.length} total in localStorage)`);
+
+      for (const fileInfo of uniqueFiles) {
+        // Check if this document already exists for this customer
+        const { data: existingDoc } = await supabase
+          .from('customer_documents')
+          .select('id')
+          .eq('customer_id', customer.id)
+          .eq('file_url', fileInfo.file_path)
+          .maybeSingle();
+
+        if (existingDoc) {
+          console.log('[CHECKOUT] Document already exists, skipping:', fileInfo.file_name);
+          continue;
+        }
+
+        const docInsertData: any = {
+          customer_id: customer.id,
+          document_type: 'Insurance Certificate',
+          document_name: fileInfo.file_name,
+          file_url: fileInfo.file_path,
+          file_name: fileInfo.file_name,
+          file_size: fileInfo.file_size,
+          mime_type: fileInfo.mime_type,
+          ai_scan_status: 'pending',
+          uploaded_at: fileInfo.uploaded_at
+        };
+
+        if (tenant?.id) {
+          docInsertData.tenant_id = tenant.id;
+        }
+
+        const { data: insertedDoc, error: docError } = await supabase
+          .from('customer_documents')
+          .insert(docInsertData)
+          .select('id, file_url')
+          .single();
+
+        if (docError) {
+          console.error('[CHECKOUT] Failed to link insurance document:', docError);
+          // Don't throw - continue with booking
+        } else {
+          console.log('[CHECKOUT] Insurance document linked to customer:', customer.id);
+
+          // Trigger AI scanning for the uploaded document
+          if (insertedDoc?.id) {
+            try {
+              console.log('[CHECKOUT] Triggering AI scan for document:', insertedDoc.id);
+              supabase.functions.invoke('scan-insurance-document', {
+                body: {
+                  documentId: insertedDoc.id,
+                  fileUrl: insertedDoc.file_url
+                }
+              }).then(({ data, error }) => {
+                if (error) {
+                  console.error('[CHECKOUT] AI scan failed:', error);
+                } else {
+                  console.log('[CHECKOUT] AI scan completed:', data);
+                }
+              });
+            } catch (scanError) {
+              console.error('[CHECKOUT] Failed to trigger AI scan:', scanError);
+              // Don't throw - scanning is optional
+            }
+          }
+        }
+      }
+
+      // Clear localStorage immediately after processing to prevent duplicates on retry
+      localStorage.removeItem('pending_insurance_files');
+      console.log('[CHECKOUT] Cleared pending_insurance_files from localStorage');
+
+      // Step 3: Check if Individual customer already has active rental
       if (customer.customer_type === "Individual") {
         const { data: activeRentals, error: checkError } = await supabase
           .from("rentals")
@@ -211,11 +291,11 @@ const BookingCheckoutContent = () => {
         }
       }
 
-      // Step 3: Calculate monthly amount
+      // Step 4: Calculate monthly amount
       const days = calculateRentalDays();
       const monthlyAmount = vehicleDetails.monthly_rent || calculateVehiclePrice();
 
-      // Step 4: Create rental
+      // Step 5: Create rental
       // Determine rental period type based on duration
       const rentalPeriodType = days >= 28 ? "Monthly" : days >= 7 ? "Weekly" : "Daily";
 
@@ -236,7 +316,7 @@ const BookingCheckoutContent = () => {
 
       if (rentalError) throw rentalError;
 
-      // Step 5: Update vehicle status to Rented (filtered by tenant)
+      // Step 6: Update vehicle status to Rented (filtered by tenant)
       let vehicleUpdateQuery = supabase
         .from("vehicles")
         .update({ status: "Rented" })
@@ -253,7 +333,7 @@ const BookingCheckoutContent = () => {
         // Don't throw - rental is already created
       }
 
-      // Step 6: Generate rental charges (let database triggers handle this)
+      // Step 7: Generate rental charges (let database triggers handle this)
       await supabase.rpc("backfill_rental_charges_first_month_only").catch(err => {
         console.error("Failed to generate charges:", err);
         // Don't throw - rental is created

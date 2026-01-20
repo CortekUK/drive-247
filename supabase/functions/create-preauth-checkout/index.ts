@@ -157,7 +157,7 @@ serve(async (req) => {
         method: 'Stripe',
         payment_type: 'InitialFee',
         status: 'Pending',
-        verification_status: 'pending',
+        verification_status: 'auto_approved', // Stripe verified payment
         is_manual_mode: true,
         stripe_checkout_session_id: session.id,
         capture_status: 'requires_capture',
