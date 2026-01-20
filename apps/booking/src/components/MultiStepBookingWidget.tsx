@@ -1569,21 +1569,22 @@ const MultiStepBookingWidget = () => {
     const pickup = new Date(`${formData.pickupDate}T${formData.pickupTime}:00`);
     const dropoff = new Date(`${formData.dropoffDate}T${formData.dropoffTime}:00`);
     const hours = differenceInHours(dropoff, pickup);
-    const days = Math.floor(hours / 24);
+    // Ceiling the days - any hours beyond full days count as another day
+    const days = Math.ceil(hours / 24);
     const remainingHours = hours % 24;
 
-    // Format duration with proper grammar
+    // Format duration with proper grammar - only show whole days (ceiling)
     const formatDuration = () => {
       // Helper for singular/plural
       const pluralize = (count: number, singular: string, plural: string) =>
         count === 1 ? `${count} ${singular}` : `${count} ${plural}`;
 
-      // If less than 1 day, show hours
+      // Minimum 1 day display
       if (days === 0) {
-        return pluralize(remainingHours, 'hour', 'hours');
+        return '1 day';
       }
 
-      // Calculate months, weeks, and remaining days
+      // Calculate months, weeks, and remaining days from the ceiled total days
       const months = Math.floor(days / 30);
       const afterMonthsDays = days % 30;
       const weeks = Math.floor(afterMonthsDays / 7);
@@ -1604,11 +1605,6 @@ const MultiStepBookingWidget = () => {
       // Add remaining days if any
       if (finalDays > 0) {
         parts.push(pluralize(finalDays, 'day', 'days'));
-      }
-
-      // Add hours if there are remaining hours and we have days
-      if (remainingHours > 0 && days > 0) {
-        parts.push(pluralize(remainingHours, 'hour', 'hours'));
       }
 
       // If no parts (shouldn't happen), fallback to days
