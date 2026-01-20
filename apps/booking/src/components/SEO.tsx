@@ -15,7 +15,7 @@ const SEO = ({ title, description, keywords, schema, canonical }: SEOProps) => {
   const { branding } = useBrandingSettings();
 
   const siteUrl = 'https://drive917.com';
-  const appName = branding.app_name || 'Drive917';
+  const appName = branding.app_name || 'Drive 247';
   const fullTitle = `${appName} | ${title}`;
 
   // Use OG image from branding settings, fall back to favicon

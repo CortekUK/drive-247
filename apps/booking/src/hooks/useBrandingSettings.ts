@@ -47,7 +47,7 @@ const DEFAULT_BRANDING: BrandingSettings = {
   dark_header_footer_color: null,
   logo_url: null,
   favicon_url: null,
-  app_name: 'Drive 917',
+  app_name: 'Drive 247',
   hero_background_url: null,
   meta_title: null,
   meta_description: null,

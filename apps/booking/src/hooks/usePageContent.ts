@@ -521,28 +521,28 @@ export const defaultContactContent: PageContent = {
   },
   contact_info: {
     phone: {
-      number: "+44 800 123 4567",
+      number: "+1 800 123 4567",
       availability: "24 hours a day, 7 days a week, 365 days a year",
     },
     email: {
-      address: "info@drive917.com",
-      response_time: "Response within 2 hours during business hours (PST)",
+      address: "info@drive247.com",
+      response_time: "Response within 2 hours during business hours (CST)",
     },
     office: {
-      address: "123 Luxury Lane, London, UK",
+      address: "123 Luxury Lane, Dallas, TX",
     },
     whatsapp: {
-      number: "+447900123456",
-      description: "Quick response for urgent enquiries",
+      number: "+18001234567",
+      description: "Quick response for urgent inquiries",
     },
   },
   contact_form: {
     title: "Send Us a Message",
     subtitle: "We typically reply within 2 hours during business hours.",
-    success_message: "Thank you for contacting Drive917. Our concierge team will respond within 2 hours during business hours (PST).",
-    gdpr_text: "I consent to being contacted regarding my enquiry.",
+    success_message: "Thank you for contacting Drive247. Our concierge team will respond within 2 hours during business hours (CST).",
+    gdpr_text: "I consent to being contacted regarding my inquiry.",
     submit_button_text: "Send Message",
-    subject_options: ["General Enquiry", "Corporate Rental", "Vehicle Availability", "Partnerships"],
+    subject_options: ["General Inquiry", "Corporate Rental", "Vehicle Availability", "Partnerships"],
   },
   trust_badges: {
     badges: [
@@ -596,17 +596,17 @@ export const defaultReviewsContent: PageContent = {
 // Default content for About page (used as fallback)
 export const defaultAboutContent: PageContent = {
   hero: {
-    title: "About Drive917",
-    subtitle: "Setting the standard for premium luxury vehicle rentals across the United Kingdom.",
+    title: "About Drive247",
+    subtitle: "Setting the standard for premium luxury vehicle rentals across the United States.",
   },
   about_story: {
     title: "Excellence in Every Rental",
     founded_year: "2010",
-    content: `<p>Drive917 was founded with a simple vision: to provide the highest standard of premium vehicle rentals with unmatched flexibility and service.</p>
+    content: `<p>Drive247 was founded with a simple vision: to provide the highest standard of premium vehicle rentals with unmatched flexibility and service.</p>
 <p>What began as a boutique rental service has grown into the trusted choice for executives, professionals, and discerning clients who demand the finest vehicles with exceptional service.</p>
 <p>Our founders recognized the need for a rental service that truly understood the unique requirements of premium vehicle hire—offering flexible daily, weekly, and monthly rates without compromising on quality.</p>
-<p>Discretion, reliability, and uncompromising quality became the pillars upon which Drive917 was built.</p>
-<p>Drive917 operates a fleet of the finest vehicles, each maintained to the highest standards and equipped with premium amenities. From Rolls-Royce to Range Rover, every vehicle represents automotive excellence.</p>
+<p>Discretion, reliability, and uncompromising quality became the pillars upon which Drive247 was built.</p>
+<p>Drive247 operates a fleet of the finest vehicles, each maintained to the highest standards and equipped with premium amenities. From Rolls-Royce to Range Rover, every vehicle represents automotive excellence.</p>
 <p>We offer flexible rental periods tailored to your needs—whether it's a day, a week, or a month, we provide premium vehicles with transparent pricing and exceptional service.</p>
 <p>Our commitment extends beyond just providing vehicles. We ensure every rental includes comprehensive insurance, 24/7 support, and meticulous vehicle preparation.</p>
 <p>We will never claim to be the biggest company — but what we are, is the pinnacle of excellence in luxury vehicle rentals.</p>
@@ -667,7 +667,7 @@ export const defaultAboutContent: PageContent = {
       {
         icon: "crown",
         title: "Premium Fleet",
-        description: "From the Rolls-Royce Phantom to the Range Rover Autobiography, every vehicle represents British excellence and comfort.",
+        description: "From the Rolls-Royce Phantom to the Range Rover Autobiography, every vehicle represents automotive excellence and comfort.",
       },
       {
         icon: "shield",
@@ -677,13 +677,13 @@ export const defaultAboutContent: PageContent = {
       {
         icon: "clock",
         title: "24/7 Availability",
-        description: "Whether weekday or weekend, we're ready to respond at a moment's notice — anywhere across the UK.",
+        description: "Whether weekday or weekend, we're ready to respond at a moment's notice — anywhere across the USA.",
       },
     ],
   },
   faq_cta: {
     title: "Still have questions?",
-    description: "Our team is here to help. Contact us for personalised assistance.",
+    description: "Our team is here to help. Contact us for personalized assistance.",
     button_text: "Call Us",
   },
   final_cta: {
@@ -692,9 +692,9 @@ export const defaultAboutContent: PageContent = {
     tagline: "Professional • Discreet • 24/7 Availability",
   },
   seo: {
-    title: "About Drive917 — Premium Luxury Car Rentals",
-    description: "Discover Drive917 — the UK's trusted name in premium car rentals, offering unmatched quality, flexibility, and discretion.",
-    keywords: "about Drive917, luxury car rental UK, premium vehicle hire, executive car rental, luxury fleet",
+    title: "About Drive247 — Premium Luxury Car Rentals",
+    description: "Discover Drive247 — the USA's trusted name in premium car rentals, offering unmatched quality, flexibility, and discretion.",
+    keywords: "about Drive247, luxury car rental USA, premium vehicle hire, executive car rental, luxury fleet",
   },
 };
 

@@ -20,9 +20,12 @@ import { Button } from '@/components/ui/button';
 import { useEffect, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useTenant } from '@/contexts/TenantContext';
+import { useBrandingSettings } from '@/hooks/useBrandingSettings';
+import { createCompanyNameReplacer } from '@/utils/tenantName';
 
 export default function Home() {
   const { tenant } = useTenant();
+  const { branding } = useBrandingSettings();
   const [testimonialStats, setTestimonialStats] = useState({
     avgRating: '5.0',
     count: '0'
@@ -31,6 +34,10 @@ export default function Home() {
   // CMS Content
   const { data: rawContent } = usePageContent('home');
   const content = mergeWithDefaults(rawContent, defaultHomeContent);
+
+  // Use the tenant's app_name for dynamic titles
+  const appName = branding.app_name || 'Drive 247';
+  const replaceCompanyName = createCompanyNameReplacer(appName);
 
   // Hero carousel media - prefer new carousel_media format, fall back to carousel_images, then defaults
   const heroCarouselMedia: CarouselMediaItem[] | undefined = (() => {
@@ -101,13 +108,13 @@ export default function Home() {
   const businessSchema = {
     '@context': 'https://schema.org',
     '@type': 'LocalBusiness',
-    'name': 'Drive 917',
-    'description': 'Premium luxury car rentals in the UK',
-    'telephone': '+44-800-123-4567',
+    'name': appName,
+    'description': 'Premium luxury car rentals in the USA',
+    'telephone': '+1-800-123-4567',
     'address': {
       '@type': 'PostalAddress',
-      'addressLocality': 'London',
-      'addressCountry': 'UK'
+      'addressLocality': 'Dallas',
+      'addressCountry': 'US'
     },
     'priceRange': '$$$',
     'aggregateRating': {
@@ -120,9 +127,9 @@ export default function Home() {
   return (
     <div className="min-h-screen bg-background">
       <SEO
-        title={content.seo?.title || 'Premium Luxury Car Rentals'}
-        description={content.seo?.description || 'Rent premium luxury vehicles with Drive917. Flexible daily, weekly, and monthly rates. Top-tier fleet and exceptional service.'}
-        keywords={content.seo?.keywords || 'luxury car rental, premium vehicle hire, exotic car rental, Dallas car rental'}
+        title={content.seo?.title ? replaceCompanyName(content.seo.title) : 'Premium Luxury Car Rentals'}
+        description={content.seo?.description ? replaceCompanyName(content.seo.description) : `Rent premium luxury vehicles with ${appName}. Flexible daily, weekly, and monthly rates. Top-tier fleet and exceptional service.`}
+        keywords={content.seo?.keywords ? replaceCompanyName(content.seo.keywords) : 'luxury car rental, premium vehicle hire, exotic car rental, Dallas car rental'}
         schema={businessSchema}
       />
       <Navigation />
