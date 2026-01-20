@@ -16,17 +16,14 @@ import {
 import {
   CreditCard,
   Plus,
-  ExternalLink,
   MoreHorizontal,
-  Eye,
   FileText,
   Download,
   ChevronLeft,
   ChevronRight,
   CheckCircle,
   XCircle,
-  Clock,
-  AlertCircle
+  Clock
 } from "lucide-react";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
@@ -35,7 +32,6 @@ import { useToast } from "@/hooks/use-toast";
 import { formatInTimeZone } from "date-fns-tz";
 import { PaymentSummaryCards } from "@/components/payments/payment-summary-cards";
 import { PaymentFilters, PaymentFilters as IPaymentFilters } from "@/components/payments/payment-filters";
-import { PaymentAllocationDrawer } from "@/components/payments/payment-allocation-drawer";
 import { AddPaymentDialog } from "@/components/shared/dialogs/add-payment-dialog";
 import { usePaymentsData, exportPaymentsCSV } from "@/hooks/use-payments-data";
 import { usePaymentVerificationActions, getVerificationStatusInfo, VerificationStatus } from "@/hooks/use-payment-verification";
@@ -57,8 +53,6 @@ const PaymentsList = () => {
   const router = useRouter();
   const { toast } = useToast();
   const [showAddDialog, setShowAddDialog] = useState(false);
-  const [selectedPaymentId, setSelectedPaymentId] = useState<string | null>(null);
-  const [showAllocationDrawer, setShowAllocationDrawer] = useState(false);
   const [showRejectDialog, setShowRejectDialog] = useState(false);
   const [rejectPaymentId, setRejectPaymentId] = useState<string | null>(null);
   const [rejectReason, setRejectReason] = useState('');
@@ -105,11 +99,6 @@ const PaymentsList = () => {
       setSortOrder('desc');
     }
     setPage(1);
-  };
-
-  const handleViewAllocations = (paymentId: string) => {
-    setSelectedPaymentId(paymentId);
-    setShowAllocationDrawer(true);
   };
 
   const handleViewLedger = (payment: any) => {
@@ -257,16 +246,12 @@ const PaymentsList = () => {
                       >
                         Amount {sortBy === 'amount' && (sortOrder === 'asc' ? '↑' : '↓')}
                       </TableHead>
-                      <TableHead>Allocation</TableHead>
                       <TableHead>Status</TableHead>
                       <TableHead>Actions</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {payments.map((payment) => {
-                      const allocatedAmount = payment.amount - (payment.remaining_amount || 0);
-                      const hasCredit = (payment.remaining_amount || 0) > 0;
-
                       return (
                         <TableRow key={payment.id} className="hover:bg-muted/50">
                           <TableCell className="font-medium">
@@ -316,35 +301,6 @@ const PaymentsList = () => {
                            <TableCell>{payment.method || '-'}</TableCell>
                           <TableCell className="text-left font-medium">
                             ${payment.amount.toLocaleString('en-US', { minimumFractionDigits: 2 })}
-                          </TableCell>
-                          <TableCell>
-                            {allocatedAmount === payment.amount ? (
-                              <Badge variant="default" className="bg-primary/10 text-primary dark:bg-primary/20">
-                                Balanced
-                              </Badge>
-                            ) : hasCredit ? (
-                              <TooltipProvider>
-                                <Tooltip>
-                                  <TooltipTrigger asChild>
-                                    <Badge variant="secondary" className="bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200 cursor-help">
-                                      Credit ${payment.remaining_amount?.toFixed(2)}
-                                    </Badge>
-                                  </TooltipTrigger>
-                                  <TooltipContent>
-                                    <div>
-                                      <p>Applied ${allocatedAmount.toFixed(2)} to charges</p>
-                                      <p>Remaining ${payment.remaining_amount?.toFixed(2)} credit will auto-apply to next charge</p>
-                                    </div>
-                                  </TooltipContent>
-                                </Tooltip>
-                              </TooltipProvider>
-                            ) : (payment.remaining_amount || 0) < 0 ? (
-                              <Badge variant="secondary" className="bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200">
-                                Debit ${Math.abs(payment.remaining_amount || 0).toFixed(2)}
-                              </Badge>
-                            ) : (
-                              <Badge variant="outline">Pending</Badge>
-                            )}
                           </TableCell>
                           <TableCell>
                             {(() => {
@@ -406,10 +362,6 @@ const PaymentsList = () => {
                                   </Button>
                                 </DropdownMenuTrigger>
                                 <DropdownMenuContent align="end">
-                                  <DropdownMenuItem onClick={() => handleViewAllocations(payment.id)}>
-                                    <Eye className="h-4 w-4 mr-2" />
-                                    View Allocations
-                                  </DropdownMenuItem>
                                   <DropdownMenuItem onClick={() => handleViewLedger(payment)}>
                                     <FileText className="h-4 w-4 mr-2" />
                                     View Ledger
@@ -472,13 +424,6 @@ const PaymentsList = () => {
           )}
         </CardContent>
       </Card>
-
-      {/* Allocation Drawer */}
-      <PaymentAllocationDrawer
-        open={showAllocationDrawer}
-        onOpenChange={setShowAllocationDrawer}
-        paymentId={selectedPaymentId}
-      />
 
       {/* Reject Payment Dialog */}
       <Dialog open={showRejectDialog} onOpenChange={setShowRejectDialog}>

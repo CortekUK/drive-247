@@ -787,12 +787,15 @@ export default function BookingCheckoutStep({
               file_size: fileInfo.file_size,
               mime_type: fileInfo.mime_type,
               ai_scan_status: 'pending',
-              uploaded_at: fileInfo.uploaded_at
+              uploaded_at: fileInfo.uploaded_at,
+              status: 'Pending', // Required field with CHECK constraint
             };
 
             if (tenant?.id) {
               docInsertData.tenant_id = tenant.id;
             }
+
+            console.log('📎 Inserting document:', JSON.stringify(docInsertData));
 
             const { data: insertedDoc, error: docError } = await supabase
               .from('customer_documents')
@@ -801,7 +804,7 @@ export default function BookingCheckoutStep({
               .single();
 
             if (docError) {
-              console.error('📎 Failed to link insurance document:', docError);
+              console.error('📎 Failed to link insurance document:', docError?.message || docError?.code || JSON.stringify(docError));
             } else {
               console.log('✅ Insurance document created for customer:', customer.id);
 
