@@ -358,6 +358,22 @@ const MultiStepBookingWidget = () => {
       localStorage.removeItem('verificationVendorData');
     }
 
+    // Restore promo code from localStorage
+    const savedPromoCode = localStorage.getItem('appliedPromoCode');
+    const savedPromoDetails = localStorage.getItem('appliedPromoDetails');
+    if (savedPromoCode && savedPromoDetails) {
+      try {
+        const promoDetailsData = JSON.parse(savedPromoDetails);
+        setFormData(prev => ({ ...prev, promoCode: savedPromoCode }));
+        setPromoDetails(promoDetailsData);
+        console.log('✅ Restored promo code from localStorage:', savedPromoCode);
+      } catch (e) {
+        console.error('Failed to parse saved promo details:', e);
+        localStorage.removeItem('appliedPromoCode');
+        localStorage.removeItem('appliedPromoDetails');
+      }
+    }
+
     // Handle window focus - check verification when user returns from Veriff popup
     // This is critical for iOS Safari which throttles background tabs
     const handleWindowFocus = async () => {
@@ -1178,44 +1194,74 @@ const MultiStepBookingWidget = () => {
   };
 
   const validatePromoCode = async (code: string) => {
-    if (!code || !tenant?.id) return;
+    if (!code || !tenant?.id) {
+      if (!tenant?.id) {
+        console.log('⚠️ Promo validation skipped - tenant not loaded yet');
+        setPromoError("Please wait while we load your settings...");
+      }
+      return;
+    }
 
     setLoading(true);
     setPromoError(null);
     setPromoDetails(null);
+    // Clear localStorage when starting new validation
+    localStorage.removeItem('appliedPromoCode');
+    localStorage.removeItem('appliedPromoDetails');
 
     try {
+      // Use case-insensitive search with ilike for the code
       // Cast to any to bypass TypeScript as promocodes table is not yet in generated types
       const { data, error } = await (supabase as any)
         .from('promocodes')
         .select('*')
-        .eq('code', code)
+        .ilike('code', code) // Case-insensitive match
         .eq('tenant_id', tenant.id)
-        .maybeSingle() as { data: { code: string; type: string; value: number; expires_at: string | null; id: string } | null; error: any };
+        .maybeSingle() as { data: { code: string; type: string; value: number; expires_at: string | null; id: string; max_users?: number } | null; error: any };
 
-      if (error) throw error;
+      if (error) {
+        console.error('Promo code query error:', error);
+        throw error;
+      }
 
       if (!data) {
+        console.log('❌ Promo code not found:', code, 'for tenant:', tenant.id);
         setPromoError("Invalid promo code");
         return;
       }
 
       // Check expiry
-      const promoData = data as { code: string; type: string; value: number; expires_at: string | null; id: string };
+      const promoData = data as { code: string; type: string; value: number; expires_at: string | null; id: string; max_users?: number };
       if (promoData.expires_at && new Date(promoData.expires_at) < new Date()) {
         setPromoError("Promo code has expired");
         return;
       }
 
-      // Check usage limits (if implemented, but schema has max_users)
-      // For now, we'll assume available if returned. Could add detailed check.
+      // Check usage limits against max_users
+      if (promoData.max_users && promoData.max_users > 0) {
+        // Count how many times this promo code has been used in invoices
+        const { count, error: usageError } = await (supabase as any)
+          .from('invoices')
+          .select('*', { count: 'exact', head: true })
+          .eq('promo_code', promoData.code)
+          .eq('tenant_id', tenant.id);
 
-      setPromoDetails({
+        if (!usageError && count !== null && count >= promoData.max_users) {
+          setPromoError("Promo code usage limit reached");
+          return;
+        }
+      }
+
+      const promoDetailsToSave = {
         code: promoData.code,
         type: promoData.type === 'value' ? 'fixed_amount' : 'percentage', // Map DB type to internal type
         value: promoData.value,
         id: promoData.id
-      });
+      };
+      setPromoDetails(promoDetailsToSave);
+      // Persist promo details to localStorage
+      localStorage.setItem('appliedPromoCode', promoDetailsToSave.code);
+      localStorage.setItem('appliedPromoDetails', JSON.stringify(promoDetailsToSave));
       toast.success("Promo code applied!");
 
     } catch (err) {
@@ -1421,6 +1467,9 @@ const MultiStepBookingWidget = () => {
     });
     setPromoDetails(null);
     setPromoError(null);
+    // Clear promo localStorage after successful booking
+    localStorage.removeItem('appliedPromoCode');
+    localStorage.removeItem('appliedPromoDetails');
     setSelectedExtras([]);
     setCalculatedDistance(null);
     setDistanceOverride(false);
@@ -2816,7 +2865,11 @@ const MultiStepBookingWidget = () => {
                     onChange={(e) => {
                       setFormData({ ...formData, promoCode: e.target.value });
                       setPromoError(null);
-                      if (!e.target.value) setPromoDetails(null);
+                      if (!e.target.value) {
+                        setPromoDetails(null);
+                        localStorage.removeItem('appliedPromoCode');
+                        localStorage.removeItem('appliedPromoDetails');
+                      }
                     }}
                     className={cn("h-12", promoError ? "border-destructive" : promoDetails ? "border-green-500" : "")}
                   />
