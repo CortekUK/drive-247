@@ -226,7 +226,11 @@ serve(async (req) => {
     }
 
     // Create a ledger entry for the refund (negative charge to reduce balance)
-    if (refundResult?.status !== "error") {
+    // Check if refund was successful (not error type)
+    const shouldCreateLedger = refundResult && refundResult.type !== "error";
+    console.log("Should create ledger entry:", shouldCreateLedger, "refundResult:", JSON.stringify(refundResult));
+
+    if (shouldCreateLedger) {
       const ledgerEntry = {
         rental_id: rentalId,
         customer_id: rental.customer_id,
@@ -241,14 +245,17 @@ serve(async (req) => {
         reference: `Refund: ${reason}${stripeRefundId ? ` (Stripe: ${stripeRefundId})` : ''}`,
       };
 
-      const { error: ledgerError } = await supabase
+      console.log("Creating ledger entry:", JSON.stringify(ledgerEntry));
+
+      const { data: ledgerData, error: ledgerError } = await supabase
         .from("ledger_entries")
-        .insert(ledgerEntry);
+        .insert(ledgerEntry)
+        .select();
 
       if (ledgerError) {
-        console.error("Failed to create ledger entry:", ledgerError);
+        console.error("Failed to create ledger entry:", JSON.stringify(ledgerError));
       } else {
-        console.log("Ledger entry created for refund");
+        console.log("Ledger entry created for refund:", JSON.stringify(ledgerData));
       }
     }
 

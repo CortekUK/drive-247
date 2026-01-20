@@ -111,3 +111,55 @@ export const useRentalPaymentBreakdown = (rentalId: string | undefined) => {
     enabled: !!tenant && !!rentalId,
   });
 };
+
+/**
+ * Hook to fetch refund amounts by category for a rental
+ * Returns how much has been refunded for each category
+ */
+export const useRentalRefundBreakdown = (rentalId: string | undefined) => {
+  const { tenant } = useTenant();
+
+  return useQuery({
+    queryKey: ["rental-refund-breakdown", tenant?.id, rentalId],
+    queryFn: async () => {
+      if (!rentalId) return null;
+
+      console.log("[REFUND-BREAKDOWN] Fetching refunds for rental:", rentalId, "tenant:", tenant?.id);
+
+      // Get all refund entries for this rental grouped by category
+      // Don't filter by tenant_id - rental_id is sufficient and refunds may have different tenant_id
+      const { data: refunds, error: refundsError } = await supabase
+        .from("ledger_entries")
+        .select("id, category, amount, tenant_id, type")
+        .eq("rental_id", rentalId)
+        .eq("type", "Refund");
+
+      if (refundsError) {
+        console.error("[REFUND-BREAKDOWN] Error fetching refunds:", refundsError);
+        throw refundsError;
+      }
+
+      console.log("[REFUND-BREAKDOWN] Query result for rental", rentalId, ":", refunds);
+
+      // Group refunds by category (amounts are negative, so we use Math.abs)
+      const categoryRefunds: Record<string, number> = {};
+
+      refunds?.forEach((refund) => {
+        const category = refund.category || "Other";
+        if (!categoryRefunds[category]) {
+          categoryRefunds[category] = 0;
+        }
+        // Refund amounts are stored as negative, so use Math.abs
+        categoryRefunds[category] += Math.abs(refund.amount);
+      });
+
+      console.log("[REFUND-BREAKDOWN] Category refunds result:", categoryRefunds);
+
+      return categoryRefunds;
+    },
+    enabled: !!tenant && !!rentalId,
+    staleTime: 0, // Always refetch
+    refetchOnMount: true,
+    refetchOnWindowFocus: true,
+  });
+};

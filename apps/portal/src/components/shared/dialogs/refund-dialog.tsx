@@ -149,6 +149,8 @@ export const RefundDialog = ({
         queryClient.invalidateQueries({ queryKey: ['rental-charges'], ...invalidateOptions }),
         queryClient.invalidateQueries({ queryKey: ['rental-payments'], ...invalidateOptions }),
         queryClient.invalidateQueries({ queryKey: ['rental-invoice'], ...invalidateOptions }),
+        queryClient.invalidateQueries({ queryKey: ['rental-refund-breakdown'], ...invalidateOptions }),
+        queryClient.invalidateQueries({ queryKey: ['rental-payment-breakdown'], ...invalidateOptions }),
         queryClient.invalidateQueries({ queryKey: ['payments-data'], ...invalidateOptions }),
         queryClient.invalidateQueries({ queryKey: ['rental', rentalId], ...invalidateOptions }),
       ]);
