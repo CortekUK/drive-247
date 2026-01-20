@@ -102,6 +102,7 @@ const MultiStepBookingWidget = () => {
   const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
   const [showFilters, setShowFilters] = useState(false);
   const [originalPriceRange, setOriginalPriceRange] = useState<[number, number]>([0, 1000]); // Store original dynamic range
+  const [priceFilterMode, setPriceFilterMode] = useState<"daily" | "weekly" | "monthly">("daily"); // Price filter mode
   const [filters, setFilters] = useState({
     transmission: [] as string[],
     fuel: [] as string[],
@@ -601,9 +602,9 @@ const MultiStepBookingWidget = () => {
       // Cast to Vehicle[] since we know the shape matches
       setVehicles(vehiclesData as unknown as Vehicle[]);
 
-      // Calculate price range from vehicles (use monthly_rent if available)
+      // Calculate price range from vehicles based on current price filter mode (default: daily)
       const prices = vehiclesData
-        .map(v => v.monthly_rent || v.daily_rent || 0)
+        .map(v => v.daily_rent || 0)
         .filter(p => p > 0);
 
       if (prices.length > 0) {
@@ -1717,6 +1718,44 @@ const MultiStepBookingWidget = () => {
     return { blocked: false };
   };
 
+  // Helper function to get vehicle price based on selected price filter mode
+  const getVehiclePriceByMode = (vehicle: Vehicle, mode: "daily" | "weekly" | "monthly"): number => {
+    switch (mode) {
+      case "daily":
+        return vehicle.daily_rent || 0;
+      case "weekly":
+        return vehicle.weekly_rent || 0;
+      case "monthly":
+        return vehicle.monthly_rent || 0;
+      default:
+        return vehicle.daily_rent || 0;
+    }
+  };
+
+  // Helper function to recalculate price range when mode changes
+  const recalculatePriceRange = (mode: "daily" | "weekly" | "monthly") => {
+    const prices = vehicles
+      .map(v => getVehiclePriceByMode(v, mode))
+      .filter(p => p > 0);
+
+    if (prices.length > 0) {
+      const minPrice = Math.min(...prices);
+      const maxPrice = Math.max(...prices);
+      const dynamicRange: [number, number] = [minPrice, maxPrice];
+      setOriginalPriceRange(dynamicRange);
+      setFilters(prev => ({
+        ...prev,
+        priceRange: dynamicRange
+      }));
+    }
+  };
+
+  // Handle price filter mode change
+  const handlePriceFilterModeChange = (mode: "daily" | "weekly" | "monthly") => {
+    setPriceFilterMode(mode);
+    recalculatePriceRange(mode);
+  };
+
   // Helper function to get readable sort label
   const getSortLabel = (sortValue: string): string => {
     switch (sortValue) {
@@ -1762,9 +1801,9 @@ const MultiStepBookingWidget = () => {
     // Seats filter (skip for portal - no capacity field)
     // Portal vehicles don't have capacity info, so this filter is disabled
 
-    // Price range filter - use monthly_rent or daily_rent
+    // Price range filter - use selected price filter mode (daily/weekly/monthly)
     filtered = filtered.filter(v => {
-      const price = v.monthly_rent || v.daily_rent || 0;
+      const price = getVehiclePriceByMode(v, priceFilterMode);
       return price >= filters.priceRange[0] && price <= filters.priceRange[1];
     });
 
@@ -1871,11 +1910,18 @@ const MultiStepBookingWidget = () => {
   const clearAllFilters = () => {
     setSearchTerm("");
     setSelectedCategories([]);
+    setPriceFilterMode("daily"); // Reset to daily mode
+    // Recalculate range for daily prices
+    const prices = vehicles.map(v => v.daily_rent || 0).filter(p => p > 0);
+    const newRange: [number, number] = prices.length > 0
+      ? [Math.min(...prices), Math.max(...prices)]
+      : [0, 1000];
+    setOriginalPriceRange(newRange);
     setFilters({
       transmission: [],
       fuel: [],
       seats: [2, 7],
-      priceRange: originalPriceRange // Use stored original range
+      priceRange: newRange
     });
     setSortBy("recommended");
   };
@@ -2593,7 +2639,6 @@ const MultiStepBookingWidget = () => {
                     className="h-12 focus-visible:ring-primary"
                     businessHoursOpen={!pickupDateWorkingHours.isAlwaysOpen && pickupDateWorkingHours.enabled ? pickupDateWorkingHours.open : undefined}
                     businessHoursClose={!pickupDateWorkingHours.isAlwaysOpen && pickupDateWorkingHours.enabled ? pickupDateWorkingHours.close : undefined}
-                    showBusinessHoursNotice={!pickupDateWorkingHours.isAlwaysOpen && pickupDateWorkingHours.enabled}
                     customerTimezone={formData.customerTimezone}
                     tenantTimezone={workingHours.timezone}
                   />
@@ -2658,7 +2703,6 @@ const MultiStepBookingWidget = () => {
                     className="h-12 focus-visible:ring-primary"
                     businessHoursOpen={!dropoffDateWorkingHours.isAlwaysOpen && dropoffDateWorkingHours.enabled ? dropoffDateWorkingHours.open : undefined}
                     businessHoursClose={!dropoffDateWorkingHours.isAlwaysOpen && dropoffDateWorkingHours.enabled ? dropoffDateWorkingHours.close : undefined}
-                    showBusinessHoursNotice={!dropoffDateWorkingHours.isAlwaysOpen && dropoffDateWorkingHours.enabled}
                     customerTimezone={formData.customerTimezone}
                     tenantTimezone={workingHours.timezone}
                   />
@@ -2859,11 +2903,18 @@ const MultiStepBookingWidget = () => {
                       <div className="flex items-center justify-between">
                         <h4 className="font-semibold">Filters</h4>
                         <Button variant="ghost" size="sm" onClick={() => {
+                          setPriceFilterMode("daily"); // Reset to daily mode
+                          // Recalculate range for daily prices
+                          const prices = vehicles.map(v => v.daily_rent || 0).filter(p => p > 0);
+                          const newRange: [number, number] = prices.length > 0
+                            ? [Math.min(...prices), Math.max(...prices)]
+                            : [0, 1000];
+                          setOriginalPriceRange(newRange);
                           setFilters({
                             transmission: [],
                             fuel: [],
                             seats: [2, 7],
-                            priceRange: originalPriceRange // Use stored original range
+                            priceRange: newRange
                           });
                         }}>
                           Reset
@@ -2904,10 +2955,56 @@ const MultiStepBookingWidget = () => {
                         }))} min={2} max={7} step={1} className="py-2" />
                         </div> */}
 
+                      {/* Price Filter Mode */}
+                      <div className="space-y-2">
+                        <Label className="text-sm font-medium">Filter By Price</Label>
+                        <div className="flex gap-1 p-1 bg-muted/50 rounded-lg">
+                          <button
+                            type="button"
+                            onClick={() => handlePriceFilterModeChange("daily")}
+                            className={cn(
+                              "flex-1 px-3 py-1.5 text-xs font-medium rounded-md transition-colors",
+                              priceFilterMode === "daily"
+                                ? "bg-primary text-primary-foreground"
+                                : "text-muted-foreground hover:text-foreground hover:bg-muted"
+                            )}
+                          >
+                            Daily
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handlePriceFilterModeChange("weekly")}
+                            className={cn(
+                              "flex-1 px-3 py-1.5 text-xs font-medium rounded-md transition-colors",
+                              priceFilterMode === "weekly"
+                                ? "bg-primary text-primary-foreground"
+                                : "text-muted-foreground hover:text-foreground hover:bg-muted"
+                            )}
+                          >
+                            Weekly
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handlePriceFilterModeChange("monthly")}
+                            className={cn(
+                              "flex-1 px-3 py-1.5 text-xs font-medium rounded-md transition-colors",
+                              priceFilterMode === "monthly"
+                                ? "bg-primary text-primary-foreground"
+                                : "text-muted-foreground hover:text-foreground hover:bg-muted"
+                            )}
+                          >
+                            Monthly
+                          </button>
+                        </div>
+                      </div>
+
                       {/* Price Range */}
                       <div className="space-y-2">
                         <Label className="text-sm font-medium">
                           Price Range: ${filters.priceRange[0]} - ${filters.priceRange[1]}
+                          <span className="text-xs text-muted-foreground ml-1">
+                            / {priceFilterMode === "daily" ? "day" : priceFilterMode === "weekly" ? "week" : "month"}
+                          </span>
                         </Label>
                         <div className="flex justify-between text-xs text-muted-foreground mb-1">
                           <span>Budget</span>

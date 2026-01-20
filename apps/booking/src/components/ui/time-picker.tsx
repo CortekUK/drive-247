@@ -1,5 +1,5 @@
 import * as React from "react"
-import { Clock, Info, Globe } from "lucide-react"
+import { Clock, Globe } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -15,8 +15,6 @@ interface TimePickerProps {
   // Business hours props
   businessHoursOpen?: string // Format: "HH:MM" (24-hour) in tenant timezone
   businessHoursClose?: string // Format: "HH:MM" (24-hour) in tenant timezone
-  showBusinessHoursNotice?: boolean
-  onBusinessHoursNoticeShown?: () => void
   // Timezone props for cross-timezone validation
   customerTimezone?: string // Customer's selected timezone (IANA identifier)
   tenantTimezone?: string // Tenant's business timezone (IANA identifier)
@@ -173,8 +171,6 @@ export function TimePicker({
   id,
   businessHoursOpen,
   businessHoursClose,
-  showBusinessHoursNotice = false,
-  onBusinessHoursNoticeShown,
   customerTimezone,
   tenantTimezone
 }: TimePickerProps) {
@@ -182,8 +178,6 @@ export function TimePicker({
   const [hours, setHours] = React.useState("12")
   const [minutes, setMinutes] = React.useState("00")
   const [period, setPeriod] = React.useState<"AM" | "PM">("PM")
-  const [showNotice, setShowNotice] = React.useState(false)
-  const [noticeAcknowledged, setNoticeAcknowledged] = React.useState(false)
 
   const hasBusinessHours = businessHoursOpen && businessHoursClose
 
@@ -226,19 +220,6 @@ export function TimePicker({
       setMinutes(m)
     }
   }, [value])
-
-  // Show notice when popover opens (if enabled and not yet acknowledged)
-  React.useEffect(() => {
-    if (isOpen && showBusinessHoursNotice && hasBusinessHours && !noticeAcknowledged) {
-      setShowNotice(true)
-      onBusinessHoursNoticeShown?.()
-    }
-  }, [isOpen, showBusinessHoursNotice, hasBusinessHours, noticeAcknowledged, onBusinessHoursNoticeShown])
-
-  const handleProceedToBooking = () => {
-    setShowNotice(false)
-    setNoticeAcknowledged(true)
-  }
 
   const handleApply = () => {
     let hour24 = parseInt(hours, 10)
@@ -435,55 +416,18 @@ export function TimePicker({
         </Button>
       </PopoverTrigger>
       <PopoverContent className="w-[280px] p-4" align="start">
-        {/* Business Hours Notice */}
-        {showNotice && hasBusinessHours && displayBusinessHours && (
-          <div className="mb-4 p-4 bg-primary/10 border border-primary/20 rounded-lg">
-            <div className="flex items-start gap-3">
-              <Info className="h-5 w-5 text-primary mt-0.5 flex-shrink-0" />
-              <div className="flex-1">
-                <h4 className="font-semibold text-sm mb-1">Business Hours</h4>
-                <p className="text-sm text-muted-foreground mb-3">
-                  Pickup and drop-off times are available during our business hours
-                  {needsTimezoneConversion && " (shown in your timezone)"}:
-                </p>
-                <div className="bg-background rounded-md p-2 mb-3 text-center">
-                  <span className="font-semibold text-lg">
-                    {formatTime12Hour(displayBusinessHours.open)} - {formatTime12Hour(displayBusinessHours.close)}
-                  </span>
-                  {needsTimezoneConversion && (
-                    <div className="flex items-center justify-center gap-1 text-xs text-muted-foreground mt-1">
-                      <Globe className="h-3 w-3" />
-                      <span>Your timezone</span>
-                    </div>
-                  )}
-                </div>
-                <Button
-                  type="button"
-                  size="sm"
-                  onClick={handleProceedToBooking}
-                  className="w-full bg-primary text-primary-foreground hover:bg-primary/90"
-                >
-                  Proceed to Booking
-                </Button>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Time Picker Content - shown after notice is acknowledged or if no notice needed */}
-        {(!showNotice || !showBusinessHoursNotice || noticeAcknowledged || !hasBusinessHours) && (
-          <div className="space-y-4">
+        <div className="space-y-4">
             <div className="text-sm font-medium">Select Time</div>
 
             {/* Business Hours Reminder */}
             {hasBusinessHours && displayBusinessHours && (
-              <div className="text-xs text-muted-foreground bg-muted/50 rounded-md p-2 flex items-center gap-2">
-                <Clock className="h-3 w-3" />
-                Available: {formatTime12Hour(displayBusinessHours.open)} - {formatTime12Hour(displayBusinessHours.close)}
+              <div className="text-xs text-muted-foreground bg-muted/50 rounded-md p-2 flex items-center gap-1.5 flex-wrap">
+                <Clock className="h-3 w-3 flex-shrink-0" />
+                <span>Available: {formatTime12Hour(displayBusinessHours.open)} - {formatTime12Hour(displayBusinessHours.close)}</span>
                 {needsTimezoneConversion && (
-                  <span className="flex items-center gap-1 ml-1">
+                  <span className="flex items-center gap-1">
                     <Globe className="h-3 w-3" />
-                    (your time)
+                    <span>(your time)</span>
                   </span>
                 )}
               </div>
@@ -675,7 +619,6 @@ export function TimePicker({
               </Button>
             </div>
           </div>
-        )}
       </PopoverContent>
     </Popover>
   )
