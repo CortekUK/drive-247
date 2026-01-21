@@ -187,11 +187,59 @@ export function InsuranceUploadDialog({
           docInsertData.customer_id = customerId;
         }
 
-        const { data: docData, error: docError } = await supabase
-          .from('customer_documents')
-          .insert(docInsertData)
-          .select()
-          .single();
+        // Check if a document with the same filename already exists for this customer
+        // If it does, update it instead of inserting (allows re-uploading same document)
+        let docData: any = null;
+        let docError: any = null;
+
+        if (customerId) {
+          // First, check for existing document with same filename for this customer
+          const { data: existingDoc } = await supabase
+            .from('customer_documents')
+            .select('id')
+            .eq('tenant_id', tenant?.id)
+            .eq('customer_id', customerId)
+            .eq('document_type', 'Insurance Certificate')
+            .eq('file_name', file.name)
+            .is('rental_id', null)
+            .maybeSingle();
+
+          if (existingDoc) {
+            // Update existing document record
+            const { data, error } = await supabase
+              .from('customer_documents')
+              .update({
+                file_url: filePath,
+                file_size: file.size,
+                mime_type: file.type,
+                ai_scan_status: 'pending',
+                uploaded_at: new Date().toISOString()
+              })
+              .eq('id', existingDoc.id)
+              .select()
+              .single();
+            docData = data;
+            docError = error;
+          } else {
+            // Insert new document record
+            const { data, error } = await supabase
+              .from('customer_documents')
+              .insert(docInsertData)
+              .select()
+              .single();
+            docData = data;
+            docError = error;
+          }
+        } else {
+          // No customer ID, just insert
+          const { data, error } = await supabase
+            .from('customer_documents')
+            .insert(docInsertData)
+            .select()
+            .single();
+          docData = data;
+          docError = error;
+        }
 
         if (docError) {
           console.error('Database error:', docError);
