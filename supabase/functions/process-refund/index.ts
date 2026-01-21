@@ -52,6 +52,59 @@ serve(async (req) => {
 
     console.log("Processing refund:", { rentalId, refundType, refundAmount, category, reason });
 
+    // Get tenant ID for queries
+    const tenantId = requestTenantId;
+
+    // VALIDATION: Check if there's actually paid amount for this category
+    // Get ledger entries to calculate what was actually paid vs charged
+    const { data: ledgerCharges } = await supabase
+      .from("ledger_entries")
+      .select("amount, remaining_amount")
+      .eq("rental_id", rentalId)
+      .eq("type", "Charge")
+      .eq("category", category);
+
+    const { data: ledgerRefunds } = await supabase
+      .from("ledger_entries")
+      .select("amount")
+      .eq("rental_id", rentalId)
+      .eq("type", "Refund")
+      .eq("category", category);
+
+    // Calculate total charged, paid, and already refunded for this category
+    const totalCharged = ledgerCharges?.reduce((sum, c) => sum + (c.amount || 0), 0) || 0;
+    const totalRemaining = ledgerCharges?.reduce((sum, c) => sum + (c.remaining_amount || 0), 0) || 0;
+    const totalPaid = totalCharged - totalRemaining;
+    const totalAlreadyRefunded = Math.abs(ledgerRefunds?.reduce((sum, r) => sum + (r.amount || 0), 0) || 0);
+    const availableForRefund = totalPaid - totalAlreadyRefunded;
+
+    console.log("Refund validation:", {
+      category,
+      totalCharged,
+      totalPaid,
+      totalAlreadyRefunded,
+      availableForRefund,
+      requestedRefund: refundAmount
+    });
+
+    if (availableForRefund <= 0) {
+      return new Response(
+        JSON.stringify({
+          error: `No refundable amount available for ${category}. Total paid: $${totalPaid.toFixed(2)}, Already refunded: $${totalAlreadyRefunded.toFixed(2)}`
+        }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    if (refundAmount > availableForRefund) {
+      return new Response(
+        JSON.stringify({
+          error: `Refund amount ($${refundAmount.toFixed(2)}) exceeds available refundable amount ($${availableForRefund.toFixed(2)}) for ${category}`
+        }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
     // Get rental details
     const { data: rental, error: rentalError } = await supabase
       .from("rentals")

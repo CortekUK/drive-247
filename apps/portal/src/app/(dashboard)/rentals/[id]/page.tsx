@@ -914,7 +914,11 @@ const RentalDetail = () => {
                   </div>
                 )}
               </div>
-              {invoiceBreakdown.serviceFee > 0 && (refundBreakdown?.["Service Fee"] ?? 0) < invoiceBreakdown.serviceFee && (
+              {/* Only show refund button if there's actual paid amount (not just invoice amount) */}
+              {invoiceBreakdown.serviceFee > 0 &&
+               totalPayments > 0 &&
+               (paymentBreakdown?.["Service Fee"]?.paid ?? 0) > 0 &&
+               (refundBreakdown?.["Service Fee"] ?? 0) < (paymentBreakdown?.["Service Fee"]?.paid ?? 0) && (
                 <Button
                   variant="outline"
                   size="sm"
@@ -923,7 +927,7 @@ const RentalDetail = () => {
                     setRefundCategory("Service Fee");
                     setRefundTotalAmount(invoiceBreakdown.serviceFee);
                     // Use actual paid amount minus already refunded
-                    const paidAmount = paymentBreakdown?.["Service Fee"]?.paid ?? invoiceBreakdown.serviceFee;
+                    const paidAmount = paymentBreakdown?.["Service Fee"]?.paid ?? 0;
                     const alreadyRefunded = refundBreakdown?.["Service Fee"] ?? 0;
                     setRefundPaidAmount(Math.max(0, paidAmount - alreadyRefunded));
                     setShowRefundDialog(true);
@@ -1003,7 +1007,11 @@ const RentalDetail = () => {
                   </div>
                 ) : null}
               </div>
-              {invoiceBreakdown.securityDeposit > 0 && (refundBreakdown?.["Security Deposit"] ?? 0) < invoiceBreakdown.securityDeposit && (
+              {/* Only show refund button if there's actual paid amount (not just invoice amount) */}
+              {invoiceBreakdown.securityDeposit > 0 &&
+               totalPayments > 0 &&
+               (paymentBreakdown?.["Security Deposit"]?.paid ?? 0) > 0 &&
+               (refundBreakdown?.["Security Deposit"] ?? 0) < (paymentBreakdown?.["Security Deposit"]?.paid ?? 0) && (
                 <Button
                   variant="outline"
                   size="sm"
@@ -1012,7 +1020,7 @@ const RentalDetail = () => {
                     setRefundCategory("Security Deposit");
                     setRefundTotalAmount(invoiceBreakdown.securityDeposit);
                     // Use actual paid amount minus already refunded
-                    const paidAmount = paymentBreakdown?.["Security Deposit"]?.paid ?? invoiceBreakdown.securityDeposit;
+                    const paidAmount = paymentBreakdown?.["Security Deposit"]?.paid ?? 0;
                     const alreadyRefunded = refundBreakdown?.["Security Deposit"] ?? 0;
                     setRefundPaidAmount(Math.max(0, paidAmount - alreadyRefunded));
                     setShowRefundDialog(true);
@@ -1089,7 +1097,11 @@ const RentalDetail = () => {
                   </>
                 )}
               </div>
-              {invoiceBreakdown.rentalFee > 0 && (refundBreakdown?.["Rental"] ?? 0) < invoiceBreakdown.rentalFee && (
+              {/* Only show refund button if there's actual paid amount (not just invoice amount) */}
+              {invoiceBreakdown.rentalFee > 0 &&
+               totalPayments > 0 &&
+               (paymentBreakdown?.["Rental"]?.paid ?? 0) > 0 &&
+               (refundBreakdown?.["Rental"] ?? 0) < (paymentBreakdown?.["Rental"]?.paid ?? 0) && (
                 <Button
                   variant="outline"
                   size="sm"
@@ -1098,7 +1110,7 @@ const RentalDetail = () => {
                     setRefundCategory("Rental");
                     setRefundTotalAmount(invoiceBreakdown.rentalFee);
                     // Use actual paid amount minus already refunded
-                    const paidAmount = paymentBreakdown?.["Rental"]?.paid ?? invoiceBreakdown.rentalFee;
+                    const paidAmount = paymentBreakdown?.["Rental"]?.paid ?? 0;
                     const alreadyRefunded = refundBreakdown?.["Rental"] ?? 0;
                     setRefundPaidAmount(Math.max(0, paidAmount - alreadyRefunded));
                     setShowRefundDialog(true);
