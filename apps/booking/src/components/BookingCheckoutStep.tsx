@@ -964,8 +964,7 @@ export default function BookingCheckoutStep({
               />
               <Label className="text-sm leading-relaxed cursor-pointer">
                 By confirming, you agree to Drive 917's{" "}
-                <a href="/terms" target="_blank" className="text-accent underline">Rental Agreement</a>,{" "}
-                <a href="/terms" target="_blank" className="text-accent underline">Terms of Service</a>, and{" "}
+                <a href="/terms" target="_blank" className="text-accent underline">Terms of Service</a> and{" "}
                 <a href="/privacy" target="_blank" className="text-accent underline">Privacy Policy</a>.
               </Label>
             </div>
