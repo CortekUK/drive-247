@@ -45,7 +45,12 @@
       "Bash(supabase functions deploy:*)",
       "Bash(git -C /home/haseeb-raza/Desktop/drive-247 log --oneline -20 -- \"*veriff*\" \"*verify*\" \"*identity*\")",
       "Bash(git -C /home/haseeb-raza/Desktop/drive-247 log -p --since=\"2 weeks ago\" -- \"apps/booking/src/app/verify\" \"apps/booking/src/components/MultiStepBookingWidget.tsx\" \"apps/booking/src/app/api/check-veriff-status\")",
-      "Bash(__NEW_LINE_55a4d4bb315f26bf__ echo \"\")"
+      "Bash(__NEW_LINE_55a4d4bb315f26bf__ echo \"\")",
+      "Bash(xargs -I{} sh -c 'echo \"\"=== {} ===\"\" && grep -i stripe {} 2>/dev/null | head -5')",
+      "Bash(supabase functions logs:*)",
+      "Bash(xargs cat:*)",
+      "Bash(supabase secrets:*)",
+      "Bash(supabase functions list:*)"
     ],
     "deny": [],
     "ask": []

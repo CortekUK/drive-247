@@ -914,11 +914,12 @@ const RentalDetail = () => {
                   </div>
                 )}
               </div>
-              {/* Only show refund button if there's actual paid amount (not just invoice amount) */}
+              {/* Only show refund button if there's actual paid amount and rental is not cancelled or closed */}
               {invoiceBreakdown.serviceFee > 0 &&
                totalPayments > 0 &&
-               (paymentBreakdown?.["Service Fee"]?.paid ?? 0) > 0 &&
-               (refundBreakdown?.["Service Fee"] ?? 0) < (paymentBreakdown?.["Service Fee"]?.paid ?? 0) && (
+               rental.status !== 'Cancelled' &&
+               rental.status !== 'Closed' &&
+               (refundBreakdown?.["Service Fee"] ?? 0) < invoiceBreakdown.serviceFee && (
                 <Button
                   variant="outline"
                   size="sm"
@@ -926,10 +927,9 @@ const RentalDetail = () => {
                   onClick={() => {
                     setRefundCategory("Service Fee");
                     setRefundTotalAmount(invoiceBreakdown.serviceFee);
-                    // Use actual paid amount minus already refunded
-                    const paidAmount = paymentBreakdown?.["Service Fee"]?.paid ?? 0;
+                    // Use invoice amount minus already refunded as the max refundable
                     const alreadyRefunded = refundBreakdown?.["Service Fee"] ?? 0;
-                    setRefundPaidAmount(Math.max(0, paidAmount - alreadyRefunded));
+                    setRefundPaidAmount(Math.max(0, invoiceBreakdown.serviceFee - alreadyRefunded));
                     setShowRefundDialog(true);
                   }}
                 >
@@ -1007,11 +1007,12 @@ const RentalDetail = () => {
                   </div>
                 ) : null}
               </div>
-              {/* Only show refund button if there's actual paid amount (not just invoice amount) */}
+              {/* Only show refund button if there's actual paid amount and rental is not cancelled or closed */}
               {invoiceBreakdown.securityDeposit > 0 &&
                totalPayments > 0 &&
-               (paymentBreakdown?.["Security Deposit"]?.paid ?? 0) > 0 &&
-               (refundBreakdown?.["Security Deposit"] ?? 0) < (paymentBreakdown?.["Security Deposit"]?.paid ?? 0) && (
+               rental.status !== 'Cancelled' &&
+               rental.status !== 'Closed' &&
+               (refundBreakdown?.["Security Deposit"] ?? 0) < invoiceBreakdown.securityDeposit && (
                 <Button
                   variant="outline"
                   size="sm"
@@ -1019,10 +1020,9 @@ const RentalDetail = () => {
                   onClick={() => {
                     setRefundCategory("Security Deposit");
                     setRefundTotalAmount(invoiceBreakdown.securityDeposit);
-                    // Use actual paid amount minus already refunded
-                    const paidAmount = paymentBreakdown?.["Security Deposit"]?.paid ?? 0;
+                    // Use invoice amount minus already refunded as the max refundable
                     const alreadyRefunded = refundBreakdown?.["Security Deposit"] ?? 0;
-                    setRefundPaidAmount(Math.max(0, paidAmount - alreadyRefunded));
+                    setRefundPaidAmount(Math.max(0, invoiceBreakdown.securityDeposit - alreadyRefunded));
                     setShowRefundDialog(true);
                   }}
                 >
@@ -1097,11 +1097,12 @@ const RentalDetail = () => {
                   </>
                 )}
               </div>
-              {/* Only show refund button if there's actual paid amount (not just invoice amount) */}
+              {/* Only show refund button if there's actual paid amount and rental is not cancelled or closed */}
               {invoiceBreakdown.rentalFee > 0 &&
                totalPayments > 0 &&
-               (paymentBreakdown?.["Rental"]?.paid ?? 0) > 0 &&
-               (refundBreakdown?.["Rental"] ?? 0) < (paymentBreakdown?.["Rental"]?.paid ?? 0) && (
+               rental.status !== 'Cancelled' &&
+               rental.status !== 'Closed' &&
+               (refundBreakdown?.["Rental"] ?? 0) < invoiceBreakdown.rentalFee && (
                 <Button
                   variant="outline"
                   size="sm"
@@ -1109,10 +1110,9 @@ const RentalDetail = () => {
                   onClick={() => {
                     setRefundCategory("Rental");
                     setRefundTotalAmount(invoiceBreakdown.rentalFee);
-                    // Use actual paid amount minus already refunded
-                    const paidAmount = paymentBreakdown?.["Rental"]?.paid ?? 0;
+                    // Use invoice amount minus already refunded as the max refundable
                     const alreadyRefunded = refundBreakdown?.["Rental"] ?? 0;
-                    setRefundPaidAmount(Math.max(0, paidAmount - alreadyRefunded));
+                    setRefundPaidAmount(Math.max(0, invoiceBreakdown.rentalFee - alreadyRefunded));
                     setShowRefundDialog(true);
                   }}
                 >

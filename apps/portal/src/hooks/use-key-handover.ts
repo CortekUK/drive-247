@@ -251,8 +251,7 @@ export function useKeyHandover(rentalId: string | undefined) {
             end_date,
             customer:customers(
               id,
-              first_name,
-              last_name,
+              name,
               email,
               phone
             ),
@@ -294,7 +293,7 @@ export function useKeyHandover(rentalId: string | undefined) {
 
           // Send rental started notification to customer
           try {
-            const customer = rental.customer as { first_name: string; last_name: string; email: string; phone: string } | null;
+            const customer = rental.customer as { name: string; email: string; phone: string } | null;
             const vehicle = rental.vehicle as { make: string; model: string; registration_number: string; color: string } | null;
 
             console.log('Rental started - preparing notification:', {
@@ -305,7 +304,7 @@ export function useKeyHandover(rentalId: string | undefined) {
 
             if (customer?.email && vehicle) {
               const notifyPayload = {
-                customerName: `${customer.first_name} ${customer.last_name}`,
+                customerName: customer.name,
                 customerEmail: customer.email,
                 customerPhone: customer.phone,
                 vehicleName: `${vehicle.make} ${vehicle.model}`,
