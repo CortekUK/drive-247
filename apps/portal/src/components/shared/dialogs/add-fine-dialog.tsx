@@ -518,7 +518,7 @@ export const AddFineDialog = ({ open, onOpenChange, vehicle_id, customer_id }: A
                 render={({ field }) => (
                   <FormItem className="flex flex-col">
                     <FormLabel>Issue Date <span className="text-red-500">*</span></FormLabel>
-                    <Popover>
+                    <Popover modal={true}>
                       <PopoverTrigger asChild>
                         <FormControl>
                           <Button
@@ -559,7 +559,7 @@ export const AddFineDialog = ({ open, onOpenChange, vehicle_id, customer_id }: A
                 render={({ field }) => (
                   <FormItem className="flex flex-col">
                     <FormLabel>Due Date <span className="text-red-500">*</span></FormLabel>
-                    <Popover>
+                    <Popover modal={true}>
                       <PopoverTrigger asChild>
                         <FormControl>
                           <Button

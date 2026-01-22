@@ -148,7 +148,7 @@ export function AuthorityPaymentDialog({
               render={({ field }) => (
                 <FormItem className="flex flex-col">
                   <FormLabel>Payment Date</FormLabel>
-                  <Popover>
+                  <Popover modal={true}>
                     <PopoverTrigger asChild>
                       <FormControl>
                         <Button

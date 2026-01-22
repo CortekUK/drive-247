@@ -24,7 +24,7 @@ export const DatePickerInput = ({
   error,
 }: DatePickerInputProps) => {
   return (
-    <Popover>
+    <Popover modal={true}>
       <PopoverTrigger asChild>
         <Button
           variant="outline"

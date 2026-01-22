@@ -405,7 +405,7 @@ export const AddPaymentDialog = ({
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>Payment Date <span className="text-red-500">*</span></FormLabel>
-                  <Popover>
+                  <Popover modal={true}>
                     <PopoverTrigger asChild>
                       <FormControl>
                         <Button

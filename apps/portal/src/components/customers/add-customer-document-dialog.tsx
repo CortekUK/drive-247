@@ -431,7 +431,7 @@ export default function AddCustomerDocumentDialog({
                     <FormLabel>
                       {showInsuranceFields ? "Policy Start Date" : "Start Date"}
                     </FormLabel>
-                    <Popover>
+                    <Popover modal={true}>
                       <PopoverTrigger asChild>
                         <FormControl>
                           <Button
@@ -476,7 +476,7 @@ export default function AddCustomerDocumentDialog({
                     <FormLabel>
                       {showInsuranceFields ? "Policy End Date" : "End Date (Expiry)"}
                     </FormLabel>
-                    <Popover>
+                    <Popover modal={true}>
                       <PopoverTrigger asChild>
                         <FormControl>
                           <Button

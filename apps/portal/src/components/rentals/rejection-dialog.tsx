@@ -656,7 +656,7 @@ export default function RejectionDialog({
                   {refundTiming === "scheduled" && (
                     <div className="space-y-2 pl-6">
                       <Label>Refund Date</Label>
-                      <Popover>
+                      <Popover modal={true}>
                         <PopoverTrigger asChild>
                           <Button
                             variant="outline"

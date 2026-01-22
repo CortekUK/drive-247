@@ -2152,7 +2152,7 @@ const Settings = () => {
                   <div className="flex gap-4">
                     <div className="space-y-2 w-1/2">
                       <Label>Expiration Date</Label>
-                      <Popover>
+                      <Popover modal={true}>
                         <PopoverTrigger asChild>
                           <Button
                             variant={"outline"}
