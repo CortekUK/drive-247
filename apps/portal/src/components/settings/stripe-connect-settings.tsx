@@ -111,10 +111,8 @@ export function StripeConnectSettings() {
     mutationFn: async (newMode: 'test' | 'live') => {
       if (!tenantStatus?.id) throw new Error('Tenant not found');
 
-      // Safety check: can't switch to live mode without completed onboarding
-      if (newMode === 'live' && !tenantStatus.stripe_onboarding_complete) {
-        throw new Error('You must complete Stripe Connect onboarding before switching to live mode');
-      }
+      // Note: Onboarding check removed to allow mode switching for testing
+      // Live mode will work with platform keys if Connect is not set up
 
       const { error } = await supabase
         .from('tenants')
@@ -145,17 +143,8 @@ export function StripeConnectSettings() {
   });
 
   const handleModeToggle = (newMode: 'test' | 'live') => {
-    // Safety check: can't switch to live without onboarding
-    if (newMode === 'live' && !tenantStatus?.stripe_onboarding_complete) {
-      toast({
-        title: 'Onboarding Required',
-        description: 'You must complete Stripe Connect onboarding before switching to live mode',
-        variant: 'destructive',
-      });
-      return;
-    }
-
-    // Show warning dialog
+    // Show warning dialog - onboarding check removed to allow mode switching
+    // If Connect is not set up, payments will process on platform account
     setPendingMode(newMode);
     setShowModeWarning(true);
   };
@@ -432,44 +421,46 @@ export function StripeConnectSettings() {
                 </>
               )}
             </AlertDialogTitle>
-            <AlertDialogDescription className="space-y-3 pt-2">
-              {pendingMode === 'live' ? (
-                <>
-                  <p className="font-medium text-yellow-700 dark:text-yellow-500">
-                    ⚠️ Warning: This will enable REAL payments
-                  </p>
-                  <p>
-                    By switching to live mode, all new bookings will:
-                  </p>
-                  <ul className="list-disc list-inside space-y-1 text-sm">
-                    <li>Use your live Stripe Connect account</li>
-                    <li>Accept real credit cards</li>
-                    <li>Charge real money to customers</li>
-                    <li>Deposit funds to your bank account</li>
-                  </ul>
-                  <p className="text-sm font-medium text-red-600 dark:text-red-500">
-                    Make sure you have completed all testing before switching to live mode.
-                  </p>
-                </>
-              ) : (
-                <>
-                  <p className="font-medium text-blue-700 dark:text-blue-500">
-                    Switching back to test mode
-                  </p>
-                  <p>
-                    By switching to test mode, all new bookings will:
-                  </p>
-                  <ul className="list-disc list-inside space-y-1 text-sm">
-                    <li>Use test Stripe keys</li>
-                    <li>Only accept test cards (4242 4242 4242 4242)</li>
-                    <li>Route to a shared test Connect account</li>
-                    <li>Not process any real money</li>
-                  </ul>
-                  <p className="text-sm text-muted-foreground">
-                    Existing live bookings will not be affected.
-                  </p>
-                </>
-              )}
+            <AlertDialogDescription asChild>
+              <div className="text-sm text-muted-foreground space-y-3 pt-2">
+                {pendingMode === 'live' ? (
+                  <>
+                    <div className="font-medium text-yellow-700 dark:text-yellow-500">
+                      ⚠️ Warning: This will enable REAL payments
+                    </div>
+                    <div>
+                      By switching to live mode, all new bookings will:
+                    </div>
+                    <ul className="list-disc list-inside space-y-1 text-sm">
+                      <li>Use your live Stripe Connect account</li>
+                      <li>Accept real credit cards</li>
+                      <li>Charge real money to customers</li>
+                      <li>Deposit funds to your bank account</li>
+                    </ul>
+                    <div className="text-sm font-medium text-red-600 dark:text-red-500">
+                      Make sure you have completed all testing before switching to live mode.
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div className="font-medium text-blue-700 dark:text-blue-500">
+                      Switching back to test mode
+                    </div>
+                    <div>
+                      By switching to test mode, all new bookings will:
+                    </div>
+                    <ul className="list-disc list-inside space-y-1 text-sm">
+                      <li>Use test Stripe keys</li>
+                      <li>Only accept test cards (4242 4242 4242 4242)</li>
+                      <li>Route to a shared test Connect account</li>
+                      <li>Not process any real money</li>
+                    </ul>
+                    <div className="text-sm text-muted-foreground">
+                      Existing live bookings will not be affected.
+                    </div>
+                  </>
+                )}
+              </div>
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
