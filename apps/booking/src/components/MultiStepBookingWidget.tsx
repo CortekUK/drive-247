@@ -71,6 +71,14 @@ interface BlockedDate {
   reason?: string | null;
 }
 const MultiStepBookingWidget = () => {
+  // Safari-safe date parser for YYYY-MM-DD strings
+  // Safari doesn't support new Date("YYYY-MM-DD") format
+  const parseDateString = (dateStr: string): Date => {
+    if (!dateStr) return new Date();
+    const [year, month, day] = dateStr.split('-').map(Number);
+    return new Date(year, month - 1, day);
+  };
+
   const { tenant } = useTenant();
   const workingHours = useWorkingHours();
   const skipInsurance = isInsuranceExemptTenant(tenant?.id);
@@ -146,7 +154,7 @@ const MultiStepBookingWidget = () => {
       };
     }
     // Get the working hours for the specific pickup date
-    const pickupDate = new Date(formData.pickupDate);
+    const pickupDate = parseDateString(formData.pickupDate);
     return getWorkingHoursForDate(pickupDate, tenant);
   }, [formData.pickupDate, tenant, workingHours]);
 
@@ -162,7 +170,7 @@ const MultiStepBookingWidget = () => {
       };
     }
     // Get the working hours for the specific dropoff date
-    const dropoffDate = new Date(formData.dropoffDate);
+    const dropoffDate = parseDateString(formData.dropoffDate);
     return getWorkingHoursForDate(dropoffDate, tenant);
   }, [formData.dropoffDate, tenant, workingHours]);
 
@@ -313,6 +321,37 @@ const MultiStepBookingWidget = () => {
       };
     }
   }, []);
+
+  // Real-time subscription for blocked dates changes
+  useEffect(() => {
+    if (!tenant?.id) return;
+
+    // Subscribe to blocked_dates changes for this tenant
+    const channel = supabase
+      .channel(`blocked-dates-${tenant.id}`)
+      .on(
+        'postgres_changes',
+        {
+          event: '*', // Listen to INSERT, UPDATE, DELETE
+          schema: 'public',
+          table: 'blocked_dates',
+          filter: `tenant_id=eq.${tenant.id}`,
+        },
+        (payload) => {
+          console.log('[BlockedDates] Real-time update received:', payload.eventType);
+          // Refetch blocked dates when any change occurs
+          loadBlockedDates();
+        }
+      )
+      .subscribe((status) => {
+        console.log('[BlockedDates] Subscription status:', status);
+      });
+
+    // Cleanup subscription on unmount or tenant change
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [tenant?.id]);
 
   useEffect(() => {
     // Load view mode from localStorage
@@ -590,6 +629,43 @@ const MultiStepBookingWidget = () => {
     return () => window.removeEventListener('beforeunload', handleBeforeUnload);
   }, [formData.customerName, formData.customerEmail, formData.vehicleId, showConfirmation]);
 
+  // Separate function to load blocked dates - used by both initial load and real-time updates
+  const loadBlockedDates = async () => {
+    if (!tenant?.id) return;
+
+    const { data: blockedDatesData } = await supabase
+      .from("blocked_dates")
+      .select("id, start_date, end_date, vehicle_id, reason")
+      .eq("tenant_id", tenant.id);
+
+    if (blockedDatesData) {
+      // Store all blocked dates (global + vehicle-specific)
+      setAllBlockedDates(blockedDatesData);
+      console.log('[BlockedDates] Loaded all blocked dates:', blockedDatesData.map(b => ({ id: b.id, vehicle_id: b.vehicle_id, start: b.start_date, end: b.end_date })));
+
+      // Filter only global blocked dates (vehicle_id is null) for Step 1 calendar
+      const globalBlockedDates = blockedDatesData.filter(range => range.vehicle_id === null);
+
+      // Expand global blocked date ranges into individual dates for calendar
+      const formattedDates: string[] = [];
+      globalBlockedDates.forEach(range => {
+        // Safari-safe date parsing: split YYYY-MM-DD and use Date constructor with numbers
+        const [startYear, startMonth, startDay] = range.start_date.split('-').map(Number);
+        const [endYear, endMonth, endDay] = range.end_date.split('-').map(Number);
+        const startDate = new Date(startYear, startMonth - 1, startDay);
+        const endDate = new Date(endYear, endMonth - 1, endDay);
+
+        // Generate all dates in the range
+        const currentDate = new Date(startDate);
+        while (currentDate <= endDate) {
+          formattedDates.push(format(currentDate, "yyyy-MM-dd"));
+          currentDate.setDate(currentDate.getDate() + 1);
+        }
+      });
+      setBlockedDates(formattedDates);
+    }
+  };
+
   const loadData = async () => {
     // Wait for tenant to be loaded before querying
     if (!tenant?.id) {
@@ -613,14 +689,6 @@ const MultiStepBookingWidget = () => {
 
     const { data: vehiclesData } = await vehiclesQuery;
 
-    // Build query for blocked dates with tenant filtering
-    const blockedDatesQuery = supabase
-      .from("blocked_dates")
-      .select("id, start_date, end_date, vehicle_id, reason")
-      .eq("tenant_id", tenant.id);
-
-    const { data: blockedDatesData } = await blockedDatesQuery;
-
     if (vehiclesData) {
       // Cast to Vehicle[] since we know the shape matches
       setVehicles(vehiclesData as unknown as Vehicle[]);
@@ -641,29 +709,9 @@ const MultiStepBookingWidget = () => {
         }));
       }
     }
-    if (blockedDatesData) {
-      // Store all blocked dates (global + vehicle-specific)
-      setAllBlockedDates(blockedDatesData);
-      console.log('[BlockedDates] Loaded all blocked dates:', blockedDatesData.map(b => ({ id: b.id, vehicle_id: b.vehicle_id, start: b.start_date, end: b.end_date })));
 
-      // Filter only global blocked dates (vehicle_id is null) for Step 1 calendar
-      const globalBlockedDates = blockedDatesData.filter(range => range.vehicle_id === null);
-
-      // Expand global blocked date ranges into individual dates for calendar
-      const formattedDates: string[] = [];
-      globalBlockedDates.forEach(range => {
-        const startDate = new Date(range.start_date);
-        const endDate = new Date(range.end_date);
-
-        // Generate all dates in the range
-        const currentDate = new Date(startDate);
-        while (currentDate <= endDate) {
-          formattedDates.push(format(currentDate, "yyyy-MM-dd"));
-          currentDate.setDate(currentDate.getDate() + 1);
-        }
-      });
-      setBlockedDates(formattedDates);
-    }
+    // Load blocked dates
+    await loadBlockedDates();
   };
 
   // Check verification status - first tries database, then falls back to Veriff API directly
@@ -1126,8 +1174,8 @@ const MultiStepBookingWidget = () => {
     let rentalPrice = 0;
     let rentalDays = 0;
     if (formData.pickupDate && formData.dropoffDate) {
-      const pickup = new Date(formData.pickupDate);
-      const dropoff = new Date(formData.dropoffDate);
+      const pickup = parseDateString(formData.pickupDate);
+      const dropoff = parseDateString(formData.dropoffDate);
       rentalDays = Math.max(1, Math.ceil((dropoff.getTime() - pickup.getTime()) / (1000 * 60 * 60 * 24)));
 
       const dailyRent = selectedVehicle.daily_rent || 0;
@@ -1749,26 +1797,20 @@ const MultiStepBookingWidget = () => {
       return { price: primaryPrice, label: primaryLabel, secondaryPrices: [] };
     }
   };
-  // Helper to parse YYYY-MM-DD to local date at midnight (avoids UTC timezone issues)
-  const parseLocalDate = (dateStr: string): Date => {
-    const [year, month, day] = dateStr.split('-').map(Number);
-    return new Date(year, month - 1, day);
-  };
-
   const isVehicleBlockedForPeriod = (vehicleId: string): { blocked: boolean; blockedRange?: { start: string; end: string } } => {
     if (!formData.pickupDate || !formData.dropoffDate) {
       return { blocked: false };
     }
 
-    const pickupDate = parseLocalDate(formData.pickupDate);
-    const dropoffDate = parseLocalDate(formData.dropoffDate);
+    const pickupDate = parseDateString(formData.pickupDate);
+    const dropoffDate = parseDateString(formData.dropoffDate);
 
     // Find any blocked dates for this specific vehicle that overlap with the rental period
     const vehicleBlockedDates = allBlockedDates.filter(block => block.vehicle_id === vehicleId);
 
     for (const block of vehicleBlockedDates) {
-      const blockStart = parseLocalDate(block.start_date);
-      const blockEnd = parseLocalDate(block.end_date);
+      const blockStart = parseDateString(block.start_date);
+      const blockEnd = parseDateString(block.end_date);
 
       // Check if there's any overlap between rental period and blocked period
       const hasOverlap = pickupDate <= blockEnd && dropoffDate >= blockStart;
@@ -1878,16 +1920,16 @@ const MultiStepBookingWidget = () => {
 
     // Filter out vehicles with blocked dates for the selected rental period
     if (formData.pickupDate && formData.dropoffDate) {
-      const pickupDate = parseLocalDate(formData.pickupDate);
-      const dropoffDate = parseLocalDate(formData.dropoffDate);
+      const pickupDate = parseDateString(formData.pickupDate);
+      const dropoffDate = parseDateString(formData.dropoffDate);
 
       filtered = filtered.filter(vehicle => {
         // Check for vehicle-specific blocked dates
         const vehicleBlockedDates = allBlockedDates.filter(block => block.vehicle_id === vehicle.id);
 
         for (const block of vehicleBlockedDates) {
-          const blockStart = parseLocalDate(block.start_date);
-          const blockEnd = parseLocalDate(block.end_date);
+          const blockStart = parseDateString(block.start_date);
+          const blockEnd = parseDateString(block.end_date);
 
           // Check if there's any overlap between rental period and blocked period
           const hasOverlap = pickupDate <= blockEnd && dropoffDate >= blockStart;
@@ -2151,7 +2193,7 @@ const MultiStepBookingWidget = () => {
     if (!formData.driverDOB || formData.driverDOB.trim() === "") {
       newErrors.driverDOB = "Date of birth is required.";
     } else {
-      const dob = new Date(formData.driverDOB);
+      const dob = parseDateString(formData.driverDOB);
       if (isNaN(dob.getTime())) {
         newErrors.driverDOB = "Please enter a valid date of birth.";
       } else {
@@ -2273,7 +2315,7 @@ const MultiStepBookingWidget = () => {
         if (!value || value.trim() === "") {
           newErrors.driverDOB = "Date of birth is required.";
         } else {
-          const dob = new Date(value);
+          const dob = parseDateString(value);
           if (isNaN(dob.getTime())) {
             newErrors.driverDOB = "Please enter a valid date of birth.";
           } else {
@@ -2299,7 +2341,7 @@ const MultiStepBookingWidget = () => {
   const handleStep1Continue = () => {
     if (validateStep1()) {
       // Calculate age from DOB for young driver check
-      const driverAge = formData.driverDOB ? calculateAge(new Date(formData.driverDOB)) : 0;
+      const driverAge = formData.driverDOB ? calculateAge(parseDateString(formData.driverDOB)) : 0;
       const isYoungDriver = driverAge < 25;
 
       // Store in localStorage
@@ -2656,11 +2698,11 @@ const MultiStepBookingWidget = () => {
                     <PopoverTrigger asChild>
                       <Button variant="outline" className={cn("w-full justify-start text-left font-normal h-12", !formData.pickupDate && "text-muted-foreground")}>
                         <CalendarIcon className="mr-2 h-4 w-4" />
-                        {formData.pickupDate ? format(new Date(formData.pickupDate), "MMM dd") : <span>Date</span>}
+                        {formData.pickupDate ? format(parseDateString(formData.pickupDate), "MMM dd") : <span>Date</span>}
                       </Button>
                     </PopoverTrigger>
                     <PopoverContent className="w-auto p-0" align="start">
-                      <Calendar mode="single" selected={formData.pickupDate ? new Date(formData.pickupDate) : undefined} onSelect={date => {
+                      <Calendar mode="single" selected={formData.pickupDate ? parseDateString(formData.pickupDate) : undefined} onSelect={date => {
                         if (date) {
                           const dateStr = format(date, "yyyy-MM-dd");
                           if (blockedDates.includes(dateStr)) {
@@ -2724,11 +2766,11 @@ const MultiStepBookingWidget = () => {
                     <PopoverTrigger asChild>
                       <Button variant="outline" className={cn("w-full justify-start text-left font-normal h-12", !formData.dropoffDate && "text-muted-foreground")}>
                         <CalendarIcon className="mr-2 h-4 w-4" />
-                        {formData.dropoffDate ? format(new Date(formData.dropoffDate), "MMM dd") : <span>Date</span>}
+                        {formData.dropoffDate ? format(parseDateString(formData.dropoffDate), "MMM dd") : <span>Date</span>}
                       </Button>
                     </PopoverTrigger>
                     <PopoverContent className="w-auto p-0" align="start">
-                      <Calendar mode="single" selected={formData.dropoffDate ? new Date(formData.dropoffDate) : undefined} onSelect={date => {
+                      <Calendar mode="single" selected={formData.dropoffDate ? parseDateString(formData.dropoffDate) : undefined} onSelect={date => {
                         if (date) {
                           const dateStr = format(date, "yyyy-MM-dd");
                           setFormData({
@@ -2743,7 +2785,7 @@ const MultiStepBookingWidget = () => {
                           }
                         }
                       }} disabled={date => {
-                        const pickupDate = formData.pickupDate ? new Date(formData.pickupDate) : new Date();
+                        const pickupDate = formData.pickupDate ? parseDateString(formData.pickupDate) : new Date();
                         const oneYearFromPickup = new Date(pickupDate);
                         oneYearFromPickup.setFullYear(oneYearFromPickup.getFullYear() + 1);
                         const dateStr = format(date, "yyyy-MM-dd");
@@ -2789,9 +2831,9 @@ const MultiStepBookingWidget = () => {
                 <div className="grid grid-cols-3 gap-2">
                   {/* Month Select */}
                   <Select
-                    value={formData.driverDOB ? (new Date(formData.driverDOB).getMonth() + 1).toString().padStart(2, '0') : ""}
+                    value={formData.driverDOB ? (parseDateString(formData.driverDOB).getMonth() + 1).toString().padStart(2, '0') : ""}
                     onValueChange={(month) => {
-                      const currentDate = formData.driverDOB ? new Date(formData.driverDOB) : new Date(2000, 0, 1);
+                      const currentDate = formData.driverDOB ? parseDateString(formData.driverDOB) : new Date(2000, 0, 1);
                       const newDate = new Date(currentDate.getFullYear(), parseInt(month) - 1, Math.min(currentDate.getDate(), new Date(currentDate.getFullYear(), parseInt(month), 0).getDate()));
                       const dateStr = format(newDate, "yyyy-MM-dd");
                       setFormData({ ...formData, driverDOB: dateStr });
@@ -2809,9 +2851,9 @@ const MultiStepBookingWidget = () => {
                   </Select>
                   {/* Day Select */}
                   <Select
-                    value={formData.driverDOB ? new Date(formData.driverDOB).getDate().toString() : ""}
+                    value={formData.driverDOB ? parseDateString(formData.driverDOB).getDate().toString() : ""}
                     onValueChange={(day) => {
-                      const currentDate = formData.driverDOB ? new Date(formData.driverDOB) : new Date(2000, 0, 1);
+                      const currentDate = formData.driverDOB ? parseDateString(formData.driverDOB) : new Date(2000, 0, 1);
                       const newDate = new Date(currentDate.getFullYear(), currentDate.getMonth(), parseInt(day));
                       const dateStr = format(newDate, "yyyy-MM-dd");
                       setFormData({ ...formData, driverDOB: dateStr });
@@ -2829,9 +2871,9 @@ const MultiStepBookingWidget = () => {
                   </Select>
                   {/* Year Select */}
                   <Select
-                    value={formData.driverDOB ? new Date(formData.driverDOB).getFullYear().toString() : ""}
+                    value={formData.driverDOB ? parseDateString(formData.driverDOB).getFullYear().toString() : ""}
                     onValueChange={(year) => {
-                      const currentDate = formData.driverDOB ? new Date(formData.driverDOB) : new Date(2000, 0, 1);
+                      const currentDate = formData.driverDOB ? parseDateString(formData.driverDOB) : new Date(2000, 0, 1);
                       const newDate = new Date(parseInt(year), currentDate.getMonth(), Math.min(currentDate.getDate(), new Date(parseInt(year), currentDate.getMonth() + 1, 0).getDate()));
                       const dateStr = format(newDate, "yyyy-MM-dd");
                       setFormData({ ...formData, driverDOB: dateStr });
@@ -2849,7 +2891,7 @@ const MultiStepBookingWidget = () => {
                   </Select>
                 </div>
                 {formData.driverDOB && (
-                  <p className="text-sm text-muted-foreground">Age: <span className={cn("font-medium", errors.driverDOB ? "text-destructive" : "text-foreground")}>{calculateAge(new Date(formData.driverDOB))} years old</span></p>
+                  <p className="text-sm text-muted-foreground">Age: <span className={cn("font-medium", errors.driverDOB ? "text-destructive" : "text-foreground")}>{calculateAge(parseDateString(formData.driverDOB))} years old</span></p>
                 )}
                 {errors.driverDOB && <p className="text-sm text-destructive">{errors.driverDOB}</p>}
               </div>
@@ -2921,7 +2963,7 @@ const MultiStepBookingWidget = () => {
             {formData.pickupDate && formData.dropoffDate && <div className="flex items-center gap-2 text-sm text-muted-foreground">
               <CalendarIcon className="w-4 h-4" />
               <span>
-                {format(new Date(formData.pickupDate), "MMM dd")} → {format(new Date(formData.dropoffDate), "MMM dd")}
+                {format(parseDateString(formData.pickupDate), "MMM dd")} → {format(parseDateString(formData.dropoffDate), "MMM dd")}
               </span>
               <span>•</span>
               <span>{formData.pickupLocation.split(',')[0] || 'Selected location'}</span>
@@ -3578,13 +3620,13 @@ const MultiStepBookingWidget = () => {
                 <div className="space-y-3 text-sm">
                   <div>
                     <p className="text-muted-foreground text-xs uppercase tracking-wide mb-1">Pickup</p>
-                    <p className="font-medium">{formData.pickupDate ? format(new Date(formData.pickupDate), "MMM dd, yyyy") : "—"}</p>
+                    <p className="font-medium">{formData.pickupDate ? format(parseDateString(formData.pickupDate), "MMM dd, yyyy") : "—"}</p>
                     <p className="text-muted-foreground text-xs">{formatTimeWithPeriod(formData.pickupTime)}</p>
                   </div>
 
                   <div>
                     <p className="text-muted-foreground text-xs uppercase tracking-wide mb-1">Return</p>
-                    <p className="font-medium">{formData.dropoffDate ? format(new Date(formData.dropoffDate), "MMM dd, yyyy") : "—"}</p>
+                    <p className="font-medium">{formData.dropoffDate ? format(parseDateString(formData.dropoffDate), "MMM dd, yyyy") : "—"}</p>
                     <p className="text-muted-foreground text-xs">{formatTimeWithPeriod(formData.dropoffTime)}</p>
                   </div>
 
