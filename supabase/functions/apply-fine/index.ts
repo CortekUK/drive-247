@@ -59,21 +59,12 @@ serve(async (req) => {
           headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
         }
       );
-    } else if (action === 'appeal') {
-      const result = await markFineAsAppealed(supabase, fineId);
-      return new Response(
-        JSON.stringify(result),
-        { 
-          status: result.success ? 200 : 400,
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
-        }
-      );
     } else {
       return new Response(
-        JSON.stringify({ success: false, error: 'Invalid action. Use: charge, waive, or appeal' }),
-        { 
-          status: 400, 
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+        JSON.stringify({ success: false, error: 'Invalid action. Use: charge or waive' }),
+        {
+          status: 400,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
         }
       );
     }
@@ -377,36 +368,6 @@ async function allocateAvailableCredit(supabase: any, customerId: string, charge
 async function waiveFine(supabase: any, fineId: string): Promise<FineChargeResult> {
   console.log(`Waiving fine: ${fineId}`);
 
-  // Check for authority payments first
-  const { data: authorityPayments, error: authorityError } = await supabase
-    .from('authority_payments')
-    .select('id, amount')
-    .eq('fine_id', fineId);
-
-  if (authorityError) {
-    console.error('Error checking authority payments:', authorityError);
-    return {
-      success: false,
-      fineId,
-      status: 'error',
-      chargedAmount: 0,
-      remainingAmount: 0,
-      error: `Failed to check authority payments: ${authorityError.message}`
-    };
-  }
-
-  if (authorityPayments && authorityPayments.length > 0) {
-    const totalPaid = authorityPayments.reduce((sum, p) => sum + Number(p.amount), 0);
-    return {
-      success: false,
-      fineId,
-      status: 'error',
-      chargedAmount: 0,
-      remainingAmount: 0,
-      error: `Cannot waive fine - authority payment of $${totalPaid} has already been made. Use "Charge to Account" to recover costs from customer.`
-    };
-  }
-
   const { data: fine, error: fineError } = await supabase
     .from('fines')
     .select('*')
@@ -452,61 +413,32 @@ async function waiveFine(supabase: any, fineId: string): Promise<FineChargeResul
     }
   }
 
-  // Check if there were any payments applied to this fine
-  // If so, we need to create negative P&L Revenue entries for refunds
-  let totalRefundAmount = 0;
-  
-  if (fine.customer_id) {
-    console.log(`Checking for applied payments to fine ${fineId}`);
-    
-    // Find payment applications for this fine's charges
-    const { data: appliedPayments, error: paymentsError } = await supabase
-      .from('payment_applications')
-      .select(`
-        amount_applied,
-        payment_id,
-        charge_entry_id,
-        ledger_entries!charge_entry_id(
-          reference,
-          vehicle_id,
-          customer_id
-        )
-      `)
-      .eq('ledger_entries.reference', `FINE-${fineId}`);
+  // If fine was charged, we need to handle the ledger entry
+  if (fine.status === 'Charged' && fine.customer_id) {
+    console.log(`Fine ${fineId} was charged, cleaning up ledger entry`);
 
-    if (paymentsError) {
-      console.error('Error fetching applied payments:', paymentsError);
-    } else if (appliedPayments && appliedPayments.length > 0) {
-      console.log(`Found ${appliedPayments.length} payment applications to refund`);
-      
-      for (const application of appliedPayments) {
-        totalRefundAmount += application.amount_applied;
-        
-        // Create negative P&L Revenue entry for refund
-        const refundReference = `refund:${fineId}:${application.payment_id}:${Date.now()}`;
-        
-        const refundPnlData: any = {
-          vehicle_id: application.ledger_entries.vehicle_id,
-          entry_date: new Date().toISOString().split('T')[0],
-          side: 'Revenue',
-          category: 'Fines',
-          amount: -Math.abs(application.amount_applied), // Negative for refund
-          reference: refundReference,
-          customer_id: application.ledger_entries.customer_id,
-          source_ref: fineId
-        };
-        if (fine.tenant_id) {
-          refundPnlData.tenant_id = fine.tenant_id;
-        }
-        const { error: refundPnlError } = await supabase
-          .from('pnl_entries')
-          .insert(refundPnlData);
+    // Find and update the ledger entry for this fine
+    const { data: chargeEntry, error: chargeError } = await supabase
+      .from('ledger_entries')
+      .select('id, remaining_amount')
+      .eq('reference', `FINE-${fineId}`)
+      .eq('type', 'Charge')
+      .single();
 
-        if (refundPnlError && !refundPnlError.message.includes('duplicate key')) {
-          console.error('Error creating refund P&L entry:', refundPnlError);
-        } else {
-          console.log(`Refund P&L entry created: -£${application.amount_applied}`);
-        }
+    if (chargeError) {
+      console.log('No charge entry found for fine (may not have been charged yet):', chargeError.message);
+    } else if (chargeEntry) {
+      // Delete the charge entry since the fine is being waived
+      const { error: deleteError } = await supabase
+        .from('ledger_entries')
+        .delete()
+        .eq('id', chargeEntry.id);
+
+      if (deleteError) {
+        console.error('Error deleting charge entry:', deleteError);
+        // Continue anyway - the fine status update is more important
+      } else {
+        console.log(`Deleted charge entry ${chargeEntry.id} for waived fine`);
       }
     }
   }
@@ -534,11 +466,7 @@ async function waiveFine(supabase: any, fineId: string): Promise<FineChargeResul
     };
   }
 
-  if (totalRefundAmount > 0) {
-    console.log(`Fine ${fineId} successfully waived with £${totalRefundAmount} in P&L refunds`);
-  } else {
-    console.log(`Fine ${fineId} successfully waived (no payments to refund)`);
-  }
+  console.log(`Fine ${fineId} successfully waived`);
 
   return {
     success: true,
@@ -549,66 +477,3 @@ async function waiveFine(supabase: any, fineId: string): Promise<FineChargeResul
   };
 }
 
-async function markFineAsAppealed(supabase: any, fineId: string): Promise<FineChargeResult> {
-  console.log(`Marking fine as appealed: ${fineId}`);
-
-  const { data: fine, error: fineError } = await supabase
-    .from('fines')
-    .select('*')
-    .eq('id', fineId)
-    .single();
-
-  if (fineError || !fine) {
-    return {
-      success: false,
-      fineId,
-      status: 'error',
-      chargedAmount: 0,
-      remainingAmount: 0,
-      error: 'Fine not found'
-    };
-  }
-
-  if (!['Open'].includes(fine.status)) {
-    return {
-      success: false,
-      fineId,
-      status: fine.status,
-      chargedAmount: 0,
-      remainingAmount: 0,
-      error: 'Only open fines can be appealed'
-    };
-  }
-
-  const now = new Date().toISOString();
-
-  const { error: updateError } = await supabase
-    .from('fines')
-    .update({
-      status: 'Appealed',
-      appealed_at: now
-    })
-    .eq('id', fineId);
-
-  if (updateError) {
-    console.error('Error marking fine as appealed:', updateError);
-    return {
-      success: false,
-      fineId,
-      status: 'error',
-      chargedAmount: 0,
-      remainingAmount: 0,
-      error: 'Failed to mark fine as appealed'
-    };
-  }
-
-  console.log(`Fine ${fineId} successfully marked as appealed`);
-
-  return {
-    success: true,
-    fineId,
-    status: 'Appealed',
-    chargedAmount: 0,
-    remainingAmount: 0
-  };
-}

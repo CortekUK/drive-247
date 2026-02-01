@@ -14,6 +14,30 @@ export type Database = {
   }
   public: {
     Tables: {
+      _orphaned_data_audit: {
+        Row: {
+          cleaned_at: string | null
+          id: number
+          orphan_type: string
+          record_id: string
+          table_name: string
+        }
+        Insert: {
+          cleaned_at?: string | null
+          id?: number
+          orphan_type: string
+          record_id: string
+          table_name: string
+        }
+        Update: {
+          cleaned_at?: string | null
+          id?: number
+          orphan_type?: string
+          record_id?: string
+          table_name?: string
+        }
+        Relationships: []
+      }
       admin_settings: {
         Row: {
           contact_form_enabled: boolean | null
@@ -810,6 +834,138 @@ export type Database = {
           },
         ]
       }
+      customer_notifications: {
+        Row: {
+          created_at: string | null
+          customer_user_id: string
+          id: string
+          is_read: boolean | null
+          link: string | null
+          message: string
+          metadata: Json | null
+          tenant_id: string | null
+          title: string
+          type: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          customer_user_id: string
+          id?: string
+          is_read?: boolean | null
+          link?: string | null
+          message: string
+          metadata?: Json | null
+          tenant_id?: string | null
+          title: string
+          type?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          customer_user_id?: string
+          id?: string
+          is_read?: boolean | null
+          link?: string | null
+          message?: string
+          metadata?: Json | null
+          tenant_id?: string | null
+          title?: string
+          type?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "customer_notifications_customer_user_id_fkey"
+            columns: ["customer_user_id"]
+            isOneToOne: false
+            referencedRelation: "customer_users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "customer_notifications_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      customer_users: {
+        Row: {
+          auth_user_id: string
+          created_at: string | null
+          customer_id: string
+          email_verified: boolean | null
+          email_verified_at: string | null
+          id: string
+          pending_email: string | null
+          pending_email_expires_at: string | null
+          pending_email_token: string | null
+          tenant_id: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          auth_user_id: string
+          created_at?: string | null
+          customer_id: string
+          email_verified?: boolean | null
+          email_verified_at?: string | null
+          id?: string
+          pending_email?: string | null
+          pending_email_expires_at?: string | null
+          pending_email_token?: string | null
+          tenant_id?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          auth_user_id?: string
+          created_at?: string | null
+          customer_id?: string
+          email_verified?: boolean | null
+          email_verified_at?: string | null
+          id?: string
+          pending_email?: string | null
+          pending_email_expires_at?: string | null
+          pending_email_token?: string | null
+          tenant_id?: string | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "customer_users_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "customers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "customer_users_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "v_customer_credit"
+            referencedColumns: ["customer_id"]
+          },
+          {
+            foreignKeyName: "customer_users_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "view_aging_receivables"
+            referencedColumns: ["customer_id"]
+          },
+          {
+            foreignKeyName: "customer_users_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "view_fines_export"
+            referencedColumns: ["customer_id"]
+          },
+          {
+            foreignKeyName: "customer_users_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       customers: {
         Row: {
           blocked_at: string | null
@@ -830,6 +986,7 @@ export type Database = {
           nok_phone: string | null
           nok_relationship: string | null
           phone: string | null
+          profile_photo_url: string | null
           rejected_at: string | null
           rejected_by: string | null
           rejection_reason: string | null
@@ -858,6 +1015,7 @@ export type Database = {
           nok_phone?: string | null
           nok_relationship?: string | null
           phone?: string | null
+          profile_photo_url?: string | null
           rejected_at?: string | null
           rejected_by?: string | null
           rejection_reason?: string | null
@@ -886,6 +1044,7 @@ export type Database = {
           nok_phone?: string | null
           nok_relationship?: string | null
           phone?: string | null
+          profile_photo_url?: string | null
           rejected_at?: string | null
           rejected_by?: string | null
           rejection_reason?: string | null
@@ -1256,6 +1415,36 @@ export type Database = {
         }
         Relationships: []
       }
+      global_blacklist: {
+        Row: {
+          blocked_tenant_count: number
+          created_at: string | null
+          email: string
+          first_blocked_at: string | null
+          id: string
+          last_blocked_at: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          blocked_tenant_count?: number
+          created_at?: string | null
+          email: string
+          first_blocked_at?: string | null
+          id?: string
+          last_blocked_at?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          blocked_tenant_count?: number
+          created_at?: string | null
+          email?: string
+          first_blocked_at?: string | null
+          id?: string
+          last_blocked_at?: string | null
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
       identity_verifications: {
         Row: {
           address: string | null
@@ -1264,6 +1453,7 @@ export type Database = {
           ai_ocr_data: Json | null
           client_comment: string | null
           created_at: string | null
+          customer_email: string | null
           customer_id: string | null
           date_of_birth: string | null
           document_back_url: string | null
@@ -1292,8 +1482,10 @@ export type Database = {
           status: string
           tenant_id: string | null
           updated_at: string | null
+          upload_progress: Json | null
           verification_completed_at: string | null
           verification_provider: string | null
+          verification_step: string | null
           verification_token: string | null
           verification_url: string | null
           verified_by: string | null
@@ -1305,6 +1497,7 @@ export type Database = {
           ai_ocr_data?: Json | null
           client_comment?: string | null
           created_at?: string | null
+          customer_email?: string | null
           customer_id?: string | null
           date_of_birth?: string | null
           document_back_url?: string | null
@@ -1333,8 +1526,10 @@ export type Database = {
           status?: string
           tenant_id?: string | null
           updated_at?: string | null
+          upload_progress?: Json | null
           verification_completed_at?: string | null
           verification_provider?: string | null
+          verification_step?: string | null
           verification_token?: string | null
           verification_url?: string | null
           verified_by?: string | null
@@ -1346,6 +1541,7 @@ export type Database = {
           ai_ocr_data?: Json | null
           client_comment?: string | null
           created_at?: string | null
+          customer_email?: string | null
           customer_id?: string | null
           date_of_birth?: string | null
           document_back_url?: string | null
@@ -1374,8 +1570,10 @@ export type Database = {
           status?: string
           tenant_id?: string | null
           updated_at?: string | null
+          upload_progress?: Json | null
           verification_completed_at?: string | null
           verification_provider?: string | null
+          verification_step?: string | null
           verification_token?: string | null
           verification_url?: string | null
           verified_by?: string | null
@@ -1587,6 +1785,8 @@ export type Database = {
           protection_fee: number | null
           rental_fee: number | null
           rental_id: string
+          security_deposit: number | null
+          service_fee: number | null
           status: string | null
           subtotal: number
           tax_amount: number | null
@@ -1606,6 +1806,8 @@ export type Database = {
           protection_fee?: number | null
           rental_fee?: number | null
           rental_id: string
+          security_deposit?: number | null
+          service_fee?: number | null
           status?: string | null
           subtotal: number
           tax_amount?: number | null
@@ -1625,6 +1827,8 @@ export type Database = {
           protection_fee?: number | null
           rental_fee?: number | null
           rental_id?: string
+          security_deposit?: number | null
+          service_fee?: number | null
           status?: string | null
           subtotal?: number
           tax_amount?: number | null
@@ -2781,6 +2985,56 @@ export type Database = {
           },
         ]
       }
+      promocodes: {
+        Row: {
+          code: string
+          created_at: string
+          created_by: string | null
+          expires_at: string
+          id: string
+          max_users: number
+          name: string
+          promo_id: number | null
+          tenant_id: string | null
+          type: string
+          value: number
+        }
+        Insert: {
+          code: string
+          created_at?: string
+          created_by?: string | null
+          expires_at: string
+          id?: string
+          max_users?: number
+          name: string
+          promo_id?: number | null
+          tenant_id?: string | null
+          type: string
+          value: number
+        }
+        Update: {
+          code?: string
+          created_at?: string
+          created_by?: string | null
+          expires_at?: string
+          id?: string
+          max_users?: number
+          name?: string
+          promo_id?: number | null
+          tenant_id?: string | null
+          type?: string
+          value?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "promocodes_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       promotions: {
         Row: {
           created_at: string | null
@@ -2791,6 +3045,7 @@ export type Database = {
           id: string
           image_url: string | null
           is_active: boolean | null
+          minimum_spend: number | null
           promo_code: string | null
           start_date: string
           tenant_id: string | null
@@ -2805,6 +3060,7 @@ export type Database = {
           id?: string
           image_url?: string | null
           is_active?: boolean | null
+          minimum_spend?: number | null
           promo_code?: string | null
           start_date: string
           tenant_id?: string | null
@@ -2819,6 +3075,7 @@ export type Database = {
           id?: string
           image_url?: string | null
           is_active?: boolean | null
+          minimum_spend?: number | null
           promo_code?: string | null
           start_date?: string
           tenant_id?: string | null
@@ -3596,8 +3853,11 @@ export type Database = {
       }
       rentals: {
         Row: {
+          approval_status: string | null
+          cancellation_reason: string | null
           created_at: string | null
           customer_id: string | null
+          discount_applied: number | null
           document_status: string | null
           docusign_envelope_id: string | null
           driver_age_range: string | null
@@ -3609,9 +3869,7 @@ export type Database = {
           insurance_status: string | null
           monthly_amount: number
           payment_mode: string | null
-          approval_status: string | null
           payment_status: string | null
-          cancellation_reason: string | null
           pickup_location: string | null
           pickup_location_id: string | null
           pickup_time: string | null
@@ -3631,8 +3889,11 @@ export type Database = {
           vehicle_id: string | null
         }
         Insert: {
+          approval_status?: string | null
+          cancellation_reason?: string | null
           created_at?: string | null
           customer_id?: string | null
+          discount_applied?: number | null
           document_status?: string | null
           docusign_envelope_id?: string | null
           driver_age_range?: string | null
@@ -3644,9 +3905,7 @@ export type Database = {
           insurance_status?: string | null
           monthly_amount: number
           payment_mode?: string | null
-          approval_status?: string | null
           payment_status?: string | null
-          cancellation_reason?: string | null
           pickup_location?: string | null
           pickup_location_id?: string | null
           pickup_time?: string | null
@@ -3666,8 +3925,11 @@ export type Database = {
           vehicle_id?: string | null
         }
         Update: {
+          approval_status?: string | null
+          cancellation_reason?: string | null
           created_at?: string | null
           customer_id?: string | null
+          discount_applied?: number | null
           document_status?: string | null
           docusign_envelope_id?: string | null
           driver_age_range?: string | null
@@ -3679,9 +3941,7 @@ export type Database = {
           insurance_status?: string | null
           monthly_amount?: number
           payment_mode?: string | null
-          approval_status?: string | null
           payment_status?: string | null
-          cancellation_reason?: string | null
           pickup_location?: string | null
           pickup_location_id?: string | null
           pickup_time?: string | null
@@ -3795,6 +4055,7 @@ export type Database = {
           id: string
           mileage: number | null
           service_date: string
+          service_type: string | null
           tenant_id: string | null
           vehicle_id: string
         }
@@ -3805,6 +4066,7 @@ export type Database = {
           id?: string
           mileage?: number | null
           service_date: string
+          service_type?: string | null
           tenant_id?: string | null
           vehicle_id: string
         }
@@ -3815,6 +4077,7 @@ export type Database = {
           id?: string
           mileage?: number | null
           service_date?: string
+          service_type?: string | null
           tenant_id?: string | null
           vehicle_id?: string
         }
@@ -3907,6 +4170,8 @@ export type Database = {
           admin_email: string | null
           admin_name: string | null
           app_name: string | null
+          area_center_lat: number | null
+          area_center_lon: number | null
           booking_lead_time_hours: number | null
           business_hours: string | null
           company_name: string
@@ -3920,10 +4185,15 @@ export type Database = {
           dark_primary_color: string | null
           dark_secondary_color: string | null
           date_format: string | null
+          deposit_mode: string | null
           facebook_url: string | null
           favicon_url: string | null
           fixed_pickup_address: string | null
           fixed_return_address: string | null
+          friday_close: string | null
+          friday_enabled: boolean | null
+          friday_open: string | null
+          global_deposit_amount: number | null
           google_maps_url: string | null
           hero_background_url: string | null
           id: string
@@ -3944,26 +4214,57 @@ export type Database = {
           meta_title: string | null
           min_rental_days: number | null
           minimum_rental_age: number | null
+          monday_close: string | null
+          monday_enabled: boolean | null
+          monday_open: string | null
           og_image_url: string | null
           payment_mode: string | null
           phone: string | null
+          pickup_area_radius_km: number | null
           pickup_location_mode: string | null
           primary_color: string | null
           require_identity_verification: boolean | null
           require_insurance_upload: boolean | null
+          return_area_radius_km: number | null
           return_location_mode: string | null
+          saturday_close: string | null
+          saturday_enabled: boolean | null
+          saturday_open: string | null
           secondary_color: string | null
+          service_fee_amount: number | null
+          service_fee_enabled: boolean | null
+          service_fee_type: string | null
+          service_fee_value: number | null
           slug: string
           status: string
           stripe_account_id: string | null
           stripe_account_status: string | null
+          stripe_mode: string
           stripe_onboarding_complete: boolean | null
           subscription_plan: string | null
+          sunday_close: string | null
+          sunday_enabled: boolean | null
+          sunday_open: string | null
+          tax_enabled: boolean | null
+          tax_percentage: number | null
           tenant_type: string | null
+          thursday_close: string | null
+          thursday_enabled: boolean | null
+          thursday_open: string | null
           timezone: string | null
           trial_ends_at: string | null
+          tuesday_close: string | null
+          tuesday_enabled: boolean | null
+          tuesday_open: string | null
           twitter_url: string | null
           updated_at: string | null
+          wednesday_close: string | null
+          wednesday_enabled: boolean | null
+          wednesday_open: string | null
+          working_hours_always_open: boolean | null
+          working_hours_close: string | null
+          working_hours_enabled: boolean | null
+          working_hours_open: string | null
         }
         Insert: {
           accent_color?: string | null
@@ -3971,6 +4272,8 @@ export type Database = {
           admin_email?: string | null
           admin_name?: string | null
           app_name?: string | null
+          area_center_lat?: number | null
+          area_center_lon?: number | null
           booking_lead_time_hours?: number | null
           business_hours?: string | null
           company_name: string
@@ -3984,10 +4287,15 @@ export type Database = {
           dark_primary_color?: string | null
           dark_secondary_color?: string | null
           date_format?: string | null
+          deposit_mode?: string | null
           facebook_url?: string | null
           favicon_url?: string | null
           fixed_pickup_address?: string | null
           fixed_return_address?: string | null
+          friday_close?: string | null
+          friday_enabled?: boolean | null
+          friday_open?: string | null
+          global_deposit_amount?: number | null
           google_maps_url?: string | null
           hero_background_url?: string | null
           id?: string
@@ -4008,26 +4316,57 @@ export type Database = {
           meta_title?: string | null
           min_rental_days?: number | null
           minimum_rental_age?: number | null
+          monday_close?: string | null
+          monday_enabled?: boolean | null
+          monday_open?: string | null
           og_image_url?: string | null
           payment_mode?: string | null
           phone?: string | null
+          pickup_area_radius_km?: number | null
           pickup_location_mode?: string | null
           primary_color?: string | null
           require_identity_verification?: boolean | null
           require_insurance_upload?: boolean | null
+          return_area_radius_km?: number | null
           return_location_mode?: string | null
+          saturday_close?: string | null
+          saturday_enabled?: boolean | null
+          saturday_open?: string | null
           secondary_color?: string | null
+          service_fee_amount?: number | null
+          service_fee_enabled?: boolean | null
+          service_fee_type?: string | null
+          service_fee_value?: number | null
           slug: string
           status?: string
           stripe_account_id?: string | null
           stripe_account_status?: string | null
+          stripe_mode?: string
           stripe_onboarding_complete?: boolean | null
           subscription_plan?: string | null
+          sunday_close?: string | null
+          sunday_enabled?: boolean | null
+          sunday_open?: string | null
+          tax_enabled?: boolean | null
+          tax_percentage?: number | null
           tenant_type?: string | null
+          thursday_close?: string | null
+          thursday_enabled?: boolean | null
+          thursday_open?: string | null
           timezone?: string | null
           trial_ends_at?: string | null
+          tuesday_close?: string | null
+          tuesday_enabled?: boolean | null
+          tuesday_open?: string | null
           twitter_url?: string | null
           updated_at?: string | null
+          wednesday_close?: string | null
+          wednesday_enabled?: boolean | null
+          wednesday_open?: string | null
+          working_hours_always_open?: boolean | null
+          working_hours_close?: string | null
+          working_hours_enabled?: boolean | null
+          working_hours_open?: string | null
         }
         Update: {
           accent_color?: string | null
@@ -4035,6 +4374,8 @@ export type Database = {
           admin_email?: string | null
           admin_name?: string | null
           app_name?: string | null
+          area_center_lat?: number | null
+          area_center_lon?: number | null
           booking_lead_time_hours?: number | null
           business_hours?: string | null
           company_name?: string
@@ -4048,10 +4389,15 @@ export type Database = {
           dark_primary_color?: string | null
           dark_secondary_color?: string | null
           date_format?: string | null
+          deposit_mode?: string | null
           facebook_url?: string | null
           favicon_url?: string | null
           fixed_pickup_address?: string | null
           fixed_return_address?: string | null
+          friday_close?: string | null
+          friday_enabled?: boolean | null
+          friday_open?: string | null
+          global_deposit_amount?: number | null
           google_maps_url?: string | null
           hero_background_url?: string | null
           id?: string
@@ -4072,26 +4418,57 @@ export type Database = {
           meta_title?: string | null
           min_rental_days?: number | null
           minimum_rental_age?: number | null
+          monday_close?: string | null
+          monday_enabled?: boolean | null
+          monday_open?: string | null
           og_image_url?: string | null
           payment_mode?: string | null
           phone?: string | null
+          pickup_area_radius_km?: number | null
           pickup_location_mode?: string | null
           primary_color?: string | null
           require_identity_verification?: boolean | null
           require_insurance_upload?: boolean | null
+          return_area_radius_km?: number | null
           return_location_mode?: string | null
+          saturday_close?: string | null
+          saturday_enabled?: boolean | null
+          saturday_open?: string | null
           secondary_color?: string | null
+          service_fee_amount?: number | null
+          service_fee_enabled?: boolean | null
+          service_fee_type?: string | null
+          service_fee_value?: number | null
           slug?: string
           status?: string
           stripe_account_id?: string | null
           stripe_account_status?: string | null
+          stripe_mode?: string
           stripe_onboarding_complete?: boolean | null
           subscription_plan?: string | null
+          sunday_close?: string | null
+          sunday_enabled?: boolean | null
+          sunday_open?: string | null
+          tax_enabled?: boolean | null
+          tax_percentage?: number | null
           tenant_type?: string | null
+          thursday_close?: string | null
+          thursday_enabled?: boolean | null
+          thursday_open?: string | null
           timezone?: string | null
           trial_ends_at?: string | null
+          tuesday_close?: string | null
+          tuesday_enabled?: boolean | null
+          tuesday_open?: string | null
           twitter_url?: string | null
           updated_at?: string | null
+          wednesday_close?: string | null
+          wednesday_enabled?: boolean | null
+          wednesday_open?: string | null
+          working_hours_always_open?: boolean | null
+          working_hours_close?: string | null
+          working_hours_enabled?: boolean | null
+          working_hours_open?: string | null
         }
         Relationships: []
       }
@@ -4434,6 +4811,7 @@ export type Database = {
         Row: {
           acquisition_date: string | null
           acquisition_type: string | null
+          allowed_mileage: number | null
           balloon: number | null
           color: string | null
           colour: string | null
@@ -4464,6 +4842,7 @@ export type Database = {
           purchase_price: number | null
           reg: string
           sale_proceeds: number | null
+          security_deposit: number | null
           security_notes: string | null
           spare_key_holder: string | null
           spare_key_notes: string | null
@@ -4472,6 +4851,7 @@ export type Database = {
           tenant_id: string | null
           term_months: number | null
           updated_at: string
+          vin: string | null
           warranty_end_date: string | null
           warranty_start_date: string | null
           weekly_rent: number | null
@@ -4480,6 +4860,7 @@ export type Database = {
         Insert: {
           acquisition_date?: string | null
           acquisition_type?: string | null
+          allowed_mileage?: number | null
           balloon?: number | null
           color?: string | null
           colour?: string | null
@@ -4510,6 +4891,7 @@ export type Database = {
           purchase_price?: number | null
           reg: string
           sale_proceeds?: number | null
+          security_deposit?: number | null
           security_notes?: string | null
           spare_key_holder?: string | null
           spare_key_notes?: string | null
@@ -4518,6 +4900,7 @@ export type Database = {
           tenant_id?: string | null
           term_months?: number | null
           updated_at?: string
+          vin?: string | null
           warranty_end_date?: string | null
           warranty_start_date?: string | null
           weekly_rent?: number | null
@@ -4526,6 +4909,7 @@ export type Database = {
         Update: {
           acquisition_date?: string | null
           acquisition_type?: string | null
+          allowed_mileage?: number | null
           balloon?: number | null
           color?: string | null
           colour?: string | null
@@ -4556,6 +4940,7 @@ export type Database = {
           purchase_price?: number | null
           reg?: string
           sale_proceeds?: number | null
+          security_deposit?: number | null
           security_notes?: string | null
           spare_key_holder?: string | null
           spare_key_notes?: string | null
@@ -4564,6 +4949,7 @@ export type Database = {
           tenant_id?: string | null
           term_months?: number | null
           updated_at?: string
+          vin?: string | null
           warranty_end_date?: string | null
           warranty_start_date?: string | null
           weekly_rent?: number | null
@@ -4593,6 +4979,18 @@ export type Database = {
         Update: {
           credit_available?: never
           customer_id?: string | null
+        }
+        Relationships: []
+      }
+      v_global_blacklist_details: {
+        Row: {
+          blocked_tenant_count: number | null
+          blocking_tenants: Json | null
+          created_at: string | null
+          email: string | null
+          first_blocked_at: string | null
+          id: string | null
+          last_blocked_at: string | null
         }
         Relationships: []
       }
@@ -5149,6 +5547,10 @@ export type Database = {
         Args: { p_vehicle_id: string }
         Returns: number
       }
+      check_and_update_global_blacklist: {
+        Args: { p_email: string }
+        Returns: boolean
+      }
       check_policy_overlap: {
         Args: {
           p_customer_id: string
@@ -5302,6 +5704,7 @@ export type Database = {
       hash_password: { Args: { password: string }; Returns: string }
       is_current_user_admin: { Args: never; Returns: boolean }
       is_global_master_admin: { Args: never; Returns: boolean }
+      is_globally_blacklisted: { Args: { p_email: string }; Returns: boolean }
       is_identity_blocked: {
         Args: { p_identity_number: string }
         Returns: {

@@ -62,6 +62,8 @@ interface Vehicle {
   daily_rent?: number;
   weekly_rent?: number;
   monthly_rent?: number;
+  // Mileage allowance
+  allowed_mileage?: number | null;
   // MOT & TAX fields
   mot_due_date?: string;
   tax_due_date?: string;
@@ -493,6 +495,10 @@ export default function VehicleDetail() {
                 {vehicle.year && <MetricItem label="Year" value={vehicle.year} />}
                 <MetricItem label="Color" value={vehicle.colour} />
                 {vehicle.fuel_type && <MetricItem label="Fuel Type" value={vehicle.fuel_type === 'Petrol' ? 'Gas' : vehicle.fuel_type} />}
+                <MetricItem
+                  label="Allowed Mileage"
+                  value={vehicle.allowed_mileage ? `${vehicle.allowed_mileage.toLocaleString()} mi/month` : 'Unlimited'}
+                />
                 <div className="flex items-center gap-2">
                   <span className="text-xs text-muted-foreground">Acquisition:</span>
                   <AcquisitionBadge acquisitionType={vehicle.acquisition_type} />

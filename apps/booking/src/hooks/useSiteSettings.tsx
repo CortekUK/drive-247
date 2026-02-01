@@ -46,7 +46,7 @@ export interface SiteSettings {
 
 const defaultSettings: SiteSettings = {
   id: "",
-  company_name: "Drive917",
+  company_name: "Drive 247",
   phone: "",
   phone_display: "",
   email: "",
@@ -63,7 +63,7 @@ const defaultSettings: SiteSettings = {
   light_logo_url: null,
   dark_logo_url: null,
   logo_url: null,
-  logo_alt: "Drive 917",
+  logo_alt: "Drive 247",
   favicon_url: null,
   accent_color: "#F5B942",
   notification_emails: [],
@@ -72,7 +72,7 @@ const defaultSettings: SiteSettings = {
   privacy_policy_url: "/privacy",
   terms_url: "/terms",
   footer_tagline: "Reliable Dallas Car Rentals",
-  copyright_text: `© ${new Date().getFullYear()} Drive917. All rights reserved.`,
+  copyright_text: `© ${new Date().getFullYear()} Drive 247. All rights reserved.`,
   facebook_url: null,
   instagram_url: null,
   twitter_url: null,

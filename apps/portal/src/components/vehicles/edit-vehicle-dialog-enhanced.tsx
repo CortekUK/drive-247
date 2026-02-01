@@ -55,6 +55,7 @@ interface Vehicle {
   security_notes?: string | null;
   description?: string | null;
   security_deposit?: number | null;
+  allowed_mileage?: number | null;
 }
 
 interface EditVehicleDialogProps {
@@ -105,6 +106,7 @@ export const EditVehicleDialogEnhanced = ({ vehicle, open, onOpenChange }: EditV
       security_notes: vehicle.security_notes || "",
       description: vehicle.description || "",
       security_deposit: vehicle.security_deposit ?? undefined,
+      allowed_mileage: vehicle.allowed_mileage ?? undefined,
     },
   });
 
@@ -153,6 +155,7 @@ export const EditVehicleDialogEnhanced = ({ vehicle, open, onOpenChange }: EditV
         has_remote_immobiliser: data.has_remote_immobiliser,
         security_notes: data.security_notes || null,
         security_deposit: data.security_deposit || null,
+        allowed_mileage: data.allowed_mileage || null,
       };
 
       // Add type-specific fields
@@ -584,6 +587,36 @@ export const EditVehicleDialogEnhanced = ({ vehicle, open, onOpenChange }: EditV
                           }}
                         />
                       </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="allowed_mileage"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Allowed Mileage</FormLabel>
+                      <FormControl>
+                        <Input
+                          type="number"
+                          min="1"
+                          placeholder="Unlimited"
+                          {...field}
+                          value={field.value ?? ''}
+                          onChange={(e) => {
+                            const value = e.target.value;
+                            field.onChange(value === '' ? undefined : parseInt(value));
+                          }}
+                          onKeyDown={(e) => {
+                            if (e.key === '-' || e.key === 'e' || e.key === 'E' || e.key === '.') {
+                              e.preventDefault();
+                            }
+                          }}
+                        />
+                      </FormControl>
+                      <p className="text-xs text-muted-foreground">Miles/month (blank = unlimited)</p>
                       <FormMessage />
                     </FormItem>
                   )}

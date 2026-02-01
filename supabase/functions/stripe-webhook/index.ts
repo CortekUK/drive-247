@@ -93,6 +93,7 @@ serve(async (req) => {
               .from("payments")
               .update({
                 stripe_payment_intent_id: session.payment_intent as string,
+                capture_status: 'requires_capture', // Pre-auth: payment is held, not captured
                 updated_at: new Date().toISOString(),
               })
               .eq("id", existingPaymentRecord.id);
@@ -100,7 +101,7 @@ serve(async (req) => {
             if (updateError) {
               console.error("Failed to update payment with stripe_payment_intent_id:", updateError);
             } else {
-              console.log("Updated payment", existingPaymentRecord.id, "with stripe_payment_intent_id:", session.payment_intent);
+              console.log("Updated payment", existingPaymentRecord.id, "with stripe_payment_intent_id:", session.payment_intent, "capture_status: requires_capture");
             }
           } else if (paymentLookupError) {
             console.log("No existing payment record found for session:", session.id, paymentLookupError.message);
@@ -223,12 +224,12 @@ serve(async (req) => {
                 apply_from_date: today,
                 method: "Card",
                 payment_type: "Payment",
-                status: "Pending", // Will be updated when admin approves
+                status: "Completed",
                 remaining_amount: paymentAmount,
-                verification_status: "pending", // Changed: needs admin approval
+                verification_status: "auto_approved", // Stripe verified payment
                 stripe_checkout_session_id: session.id,
                 stripe_payment_intent_id: session.payment_intent as string,
-                capture_status: "captured", // Payment is captured, just needs approval
+                capture_status: "captured",
                 booking_source: "website",
               };
 
@@ -316,25 +317,30 @@ serve(async (req) => {
           }
         }
 
-        // BACKFILL: Ensure stripe_payment_intent_id is saved for ALL matching payments
+        // BACKFILL: Ensure stripe_payment_intent_id and capture_status are saved for ALL matching payments
         // This catches any race conditions where the payment record was created after the webhook
         if (session.payment_intent && session.id) {
+          // Determine correct capture_status based on whether this is pre-auth or auto mode
+          const captureStatus = isPreAuth ? 'requires_capture' : 'captured';
+
           const { data: backfilledPayments, error: backfillError } = await supabase
             .from("payments")
             .update({
               stripe_payment_intent_id: session.payment_intent as string,
+              capture_status: captureStatus, // Fix: Also update capture_status
               updated_at: new Date().toISOString(),
             })
             .eq("stripe_checkout_session_id", session.id)
-            .is("stripe_payment_intent_id", null)
             .select("id");
 
           if (!backfillError && backfilledPayments && backfilledPayments.length > 0) {
             console.log(
-              "Backfilled stripe_payment_intent_id for",
+              "Backfilled stripe_payment_intent_id and capture_status for",
               backfilledPayments.length,
               "payments with session:",
-              session.id
+              session.id,
+              "capture_status:",
+              captureStatus
             );
           }
         }

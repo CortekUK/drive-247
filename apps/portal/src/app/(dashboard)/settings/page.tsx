@@ -20,7 +20,7 @@ import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { format } from 'date-fns';
-import { Calendar as CalendarIcon, Settings as SettingsIcon, Building2, Bell, Zap, Upload, Save, Loader2, Database, AlertTriangle, Trash2, CreditCard, Palette, Link2, CheckCircle2, AlertCircle, ExternalLink, MapPin, FileText, Car, Mail, ShieldX, FilePenLine, Receipt, Banknote, Shield } from 'lucide-react';
+import { Calendar as CalendarIcon, Settings as SettingsIcon, Building2, Bell, Zap, Upload, Save, Loader2, Database, AlertTriangle, Trash2, CreditCard, Palette, Link2, CheckCircle2, AlertCircle, ExternalLink, MapPin, FileText, Car, Mail, ShieldX, FilePenLine, Receipt, Banknote, Shield, Copy, Check, Clock } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
 import { useOrgSettings } from '@/hooks/use-org-settings';
 import { useTenantBranding } from '@/hooks/use-tenant-branding';
@@ -81,6 +81,8 @@ const Settings = () => {
     tax_percentage: 0,
     service_fee_enabled: false,
     service_fee_amount: 0,
+    service_fee_type: 'fixed_amount' as 'percentage' | 'fixed_amount',
+    service_fee_value: 0,
     deposit_mode: 'global' as 'global' | 'per_vehicle',
     global_deposit_amount: 0,
   });
@@ -94,6 +96,8 @@ const Settings = () => {
         tax_percentage: rentalSettings.tax_percentage ?? 0,
         service_fee_enabled: rentalSettings.service_fee_enabled ?? false,
         service_fee_amount: rentalSettings.service_fee_amount ?? 0,
+        service_fee_type: (rentalSettings.service_fee_type as 'percentage' | 'fixed_amount') ?? 'fixed_amount',
+        service_fee_value: rentalSettings.service_fee_value ?? rentalSettings.service_fee_amount ?? 0,
         deposit_mode: rentalSettings.deposit_mode ?? 'global',
         global_deposit_amount: rentalSettings.global_deposit_amount ?? 0,
       });
@@ -1494,16 +1498,22 @@ const Settings = () => {
                 <div className="flex items-center gap-4">
                   <Input
                     id="minimum_rental_age"
-                    type="number"
-                    min="16"
-                    max="100"
+                    type="text"
+                    inputMode="numeric"
+                    pattern="[0-9]*"
                     value={rentalForm.minimum_rental_age}
                     onChange={(e) => {
-                      const value = parseInt(e.target.value) || 16;
+                      const rawValue = e.target.value.replace(/[^0-9]/g, '');
                       setRentalForm(prev => ({
                         ...prev,
-                        minimum_rental_age: Math.max(16, Math.min(100, value))
+                        minimum_rental_age: rawValue === '' ? '' : Math.max(16, Math.min(100, parseInt(rawValue)))
                       }));
+                    }}
+                    onBlur={(e) => {
+                      const value = parseInt(e.target.value);
+                      if (!value || value < 16) {
+                        setRentalForm(prev => ({ ...prev, minimum_rental_age: 21 }));
+                      }
                     }}
                     className="w-32"
                   />
@@ -1570,17 +1580,21 @@ const Settings = () => {
                   <div className="flex items-center gap-4">
                     <Input
                       id="tax_percentage"
-                      type="number"
-                      min="0"
-                      max="100"
-                      step="0.01"
-                      value={rentalForm.tax_percentage ?? 0}
+                      type="text"
+                      inputMode="decimal"
+                      value={rentalForm.tax_percentage ?? ''}
                       onChange={(e) => {
-                        const value = parseFloat(e.target.value) || 0;
-                        setRentalForm(prev => ({
-                          ...prev,
-                          tax_percentage: Math.max(0, Math.min(100, value))
-                        }));
+                        const rawValue = e.target.value.replace(/[^0-9.]/g, '');
+                        if (rawValue === '' || rawValue === '.') {
+                          setRentalForm(prev => ({ ...prev, tax_percentage: rawValue as any }));
+                        } else {
+                          const numValue = Math.max(0, Math.min(100, parseFloat(rawValue) || 0));
+                          setRentalForm(prev => ({ ...prev, tax_percentage: numValue }));
+                        }
+                      }}
+                      onBlur={(e) => {
+                        const value = parseFloat(e.target.value);
+                        setRentalForm(prev => ({ ...prev, tax_percentage: isNaN(value) ? 0 : Math.max(0, Math.min(100, value)) }));
                       }}
                       className="w-32"
                     />
@@ -1624,7 +1638,7 @@ const Settings = () => {
                 Service Fee
               </CardTitle>
               <CardDescription>
-                Configure a fixed service fee for customer bookings
+                Configure a service fee for customer bookings
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
@@ -1632,7 +1646,7 @@ const Settings = () => {
                 <div className="space-y-1">
                   <h4 className="font-medium">Enable Service Fee</h4>
                   <p className="text-sm text-muted-foreground">
-                    Add a fixed service fee to customer invoices
+                    Add a service fee to customer invoices
                   </p>
                 </div>
                 <Switch
@@ -1644,31 +1658,80 @@ const Settings = () => {
               </div>
 
               {rentalForm.service_fee_enabled && (
-                <div className="space-y-2">
-                  <Label htmlFor="service_fee_amount">Service Fee Amount</Label>
-                  <div className="flex items-center gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="service_fee_type">Type</Label>
+                    <Select
+                      value={rentalForm.service_fee_type}
+                      onValueChange={(value: 'percentage' | 'fixed_amount') => {
+                        setRentalForm(prev => ({ ...prev, service_fee_type: value }));
+                      }}
+                    >
+                      <SelectTrigger id="service_fee_type">
+                        <SelectValue placeholder="Select type" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="percentage">Percentage</SelectItem>
+                        <SelectItem value="fixed_amount">Fixed Amount</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="service_fee_value">
+                      {rentalForm.service_fee_type === 'percentage' ? 'Type Value' : 'Type Value'}
+                    </Label>
                     <div className="relative">
-                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">$</span>
+                      {rentalForm.service_fee_type === 'fixed_amount' && (
+                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">$</span>
+                      )}
                       <Input
-                        id="service_fee_amount"
-                        type="number"
-                        min="0"
-                        step="0.01"
-                        value={rentalForm.service_fee_amount ?? 0}
+                        id="service_fee_value"
+                        type="text"
+                        inputMode="decimal"
+                        value={rentalForm.service_fee_value ?? ''}
                         onChange={(e) => {
-                          const value = parseFloat(e.target.value) || 0;
+                          const rawValue = e.target.value.replace(/[^0-9.]/g, '');
+                          if (rawValue === '' || rawValue === '.') {
+                            setRentalForm(prev => ({
+                              ...prev,
+                              service_fee_value: rawValue as any,
+                              service_fee_amount: rawValue as any
+                            }));
+                          } else {
+                            let value = parseFloat(rawValue) || 0;
+                            if (rentalForm.service_fee_type === 'percentage' && value > 100) {
+                              value = 100;
+                            }
+                            setRentalForm(prev => ({
+                              ...prev,
+                              service_fee_value: Math.max(0, value),
+                              service_fee_amount: Math.max(0, value)
+                            }));
+                          }
+                        }}
+                        onBlur={(e) => {
+                          const value = parseFloat(e.target.value);
+                          const finalValue = isNaN(value) ? 0 : Math.max(0, value);
                           setRentalForm(prev => ({
                             ...prev,
-                            service_fee_amount: Math.max(0, value)
+                            service_fee_value: finalValue,
+                            service_fee_amount: finalValue
                           }));
                         }}
-                        className="w-32 pl-7"
+                        className={rentalForm.service_fee_type === 'fixed_amount' ? 'pl-7' : ''}
+                        placeholder={rentalForm.service_fee_type === 'percentage' ? 'e.g. 10 (for 10%)' : 'e.g. 25.00'}
                       />
+                      {rentalForm.service_fee_type === 'percentage' && (
+                        <span className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground">%</span>
+                      )}
                     </div>
+                    <p className="text-xs text-muted-foreground">
+                      {rentalForm.service_fee_type === 'percentage'
+                        ? 'Percentage of the rental total added as service fee'
+                        : 'Fixed amount added to each booking'}
+                    </p>
                   </div>
-                  <p className="text-xs text-muted-foreground">
-                    Fixed amount added to each booking
-                  </p>
                 </div>
               )}
 
@@ -1677,7 +1740,9 @@ const Settings = () => {
                   try {
                     await updateRentalSettings({
                       service_fee_enabled: rentalForm.service_fee_enabled,
-                      service_fee_amount: rentalForm.service_fee_amount,
+                      service_fee_amount: rentalForm.service_fee_value,
+                      service_fee_type: rentalForm.service_fee_type,
+                      service_fee_value: rentalForm.service_fee_value,
                     });
                   } catch (error) {
                     console.error('Failed to update service fee settings:', error);
@@ -1748,16 +1813,20 @@ const Settings = () => {
                       <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">$</span>
                       <Input
                         id="global_deposit_amount"
-                        type="number"
-                        min="0"
-                        step="0.01"
-                        value={rentalForm.global_deposit_amount ?? 0}
+                        type="text"
+                        inputMode="decimal"
+                        value={rentalForm.global_deposit_amount ?? ''}
                         onChange={(e) => {
-                          const value = parseFloat(e.target.value) || 0;
-                          setRentalForm(prev => ({
-                            ...prev,
-                            global_deposit_amount: Math.max(0, value)
-                          }));
+                          const rawValue = e.target.value.replace(/[^0-9.]/g, '');
+                          if (rawValue === '' || rawValue === '.') {
+                            setRentalForm(prev => ({ ...prev, global_deposit_amount: rawValue as any }));
+                          } else {
+                            setRentalForm(prev => ({ ...prev, global_deposit_amount: Math.max(0, parseFloat(rawValue) || 0) }));
+                          }
+                        }}
+                        onBlur={(e) => {
+                          const value = parseFloat(e.target.value);
+                          setRentalForm(prev => ({ ...prev, global_deposit_amount: isNaN(value) ? 0 : Math.max(0, value) }));
                         }}
                         className="w-32 pl-7"
                       />
@@ -1801,23 +1870,23 @@ const Settings = () => {
             </CardContent>
           </Card>
 
-          {/* Promocode Card UI */}
+          {/* Promo Code Card UI */}
           <Card className="mt-8">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <span className="inline-block bg-primary/10 rounded-full p-2">
                   <Zap className="h-5 w-5 text-primary" />
                 </span>
-                Promocode
+                Promo Code
               </CardTitle>
               <CardDescription>
-                Create and manage promocodes for your customers
+                Create and manage promo codes for your customers
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
-              {/* Promocode Name */}
+              {/* Promo Code Name */}
               <div className="space-y-2">
-                <Label htmlFor="promo_name">Promocode Name</Label>
+                <Label htmlFor="promo_name">Promo Code Name</Label>
                 <Input
                   id="promo_name"
                   placeholder="e.g. WINTER2026"
@@ -1899,15 +1968,19 @@ const Settings = () => {
                     placeholder={promoForm.type === 'percentage' ? "e.g. 10 (for 10%)" : "e.g. 20.00"}
                     className="max-w-md"
                     value={promoForm.value}
-                    onChange={(e) => setPromoForm(prev => ({ ...prev, value: e.target.value }))}
-                    type="number"
+                    onChange={(e) => {
+                      const rawValue = e.target.value.replace(/[^0-9.]/g, '');
+                      setPromoForm(prev => ({ ...prev, value: rawValue }));
+                    }}
+                    type="text"
+                    inputMode="decimal"
                   />
                 </div>
               </div>
 
-              {/* Autogenerated Promocode Value */}
+              {/* Autogenerated Promo Code Value */}
               <div className="space-y-2">
-                <Label htmlFor="promo_code_value">Promocode (Autogenerated)</Label>
+                <Label htmlFor="promo_code_value">Promo Code (Autogenerated)</Label>
                 <div className="flex gap-2 max-w-md">
                   <Input
                     id="promo_code_value"
@@ -1926,11 +1999,16 @@ const Settings = () => {
                 <Label htmlFor="promo_max_users">Max Users</Label>
                 <Input
                   id="promo_max_users"
-                  type="number"
+                  type="text"
+                  inputMode="numeric"
+                  pattern="[0-9]*"
                   placeholder="e.g. 100"
                   className="max-w-md"
                   value={promoForm.max_users}
-                  onChange={(e) => setPromoForm(prev => ({ ...prev, max_users: e.target.value }))}
+                  onChange={(e) => {
+                    const rawValue = e.target.value.replace(/[^0-9]/g, '');
+                    setPromoForm(prev => ({ ...prev, max_users: rawValue }));
+                  }}
                 />
               </div>
 
@@ -1995,7 +2073,20 @@ const Settings = () => {
                               <td className="p-3 text-muted-foreground">{promo.expires_at}</td>
                               <td className="p-3">{promo.max_users}</td>
                               <td className="p-3">
-                                <Badge variant="outline" className="font-mono">{promo.code}</Badge>
+                                <div className="flex items-center gap-2">
+                                  <Badge variant="outline" className="font-mono">{promo.code}</Badge>
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-6 w-6 text-muted-foreground hover:text-primary"
+                                    onClick={() => {
+                                      navigator.clipboard.writeText(promo.code);
+                                      toast({ title: "Copied!", description: "Promo code copied to clipboard" });
+                                    }}
+                                  >
+                                    <Copy className="h-3.5 w-3.5" />
+                                  </Button>
+                                </div>
                               </td>
                               <td className="p-3 text-right">
                                 <div className="flex justify-end gap-2">
@@ -2061,7 +2152,7 @@ const Settings = () => {
                   <div className="flex gap-4">
                     <div className="space-y-2 w-1/2">
                       <Label>Expiration Date</Label>
-                      <Popover>
+                      <Popover modal={true}>
                         <PopoverTrigger asChild>
                           <Button
                             variant={"outline"}
@@ -2085,9 +2176,14 @@ const Settings = () => {
                       <Label htmlFor="edit_max_users">Max Users</Label>
                       <Input
                         id="edit_max_users"
-                        type="number"
+                        type="text"
+                        inputMode="numeric"
+                        pattern="[0-9]*"
                         value={editingPromo.max_users}
-                        onChange={(e) => setEditingPromo({ ...editingPromo, max_users: e.target.value })}
+                        onChange={(e) => {
+                          const rawValue = e.target.value.replace(/[^0-9]/g, '');
+                          setEditingPromo({ ...editingPromo, max_users: rawValue });
+                        }}
                       />
                     </div>
                   </div>
@@ -2112,9 +2208,13 @@ const Settings = () => {
                       <Label htmlFor="edit_value">Value</Label>
                       <Input
                         id="edit_value"
-                        type="number"
+                        type="text"
+                        inputMode="decimal"
                         value={editingPromo.value}
-                        onChange={(e) => setEditingPromo({ ...editingPromo, value: e.target.value })}
+                        onChange={(e) => {
+                          const rawValue = e.target.value.replace(/[^0-9.]/g, '');
+                          setEditingPromo({ ...editingPromo, value: rawValue });
+                        }}
                       />
                     </div>
                   </div>

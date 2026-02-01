@@ -212,6 +212,62 @@
         "phone": "+19043202299",
         "address": "Jacksonville, Florida"
       }
+    },
+    {
+      "slug": "vitalisrental",
+      "app_name": "Vitalis Rental",
+      "colors": {
+        "primary_color": "#223331",
+        "secondary_color": "#223331",
+        "accent_color": "#E9B63E",
+        "light_primary_color": null,
+        "light_secondary_color": null,
+        "light_accent_color": null,
+        "light_background_color": null,
+        "light_header_footer_color": null,
+        "dark_primary_color": null,
+        "dark_secondary_color": null,
+        "dark_accent_color": null,
+        "dark_background_color": null,
+        "dark_header_footer_color": null
+      },
+      "seo": {
+        "meta_title": "Vitalis Rental - Premium Luxury Car Rentals in South Florida",
+        "meta_description": "Premium luxury car rentals in South Florida. BMW M3, Porsche 911, Lamborghini Urus, and more. Experience excellence with Vitalis Rental."
+      },
+      "contact": {
+        "phone": "+19542260352",
+        "address": "South Florida"
+      }
+    },
+    {
+      "slug": "ediberthcarrentals",
+      "app_name": "Ediberth Car Rentals",
+      "logo_path": "./logos/ediberth-logo.png",
+      "favicon_path": "./logos/ediberth-logo.png",
+      "colors": {
+        "primary_color": "#0F172A",
+        "secondary_color": "#1E293B",
+        "accent_color": "#F8FAFC",
+        "light_primary_color": "#0F172A",
+        "light_secondary_color": "#1E293B",
+        "light_accent_color": "#F8FAFC",
+        "light_background_color": "#FFFFFF",
+        "light_header_footer_color": "#0F172A",
+        "dark_primary_color": "#E2E8F0",
+        "dark_secondary_color": "#F8FAFC",
+        "dark_accent_color": "#FFFFFF",
+        "dark_background_color": "#0F172A",
+        "dark_header_footer_color": "#1E293B"
+      },
+      "seo": {
+        "meta_title": "Ediberth Car Rentals - Affordable Car Rentals in Maryland",
+        "meta_description": "Affordable economy car rentals in Stevensville, Maryland. Quality vehicles at budget-friendly rates. Open 24/7. Book your ride today!"
+      },
+      "contact": {
+        "phone": "+14102001904",
+        "address": "Stevensville, Maryland"
+      }
     }
   ]
 }

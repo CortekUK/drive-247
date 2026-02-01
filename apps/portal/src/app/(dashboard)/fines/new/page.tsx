@@ -579,8 +579,8 @@ const CreateFine = () => {
               <div className="pt-4 border-t">
                 <div className="p-3 bg-muted rounded-lg">
                   <p className="text-xs text-muted-foreground">
-                    <strong>Next Steps:</strong> After creation, you can charge the fine to the customer's account,
-                    record authority payments, or mark it as appealed/waived from the fine detail page.
+                    <strong>Next Steps:</strong> After creation, you can charge the fine to the customer's account
+                    from the fine detail page.
                   </p>
                 </div>
               </div>

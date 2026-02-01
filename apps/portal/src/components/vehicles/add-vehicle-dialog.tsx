@@ -67,6 +67,7 @@ export const AddVehicleDialog = ({ open, onOpenChange }: AddVehicleDialogProps) 
       security_notes: "",
       description: "",
       security_deposit: undefined,
+      allowed_mileage: undefined,
     },
   });
 
@@ -213,6 +214,7 @@ export const AddVehicleDialog = ({ open, onOpenChange }: AddVehicleDialogProps) 
         security_notes: data.security_notes || null,
         description: data.description || null,
         security_deposit: data.security_deposit || null,
+        allowed_mileage: data.allowed_mileage || null,
       };
 
       // Add type-specific fields
@@ -310,6 +312,97 @@ export const AddVehicleDialog = ({ open, onOpenChange }: AddVehicleDialogProps) 
         title: "Vehicle Added",
         description: `${data.make} ${data.model} (${normalizedReg}) has been added to the fleet.`,
       });
+
+      // Create reminders directly for Inspection/Registration dates if set
+      if (insertedVehicle) {
+        const today = new Date().toISOString().split('T')[0];
+
+        // Create Inspection reminder if mot_due_date is set
+        if (data.mot_due_date) {
+          try {
+            const motDate = new Date(data.mot_due_date);
+            const daysUntilDue = Math.ceil((motDate.getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24));
+
+            let ruleCode: string;
+            if (daysUntilDue <= 0) ruleCode = 'MOT_0D';
+            else if (daysUntilDue <= 7) ruleCode = 'MOT_7D';
+            else if (daysUntilDue <= 14) ruleCode = 'MOT_14D';
+            else ruleCode = 'MOT_30D';
+
+            const severity = daysUntilDue <= 0 ? 'critical' : daysUntilDue <= 7 ? 'warning' : 'info';
+            const dueDateStr = data.mot_due_date.toISOString().split('T')[0];
+
+            await supabase.from('reminders').insert({
+              rule_code: ruleCode,
+              object_type: 'Vehicle',
+              object_id: insertedVehicle.id,
+              title: `Inspection due soon — ${normalizedReg} (${daysUntilDue > 0 ? daysUntilDue + ' days' : 'overdue'})`,
+              message: `Inspection for ${normalizedReg} (${data.make} ${data.model}) due on ${dueDateStr}. Please schedule inspection.`,
+              due_on: dueDateStr,
+              remind_on: today,
+              severity: severity,
+              context: {
+                vehicle_id: insertedVehicle.id,
+                reg: normalizedReg,
+                make: data.make,
+                model: data.model,
+                due_date: dueDateStr,
+                days_until: Math.max(0, daysUntilDue)
+              },
+              status: 'pending',
+              tenant_id: tenant?.id || null
+            });
+            console.log('Created Inspection reminder for', normalizedReg);
+          } catch (reminderError) {
+            console.error('Error creating Inspection reminder:', reminderError);
+          }
+        }
+
+        // Create Registration reminder if tax_due_date is set
+        if (data.tax_due_date) {
+          try {
+            const taxDate = new Date(data.tax_due_date);
+            const daysUntilDue = Math.ceil((taxDate.getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24));
+
+            let ruleCode: string;
+            if (daysUntilDue <= 0) ruleCode = 'TAX_0D';
+            else if (daysUntilDue <= 7) ruleCode = 'TAX_7D';
+            else if (daysUntilDue <= 14) ruleCode = 'TAX_14D';
+            else ruleCode = 'TAX_30D';
+
+            const severity = daysUntilDue <= 0 ? 'critical' : daysUntilDue <= 7 ? 'warning' : 'info';
+            const dueDateStr = data.tax_due_date.toISOString().split('T')[0];
+
+            await supabase.from('reminders').insert({
+              rule_code: ruleCode,
+              object_type: 'Vehicle',
+              object_id: insertedVehicle.id,
+              title: `Registration due soon — ${normalizedReg} (${daysUntilDue > 0 ? daysUntilDue + ' days' : 'overdue'})`,
+              message: `Registration for ${normalizedReg} (${data.make} ${data.model}) due on ${dueDateStr}. Please renew.`,
+              due_on: dueDateStr,
+              remind_on: today,
+              severity: severity,
+              context: {
+                vehicle_id: insertedVehicle.id,
+                reg: normalizedReg,
+                make: data.make,
+                model: data.model,
+                due_date: dueDateStr,
+                days_until: Math.max(0, daysUntilDue)
+              },
+              status: 'pending',
+              tenant_id: tenant?.id || null
+            });
+            console.log('Created Registration reminder for', normalizedReg);
+          } catch (reminderError) {
+            console.error('Error creating Registration reminder:', reminderError);
+          }
+        }
+
+        // Invalidate reminders cache so the new reminders show up
+        queryClient.invalidateQueries({ queryKey: ["reminders"] });
+        queryClient.invalidateQueries({ queryKey: ["reminder-stats"] });
+      }
 
       form.reset();
       setPhotoFiles([]);
@@ -734,6 +827,33 @@ export const AddVehicleDialog = ({ open, onOpenChange }: AddVehicleDialogProps) 
                             }}
                           />
                         </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    control={form.control}
+                    name="allowed_mileage"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Allowed Mileage</FormLabel>
+                        <FormControl>
+                          <Input
+                            type="number"
+                            min="1"
+                            placeholder="Unlimited"
+                            {...field}
+                            value={field.value ?? ""}
+                            onChange={(e) => {
+                              const value = e.target.value;
+                              field.onChange(value === "" ? undefined : parseInt(value));
+                            }}
+                          />
+                        </FormControl>
+                        <FormDescription className="text-xs">
+                          Miles/month (leave blank for unlimited)
+                        </FormDescription>
                         <FormMessage />
                       </FormItem>
                     )}

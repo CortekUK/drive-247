@@ -13,8 +13,8 @@ import {
 
 // Common country codes with flags
 const COUNTRY_CODES = [
-    { code: "+44", country: "GB", flag: "🇬🇧", name: "United Kingdom" },
     { code: "+1", country: "US", flag: "🇺🇸", name: "United States" },
+    { code: "+44", country: "GB", flag: "🇬🇧", name: "United Kingdom" },
     { code: "+1", country: "CA", flag: "🇨🇦", name: "Canada" },
     { code: "+353", country: "IE", flag: "🇮🇪", name: "Ireland" },
     { code: "+49", country: "DE", flag: "🇩🇪", name: "Germany" },
@@ -61,7 +61,7 @@ interface PhoneInputProps extends Omit<React.InputHTMLAttributes<HTMLInputElemen
  * Combines a dropdown for country code selection with a phone number input
  */
 export const PhoneInput = React.forwardRef<HTMLInputElement, PhoneInputProps>(
-    ({ className, value = "", onChange, defaultCountry = "GB", error, ...props }, ref) => {
+    ({ className, value = "", onChange, defaultCountry = "US", error, ...props }, ref) => {
         // Parse the current value to extract country code and number
         const parseValue = (val: string): { countryCode: string; number: string } => {
             if (!val) return { countryCode: getDefaultCode(), number: "" };

@@ -120,7 +120,16 @@ export const AddPaymentDialog = ({
       const { data, error } = await query;
 
       if (error) throw error;
-      return data?.map(r => r.vehicles).filter(Boolean) || [];
+
+      // Deduplicate vehicles by ID (customer may have multiple rentals for same vehicle)
+      const vehicles = data?.map(r => r.vehicles).filter(Boolean) || [];
+      const uniqueVehicles = vehicles.reduce((acc: any[], vehicle: any) => {
+        if (!acc.find(v => v.id === vehicle.id)) {
+          acc.push(vehicle);
+        }
+        return acc;
+      }, []);
+      return uniqueVehicles;
     },
     enabled: !!selectedCustomerId,
   });
@@ -173,6 +182,7 @@ export const AddPaymentDialog = ({
       }
 
       // Create generic payment record - FIFO allocation will be handled by edge function
+      // Manual payments recorded by staff are automatically approved (not auto_approved)
       const { data: payment, error: paymentError } = await supabase
         .from("payments")
         .insert({
@@ -184,6 +194,7 @@ export const AddPaymentDialog = ({
           method: data.method,
           payment_type: 'Payment', // All customer payments are generic
           tenant_id: tenant?.id,
+          verification_status: 'approved', // Manual payments are staff-verified
         })
         .select()
         .single();
@@ -394,7 +405,7 @@ export const AddPaymentDialog = ({
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>Payment Date <span className="text-red-500">*</span></FormLabel>
-                  <Popover>
+                  <Popover modal={true}>
                     <PopoverTrigger asChild>
                       <FormControl>
                         <Button

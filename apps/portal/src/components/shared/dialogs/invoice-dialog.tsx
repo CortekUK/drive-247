@@ -19,6 +19,8 @@ interface InvoiceDialogProps {
     security_deposit?: number;
     total_amount: number;
     notes?: string;
+    discount_amount?: number;
+    promo_code?: string;
   };
   customer: {
     name: string;
@@ -45,6 +47,9 @@ interface InvoiceDialogProps {
 // Separate printable component
 const PrintableInvoice = ({ invoice, customer, vehicle, rental, protectionPlan }: Omit<InvoiceDialogProps, "open" | "onOpenChange">) => {
   const vehicleName = vehicle.make && vehicle.model ? `${vehicle.make} ${vehicle.model}` : vehicle.reg;
+  const hasDiscount = (invoice.discount_amount ?? 0) > 0;
+  // If there's a discount, show original price (subtotal + discount), otherwise show subtotal
+  const originalRentalFee = hasDiscount ? (invoice.subtotal + (invoice.discount_amount ?? 0)) : invoice.subtotal;
   const rentalFee = protectionPlan?.rentalFee ?? invoice.subtotal;
 
   return (
@@ -114,9 +119,31 @@ const PrintableInvoice = ({ invoice, customer, vehicle, rental, protectionPlan }
                 </div>
               </td>
               <td className="p-3 text-sm text-right font-medium">
-                {formatCurrency(rentalFee)}
+                {hasDiscount ? (
+                  <div>
+                    <span className="line-through text-gray-400 mr-2">{formatCurrency(originalRentalFee)}</span>
+                    <span>{formatCurrency(rentalFee)}</span>
+                  </div>
+                ) : (
+                  formatCurrency(rentalFee)
+                )}
               </td>
             </tr>
+            {hasDiscount && (
+              <tr className="border-b border-gray-300" style={{ backgroundColor: '#f0fdf4' }}>
+                <td className="p-3 text-sm">
+                  <div>
+                    <p className="font-medium" style={{ color: '#16a34a' }}>Promo Discount</p>
+                    {invoice.promo_code && (
+                      <p className="text-xs text-gray-600">Code: {invoice.promo_code}</p>
+                    )}
+                  </div>
+                </td>
+                <td className="p-3 text-sm text-right font-medium" style={{ color: '#16a34a' }}>
+                  -{formatCurrency(invoice.discount_amount ?? 0)}
+                </td>
+              </tr>
+            )}
             {protectionPlan && (
               <tr className="border-b border-gray-300">
                 <td className="p-3 text-sm">
@@ -189,6 +216,8 @@ export const InvoiceDialog = ({
 }: InvoiceDialogProps) => {
   const printRef = useRef<HTMLDivElement>(null);
   const vehicleName = vehicle.make && vehicle.model ? `${vehicle.make} ${vehicle.model}` : vehicle.reg;
+  const hasDiscount = (invoice.discount_amount ?? 0) > 0;
+  const originalRentalFee = hasDiscount ? (invoice.subtotal + (invoice.discount_amount ?? 0)) : invoice.subtotal;
   const rentalFee = protectionPlan?.rentalFee ?? invoice.subtotal;
 
   const handlePrint = useReactToPrint({
@@ -300,9 +329,31 @@ export const InvoiceDialog = ({
                       </div>
                     </td>
                     <td className="p-3 text-sm text-right font-medium">
-                      {formatCurrency(rentalFee)}
+                      {hasDiscount ? (
+                        <div>
+                          <span className="line-through text-muted-foreground mr-2">{formatCurrency(originalRentalFee)}</span>
+                          <span>{formatCurrency(rentalFee)}</span>
+                        </div>
+                      ) : (
+                        formatCurrency(rentalFee)
+                      )}
                     </td>
                   </tr>
+                  {hasDiscount && (
+                    <tr className="border-b bg-green-50 dark:bg-green-950/20">
+                      <td className="p-3 text-sm">
+                        <div>
+                          <p className="font-medium text-green-600">Promo Discount</p>
+                          {invoice.promo_code && (
+                            <p className="text-xs text-muted-foreground">Code: {invoice.promo_code}</p>
+                          )}
+                        </div>
+                      </td>
+                      <td className="p-3 text-sm text-right font-medium text-green-600">
+                        -{formatCurrency(invoice.discount_amount ?? 0)}
+                      </td>
+                    </tr>
+                  )}
                   {protectionPlan && (
                     <tr className="border-b">
                       <td className="p-3 text-sm">

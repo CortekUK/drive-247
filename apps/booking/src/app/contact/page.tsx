@@ -21,6 +21,8 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { usePageContent, defaultContactContent, mergeWithDefaults } from "@/hooks/usePageContent";
 import { useSiteSettings } from "@/hooks/useSiteSettings";
+import { useBrandingSettings } from "@/hooks/useBrandingSettings";
+import { createCompanyNameReplacer } from "@/utils/tenantName";
 
 const contactSchema = z.object({
   name: z.string().trim().min(2, "Name must be at least 2 characters").max(100, "Name must be less than 100 characters"),
@@ -50,6 +52,7 @@ const Contact = () => {
 
   // Site settings for phone/email defaults
   const { settings: siteSettings } = useSiteSettings();
+  const { branding } = useBrandingSettings();
 
   // Fetch CMS content for contact page
   const { data: cmsContent } = usePageContent("contact");
@@ -57,6 +60,10 @@ const Contact = () => {
     () => mergeWithDefaults(cmsContent, defaultContactContent),
     [cmsContent]
   );
+
+  // Use the tenant's app_name for dynamic titles
+  const appName = branding.app_name || 'Drive 247';
+  const replaceCompanyName = createCompanyNameReplacer(appName);
 
   // Derive contact settings from CMS content
   const contactSettings = useMemo(() => ({
@@ -73,9 +80,9 @@ const Contact = () => {
   const businessSchema = {
     "@context": "https://schema.org",
     "@type": "CarRental",
-    "name": "Drive917",
+    "name": appName,
     "description": "Premium luxury car rentals in Los Angeles",
-    "url": typeof window !== 'undefined' ? window.location.origin : 'https://drive917.com',
+    "url": typeof window !== 'undefined' ? window.location.origin : 'https://drive247.com',
     "telephone": contactSettings.phone,
     "email": contactSettings.email,
     "address": {
@@ -151,7 +158,7 @@ const Contact = () => {
       }
 
       setSubmitStatus('success');
-      toast.success(content.contact_form?.success_message || "Thank you for contacting Drive917. Our concierge team will respond within 2 hours during business hours (PST).");
+      toast.success(content.contact_form?.success_message ? replaceCompanyName(content.contact_form.success_message) : `Thank you for contacting ${appName}. Our concierge team will respond within 2 hours during business hours (PST).`);
 
       // Reset form
       setFormData({
@@ -184,11 +191,11 @@ const Contact = () => {
   return (
     <div className="min-h-screen bg-background">
       <SEO
-        title={content.seo?.title || "Contact Drive917 — Los Angeles Luxury Car Rentals"}
-        description={content.seo?.description || "Get in touch with Drive917 for premium vehicle rentals, chauffeur services, and exclusive offers in Los Angeles."}
-        keywords={content.seo?.keywords || "contact Drive917, luxury car rental Los Angeles, premium vehicle rental contact, chauffeur service inquiry"}
+        title={content.seo?.title ? replaceCompanyName(content.seo.title) : `Contact ${appName} — Los Angeles Luxury Car Rentals`}
+        description={content.seo?.description ? replaceCompanyName(content.seo.description) : `Get in touch with ${appName} for premium vehicle rentals, chauffeur services, and exclusive offers in Los Angeles.`}
+        keywords={content.seo?.keywords ? replaceCompanyName(content.seo.keywords) : `contact ${appName}, luxury car rental Los Angeles, premium vehicle rental contact, chauffeur service inquiry`}
         schema={businessSchema}
-        canonical={typeof window !== 'undefined' ? `${window.location.origin}/contact` : 'https://drive917.com/contact'}
+        canonical={typeof window !== 'undefined' ? `${window.location.origin}/contact` : 'https://drive247.com/contact'}
       />
       <Navigation />
 
@@ -198,7 +205,7 @@ const Contact = () => {
         <div className="container mx-auto px-4 relative">
           <div className="max-w-4xl mx-auto text-center mb-20 animate-fade-in">
             <h1 className="text-5xl md:text-6xl lg:text-7xl font-display font-bold mb-6 text-gradient-metal leading-tight">
-              {content.hero?.title || "Contact Drive917"}
+              {content.hero?.title ? replaceCompanyName(content.hero.title) : `Contact ${appName}`}
             </h1>
             <div className="flex items-center justify-center mb-8">
               <div className="h-[1px] w-24 bg-gradient-to-r from-transparent via-accent to-transparent" />

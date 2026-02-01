@@ -68,7 +68,7 @@ export default function UsersManagement() {
   const [selectedRole, setSelectedRole] = useState<string>('');
 
   // Fetch users for this tenant
-  const { data: users, isLoading } = useQuery({
+  const { data: users, isLoading, refetch } = useQuery({
     queryKey: ['users', tenant?.id],
     queryFn: async () => {
       let query = supabase
@@ -82,10 +82,14 @@ export default function UsersManagement() {
 
       const { data, error } = await query;
 
-      if (error) throw error;
+      if (error) {
+        console.error('Error fetching users:', error);
+        throw error;
+      }
       return data as AppUser[];
     },
     enabled: !!tenant,
+    staleTime: 0, // Always consider data stale so it refetches on invalidation
   });
 
   // Generate random password
@@ -113,12 +117,14 @@ export default function UsersManagement() {
       const temporaryPassword = generatePassword();
 
       // Call admin-create-user edge function
+      // Pass the tenant_id from context to ensure user is created in the correct tenant
       const { data: result, error } = await supabase.functions.invoke('admin-create-user', {
         body: {
           email: data.email,
           name: data.name,
           role: data.role,
           temporaryPassword,
+          tenant_id: tenant?.id, // Use tenant from URL context, not from logged-in user
         }
       });
 
@@ -142,8 +148,11 @@ export default function UsersManagement() {
 
       return { ...result, temporaryPassword, name: data.name, email: data.email };
     },
-    onSuccess: (data) => {
-      queryClient.invalidateQueries({ queryKey: ['users'] });
+    onSuccess: async (data) => {
+      console.log('User created successfully, refreshing list...');
+      // Invalidate and refetch the users query to ensure the list updates
+      await queryClient.invalidateQueries({ queryKey: ['users', tenant?.id] });
+      await refetch();
       setShowAddDialog(false);
       // Show credentials modal
       setNewUserCredentials({
@@ -209,7 +218,7 @@ export default function UsersManagement() {
       return data;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['users'] });
+      queryClient.invalidateQueries({ queryKey: ['users', tenant?.id] });
       setShowRoleDialog(false);
       setSelectedUser(null);
       setSelectedRole('');
@@ -240,7 +249,7 @@ export default function UsersManagement() {
       return data;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['users'] });
+      queryClient.invalidateQueries({ queryKey: ['users', tenant?.id] });
       toast({
         title: "Success",
         description: "User status updated successfully",

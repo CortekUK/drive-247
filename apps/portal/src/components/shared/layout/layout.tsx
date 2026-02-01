@@ -7,6 +7,7 @@ import { UserMenu } from "./user-menu";
 import { AppSidebar } from "./app-sidebar";
 import { NotificationBell } from "./notification-bell";
 import { SidebarProvider, SidebarTrigger, SidebarInset } from "@/components/ui/sidebar";
+import { ChatSidebar } from "@/components/chat";
 
 interface LayoutProps {
   children: ReactNode;
@@ -32,6 +33,9 @@ export const Layout = ({ children }: LayoutProps) => {
           {children}
         </main>
       </SidebarInset>
+
+      {/* RAG Chatbot sidebar with floating trigger */}
+      <ChatSidebar />
     </SidebarProvider>
   );
 };

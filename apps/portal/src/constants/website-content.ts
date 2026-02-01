@@ -97,6 +97,15 @@ export const CMS_MEDIA = {
   /** Maximum file size for CMS media (5 MB) */
   MAX_FILE_SIZE_BYTES: 5 * 1024 * 1024,
 
+  /** Maximum file size for images in carousel (10 MB) */
+  MAX_IMAGE_SIZE_BYTES: 10 * 1024 * 1024,
+
+  /** Maximum file size for videos in carousel (50 MB) */
+  MAX_VIDEO_SIZE_BYTES: 50 * 1024 * 1024,
+
+  /** Maximum items in carousel (images + videos combined) */
+  MAX_CAROUSEL_ITEMS: 10,
+
   /** Allowed image types */
   ALLOWED_IMAGE_TYPES: [
     'image/jpeg',
@@ -105,12 +114,25 @@ export const CMS_MEDIA = {
     'image/svg+xml',
   ] as const,
 
-  /** Allowed video types */
+  /** Allowed video types (includes GIF as it behaves like video) */
   ALLOWED_VIDEO_TYPES: [
     'video/mp4',
     'video/webm',
-    'video/ogg',
+    'image/gif',
   ] as const,
+
+  /** Allowed carousel media types (images + videos) */
+  ALLOWED_CAROUSEL_TYPES: [
+    'image/jpeg',
+    'image/png',
+    'image/webp',
+    'video/mp4',
+    'video/webm',
+    'image/gif',
+  ] as const,
+
+  /** Video file extensions for URL detection */
+  VIDEO_EXTENSIONS: ['.mp4', '.webm', '.gif'] as const,
 
   /** Storage bucket name */
   BUCKET: 'cms-media',
@@ -245,7 +267,7 @@ export const CMS_SEO = {
 // ============================================
 // CMS DEFAULT CONTENT
 // ============================================
-// Default CMS content for Drive 917 landing page
+// Default CMS content for Drive 247 landing page
 
 // ============================================
 // HOME PAGE DEFAULTS
@@ -270,7 +292,7 @@ export const DEFAULT_PROMO_BADGE: PromoBadgeContent = {
 };
 
 export const DEFAULT_SERVICE_HIGHLIGHTS: ServiceHighlightsContent = {
-  title: "Why Choose Drive 917?",
+  title: "Why Choose Drive 247?",
   subtitle: "We deliver exceptional service with every rental",
   services: [
     {
@@ -312,7 +334,7 @@ export const DEFAULT_TESTIMONIALS_HEADER: TestimonialsHeaderContent = {
 
 export const DEFAULT_HOME_CTA: HomeCTAContent = {
   title: "Ready to Hit the Road?",
-  description: "Join hundreds of satisfied customers who trust Drive 917 for their transportation needs. Book your vehicle today and experience the difference.",
+  description: "Join hundreds of satisfied customers who trust Drive 247 for their transportation needs. Book your vehicle today and experience the difference.",
   primary_cta_text: "Browse Vehicles",
   secondary_cta_text: "Contact Us",
   trust_points: [
@@ -326,15 +348,15 @@ export const DEFAULT_CONTACT_CARD: ContactCardContent = {
   title: "Need Help?",
   description: "Our team is ready to assist you with any questions about our rental services.",
   phone_number: "+19725156635",
-  email: "info@drive917.com",
+  email: "info@drive247.com",
   call_button_text: "Call Us",
   email_button_text: "Email Us",
 };
 
 export const DEFAULT_HOME_SEO: SEOContent = {
-  title: "Drive 917 | Premium Car Rentals in Dallas, TX",
+  title: "Drive 247 | Premium Car Rentals in Dallas, TX",
   description: "Rent premium vehicles in Dallas-Fort Worth. Daily, weekly & monthly rentals. Competitive rates, flexible terms, and exceptional service. Book online today!",
-  keywords: "car rental dallas, rent a car dallas tx, premium car rental, weekly car rental, monthly car rental, drive 917",
+  keywords: "car rental dallas, rent a car dallas tx, premium car rental, weekly car rental, monthly car rental, drive 247",
 };
 
 // ============================================
@@ -343,14 +365,14 @@ export const DEFAULT_HOME_SEO: SEOContent = {
 
 export const DEFAULT_LOGO: LogoContent = {
   logo_url: "",
-  logo_alt: "Drive 917",
+  logo_alt: "Drive 247",
   favicon_url: "",
 };
 
 export const DEFAULT_SITE_CONTACT: SiteContactContent = {
   phone: "+19725156635",
   phone_display: "(972) 515-6635",
-  email: "info@drive917.com",
+  email: "info@drive247.com",
   address_line1: "1234 Main Street",
   address_line2: "Suite 100",
   city: "Dallas",
@@ -361,8 +383,8 @@ export const DEFAULT_SITE_CONTACT: SiteContactContent = {
 };
 
 export const DEFAULT_SOCIAL_LINKS: SocialLinksContent = {
-  facebook: "https://facebook.com/drive917",
-  instagram: "https://instagram.com/drive917",
+  facebook: "https://facebook.com/drive247",
+  instagram: "https://instagram.com/drive247",
   twitter: "",
   linkedin: "",
   youtube: "",
@@ -370,7 +392,7 @@ export const DEFAULT_SOCIAL_LINKS: SocialLinksContent = {
 };
 
 export const DEFAULT_FOOTER: FooterContent = {
-  copyright_text: `© ${new Date().getFullYear()} Drive 917. All rights reserved.`,
+  copyright_text: `© ${new Date().getFullYear()} Drive 247. All rights reserved.`,
   tagline: "Premium Car Rentals in Dallas",
 };
 
@@ -379,14 +401,14 @@ export const DEFAULT_FOOTER: FooterContent = {
 // ============================================
 
 export const DEFAULT_ABOUT_HERO: HeroContent = {
-  title: "About Drive 917",
+  title: "About Drive 247",
   subtitle: "Your trusted partner for premium car rentals in Dallas-Fort Worth",
 };
 
 export const DEFAULT_ABOUT_STORY: AboutStoryContent = {
   title: "Our Story",
   founded_year: "2020",
-  content: `<p>Drive 917 was founded with a simple mission: to provide Dallas-Fort Worth residents and visitors with reliable, affordable, and premium vehicle rentals.</p>
+  content: `<p>Drive 247 was founded with a simple mission: to provide Dallas-Fort Worth residents and visitors with reliable, affordable, and premium vehicle rentals.</p>
 <p>What started as a small fleet of carefully selected vehicles has grown into one of the most trusted car rental services in the metroplex. Our commitment to quality, transparency, and customer satisfaction has earned us a loyal customer base and a reputation for excellence.</p>
 <p>Every vehicle in our fleet is handpicked, thoroughly inspected, and maintained to the highest standards. We believe that renting a car should be a seamless experience, from booking to returning the keys.</p>`,
 };
@@ -433,9 +455,9 @@ export const DEFAULT_ABOUT_STATS: StatsContent = {
 };
 
 export const DEFAULT_ABOUT_SEO: SEOContent = {
-  title: "About Us | Drive 917 - Premium Car Rentals Dallas",
-  description: "Learn about Drive 917, Dallas's trusted car rental company. Quality vehicles, transparent pricing, and exceptional service since 2020.",
-  keywords: "about drive 917, dallas car rental company, car rental dallas about us",
+  title: "About Us | Drive 247 - Premium Car Rentals Dallas",
+  description: "Learn about Drive 247, Dallas's trusted car rental company. Quality vehicles, transparent pricing, and exceptional service since 2020.",
+  keywords: "about drive 247, dallas car rental company, car rental dallas about us",
 };
 
 // ============================================
@@ -453,7 +475,7 @@ export const DEFAULT_CONTACT_INFO: ContactInfoContent = {
     availability: "Mon-Sat: 9AM-7PM, Sun: 10AM-5PM",
   },
   email: {
-    address: "info@drive917.com",
+    address: "info@drive247.com",
     response_time: "We respond within 2 hours",
   },
   office: {
@@ -491,9 +513,9 @@ export const DEFAULT_TRUST_BADGES: TrustBadgesContent = {
 };
 
 export const DEFAULT_CONTACT_SEO: SEOContent = {
-  title: "Contact Us | Drive 917 - Premium Car Rentals Dallas",
-  description: "Get in touch with Drive 917 for all your car rental needs in Dallas. Call us, email, or visit our location. We're here to help!",
-  keywords: "contact drive 917, dallas car rental contact, car rental phone number dallas",
+  title: "Contact Us | Drive 247 - Premium Car Rentals Dallas",
+  description: "Get in touch with Drive 247 for all your car rental needs in Dallas. Call us, email, or visit our location. We're here to help!",
+  keywords: "contact drive 247, dallas car rental contact, car rental phone number dallas",
 };
 
 // ============================================
@@ -551,7 +573,7 @@ export const DEFAULT_FLEET_CTA: FleetCTAContent = {
 };
 
 export const DEFAULT_FLEET_SEO: SEOContent = {
-  title: "Our Fleet | Drive 917 - Premium Car Rentals Dallas",
+  title: "Our Fleet | Drive 247 - Premium Car Rentals Dallas",
   description: "Browse our premium fleet of rental vehicles in Dallas. Sedans, SUVs, and luxury cars available for daily, weekly, and monthly rentals.",
   keywords: "rental cars dallas, premium car fleet, rent sedan dallas, rent suv dallas, luxury car rental",
 };
@@ -592,14 +614,14 @@ export const DEFAULT_PROMO_TERMS: TermsContent = {
     "Promotions cannot be combined with other offers unless specified",
     "Valid ID and credit card required at time of rental",
     "Subject to vehicle availability",
-    "Drive 917 reserves the right to modify or cancel promotions at any time",
+    "Drive 247 reserves the right to modify or cancel promotions at any time",
   ],
 };
 
 export const DEFAULT_PROMOTIONS_SEO: SEOContent = {
-  title: "Promotions & Deals | Drive 917 - Car Rental Discounts Dallas",
-  description: "Save on your next car rental with Drive 917's special promotions and deals. Exclusive discounts on daily, weekly, and monthly rentals in Dallas.",
-  keywords: "car rental deals dallas, rental car discounts, drive 917 promotions, cheap car rental dallas",
+  title: "Promotions & Deals | Drive 247 - Car Rental Discounts Dallas",
+  description: "Save on your next car rental with Drive 247's special promotions and deals. Exclusive discounts on daily, weekly, and monthly rentals in Dallas.",
+  keywords: "car rental deals dallas, rental car discounts, drive 247 promotions, cheap car rental dallas",
 };
 
 // ============================================
@@ -610,7 +632,7 @@ export const DEFAULT_PRIVACY_POLICY: PrivacyPolicyContent = {
   title: "Privacy Policy",
   last_updated: new Date().toISOString().split('T')[0],
   content: `<h2>Introduction</h2>
-<p>Drive 917 ("we," "our," or "us") is committed to protecting your privacy. This Privacy Policy explains how we collect, use, disclose, and safeguard your information when you visit our website or use our services.</p>
+<p>Drive 247 ("we," "our," or "us") is committed to protecting your privacy. This Privacy Policy explains how we collect, use, disclose, and safeguard your information when you visit our website or use our services.</p>
 
 <h2>Information We Collect</h2>
 <p>We collect information that you provide directly to us, such as:</p>
@@ -631,14 +653,14 @@ export const DEFAULT_PRIVACY_POLICY: PrivacyPolicyContent = {
 </ul>
 
 <h2>Contact Us</h2>
-<p>If you have questions about this Privacy Policy, please contact us at info@drive917.com.</p>`,
+<p>If you have questions about this Privacy Policy, please contact us at info@drive247.com.</p>`,
 };
 
 export const DEFAULT_TERMS_OF_SERVICE: TermsOfServiceContent = {
   title: "Terms of Service",
   last_updated: new Date().toISOString().split('T')[0],
   content: `<h2>Agreement to Terms</h2>
-<p>By accessing or using Drive 917's services, you agree to be bound by these Terms of Service and all applicable laws and regulations.</p>
+<p>By accessing or using Drive 247's services, you agree to be bound by these Terms of Service and all applicable laws and regulations.</p>
 
 <h2>Rental Requirements</h2>
 <ul>
@@ -658,7 +680,7 @@ export const DEFAULT_TERMS_OF_SERVICE: TermsOfServiceContent = {
 </ul>
 
 <h2>Contact Us</h2>
-<p>For questions about these Terms, please contact us at info@drive917.com.</p>`,
+<p>For questions about these Terms, please contact us at info@drive247.com.</p>`,
 };
 
 // ============================================

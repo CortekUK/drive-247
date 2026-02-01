@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import Stripe from "https://esm.sh/stripe@14.21.0?target=deno";
+import { getStripeClient, getConnectAccountId, type StripeMode } from '../_shared/stripe-client.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -26,15 +27,6 @@ serve(async (req) => {
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
-
-    // Initialize Stripe
-    const stripeSecretKey = Deno.env.get('STRIPE_SECRET_KEY');
-    if (!stripeSecretKey) {
-      throw new Error('STRIPE_SECRET_KEY not configured');
-    }
-    const stripe = new Stripe(stripeSecretKey, {
-      apiVersion: '2023-10-16',
-    });
 
     // Check if this is an immediate refund request (has paymentId in body)
     let requestBody: ImmediateRefundRequest | null = null;
@@ -67,23 +59,27 @@ serve(async (req) => {
         throw new Error('Payment has no Stripe payment intent. Please provide one from Stripe Dashboard.');
       }
 
-      // Get tenant's Stripe Connect account
+      // Get tenant's Stripe mode and Connect account
       const tenantId = requestBody.tenantId || payment.tenant_id || payment.rentals?.tenant_id;
+      let stripeMode: StripeMode = 'test'; // Default to test
       let stripeAccountId: string | null = null;
 
       if (tenantId) {
         const { data: tenant } = await supabase
           .from('tenants')
-          .select('stripe_account_id, stripe_onboarding_complete')
+          .select('stripe_mode, stripe_account_id, stripe_onboarding_complete')
           .eq('id', tenantId)
           .single();
 
-        if (tenant?.stripe_account_id && tenant?.stripe_onboarding_complete) {
-          stripeAccountId = tenant.stripe_account_id;
-          console.log('Using Stripe Connect account:', stripeAccountId);
+        if (tenant) {
+          stripeMode = (tenant.stripe_mode as StripeMode) || 'test';
+          stripeAccountId = getConnectAccountId(tenant);
+          console.log('Tenant mode:', stripeMode, 'Connect account:', stripeAccountId);
         }
       }
 
+      // Get Stripe client for the tenant's mode
+      const stripe = getStripeClient(stripeMode);
       const stripeOptions = stripeAccountId ? { stripeAccount: stripeAccountId } : undefined;
       const refundAmount = requestBody.amount || payment.amount;
 
@@ -114,6 +110,62 @@ serve(async (req) => {
           refund_reason: requestBody.reason || 'Refund requested'
         })
         .eq('id', payment.id);
+
+      // Create ledger entries for the refund to track it properly
+      // Get rental details for customer_id and vehicle_id
+      const { data: rental } = await supabase
+        .from('rentals')
+        .select('customer_id, vehicle_id')
+        .eq('id', payment.rental_id)
+        .single();
+
+      if (rental) {
+        // Get the invoice to understand the breakdown of the original payment
+        const { data: invoice } = await supabase
+          .from('invoices')
+          .select('rental_fee, tax_amount, service_fee, security_deposit')
+          .eq('rental_id', payment.rental_id)
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .single();
+
+        // Create refund ledger entries proportionally based on what was charged
+        // For rejection refunds, we refund everything that was paid
+        const categories = [
+          { name: 'Rental', amount: invoice?.rental_fee || 0 },
+          { name: 'Tax', amount: invoice?.tax_amount || 0 },
+          { name: 'Service Fee', amount: invoice?.service_fee || 0 },
+          { name: 'Security Deposit', amount: invoice?.security_deposit || 0 },
+        ].filter(c => c.amount > 0);
+
+        const totalInvoice = categories.reduce((sum, c) => sum + c.amount, 0);
+
+        for (const category of categories) {
+          // Calculate proportional refund for this category
+          const categoryRefund = totalInvoice > 0
+            ? (category.amount / totalInvoice) * refundAmount
+            : 0;
+
+          if (categoryRefund > 0) {
+            const ledgerEntry = {
+              rental_id: payment.rental_id,
+              customer_id: rental.customer_id,
+              vehicle_id: rental.vehicle_id,
+              tenant_id: tenantId,
+              entry_date: new Date().toISOString().split('T')[0],
+              due_date: new Date().toISOString().split('T')[0],
+              type: 'Refund',
+              category: category.name,
+              amount: -Math.abs(categoryRefund), // Negative amount for refund
+              remaining_amount: 0,
+              reference: `Refund: ${requestBody.reason || 'Booking rejected'} (Stripe: ${stripeRefund.id})`,
+            };
+
+            await supabase.from('ledger_entries').insert(ledgerEntry);
+            console.log(`Created ledger entry for ${category.name} refund: $${categoryRefund.toFixed(2)}`);
+          }
+        }
+      }
 
       return new Response(
         JSON.stringify({
@@ -171,32 +223,35 @@ serve(async (req) => {
           .update({ refund_status: 'processing' })
           .eq('id', refund.payment_id);
 
-        // Get tenant's Stripe Connect account for this refund
-        // First get tenant_id from payment record
+        // Get tenant's Stripe mode and Connect account for this refund
         const { data: paymentRecord } = await supabase
           .from('payments')
           .select('tenant_id')
           .eq('id', refund.payment_id)
           .single();
 
+        let batchStripeMode: StripeMode = 'test';
         let batchStripeAccountId: string | null = null;
         if (paymentRecord?.tenant_id) {
           const { data: tenant } = await supabase
             .from('tenants')
-            .select('stripe_account_id, stripe_onboarding_complete')
+            .select('stripe_mode, stripe_account_id, stripe_onboarding_complete')
             .eq('id', paymentRecord.tenant_id)
             .single();
 
-          if (tenant?.stripe_account_id && tenant?.stripe_onboarding_complete) {
-            batchStripeAccountId = tenant.stripe_account_id;
+          if (tenant) {
+            batchStripeMode = (tenant.stripe_mode as StripeMode) || 'test';
+            batchStripeAccountId = getConnectAccountId(tenant);
           }
         }
 
+        // Get Stripe client for this tenant's mode
+        const batchStripe = getStripeClient(batchStripeMode);
         const batchStripeOptions = batchStripeAccountId ? { stripeAccount: batchStripeAccountId } : undefined;
 
         // Process refund via Stripe (on connected account for direct charges)
-        console.log(`Creating refund`, batchStripeAccountId ? `on connected account: ${batchStripeAccountId}` : 'on platform');
-        const stripeRefund = await stripe.refunds.create({
+        console.log(`Creating refund (${batchStripeMode} mode)`, batchStripeAccountId ? `on connected account: ${batchStripeAccountId}` : 'on platform');
+        const stripeRefund = await batchStripe.refunds.create({
           payment_intent: refund.stripe_payment_intent_id,
           amount: Math.round(refund.refund_amount * 100), // Convert to cents
           reason: 'requested_by_customer',
@@ -220,6 +275,54 @@ serve(async (req) => {
             status: refund.refund_amount >= refund.payment_amount ? 'Refunded' : 'Partial Refund'
           })
           .eq('id', refund.payment_id);
+
+        // Create ledger entries for the batch refund
+        const { data: batchRental } = await supabase
+          .from('rentals')
+          .select('customer_id, vehicle_id')
+          .eq('id', refund.rental_id)
+          .single();
+
+        if (batchRental) {
+          const { data: batchInvoice } = await supabase
+            .from('invoices')
+            .select('rental_fee, tax_amount, service_fee, security_deposit')
+            .eq('rental_id', refund.rental_id)
+            .order('created_at', { ascending: false })
+            .limit(1)
+            .single();
+
+          const batchCategories = [
+            { name: 'Rental', amount: batchInvoice?.rental_fee || 0 },
+            { name: 'Tax', amount: batchInvoice?.tax_amount || 0 },
+            { name: 'Service Fee', amount: batchInvoice?.service_fee || 0 },
+            { name: 'Security Deposit', amount: batchInvoice?.security_deposit || 0 },
+          ].filter(c => c.amount > 0);
+
+          const batchTotalInvoice = batchCategories.reduce((sum, c) => sum + c.amount, 0);
+
+          for (const category of batchCategories) {
+            const categoryRefund = batchTotalInvoice > 0
+              ? (category.amount / batchTotalInvoice) * refund.refund_amount
+              : 0;
+
+            if (categoryRefund > 0) {
+              await supabase.from('ledger_entries').insert({
+                rental_id: refund.rental_id,
+                customer_id: batchRental.customer_id,
+                vehicle_id: batchRental.vehicle_id,
+                tenant_id: paymentRecord?.tenant_id,
+                entry_date: new Date().toISOString().split('T')[0],
+                due_date: new Date().toISOString().split('T')[0],
+                type: 'Refund',
+                category: category.name,
+                amount: -Math.abs(categoryRefund),
+                remaining_amount: 0,
+                reference: `Scheduled Refund: ${refund.refund_reason || 'Refund processed'} (Stripe: ${stripeRefund.id})`,
+              });
+            }
+          }
+        }
 
         // Send notification email
         await supabase.functions.invoke('notify-refund-processed', {

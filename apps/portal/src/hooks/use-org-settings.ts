@@ -123,10 +123,17 @@ export const useOrgSettings = () => {
   const updateSettingsMutation = useMutation({
     mutationFn: async (updates: Partial<OrgSettings>): Promise<OrgSettings> => {
       console.log('🔧 [SETTINGS] Updating settings with:', updates);
+      console.log('🔧 [SETTINGS] Tenant context:', tenant?.id);
       console.log('🔧 [SETTINGS] Calling Edge Function...');
       
+      // Include tenant_id from context for proper multi-tenant audit logging
+      const requestBody = {
+        ...updates,
+        _tenant_id: tenant?.id, // Will be extracted by Edge Function for audit logging
+      };
+      
       const { data, error } = await supabase.functions.invoke('settings', {
-        body: updates,
+        body: requestBody,
       });
 
       console.log('🔧 [SETTINGS] Edge Function response:', { data, error });

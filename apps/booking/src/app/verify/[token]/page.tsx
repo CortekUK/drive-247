@@ -57,6 +57,7 @@ export default function VerifyPage() {
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const galleryInputRef = useRef<HTMLInputElement>(null);
 
   // Processing state
   const [processingMessage, setProcessingMessage] = useState('');
@@ -682,12 +683,21 @@ export default function VerifyPage() {
             <p className="text-white/60 text-sm">{stepInfo.subtitle}</p>
           </div>
 
-          {/* Hidden file input */}
+          {/* Hidden file input for camera capture */}
           <input
             ref={fileInputRef}
             type="file"
             accept="image/*"
             capture={step === 'selfie' ? 'user' : 'environment'}
+            onChange={handleFileUpload}
+            className="hidden"
+          />
+
+          {/* Hidden file input for gallery selection (no capture attribute) */}
+          <input
+            ref={galleryInputRef}
+            type="file"
+            accept="image/*"
             onChange={handleFileUpload}
             className="hidden"
           />
@@ -707,7 +717,7 @@ export default function VerifyPage() {
               {/* Upload alternative */}
               {isCameraActive && (
                 <button
-                  onClick={() => fileInputRef.current?.click()}
+                  onClick={() => galleryInputRef.current?.click()}
                   className="text-white/60 text-sm flex items-center gap-1 py-2"
                 >
                   <Upload className="h-4 w-4" />

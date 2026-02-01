@@ -14,13 +14,15 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage, FormDescription } from "@/components/ui/form";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
-import { ArrowLeft, FileText, Save, AlertTriangle, MapPin, Clock, Shield, Upload, CheckCircle2, XCircle, Loader2, RefreshCw, QrCode, Smartphone, Copy } from "lucide-react";
+import { ArrowLeft, FileText, Save, AlertTriangle, MapPin, Clock, Shield, Upload, CheckCircle2, XCircle, Loader2, RefreshCw, QrCode, Smartphone, Copy, Check } from "lucide-react";
+import { cn } from "@/lib/utils";
 import { Input } from "@/components/ui/input";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { useQueryClient } from "@tanstack/react-query";
 import { useTenant } from "@/contexts/TenantContext";
+import { isInsuranceExemptTenant } from "@/config/tenant-config";
 import { useCustomerActiveRentals } from "@/hooks/use-customer-active-rentals";
 import { PAYMENT_TYPES } from "@/constants";
 import { ContractSummary } from "@/components/rentals/contract-summary";
@@ -87,6 +89,7 @@ const CreateRental = () => {
   const router = useRouter();
   const { toast } = useToast();
   const { tenant } = useTenant();
+  const skipInsurance = isInsuranceExemptTenant(tenant?.id);
   const queryClient = useQueryClient();
   const [loading, setLoading] = useState(false);
   const [submitError, setSubmitError] = useState<string>("");
@@ -95,6 +98,16 @@ const CreateRental = () => {
   const [createdRentalData, setCreatedRentalData] = useState<any>(null);
   const [generatedInvoice, setGeneratedInvoice] = useState<Invoice | null>(null);
   const [sendingDocuSign, setSendingDocuSign] = useState(false);
+
+  // Promo code state
+  const [promoLoading, setPromoLoading] = useState(false);
+  const [promoError, setPromoError] = useState<string | null>(null);
+  const [promoDetails, setPromoDetails] = useState<{
+    code: string;
+    type: 'percentage' | 'fixed_amount';
+    value: number;
+    id: string;
+  } | null>(null);
 
   // Verification state
   const [creatingVerification, setCreatingVerification] = useState(false);
@@ -136,6 +149,70 @@ const CreateRental = () => {
     }
     // Global deposit mode
     return rentalSettings?.global_deposit_amount ?? 0;
+  };
+
+  // Promo code validation function
+  const validatePromoCode = async (code: string) => {
+    if (!code || !tenant?.id) return;
+
+    setPromoLoading(true);
+    setPromoError(null);
+    setPromoDetails(null);
+
+    try {
+      // Use type assertion since promocodes table may not be in generated types
+      const { data, error } = await (supabase as any)
+        .from('promocodes')
+        .select('*')
+        .eq('code', code.trim())
+        .eq('tenant_id', tenant.id)
+        .maybeSingle();
+
+      if (error) throw error;
+
+      if (!data) {
+        setPromoError("Invalid promo code");
+        return;
+      }
+
+      // Check expiry
+      if (data.expires_at && new Date(data.expires_at) < new Date()) {
+        setPromoError("Promo code has expired");
+        return;
+      }
+
+      setPromoDetails({
+        code: data.code,
+        type: data.type === 'value' ? 'fixed_amount' : 'percentage',
+        value: data.value,
+        id: data.id
+      });
+      toast({
+        title: "Promo code applied!",
+        description: data.type === 'percentage'
+          ? `${data.value}% discount will be applied`
+          : `$${data.value} discount will be applied`,
+      });
+
+    } catch (err) {
+      console.error("Promo validation error:", err);
+      setPromoError("Failed to validate promo code");
+    } finally {
+      setPromoLoading(false);
+    }
+  };
+
+  // Calculate discount amount based on promo details
+  const calculateDiscount = (rentalAmount: number): number => {
+    if (!promoDetails) return 0;
+
+    if (promoDetails.type === 'fixed_amount') {
+      // Fixed amount discount - only apply if rental price > discount value
+      return rentalAmount > promoDetails.value ? promoDetails.value : 0;
+    } else {
+      // Percentage discount
+      return (rentalAmount * promoDetails.value) / 100;
+    }
   };
 
   // Get all blocked dates (global and vehicle-specific)
@@ -265,10 +342,18 @@ const CreateRental = () => {
   const [pickupLocationId, setPickupLocationId] = useState<string | undefined>(undefined);
   const [returnLocationId, setReturnLocationId] = useState<string | undefined>(undefined);
 
-  // Watch form values for live updates
-  const watchedValues = form.watch();
-  const selectedCustomerId = watchedValues.customer_id;
-  const selectedVehicleId = watchedValues.vehicle_id;
+  // Watch specific form values for live updates - watching individual fields prevents infinite loops
+  // Using form.watch() without arguments returns a new object on every render, causing infinite loops
+  const selectedCustomerId = form.watch("customer_id");
+  const selectedVehicleId = form.watch("vehicle_id");
+  const watchedStartDate = form.watch("start_date");
+  const watchedEndDate = form.watch("end_date");
+  const watchedRentalPeriodType = form.watch("rental_period_type");
+  const watchedMonthlyAmount = form.watch("monthly_amount");
+  const watchedPickupLocation = form.watch("pickup_location");
+  const watchedPromoCode = form.watch("promo_code");
+  const watchedInsuranceStatus = form.watch("insurance_status");
+  const watchedDriverAgeRange = form.watch("driver_age_range");
 
   // Get customers and available vehicles
   const { data: customers } = useQuery({
@@ -358,7 +443,7 @@ const CreateRental = () => {
     if (selectedVehicleId && vehicles) {
       const vehicle = vehicles.find(v => v.id === selectedVehicleId);
       if (vehicle) {
-        const periodType = watchedValues.rental_period_type || "Monthly";
+        const periodType = watchedRentalPeriodType || "Monthly";
         let amount: number | undefined;
 
         if (periodType === "Daily" && vehicle.daily_rent) {
@@ -374,7 +459,7 @@ const CreateRental = () => {
         }
       }
     }
-  }, [selectedVehicleId, watchedValues.rental_period_type, vehicles, form]);
+  }, [selectedVehicleId, watchedRentalPeriodType, vehicles, form]);
 
   // DEV MODE: Listen for dev panel fill events (only in development)
   useEffect(() => {
@@ -427,29 +512,42 @@ const CreateRental = () => {
   }, [form]);
 
   // Auto-update end date based on rental period type and start date
+  // Use a ref to track previous values and prevent unnecessary updates
+  const prevStartDateRef = useRef<Date | null>(null);
+  const prevPeriodTypeRef = useRef<string | null>(null);
+
   useEffect(() => {
-    const startDate = watchedValues.start_date;
-    const periodType = watchedValues.rental_period_type;
+    const startDate = watchedStartDate;
+    const periodType = watchedRentalPeriodType;
 
     if (startDate && periodType) {
-      let newEndDate: Date;
+      // Check if values actually changed to prevent infinite loops
+      const startDateChanged = !prevStartDateRef.current ||
+        startDate.getTime() !== prevStartDateRef.current.getTime();
+      const periodTypeChanged = prevPeriodTypeRef.current !== periodType;
 
-      switch (periodType) {
-        case "Daily":
-          newEndDate = addDays(startDate, 1);
-          break;
-        case "Weekly":
-          newEndDate = addWeeks(startDate, 1);
-          break;
-        case "Monthly":
-        default:
-          newEndDate = addMonths(startDate, 1);
-          break;
+      if (startDateChanged || periodTypeChanged) {
+        let newEndDate: Date;
+
+        switch (periodType) {
+          case "Daily":
+            newEndDate = addDays(startDate, 1);
+            break;
+          case "Weekly":
+            newEndDate = addWeeks(startDate, 1);
+            break;
+          case "Monthly":
+          default:
+            newEndDate = addMonths(startDate, 1);
+            break;
+        }
+
+        prevStartDateRef.current = startDate;
+        prevPeriodTypeRef.current = periodType;
+        form.setValue("end_date", newEndDate);
       }
-
-      form.setValue("end_date", newEndDate);
     }
-  }, [watchedValues.rental_period_type, watchedValues.start_date, form]);
+  }, [watchedRentalPeriodType, watchedStartDate, form]);
 
   const selectedCustomer = customers?.find(c => c.id === selectedCustomerId);
   const selectedVehicle = vehicles?.find(v => v.id === selectedVehicleId);
@@ -622,6 +720,9 @@ const CreateRental = () => {
         throw new Error(`Cannot create rental: ${blockType}. Reason: ${blockCheck.reason}`);
       }
 
+      // Calculate discount if promo code was applied
+      const discountAmount = promoDetails ? calculateDiscount(data.monthly_amount) : 0;
+
       // Create rental with Pending status (will become Active after DocuSign)
       const { data: rental, error: rentalError } = await supabase
         .from("rentals")
@@ -644,7 +745,8 @@ const CreateRental = () => {
           pickup_time: data.pickup_time || null,
           return_time: data.return_time || null,
           driver_age_range: data.driver_age_range || null,
-          promo_code: data.promo_code || null,
+          promo_code: promoDetails?.code || null,
+          discount_applied: discountAmount > 0 ? discountAmount : null,
           insurance_status: data.insurance_status || "pending",
         })
         .select()
@@ -683,8 +785,15 @@ const CreateRental = () => {
         }
       }
 
-      // Generate only first month's charge (subsequent charges created monthly)
-      await supabase.rpc("backfill_rental_charges_first_month_only");
+      // Generate first charge for this specific rental (works for Pending status)
+      const { error: chargeError } = await supabase.rpc("generate_first_charge_for_rental", {
+        rental_id_param: rental.id
+      });
+
+      if (chargeError) {
+        console.error("Error generating first charge:", chargeError);
+        // Don't throw - rental is already created, charge can be created manually
+      }
 
       const customerName = selectedCustomer?.name || "Customer";
       const vehicleReg = selectedVehicle?.reg || "Vehicle";
@@ -727,10 +836,12 @@ const CreateRental = () => {
       let invoiceCreated = false;
       try {
         const invoiceNotes = `Monthly rental fee for ${selectedVehicle?.make} ${selectedVehicle?.model} (${vehicleReg})`;
-        const taxAmount = calculateTaxAmount(data.monthly_amount);
+        // Apply discount to the rental amount
+        const discountedAmount = data.monthly_amount - discountAmount;
+        const taxAmount = calculateTaxAmount(discountedAmount);
         const serviceFee = calculateServiceFee();
         const securityDeposit = calculateSecurityDeposit(data.vehicle_id);
-        const totalAmount = data.monthly_amount + taxAmount + serviceFee + securityDeposit;
+        const totalAmount = discountedAmount + taxAmount + serviceFee + securityDeposit;
 
         const invoice = await createInvoice({
           rental_id: rental.id,
@@ -738,7 +849,7 @@ const CreateRental = () => {
           vehicle_id: data.vehicle_id,
           invoice_date: data.start_date,
           due_date: addMonths(data.start_date, 1),
-          subtotal: data.monthly_amount,
+          subtotal: discountedAmount,
           tax_amount: taxAmount,
           service_fee: serviceFee,
           security_deposit: securityDeposit,
@@ -747,7 +858,12 @@ const CreateRental = () => {
           tenant_id: tenant?.id,
         });
 
-        setGeneratedInvoice(invoice);
+        // Add discount info to invoice for display
+        setGeneratedInvoice({
+          ...invoice,
+          discount_amount: discountAmount > 0 ? discountAmount : undefined,
+          promo_code: promoDetails?.code,
+        } as any);
         invoiceCreated = true;
       } catch (invoiceError) {
         console.error('Error creating invoice:', invoiceError);
@@ -881,7 +997,7 @@ const CreateRental = () => {
   const yearAgo = subYears(new Date(), 1);
 
   // Check if start date is in the past
-  const isPastStartDate = watchedValues.start_date && isBefore(watchedValues.start_date, todayAtMidnight);
+  const isPastStartDate = watchedStartDate && isBefore(watchedStartDate, todayAtMidnight);
 
   return (
     <div className="container mx-auto p-4 md:p-6 space-y-6 min-h-screen">
@@ -1169,7 +1285,7 @@ const CreateRental = () => {
                       control={form.control}
                       name="end_date"
                       render={({ field }) => {
-                        const periodType = watchedValues.rental_period_type || "Monthly";
+                        const periodType = watchedRentalPeriodType || "Monthly";
                         const getMinEndDate = (startDate: Date) => {
                           switch (periodType) {
                             case "Daily":
@@ -1197,7 +1313,7 @@ const CreateRental = () => {
                                 placeholder="Select end date"
                                 disabled={(date) => {
                                   // Disable dates before minimum end date
-                                  if (watchedValues.start_date && isBefore(date, getMinEndDate(watchedValues.start_date))) {
+                                  if (watchedStartDate && isBefore(date, getMinEndDate(watchedStartDate))) {
                                     return true;
                                   }
                                   // Disable globally blocked dates
@@ -1233,7 +1349,7 @@ const CreateRental = () => {
                       control={form.control}
                       name="monthly_amount"
                       render={({ field }) => {
-                        const periodType = watchedValues.rental_period_type || "Monthly";
+                        const periodType = watchedRentalPeriodType || "Monthly";
                         const label = periodType === "Daily" ? "Daily Amount *" :
                           periodType === "Weekly" ? "Weekly Amount *" :
                             "Monthly Amount *";
@@ -1389,32 +1505,34 @@ const CreateRental = () => {
                     </div>
                   </div>
 
-                  {/* Insurance Verification */}
-                  <div className="space-y-4 pt-4 border-t">
-                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-                      <div className="flex items-center gap-2">
-                        <Shield className="h-4 w-4 text-muted-foreground flex-shrink-0" />
-                        <h3 className="font-medium">Insurance Verification</h3>
+                  {/* Insurance Verification - Hidden for insurance-exempt tenants like Kedic Services */}
+                  {!skipInsurance && (
+                    <div className="space-y-4 pt-4 border-t">
+                      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                        <div className="flex items-center gap-2">
+                          <Shield className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+                          <h3 className="font-medium">Insurance Verification</h3>
+                        </div>
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setShowInsuranceUpload(true)}
+                            className="whitespace-nowrap"
+                          >
+                            <Upload className="h-4 w-4 mr-2" />
+                            <span className="hidden sm:inline">{insuranceDocId ? "Certificate Uploaded" : "Upload Certificate"}</span>
+                            <span className="sm:hidden">{insuranceDocId ? "Uploaded" : "Upload"}</span>
+                          </Button>
+                          {insuranceDocId && (
+                            <span className="text-sm text-green-600 whitespace-nowrap">✓ Uploaded</span>
+                          )}
+                        </div>
                       </div>
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <Button
-                          type="button"
-                          variant="outline"
-                          size="sm"
-                          onClick={() => setShowInsuranceUpload(true)}
-                          className="whitespace-nowrap"
-                        >
-                          <Upload className="h-4 w-4 mr-2" />
-                          <span className="hidden sm:inline">{insuranceDocId ? "Certificate Uploaded" : "Upload Certificate"}</span>
-                          <span className="sm:hidden">{insuranceDocId ? "Uploaded" : "Upload"}</span>
-                        </Button>
-                        {insuranceDocId && (
-                          <span className="text-sm text-green-600 whitespace-nowrap">✓ Uploaded</span>
-                        )}
-                      </div>
+                      <p className="text-sm text-muted-foreground">Upload customer's insurance certificate for verification</p>
                     </div>
-                    <p className="text-sm text-muted-foreground">Upload customer's insurance certificate for verification</p>
-                  </div>
+                  )}
 
                   {/* Optional Details */}
                   <div className="space-y-4 pt-4 border-t">
@@ -1448,12 +1566,37 @@ const CreateRental = () => {
                         render={({ field }) => (
                           <FormItem>
                             <FormLabel>Promo Code</FormLabel>
-                            <FormControl>
-                              <Input
-                                {...field}
-                                placeholder="Enter promo code"
-                              />
-                            </FormControl>
+                            <div className="flex gap-2">
+                              <FormControl>
+                                <Input
+                                  {...field}
+                                  placeholder="Enter promo code"
+                                  className={cn(
+                                    promoError ? "border-destructive" : promoDetails ? "border-green-500" : ""
+                                  )}
+                                  onChange={(e) => {
+                                    field.onChange(e);
+                                    setPromoError(null);
+                                    if (!e.target.value) setPromoDetails(null);
+                                  }}
+                                />
+                              </FormControl>
+                              <Button
+                                type="button"
+                                variant="outline"
+                                onClick={() => validatePromoCode(field.value || "")}
+                                disabled={promoLoading || !field.value}
+                              >
+                                {promoLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : "Apply"}
+                              </Button>
+                            </div>
+                            {promoError && <p className="text-sm text-destructive">{promoError}</p>}
+                            {promoDetails && (
+                              <p className="text-sm text-green-600 font-medium flex items-center gap-1">
+                                <Check className="w-4 h-4" />
+                                Code applied: {promoDetails.type === 'percentage' ? `${promoDetails.value}% off` : `$${promoDetails.value} off`}
+                              </p>
+                            )}
                             <FormMessage />
                           </FormItem>
                         )}
@@ -1518,11 +1661,10 @@ const CreateRental = () => {
             <ContractSummary
               customer={selectedCustomer}
               vehicle={selectedVehicle}
-              startDate={watchedValues.start_date}
-              endDate={watchedValues.end_date}
-              rentalPeriodType={watchedValues.rental_period_type}
-              monthlyAmount={watchedValues.monthly_amount}
-              initialFee={watchedValues.initial_fee}
+              startDate={watchedStartDate}
+              endDate={watchedEndDate}
+              rentalPeriodType={watchedRentalPeriodType}
+              monthlyAmount={watchedMonthlyAmount}
             />
           </div>
         </div>
@@ -1561,16 +1703,18 @@ const CreateRental = () => {
         />
       )}
 
-      {/* Insurance Upload Dialog */}
-      <InsuranceUploadDialog
-        open={showInsuranceUpload}
-        onOpenChange={setShowInsuranceUpload}
-        customerId={watchedValues.customer_id}
-        onUploadComplete={(documentId) => {
-          setInsuranceDocId(documentId);
-          form.setValue("insurance_status", "uploaded");
-        }}
-      />
+      {/* Insurance Upload Dialog - Hidden for insurance-exempt tenants */}
+      {!skipInsurance && (
+        <InsuranceUploadDialog
+          open={showInsuranceUpload}
+          onOpenChange={setShowInsuranceUpload}
+          customerId={selectedCustomerId}
+          onUploadComplete={(documentId) => {
+            setInsuranceDocId(documentId);
+            form.setValue("insurance_status", "uploaded");
+          }}
+        />
+      )}
 
       {/* AI Verification QR Modal */}
       <Dialog

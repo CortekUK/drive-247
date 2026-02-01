@@ -11,8 +11,16 @@ import { ChevronLeft, CreditCard, Shield, Calendar, MapPin, Clock, Car, User, Lo
 import { supabase } from "@/integrations/supabase/client";
 import { useTenant } from "@/contexts/TenantContext";
 import { format } from "date-fns";
+import { isEnquiryBasedTenant } from "@/config/tenant-config";
 import { InvoiceDialog } from "@/components/InvoiceDialog";
 import { createInvoiceWithFallback, Invoice } from "@/lib/invoiceUtils";
+
+interface PromoDetails {
+  code: string;
+  type: "percentage" | "fixed_amount";
+  value: number;
+  id: string;
+}
 
 interface BookingCheckoutStepProps {
   formData: any;
@@ -22,7 +30,8 @@ interface BookingCheckoutStepProps {
     days: number;
     formatted: string;
   };
-  vehicleTotal: number;
+  vehicleTotal: number; // Original price before promo discount
+  promoDetails?: PromoDetails | null;
   onBack: () => void;
 }
 
@@ -32,6 +41,7 @@ export default function BookingCheckoutStep({
   extras,
   rentalDuration,
   vehicleTotal,
+  promoDetails,
   onBack
 }: BookingCheckoutStepProps) {
   const router = useRouter();
@@ -79,20 +89,51 @@ export default function BookingCheckoutStep({
     return 0;
   };
 
-  // Calculate tax amount based on tenant settings
+  // Calculate promo discount amount
+  const calculatePromoDiscount = (): number => {
+    if (!promoDetails) return 0;
+
+    if (promoDetails.type === 'fixed_amount') {
+      // Fixed amount discount, but not more than the vehicle total
+      return Math.min(promoDetails.value, vehicleTotal);
+    } else if (promoDetails.type === 'percentage') {
+      // Percentage discount
+      return (vehicleTotal * promoDetails.value) / 100;
+    }
+    return 0;
+  };
+
+  // Calculate discounted vehicle total (after promo code)
+  const calculateDiscountedVehicleTotal = (): number => {
+    return vehicleTotal - calculatePromoDiscount();
+  };
+
+  // Calculate tax amount based on tenant settings (applied to discounted price)
   const calculateTaxAmount = (): number => {
     if (!tenant?.tax_enabled || !tenant?.tax_percentage) {
       return 0;
     }
-    return vehicleTotal * (tenant.tax_percentage / 100);
+    // Tax is calculated on the discounted price
+    return calculateDiscountedVehicleTotal() * (tenant.tax_percentage / 100);
   };
 
-  // Calculate service fee based on tenant settings
+  // Calculate service fee based on tenant settings (supports both fixed and percentage)
   const calculateServiceFee = (): number => {
-    if (!tenant?.service_fee_enabled || !tenant?.service_fee_amount) {
+    if (!tenant?.service_fee_enabled) {
       return 0;
     }
-    return tenant.service_fee_amount;
+
+    // Check for percentage type service fee
+    const feeType = (tenant as any)?.service_fee_type || 'fixed_amount';
+    const feeValue = (tenant as any)?.service_fee_value ?? tenant?.service_fee_amount ?? 0;
+
+    if (feeType === 'percentage') {
+      // Percentage service fee (calculated on discounted vehicle total)
+      return (calculateDiscountedVehicleTotal() * feeValue) / 100;
+    } else {
+      // Fixed amount service fee
+      return feeValue;
+    }
   };
 
   // Calculate security deposit based on tenant settings
@@ -106,7 +147,20 @@ export default function BookingCheckoutStep({
   };
 
   const calculateGrandTotal = () => {
-    return vehicleTotal + calculateTaxAmount() + calculateServiceFee() + calculateSecurityDeposit();
+    // Grand total = discounted vehicle price + tax + service fee + security deposit
+    return calculateDiscountedVehicleTotal() + calculateTaxAmount() + calculateServiceFee() + calculateSecurityDeposit();
+  };
+
+  // Check if this is an enquiry-based tenant (e.g., Kedic Services)
+  // For enquiry tenants: only charge security deposit upfront (if any), rental fees collected later
+  const isEnquiry = isEnquiryBasedTenant(tenant?.id);
+
+  // For enquiry-based tenants, only charge security deposit (if any)
+  const getPayableAmount = (): number => {
+    if (isEnquiry) {
+      return calculateSecurityDeposit(); // Only security deposit for enquiry tenants
+    }
+    return calculateGrandTotal();
   };
 
   // Function to get booking payment mode
@@ -135,12 +189,13 @@ export default function BookingCheckoutStep({
       setIsProcessing(true);
 
       // Create Stripe checkout session
+      // For enquiry tenants, only charge the deposit (getPayableAmount handles this)
       const { data, error: functionError } = await supabase.functions.invoke('create-checkout-session', {
         body: {
           rentalId: createdRentalData.rental.id,
           customerEmail: formData.customerEmail,
           customerName: formData.customerName,
-          totalAmount: calculateGrandTotal(),
+          totalAmount: getPayableAmount(), // Use payable amount (deposit only for enquiry tenants)
           tenantSlug: tenant?.slug, // Pass tenant slug for Stripe Connect routing
           tenantId: tenant?.id,
         },
@@ -154,7 +209,7 @@ export default function BookingCheckoutStep({
           (window as any).gtag('event', 'redirecting_to_stripe', {
             rental_id: createdRentalData.rental.id,
             customer_id: createdRentalData.customer.id,
-            total: calculateGrandTotal(),
+            total: getPayableAmount(),
           });
         }
         window.location.href = data.url;
@@ -179,6 +234,7 @@ export default function BookingCheckoutStep({
       setIsProcessing(true);
 
       // Create Stripe pre-auth checkout session
+      // For enquiry tenants, only charge the deposit (getPayableAmount handles this)
       const { data, error: functionError } = await supabase.functions.invoke('create-preauth-checkout', {
         body: {
           rentalId: createdRentalData.rental.id,
@@ -190,7 +246,7 @@ export default function BookingCheckoutStep({
           vehicleName: selectedVehicle.make && selectedVehicle.model
             ? `${selectedVehicle.make} ${selectedVehicle.model}`
             : selectedVehicle.reg,
-          totalAmount: calculateGrandTotal(),
+          totalAmount: getPayableAmount(), // Use payable amount (deposit only for enquiry tenants)
           pickupDate: formData.pickupDate,
           returnDate: formData.dropoffDate,
           tenantId: tenant?.id, // Explicitly pass tenant_id
@@ -205,7 +261,7 @@ export default function BookingCheckoutStep({
           (window as any).gtag('event', 'redirecting_to_stripe_preauth', {
             rental_id: createdRentalData.rental.id,
             customer_id: createdRentalData.customer.id,
-            total: calculateGrandTotal(),
+            total: getPayableAmount(),
           });
         }
         window.location.href = data.url;
@@ -270,12 +326,28 @@ export default function BookingCheckoutStep({
         toast.error(data?.error || "DocuSign failed. Agreement will be sent later.");
       }
 
-      // Always proceed to payment
+      // Proceed based on payable amount
       setSendingDocuSign(false);
 
       setTimeout(async () => {
+        const payableAmount = getPayableAmount();
+
+        // For enquiry tenants with no security deposit, skip payment entirely
+        if (isEnquiry && payableAmount === 0) {
+          console.log('📋 Enquiry booking with no deposit - redirecting to enquiry submitted page');
+          if (typeof window !== 'undefined' && (window as any).gtag) {
+            (window as any).gtag('event', 'enquiry_submitted', {
+              rental_id: createdRentalData.rental.id,
+              customer_id: createdRentalData.customer.id,
+            });
+          }
+          window.location.href = `/booking-enquiry-submitted?rental_id=${createdRentalData.rental.id}`;
+          return;
+        }
+
+        // Proceed to payment (either full amount or deposit only)
         const bookingMode = await getBookingMode();
-        console.log('💳 Proceeding to payment, mode:', bookingMode);
+        console.log('💳 Proceeding to payment, mode:', bookingMode, 'amount:', payableAmount);
         if (bookingMode === 'manual') {
           redirectToPreAuthPayment();
         } else {
@@ -285,10 +357,19 @@ export default function BookingCheckoutStep({
 
     } catch (err: any) {
       console.error("DocuSign exception:", err);
-      toast.error("DocuSign error. Proceeding to payment...");
+      toast.error("DocuSign error. Proceeding...");
       setSendingDocuSign(false);
 
       setTimeout(async () => {
+        const payableAmount = getPayableAmount();
+
+        // For enquiry tenants with no security deposit, skip payment entirely
+        if (isEnquiry && payableAmount === 0) {
+          console.log('📋 Enquiry booking with no deposit - redirecting to enquiry submitted page');
+          window.location.href = `/booking-enquiry-submitted?rental_id=${createdRentalData.rental.id}`;
+          return;
+        }
+
         const bookingMode = await getBookingMode();
         if (bookingMode === 'manual') {
           redirectToPreAuthPayment();
@@ -515,6 +596,9 @@ export default function BookingCheckoutStep({
       const rentalPeriodType = calculateRentalPeriodType();
       const grandTotal = calculateGrandTotal(); // Use grand total (includes taxes/fees) for rental amount
 
+      // For enquiry tenants with no deposit, mark payment as not required
+      const enquiryWithNoDeposit = isEnquiry && calculateSecurityDeposit() === 0;
+
       const rentalData: any = {
         customer_id: customer.id,
         vehicle_id: selectedVehicle.id,
@@ -523,9 +607,9 @@ export default function BookingCheckoutStep({
         rental_period_type: rentalPeriodType,
         monthly_amount: grandTotal, // Store grand total (rental + taxes + fees + protection)
         status: "Pending", // Derived from approval_status + payment_status
-        payment_mode: bookingMode, // Track which payment mode was used
+        payment_mode: enquiryWithNoDeposit ? 'manual' : bookingMode, // Track payment mode
         approval_status: "pending", // Awaiting admin approval
-        payment_status: "pending", // Awaiting payment (will be updated by webhook)
+        payment_status: enquiryWithNoDeposit ? "fulfilled" : "pending", // Enquiry with no deposit: payment already satisfied
         // Location data
         pickup_location: formData.pickupLocation || null,
         pickup_location_id: formData.pickupLocationId || null,
@@ -566,25 +650,35 @@ export default function BookingCheckoutStep({
       console.log('⏳ Vehicle status unchanged - awaiting admin approval');
 
       // Step 4: Create invoice (with fallback to local if DB fails)
+      const promoDiscount = calculatePromoDiscount();
+      const discountedVehicleTotal = calculateDiscountedVehicleTotal();
+
       const invoice = await createInvoiceWithFallback({
         rental_id: rental.id,
         customer_id: customer.id,
         vehicle_id: selectedVehicle.id,
         invoice_date: new Date(),
         due_date: new Date(formData.pickupDate),
-        subtotal: vehicleTotal,
-        rental_fee: vehicleTotal,
+        subtotal: vehicleTotal, // Original price before discount
+        rental_fee: discountedVehicleTotal, // Discounted rental fee
         protection_fee: 0,
         tax_amount: calculateTaxAmount(),
         service_fee: calculateServiceFee(),
         security_deposit: calculateSecurityDeposit(),
         total_amount: calculateGrandTotal(),
-        notes: '',
+        discount_amount: promoDiscount,
+        promo_code: promoDetails?.code || null,
         tenant_id: tenant?.id,
       });
 
       console.log('✅ Invoice ready:', invoice.invoice_number);
-      setGeneratedInvoice(invoice);
+      // Augment invoice with discount info (not stored in DB but needed for display)
+      const invoiceWithDiscount = {
+        ...invoice,
+        discount_amount: promoDiscount,
+        promo_code: promoDetails?.code || null,
+      };
+      setGeneratedInvoice(invoiceWithDiscount);
 
       // Step 5: Store payment details in localStorage for success page
       // Payment record will be created ONLY after Stripe confirms successful payment
@@ -612,12 +706,19 @@ export default function BookingCheckoutStep({
       // so we need to update both customer_id and rental_id
       try {
         // Get pending insurance docs from localStorage (stored during upload)
+        // Check BOTH localStorage keys for backwards compatibility
         const pendingDocs = typeof window !== 'undefined'
           ? JSON.parse(localStorage.getItem('pending_insurance_docs') || '[]')
           : [];
 
-        console.log('🔍 Found pending insurance docs:', pendingDocs);
+        // Also check for files stored by insurance-upload-dialog (pending_insurance_files)
+        const pendingFiles = typeof window !== 'undefined'
+          ? JSON.parse(localStorage.getItem('pending_insurance_files') || '[]')
+          : [];
 
+        console.log('🔍 Found pending insurance docs:', pendingDocs.length, 'pending files:', pendingFiles.length);
+
+        // Handle old-style pending docs (already created in DB, need linking)
         if (pendingDocs.length > 0) {
           // Update each pending document with real customer_id and rental_id
           for (const doc of pendingDocs) {
@@ -657,7 +758,105 @@ export default function BookingCheckoutStep({
           // Clear pending docs from localStorage
           localStorage.removeItem('pending_insurance_docs');
           console.log('✅ Insurance documents linked to rental and cleaned up');
-        } else {
+        }
+
+        // Handle new-style pending files (only uploaded to storage, need DB insert)
+        if (pendingFiles.length > 0) {
+          // Deduplicate files by file_path
+          const uniqueFiles = Array.from(
+            new Map(pendingFiles.map((file: any) => [file.file_path, file])).values()
+          ) as any[];
+
+          console.log(`📎 Processing ${uniqueFiles.length} unique insurance files`);
+
+          for (const fileInfo of uniqueFiles) {
+            // Check if a document with the same filename already exists for this customer
+            // The unique constraint is on (tenant_id, customer_id, document_type, file_name) where rental_id IS NULL
+            const { data: existingDoc } = await supabase
+              .from('customer_documents')
+              .select('id')
+              .eq('customer_id', customer.id)
+              .eq('document_type', 'Insurance Certificate')
+              .eq('file_name', fileInfo.file_name)
+              .is('rental_id', null)
+              .maybeSingle();
+
+            let insertedDoc: any = null;
+            let docError: any = null;
+
+            if (existingDoc) {
+              // Update existing document record (allows re-uploading same document)
+              console.log('📎 Updating existing document:', fileInfo.file_name);
+              const { data, error } = await supabase
+                .from('customer_documents')
+                .update({
+                  file_url: fileInfo.file_path,
+                  file_size: fileInfo.file_size,
+                  mime_type: fileInfo.mime_type,
+                  ai_scan_status: 'pending',
+                  uploaded_at: fileInfo.uploaded_at,
+                  status: 'Pending',
+                })
+                .eq('id', existingDoc.id)
+                .select('id, file_url')
+                .single();
+              insertedDoc = data;
+              docError = error;
+            } else {
+              // Insert new document record
+              const docInsertData: any = {
+                customer_id: customer.id,
+                document_type: 'Insurance Certificate',
+                document_name: fileInfo.file_name,
+                file_url: fileInfo.file_path,
+                file_name: fileInfo.file_name,
+                file_size: fileInfo.file_size,
+                mime_type: fileInfo.mime_type,
+                ai_scan_status: 'pending',
+                uploaded_at: fileInfo.uploaded_at,
+                status: 'Pending', // Required field with CHECK constraint
+              };
+
+              if (tenant?.id) {
+                docInsertData.tenant_id = tenant.id;
+              }
+
+              console.log('📎 Inserting document:', JSON.stringify(docInsertData));
+
+              const { data, error } = await supabase
+                .from('customer_documents')
+                .insert(docInsertData)
+                .select('id, file_url')
+                .single();
+              insertedDoc = data;
+              docError = error;
+            }
+
+            if (docError) {
+              console.error('📎 Failed to link insurance document:', docError?.message || docError?.code || JSON.stringify(docError));
+            } else {
+              console.log('✅ Insurance document created/updated for customer:', customer.id);
+
+              // Trigger AI scanning
+              if (insertedDoc?.id) {
+                supabase.functions.invoke('scan-insurance-document', {
+                  body: {
+                    documentId: insertedDoc.id,
+                    fileUrl: insertedDoc.file_url
+                  }
+                }).then(({ error }) => {
+                  if (error) console.error('📎 AI scan failed:', error);
+                }).catch(e => console.error('📎 AI scan error:', e));
+              }
+            }
+          }
+
+          // Clear pending files from localStorage
+          localStorage.removeItem('pending_insurance_files');
+          console.log('✅ Insurance files processed and cleaned up');
+        }
+
+        if (pendingDocs.length === 0 && pendingFiles.length === 0) {
           console.log('ℹ️ No pending insurance documents to link');
         }
       } catch (linkErr) {
@@ -789,8 +988,7 @@ export default function BookingCheckoutStep({
               />
               <Label className="text-sm leading-relaxed cursor-pointer">
                 By confirming, you agree to Drive 917's{" "}
-                <a href="/terms" target="_blank" className="text-accent underline">Rental Agreement</a>,{" "}
-                <a href="/terms" target="_blank" className="text-accent underline">Terms of Service</a>, and{" "}
+                <a href="/terms" target="_blank" className="text-accent underline">Terms of Service</a> and{" "}
                 <a href="/privacy" target="_blank" className="text-accent underline">Privacy Policy</a>.
               </Label>
             </div>
@@ -800,50 +998,128 @@ export default function BookingCheckoutStep({
         {/* Right Column - Price Summary (Sticky) */}
         <div className="lg:col-span-1">
           <Card className="p-6 bg-gradient-dark border-accent/30 lg:sticky lg:top-24">
-            <h3 className="text-lg font-semibold text-gradient-metal mb-4">Price Summary</h3>
+            <h3 className="text-lg font-semibold text-gradient-metal mb-4">
+              {isEnquiry ? 'Booking Summary' : 'Price Summary'}
+            </h3>
 
             <div className="space-y-3">
-              <div className="flex justify-between text-sm pb-3 border-b border-border">
-                <span className="text-muted-foreground">Rental ({rentalDuration.formatted})</span>
-                <span className="font-medium">${vehicleTotal.toLocaleString()}</span>
-              </div>
+              {/* ENQUIRY TENANT: Show info message and only deposit (if any) */}
+              {isEnquiry ? (
+                <>
+                  {/* Info message for enquiry booking */}
+                  <div className="bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 rounded-lg p-4 mb-4">
+                    <p className="text-sm text-blue-700 dark:text-blue-300 font-medium">
+                      This is an enquiry booking
+                    </p>
+                    <p className="text-xs text-blue-600 dark:text-blue-400 mt-1">
+                      Rental charges will be confirmed after your booking is approved.
+                    </p>
+                  </div>
 
-              {/* Tax line item - only show when tax is enabled */}
-              {tenant?.tax_enabled && tenant?.tax_percentage > 0 && (
-                <div className="flex justify-between text-sm">
-                  <span className="text-muted-foreground">Tax ({tenant.tax_percentage}%)</span>
-                  <span className="font-medium">${calculateTaxAmount().toFixed(2)}</span>
-                </div>
+                  {/* Only show security deposit if > 0 */}
+                  {calculateSecurityDeposit() > 0 && (
+                    <div className="flex justify-between text-sm">
+                      <span className="text-muted-foreground">Security Deposit</span>
+                      <span className="font-medium">${calculateSecurityDeposit().toFixed(2)}</span>
+                    </div>
+                  )}
+
+                  {/* Total Due Now */}
+                  <div className="pt-3 border-t border-accent/30">
+                    <div className="flex justify-between items-center">
+                      <span className="text-lg font-semibold">Total Due Now</span>
+                      <span className="text-2xl font-bold text-accent">
+                        ${getPayableAmount().toFixed(2)}
+                      </span>
+                    </div>
+                  </div>
+
+                  <p className="text-xs text-muted-foreground mt-4">
+                    {calculateSecurityDeposit() > 0
+                      ? "Security deposit will be collected now. Rental charges confirmed after approval."
+                      : "No payment required now. You'll be contacted to confirm your booking."}
+                  </p>
+                </>
+              ) : (
+                <>
+                  {/* STANDARD TENANT: Show full price breakdown */}
+                  {/* Original rental price */}
+                  <div className="flex justify-between text-sm">
+                    <span className="text-muted-foreground">Rental ({rentalDuration.formatted})</span>
+                    <span className={`font-medium ${promoDetails ? 'line-through text-muted-foreground' : ''}`}>
+                      ${vehicleTotal.toFixed(2)}
+                    </span>
+                  </div>
+
+                  {/* Promo discount line item - only show when applied */}
+                  {promoDetails && calculatePromoDiscount() > 0 && (
+                    <div className="flex justify-between text-sm text-green-600">
+                      <span>
+                        Promo ({promoDetails.code})
+                        <span className="text-xs ml-1">
+                          ({promoDetails.type === 'percentage' ? `${promoDetails.value}%` : `$${promoDetails.value}`} off)
+                        </span>
+                      </span>
+                      <span className="font-medium">-${calculatePromoDiscount().toFixed(2)}</span>
+                    </div>
+                  )}
+
+                  {/* Discounted subtotal - show when promo is applied */}
+                  {promoDetails && calculatePromoDiscount() > 0 && (
+                    <div className="flex justify-between text-sm pb-3 border-b border-border">
+                      <span className="text-muted-foreground">Subtotal</span>
+                      <span className="font-medium text-green-600">${calculateDiscountedVehicleTotal().toFixed(2)}</span>
+                    </div>
+                  )}
+
+                  {/* Border when no promo */}
+                  {(!promoDetails || calculatePromoDiscount() === 0) && (
+                    <div className="pb-3 border-b border-border" />
+                  )}
+
+                  {/* Tax line item - only show when tax is enabled */}
+                  {tenant?.tax_enabled && (tenant?.tax_percentage ?? 0) > 0 && (
+                    <div className="flex justify-between text-sm">
+                      <span className="text-muted-foreground">Tax ({tenant.tax_percentage}%)</span>
+                      <span className="font-medium">${calculateTaxAmount().toFixed(2)}</span>
+                    </div>
+                  )}
+
+                  {/* Service fee line item - only show when enabled */}
+                  {tenant?.service_fee_enabled && calculateServiceFee() > 0 && (
+                    <div className="flex justify-between text-sm">
+                      <span className="text-muted-foreground">
+                        Service Fee
+                        {(tenant as any)?.service_fee_type === 'percentage' && (
+                          <span className="text-xs ml-1">({(tenant as any)?.service_fee_value || 0}%)</span>
+                        )}
+                      </span>
+                      <span className="font-medium">${calculateServiceFee().toFixed(2)}</span>
+                    </div>
+                  )}
+
+                  {/* Security deposit line item - only show when > 0 */}
+                  {calculateSecurityDeposit() > 0 && (
+                    <div className="flex justify-between text-sm">
+                      <span className="text-muted-foreground">Security Deposit</span>
+                      <span className="font-medium">${calculateSecurityDeposit().toFixed(2)}</span>
+                    </div>
+                  )}
+
+                  <div className="pt-3 border-t border-accent/30">
+                    <div className="flex justify-between items-center">
+                      <span className="text-lg font-semibold">Total</span>
+                      <span className="text-2xl font-bold text-accent">
+                        ${calculateGrandTotal().toFixed(2)}
+                      </span>
+                    </div>
+                  </div>
+
+                  <p className="text-xs text-muted-foreground mt-4">
+                    You'll receive a digital receipt immediately.
+                  </p>
+                </>
               )}
-
-              {/* Service fee line item - only show when enabled */}
-              {tenant?.service_fee_enabled && tenant?.service_fee_amount > 0 && (
-                <div className="flex justify-between text-sm">
-                  <span className="text-muted-foreground">Service Fee</span>
-                  <span className="font-medium">${calculateServiceFee().toFixed(2)}</span>
-                </div>
-              )}
-
-              {/* Security deposit line item - only show when > 0 */}
-              {calculateSecurityDeposit() > 0 && (
-                <div className="flex justify-between text-sm">
-                  <span className="text-muted-foreground">Security Deposit</span>
-                  <span className="font-medium">${calculateSecurityDeposit().toFixed(2)}</span>
-                </div>
-              )}
-
-              <div className="pt-3 border-t border-accent/30">
-                <div className="flex justify-between items-center">
-                  <span className="text-lg font-semibold">Total</span>
-                  <span className="text-2xl font-bold text-accent">
-                    ${calculateGrandTotal().toLocaleString()}
-                  </span>
-                </div>
-              </div>
-
-              <p className="text-xs text-muted-foreground mt-4">
-                You'll receive a digital receipt immediately.
-              </p>
             </div>
 
             <div className="mt-6 space-y-3">
@@ -863,10 +1139,19 @@ export default function BookingCheckoutStep({
                     <Loader2 className="w-4 h-4 mr-2 animate-spin" />
                     Sending Agreement...
                   </>
+                ) : isEnquiry && getPayableAmount() === 0 ? (
+                  <>
+                    Submit Enquiry
+                  </>
+                ) : isEnquiry ? (
+                  <>
+                    <CreditCard className="w-4 h-4 mr-2" />
+                    Pay Deposit ${getPayableAmount().toFixed(2)}
+                  </>
                 ) : (
                   <>
                     <CreditCard className="w-4 h-4 mr-2" />
-                    Confirm & Pay ${calculateGrandTotal().toLocaleString()}
+                    Confirm & Pay ${calculateGrandTotal().toFixed(2)}
                   </>
                 )}
               </Button>
@@ -882,10 +1167,13 @@ export default function BookingCheckoutStep({
                 Back to Vehicles
               </Button>
 
-              <div className="flex items-center gap-2 text-xs text-muted-foreground justify-center pt-2">
-                <Shield className="w-4 h-4" />
-                <span>Secured by Stripe. Card details never stored.</span>
-              </div>
+              {/* Only show Stripe security message if payment is required */}
+              {getPayableAmount() > 0 && (
+                <div className="flex items-center gap-2 text-xs text-muted-foreground justify-center pt-2">
+                  <Shield className="w-4 h-4" />
+                  <span>Secured by Stripe. Card details never stored.</span>
+                </div>
+              )}
             </div>
           </Card>
         </div>
@@ -898,6 +1186,9 @@ export default function BookingCheckoutStep({
           onOpenChange={setShowInvoiceDialog}
           onSignAgreement={handleSendDocuSign}
           invoice={generatedInvoice}
+          isEnquiry={isEnquiry}
+          payableAmount={getPayableAmount()}
+          promoDetails={promoDetails}
           customer={{
             name: formData.customerName,
             email: formData.customerEmail,

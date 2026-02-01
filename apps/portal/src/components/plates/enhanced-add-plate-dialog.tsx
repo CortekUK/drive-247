@@ -455,7 +455,7 @@ export const EnhancedAddPlateDialog = ({
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Order Date</FormLabel>
-                    <Popover>
+                    <Popover modal={true}>
                       <PopoverTrigger asChild>
                         <FormControl>
                           <Button

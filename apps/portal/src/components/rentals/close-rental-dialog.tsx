@@ -169,7 +169,7 @@ export const CloseRentalDialog = ({ open, onOpenChange, rental }: CloseRentalDia
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel>End Date <span className="text-red-500">*</span></FormLabel>
-                      <Popover>
+                      <Popover modal={true}>
                         <PopoverTrigger asChild>
                           <FormControl>
                             <Button

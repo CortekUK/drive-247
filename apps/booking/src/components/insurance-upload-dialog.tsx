@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -26,6 +26,15 @@ export default function InsuranceUploadDialog({ open, onOpenChange, onUploadComp
 
   // Ref for synchronous double-click prevention (state updates are async)
   const isUploadingRef = useRef(false);
+
+  // Clear localStorage when dialog opens to prevent duplicates
+  // Use useEffect to ensure it runs reliably
+  useEffect(() => {
+    if (open) {
+      console.log('[INSURANCE-UPLOAD] Dialog opened - clearing old pending files from localStorage');
+      localStorage.removeItem('pending_insurance_files');
+    }
+  }, [open]);
 
   /**
    * Handle cancel - just close the dialog, no cleanup needed

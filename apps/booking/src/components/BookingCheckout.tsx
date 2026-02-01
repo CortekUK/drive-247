@@ -205,34 +205,106 @@ const BookingCheckout = () => {
 
       // Step 2: Link any pending insurance documents to the customer
       const pendingInsuranceFiles = JSON.parse(localStorage.getItem('pending_insurance_files') || '[]');
-      for (const fileInfo of pendingInsuranceFiles) {
-        const docInsertData: any = {
-          customer_id: customer.id,
-          document_type: 'Insurance Certificate',
-          document_name: fileInfo.file_name,
-          file_url: fileInfo.file_path,
-          file_name: fileInfo.file_name,
-          file_size: fileInfo.file_size,
-          mime_type: fileInfo.mime_type,
-          ai_scan_status: 'pending',
-          uploaded_at: fileInfo.uploaded_at
-        };
 
-        if (tenant?.id) {
-          docInsertData.tenant_id = tenant.id;
+      // Deduplicate files by file_path to prevent duplicate inserts
+      const uniqueFiles = Array.from(
+        new Map(pendingInsuranceFiles.map((file: any) => [file.file_path, file])).values()
+      );
+
+      console.log(`[CHECKOUT] Processing ${uniqueFiles.length} unique insurance documents (${pendingInsuranceFiles.length} total in localStorage)`);
+
+      for (const fileInfo of uniqueFiles) {
+        // Check if a document with the same filename already exists for this customer
+        // The unique constraint is on (tenant_id, customer_id, document_type, file_name) where rental_id IS NULL
+        const { data: existingDoc } = await supabase
+          .from('customer_documents')
+          .select('id')
+          .eq('customer_id', customer.id)
+          .eq('document_type', 'Insurance Certificate')
+          .eq('file_name', fileInfo.file_name)
+          .is('rental_id', null)
+          .maybeSingle();
+
+        let insertedDoc: any = null;
+        let docError: any = null;
+
+        if (existingDoc) {
+          // Update existing document record (allows re-uploading same document)
+          console.log('[CHECKOUT] Updating existing document:', fileInfo.file_name);
+          const { data, error } = await supabase
+            .from('customer_documents')
+            .update({
+              file_url: fileInfo.file_path,
+              file_size: fileInfo.file_size,
+              mime_type: fileInfo.mime_type,
+              ai_scan_status: 'pending',
+              uploaded_at: fileInfo.uploaded_at
+            })
+            .eq('id', existingDoc.id)
+            .select('id, file_url')
+            .single();
+          insertedDoc = data;
+          docError = error;
+        } else {
+          // Insert new document record
+          const docInsertData: any = {
+            customer_id: customer.id,
+            document_type: 'Insurance Certificate',
+            document_name: fileInfo.file_name,
+            file_url: fileInfo.file_path,
+            file_name: fileInfo.file_name,
+            file_size: fileInfo.file_size,
+            mime_type: fileInfo.mime_type,
+            ai_scan_status: 'pending',
+            uploaded_at: fileInfo.uploaded_at
+          };
+
+          if (tenant?.id) {
+            docInsertData.tenant_id = tenant.id;
+          }
+
+          const { data, error } = await supabase
+            .from('customer_documents')
+            .insert(docInsertData)
+            .select('id, file_url')
+            .single();
+          insertedDoc = data;
+          docError = error;
         }
 
-        const { error: docError } = await supabase
-          .from('customer_documents')
-          .insert(docInsertData);
-
         if (docError) {
-          console.error('Failed to link insurance document:', docError);
+          console.error('[CHECKOUT] Failed to link insurance document:', docError);
           // Don't throw - continue with booking
         } else {
           console.log('[CHECKOUT] Insurance document linked to customer:', customer.id);
+
+          // Trigger AI scanning for the uploaded document
+          if (insertedDoc?.id) {
+            try {
+              console.log('[CHECKOUT] Triggering AI scan for document:', insertedDoc.id);
+              supabase.functions.invoke('scan-insurance-document', {
+                body: {
+                  documentId: insertedDoc.id,
+                  fileUrl: insertedDoc.file_url
+                }
+              }).then(({ data, error }) => {
+                if (error) {
+                  console.error('[CHECKOUT] AI scan failed:', error);
+                } else {
+                  console.log('[CHECKOUT] AI scan completed:', data);
+                }
+              });
+            } catch (scanError) {
+              console.error('[CHECKOUT] Failed to trigger AI scan:', scanError);
+              // Don't throw - scanning is optional
+            }
+          }
         }
       }
+
+      // Clear localStorage immediately after processing to prevent duplicates on retry
+      localStorage.removeItem('pending_insurance_files');
+      console.log('[CHECKOUT] Cleared pending_insurance_files from localStorage');
 
       // Step 3: Check if Individual customer already has active rental
       if (customer.customer_type === "Individual") {
@@ -300,8 +372,7 @@ const BookingCheckout = () => {
         // Don't throw - rental is created
       }
 
-      // Clear pending insurance files from localStorage since booking is complete
-      localStorage.removeItem('pending_insurance_files');
+      // Pending insurance files already cleared after processing (see Step 2)
 
       // Show confirmation screen
       setConfirmedBooking({

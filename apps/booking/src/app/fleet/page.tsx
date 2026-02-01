@@ -14,6 +14,8 @@ import { useTenant } from "@/contexts/TenantContext";
 import Link from "next/link";
 import SEO from "@/components/SEO";
 import { usePageContent, defaultFleetContent, mergeWithDefaults, defaultFleetCarouselImages } from "@/hooks/usePageContent";
+import { useBrandingSettings } from "@/hooks/useBrandingSettings";
+import { createCompanyNameReplacer } from "@/utils/tenantName";
 import {
   Car,
   CarFront,
@@ -109,6 +111,7 @@ const getIconComponent = (iconName: string) => {
 
 const Pricing = () => {
   const { tenant } = useTenant();
+  const { branding } = useBrandingSettings();
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
   const [makeFilter, setMakeFilter] = useState<string>("all");
   const [colourFilter, setColourFilter] = useState<string>("all");
@@ -118,6 +121,10 @@ const Pricing = () => {
   // CMS Content
   const { data: rawContent } = usePageContent("fleet");
   const content = mergeWithDefaults(rawContent, defaultFleetContent);
+
+  // Use the tenant's app_name for dynamic titles
+  const appName = branding.app_name || 'Drive 247';
+  const replaceCompanyName = createCompanyNameReplacer(appName);
 
   // Hero carousel images - use CMS images if set, otherwise use defaults
   const heroCarouselImages = content.fleet_hero?.carousel_images?.length
@@ -241,9 +248,9 @@ const Pricing = () => {
   return (
     <div className="min-h-screen bg-background">
       <SEO
-        title={content.seo?.title || "Fleet & Pricing | Drive 917 - Premium Luxury Car Rentals"}
-        description={content.seo?.description || "Browse our exclusive fleet of luxury vehicles including Rolls-Royce, Bentley, and Range Rover. Transparent daily, weekly, and monthly rental rates with no hidden fees."}
-        keywords={content.seo?.keywords || "luxury car rental pricing, Rolls-Royce rental rates, premium vehicle hire, executive car rental, London luxury cars"}
+        title={content.seo?.title ? replaceCompanyName(content.seo.title) : `Fleet & Pricing | ${appName} - Premium Luxury Car Rentals`}
+        description={content.seo?.description ? replaceCompanyName(content.seo.description) : "Browse our exclusive fleet of luxury vehicles including Rolls-Royce, Bentley, and Range Rover. Transparent daily, weekly, and monthly rental rates with no hidden fees."}
+        keywords={content.seo?.keywords ? replaceCompanyName(content.seo.keywords) : "luxury car rental pricing, Rolls-Royce rental rates, premium vehicle hire, executive car rental, Dallas luxury cars"}
       />
       <Navigation />
 
@@ -516,7 +523,7 @@ const Pricing = () => {
 
             <div className="text-center mb-16 space-y-4">
               <h3 className="text-3xl md:text-4xl font-display font-bold text-gradient-metal">
-                {content.inclusions?.section_title || "Every Drive917 Rental Includes"}
+                {content.inclusions?.section_title ? replaceCompanyName(content.inclusions.section_title) : `Every ${appName} Rental Includes`}
               </h3>
               <div className="flex items-center justify-center">
                 <div className="h-[1px] w-24 bg-gradient-to-r from-transparent via-accent to-transparent" />

@@ -10,6 +10,9 @@ import { Separator } from "@/components/ui/separator";
 import { supabase } from "@/integrations/supabase/client";
 import { useSiteSettings } from "@/hooks/useSiteSettings";
 import { usePageContent, defaultAboutContent, mergeWithDefaults } from "@/hooks/usePageContent";
+import { useBrandingSettings } from "@/hooks/useBrandingSettings";
+import { createCompanyNameReplacer } from "@/utils/tenantName";
+import { useTenant } from "@/contexts/TenantContext";
 import {
   Accordion,
   AccordionContent,
@@ -47,18 +50,26 @@ const About = () => {
     totalRentals: 0,
     activeVehicles: 0,
     avgRating: 0,
-    yearsExperience: 15
+    yearsExperience: 0
   });
   const [statsAnimated, setStatsAnimated] = useState(false);
   const statsRef = useRef<HTMLDivElement>(null);
   const { settings } = useSiteSettings();
+  const { branding } = useBrandingSettings();
+  const { tenant } = useTenant();
   const { data: rawContent } = usePageContent("about");
   const content = mergeWithDefaults(rawContent, defaultAboutContent);
+
+  // Use the tenant's app_name for dynamic titles
+  const appName = branding.app_name || 'Drive 247';
+
+  // Helper to replace generic company names with the tenant's actual name
+  const replaceCompanyName = createCompanyNameReplacer(appName);
 
   useEffect(() => {
     loadFAQs();
     loadStats();
-    
+
     // Intersection Observer for stats animation
     const observer = new IntersectionObserver(
       (entries) => {
@@ -74,39 +85,54 @@ const About = () => {
     }
 
     return () => observer.disconnect();
-  }, [statsAnimated]);
+  }, [statsAnimated, tenant?.id]);
 
   const loadStats = async () => {
     try {
-      // Get total bookings/rentals
+      // Only load stats if we have a tenant
+      if (!tenant?.id) {
+        setStats({
+          totalRentals: 0,
+          activeVehicles: 0,
+          avgRating: 0,
+          yearsExperience: 0
+        });
+        return;
+      }
+
+      // Get total bookings/rentals for this tenant
       const { count: rentalsCount } = await supabase
         .from("rentals")
-        .select("*", { count: "exact", head: true });
+        .select("*", { count: "exact", head: true })
+        .eq("tenant_id", tenant.id);
 
-      // Get active vehicles
+      // Get active vehicles for this tenant
       // @ts-ignore - Supabase type inference issue
       const { count: vehiclesCount } = await supabase
         .from("vehicles")
         .select("*", { count: "exact", head: true })
-        .eq("is_active", true);
+        .eq("is_active", true)
+        .eq("tenant_id", tenant.id);
 
-      // Get average rating from testimonials
+      // Get average rating from testimonials for this tenant
       // @ts-ignore - Supabase type inference issue
       const { data: testimonials } = await supabase
         .from("testimonials")
         .select("rating")
-        .eq("is_active", true);
+        .eq("is_active", true)
+        .eq("tenant_id", tenant.id);
 
+      // Default to 0 if no testimonials exist
       const avgRating = testimonials && testimonials.length > 0
         // @ts-ignore - Supabase type inference issue
         ? testimonials.reduce((sum: any, t: any) => sum + (t.rating || 5), 0) / testimonials.length
-        : 5.0;
+        : 0;
 
       setStats({
         totalRentals: rentalsCount || 0,
         activeVehicles: vehiclesCount || 0,
         avgRating: parseFloat(avgRating.toFixed(1)),
-        yearsExperience: new Date().getFullYear() - 2010
+        yearsExperience: 0  // Only show if explicitly set via CMS
       });
     } catch (error) {
       console.error("Error loading stats:", error);
@@ -129,15 +155,15 @@ const About = () => {
   const organizationSchema = {
     "@context": "https://schema.org",
     "@type": "CarRental",
-    "name": "Drive 917",
-    "description": "Premium luxury vehicle rentals across the United Kingdom",
-    "url": "https://drive917.co.uk",
+    "name": appName,
+    "description": "Premium luxury vehicle rentals across the United States",
+    "url": typeof window !== 'undefined' ? window.location.origin : "https://drive247.com",
     "telephone": settings.phone,
     "email": settings.email,
     "address": {
       "@type": "PostalAddress",
-      "addressLocality": "London",
-      "addressCountry": "GB"
+      "addressLocality": "Dallas",
+      "addressCountry": "US"
     },
     "aggregateRating": {
       "@type": "AggregateRating",
@@ -151,9 +177,9 @@ const About = () => {
   return (
     <>
       <SEO
-        title={content.seo?.title || "About Drive917 — Premium Luxury Car Rentals"}
-        description={content.seo?.description || "Discover Drive917 — the UK's trusted name in premium car rentals, offering unmatched quality, flexibility, and discretion."}
-        keywords={content.seo?.keywords || "about Drive917, luxury car rental UK, premium vehicle hire, executive car rental, luxury fleet"}
+        title={content.seo?.title ? replaceCompanyName(content.seo.title) : `About ${appName} — Premium Luxury Car Rentals`}
+        description={content.seo?.description ? replaceCompanyName(content.seo.description) : `Discover ${appName} — the USA's trusted name in premium car rentals, offering unmatched quality, flexibility, and discretion.`}
+        keywords={content.seo?.keywords ? replaceCompanyName(content.seo.keywords) : `about ${appName}, luxury car rental USA, premium vehicle hire, executive car rental, luxury fleet`}
         schema={organizationSchema}
       />
       <div className="min-h-screen bg-background">
@@ -164,13 +190,13 @@ const About = () => {
           <div className="container mx-auto px-4">
             <div className="max-w-4xl mx-auto text-center mb-20 animate-fade-in">
               <h1 className="text-5xl md:text-6xl lg:text-7xl font-display font-bold mb-6 text-gradient-metal leading-tight pb-2">
-                {content.hero?.title || "About Drive917"}
+                {content.hero?.title ? replaceCompanyName(content.hero.title) : `About ${appName}`}
               </h1>
               <div className="flex items-center justify-center mb-8">
                 <div className="h-[1px] w-24 bg-gradient-to-r from-transparent via-accent to-transparent" />
               </div>
               <p className="text-lg md:text-xl text-muted-foreground max-w-3xl mx-auto leading-relaxed">
-                {content.hero?.subtitle || "Setting the standard for premium luxury vehicle rentals across the United Kingdom."}
+                {content.hero?.subtitle || "Setting the standard for premium luxury vehicle rentals across the United States."}
               </p>
             </div>
 
@@ -184,12 +210,12 @@ const About = () => {
                 {content.about_story?.content ? (
                   <div
                     className="prose prose-lg dark:prose-invert max-w-none [&>p]:mb-6 [&>ul]:list-disc [&>ul]:list-inside [&>ul]:pl-4"
-                    dangerouslySetInnerHTML={{ __html: content.about_story.content }}
+                    dangerouslySetInnerHTML={{ __html: replaceCompanyName(content.about_story.content) }}
                   />
                 ) : (
                   <>
                     <p>
-                      Drive917 was founded with a simple vision: to provide the highest
+                      {appName} was founded with a simple vision: to provide the highest
                       standard of premium vehicle rentals with unmatched flexibility and service.
                     </p>
                     <p>
@@ -199,7 +225,7 @@ const About = () => {
                     </p>
                     <p>
                       Discretion, reliability, and uncompromising quality became the
-                      pillars upon which Drive917 was built.
+                      pillars upon which {appName} was built.
                     </p>
                   </>
                 )}
@@ -216,18 +242,18 @@ const About = () => {
               ]).map((item, index) => {
                 const IconComponent = getIcon(item.icon);
 
-                // Get dynamic value based on source
+                // Get dynamic value based on source - show 0 as default unless data is set
                 const getDynamicValue = () => {
                   if (!item.use_dynamic) return item.value;
                   switch (item.dynamic_source) {
                     case "years_experience":
                       return stats.yearsExperience.toString();
                     case "total_rentals":
-                      return stats.totalRentals > 0 ? `${Math.floor(stats.totalRentals / 1000) * 1000}` : "5,000";
+                      return stats.totalRentals.toString();
                     case "active_vehicles":
                       return stats.activeVehicles.toString();
                     case "avg_rating":
-                      return stats.avgRating > 0 ? stats.avgRating.toFixed(1) : "5.0";
+                      return stats.avgRating > 0 ? stats.avgRating.toFixed(1) : "0";
                     default:
                       return item.value || "0";
                   }
@@ -263,9 +289,9 @@ const About = () => {
               <div className="space-y-8">
                 {(content.why_choose_us?.items && content.why_choose_us.items.length > 0 ? content.why_choose_us.items : [
                   { icon: "lock", title: "Privacy & Discretion", description: "Your rental details remain completely private. We maintain strict confidentiality for all our distinguished clients." },
-                  { icon: "crown", title: "Premium Fleet", description: "From the Rolls-Royce Phantom to the Range Rover Autobiography, every vehicle represents British excellence and comfort." },
+                  { icon: "crown", title: "Premium Fleet", description: "From the Rolls-Royce Phantom to the Range Rover Autobiography, every vehicle represents automotive excellence and comfort." },
                   { icon: "shield", title: "Flexible Terms", description: "Choose from daily, weekly, or monthly rental periods. Competitive rates with no hidden fees or surprises." },
-                  { icon: "clock", title: "24/7 Availability", description: "Whether weekday or weekend, we're ready to respond at a moment's notice — anywhere across the UK." },
+                  { icon: "clock", title: "24/7 Availability", description: "Whether weekday or weekend, we're ready to respond at a moment's notice — anywhere across the USA." },
                 ]).map((item, index, arr) => {
                   const IconComponent = getIcon(item.icon);
                   return (
@@ -342,7 +368,7 @@ const About = () => {
                   {content.faq_cta?.title || "Still have questions?"}
                 </h3>
                 <p className="text-muted-foreground mb-8 text-lg max-w-xl mx-auto leading-relaxed">
-                  {content.faq_cta?.description || "Our team is here to help. Contact us for personalised assistance."}
+                  {content.faq_cta?.description || "Our team is here to help. Contact us for personalized assistance."}
                 </p>
                 <Button
                   size="lg"

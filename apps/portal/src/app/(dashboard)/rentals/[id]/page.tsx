@@ -11,13 +11,17 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
-import { FileText, ArrowLeft, DollarSign, Plus, X, Send, Download, Ban, Check, AlertTriangle, Loader2, Shield, CheckCircle, XCircle, ExternalLink, UserCheck, IdCard, Camera, FileSignature, Clock, Mail, RefreshCw, Trash2 } from "lucide-react";
+import { FileText, ArrowLeft, DollarSign, Plus, X, Send, Download, Ban, Check, AlertTriangle, Loader2, Shield, CheckCircle, XCircle, ExternalLink, UserCheck, IdCard, Camera, FileSignature, Clock, Mail, RefreshCw, Trash2, Receipt, Percent, Car, Undo2 } from "lucide-react";
 import { AddPaymentDialog } from "@/components/shared/dialogs/add-payment-dialog";
+import { RefundDialog } from "@/components/shared/dialogs/refund-dialog";
 import { useToast } from "@/hooks/use-toast";
 import { useTenant } from "@/contexts/TenantContext";
+import { isInsuranceExemptTenant } from "@/config/tenant-config";
 import { useRentalTotals } from "@/hooks/use-rental-ledger-data";
+import { useRentalInvoice, useRentalPaymentBreakdown, useRentalRefundBreakdown } from "@/hooks/use-rental-invoice";
 import { RentalLedger } from "@/components/rentals/rental-ledger";
 import { KeyHandoverSection } from "@/components/rentals/key-handover-section";
+import { KeyHandoverActionBanner } from "@/components/rentals/key-handover-action-banner";
 import { CancelRentalDialog } from "@/components/shared/dialogs/cancel-rental-dialog";
 import RejectionDialog from "@/components/rentals/rejection-dialog";
 
@@ -49,6 +53,7 @@ const RentalDetail = () => {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const { tenant } = useTenant();
+  const skipInsurance = isInsuranceExemptTenant(tenant?.id);
   const [showAddPayment, setShowAddPayment] = useState(false);
   const [sendingDocuSign, setSendingDocuSign] = useState(false);
   const [checkingDocuSignStatus, setCheckingDocuSignStatus] = useState(false);
@@ -63,6 +68,11 @@ const RentalDetail = () => {
   const [isClosing, setIsClosing] = useState(false);
   const [loadingDocuSignDoc, setLoadingDocuSignDoc] = useState(false);
 
+  // Refund dialog states
+  const [showRefundDialog, setShowRefundDialog] = useState(false);
+  const [refundCategory, setRefundCategory] = useState<string>("");
+  const [refundTotalAmount, setRefundTotalAmount] = useState(0);
+  const [refundPaidAmount, setRefundPaidAmount] = useState(0);
 
   const { data: rental, isLoading, error: rentalError } = useQuery({
     queryKey: ["rental", id, tenant?.id],
@@ -89,6 +99,9 @@ const RentalDetail = () => {
   });
 
   const { data: rentalTotals } = useRentalTotals(id);
+  const { data: invoiceBreakdown } = useRentalInvoice(id);
+  const { data: paymentBreakdown } = useRentalPaymentBreakdown(id);
+  const { data: refundBreakdown } = useRentalRefundBreakdown(id);
 
   // Scroll to ledger section if hash is present (wait for data to load)
   useEffect(() => {
@@ -213,62 +226,87 @@ const RentalDetail = () => {
 
   // Fetch insurance documents with AI scanning results
   // Documents may be linked by rental_id, customer_id, or still be unlinked (from temp customers)
-  const { data: insuranceDocuments, data: unlinkedDocs } = useQuery({
+  // IMPORTANT: We include documents with NULL tenant_id to catch docs uploaded from booking app
+  // where tenant context might not have been available
+  const { data: insuranceDocuments } = useQuery({
     queryKey: ["rental-insurance-docs", id, rental?.customers?.id, tenant?.id],
     queryFn: async () => {
-      const results: any[] = [];
+      // Collect all potential document IDs to avoid showing duplicates
+      const seenDocIds = new Set<string>();
+      const allDocs: any[] = [];
 
-      // First try to find by rental_id (direct link)
+      // First try to find by rental_id (direct link) - highest priority
+      // Include documents with matching tenant_id OR null tenant_id
       if (tenant?.id) {
         const { data: rentalDocs } = await supabase
           .from("customer_documents")
           .select("*")
           .eq("rental_id", id)
           .eq("document_type", "Insurance Certificate")
-          .eq("tenant_id", tenant.id)
+          .or(`tenant_id.eq.${tenant.id},tenant_id.is.null`)
           .order("uploaded_at", { ascending: false });
 
         if (rentalDocs && rentalDocs.length > 0) {
-          return rentalDocs;
+          rentalDocs.forEach(doc => {
+            if (!seenDocIds.has(doc.id)) {
+              seenDocIds.add(doc.id);
+              allDocs.push(doc);
+            }
+          });
         }
       }
 
-      // Try by customer_id
+      // Then try by customer_id (exclude documents already linked to OTHER rentals)
+      // Include documents with matching tenant_id OR null tenant_id
       if (rental?.customers?.id && tenant?.id) {
         const { data: customerDocs } = await supabase
           .from("customer_documents")
           .select("*")
           .eq("customer_id", rental.customers.id)
           .eq("document_type", "Insurance Certificate")
-          .eq("tenant_id", tenant.id)
+          .or(`tenant_id.eq.${tenant.id},tenant_id.is.null`)
+          .is("rental_id", null) // Only show if not linked to a rental yet
           .order("uploaded_at", { ascending: false });
 
         if (customerDocs && customerDocs.length > 0) {
-          return customerDocs;
+          customerDocs.forEach(doc => {
+            if (!seenDocIds.has(doc.id)) {
+              seenDocIds.add(doc.id);
+              allDocs.push(doc);
+            }
+          });
         }
       }
 
-      // Fallback: Show all unlinked insurance documents for this tenant
-      // These may be orphaned from bookings where the linking failed
-      if (tenant?.id) {
+      // Fallback: Show unlinked insurance documents for this tenant ONLY if no docs found yet
+      // Include documents with matching tenant_id OR null tenant_id
+      if (allDocs.length === 0 && tenant?.id) {
         const { data: unlinkedDocs } = await supabase
           .from("customer_documents")
           .select("*, customers!customer_documents_customer_id_fkey(email)")
           .eq("document_type", "Insurance Certificate")
-          .eq("tenant_id", tenant.id)
+          .or(`tenant_id.eq.${tenant.id},tenant_id.is.null`)
           .is("rental_id", null)
+          .is("customer_id", null)
           .order("uploaded_at", { ascending: false })
           .limit(10);
 
         // Mark these as unlinked so UI can show appropriate message
         if (unlinkedDocs && unlinkedDocs.length > 0) {
-          return unlinkedDocs.map(doc => ({ ...doc, isUnlinked: true }));
+          unlinkedDocs.forEach(doc => {
+            if (!seenDocIds.has(doc.id)) {
+              seenDocIds.add(doc.id);
+              allDocs.push({ ...doc, isUnlinked: true });
+            }
+          });
         }
       }
 
-      return [];
+      console.log(`[RENTAL-DOCS] Found ${allDocs.length} unique insurance documents for rental ${id}, customer: ${rental?.customers?.id}`);
+      return allDocs;
     },
-    enabled: !!id && !!tenant?.id,
+    // Wait for rental data to load so we have customer_id for the query
+    enabled: !!id && !!tenant?.id && !!rental?.customers?.id,
   });
 
   // Fetch identity verification for this customer (by customer_id or by email)
@@ -651,8 +689,18 @@ const RentalDetail = () => {
   };
 
 
+  // Determine if key handover needs action (approved + fulfilled but not handed over)
+  const needsKeyHandover = rental?.approval_status === 'approved' && rental?.payment_status === 'fulfilled' && !isKeyHandoverCompleted;
+
   return (
     <div className="space-y-6 py-[24px] px-[8px]">
+      {/* Key Handover Action Banner */}
+      <KeyHandoverActionBanner
+        show={needsKeyHandover}
+        customerName={rental?.customers?.name}
+        vehicleInfo={rental?.vehicles ? `${rental.vehicles.make} ${rental.vehicles.model} • ${rental.vehicles.reg}` : undefined}
+      />
+
       {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-4">
@@ -782,6 +830,300 @@ const RentalDetail = () => {
           </CardContent>
         </Card>
       </div>
+
+      {/* Payment Breakdown Cards */}
+      {invoiceBreakdown && (
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+          {/* Tax Card */}
+          <Card className="relative overflow-hidden flex flex-col">
+            <div className="absolute top-0 left-0 w-1 h-full bg-blue-500" />
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-medium flex items-center gap-2">
+                <Percent className="h-4 w-4 text-blue-500" />
+                Tax
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3 flex-1 flex flex-col">
+              <div>
+                <p className="text-2xl font-bold">${invoiceBreakdown.taxAmount.toFixed(2)}</p>
+                <p className="text-xs text-muted-foreground">Tax charged on rental</p>
+              </div>
+              {invoiceBreakdown.taxAmount > 0 && invoiceBreakdown.rentalFee > 0 && (
+                <div className="text-xs text-muted-foreground bg-muted/50 rounded p-2">
+                  <span className="font-medium">Rate:</span> {((invoiceBreakdown.taxAmount / invoiceBreakdown.rentalFee) * 100).toFixed(1)}%
+                  <br />
+                  <span className="font-medium">Pre-tax:</span> ${invoiceBreakdown.rentalFee.toFixed(2)}
+                  <br />
+                  <span className="font-medium">After tax:</span> ${(invoiceBreakdown.rentalFee + invoiceBreakdown.taxAmount).toFixed(2)}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Service Fee Card */}
+          <Card className="relative overflow-hidden flex flex-col">
+            <div className="absolute top-0 left-0 w-1 h-full bg-purple-500" />
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-medium flex items-center justify-between">
+                <span className="flex items-center gap-2">
+                  <Receipt className="h-4 w-4 text-purple-500" />
+                  Service Fee
+                </span>
+                {(refundBreakdown?.["Service Fee"] ?? 0) >= invoiceBreakdown.serviceFee && invoiceBreakdown.serviceFee > 0 ? (
+                  <span className="text-xs bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 px-2 py-0.5 rounded-full">
+                    Fully Refunded
+                  </span>
+                ) : (refundBreakdown?.["Service Fee"] ?? 0) > 0 ? (
+                  <span className="text-xs bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-400 px-2 py-0.5 rounded-full">
+                    Partial Refund
+                  </span>
+                ) : null}
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="flex-1 flex flex-col">
+              <div className="space-y-3 flex-1">
+                <div>
+                  {(refundBreakdown?.["Service Fee"] ?? 0) > 0 ? (
+                    <>
+                      <p className="text-2xl font-bold text-green-600">
+                        ${(invoiceBreakdown.serviceFee - (refundBreakdown?.["Service Fee"] ?? 0)).toFixed(2)}
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        Net Amount (Original: ${invoiceBreakdown.serviceFee.toFixed(2)})
+                      </p>
+                    </>
+                  ) : (
+                    <>
+                      <p className="text-2xl font-bold">${invoiceBreakdown.serviceFee.toFixed(2)}</p>
+                      <p className="text-xs text-muted-foreground">Platform service fee</p>
+                    </>
+                  )}
+                </div>
+                {(refundBreakdown?.["Service Fee"] ?? 0) > 0 && (
+                  <div className="text-xs bg-green-50 dark:bg-green-950/30 border border-green-200 dark:border-green-800 rounded p-2 space-y-1">
+                    <div className="flex justify-between">
+                      <span className="text-green-700 dark:text-green-400">Original:</span>
+                      <span className="font-medium">${invoiceBreakdown.serviceFee.toFixed(2)}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-green-700 dark:text-green-400">Refunded:</span>
+                      <span className="font-semibold text-green-600 dark:text-green-300">
+                        -${(refundBreakdown?.["Service Fee"] ?? 0).toFixed(2)}
+                      </span>
+                    </div>
+                  </div>
+                )}
+              </div>
+              {/* Only show refund button if there's actual paid amount and rental is not cancelled or closed */}
+              {invoiceBreakdown.serviceFee > 0 &&
+               totalPayments > 0 &&
+               rental.status !== 'Cancelled' &&
+               rental.status !== 'Closed' &&
+               (refundBreakdown?.["Service Fee"] ?? 0) < invoiceBreakdown.serviceFee && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="w-full text-xs mt-3"
+                  onClick={() => {
+                    setRefundCategory("Service Fee");
+                    setRefundTotalAmount(invoiceBreakdown.serviceFee);
+                    // Use invoice amount minus already refunded as the max refundable
+                    const alreadyRefunded = refundBreakdown?.["Service Fee"] ?? 0;
+                    setRefundPaidAmount(Math.max(0, invoiceBreakdown.serviceFee - alreadyRefunded));
+                    setShowRefundDialog(true);
+                  }}
+                >
+                  <Undo2 className="h-3 w-3 mr-1" />
+                  {(refundBreakdown?.["Service Fee"] ?? 0) > 0 ? "Refund More" : "Refund"}
+                </Button>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Security Deposit Card */}
+          <Card className="relative overflow-hidden flex flex-col">
+            <div className="absolute top-0 left-0 w-1 h-full bg-amber-500" />
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-medium flex items-center justify-between">
+                <span className="flex items-center gap-2">
+                  <Shield className="h-4 w-4 text-amber-500" />
+                  Security Deposit
+                </span>
+                {(refundBreakdown?.["Security Deposit"] ?? 0) >= invoiceBreakdown.securityDeposit && invoiceBreakdown.securityDeposit > 0 ? (
+                  <span className="text-xs bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 px-2 py-0.5 rounded-full">
+                    Fully Refunded
+                  </span>
+                ) : (refundBreakdown?.["Security Deposit"] ?? 0) > 0 ? (
+                  <span className="text-xs bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-400 px-2 py-0.5 rounded-full">
+                    Partial Refund
+                  </span>
+                ) : null}
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="flex-1 flex flex-col">
+              <div className="space-y-3 flex-1">
+                <div>
+                  {(refundBreakdown?.["Security Deposit"] ?? 0) > 0 ? (
+                    <>
+                      <p className="text-2xl font-bold text-green-600">
+                        ${(invoiceBreakdown.securityDeposit - (refundBreakdown?.["Security Deposit"] ?? 0)).toFixed(2)}
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        Remaining (Original: ${invoiceBreakdown.securityDeposit.toFixed(2)})
+                      </p>
+                    </>
+                  ) : (
+                    <>
+                      <p className="text-2xl font-bold">${invoiceBreakdown.securityDeposit.toFixed(2)}</p>
+                      <p className="text-xs text-muted-foreground">Refundable deposit</p>
+                    </>
+                  )}
+                </div>
+                {(refundBreakdown?.["Security Deposit"] ?? 0) > 0 ? (
+                  <div className="text-xs bg-green-50 dark:bg-green-950/30 border border-green-200 dark:border-green-800 rounded p-2 space-y-1">
+                    <div className="flex justify-between">
+                      <span className="text-green-700 dark:text-green-400">Original Amount:</span>
+                      <span className="font-medium">${invoiceBreakdown.securityDeposit.toFixed(2)}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-green-700 dark:text-green-400">Refunded:</span>
+                      <span className="font-semibold text-green-600 dark:text-green-300">
+                        -${(refundBreakdown?.["Security Deposit"] ?? 0).toFixed(2)}
+                      </span>
+                    </div>
+                    <div className="flex justify-between border-t border-green-200 dark:border-green-700 pt-1 mt-1">
+                      <span className="font-medium text-green-700 dark:text-green-400">Net Held:</span>
+                      <span className="font-bold">
+                        ${(invoiceBreakdown.securityDeposit - (refundBreakdown?.["Security Deposit"] ?? 0)).toFixed(2)}
+                      </span>
+                    </div>
+                  </div>
+                ) : invoiceBreakdown.securityDeposit > 0 ? (
+                  <div className="text-xs bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded p-2">
+                    <span className="font-medium text-amber-700 dark:text-amber-400">Status:</span>{" "}
+                    <span className="text-amber-600 dark:text-amber-300">
+                      {rental.status === 'Closed' ? 'Eligible for refund' : 'Held until rental ends'}
+                    </span>
+                  </div>
+                ) : null}
+              </div>
+              {/* Only show refund button if there's actual paid amount and rental is not cancelled or closed */}
+              {invoiceBreakdown.securityDeposit > 0 &&
+               totalPayments > 0 &&
+               rental.status !== 'Cancelled' &&
+               rental.status !== 'Closed' &&
+               (refundBreakdown?.["Security Deposit"] ?? 0) < invoiceBreakdown.securityDeposit && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="w-full text-xs mt-3"
+                  onClick={() => {
+                    setRefundCategory("Security Deposit");
+                    setRefundTotalAmount(invoiceBreakdown.securityDeposit);
+                    // Use invoice amount minus already refunded as the max refundable
+                    const alreadyRefunded = refundBreakdown?.["Security Deposit"] ?? 0;
+                    setRefundPaidAmount(Math.max(0, invoiceBreakdown.securityDeposit - alreadyRefunded));
+                    setShowRefundDialog(true);
+                  }}
+                >
+                  <Undo2 className="h-3 w-3 mr-1" />
+                  {(refundBreakdown?.["Security Deposit"] ?? 0) > 0 ? "Refund More" : "Refund Deposit"}
+                </Button>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Rental Amount Card */}
+          <Card className="relative overflow-hidden flex flex-col">
+            <div className="absolute top-0 left-0 w-1 h-full bg-green-500" />
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-medium flex items-center justify-between">
+                <span className="flex items-center gap-2">
+                  <Car className="h-4 w-4 text-green-500" />
+                  Rental
+                </span>
+                {(refundBreakdown?.["Rental"] ?? 0) >= invoiceBreakdown.rentalFee && invoiceBreakdown.rentalFee > 0 ? (
+                  <span className="text-xs bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 px-2 py-0.5 rounded-full">
+                    Fully Refunded
+                  </span>
+                ) : (refundBreakdown?.["Rental"] ?? 0) > 0 ? (
+                  <span className="text-xs bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-400 px-2 py-0.5 rounded-full">
+                    Partial Refund
+                  </span>
+                ) : null}
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="flex-1 flex flex-col">
+              <div className="space-y-3 flex-1">
+                <div>
+                  {(refundBreakdown?.["Rental"] ?? 0) > 0 ? (
+                    <>
+                      <p className="text-2xl font-bold text-green-600">
+                        ${(invoiceBreakdown.rentalFee - (refundBreakdown?.["Rental"] ?? 0)).toFixed(2)}
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        Net Amount (Original: ${invoiceBreakdown.rentalFee.toFixed(2)})
+                      </p>
+                    </>
+                  ) : (
+                    <>
+                      <p className="text-2xl font-bold">${invoiceBreakdown.rentalFee.toFixed(2)}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {rental.rental_period_type || 'Monthly'} rental charge
+                      </p>
+                    </>
+                  )}
+                </div>
+                {invoiceBreakdown.rentalFee > 0 && (
+                  <>
+                    {(refundBreakdown?.["Rental"] ?? 0) > 0 && (
+                      <div className="text-xs bg-green-50 dark:bg-green-950/30 border border-green-200 dark:border-green-800 rounded p-2 space-y-1">
+                        <div className="flex justify-between">
+                          <span className="text-green-700 dark:text-green-400">Original:</span>
+                          <span className="font-medium">${invoiceBreakdown.rentalFee.toFixed(2)}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-green-700 dark:text-green-400">Refunded:</span>
+                          <span className="font-semibold text-green-600 dark:text-green-300">
+                            -${(refundBreakdown?.["Rental"] ?? 0).toFixed(2)}
+                          </span>
+                        </div>
+                      </div>
+                    )}
+                    <div className="text-xs text-muted-foreground bg-muted/50 rounded p-2">
+                      <span className="font-medium">Period:</span>{" "}
+                      {new Date(rental.start_date).toLocaleDateString()} - {new Date(rental.end_date).toLocaleDateString()}
+                    </div>
+                  </>
+                )}
+              </div>
+              {/* Only show refund button if there's actual paid amount and rental is not cancelled or closed */}
+              {invoiceBreakdown.rentalFee > 0 &&
+               totalPayments > 0 &&
+               rental.status !== 'Cancelled' &&
+               rental.status !== 'Closed' &&
+               (refundBreakdown?.["Rental"] ?? 0) < invoiceBreakdown.rentalFee && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="w-full text-xs mt-3"
+                  onClick={() => {
+                    setRefundCategory("Rental");
+                    setRefundTotalAmount(invoiceBreakdown.rentalFee);
+                    // Use invoice amount minus already refunded as the max refundable
+                    const alreadyRefunded = refundBreakdown?.["Rental"] ?? 0;
+                    setRefundPaidAmount(Math.max(0, invoiceBreakdown.rentalFee - alreadyRefunded));
+                    setShowRefundDialog(true);
+                  }}
+                >
+                  <Undo2 className="h-3 w-3 mr-1" />
+                  {(refundBreakdown?.["Rental"] ?? 0) > 0 ? "Refund More" : "Refund"}
+                </Button>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+      )}
 
       {/* Rental Details */}
       <Card>
@@ -1089,14 +1431,15 @@ const RentalDetail = () => {
         </CardContent>
       </Card>
 
-      {/* Insurance Verification Card */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Shield className="h-5 w-5" />
-            Insurance Verification
-          </CardTitle>
-        </CardHeader>
+      {/* Insurance Verification Card - Hidden for insurance-exempt tenants like Kedic Services */}
+      {!skipInsurance && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Shield className="h-5 w-5" />
+              Insurance Verification
+            </CardTitle>
+          </CardHeader>
         <CardContent className="space-y-4">
           <div className="flex items-center justify-between">
             <p className="text-sm text-muted-foreground">Upload customer's insurance documents for verification</p>
@@ -1531,7 +1874,8 @@ const RentalDetail = () => {
             </div>
           )}
         </CardContent>
-      </Card>
+        </Card>
+      )}
 
       {/* Identity Verification Section - Always show */}
       <Card>
@@ -1838,7 +2182,13 @@ const RentalDetail = () => {
       </Card>
 
       {/* Key Handover Section */}
-      {id && <KeyHandoverSection rentalId={id} rentalStatus={displayStatus} />}
+      {id && (
+        <KeyHandoverSection
+          rentalId={id}
+          rentalStatus={displayStatus}
+          needsAction={needsKeyHandover}
+        />
+      )}
 
       {/* Enhanced Ledger */}
       <div id="ledger">
@@ -1867,6 +2217,18 @@ const RentalDetail = () => {
             vehicle: rental.vehicles,
             monthly_amount: rental.monthly_amount,
           }}
+        />
+      )}
+
+      {/* Refund Dialog */}
+      {rental && (
+        <RefundDialog
+          open={showRefundDialog}
+          onOpenChange={setShowRefundDialog}
+          rentalId={rental.id}
+          category={refundCategory}
+          totalAmount={refundTotalAmount}
+          paidAmount={refundPaidAmount}
         />
       )}
 

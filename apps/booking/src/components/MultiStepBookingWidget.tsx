@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -15,7 +15,7 @@ import { Badge } from "@/components/ui/badge";
 import { supabase } from "@/integrations/supabase/client";
 import { useTenant } from "@/contexts/TenantContext";
 import { toast } from "sonner";
-import { ChevronRight, ChevronLeft, Check, Baby, Coffee, MapPin, UserCheck, Car, Crown, TrendingUp, Users as GroupIcon, Calculator, Shield, CheckCircle, CalendarIcon, Clock, Search, Grid3x3, List, SlidersHorizontal, X, AlertCircle, FileCheck, RefreshCw, Upload } from "lucide-react";
+import { ChevronRight, ChevronLeft, Check, Baby, Coffee, MapPin, UserCheck, Car, Crown, TrendingUp, Users as GroupIcon, Calculator, Shield, CheckCircle, CalendarIcon, Clock, Search, Grid3x3, List, SlidersHorizontal, X, AlertCircle, FileCheck, RefreshCw, Upload, Gauge, User } from "lucide-react";
 import { format, differenceInHours } from "date-fns";
 import { cn } from "@/lib/utils";
 import BookingConfirmation from "./BookingConfirmation";
@@ -26,9 +26,12 @@ import AIScanProgress from "./ai-scan-progress";
 import AIVerificationQR from "./AIVerificationQR";
 import { stripePromise } from "@/config/stripe";
 import { usePageContent, defaultHomeContent, mergeWithDefaults } from "@/hooks/usePageContent";
+import { useWorkingHours, getWorkingHoursForDate } from "@/hooks/useWorkingHours";
+import { isInsuranceExemptTenant } from "@/config/tenant-config";
 import { canCustomerBook } from "@/lib/tenantQueries";
 import { sanitizeName, sanitizeEmail, sanitizePhone, sanitizeLocation, sanitizeTextArea, isInputSafe } from "@/lib/sanitize";
 import { createVeriffFrame, MESSAGES } from "@veriff/incontext-sdk";
+import { getTimezonesByRegion, findTimezone, getDetectedTimezone } from "@/lib/timezones";
 interface VehiclePhoto {
   photo_url: string;
 }
@@ -52,6 +55,7 @@ interface Vehicle {
   photo_url?: string | null;
   vehicle_photos?: VehiclePhoto[];
   description?: string | null;
+  allowed_mileage?: number | null;
 }
 interface PricingExtra {
   id: string;
@@ -67,7 +71,17 @@ interface BlockedDate {
   reason?: string | null;
 }
 const MultiStepBookingWidget = () => {
+  // Safari-safe date parser for YYYY-MM-DD strings
+  // Safari doesn't support new Date("YYYY-MM-DD") format
+  const parseDateString = (dateStr: string): Date => {
+    if (!dateStr) return new Date();
+    const [year, month, day] = dateStr.split('-').map(Number);
+    return new Date(year, month - 1, day);
+  };
+
   const { tenant } = useTenant();
+  const workingHours = useWorkingHours();
+  const skipInsurance = isInsuranceExemptTenant(tenant?.id);
   const [currentStep, setCurrentStep] = useState(1);
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
   const [extras, setExtras] = useState<PricingExtra[]>([]);
@@ -96,6 +110,7 @@ const MultiStepBookingWidget = () => {
   const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
   const [showFilters, setShowFilters] = useState(false);
   const [originalPriceRange, setOriginalPriceRange] = useState<[number, number]>([0, 1000]); // Store original dynamic range
+  const [priceFilterMode, setPriceFilterMode] = useState<"daily" | "weekly" | "monthly">("daily"); // Price filter mode
   const [filters, setFilters] = useState({
     transmission: [] as string[],
     fuel: [] as string[],
@@ -124,7 +139,40 @@ const MultiStepBookingWidget = () => {
     customerType: "",
     licenseNumber: "",
     verificationSessionId: "",
+    customerTimezone: "", // Will be set from tenant timezone or detected browser timezone
   });
+
+  // Calculate working hours for the selected pickup date (per-day hours)
+  const pickupDateWorkingHours = useMemo(() => {
+    // If no pickup date selected, use the current day's working hours from the hook
+    if (!formData.pickupDate) {
+      return {
+        enabled: workingHours.isDayEnabled,
+        open: workingHours.openTime,
+        close: workingHours.closeTime,
+        isAlwaysOpen: workingHours.isAlwaysOpen,
+      };
+    }
+    // Get the working hours for the specific pickup date
+    const pickupDate = parseDateString(formData.pickupDate);
+    return getWorkingHoursForDate(pickupDate, tenant);
+  }, [formData.pickupDate, tenant, workingHours]);
+
+  // Calculate working hours for the selected dropoff date (per-day hours)
+  const dropoffDateWorkingHours = useMemo(() => {
+    // If no dropoff date selected, use the current day's working hours from the hook
+    if (!formData.dropoffDate) {
+      return {
+        enabled: workingHours.isDayEnabled,
+        open: workingHours.openTime,
+        close: workingHours.closeTime,
+        isAlwaysOpen: workingHours.isAlwaysOpen,
+      };
+    }
+    // Get the working hours for the specific dropoff date
+    const dropoffDate = parseDateString(formData.dropoffDate);
+    return getWorkingHoursForDate(dropoffDate, tenant);
+  }, [formData.dropoffDate, tenant, workingHours]);
 
   // Insurance state
   const [hasInsurance, setHasInsurance] = useState<boolean | null>(null);
@@ -144,6 +192,13 @@ const MultiStepBookingWidget = () => {
     qrUrl: string;
     expiresAt: Date;
   } | null>(null);
+
+  // Verification images state
+  const [verificationImages, setVerificationImages] = useState<{
+    document_front_url: string | null;
+    document_back_url: string | null;
+    selfie_image_url: string | null;
+  } | null>(null);
   const [promoDetails, setPromoDetails] = useState<{
     code: string;
     type: "percentage" | "fixed_amount";
@@ -157,6 +212,15 @@ const MultiStepBookingWidget = () => {
     dropoffLat: null as number | null,
     dropoffLon: null as number | null
   });
+
+  // Initialize customer timezone when tenant loads - default to tenant's timezone
+  useEffect(() => {
+    if (tenant?.timezone && !formData.customerTimezone) {
+      // Default to tenant's timezone so customer sees times in business timezone by default
+      setFormData(prev => ({ ...prev, customerTimezone: tenant.timezone }));
+    }
+  }, [tenant?.timezone, formData.customerTimezone]);
+
   useEffect(() => {
     loadData();
 
@@ -258,6 +322,37 @@ const MultiStepBookingWidget = () => {
     }
   }, []);
 
+  // Real-time subscription for blocked dates changes
+  useEffect(() => {
+    if (!tenant?.id) return;
+
+    // Subscribe to blocked_dates changes for this tenant
+    const channel = supabase
+      .channel(`blocked-dates-${tenant.id}`)
+      .on(
+        'postgres_changes',
+        {
+          event: '*', // Listen to INSERT, UPDATE, DELETE
+          schema: 'public',
+          table: 'blocked_dates',
+          filter: `tenant_id=eq.${tenant.id}`,
+        },
+        (payload) => {
+          console.log('[BlockedDates] Real-time update received:', payload.eventType);
+          // Refetch blocked dates when any change occurs
+          loadBlockedDates();
+        }
+      )
+      .subscribe((status) => {
+        console.log('[BlockedDates] Subscription status:', status);
+      });
+
+    // Cleanup subscription on unmount or tenant change
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [tenant?.id]);
+
   useEffect(() => {
     // Load view mode from localStorage
     const savedViewMode = localStorage.getItem('viewMode');
@@ -300,6 +395,22 @@ const MultiStepBookingWidget = () => {
       localStorage.removeItem('verifiedCustomerName');
       localStorage.removeItem('verifiedLicenseNumber');
       localStorage.removeItem('verificationVendorData');
+    }
+
+    // Restore promo code from localStorage
+    const savedPromoCode = localStorage.getItem('appliedPromoCode');
+    const savedPromoDetails = localStorage.getItem('appliedPromoDetails');
+    if (savedPromoCode && savedPromoDetails) {
+      try {
+        const promoDetailsData = JSON.parse(savedPromoDetails);
+        setFormData(prev => ({ ...prev, promoCode: savedPromoCode }));
+        setPromoDetails(promoDetailsData);
+        console.log('✅ Restored promo code from localStorage:', savedPromoCode);
+      } catch (e) {
+        console.error('Failed to parse saved promo details:', e);
+        localStorage.removeItem('appliedPromoCode');
+        localStorage.removeItem('appliedPromoDetails');
+      }
     }
 
     // Handle window focus - check verification when user returns from Veriff popup
@@ -518,6 +629,43 @@ const MultiStepBookingWidget = () => {
     return () => window.removeEventListener('beforeunload', handleBeforeUnload);
   }, [formData.customerName, formData.customerEmail, formData.vehicleId, showConfirmation]);
 
+  // Separate function to load blocked dates - used by both initial load and real-time updates
+  const loadBlockedDates = async () => {
+    if (!tenant?.id) return;
+
+    const { data: blockedDatesData } = await supabase
+      .from("blocked_dates")
+      .select("id, start_date, end_date, vehicle_id, reason")
+      .eq("tenant_id", tenant.id);
+
+    if (blockedDatesData) {
+      // Store all blocked dates (global + vehicle-specific)
+      setAllBlockedDates(blockedDatesData);
+      console.log('[BlockedDates] Loaded all blocked dates:', blockedDatesData.map(b => ({ id: b.id, vehicle_id: b.vehicle_id, start: b.start_date, end: b.end_date })));
+
+      // Filter only global blocked dates (vehicle_id is null) for Step 1 calendar
+      const globalBlockedDates = blockedDatesData.filter(range => range.vehicle_id === null);
+
+      // Expand global blocked date ranges into individual dates for calendar
+      const formattedDates: string[] = [];
+      globalBlockedDates.forEach(range => {
+        // Safari-safe date parsing: split YYYY-MM-DD and use Date constructor with numbers
+        const [startYear, startMonth, startDay] = range.start_date.split('-').map(Number);
+        const [endYear, endMonth, endDay] = range.end_date.split('-').map(Number);
+        const startDate = new Date(startYear, startMonth - 1, startDay);
+        const endDate = new Date(endYear, endMonth - 1, endDay);
+
+        // Generate all dates in the range
+        const currentDate = new Date(startDate);
+        while (currentDate <= endDate) {
+          formattedDates.push(format(currentDate, "yyyy-MM-dd"));
+          currentDate.setDate(currentDate.getDate() + 1);
+        }
+      });
+      setBlockedDates(formattedDates);
+    }
+  };
+
   const loadData = async () => {
     // Wait for tenant to be loaded before querying
     if (!tenant?.id) {
@@ -541,21 +689,13 @@ const MultiStepBookingWidget = () => {
 
     const { data: vehiclesData } = await vehiclesQuery;
 
-    // Build query for blocked dates with tenant filtering
-    const blockedDatesQuery = supabase
-      .from("blocked_dates")
-      .select("id, start_date, end_date, vehicle_id, reason")
-      .eq("tenant_id", tenant.id);
-
-    const { data: blockedDatesData } = await blockedDatesQuery;
-
     if (vehiclesData) {
       // Cast to Vehicle[] since we know the shape matches
       setVehicles(vehiclesData as unknown as Vehicle[]);
 
-      // Calculate price range from vehicles (use monthly_rent if available)
+      // Calculate price range from vehicles based on current price filter mode (default: daily)
       const prices = vehiclesData
-        .map(v => v.monthly_rent || v.daily_rent || 0)
+        .map(v => v.daily_rent || 0)
         .filter(p => p > 0);
 
       if (prices.length > 0) {
@@ -569,29 +709,9 @@ const MultiStepBookingWidget = () => {
         }));
       }
     }
-    if (blockedDatesData) {
-      // Store all blocked dates (global + vehicle-specific)
-      setAllBlockedDates(blockedDatesData);
-      console.log('[BlockedDates] Loaded all blocked dates:', blockedDatesData.map(b => ({ id: b.id, vehicle_id: b.vehicle_id, start: b.start_date, end: b.end_date })));
 
-      // Filter only global blocked dates (vehicle_id is null) for Step 1 calendar
-      const globalBlockedDates = blockedDatesData.filter(range => range.vehicle_id === null);
-
-      // Expand global blocked date ranges into individual dates for calendar
-      const formattedDates: string[] = [];
-      globalBlockedDates.forEach(range => {
-        const startDate = new Date(range.start_date);
-        const endDate = new Date(range.end_date);
-
-        // Generate all dates in the range
-        const currentDate = new Date(startDate);
-        while (currentDate <= endDate) {
-          formattedDates.push(format(currentDate, "yyyy-MM-dd"));
-          currentDate.setDate(currentDate.getDate() + 1);
-        }
-      });
-      setBlockedDates(formattedDates);
-    }
+    // Load blocked dates
+    await loadBlockedDates();
   };
 
   // Check verification status - first tries database, then falls back to Veriff API directly
@@ -602,7 +722,7 @@ const MultiStepBookingWidget = () => {
       // STEP 1: Try database query first
       let { data, error } = await supabase
         .from('identity_verifications')
-        .select('review_result, status, review_status, first_name, last_name, document_number, date_of_birth, external_user_id')
+        .select('review_result, status, review_status, first_name, last_name, document_number, date_of_birth, external_user_id, document_front_url, document_back_url, selfie_image_url')
         .eq('session_id', sessionId)
         .maybeSingle();
 
@@ -615,7 +735,7 @@ const MultiStepBookingWidget = () => {
         console.log('🔍 Trying email-based fallback in database...');
         const emailResult = await supabase
           .from('identity_verifications')
-          .select('review_result, status, review_status, first_name, last_name, document_number, date_of_birth, external_user_id')
+          .select('review_result, status, review_status, first_name, last_name, document_number, date_of_birth, external_user_id, document_front_url, document_back_url, selfie_image_url')
           .ilike('external_user_id', `%${formData.customerEmail}%`)
           .order('created_at', { ascending: false })
           .limit(1)
@@ -653,7 +773,14 @@ const MultiStepBookingWidget = () => {
   };
 
   // Auto-populate form with verified data from Veriff
-  const populateFormWithVerifiedData = (verificationData: { first_name?: string | null; last_name?: string | null; document_number?: string | null }) => {
+  const populateFormWithVerifiedData = (verificationData: {
+    first_name?: string | null;
+    last_name?: string | null;
+    document_number?: string | null;
+    document_front_url?: string | null;
+    document_back_url?: string | null;
+    selfie_image_url?: string | null;
+  }) => {
     const firstName = verificationData.first_name || '';
     const lastName = verificationData.last_name || '';
     const fullName = [firstName, lastName].filter(Boolean).join(' ').trim();
@@ -673,6 +800,15 @@ const MultiStepBookingWidget = () => {
 
       toast.success(`Your details have been verified and updated: ${fullName}`, { duration: 5000 });
       console.log('✅ Form populated with verified data:', { customerName: fullName, licenseNumber: verificationData.document_number });
+    }
+
+    // Store verification images if available
+    if (verificationData.document_front_url || verificationData.document_back_url || verificationData.selfie_image_url) {
+      setVerificationImages({
+        document_front_url: verificationData.document_front_url || null,
+        document_back_url: verificationData.document_back_url || null,
+        selfie_image_url: verificationData.selfie_image_url || null,
+      });
     }
   };
 
@@ -706,6 +842,7 @@ const MultiStepBookingWidget = () => {
     setVerificationSessionId(null);
     setVerificationStatus('init');
     setAiSessionData(null); // Clear AI session data too
+    setVerificationImages(null); // Clear verification images
     setFormData(prev => ({ ...prev, verificationSessionId: "", licenseNumber: "" }));
     localStorage.removeItem('verificationSessionId');
     localStorage.removeItem('verificationToken');
@@ -1037,8 +1174,8 @@ const MultiStepBookingWidget = () => {
     let rentalPrice = 0;
     let rentalDays = 0;
     if (formData.pickupDate && formData.dropoffDate) {
-      const pickup = new Date(formData.pickupDate);
-      const dropoff = new Date(formData.dropoffDate);
+      const pickup = parseDateString(formData.pickupDate);
+      const dropoff = parseDateString(formData.dropoffDate);
       rentalDays = Math.max(1, Math.ceil((dropoff.getTime() - pickup.getTime()) / (1000 * 60 * 60 * 24)));
 
       const dailyRent = selectedVehicle.daily_rent || 0;
@@ -1105,42 +1242,74 @@ const MultiStepBookingWidget = () => {
   };
 
   const validatePromoCode = async (code: string) => {
-    if (!code || !tenant?.id) return;
+    if (!code || !tenant?.id) {
+      if (!tenant?.id) {
+        console.log('⚠️ Promo validation skipped - tenant not loaded yet');
+        setPromoError("Please wait while we load your settings...");
+      }
+      return;
+    }
 
     setLoading(true);
     setPromoError(null);
     setPromoDetails(null);
+    // Clear localStorage when starting new validation
+    localStorage.removeItem('appliedPromoCode');
+    localStorage.removeItem('appliedPromoDetails');
 
     try {
-      const { data, error } = await supabase
+      // Use case-insensitive search with ilike for the code
+      // Cast to any to bypass TypeScript as promocodes table is not yet in generated types
+      const { data, error } = await (supabase as any)
         .from('promocodes')
         .select('*')
-        .eq('code', code)
+        .ilike('code', code) // Case-insensitive match
         .eq('tenant_id', tenant.id)
-        .maybeSingle();
+        .maybeSingle() as { data: { code: string; type: string; value: number; expires_at: string | null; id: string; max_users?: number } | null; error: any };
 
-      if (error) throw error;
+      if (error) {
+        console.error('Promo code query error:', error);
+        throw error;
+      }
 
       if (!data) {
+        console.log('❌ Promo code not found:', code, 'for tenant:', tenant.id);
         setPromoError("Invalid promo code");
         return;
       }
 
       // Check expiry
-      if (data.expires_at && new Date(data.expires_at) < new Date()) {
+      const promoData = data as { code: string; type: string; value: number; expires_at: string | null; id: string; max_users?: number };
+      if (promoData.expires_at && new Date(promoData.expires_at) < new Date()) {
         setPromoError("Promo code has expired");
         return;
       }
 
-      // Check usage limits (if implemented, but schema has max_users)
-      // For now, we'll assume available if returned. Could add detailed check.
+      // Check usage limits against max_users
+      if (promoData.max_users && promoData.max_users > 0) {
+        // Count how many times this promo code has been used in invoices
+        const { count, error: usageError } = await (supabase as any)
+          .from('invoices')
+          .select('*', { count: 'exact', head: true })
+          .eq('promo_code', promoData.code)
+          .eq('tenant_id', tenant.id);
 
-      setPromoDetails({
-        code: data.code,
-        type: data.type === 'value' ? 'fixed_amount' : 'percentage', // Map DB type to internal type
-        value: data.value,
-        id: data.id
-      });
+        if (!usageError && count !== null && count >= promoData.max_users) {
+          setPromoError("Promo code usage limit reached");
+          return;
+        }
+      }
+
+      const promoDetailsToSave = {
+        code: promoData.code,
+        type: promoData.type === 'value' ? 'fixed_amount' : 'percentage', // Map DB type to internal type
+        value: promoData.value,
+        id: promoData.id
+      };
+      setPromoDetails(promoDetailsToSave);
+      // Persist promo details to localStorage
+      localStorage.setItem('appliedPromoCode', promoDetailsToSave.code);
+      localStorage.setItem('appliedPromoDetails', JSON.stringify(promoDetailsToSave));
       toast.success("Promo code applied!");
 
     } catch (err) {
@@ -1194,7 +1363,8 @@ const MultiStepBookingWidget = () => {
         customerId = existingCustomer.id;
         // Update existing customer with DOB if provided
         if (formData.driverDOB) {
-          await supabase
+          // Cast to any as date_of_birth is not in the generated types yet
+          await (supabase as any)
             .from("customers")
             .update({ date_of_birth: formData.driverDOB })
             .eq("id", existingCustomer.id);
@@ -1270,6 +1440,9 @@ const MultiStepBookingWidget = () => {
         return_location: sanitizeLocation(formData.dropoffLocation),
         start_date: formData.pickupDate,
         end_date: formData.dropoffDate || formData.pickupDate,
+        pickup_time: formData.pickupTime || null,
+        dropoff_time: formData.dropoffTime || null,
+        customer_timezone: formData.customerTimezone || null,
         monthly_amount: priceBreakdown?.totalPrice || 0,
         notes: formData.specialRequests ? sanitizeTextArea(formData.specialRequests) : null,
         status: "Pending",
@@ -1342,6 +1515,9 @@ const MultiStepBookingWidget = () => {
     });
     setPromoDetails(null);
     setPromoError(null);
+    // Clear promo localStorage after successful booking
+    localStorage.removeItem('appliedPromoCode');
+    localStorage.removeItem('appliedPromoDetails');
     setSelectedExtras([]);
     setCalculatedDistance(null);
     setDistanceOverride(false);
@@ -1490,21 +1666,22 @@ const MultiStepBookingWidget = () => {
     const pickup = new Date(`${formData.pickupDate}T${formData.pickupTime}:00`);
     const dropoff = new Date(`${formData.dropoffDate}T${formData.dropoffTime}:00`);
     const hours = differenceInHours(dropoff, pickup);
-    const days = Math.floor(hours / 24);
+    // Ceiling the days - any hours beyond full days count as another day
+    const days = Math.ceil(hours / 24);
     const remainingHours = hours % 24;
 
-    // Format duration with proper grammar
+    // Format duration with proper grammar - only show whole days (ceiling)
     const formatDuration = () => {
       // Helper for singular/plural
       const pluralize = (count: number, singular: string, plural: string) =>
         count === 1 ? `${count} ${singular}` : `${count} ${plural}`;
 
-      // If less than 1 day, show hours
+      // Minimum 1 day display
       if (days === 0) {
-        return pluralize(remainingHours, 'hour', 'hours');
+        return '1 day';
       }
 
-      // Calculate months, weeks, and remaining days
+      // Calculate months, weeks, and remaining days from the ceiled total days
       const months = Math.floor(days / 30);
       const afterMonthsDays = days % 30;
       const weeks = Math.floor(afterMonthsDays / 7);
@@ -1525,11 +1702,6 @@ const MultiStepBookingWidget = () => {
       // Add remaining days if any
       if (finalDays > 0) {
         parts.push(pluralize(finalDays, 'day', 'days'));
-      }
-
-      // Add hours if there are remaining hours and we have days
-      if (remainingHours > 0 && days > 0) {
-        parts.push(pluralize(remainingHours, 'hour', 'hours'));
       }
 
       // If no parts (shouldn't happen), fallback to days
@@ -1625,26 +1797,20 @@ const MultiStepBookingWidget = () => {
       return { price: primaryPrice, label: primaryLabel, secondaryPrices: [] };
     }
   };
-  // Helper to parse YYYY-MM-DD to local date at midnight (avoids UTC timezone issues)
-  const parseLocalDate = (dateStr: string): Date => {
-    const [year, month, day] = dateStr.split('-').map(Number);
-    return new Date(year, month - 1, day);
-  };
-
   const isVehicleBlockedForPeriod = (vehicleId: string): { blocked: boolean; blockedRange?: { start: string; end: string } } => {
     if (!formData.pickupDate || !formData.dropoffDate) {
       return { blocked: false };
     }
 
-    const pickupDate = parseLocalDate(formData.pickupDate);
-    const dropoffDate = parseLocalDate(formData.dropoffDate);
+    const pickupDate = parseDateString(formData.pickupDate);
+    const dropoffDate = parseDateString(formData.dropoffDate);
 
     // Find any blocked dates for this specific vehicle that overlap with the rental period
     const vehicleBlockedDates = allBlockedDates.filter(block => block.vehicle_id === vehicleId);
 
     for (const block of vehicleBlockedDates) {
-      const blockStart = parseLocalDate(block.start_date);
-      const blockEnd = parseLocalDate(block.end_date);
+      const blockStart = parseDateString(block.start_date);
+      const blockEnd = parseDateString(block.end_date);
 
       // Check if there's any overlap between rental period and blocked period
       const hasOverlap = pickupDate <= blockEnd && dropoffDate >= blockStart;
@@ -1661,6 +1827,44 @@ const MultiStepBookingWidget = () => {
     }
 
     return { blocked: false };
+  };
+
+  // Helper function to get vehicle price based on selected price filter mode
+  const getVehiclePriceByMode = (vehicle: Vehicle, mode: "daily" | "weekly" | "monthly"): number => {
+    switch (mode) {
+      case "daily":
+        return vehicle.daily_rent || 0;
+      case "weekly":
+        return vehicle.weekly_rent || 0;
+      case "monthly":
+        return vehicle.monthly_rent || 0;
+      default:
+        return vehicle.daily_rent || 0;
+    }
+  };
+
+  // Helper function to recalculate price range when mode changes
+  const recalculatePriceRange = (mode: "daily" | "weekly" | "monthly") => {
+    const prices = vehicles
+      .map(v => getVehiclePriceByMode(v, mode))
+      .filter(p => p > 0);
+
+    if (prices.length > 0) {
+      const minPrice = Math.min(...prices);
+      const maxPrice = Math.max(...prices);
+      const dynamicRange: [number, number] = [minPrice, maxPrice];
+      setOriginalPriceRange(dynamicRange);
+      setFilters(prev => ({
+        ...prev,
+        priceRange: dynamicRange
+      }));
+    }
+  };
+
+  // Handle price filter mode change
+  const handlePriceFilterModeChange = (mode: "daily" | "weekly" | "monthly") => {
+    setPriceFilterMode(mode);
+    recalculatePriceRange(mode);
   };
 
   // Helper function to get readable sort label
@@ -1708,24 +1912,24 @@ const MultiStepBookingWidget = () => {
     // Seats filter (skip for portal - no capacity field)
     // Portal vehicles don't have capacity info, so this filter is disabled
 
-    // Price range filter - use monthly_rent or daily_rent
+    // Price range filter - use selected price filter mode (daily/weekly/monthly)
     filtered = filtered.filter(v => {
-      const price = v.monthly_rent || v.daily_rent || 0;
+      const price = getVehiclePriceByMode(v, priceFilterMode);
       return price >= filters.priceRange[0] && price <= filters.priceRange[1];
     });
 
     // Filter out vehicles with blocked dates for the selected rental period
     if (formData.pickupDate && formData.dropoffDate) {
-      const pickupDate = parseLocalDate(formData.pickupDate);
-      const dropoffDate = parseLocalDate(formData.dropoffDate);
+      const pickupDate = parseDateString(formData.pickupDate);
+      const dropoffDate = parseDateString(formData.dropoffDate);
 
       filtered = filtered.filter(vehicle => {
         // Check for vehicle-specific blocked dates
         const vehicleBlockedDates = allBlockedDates.filter(block => block.vehicle_id === vehicle.id);
 
         for (const block of vehicleBlockedDates) {
-          const blockStart = parseLocalDate(block.start_date);
-          const blockEnd = parseLocalDate(block.end_date);
+          const blockStart = parseDateString(block.start_date);
+          const blockEnd = parseDateString(block.end_date);
 
           // Check if there's any overlap between rental period and blocked period
           const hasOverlap = pickupDate <= blockEnd && dropoffDate >= blockStart;
@@ -1817,11 +2021,18 @@ const MultiStepBookingWidget = () => {
   const clearAllFilters = () => {
     setSearchTerm("");
     setSelectedCategories([]);
+    setPriceFilterMode("daily"); // Reset to daily mode
+    // Recalculate range for daily prices
+    const prices = vehicles.map(v => v.daily_rent || 0).filter(p => p > 0);
+    const newRange: [number, number] = prices.length > 0
+      ? [Math.min(...prices), Math.max(...prices)]
+      : [0, 1000];
+    setOriginalPriceRange(newRange);
     setFilters({
       transmission: [],
       fuel: [],
       seats: [2, 7],
-      priceRange: originalPriceRange // Use stored original range
+      priceRange: newRange
     });
     setSortBy("recommended");
   };
@@ -1982,7 +2193,7 @@ const MultiStepBookingWidget = () => {
     if (!formData.driverDOB || formData.driverDOB.trim() === "") {
       newErrors.driverDOB = "Date of birth is required.";
     } else {
-      const dob = new Date(formData.driverDOB);
+      const dob = parseDateString(formData.driverDOB);
       if (isNaN(dob.getTime())) {
         newErrors.driverDOB = "Please enter a valid date of birth.";
       } else {
@@ -2104,7 +2315,7 @@ const MultiStepBookingWidget = () => {
         if (!value || value.trim() === "") {
           newErrors.driverDOB = "Date of birth is required.";
         } else {
-          const dob = new Date(value);
+          const dob = parseDateString(value);
           if (isNaN(dob.getTime())) {
             newErrors.driverDOB = "Please enter a valid date of birth.";
           } else {
@@ -2130,7 +2341,7 @@ const MultiStepBookingWidget = () => {
   const handleStep1Continue = () => {
     if (validateStep1()) {
       // Calculate age from DOB for young driver check
-      const driverAge = formData.driverDOB ? calculateAge(new Date(formData.driverDOB)) : 0;
+      const driverAge = formData.driverDOB ? calculateAge(parseDateString(formData.driverDOB)) : 0;
       const isYoungDriver = driverAge < 25;
 
       // Store in localStorage
@@ -2141,6 +2352,7 @@ const MultiStepBookingWidget = () => {
         pickupTime: formData.pickupTime,
         dropoffDate: formData.dropoffDate,
         dropoffTime: formData.dropoffTime,
+        customerTimezone: formData.customerTimezone,
         driverDOB: formData.driverDOB,
         driverAge: driverAge,
         promoCode: formData.promoCode,
@@ -2193,7 +2405,12 @@ const MultiStepBookingWidget = () => {
           sortBy
         }
       }));
-      setCurrentStep(3); // Go to insurance verification
+      // Skip insurance step for exempt tenants (like Kedic Services)
+      if (skipInsurance) {
+        setCurrentStep(4); // Skip directly to customer details
+      } else {
+        setCurrentStep(3); // Go to insurance verification
+      }
     }
   };
 
@@ -2323,41 +2540,34 @@ const MultiStepBookingWidget = () => {
         {/* Enhanced Progress Indicator */}
         <div className="w-full overflow-x-auto py-4">
           <div className="flex items-center justify-between relative min-w-[280px]">
-            {[{
-              step: 1,
-              label: "Trip",
-              fullLabel: "Trip Details"
-            }, {
-              step: 2,
-              label: "Vehicle",
-              fullLabel: "Choose Vehicle"
-            }, {
-              step: 3,
-              label: "Insurance",
-              fullLabel: "Insurance Verification"
-            }, {
-              step: 4,
-              label: "Details",
-              fullLabel: "Customer Details"
-            }, {
-              step: 5,
-              label: "Review",
-              fullLabel: "Review & Confirm"
-            }].map(({
+            {/* Dynamic steps based on whether tenant is insurance exempt */}
+            {(skipInsurance ? [
+              { step: 1, displayStep: 1, label: "Trip", fullLabel: "Trip Details" },
+              { step: 2, displayStep: 2, label: "Vehicle", fullLabel: "Choose Vehicle" },
+              { step: 4, displayStep: 3, label: "Details", fullLabel: "Customer Details" },
+              { step: 5, displayStep: 4, label: "Review", fullLabel: "Review & Confirm" }
+            ] : [
+              { step: 1, displayStep: 1, label: "Trip", fullLabel: "Trip Details" },
+              { step: 2, displayStep: 2, label: "Vehicle", fullLabel: "Choose Vehicle" },
+              { step: 3, displayStep: 3, label: "Insurance", fullLabel: "Insurance Verification" },
+              { step: 4, displayStep: 4, label: "Details", fullLabel: "Customer Details" },
+              { step: 5, displayStep: 5, label: "Review", fullLabel: "Review & Confirm" }
+            ]).map(({
               step,
+              displayStep,
               label,
               fullLabel
-            }, index) => <div key={step} className="flex flex-col items-center flex-1 relative z-10">
-                <div className={cn("bk-step__node flex items-center justify-center w-10 h-10 sm:w-12 sm:h-12 md:w-14 md:h-14 rounded-full border-2 transition-all", currentStep >= step ? 'bg-primary border-primary shadow-glow' : 'border-border bg-muted', currentStep === step && 'bk-step__node--active shadow-glow')} aria-label={`Step ${step} of 5: ${fullLabel}`} aria-current={currentStep === step ? "step" : undefined}>
+            }, index, arr) => <div key={step} className="flex flex-col items-center flex-1 relative z-10">
+                <div className={cn("bk-step__node flex items-center justify-center w-10 h-10 sm:w-12 sm:h-12 md:w-14 md:h-14 rounded-full border-2 transition-all", currentStep >= step ? 'bg-primary border-primary shadow-glow' : 'border-border bg-muted', currentStep === step && 'bk-step__node--active shadow-glow')} aria-label={`Step ${displayStep} of ${arr.length}: ${fullLabel}`} aria-current={currentStep === step ? "step" : undefined}>
                   {currentStep > step ? <Check className="w-4 h-4 sm:w-5 sm:h-5 md:w-6 md:h-6 text-primary-foreground" /> : <span className={cn("text-base sm:text-lg md:text-xl font-bold", currentStep === step ? "text-primary-foreground" : "text-muted-foreground")}>
-                    {step}
+                    {displayStep}
                   </span>}
                 </div>
                 <span className={`mt-1.5 sm:mt-2 text-[10px] sm:text-xs md:text-sm font-medium text-center leading-tight ${currentStep >= step ? 'text-primary' : 'text-muted-foreground'}`}>
                   <span className="hidden sm:inline">{fullLabel}</span>
                   <span className="sm:hidden">{label}</span>
                 </span>
-                {index < 4 && <div className={cn("bk-step__line absolute top-5 sm:top-6 md:top-7 left-[calc(50%+20px)] sm:left-[calc(50%+24px)] md:left-[calc(50%+28px)] w-[calc(100%-40px)] sm:w-[calc(100%-48px)] md:w-[calc(100%-56px)] h-0.5", currentStep > step ? 'bg-primary' : 'bg-border')} />}
+                {index < arr.length - 1 && <div className={cn("bk-step__line absolute top-5 sm:top-6 md:top-7 left-[calc(50%+20px)] sm:left-[calc(50%+24px)] md:left-[calc(50%+28px)] w-[calc(100%-40px)] sm:w-[calc(100%-48px)] md:w-[calc(100%-56px)] h-0.5", currentStep > step ? 'bg-primary' : 'bg-border')} />}
               </div>)}
           </div>
         </div>
@@ -2432,24 +2642,67 @@ const MultiStepBookingWidget = () => {
               </div>
             </div>
 
+            {/* Timezone Selection & Business Hours Info */}
+            <div className="space-y-4">
+              {/* Customer Timezone Selection */}
+              <div className="space-y-2">
+                <Label className="font-medium">Your Timezone</Label>
+                <Select
+                  value={formData.customerTimezone}
+                  onValueChange={(value) => setFormData({ ...formData, customerTimezone: value })}
+                >
+                  <SelectTrigger className="h-12">
+                    <SelectValue placeholder="Select your timezone">
+                      {findTimezone(formData.customerTimezone)?.label || formData.customerTimezone || 'Select timezone'}
+                    </SelectValue>
+                  </SelectTrigger>
+                  <SelectContent className="max-h-[300px]">
+                    {getTimezonesByRegion().map((group) => (
+                      <div key={group.region}>
+                        <div className="px-2 py-1.5 text-sm font-semibold text-muted-foreground bg-muted/50">
+                          {group.label}
+                        </div>
+                        {group.timezones.map((tz) => (
+                          <SelectItem key={tz.value} value={tz.value}>
+                            {tz.label}
+                          </SelectItem>
+                        ))}
+                      </div>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* Business Timezone Notice */}
+              <div className="flex items-center gap-2 p-3 bg-muted/50 rounded-lg text-sm">
+                <Clock className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+                <div>
+                  <span className="text-muted-foreground">Business operates in </span>
+                  <span className="font-medium">{findTimezone(workingHours.timezone)?.label || workingHours.timezone}</span>
+                  {!workingHours.isAlwaysOpen && (
+                    <span className="text-muted-foreground">
+                      {" "}({workingHours.formattedOpenTime} - {workingHours.formattedCloseTime})
+                    </span>
+                  )}
+                </div>
+              </div>
+            </div>
+
             {/* Row 2: Pickup & Return Datetime */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
               {/* Pickup Datetime */}
               <div className="space-y-2">
-                <div className="flex items-center gap-2">
-                  <Label className="font-medium">Pickup *</Label>
-                  <span className="text-xs text-muted-foreground px-2 py-0.5 bg-muted rounded">PST/PDT</span>
-                </div>
+                <Label className="font-medium">Pickup *</Label>
                 <div className="grid grid-cols-2 gap-2">
                   <Popover>
                     <PopoverTrigger asChild>
                       <Button variant="outline" className={cn("w-full justify-start text-left font-normal h-12", !formData.pickupDate && "text-muted-foreground")}>
                         <CalendarIcon className="mr-2 h-4 w-4" />
-                        {formData.pickupDate ? format(new Date(formData.pickupDate), "MMM dd") : <span>Date</span>}
+                        {formData.pickupDate ? format(parseDateString(formData.pickupDate), "MMM dd") : <span>Date</span>}
                       </Button>
                     </PopoverTrigger>
                     <PopoverContent className="w-auto p-0" align="start">
-                      <Calendar mode="single" selected={formData.pickupDate ? new Date(formData.pickupDate) : undefined} onSelect={date => {
+                      <Calendar mode="single" selected={formData.pickupDate ? parseDateString(formData.pickupDate) : undefined} onSelect={date => {
                         if (date) {
                           const dateStr = format(date, "yyyy-MM-dd");
                           if (blockedDates.includes(dateStr)) {
@@ -2472,22 +2725,34 @@ const MultiStepBookingWidget = () => {
                         const today = new Date(new Date().setHours(0, 0, 0, 0));
                         const oneYearFromNow = new Date(today);
                         oneYearFromNow.setFullYear(oneYearFromNow.getFullYear() + 1);
-                        return date < today || date > oneYearFromNow || blockedDates.includes(dateStr);
+                        // Check if the day is closed based on working hours
+                        const dayWorkingHours = getWorkingHoursForDate(date, tenant);
+                        const isClosedDay = !dayWorkingHours.enabled;
+                        return date < today || date > oneYearFromNow || blockedDates.includes(dateStr) || isClosedDay;
                       }} initialFocus className="pointer-events-auto" />
                     </PopoverContent>
                   </Popover>
-                  <TimePicker id="pickupTime" value={formData.pickupTime} onChange={value => {
-                    setFormData({
-                      ...formData,
-                      pickupTime: value
-                    });
-                    if (errors.pickupTime) {
-                      setErrors({
-                        ...errors,
-                        pickupTime: ""
+                  <TimePicker
+                    id="pickupTime"
+                    value={formData.pickupTime}
+                    onChange={value => {
+                      setFormData({
+                        ...formData,
+                        pickupTime: value
                       });
-                    }
-                  }} className="h-12 focus-visible:ring-primary" />
+                      if (errors.pickupTime) {
+                        setErrors({
+                          ...errors,
+                          pickupTime: ""
+                        });
+                      }
+                    }}
+                    className="h-12 focus-visible:ring-primary"
+                    businessHoursOpen={!pickupDateWorkingHours.isAlwaysOpen && pickupDateWorkingHours.enabled ? pickupDateWorkingHours.open : undefined}
+                    businessHoursClose={!pickupDateWorkingHours.isAlwaysOpen && pickupDateWorkingHours.enabled ? pickupDateWorkingHours.close : undefined}
+                    customerTimezone={formData.customerTimezone}
+                    tenantTimezone={workingHours.timezone}
+                  />
                 </div>
                 {errors.pickupDate && <p className="text-sm text-destructive">{errors.pickupDate}</p>}
                 {errors.pickupTime && !errors.pickupDate && <p className="text-sm text-destructive">{errors.pickupTime}</p>}
@@ -2495,20 +2760,17 @@ const MultiStepBookingWidget = () => {
 
               {/* Return Datetime */}
               <div className="space-y-2">
-                <div className="flex items-center gap-2">
-                  <Label className="font-medium">Return *</Label>
-                  <span className="text-xs text-muted-foreground px-2 py-0.5 bg-muted rounded">PST/PDT</span>
-                </div>
+                <Label className="font-medium">Return *</Label>
                 <div className="grid grid-cols-2 gap-2">
                   <Popover>
                     <PopoverTrigger asChild>
                       <Button variant="outline" className={cn("w-full justify-start text-left font-normal h-12", !formData.dropoffDate && "text-muted-foreground")}>
                         <CalendarIcon className="mr-2 h-4 w-4" />
-                        {formData.dropoffDate ? format(new Date(formData.dropoffDate), "MMM dd") : <span>Date</span>}
+                        {formData.dropoffDate ? format(parseDateString(formData.dropoffDate), "MMM dd") : <span>Date</span>}
                       </Button>
                     </PopoverTrigger>
                     <PopoverContent className="w-auto p-0" align="start">
-                      <Calendar mode="single" selected={formData.dropoffDate ? new Date(formData.dropoffDate) : undefined} onSelect={date => {
+                      <Calendar mode="single" selected={formData.dropoffDate ? parseDateString(formData.dropoffDate) : undefined} onSelect={date => {
                         if (date) {
                           const dateStr = format(date, "yyyy-MM-dd");
                           setFormData({
@@ -2523,135 +2785,154 @@ const MultiStepBookingWidget = () => {
                           }
                         }
                       }} disabled={date => {
-                        const pickupDate = formData.pickupDate ? new Date(formData.pickupDate) : new Date();
+                        const pickupDate = formData.pickupDate ? parseDateString(formData.pickupDate) : new Date();
                         const oneYearFromPickup = new Date(pickupDate);
                         oneYearFromPickup.setFullYear(oneYearFromPickup.getFullYear() + 1);
                         const dateStr = format(date, "yyyy-MM-dd");
-                        return date <= pickupDate || date > oneYearFromPickup || blockedDates.includes(dateStr);
+                        // Check if the day is closed based on working hours
+                        const dayWorkingHours = getWorkingHoursForDate(date, tenant);
+                        const isClosedDay = !dayWorkingHours.enabled;
+                        return date <= pickupDate || date > oneYearFromPickup || blockedDates.includes(dateStr) || isClosedDay;
                       }} initialFocus className="pointer-events-auto" />
                     </PopoverContent>
                   </Popover>
-                  <TimePicker id="dropoffTime" value={formData.dropoffTime} onChange={value => {
-                    setFormData({
-                      ...formData,
-                      dropoffTime: value
-                    });
-                    if (errors.dropoffTime) {
-                      setErrors({
-                        ...errors,
-                        dropoffTime: ""
+                  <TimePicker
+                    id="dropoffTime"
+                    value={formData.dropoffTime}
+                    onChange={value => {
+                      setFormData({
+                        ...formData,
+                        dropoffTime: value
                       });
-                    }
-                  }} className="h-12 focus-visible:ring-primary" />
+                      if (errors.dropoffTime) {
+                        setErrors({
+                          ...errors,
+                          dropoffTime: ""
+                        });
+                      }
+                    }}
+                    className="h-12 focus-visible:ring-primary"
+                    businessHoursOpen={!dropoffDateWorkingHours.isAlwaysOpen && dropoffDateWorkingHours.enabled ? dropoffDateWorkingHours.open : undefined}
+                    businessHoursClose={!dropoffDateWorkingHours.isAlwaysOpen && dropoffDateWorkingHours.enabled ? dropoffDateWorkingHours.close : undefined}
+                    customerTimezone={formData.customerTimezone}
+                    tenantTimezone={workingHours.timezone}
+                  />
                 </div>
                 {errors.dropoffDate && <p className="text-sm text-destructive">{errors.dropoffDate}</p>}
                 {errors.dropoffTime && !errors.dropoffDate && <p className="text-sm text-destructive">{errors.dropoffTime}</p>}
               </div>
             </div>
 
-            {/* Row 3: Driver DOB */}
-            <div className="space-y-2">
-              <Label className="font-medium">Date of Birth *</Label>
-              <div className="grid grid-cols-3 gap-2 max-w-md">
-                {/* Month Select */}
-                <Select
-                  value={formData.driverDOB ? (new Date(formData.driverDOB).getMonth() + 1).toString().padStart(2, '0') : ""}
-                  onValueChange={(month) => {
-                    const currentDate = formData.driverDOB ? new Date(formData.driverDOB) : new Date(2000, 0, 1);
-                    const newDate = new Date(currentDate.getFullYear(), parseInt(month) - 1, Math.min(currentDate.getDate(), new Date(currentDate.getFullYear(), parseInt(month), 0).getDate()));
-                    const dateStr = format(newDate, "yyyy-MM-dd");
-                    setFormData({ ...formData, driverDOB: dateStr });
-                    validateField('driverDOB', dateStr);
-                  }}
-                >
-                  <SelectTrigger className={cn("h-12", errors.driverDOB && "border-destructive")}>
-                    <SelectValue placeholder="Month" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'].map((month, i) => (
-                      <SelectItem key={i} value={(i + 1).toString().padStart(2, '0')}>{month}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                {/* Day Select */}
-                <Select
-                  value={formData.driverDOB ? new Date(formData.driverDOB).getDate().toString() : ""}
-                  onValueChange={(day) => {
-                    const currentDate = formData.driverDOB ? new Date(formData.driverDOB) : new Date(2000, 0, 1);
-                    const newDate = new Date(currentDate.getFullYear(), currentDate.getMonth(), parseInt(day));
-                    const dateStr = format(newDate, "yyyy-MM-dd");
-                    setFormData({ ...formData, driverDOB: dateStr });
-                    validateField('driverDOB', dateStr);
-                  }}
-                >
-                  <SelectTrigger className={cn("h-12", errors.driverDOB && "border-destructive")}>
-                    <SelectValue placeholder="Day" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {Array.from({ length: 31 }, (_, i) => (
-                      <SelectItem key={i + 1} value={(i + 1).toString()}>{i + 1}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                {/* Year Select */}
-                <Select
-                  value={formData.driverDOB ? new Date(formData.driverDOB).getFullYear().toString() : ""}
-                  onValueChange={(year) => {
-                    const currentDate = formData.driverDOB ? new Date(formData.driverDOB) : new Date(2000, 0, 1);
-                    const newDate = new Date(parseInt(year), currentDate.getMonth(), Math.min(currentDate.getDate(), new Date(parseInt(year), currentDate.getMonth() + 1, 0).getDate()));
-                    const dateStr = format(newDate, "yyyy-MM-dd");
-                    setFormData({ ...formData, driverDOB: dateStr });
-                    validateField('driverDOB', dateStr);
-                  }}
-                >
-                  <SelectTrigger className={cn("h-12", errors.driverDOB && "border-destructive")}>
-                    <SelectValue placeholder="Year" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {Array.from({ length: 100 }, (_, i) => new Date().getFullYear() - (tenant?.minimum_rental_age || 18) - i).map((year) => (
-                      <SelectItem key={year} value={year.toString()}>{year}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+            {/* Row 3: Driver DOB and Promo Code */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {/* Date of Birth */}
+              <div className="space-y-2">
+                <Label className="font-medium">Date of Birth *</Label>
+                <div className="grid grid-cols-3 gap-2">
+                  {/* Month Select */}
+                  <Select
+                    value={formData.driverDOB ? (parseDateString(formData.driverDOB).getMonth() + 1).toString().padStart(2, '0') : ""}
+                    onValueChange={(month) => {
+                      const currentDate = formData.driverDOB ? parseDateString(formData.driverDOB) : new Date(2000, 0, 1);
+                      const newDate = new Date(currentDate.getFullYear(), parseInt(month) - 1, Math.min(currentDate.getDate(), new Date(currentDate.getFullYear(), parseInt(month), 0).getDate()));
+                      const dateStr = format(newDate, "yyyy-MM-dd");
+                      setFormData({ ...formData, driverDOB: dateStr });
+                      validateField('driverDOB', dateStr);
+                    }}
+                  >
+                    <SelectTrigger className={cn("h-12", errors.driverDOB && "border-destructive")}>
+                      <SelectValue placeholder="Month" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'].map((month, i) => (
+                        <SelectItem key={i} value={(i + 1).toString().padStart(2, '0')}>{month}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  {/* Day Select */}
+                  <Select
+                    value={formData.driverDOB ? parseDateString(formData.driverDOB).getDate().toString() : ""}
+                    onValueChange={(day) => {
+                      const currentDate = formData.driverDOB ? parseDateString(formData.driverDOB) : new Date(2000, 0, 1);
+                      const newDate = new Date(currentDate.getFullYear(), currentDate.getMonth(), parseInt(day));
+                      const dateStr = format(newDate, "yyyy-MM-dd");
+                      setFormData({ ...formData, driverDOB: dateStr });
+                      validateField('driverDOB', dateStr);
+                    }}
+                  >
+                    <SelectTrigger className={cn("h-12", errors.driverDOB && "border-destructive")}>
+                      <SelectValue placeholder="Day" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {Array.from({ length: 31 }, (_, i) => (
+                        <SelectItem key={i + 1} value={(i + 1).toString()}>{i + 1}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  {/* Year Select */}
+                  <Select
+                    value={formData.driverDOB ? parseDateString(formData.driverDOB).getFullYear().toString() : ""}
+                    onValueChange={(year) => {
+                      const currentDate = formData.driverDOB ? parseDateString(formData.driverDOB) : new Date(2000, 0, 1);
+                      const newDate = new Date(parseInt(year), currentDate.getMonth(), Math.min(currentDate.getDate(), new Date(parseInt(year), currentDate.getMonth() + 1, 0).getDate()));
+                      const dateStr = format(newDate, "yyyy-MM-dd");
+                      setFormData({ ...formData, driverDOB: dateStr });
+                      validateField('driverDOB', dateStr);
+                    }}
+                  >
+                    <SelectTrigger className={cn("h-12", errors.driverDOB && "border-destructive")}>
+                      <SelectValue placeholder="Year" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {Array.from({ length: 100 }, (_, i) => new Date().getFullYear() - (tenant?.minimum_rental_age || 18) - i).map((year) => (
+                        <SelectItem key={year} value={year.toString()}>{year}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                {formData.driverDOB && (
+                  <p className="text-sm text-muted-foreground">Age: <span className={cn("font-medium", errors.driverDOB ? "text-destructive" : "text-foreground")}>{calculateAge(parseDateString(formData.driverDOB))} years old</span></p>
+                )}
+                {errors.driverDOB && <p className="text-sm text-destructive">{errors.driverDOB}</p>}
               </div>
-              {formData.driverDOB && (
-                <p className="text-sm text-muted-foreground">Age: <span className={cn("font-medium", errors.driverDOB ? "text-destructive" : "text-foreground")}>{calculateAge(new Date(formData.driverDOB))} years old</span></p>
-              )}
-              {errors.driverDOB && <p className="text-sm text-destructive">{errors.driverDOB}</p>}
-            </div>
 
-            {/* Row 4: Promo Code */}
-            <div className="space-y-2 max-w-md">
-              <Label htmlFor="promoCode" className="font-medium">Promo Code (Optional)</Label>
-              <div className="flex gap-2">
-                <Input
-                  id="promoCode"
-                  placeholder="Enter code"
-                  value={formData.promoCode}
-                  onChange={(e) => {
-                    setFormData({ ...formData, promoCode: e.target.value });
-                    setPromoError(null);
-                    if (!e.target.value) setPromoDetails(null);
-                  }}
-                  className={cn("h-12", promoError ? "border-destructive" : promoDetails ? "border-green-500" : "")}
-                />
-                <Button
-                  type="button"
-                  variant="outline"
-                  className="h-12 px-4"
-                  onClick={() => validatePromoCode(formData.promoCode)}
-                  disabled={loading || !formData.promoCode}
-                >
-                  Apply
-                </Button>
+              {/* Promo Code */}
+              <div className="space-y-2">
+                <Label htmlFor="promoCode" className="font-medium">Promo Code (Optional)</Label>
+                <div className="flex gap-2">
+                  <Input
+                    id="promoCode"
+                    placeholder="Enter code"
+                    value={formData.promoCode}
+                    onChange={(e) => {
+                      setFormData({ ...formData, promoCode: e.target.value });
+                      setPromoError(null);
+                      if (!e.target.value) {
+                        setPromoDetails(null);
+                        localStorage.removeItem('appliedPromoCode');
+                        localStorage.removeItem('appliedPromoDetails');
+                      }
+                    }}
+                    className={cn("h-12", promoError ? "border-destructive" : promoDetails ? "border-green-500" : "")}
+                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="h-12 px-4"
+                    onClick={() => validatePromoCode(formData.promoCode)}
+                    disabled={loading || !formData.promoCode}
+                  >
+                    Apply
+                  </Button>
+                </div>
+                {promoError && <p className="text-sm text-destructive">{promoError}</p>}
+                {promoDetails && (
+                  <p className="text-sm text-green-600 font-medium flex items-center gap-1">
+                    <Check className="w-4 h-4" />
+                    Code applied: {promoDetails.type === 'percentage' ? `${promoDetails.value}% off` : `$${promoDetails.value} off`}
+                  </p>
+                )}
               </div>
-              {promoError && <p className="text-sm text-destructive">{promoError}</p>}
-              {promoDetails && (
-                <p className="text-sm text-green-600 font-medium flex items-center gap-1">
-                  <Check className="w-4 h-4" />
-                  Code applied: {promoDetails.type === 'percentage' ? `${promoDetails.value}% off` : `$${promoDetails.value} off`}
-                </p>
-              )}
             </div>
           </div>
 
@@ -2682,7 +2963,7 @@ const MultiStepBookingWidget = () => {
             {formData.pickupDate && formData.dropoffDate && <div className="flex items-center gap-2 text-sm text-muted-foreground">
               <CalendarIcon className="w-4 h-4" />
               <span>
-                {format(new Date(formData.pickupDate), "MMM dd")} → {format(new Date(formData.dropoffDate), "MMM dd")}
+                {format(parseDateString(formData.pickupDate), "MMM dd")} → {format(parseDateString(formData.dropoffDate), "MMM dd")}
               </span>
               <span>•</span>
               <span>{formData.pickupLocation.split(',')[0] || 'Selected location'}</span>
@@ -2692,7 +2973,7 @@ const MultiStepBookingWidget = () => {
           </div>
 
           {/* Toolbar */}
-          <Card className="p-4 bg-card/90 backdrop-blur-sm border-primary/15 sticky top-20 z-10 shadow-lg">
+          <Card className="p-4 bg-card/90 backdrop-blur-sm border-primary/15 sticky top-20 z-30 shadow-lg">
             <div className="flex flex-col gap-4">
               {/* Top Row: Search, Sort, View Toggle */}
               <div className="flex flex-col sm:flex-row gap-3">
@@ -2737,11 +3018,18 @@ const MultiStepBookingWidget = () => {
                       <div className="flex items-center justify-between">
                         <h4 className="font-semibold">Filters</h4>
                         <Button variant="ghost" size="sm" onClick={() => {
+                          setPriceFilterMode("daily"); // Reset to daily mode
+                          // Recalculate range for daily prices
+                          const prices = vehicles.map(v => v.daily_rent || 0).filter(p => p > 0);
+                          const newRange: [number, number] = prices.length > 0
+                            ? [Math.min(...prices), Math.max(...prices)]
+                            : [0, 1000];
+                          setOriginalPriceRange(newRange);
                           setFilters({
                             transmission: [],
                             fuel: [],
                             seats: [2, 7],
-                            priceRange: originalPriceRange // Use stored original range
+                            priceRange: newRange
                           });
                         }}>
                           Reset
@@ -2782,10 +3070,56 @@ const MultiStepBookingWidget = () => {
                         }))} min={2} max={7} step={1} className="py-2" />
                         </div> */}
 
+                      {/* Price Filter Mode */}
+                      <div className="space-y-2">
+                        <Label className="text-sm font-medium">Filter By Price</Label>
+                        <div className="flex gap-1 p-1 bg-muted/50 rounded-lg">
+                          <button
+                            type="button"
+                            onClick={() => handlePriceFilterModeChange("daily")}
+                            className={cn(
+                              "flex-1 px-3 py-1.5 text-xs font-medium rounded-md transition-colors",
+                              priceFilterMode === "daily"
+                                ? "bg-primary text-primary-foreground"
+                                : "text-muted-foreground hover:text-foreground hover:bg-muted"
+                            )}
+                          >
+                            Daily
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handlePriceFilterModeChange("weekly")}
+                            className={cn(
+                              "flex-1 px-3 py-1.5 text-xs font-medium rounded-md transition-colors",
+                              priceFilterMode === "weekly"
+                                ? "bg-primary text-primary-foreground"
+                                : "text-muted-foreground hover:text-foreground hover:bg-muted"
+                            )}
+                          >
+                            Weekly
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handlePriceFilterModeChange("monthly")}
+                            className={cn(
+                              "flex-1 px-3 py-1.5 text-xs font-medium rounded-md transition-colors",
+                              priceFilterMode === "monthly"
+                                ? "bg-primary text-primary-foreground"
+                                : "text-muted-foreground hover:text-foreground hover:bg-muted"
+                            )}
+                          >
+                            Monthly
+                          </button>
+                        </div>
+                      </div>
+
                       {/* Price Range */}
                       <div className="space-y-2">
                         <Label className="text-sm font-medium">
                           Price Range: ${filters.priceRange[0]} - ${filters.priceRange[1]}
+                          <span className="text-xs text-muted-foreground ml-1">
+                            / {priceFilterMode === "daily" ? "day" : priceFilterMode === "weekly" ? "week" : "month"}
+                          </span>
                         </Label>
                         <div className="flex justify-between text-xs text-muted-foreground mb-1">
                           <span>Budget</span>
@@ -2871,7 +3205,7 @@ const MultiStepBookingWidget = () => {
                     let displayPrice = estimation?.total || 0;
                     let originalPrice = displayPrice;
                     let hasDiscount = false;
-                    let promoErrorMsg = null;
+                    let promoErrorMsg: string | null = null;
 
                     if (promoDetails && estimation) {
                       if (promoDetails.type === 'fixed_amount') {
@@ -2995,6 +3329,10 @@ const MultiStepBookingWidget = () => {
                                     {isRollsRoyce && <Crown className="w-5 h-5 text-primary" />}
                                   </h4>
                                   {vehicle.colour && <p className="text-xs text-muted-foreground mt-1">{vehicle.colour}</p>}
+                                  <div className="flex items-center gap-1 text-xs text-muted-foreground mt-1">
+                                    <Gauge className="h-3 w-3" />
+                                    <span>{vehicle.allowed_mileage ? `${vehicle.allowed_mileage.toLocaleString()} mi/mo` : 'Unlimited miles'}</span>
+                                  </div>
                                 </div>
                                 {isSelected && <div className="w-6 h-6 bg-primary rounded-full flex items-center justify-center">
                                   <Check className="w-4 h-4 text-black" />
@@ -3206,6 +3544,12 @@ const MultiStepBookingWidget = () => {
                           {/* Spec Bar */}
                           <div className="flex items-center gap-4 text-xs text-muted-foreground pb-3 border-b border-border/50">
                             <span title="Registration">{vehicle.reg}</span>
+                            <span className="flex items-center gap-1" title="Mileage Allowance">
+                              <Gauge className="h-3 w-3" />
+                              {vehicle.allowed_mileage
+                                ? `${vehicle.allowed_mileage.toLocaleString()} mi/mo`
+                                : 'Unlimited'}
+                            </span>
                           </div>
 
                           {/* Price Section */}
@@ -3276,13 +3620,13 @@ const MultiStepBookingWidget = () => {
                 <div className="space-y-3 text-sm">
                   <div>
                     <p className="text-muted-foreground text-xs uppercase tracking-wide mb-1">Pickup</p>
-                    <p className="font-medium">{formData.pickupDate ? format(new Date(formData.pickupDate), "MMM dd, yyyy") : "—"}</p>
+                    <p className="font-medium">{formData.pickupDate ? format(parseDateString(formData.pickupDate), "MMM dd, yyyy") : "—"}</p>
                     <p className="text-muted-foreground text-xs">{formatTimeWithPeriod(formData.pickupTime)}</p>
                   </div>
 
                   <div>
                     <p className="text-muted-foreground text-xs uppercase tracking-wide mb-1">Return</p>
-                    <p className="font-medium">{formData.dropoffDate ? format(new Date(formData.dropoffDate), "MMM dd, yyyy") : "—"}</p>
+                    <p className="font-medium">{formData.dropoffDate ? format(parseDateString(formData.dropoffDate), "MMM dd, yyyy") : "—"}</p>
                     <p className="text-muted-foreground text-xs">{formatTimeWithPeriod(formData.dropoffTime)}</p>
                   </div>
 
@@ -3386,8 +3730,8 @@ const MultiStepBookingWidget = () => {
           </div>
         </div>}
 
-        {/* Step 3: Insurance Verification */}
-        {currentStep === 3 && <div className="space-y-8 animate-fade-in">
+        {/* Step 3: Insurance Verification (skipped for insurance-exempt tenants) */}
+        {currentStep === 3 && !skipInsurance && <div className="space-y-8 animate-fade-in">
           {/* Header */}
           <div className="text-center space-y-2">
             <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-primary/10 mb-4">
@@ -3488,69 +3832,67 @@ const MultiStepBookingWidget = () => {
             <div className="max-w-3xl mx-auto space-y-6">
               {uploadedDocumentId ? (
                 <Card className="overflow-hidden border-2 border-primary/30 bg-card">
-                  <div className="p-8">
+                  <div className="p-8 space-y-6">
+                    {/* Header with icon */}
                     <div className="flex items-start gap-6">
                       <div className="flex-shrink-0">
                         <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center">
                           <FileCheck className="w-8 h-8 text-primary" />
                         </div>
                       </div>
-                      <div className="flex-1 space-y-4">
-                        <div>
-                          <h4 className="text-xl font-semibold text-foreground mb-2">
-                            Documents Uploaded Successfully!
-                          </h4>
-                          <p className="text-muted-foreground">
-                            Our team is reviewing your insurance certificate now.
-                          </p>
-                        </div>
+                      <div className="flex-1">
+                        <h4 className="text-xl font-semibold text-foreground mb-2">
+                          Documents Uploaded Successfully!
+                        </h4>
+                        <p className="text-muted-foreground">
+                          Our team is reviewing your insurance certificate now.
+                        </p>
+                      </div>
+                    </div>
 
-                        {/* Upload Complete Progress */}
-                        <div className="bg-gradient-to-br from-primary/5 to-transparent rounded-lg p-6 border-2 border-primary/20">
-                          <div className="max-w-2xl mx-auto">
-                            <div className="text-center space-y-6">
-                              {/* Success Icon with animated background */}
-                              <div className="relative inline-block mb-4">
-                                <div className="absolute inset-0 bg-primary/10 rounded-full blur-2xl animate-pulse"></div>
-                                <div className="relative">
-                                  <CheckCircle className="h-16 w-16 mx-auto text-primary" />
-                                </div>
-                              </div>
-
-                              <h3 className="text-2xl md:text-3xl font-bold text-primary">
-                                Upload Complete!
-                              </h3>
-
-                              <p className="text-base md:text-lg text-muted-foreground max-w-lg mx-auto">
-                                Your insurance certificate is being reviewed by our team
-                              </p>
-
-                              {/* Progress Bar at 100% */}
-                              <div className="space-y-3 pt-2">
-                                <div className="w-full bg-muted rounded-full h-3 overflow-hidden">
-                                  <div className="bg-primary h-full w-full transition-all duration-500"></div>
-                                </div>
-                                <p className="text-sm font-medium text-primary">
-                                  100% complete
-                                </p>
-
-                                {/* Subtle AI indicator */}
-                                <div className="flex items-center justify-center gap-2 pt-2">
-                                  <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-primary/10 border border-primary/20">
-                                    <div className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse"></div>
-                                    <span className="text-xs text-muted-foreground">AI-assisted verification</span>
-                                  </div>
-                                </div>
-                              </div>
-                            </div>
+                    {/* Upload Complete Progress - Full width centered */}
+                    <div className="bg-gradient-to-br from-primary/5 to-transparent rounded-lg p-6 border-2 border-primary/20">
+                      <div className="flex flex-col items-center text-center space-y-6">
+                        {/* Success Icon with animated background */}
+                        <div className="relative">
+                          <div className="absolute inset-0 bg-primary/10 rounded-full blur-2xl animate-pulse"></div>
+                          <div className="relative">
+                            <CheckCircle className="h-16 w-16 text-primary" />
                           </div>
                         </div>
 
-                        <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                          <CheckCircle className="w-4 h-4 text-primary" />
-                          <span>You can continue with your booking</span>
+                        <h3 className="text-2xl md:text-3xl font-bold text-primary">
+                          Upload Complete!
+                        </h3>
+
+                        <p className="text-base md:text-lg text-muted-foreground max-w-lg">
+                          Your insurance certificate is being reviewed by our team
+                        </p>
+
+                        {/* Progress Bar at 100% */}
+                        <div className="w-full max-w-md space-y-3 pt-2">
+                          <div className="w-full bg-muted rounded-full h-3 overflow-hidden">
+                            <div className="bg-primary h-full w-full transition-all duration-500"></div>
+                          </div>
+                          <p className="text-sm font-medium text-primary">
+                            100% complete
+                          </p>
+
+                          {/* Subtle AI indicator */}
+                          <div className="flex items-center justify-center gap-2 pt-2">
+                            <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-primary/10 border border-primary/20">
+                              <div className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse"></div>
+                              <span className="text-xs text-muted-foreground">AI-assisted verification</span>
+                            </div>
+                          </div>
                         </div>
                       </div>
+                    </div>
+
+                    {/* Footer message */}
+                    <div className="flex items-center justify-center gap-2 text-sm text-muted-foreground">
+                      <CheckCircle className="w-4 h-4 text-primary" />
+                      <span>You can continue with your booking</span>
                     </div>
                   </div>
                 </Card>
@@ -3821,7 +4163,7 @@ const MultiStepBookingWidget = () => {
                 <PhoneInput
                   id="customerPhone"
                   value={formData.customerPhone}
-                  defaultCountry="GB"
+                  defaultCountry="US"
                   onChange={value => {
                     setFormData({
                       ...formData,
@@ -4010,6 +4352,68 @@ const MultiStepBookingWidget = () => {
                             License/ID: {formData.licenseNumber.slice(0, 4)}****
                           </p>
                         )}
+
+                        {/* Verification Images */}
+                        {verificationImages && (verificationImages.document_front_url || verificationImages.document_back_url || verificationImages.selfie_image_url) && (
+                          <div className="mt-3 pt-3 border-t border-green-500/20">
+                            <p className="text-xs text-muted-foreground mb-2">Uploaded Documents</p>
+                            <div className="grid grid-cols-3 gap-2">
+                              {/* ID Front */}
+                              <div className="flex flex-col items-center">
+                                <div className={`w-full aspect-[3/4] rounded-md overflow-hidden border bg-muted/30 ${verificationImages.document_front_url ? 'border-green-500/30' : 'border-muted'}`}>
+                                  {verificationImages.document_front_url ? (
+                                    <img
+                                      src={verificationImages.document_front_url}
+                                      alt="ID Front"
+                                      className="w-full h-full object-cover"
+                                    />
+                                  ) : (
+                                    <div className="w-full h-full flex items-center justify-center">
+                                      <FileCheck className="h-4 w-4 text-muted-foreground/50" />
+                                    </div>
+                                  )}
+                                </div>
+                                <span className="text-[9px] mt-1 text-muted-foreground">ID Front</span>
+                              </div>
+
+                              {/* ID Back */}
+                              <div className="flex flex-col items-center">
+                                <div className={`w-full aspect-[3/4] rounded-md overflow-hidden border bg-muted/30 ${verificationImages.document_back_url ? 'border-green-500/30' : 'border-muted'}`}>
+                                  {verificationImages.document_back_url ? (
+                                    <img
+                                      src={verificationImages.document_back_url}
+                                      alt="ID Back"
+                                      className="w-full h-full object-cover"
+                                    />
+                                  ) : (
+                                    <div className="w-full h-full flex items-center justify-center">
+                                      <FileCheck className="h-4 w-4 text-muted-foreground/50" />
+                                    </div>
+                                  )}
+                                </div>
+                                <span className="text-[9px] mt-1 text-muted-foreground">ID Back</span>
+                              </div>
+
+                              {/* Selfie */}
+                              <div className="flex flex-col items-center">
+                                <div className={`w-full aspect-[3/4] rounded-md overflow-hidden border bg-muted/30 ${verificationImages.selfie_image_url ? 'border-green-500/30' : 'border-muted'}`}>
+                                  {verificationImages.selfie_image_url ? (
+                                    <img
+                                      src={verificationImages.selfie_image_url}
+                                      alt="Selfie"
+                                      className="w-full h-full object-cover"
+                                    />
+                                  ) : (
+                                    <div className="w-full h-full flex items-center justify-center">
+                                      <User className="h-4 w-4 text-muted-foreground/50" />
+                                    </div>
+                                  )}
+                                </div>
+                                <span className="text-[9px] mt-1 text-muted-foreground">Selfie</span>
+                              </div>
+                            </div>
+                          </div>
+                        )}
                       </div>
                     </div>
                     <Button
@@ -4060,7 +4464,7 @@ const MultiStepBookingWidget = () => {
           {/* Navigation Buttons */}
           <div className="flex flex-col sm:flex-row gap-3 sm:gap-4">
             <Button
-              onClick={() => setCurrentStep(3)}
+              onClick={() => setCurrentStep(skipInsurance ? 2 : 3)}
               variant="outline"
               className="w-full sm:flex-1 h-11 sm:h-12 border-primary text-primary hover:bg-primary/10 font-semibold text-sm sm:text-base"
               size="lg"
@@ -4096,24 +4500,33 @@ const MultiStepBookingWidget = () => {
               formatted: '1 day'
             }}
             vehicleTotal={estimatedBooking?.total || 0}
+            promoDetails={promoDetails}
             onBack={() => setCurrentStep(4)}
           />
         </div>}
 
       </div>
-    </Card >
+    </Card>
 
     {/* Insurance Upload Dialog */}
-    < InsuranceUploadDialog
+    <InsuranceUploadDialog
       open={showUploadDialog}
       onOpenChange={setShowUploadDialog}
       onUploadComplete={async (documentId, fileUrl) => {
         // documentId is the database record ID, fileUrl is the storage path
         setUploadedDocumentId(documentId);
-        setScanningDocument(true);
         setShowUploadDialog(false);
 
-        // Trigger AI document review
+        // Skip AI scanning if documentId is 'pending' (file uploaded but no DB record yet)
+        // AI scanning will happen after checkout when the document record is created
+        if (documentId === 'pending') {
+          console.log('[INSURANCE] File uploaded to storage, AI scanning will happen at checkout');
+          toast.success("Document uploaded! It will be verified during checkout.");
+          return;
+        }
+
+        // Trigger AI document review for documents with actual database records
+        setScanningDocument(true);
         try {
           const { data, error } = await supabase.functions.invoke('scan-insurance-document', {
             body: { documentId, fileUrl }

@@ -106,12 +106,26 @@ export function useCustomerBlockingActions() {
       });
 
       if (error) throw error;
-      return data;
+
+      // Check if the RPC returned an error in its response
+      if (data && typeof data === 'object' && 'success' in data && !data.success) {
+        throw new Error(data.error || 'Failed to block customer');
+      }
+
+      return customerId; // Return customerId for cache invalidation
     },
-    onSuccess: () => {
+    onSuccess: (customerId) => {
+      // Invalidate all related queries to force UI refresh
       queryClient.invalidateQueries({ queryKey: ['customers'] });
       queryClient.invalidateQueries({ queryKey: ['customers-list'] });
       queryClient.invalidateQueries({ queryKey: ['blocked-identities'] });
+      // Invalidate the specific customer detail query
+      queryClient.invalidateQueries({ queryKey: ['customer', customerId] });
+      // Also try with partial match for any customer queries
+      queryClient.invalidateQueries({
+        predicate: (query) =>
+          query.queryKey[0] === 'customer' && query.queryKey[1] === customerId
+      });
       toast({
         title: "Customer Blocked",
         description: "The customer has been blocked and their identifiers added to the blocklist.",
@@ -134,12 +148,26 @@ export function useCustomerBlockingActions() {
       });
 
       if (error) throw error;
-      return data;
+
+      // Check if the RPC returned an error in its response
+      if (data && typeof data === 'object' && 'success' in data && !data.success) {
+        throw new Error(data.error || 'Failed to unblock customer');
+      }
+
+      return customerId; // Return customerId for cache invalidation
     },
-    onSuccess: () => {
+    onSuccess: (customerId) => {
+      // Invalidate all related queries to force UI refresh
       queryClient.invalidateQueries({ queryKey: ['customers'] });
       queryClient.invalidateQueries({ queryKey: ['customers-list'] });
       queryClient.invalidateQueries({ queryKey: ['blocked-identities'] });
+      // Invalidate the specific customer detail query
+      queryClient.invalidateQueries({ queryKey: ['customer', customerId] });
+      // Also try with partial match for any customer queries
+      queryClient.invalidateQueries({
+        predicate: (query) =>
+          query.queryKey[0] === 'customer' && query.queryKey[1] === customerId
+      });
       toast({
         title: "Customer Unblocked",
         description: "The customer has been unblocked.",

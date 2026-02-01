@@ -14,8 +14,15 @@ export interface RentalSettings {
   tax_percentage: number | null;
   service_fee_enabled: boolean | null;
   service_fee_amount: number | null;
+  service_fee_type: 'percentage' | 'fixed_amount' | null;
+  service_fee_value: number | null;
   deposit_mode: 'global' | 'per_vehicle' | null;
   global_deposit_amount: number | null;
+  // Working hours settings
+  working_hours_enabled: boolean | null;
+  working_hours_open: string | null;
+  working_hours_close: string | null;
+  working_hours_always_open: boolean | null;
 }
 
 const DEFAULT_RENTAL_SETTINGS: RentalSettings = {
@@ -29,8 +36,15 @@ const DEFAULT_RENTAL_SETTINGS: RentalSettings = {
   tax_percentage: 0,
   service_fee_enabled: false,
   service_fee_amount: 0,
+  service_fee_type: 'fixed_amount',
+  service_fee_value: 0,
   deposit_mode: 'global',
   global_deposit_amount: 0,
+  // Working hours defaults
+  working_hours_enabled: true,
+  working_hours_open: '09:00',
+  working_hours_close: '17:00',
+  working_hours_always_open: false,
 };
 
 /**
@@ -72,8 +86,14 @@ export const useRentalSettings = () => {
           tax_percentage,
           service_fee_enabled,
           service_fee_amount,
+          service_fee_type,
+          service_fee_value,
           deposit_mode,
-          global_deposit_amount
+          global_deposit_amount,
+          working_hours_enabled,
+          working_hours_open,
+          working_hours_close,
+          working_hours_always_open
         `)
         .eq('id', tenant.id)
         .single();
@@ -84,7 +104,13 @@ export const useRentalSettings = () => {
       }
 
       console.log('[RentalSettings] Settings loaded:', data);
-      return { ...DEFAULT_RENTAL_SETTINGS, ...data } as RentalSettings;
+
+      // Map service_fee_amount to service_fee_value for backward compatibility
+      const result = { ...DEFAULT_RENTAL_SETTINGS, ...data };
+      if (result.service_fee_value === null || result.service_fee_value === undefined) {
+        result.service_fee_value = result.service_fee_amount ?? 0;
+      }
+      return result as RentalSettings;
     },
     enabled: !!tenant?.id,
     staleTime: 30 * 1000, // 30 seconds
@@ -115,8 +141,14 @@ export const useRentalSettings = () => {
           tax_percentage,
           service_fee_enabled,
           service_fee_amount,
+          service_fee_type,
+          service_fee_value,
           deposit_mode,
-          global_deposit_amount
+          global_deposit_amount,
+          working_hours_enabled,
+          working_hours_open,
+          working_hours_close,
+          working_hours_always_open
         `);
 
       if (error) {
