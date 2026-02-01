@@ -20,7 +20,6 @@ interface Fine {
   issue_date: string;
   due_date: string;
   amount: number;
-  liability: string;
   status: string;
   notes: string | null;
   customer_id: string | null;
@@ -158,7 +157,7 @@ const FineDetail = () => {
   }
 
   // Action button states
-  const canCharge = fine.liability === 'Customer' && fine.status === 'Open';
+  const canCharge = fine.status === 'Open';
   const canWaive = fine.status === 'Open';
   const isCharged = fine.status === 'Charged';
 
@@ -184,9 +183,9 @@ const FineDetail = () => {
 
   return (
     <TooltipProvider>
-      <div className="space-y-16 max-w-7xl mx-auto p-6 pt-8">
-        {/* Enhanced Header */}
-        <div className="flex flex-col space-y-4 lg:flex-row lg:items-center lg:justify-between lg:space-y-0 mb-8">
+      <div className="container mx-auto p-6 space-y-6">
+        {/* Header */}
+        <div className="flex flex-col space-y-4 sm:flex-row sm:items-center sm:justify-between sm:space-y-0">
           <div className="flex items-center gap-4">
             <Tooltip>
               <TooltipTrigger asChild>
@@ -275,11 +274,11 @@ const FineDetail = () => {
           />
         </div>
 
-        {/* Enhanced Tabbed Layout */}
+        {/* Tabbed Layout */}
         <Tabs defaultValue="overview" className="w-full">
           <TabsList className="grid w-full grid-cols-2">
             <TabsTrigger value="overview">Overview</TabsTrigger>
-            <TabsTrigger value="evidence">Evidence</TabsTrigger>
+            <TabsTrigger value="documents">Documents</TabsTrigger>
           </TabsList>
 
           <TabsContent value="overview" className="space-y-6 mt-6">
@@ -311,12 +310,12 @@ const FineDetail = () => {
             </Card>
           </TabsContent>
 
-          <TabsContent value="evidence" className="space-y-6 mt-6">
+          <TabsContent value="documents" className="space-y-6 mt-6">
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                   <FileText className="h-5 w-5 text-primary" />
-                  Evidence Files
+                  Documents
                 </CardTitle>
               </CardHeader>
               <CardContent>
@@ -342,11 +341,10 @@ const FineDetail = () => {
                 ) : (
                   <div className="text-center py-12">
                     <FileText className="mx-auto h-12 w-12 text-muted-foreground mb-4" />
-                    <h3 className="text-lg font-medium mb-2">No evidence files</h3>
-                    <Button variant="outline" disabled>
-                      <Upload className="h-4 w-4 mr-2" />
-                      Upload Evidence (Coming Soon)
-                    </Button>
+                    <h3 className="text-lg font-medium mb-2">No documents</h3>
+                    <p className="text-sm text-muted-foreground">
+                      Documents related to this fine will appear here
+                    </p>
                   </div>
                 )}
               </CardContent>

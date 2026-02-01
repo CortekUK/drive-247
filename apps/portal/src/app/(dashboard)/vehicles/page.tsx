@@ -402,11 +402,6 @@ export default function VehiclesListEnhanced() {
         </Select>
       </div>
 
-      {/* Results Info */}
-      <div className="text-sm text-muted-foreground">
-        Showing {paginatedVehicles.length} of {filteredVehicles.length} vehicles
-      </div>
-
       {/* Table */}
       {filteredVehicles.length === 0 ? (
         <EmptyState
@@ -496,8 +491,11 @@ export default function VehiclesListEnhanced() {
       )}
 
       {/* Pagination */}
-      {totalPages > 1 && (
-        <div className="flex justify-between items-center">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+        <div className="text-sm text-muted-foreground">
+          Showing {paginatedVehicles.length} of {filteredVehicles.length} vehicles
+        </div>
+        <div className="flex items-center gap-4 w-full sm:w-auto flex-wrap justify-center sm:justify-end">
           <div className="flex items-center gap-2">
             <span className="text-sm text-muted-foreground">Rows per page:</span>
             <Select value={pageSize.toString()} onValueChange={(value) => {
@@ -534,14 +532,14 @@ export default function VehiclesListEnhanced() {
               Previous
             </Button>
 
-            <span className="text-sm text-muted-foreground">
-              Page {currentPage} of {totalPages}
+            <span className="text-sm text-muted-foreground whitespace-nowrap">
+              Page {currentPage} of {totalPages || 1}
             </span>
 
             <Button
               variant="outline"
               size="sm"
-              disabled={currentPage === totalPages}
+              disabled={currentPage === totalPages || totalPages <= 1}
               onClick={() => {
                 setCurrentPage(currentPage + 1);
                 const params = new URLSearchParams(searchParams.toString());
@@ -553,7 +551,7 @@ export default function VehiclesListEnhanced() {
             </Button>
           </div>
         </div>
-      )}
+      </div>
     </div>
   );
 }

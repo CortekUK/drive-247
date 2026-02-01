@@ -19,6 +19,8 @@ export interface SearchResults {
   payments: SearchResult[];
   plates: SearchResult[];
   insurance: SearchResult[];
+  invoices: SearchResult[];
+  documents: SearchResult[];
 }
 
 // Fuzzy matching utility
@@ -79,6 +81,8 @@ export const searchService = {
         payments: [],
         plates: [],
         insurance: [],
+        invoices: [],
+        documents: [],
       };
     }
 
@@ -91,6 +95,8 @@ export const searchService = {
       payments: [],
       plates: [],
       insurance: [],
+      invoices: [],
+      documents: [],
     };
 
     try {
@@ -321,6 +327,147 @@ export const searchService = {
           }));
 
         results.insurance = rankResults(insuranceResults, query);
+      }
+
+      // Search invoices (if not filtered out)
+      if (entityFilter === 'all' || entityFilter === 'invoices') {
+        try {
+          const { data: invoices, error: invoiceError } = await supabase
+            .from("invoices" as any)
+            .select(`
+              id,
+              invoice_number,
+              invoice_date,
+              total_amount,
+              status,
+              customer_id,
+              vehicle_id
+            `)
+            .eq("tenant_id", tenantId || '')
+            .order('invoice_date', { ascending: false })
+            .limit(100);
+
+          if (invoiceError) {
+            console.error('Invoice search error:', invoiceError);
+          }
+
+          // Get customer and vehicle data separately if we have invoices
+          let customerMap: Record<string, string> = {};
+          let vehicleMap: Record<string, { reg: string; make: string; model: string }> = {};
+
+          if (invoices && invoices.length > 0) {
+            const customerIds = [...new Set(invoices.map((i: any) => i.customer_id).filter(Boolean))];
+            const vehicleIds = [...new Set(invoices.map((i: any) => i.vehicle_id).filter(Boolean))];
+
+            if (customerIds.length > 0) {
+              const { data: customers } = await supabase
+                .from("customers")
+                .select("id, name")
+                .in("id", customerIds);
+              customers?.forEach((c: any) => { customerMap[c.id] = c.name; });
+            }
+
+            if (vehicleIds.length > 0) {
+              const { data: vehicles } = await supabase
+                .from("vehicles")
+                .select("id, reg, make, model")
+                .in("id", vehicleIds);
+              vehicles?.forEach((v: any) => { vehicleMap[v.id] = { reg: v.reg, make: v.make, model: v.model }; });
+            }
+          }
+
+          // Client-side filtering to search across multiple fields
+          const lowerQuery = query.toLowerCase();
+          const filteredInvoices = (invoices || []).filter((invoice: any) => {
+            const invoiceNum = invoice.invoice_number?.toLowerCase() || '';
+            const customerName = customerMap[invoice.customer_id]?.toLowerCase() || '';
+            const vehicle = vehicleMap[invoice.vehicle_id];
+            const vehicleReg = vehicle?.reg?.toLowerCase() || '';
+            const vehicleMake = vehicle?.make?.toLowerCase() || '';
+            const vehicleModel = vehicle?.model?.toLowerCase() || '';
+
+            return invoiceNum.includes(lowerQuery) ||
+                   customerName.includes(lowerQuery) ||
+                   vehicleReg.includes(lowerQuery) ||
+                   vehicleMake.includes(lowerQuery) ||
+                   vehicleModel.includes(lowerQuery);
+          });
+
+          const invoiceResults = filteredInvoices.map((invoice: any) => ({
+            id: invoice.id,
+            title: invoice.invoice_number || `Invoice`,
+            subtitle: `${customerMap[invoice.customer_id] || 'Unknown'} • $${invoice.total_amount} • ${invoice.invoice_date}`,
+            category: "Invoices",
+            url: `/invoices?invoice=${invoice.id}`,
+            icon: "file-text",
+          }));
+
+          results.invoices = rankResults(invoiceResults, query);
+        } catch (err) {
+          console.error('Invoice search failed:', err);
+        }
+      }
+
+      // Search documents (if not filtered out)
+      if (entityFilter === 'all' || entityFilter === 'documents') {
+        try {
+          const { data: documents, error: docError } = await supabase
+            .from("customer_documents")
+            .select(`
+              id,
+              document_name,
+              document_type,
+              created_at,
+              customer_id
+            `)
+            .eq("tenant_id", tenantId || '')
+            .order('created_at', { ascending: false })
+            .limit(100);
+
+          if (docError) {
+            console.error('Document search error:', docError);
+          }
+
+          // Get customer data separately if we have documents
+          let customerMap: Record<string, string> = {};
+
+          if (documents && documents.length > 0) {
+            const customerIds = [...new Set(documents.map((d: any) => d.customer_id).filter(Boolean))];
+
+            if (customerIds.length > 0) {
+              const { data: customers } = await supabase
+                .from("customers")
+                .select("id, name")
+                .in("id", customerIds);
+              customers?.forEach((c: any) => { customerMap[c.id] = c.name; });
+            }
+          }
+
+          // Client-side filtering to search across multiple fields
+          const lowerQuery = query.toLowerCase();
+          const filteredDocs = (documents || []).filter((doc: any) => {
+            const docName = doc.document_name?.toLowerCase() || '';
+            const docType = doc.document_type?.toLowerCase() || '';
+            const customerName = customerMap[doc.customer_id]?.toLowerCase() || '';
+
+            return docName.includes(lowerQuery) ||
+                   docType.includes(lowerQuery) ||
+                   customerName.includes(lowerQuery);
+          });
+
+          const documentResults = filteredDocs.map((doc: any) => ({
+            id: doc.id,
+            title: doc.document_name || 'Document',
+            subtitle: `${customerMap[doc.customer_id] || 'Unknown'} • ${doc.document_type || 'Document'} • ${doc.created_at?.split('T')[0] || ''}`,
+            category: "Documents",
+            url: `/documents?doc=${doc.id}`,
+            icon: "file",
+          }));
+
+          results.documents = rankResults(documentResults, query);
+        } catch (err) {
+          console.error('Document search failed:', err);
+        }
       }
 
     } catch (error) {

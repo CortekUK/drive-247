@@ -235,21 +235,11 @@ const RentalsList = () => {
       />
 
       {/* Rentals Table */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <FileText className="h-5 w-5 text-primary" />
-            Rental Agreements
-          </CardTitle>
-          <CardDescription>
-            Showing {rentals.length} of {totalCount} rentals
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          {rentals.length > 0 ? (
-            <>
-              <div className="rounded-md border overflow-x-auto scrollbar-thin">
-                <Table>
+      {rentals.length > 0 ? (
+        <>
+          <Card>
+            <CardContent className="p-0">
+              <Table>
                   <TableHeader>
                     <TableRow>
                       <TableHead>Rental #</TableHead>
@@ -319,79 +309,89 @@ const RentalsList = () => {
                     ))}
                   </TableBody>
                 </Table>
-              </div>
+            </CardContent>
+          </Card>
 
-              {/* Pagination */}
-              {totalPages > 1 && (
-                <div className="flex items-center justify-center mt-6">
-                  <Pagination>
-                    <PaginationContent>
-                      <PaginationItem>
-                        <PaginationPrevious
-                          onClick={() =>
-                            handlePageChange(Math.max(1, filters.page! - 1))
-                          }
-                          className={
-                            filters.page === 1
-                              ? "pointer-events-none opacity-50"
-                              : "cursor-pointer"
-                          }
-                        />
-                      </PaginationItem>
-
-                      {Array.from(
-                        { length: Math.min(5, totalPages) },
-                        (_, i) => {
-                          const pageNum =
-                            Math.max(
-                              1,
-                              Math.min(totalPages - 4, filters.page! - 2)
-                            ) + i;
-                          return (
-                            <PaginationItem key={pageNum}>
-                              <PaginationLink
-                                onClick={() => handlePageChange(pageNum)}
-                                isActive={pageNum === filters.page}
-                                className="cursor-pointer"
-                              >
-                                {pageNum}
-                              </PaginationLink>
-                            </PaginationItem>
-                          );
-                        }
-                      )}
-
-                      <PaginationItem>
-                        <PaginationNext
-                          onClick={() =>
-                            handlePageChange(
-                              Math.min(totalPages, filters.page! + 1)
-                            )
-                          }
-                          className={
-                            filters.page === totalPages
-                              ? "pointer-events-none opacity-50"
-                              : "cursor-pointer"
-                          }
-                        />
-                      </PaginationItem>
-                    </PaginationContent>
-                  </Pagination>
-                </div>
-              )}
-            </>
-          ) : (
-            <div className="text-center py-8">
-              <FileText className="mx-auto h-12 w-12 text-muted-foreground mb-4" />
-              <h3 className="text-lg font-medium mb-2">No rentals found</h3>
-              <p className="text-muted-foreground mb-4">
-                No rentals match your current filters
-              </p>
-              <Button onClick={handleClearFilters}>Clear Filters</Button>
+          {/* Pagination */}
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+            <div className="text-sm text-muted-foreground">
+              Showing {rentals.length} of {totalCount} rentals
             </div>
-          )}
-        </CardContent>
-      </Card>
+            <div className="flex items-center">
+              <Pagination>
+                <PaginationContent>
+                  <PaginationItem>
+                    <PaginationPrevious
+                      onClick={() =>
+                        handlePageChange(Math.max(1, filters.page! - 1))
+                      }
+                      className={
+                        filters.page === 1
+                          ? "pointer-events-none opacity-50"
+                          : "cursor-pointer"
+                      }
+                    />
+                  </PaginationItem>
+
+                  {totalPages > 1 ? (
+                    Array.from(
+                      { length: Math.min(5, totalPages) },
+                      (_, i) => {
+                        const pageNum =
+                          Math.max(
+                            1,
+                            Math.min(totalPages - 4, filters.page! - 2)
+                          ) + i;
+                        return (
+                          <PaginationItem key={pageNum}>
+                            <PaginationLink
+                              onClick={() => handlePageChange(pageNum)}
+                              isActive={pageNum === filters.page}
+                              className="cursor-pointer"
+                            >
+                              {pageNum}
+                            </PaginationLink>
+                          </PaginationItem>
+                        );
+                      }
+                    )
+                  ) : (
+                    <PaginationItem>
+                      <PaginationLink isActive className="cursor-default">
+                        1
+                      </PaginationLink>
+                    </PaginationItem>
+                  )}
+
+                  <PaginationItem>
+                    <PaginationNext
+                      onClick={() =>
+                        handlePageChange(
+                          Math.min(totalPages, filters.page! + 1)
+                        )
+                      }
+                      className={
+                        filters.page === totalPages || totalPages <= 1
+                          ? "pointer-events-none opacity-50"
+                          : "cursor-pointer"
+                      }
+                    />
+                  </PaginationItem>
+                </PaginationContent>
+              </Pagination>
+            </div>
+          </div>
+        </>
+      ) : (
+        <div className="text-center py-8">
+          <FileText className="mx-auto h-12 w-12 text-muted-foreground mb-4" />
+          <h3 className="text-lg font-medium mb-2">No rentals found</h3>
+          <p className="text-muted-foreground mb-4">
+            No rentals match your current filters
+          </p>
+          <Button onClick={handleClearFilters}>Clear Filters</Button>
+        </div>
+      )}
     </div>
   );
 };

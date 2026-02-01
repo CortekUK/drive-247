@@ -302,39 +302,22 @@ const PaymentsList = () => {
       }} />
 
       {/* Payments Table */}
-      <Card>
-        <CardHeader>
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <CreditCard className="h-5 w-5 text-primary" />
-              <CardTitle>Payment Records</CardTitle>
-            </div>
-            {totalCount > 0 && (
-              <div className="text-sm text-muted-foreground">
-                Showing {((page - 1) * pageSize) + 1}-{Math.min(page * pageSize, totalCount)} of {totalCount} payments
+      {isLoading ? (
+        <div className="space-y-4">
+          {[...Array(5)].map((_, i) => (
+            <div key={i} className="animate-pulse flex space-x-4">
+              <div className="flex-1 space-y-2">
+                <div className="h-4 bg-muted rounded w-3/4"></div>
+                <div className="h-4 bg-muted rounded w-1/2"></div>
               </div>
-            )}
-          </div>
-          <CardDescription>
-            Complete record of all payments received with allocation details
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          {isLoading ? (
-            <div className="space-y-4">
-              {[...Array(5)].map((_, i) => (
-                <div key={i} className="animate-pulse flex space-x-4">
-                  <div className="flex-1 space-y-2">
-                    <div className="h-4 bg-muted rounded w-3/4"></div>
-                    <div className="h-4 bg-muted rounded w-1/2"></div>
-                  </div>
-                </div>
-              ))}
             </div>
-          ) : payments && payments.length > 0 ? (
-            <>
-              <div className="rounded-md border">
-                <Table>
+          ))}
+        </div>
+      ) : payments && payments.length > 0 ? (
+        <>
+          <Card>
+            <CardContent className="p-0">
+              <Table>
                   <TableHeader>
                     <TableRow>
                       <TableHead
@@ -513,55 +496,55 @@ const PaymentsList = () => {
                     })}
                   </TableBody>
                 </Table>
-              </div>
+            </CardContent>
+          </Card>
 
-              {/* Pagination */}
-              {totalPages > 1 && (
-                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mt-4 gap-3">
-                  <div className="text-sm text-muted-foreground">
-                    Page {page} of {totalPages}
-                  </div>
-                  <div className="flex gap-2 w-full sm:w-auto flex-wrap justify-center sm:justify-end">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setPage(page - 1)}
-                      disabled={page === 1}
-                    >
-                      <ChevronLeft className="h-4 w-4" />
-                      Previous
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setPage(page + 1)}
-                      disabled={page === totalPages}
-                    >
-                      Next
-                      <ChevronRight className="h-4 w-4" />
-                    </Button>
-                  </div>
-                </div>
-              )}
-            </>
-          ) : (
-            <div className="text-center py-12">
-              <CreditCard className="mx-auto h-12 w-12 text-muted-foreground mb-4" />
-              <h3 className="text-lg font-medium mb-2">No payments found</h3>
-              <p className="text-muted-foreground mb-4">
-                {Object.values(filters).some(f => f && f !== 'all' && f !== 'thisMonth') ?
-                  "No payments match your current filters" :
-                  "Start recording payments to track your cash flow"
-                }
-              </p>
-              <Button onClick={() => setShowAddDialog(true)}>
-                <Plus className="h-4 w-4 mr-2" />
-                Record Payment
+          {/* Pagination */}
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+            <div className="text-sm text-muted-foreground">
+              Showing {((page - 1) * pageSize) + 1}-{Math.min(page * pageSize, totalCount)} of {totalCount} payments
+            </div>
+            <div className="flex items-center gap-2 w-full sm:w-auto flex-wrap justify-center sm:justify-end">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setPage(page - 1)}
+                disabled={page === 1}
+              >
+                <ChevronLeft className="h-4 w-4" />
+                Previous
+              </Button>
+              <span className="text-sm text-muted-foreground whitespace-nowrap">
+                Page {page} of {totalPages || 1}
+              </span>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setPage(page + 1)}
+                disabled={page === totalPages || totalPages <= 1}
+              >
+                Next
+                <ChevronRight className="h-4 w-4" />
               </Button>
             </div>
-          )}
-        </CardContent>
-      </Card>
+          </div>
+        </>
+      ) : (
+        <div className="text-center py-12">
+          <CreditCard className="mx-auto h-12 w-12 text-muted-foreground mb-4" />
+          <h3 className="text-lg font-medium mb-2">No payments found</h3>
+          <p className="text-muted-foreground mb-4">
+            {Object.values(filters).some(f => f && f !== 'all' && f !== 'thisMonth') ?
+              "No payments match your current filters" :
+              "Start recording payments to track your cash flow"
+            }
+          </p>
+          <Button onClick={() => setShowAddDialog(true)}>
+            <Plus className="h-4 w-4 mr-2" />
+            Record Payment
+          </Button>
+        </div>
+      )}
 
       {/* Reject Payment Dialog */}
       <Dialog open={showRejectDialog} onOpenChange={setShowRejectDialog}>

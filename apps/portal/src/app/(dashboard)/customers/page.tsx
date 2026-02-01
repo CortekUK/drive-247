@@ -27,6 +27,7 @@ import { useCustomerBlockingActions } from "@/hooks/use-customer-blocking";
 import { useCustomerStatusActions } from "@/hooks/use-customer-status-actions";
 import { toast } from "sonner";
 import { useTenant } from "@/contexts/TenantContext";
+import { useAuditLog } from "@/hooks/use-audit-log";
 
 interface Customer {
   id: string;
@@ -60,6 +61,7 @@ const CustomersList = () => {
   const queryClient = useQueryClient();
   const searchParams = useSearchParams();
   const { tenant } = useTenant();
+  const { logAction } = useAuditLog();
 
   // State from URL params
   const [searchTerm, setSearchTerm] = useState(searchParams.get('search') || '');
@@ -392,10 +394,19 @@ const CustomersList = () => {
 
       if (error) throw error;
 
+      // Audit log for customer deletion
+      logAction({
+        action: "customer_deleted",
+        entityType: "customer",
+        entityId: selectedCustomer.id,
+        details: { customer_name: selectedCustomer.name }
+      });
+
       toast.success(`${selectedCustomer.name} has been deleted`);
       setDeleteDialogOpen(false);
       setSelectedCustomer(null);
       refetchCustomers();
+      queryClient.invalidateQueries({ queryKey: ["audit-logs"] });
     } catch (error: any) {
       toast.error(error.message || 'Failed to delete customer. They may have associated rentals or payments.');
     }
@@ -505,7 +516,7 @@ const CustomersList = () => {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-3xl font-bold">Customers</h1>
-          <p className="text-muted-foreground">Manage customer accounts and view balance status</p>
+          <p className="text-muted-foreground">View and manage all customers with contact information and account balances</p>
         </div>
         <Button className="bg-gradient-primary w-full sm:w-auto" onClick={handleAddCustomer}>
           <Plus className="h-4 w-4 mr-2" />
@@ -516,118 +527,78 @@ const CustomersList = () => {
       {/* Summary Cards */}
       {customers && <CustomerSummaryCards customers={customers} />}
 
-      {/* Main Content */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Users className="h-5 w-5 text-primary" />
-            Customer Database
-            {/* <Badge variant="outline" className="ml-2">
-              {totalCustomers} {totalCustomers === 1 ? 'customer' : 'customers'}
-            </Badge> */}
-          </CardTitle>
-          <CardDescription>
-            View and manage all customers with contact information and account balances
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          {/* Search and Filters */}
-          <div className="mb-6 space-y-4">
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
-              <Input
-                placeholder="Search customers by name, email, or phone..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-10"
-              />
-            </div>
-
-            <div className="flex flex-wrap gap-4 items-center">
-              <Select value={typeFilter} onValueChange={setTypeFilter}>
-                <SelectTrigger className="w-48">
-                  <SelectValue placeholder="Filter by type" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Types</SelectItem>
-                  <SelectItem value="Individual">Individual</SelectItem>
-                  <SelectItem value="Company">Company</SelectItem>
-                </SelectContent>
-              </Select>
-
-              <Select value={statusFilter} onValueChange={setStatusFilter}>
-                <SelectTrigger className="w-48">
-                  <SelectValue placeholder="Filter by status" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Customers</SelectItem>
-                  <SelectItem value="Active">Active</SelectItem>
-                  <SelectItem value="Inactive">Inactive</SelectItem>
-                  <SelectItem value="Rejected">Rejected</SelectItem>
-                </SelectContent>
-              </Select>
-
-              <Select value={highSwitcherFilter} onValueChange={setHighSwitcherFilter}>
-                <SelectTrigger className="w-48">
-                  <SelectValue placeholder="Filter by high switcher" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Customers</SelectItem>
-                  <SelectItem value="no">Regular Customers</SelectItem>
-                  <SelectItem value="yes">High Switchers</SelectItem>
-                </SelectContent>
-              </Select>
-
-              <Select value={pageSize.toString()} onValueChange={(value) => setPageSize(parseInt(value))}>
-                <SelectTrigger className="w-24">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="25">25</SelectItem>
-                  <SelectItem value="50">50</SelectItem>
-                  <SelectItem value="100">100</SelectItem>
-                </SelectContent>
-              </Select>
-
-              {hasActiveFilters && (
-                <Button variant="outline" size="sm" onClick={clearFilters}>
-                  <X className="h-4 w-4 mr-1" />
-                  Clear Filters
-                </Button>
-              )}
-            </div>
+      {/* Search and Filters */}
+      <div className="space-y-4">
+        <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+          <div className="relative md:col-span-1">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
+            <Input
+              placeholder="Search customers..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="pl-10"
+            />
           </div>
 
-          {/* Results info */}
-          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-4 gap-3">
-            <p className="text-sm text-muted-foreground">
-              Showing {startIndex + 1}-{endIndex} of {totalCustomers} customers
-            </p>
-            <div className="flex items-center gap-2 w-full sm:w-auto flex-wrap justify-center sm:justify-end">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
-                disabled={currentPage === 1}
-              >
-                Previous
-              </Button>
-              <span className="text-sm text-muted-foreground whitespace-nowrap">
-                Page {currentPage} of {totalPages}
-              </span>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setCurrentPage(Math.min(totalPages, currentPage + 1))}
-                disabled={currentPage === totalPages}
-              >
-                Next
-              </Button>
-            </div>
-          </div>
+          <Select value={typeFilter} onValueChange={setTypeFilter}>
+            <SelectTrigger>
+              <SelectValue placeholder="All Types" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Types</SelectItem>
+              <SelectItem value="Individual">Individual</SelectItem>
+              <SelectItem value="Company">Company</SelectItem>
+            </SelectContent>
+          </Select>
 
-          {paginatedCustomers.length > 0 ? (
-            <div className="rounded-md border">
+          <Select value={statusFilter} onValueChange={setStatusFilter}>
+            <SelectTrigger>
+              <SelectValue placeholder="All Customers" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Customers</SelectItem>
+              <SelectItem value="Active">Active</SelectItem>
+              <SelectItem value="Inactive">Inactive</SelectItem>
+              <SelectItem value="Rejected">Rejected</SelectItem>
+            </SelectContent>
+          </Select>
+
+          <Select value={highSwitcherFilter} onValueChange={setHighSwitcherFilter}>
+            <SelectTrigger>
+              <SelectValue placeholder="All Customers" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Customers</SelectItem>
+              <SelectItem value="no">Regular Customers</SelectItem>
+              <SelectItem value="yes">High Switchers</SelectItem>
+            </SelectContent>
+          </Select>
+
+          <Select value={pageSize.toString()} onValueChange={(value) => setPageSize(parseInt(value))}>
+            <SelectTrigger>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="25">25</SelectItem>
+              <SelectItem value="50">50</SelectItem>
+              <SelectItem value="100">100</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+
+        {hasActiveFilters && (
+          <Button variant="outline" size="sm" onClick={clearFilters}>
+            <X className="h-4 w-4 mr-1" />
+            Clear Filters
+          </Button>
+        )}
+      </div>
+
+      {/* Table */}
+      {paginatedCustomers.length > 0 ? (
+        <>
+        <Card>
+          <CardContent className="p-0">
               <Table>
                 <TableHeader>
                   <TableRow>
@@ -660,15 +631,16 @@ const CustomersList = () => {
                       </div>
                     </TableHead>
                     <TableHead
-                      className="text-center cursor-pointer hover:bg-muted/50"
+                      className="cursor-pointer hover:bg-muted/50"
                       onClick={() => handleSort('balance')}
                     >
-                      <div className="flex items-center justify-center gap-2">
+                      <div className="flex items-center gap-2">
                         Balance
                         <SortIcon field="balance" />
                       </div>
                     </TableHead>
-                    <TableHead className="text-left">Actions</TableHead>
+                    <TableHead className="w-12">View</TableHead>
+                    <TableHead className="text-right w-12">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -741,7 +713,7 @@ const CustomersList = () => {
                             {customer.status}
                           </Badge>
                         </TableCell>
-                        <TableCell className="text-center">
+                        <TableCell>
                           {balanceData ? (
                             <CustomerBalanceChip
                               balance={balanceData.balance}
@@ -754,18 +726,18 @@ const CustomersList = () => {
                             <CustomerBalanceChip balance={0} status="Settled" size="small" />
                           )}
                         </TableCell>
-                        <TableCell className="text-left">
-                          <div className="flex justify-start gap-2">
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => router.push(`/customers/${customer.id}`)}
-                              aria-label={`View ${customer.name} details`}
-                            >
-                              <Eye className="h-4 w-4 mr-1" />
-                              View
-                            </Button>
-                            <DropdownMenu>
+                        <TableCell>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => router.push(`/customers/${customer.id}`)}
+                            aria-label={`View ${customer.name} details`}
+                          >
+                            <Eye className="h-4 w-4" />
+                          </Button>
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <DropdownMenu>
                               <DropdownMenuTrigger asChild>
                                 <Button variant="outline" size="sm">
                                   <MoreHorizontal className="h-4 w-4" />
@@ -826,41 +798,68 @@ const CustomersList = () => {
                                 </DropdownMenuItem>
                               </DropdownMenuContent>
                             </DropdownMenu>
-                          </div>
                         </TableCell>
                       </TableRow>
                     );
                   })}
                 </TableBody>
               </Table>
-            </div>
+          </CardContent>
+        </Card>
+
+        {/* Pagination */}
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+          <p className="text-sm text-muted-foreground">
+            Showing {startIndex + 1}-{endIndex} of {totalCustomers} customers
+          </p>
+          <div className="flex items-center gap-2 w-full sm:w-auto flex-wrap justify-center sm:justify-end">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
+              disabled={currentPage === 1}
+            >
+              Previous
+            </Button>
+            <span className="text-sm text-muted-foreground whitespace-nowrap">
+              Page {currentPage} of {totalPages || 1}
+            </span>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setCurrentPage(Math.min(totalPages, currentPage + 1))}
+              disabled={currentPage === totalPages || totalPages <= 1}
+            >
+              Next
+            </Button>
+          </div>
+        </div>
+        </>
+      ) : (
+        <div className="text-center py-12">
+          <Users className="mx-auto h-12 w-12 text-muted-foreground mb-4" />
+          <h3 className="text-lg font-medium mb-2">
+            {hasActiveFilters ? 'No customers match your filters' : 'No customers yet'}
+          </h3>
+          <p className="text-muted-foreground mb-4">
+            {hasActiveFilters
+              ? 'Try adjusting your search or filter criteria'
+              : 'Add your first customer to get started'
+            }
+          </p>
+          {hasActiveFilters ? (
+            <Button variant="outline" onClick={clearFilters}>
+              <X className="h-4 w-4 mr-2" />
+              Clear Filters
+            </Button>
           ) : (
-            <div className="text-center py-12">
-              <Users className="mx-auto h-12 w-12 text-muted-foreground mb-4" />
-              <h3 className="text-lg font-medium mb-2">
-                {hasActiveFilters ? 'No customers match your filters' : 'No customers yet'}
-              </h3>
-              <p className="text-muted-foreground mb-4">
-                {hasActiveFilters
-                  ? 'Try adjusting your search or filter criteria'
-                  : 'Add your first customer to get started'
-                }
-              </p>
-              {hasActiveFilters ? (
-                <Button variant="outline" onClick={clearFilters}>
-                  <X className="h-4 w-4 mr-2" />
-                  Clear Filters
-                </Button>
-              ) : (
-                <Button onClick={handleAddCustomer}>
-                  <Plus className="h-4 w-4 mr-2" />
-                  Add Customer
-                </Button>
-              )}
-            </div>
+            <Button onClick={handleAddCustomer}>
+              <Plus className="h-4 w-4 mr-2" />
+              Add Customer
+            </Button>
           )}
-        </CardContent>
-      </Card>
+        </div>
+      )}
 
       <CustomerFormModal
         open={isModalOpen}

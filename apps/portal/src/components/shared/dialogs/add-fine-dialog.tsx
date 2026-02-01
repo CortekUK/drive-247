@@ -56,7 +56,6 @@ const fineFormSchema = z.object({
   amount: z.string().refine((val) => !isNaN(Number(val)) && Number(val) > 0, {
     message: "Amount must be a positive number",
   }),
-  liability: z.enum(["Customer", "Business"]).default("Customer"),
   notes: z.string().optional(),
 });
 
@@ -78,7 +77,6 @@ export const AddFineDialog = ({ open, onOpenChange, vehicle_id, customer_id }: A
     resolver: zodResolver(fineFormSchema),
     defaultValues: {
       type: "PCN",
-      liability: "Customer",
       vehicle_id: vehicle_id || "",
       customer_id: customer_id || "",
     },
@@ -89,7 +87,6 @@ export const AddFineDialog = ({ open, onOpenChange, vehicle_id, customer_id }: A
     if (open) {
       form.reset({
         type: "PCN",
-        liability: "Customer",
         vehicle_id: vehicle_id || "",
         customer_id: customer_id || "",
       });
@@ -307,7 +304,6 @@ export const AddFineDialog = ({ open, onOpenChange, vehicle_id, customer_id }: A
           issue_date: format(values.issue_date, "yyyy-MM-dd"),
           due_date: format(values.due_date, "yyyy-MM-dd"),
           amount: Number(values.amount),
-          liability: values.liability,
           notes: values.notes || null,
           tenant_id: tenant?.id,
         })
@@ -399,52 +395,28 @@ export const AddFineDialog = ({ open, onOpenChange, vehicle_id, customer_id }: A
 
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-            <div className="grid grid-cols-2 gap-4">
-              <FormField
-                control={form.control}
-                name="type"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Type</FormLabel>
-                    <Select onValueChange={field.onChange} defaultValue={field.value}>
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Select fine type" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        <SelectItem value="PCN">Parking Citation</SelectItem>
-                        <SelectItem value="Speeding">Speeding</SelectItem>
-                        <SelectItem value="Other">Other</SelectItem>
-                      </SelectContent>
-                    </Select>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              <FormField
-                control={form.control}
-                name="liability"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Liability</FormLabel>
-                    <Select onValueChange={field.onChange} defaultValue={field.value}>
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Select liability" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        <SelectItem value="Customer">Individual</SelectItem>
-                        <SelectItem value="Business">Business</SelectItem>
-                      </SelectContent>
-                    </Select>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            </div>
+            <FormField
+              control={form.control}
+              name="type"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Type</FormLabel>
+                  <Select onValueChange={field.onChange} defaultValue={field.value}>
+                    <FormControl>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select fine type" />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      <SelectItem value="PCN">Parking Citation</SelectItem>
+                      <SelectItem value="Speeding">Speeding</SelectItem>
+                      <SelectItem value="Other">Other</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
 
             <FormField
               control={form.control}

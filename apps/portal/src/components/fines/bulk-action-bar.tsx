@@ -11,7 +11,6 @@ import { useToast } from "@/hooks/use-toast";
 interface Fine {
   id: string;
   status: string;
-  liability: string;
   amount: number;
   reference_no: string | null;
 }
@@ -28,13 +27,8 @@ export const BulkActionBar = ({ selectedFines, onClearSelection }: BulkActionBar
   const queryClient = useQueryClient();
 
   // Filter eligible fines for each action
-  const chargeableFines = selectedFines.filter(fine =>
-    (fine.liability === 'Customer' || fine.liability === 'Individual') && fine.status === 'Open'
-  );
-
-  const waivableFines = selectedFines.filter(fine =>
-    fine.status === 'Open'
-  );
+  const chargeableFines = selectedFines.filter(fine => fine.status === 'Open');
+  const waivableFines = selectedFines.filter(fine => fine.status === 'Open');
 
   const bulkChargeMutation = useMutation({
     mutationFn: async (fineIds: string[]) => {
@@ -170,7 +164,7 @@ export const BulkActionBar = ({ selectedFines, onClearSelection }: BulkActionBar
               <AlertTriangle className="h-4 w-4" />
               <span>
                 {selectedFines.length - chargeableFines.length} fines cannot be charged
-                (Business liability or already processed)
+                (already processed)
               </span>
             </div>
           )}

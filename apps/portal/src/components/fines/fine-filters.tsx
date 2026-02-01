@@ -1,17 +1,15 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Checkbox } from "@/components/ui/checkbox";
-import { DatePickerInput } from "@/components/shared/forms/date-picker-input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Badge } from "@/components/ui/badge";
-import { Filter, X, Search, Calendar } from "lucide-react";
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Calendar as CalendarComponent } from "@/components/ui/calendar";
+import { format } from "date-fns";
+import { Search, Calendar, X } from "lucide-react";
+import { cn } from "@/lib/utils";
 
 interface FineFiltersProps {
   onFiltersChange: (filters: FineFilterState) => void;
@@ -19,9 +17,9 @@ interface FineFiltersProps {
 
 export interface FineFilterState {
   status: string[];
-  liability: string[];
   vehicleSearch: string;
   customerSearch: string;
+  search?: string; // Unified search
   issueDateFrom?: Date;
   issueDateTo?: Date;
   dueDateFrom?: Date;
@@ -32,13 +30,12 @@ export interface FineFilterState {
 export const FineFilters = ({ onFiltersChange }: FineFiltersProps) => {
   const searchParams = useSearchParams();
   const router = useRouter();
-  const [isOpen, setIsOpen] = useState(false);
 
   const [filters, setFilters] = useState<FineFilterState>({
     status: searchParams?.getAll('status') || [],
-    liability: searchParams?.getAll('liability') || [],
-    vehicleSearch: searchParams?.get('vehicle') || '',
-    customerSearch: searchParams?.get('customer') || '',
+    vehicleSearch: '',
+    customerSearch: '',
+    search: searchParams?.get('search') || '',
     issueDateFrom: searchParams?.get('issueDateFrom') ? new Date(searchParams?.get('issueDateFrom')!) : undefined,
     issueDateTo: searchParams?.get('issueDateTo') ? new Date(searchParams?.get('issueDateTo')!) : undefined,
     dueDateFrom: searchParams?.get('dueDateFrom') ? new Date(searchParams?.get('dueDateFrom')!) : undefined,
@@ -46,18 +43,26 @@ export const FineFilters = ({ onFiltersChange }: FineFiltersProps) => {
     quickFilter: searchParams?.get('quickFilter') as any || undefined,
   });
 
-  const statusOptions = [
-    { value: 'Open', label: 'Open' },
-    { value: 'Charged', label: 'Charged' },
-    { value: 'Waived', label: 'Waived' },
-    { value: 'Appealed', label: 'Appealed' },
-    { value: 'Paid', label: 'Paid' },
-  ];
+  const [localSearch, setLocalSearch] = useState(filters.search || '');
+  const [issueDateFromOpen, setIssueDateFromOpen] = useState(false);
+  const [issueDateToOpen, setIssueDateToOpen] = useState(false);
+  const [dueDateFromOpen, setDueDateFromOpen] = useState(false);
+  const [dueDateToOpen, setDueDateToOpen] = useState(false);
 
-  const liabilityOptions = [
-    { value: 'Customer', label: 'Customer' },
-    { value: 'Business', label: 'Business' },
-  ];
+  // Debounce search
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (localSearch !== (filters.search || '')) {
+        updateFilter('search', localSearch);
+      }
+    }, 400);
+    return () => clearTimeout(timer);
+  }, [localSearch]);
+
+  // Sync local search when filters change externally
+  useEffect(() => {
+    setLocalSearch(filters.search || '');
+  }, [filters.search]);
 
   const updateFilter = <K extends keyof FineFilterState>(key: K, value: FineFilterState[K]) => {
     const newFilters = { ...filters, [key]: value };
@@ -83,215 +88,190 @@ export const FineFilters = ({ onFiltersChange }: FineFiltersProps) => {
     router.push(`?${newSearchParams.toString()}`, { scroll: false });
   };
 
-  const handleStatusChange = (status: string, checked: boolean) => {
-    const newStatus = checked
-      ? [...filters.status, status]
-      : filters.status.filter(s => s !== status);
-    updateFilter('status', newStatus);
-  };
-
-  const handleLiabilityChange = (liability: string, checked: boolean) => {
-    const newLiability = checked
-      ? [...filters.liability, liability]
-      : filters.liability.filter(l => l !== liability);
-    updateFilter('liability', newLiability);
-  };
-
   const clearFilters = () => {
     const emptyFilters: FineFilterState = {
       status: [],
-      liability: [],
       vehicleSearch: '',
       customerSearch: '',
+      search: '',
     };
     setFilters(emptyFilters);
+    setLocalSearch('');
     onFiltersChange(emptyFilters);
     router.push("?", { scroll: false });
   };
 
+  // Helper to fix timezone issues with date picker
+  const normalizeDate = (date: Date | undefined) => {
+    if (!date) return undefined;
+    return new Date(date.getFullYear(), date.getMonth(), date.getDate(), 12, 0, 0);
+  };
+
   const hasActiveFilters = filters.status.length > 0 ||
-    filters.liability.length > 0 ||
-    filters.vehicleSearch ||
-    filters.customerSearch ||
+    filters.search ||
     filters.issueDateFrom ||
     filters.issueDateTo ||
     filters.dueDateFrom ||
     filters.dueDateTo ||
     filters.quickFilter;
 
-  const activeFilterCount = [
-    ...filters.status,
-    ...filters.liability,
-    filters.vehicleSearch ? 'vehicle' : null,
-    filters.customerSearch ? 'customer' : null,
-    filters.issueDateFrom ? 'issueFrom' : null,
-    filters.issueDateTo ? 'issueTo' : null,
-    filters.dueDateFrom ? 'dueFrom' : null,
-    filters.dueDateTo ? 'dueTo' : null,
-    filters.quickFilter ? 'quick' : null,
-  ].filter(Boolean).length;
-
   return (
-    <>
-      {/* Quick Filter Pills */}
-      <div className="flex flex-wrap gap-2 mb-4">
-        <Button
-          variant={filters.quickFilter === 'due-next-7' ? 'default' : 'outline'}
-          size="sm"
-          onClick={() => updateFilter('quickFilter', filters.quickFilter === 'due-next-7' ? undefined : 'due-next-7')}
+    <div className="space-y-4">
+      {/* Search and main filters */}
+      <div className="flex flex-wrap gap-4 items-center">
+        <div className="relative flex-1 min-w-[200px] sm:min-w-[300px]">
+          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
+          <Input
+            placeholder="Search by reference, vehicle, or customer..."
+            value={localSearch}
+            onChange={(e) => setLocalSearch(e.target.value)}
+            className="pl-10"
+          />
+        </div>
+
+        <Select
+          value={filters.status.length === 1 ? filters.status[0] : "all"}
+          onValueChange={(value) => updateFilter('status', value === 'all' ? [] : [value])}
         >
-          <Calendar className="h-4 w-4 mr-2" />
-          Due Next 7 Days
-        </Button>
-        <Button
-          variant={filters.quickFilter === 'overdue' ? 'destructive' : 'outline'}
-          size="sm"
-          onClick={() => updateFilter('quickFilter', filters.quickFilter === 'overdue' ? undefined : 'overdue')}
-        >
-          <Calendar className="h-4 w-4 mr-2" />
-          Overdue
-        </Button>
+          <SelectTrigger className="w-full sm:w-[140px]">
+            <SelectValue placeholder="Status" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Status</SelectItem>
+            <SelectItem value="Open">Open</SelectItem>
+            <SelectItem value="Charged">Charged</SelectItem>
+            <SelectItem value="Waived">Waived</SelectItem>
+            <SelectItem value="Appealed">Appealed</SelectItem>
+            <SelectItem value="Paid">Paid</SelectItem>
+          </SelectContent>
+        </Select>
       </div>
 
-      {/* Advanced Filters */}
-      <Card>
-        <Collapsible open={isOpen} onOpenChange={setIsOpen}>
-          <CollapsibleTrigger asChild>
-            <CardHeader className="cursor-pointer">
-              <CardTitle className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <Filter className="h-5 w-5" />
-                  Advanced Filters
-                  {activeFilterCount > 0 && (
-                    <Badge variant="secondary">{activeFilterCount}</Badge>
-                  )}
-                </div>
-                <Button variant="ghost" size="sm">
-                  {isOpen ? 'Hide' : 'Show'}
-                </Button>
-              </CardTitle>
-            </CardHeader>
-          </CollapsibleTrigger>
+      {/* Date filters row */}
+      <div className="flex flex-wrap gap-4 items-center">
+        <div className="flex gap-2 items-center">
+          <span className="text-sm text-muted-foreground whitespace-nowrap">Issue Date:</span>
 
-          <CollapsibleContent>
-            <CardContent className="space-y-6">
-              {/* Search Filters */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <Label htmlFor="vehicle-search">Vehicle Search</Label>
-                  <div className="relative mt-1">
-                    <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-                    <Input
-                      id="vehicle-search"
-                      placeholder="Search by reg, make, model..."
-                      value={filters.vehicleSearch}
-                      onChange={(e) => updateFilter('vehicleSearch', e.target.value)}
-                      className="pl-9"
-                    />
-                  </div>
-                </div>
+          <Popover open={issueDateFromOpen} onOpenChange={setIssueDateFromOpen}>
+            <PopoverTrigger asChild>
+              <Button
+                variant="outline"
+                className={cn(
+                  "w-[110px] justify-start text-left font-normal",
+                  !filters.issueDateFrom && "text-muted-foreground"
+                )}
+              >
+                <Calendar className="mr-2 h-4 w-4" />
+                {filters.issueDateFrom ? format(filters.issueDateFrom, "MMM dd") : "From"}
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-auto p-0" align="start">
+              <CalendarComponent
+                mode="single"
+                selected={filters.issueDateFrom}
+                onSelect={(date) => {
+                  updateFilter("issueDateFrom", normalizeDate(date));
+                  setIssueDateFromOpen(false);
+                }}
+                initialFocus
+                className="p-3 pointer-events-auto"
+              />
+            </PopoverContent>
+          </Popover>
 
-                <div>
-                  <Label htmlFor="customer-search">Customer Search</Label>
-                  <div className="relative mt-1">
-                    <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-                    <Input
-                      id="customer-search"
-                      placeholder="Search by name, email, phone..."
-                      value={filters.customerSearch}
-                      onChange={(e) => updateFilter('customerSearch', e.target.value)}
-                      className="pl-9"
-                    />
-                  </div>
-                </div>
-              </div>
+          <Popover open={issueDateToOpen} onOpenChange={setIssueDateToOpen}>
+            <PopoverTrigger asChild>
+              <Button
+                variant="outline"
+                className={cn(
+                  "w-[110px] justify-start text-left font-normal",
+                  !filters.issueDateTo && "text-muted-foreground"
+                )}
+              >
+                <Calendar className="mr-2 h-4 w-4" />
+                {filters.issueDateTo ? format(filters.issueDateTo, "MMM dd") : "To"}
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-auto p-0" align="start">
+              <CalendarComponent
+                mode="single"
+                selected={filters.issueDateTo}
+                onSelect={(date) => {
+                  updateFilter("issueDateTo", normalizeDate(date));
+                  setIssueDateToOpen(false);
+                }}
+                initialFocus
+                className="p-3 pointer-events-auto"
+              />
+            </PopoverContent>
+          </Popover>
+        </div>
 
-              {/* Status Filters */}
-              {/* <div>
-                <Label className="text-base font-medium">Status</Label>
-                <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mt-2">
-                  {statusOptions.map((option) => (
-                    <div key={option.value} className="flex items-center space-x-2">
-                      <Checkbox
-                        id={`status-${option.value}`}
-                        checked={filters.status.includes(option.value)}
-                        onCheckedChange={(checked) => handleStatusChange(option.value, checked as boolean)}
-                      />
-                      <Label htmlFor={`status-${option.value}`} className="text-sm font-normal">
-                        {option.label}
-                      </Label>
-                    </div>
-                  ))}
-                </div>
-              </div> */}
+        <div className="flex gap-2 items-center">
+          <span className="text-sm text-muted-foreground whitespace-nowrap">Due Date:</span>
 
-              {/* Liability Filters */}
-              <div>
-                <Label className="text-base font-medium">Liability</Label>
-                <div className="grid grid-cols-2 gap-4 mt-2">
-                  {liabilityOptions.map((option) => (
-                    <div key={option.value} className="flex items-center space-x-2">
-                      <Checkbox
-                        id={`liability-${option.value}`}
-                        checked={filters.liability.includes(option.value)}
-                        onCheckedChange={(checked) => handleLiabilityChange(option.value, checked as boolean)}
-                      />
-                      <Label htmlFor={`liability-${option.value}`} className="text-sm font-normal">
-                        {option.label}
-                      </Label>
-                    </div>
-                  ))}
-                </div>
-              </div>
+          <Popover open={dueDateFromOpen} onOpenChange={setDueDateFromOpen}>
+            <PopoverTrigger asChild>
+              <Button
+                variant="outline"
+                className={cn(
+                  "w-[110px] justify-start text-left font-normal",
+                  !filters.dueDateFrom && "text-muted-foreground"
+                )}
+              >
+                <Calendar className="mr-2 h-4 w-4" />
+                {filters.dueDateFrom ? format(filters.dueDateFrom, "MMM dd") : "From"}
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-auto p-0" align="start">
+              <CalendarComponent
+                mode="single"
+                selected={filters.dueDateFrom}
+                onSelect={(date) => {
+                  updateFilter("dueDateFrom", normalizeDate(date));
+                  setDueDateFromOpen(false);
+                }}
+                initialFocus
+                className="p-3 pointer-events-auto"
+              />
+            </PopoverContent>
+          </Popover>
 
-              {/* Date Range Filters */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div>
-                  <Label className="text-base font-medium">Issue Date Range</Label>
-                  <div className="grid grid-cols-2 gap-2 mt-2">
-                    <DatePickerInput
-                      placeholder="From date"
-                      date={filters.issueDateFrom}
-                      onSelect={(date) => updateFilter('issueDateFrom', date)}
-                    />
-                    <DatePickerInput
-                      placeholder="To date"
-                      date={filters.issueDateTo}
-                      onSelect={(date) => updateFilter('issueDateTo', date)}
-                    />
-                  </div>
-                </div>
+          <Popover open={dueDateToOpen} onOpenChange={setDueDateToOpen}>
+            <PopoverTrigger asChild>
+              <Button
+                variant="outline"
+                className={cn(
+                  "w-[110px] justify-start text-left font-normal",
+                  !filters.dueDateTo && "text-muted-foreground"
+                )}
+              >
+                <Calendar className="mr-2 h-4 w-4" />
+                {filters.dueDateTo ? format(filters.dueDateTo, "MMM dd") : "To"}
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-auto p-0" align="start">
+              <CalendarComponent
+                mode="single"
+                selected={filters.dueDateTo}
+                onSelect={(date) => {
+                  updateFilter("dueDateTo", normalizeDate(date));
+                  setDueDateToOpen(false);
+                }}
+                initialFocus
+                className="p-3 pointer-events-auto"
+              />
+            </PopoverContent>
+          </Popover>
+        </div>
 
-                <div>
-                  <Label className="text-base font-medium">Due Date Range</Label>
-                  <div className="grid grid-cols-2 gap-2 mt-2">
-                    <DatePickerInput
-                      placeholder="From date"
-                      date={filters.dueDateFrom}
-                      onSelect={(date) => updateFilter('dueDateFrom', date)}
-                    />
-                    <DatePickerInput
-                      placeholder="To date"
-                      date={filters.dueDateTo}
-                      onSelect={(date) => updateFilter('dueDateTo', date)}
-                    />
-                  </div>
-                </div>
-              </div>
-
-              {/* Clear Filters */}
-              {hasActiveFilters && (
-                <div className="flex justify-end">
-                  <Button variant="outline" onClick={clearFilters}>
-                    <X className="h-4 w-4 mr-2" />
-                    Clear All Filters
-                  </Button>
-                </div>
-              )}
-            </CardContent>
-          </CollapsibleContent>
-        </Collapsible>
-      </Card>
-    </>
+        {hasActiveFilters && (
+          <Button variant="outline" onClick={clearFilters} className="gap-2">
+            <X className="h-4 w-4" />
+            Clear Filters
+          </Button>
+        )}
+      </div>
+    </div>
   );
 };

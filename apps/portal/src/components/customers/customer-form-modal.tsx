@@ -16,6 +16,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { useQueryClient } from "@tanstack/react-query";
 import { useTenant } from "@/contexts/TenantContext";
+import { useAuditLog } from "@/hooks/use-audit-log";
 import { customerFormModalSchema, type CustomerFormModalFormValues } from "@/client-schemas/customers/customer-form-modal";
 
 type CustomerFormData = CustomerFormModalFormValues;
@@ -53,6 +54,7 @@ export const CustomerFormModal = ({ open, onOpenChange, customer }: CustomerForm
   const [blockWarning, setBlockWarning] = useState<{ isBlocked: boolean; reason?: string; type?: string } | null>(null);
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const { logAction } = useAuditLog();
   const isEditing = !!customer;
 
   const form = useForm<CustomerFormData>({
@@ -381,16 +383,36 @@ export const CustomerFormModal = ({ open, onOpenChange, customer }: CustomerForm
 
         if (error) throw error;
 
+        // Audit log for customer update
+        logAction({
+          action: "customer_updated",
+          entityType: "customer",
+          entityId: customer.id,
+          details: { customer_name: data.name }
+        });
+
         toast({
           title: "Customer Updated",
           description: `${data.name} has been updated successfully.`,
         });
       } else {
-        const { error } = await supabase
+        const { data: newCustomer, error } = await supabase
           .from("customers")
-          .insert(payload);
+          .insert(payload)
+          .select("id")
+          .single();
 
         if (error) throw error;
+
+        // Audit log for customer creation
+        if (newCustomer?.id) {
+          logAction({
+            action: "customer_created",
+            entityType: "customer",
+            entityId: newCustomer.id,
+            details: { customer_name: data.name }
+          });
+        }
 
         toast({
           title: "Customer Added",

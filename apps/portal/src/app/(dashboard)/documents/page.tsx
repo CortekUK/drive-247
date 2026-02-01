@@ -2,7 +2,7 @@
 
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 import { FileText, Download, ExternalLink } from "lucide-react";
@@ -32,6 +32,8 @@ interface Document {
 
 export default function DocumentsList() {
   const [searchQuery, setSearchQuery] = useState("");
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(25);
   const { tenant } = useTenant();
 
   // Fetch completed documents from customer_documents table
@@ -114,6 +116,19 @@ export default function DocumentsList() {
     return matchesSearch;
   });
 
+  // Pagination
+  const totalDocuments = filteredDocuments.length;
+  const totalPages = Math.ceil(totalDocuments / pageSize);
+  const startIndex = (currentPage - 1) * pageSize;
+  const endIndex = Math.min(startIndex + pageSize, totalDocuments);
+  const paginatedDocuments = filteredDocuments.slice(startIndex, endIndex);
+
+  // Reset page when search changes
+  const handleSearchChange = (value: string) => {
+    setSearchQuery(value);
+    setCurrentPage(1);
+  };
+
   const getPublicUrl = (filePath: string) => {
     // If it's already a full URL, return as is
     if (filePath.startsWith('http://') || filePath.startsWith('https://')) {
@@ -172,39 +187,28 @@ export default function DocumentsList() {
       </div>
 
       {/* Search */}
-      <Card>
-        <CardContent className="pt-6">
-          <Input
-            placeholder="Search by document name or customer..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full"
-          />
-        </CardContent>
-      </Card>
+      <div className="relative">
+        <Input
+          placeholder="Search by document name or customer..."
+          value={searchQuery}
+          onChange={(e) => handleSearchChange(e.target.value)}
+          className="w-full"
+        />
+      </div>
 
       {/* Documents Table */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <FileText className="h-5 w-5 text-primary" />
-            All Documents
-          </CardTitle>
-          <CardDescription>
-            Showing {filteredDocuments.length} of {documents.length} documents
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          {filteredDocuments.length === 0 ? (
-            <EmptyState
-              icon={FileText}
-              title="No documents found"
-              description={searchQuery
-                ? "No documents match your search criteria"
-                : "There are no documents in the system yet."}
-            />
-          ) : (
-            <div className="rounded-md border">
+      {paginatedDocuments.length === 0 ? (
+        <EmptyState
+          icon={FileText}
+          title="No documents found"
+          description={searchQuery
+            ? "No documents match your search criteria"
+            : "There are no documents in the system yet."}
+        />
+      ) : (
+        <>
+          <Card>
+            <CardContent className="p-0">
               <Table>
                 <TableHeader>
                   <TableRow>
@@ -215,7 +219,7 @@ export default function DocumentsList() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {filteredDocuments.map((doc) => (
+                  {paginatedDocuments.map((doc) => (
                     <TableRow key={doc.id}>
                       <TableCell className="font-medium">{doc.document_name}</TableCell>
                       <TableCell className="font-medium text-foreground">
@@ -254,10 +258,38 @@ export default function DocumentsList() {
                   ))}
                 </TableBody>
               </Table>
+            </CardContent>
+          </Card>
+
+          {/* Pagination */}
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+            <p className="text-sm text-muted-foreground">
+              Showing {startIndex + 1}-{endIndex} of {totalDocuments} documents
+            </p>
+            <div className="flex items-center gap-2 w-full sm:w-auto flex-wrap justify-center sm:justify-end">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
+                disabled={currentPage === 1}
+              >
+                Previous
+              </Button>
+              <span className="text-sm text-muted-foreground whitespace-nowrap">
+                Page {currentPage} of {totalPages || 1}
+              </span>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setCurrentPage(Math.min(totalPages, currentPage + 1))}
+                disabled={currentPage === totalPages || totalPages <= 1}
+              >
+                Next
+              </Button>
             </div>
-          )}
-        </CardContent>
-      </Card>
+          </div>
+        </>
+      )}
     </div>
   );
 }

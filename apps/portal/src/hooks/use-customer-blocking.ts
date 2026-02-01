@@ -3,6 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "./use-toast";
 import { useAuth } from "@/stores/auth-store";
 import { useTenant } from "@/contexts/TenantContext";
+import { useAuditLog } from "./use-audit-log";
 
 export interface BlockedIdentity {
   id: string;
@@ -11,6 +12,7 @@ export interface BlockedIdentity {
   reason: string;
   blocked_by: string | null;
   notes: string | null;
+  customer_name: string | null;
   is_active: boolean;
   created_at: string;
   updated_at: string;
@@ -26,6 +28,7 @@ export interface AddBlockedIdentityRequest {
   identityNumber: string;
   reason: string;
   notes?: string;
+  customerName?: string;
 }
 
 // Hook to get all blocked identities
@@ -95,6 +98,7 @@ export function useCustomerBlockingActions() {
   const { toast } = useToast();
   const { appUser } = useAuth();
   const { tenant } = useTenant();
+  const { logAction } = useAuditLog();
 
   // Block a customer
   const blockCustomer = useMutation({
@@ -112,9 +116,9 @@ export function useCustomerBlockingActions() {
         throw new Error(data.error || 'Failed to block customer');
       }
 
-      return customerId; // Return customerId for cache invalidation
+      return { customerId, reason }; // Return for audit logging
     },
-    onSuccess: (customerId) => {
+    onSuccess: ({ customerId, reason }) => {
       // Invalidate all related queries to force UI refresh
       queryClient.invalidateQueries({ queryKey: ['customers'] });
       queryClient.invalidateQueries({ queryKey: ['customers-list'] });
@@ -126,6 +130,15 @@ export function useCustomerBlockingActions() {
         predicate: (query) =>
           query.queryKey[0] === 'customer' && query.queryKey[1] === customerId
       });
+
+      // Audit log
+      logAction({
+        action: "customer_blocked",
+        entityType: "customer",
+        entityId: customerId,
+        details: { reason }
+      });
+
       toast({
         title: "Customer Blocked",
         description: "The customer has been blocked and their identifiers added to the blocklist.",
@@ -168,6 +181,15 @@ export function useCustomerBlockingActions() {
         predicate: (query) =>
           query.queryKey[0] === 'customer' && query.queryKey[1] === customerId
       });
+
+      // Audit log
+      logAction({
+        action: "customer_unblocked",
+        entityType: "customer",
+        entityId: customerId,
+        details: {}
+      });
+
       toast({
         title: "Customer Unblocked",
         description: "The customer has been unblocked.",
@@ -184,7 +206,7 @@ export function useCustomerBlockingActions() {
 
   // Add identity to blocklist directly
   const addBlockedIdentity = useMutation({
-    mutationFn: async ({ identityType, identityNumber, reason, notes }: AddBlockedIdentityRequest) => {
+    mutationFn: async ({ identityType, identityNumber, reason, notes, customerName }: AddBlockedIdentityRequest) => {
       const { data, error } = await supabase
         .from('blocked_identities')
         .insert({
@@ -192,6 +214,7 @@ export function useCustomerBlockingActions() {
           identity_number: identityNumber,
           reason,
           notes,
+          customer_name: customerName || null,
           blocked_by: appUser?.id || null,
           tenant_id: tenant?.id
         })
@@ -200,21 +223,75 @@ export function useCustomerBlockingActions() {
 
       if (error) throw error;
 
+      // Also block any existing customer with this identity number
+      if (identityType === 'license' || identityType === 'id_card') {
+        const fieldName = identityType === 'license' ? 'license_number' : 'id_number';
+
+        let customerQuery = supabase
+          .from('customers')
+          .update({
+            is_blocked: true,
+            blocked_at: new Date().toISOString(),
+            blocked_reason: reason
+          })
+          .eq(fieldName, identityNumber)
+          .eq('is_blocked', false);
+
+        if (tenant?.id) {
+          customerQuery = customerQuery.eq('tenant_id', tenant.id);
+        }
+
+        await customerQuery;
+      }
+
       // If blocking by email, check and update global blacklist
       if (identityType === 'email') {
         await supabase.rpc('check_and_update_global_blacklist', {
           p_email: identityNumber
         });
+
+        // Also block customer with this email
+        let customerQuery = supabase
+          .from('customers')
+          .update({
+            is_blocked: true,
+            blocked_at: new Date().toISOString(),
+            blocked_reason: reason
+          })
+          .eq('email', identityNumber)
+          .eq('is_blocked', false);
+
+        if (tenant?.id) {
+          customerQuery = customerQuery.eq('tenant_id', tenant.id);
+        }
+
+        await customerQuery;
       }
 
       return data;
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['blocked-identities'] });
       queryClient.invalidateQueries({ queryKey: ['global-blacklist'] });
+      queryClient.invalidateQueries({ queryKey: ['customers'] });
+      queryClient.invalidateQueries({ queryKey: ['blocked-customers'] });
+
+      // Audit log
+      logAction({
+        action: "identity_blocked",
+        entityType: "identity",
+        entityId: data.id,
+        details: {
+          identity_type: data.identity_type,
+          identity_number: data.identity_number,
+          customer_name: data.customer_name,
+          reason: data.reason
+        }
+      });
+
       toast({
         title: "Identity Blocked",
-        description: "The identity has been added to the blocklist.",
+        description: "The identity has been added to the blocklist and matching customers have been blocked.",
       });
     },
     onError: (error: any) => {
@@ -240,7 +317,7 @@ export function useCustomerBlockingActions() {
       // First get the identity to check if it's an email type
       const { data: identity } = await supabase
         .from('blocked_identities')
-        .select('identity_type, identity_number')
+        .select('identity_type, identity_number, customer_name')
         .eq('id', identityId)
         .single();
 
@@ -263,10 +340,25 @@ export function useCustomerBlockingActions() {
           p_email: identity.identity_number
         });
       }
+
+      return { identityId, identity };
     },
-    onSuccess: () => {
+    onSuccess: ({ identityId, identity }) => {
       queryClient.invalidateQueries({ queryKey: ['blocked-identities'] });
       queryClient.invalidateQueries({ queryKey: ['global-blacklist'] });
+
+      // Audit log
+      logAction({
+        action: "identity_unblocked",
+        entityType: "identity",
+        entityId: identityId,
+        details: {
+          identity_type: identity?.identity_type,
+          identity_number: identity?.identity_number,
+          customer_name: identity?.customer_name
+        }
+      });
+
       toast({
         title: "Identity Unblocked",
         description: "The identity has been removed from the blocklist.",

@@ -15,6 +15,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { useQueryClient } from "@tanstack/react-query";
+import { useAuditLog } from "@/hooks/use-audit-log";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
 import { getContractTotal } from "@/lib/vehicle-utils";
@@ -69,6 +70,7 @@ export const EditVehicleDialogEnhanced = ({ vehicle, open, onOpenChange }: EditV
   const [loading, setLoading] = useState(false);
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const { logAction } = useAuditLog();
   
   // Calculate contract total for existing finance vehicles
   const existingContractTotal = vehicle.acquisition_type === 'Finance' 
@@ -187,17 +189,26 @@ export const EditVehicleDialogEnhanced = ({ vehicle, open, onOpenChange }: EditV
 
       if (error) throw error;
 
+      // Audit log for vehicle update
+      logAction({
+        action: "vehicle_updated",
+        entityType: "vehicle",
+        entityId: vehicle.id,
+        details: { reg: normalizedReg, make: data.make, model: data.model }
+      });
+
       toast({
         title: "Vehicle Updated",
         description: `${data.make} ${data.model} (${normalizedReg}) has been updated successfully.`,
       });
 
       handleOpenChange(false);
-      
+
       // Refresh the vehicle data and P&L data
       queryClient.invalidateQueries({ queryKey: ["vehicle", vehicle.id] });
       queryClient.invalidateQueries({ queryKey: ["vehicles-list"] });
       queryClient.invalidateQueries({ queryKey: ["vehicles-pl"] });
+      queryClient.invalidateQueries({ queryKey: ["audit-logs"] });
     } catch (error: any) {
       console.error('=== EDIT VEHICLE ERROR ===');
       console.error('Error object:', error);

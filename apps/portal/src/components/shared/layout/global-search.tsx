@@ -2,17 +2,19 @@
 
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { 
-  Search, 
-  User, 
-  Car, 
-  Calendar, 
-  AlertTriangle, 
-  CreditCard, 
-  Hash, 
+import {
+  Search,
+  User,
+  Car,
+  Calendar,
+  AlertTriangle,
+  CreditCard,
+  Hash,
   Shield,
   Loader2,
-  Filter
+  Filter,
+  FileText,
+  File
 } from "lucide-react";
 import {
   Command,
@@ -58,6 +60,10 @@ const getIcon = (iconName: string) => {
       return Hash;
     case "shield":
       return Shield;
+    case "file-text":
+      return FileText;
+    case "file":
+      return File;
     default:
       return Search;
   }
@@ -222,6 +228,8 @@ export const GlobalSearch = ({ open, onOpenChange }: GlobalSearchProps) => {
                 <SelectItem value="payments">Payments</SelectItem>
                 {!hideInsurance && <SelectItem value="insurance">Insurance</SelectItem>}
                 <SelectItem value="plates">Plates</SelectItem>
+                <SelectItem value="invoices">Invoices</SelectItem>
+                <SelectItem value="documents">Documents</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -272,7 +280,7 @@ export const GlobalSearch = ({ open, onOpenChange }: GlobalSearchProps) => {
               <div className="space-y-2">
                 <h3 className="text-lg font-semibold text-foreground">Search Everything</h3>
                 <p className="text-sm text-muted-foreground max-w-md mx-auto">
-                  Instantly find customers, vehicles, rentals, fines, payments{!hideInsurance ? ', insurance records,' : ','} and license plates
+                  Instantly find customers, vehicles, rentals, fines, payments{!hideInsurance ? ', insurance,' : ','} invoices, documents, and plates
                 </p>
               </div>
 
@@ -330,6 +338,8 @@ export const GlobalSearch = ({ open, onOpenChange }: GlobalSearchProps) => {
               {renderGroup("Payments", results.payments, "")}
               {!hideInsurance && renderGroup("Insurance", results.insurance, "")}
               {renderGroup("Plates", results.plates, "")}
+              {renderGroup("Invoices", results.invoices, "")}
+              {renderGroup("Documents", results.documents, "")}
             </div>
           )}
         </CommandList>

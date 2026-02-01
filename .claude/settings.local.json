@@ -50,7 +50,9 @@
       "Bash(supabase functions logs:*)",
       "Bash(xargs cat:*)",
       "Bash(supabase secrets:*)",
-      "Bash(supabase functions list:*)"
+      "Bash(supabase functions list:*)",
+      "Bash(./node_modules/.bin/tsc:*)",
+      "Bash(npm exec:*)"
     ],
     "deny": [],
     "ask": []

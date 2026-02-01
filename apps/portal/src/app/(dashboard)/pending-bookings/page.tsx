@@ -2,13 +2,7 @@
 
 import { useState } from "react";
 import { format, differenceInDays, parseISO } from "date-fns";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -208,28 +202,14 @@ const PendingBookings = () => {
       </div>
 
       {bookings && bookings.length === 0 ? (
-        <Card>
-          <CardContent className="py-12">
-            <div className="text-center text-muted-foreground">
-              <CheckCircle className="h-12 w-12 mx-auto mb-4 text-green-500" />
-              <h3 className="text-lg font-semibold mb-2">All caught up!</h3>
-              <p>No pending bookings require your attention.</p>
-            </div>
-          </CardContent>
-        </Card>
+        <div className="text-center py-12">
+          <CheckCircle className="h-12 w-12 mx-auto mb-4 text-green-500" />
+          <h3 className="text-lg font-semibold mb-2">All caught up!</h3>
+          <p className="text-muted-foreground">No pending bookings require your attention.</p>
+        </div>
       ) : (
         <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Clock className="h-5 w-5 text-primary" />
-              Awaiting Approval ({bookings?.length || 0})
-            </CardTitle>
-            <CardDescription>
-              These bookings have pre-authorized payment holds. Approve to
-              capture payment or reject to release the hold.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
+          <CardContent className="p-0">
             <Table>
               <TableHeader>
                 <TableRow>

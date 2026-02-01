@@ -38,6 +38,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
+import { useAuditLog } from "@/hooks/use-audit-log";
 
 interface Vehicle {
   id: string;
@@ -128,6 +129,7 @@ export default function VehicleDetail() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { toast } = useToast();
+  const { logAction } = useAuditLog();
   const [showAddFineDialog, setShowAddFineDialog] = useState(false);
   const [showEditDialog, setShowEditDialog] = useState(false);
   const [showDisposeDialog, setShowDisposeDialog] = useState(false);
@@ -828,6 +830,14 @@ export default function VehicleDetail() {
                     .eq('id', vehicle.id);
 
                   if (error) throw error;
+
+                  // Audit log for vehicle deletion
+                  logAction({
+                    action: "vehicle_deleted",
+                    entityType: "vehicle",
+                    entityId: vehicle.id,
+                    details: { reg: vehicle.reg, make: vehicle.make, model: vehicle.model }
+                  });
 
                   toast({
                     title: "Vehicle deleted",

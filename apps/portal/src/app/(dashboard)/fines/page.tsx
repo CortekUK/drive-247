@@ -18,6 +18,7 @@ import { useFinesData, EnhancedFine } from "@/hooks/use-fines-data";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
+import { useAuditLog } from "@/hooks/use-audit-log";
 import { cn } from "@/lib/utils";
 
 const FinesList = () => {
@@ -25,17 +26,20 @@ const FinesList = () => {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const searchParams = useSearchParams();
+  const { logAction } = useAuditLog();
 
   // State for filtering, sorting, and selection
   const [filters, setFilters] = useState<FineFilterState>({
     status: [],
-    liability: [],
     vehicleSearch: '',
     customerSearch: '',
+    search: '',
   });
 
   const [sortBy, setSortBy] = useState('created_at');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
+  const [currentPage, setCurrentPage] = useState(1);
+  const pageSize = 25;
 
   const [selectedFines, setSelectedFines] = useState<string[]>([]);
 
@@ -46,8 +50,19 @@ const FinesList = () => {
     sortOrder,
   });
 
-  // All fines
-  const filteredFines = finesData?.fines || [];
+  // All fines with pagination
+  const allFines = finesData?.fines || [];
+  const totalFines = allFines.length;
+  const totalPages = Math.ceil(totalFines / pageSize);
+  const startIndex = (currentPage - 1) * pageSize;
+  const endIndex = Math.min(startIndex + pageSize, totalFines);
+  const filteredFines = allFines.slice(startIndex, endIndex);
+
+  // Reset to page 1 when filters change
+  const handleFiltersChange = (newFilters: FineFilterState) => {
+    setFilters(newFilters);
+    setCurrentPage(1);
+  };
 
   // Get selected fine objects for bulk actions
   const selectedFineObjects = filteredFines.filter(fine => selectedFines.includes(fine.id));
@@ -60,12 +75,21 @@ const FinesList = () => {
       });
       if (error) throw error;
       if (!data.success) throw new Error(data.error || 'Failed to charge fine');
-      return data;
+      return { ...data, fineId };
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
       toast({ title: "Fine charged to customer account successfully" });
       queryClient.invalidateQueries({ queryKey: ["fines-enhanced"] });
       queryClient.invalidateQueries({ queryKey: ["fines-kpis"] });
+      queryClient.invalidateQueries({ queryKey: ["audit-logs"] });
+
+      // Audit log
+      logAction({
+        action: "fine_charged",
+        entityType: "fine",
+        entityId: data.fineId,
+        details: { amount: data.amount }
+      });
     },
     onError: (error: any) => {
       toast({
@@ -83,12 +107,21 @@ const FinesList = () => {
       });
       if (error) throw error;
       if (!data.success) throw new Error(data.error || 'Failed to waive fine');
-      return data;
+      return { ...data, fineId };
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
       toast({ title: "Fine waived successfully" });
       queryClient.invalidateQueries({ queryKey: ["fines-enhanced"] });
       queryClient.invalidateQueries({ queryKey: ["fines-kpis"] });
+      queryClient.invalidateQueries({ queryKey: ["audit-logs"] });
+
+      // Audit log
+      logAction({
+        action: "fine_waived",
+        entityType: "fine",
+        entityId: data.fineId,
+        details: { amount: data.amount }
+      });
     },
     onError: (error: any) => {
       toast({
@@ -124,7 +157,7 @@ const FinesList = () => {
 
   // Render individual fine row
   const renderFineRow = (fine: EnhancedFine) => {
-    const canCharge = (fine.liability === 'Individual' || fine.liability === 'Customer') && fine.status === 'Open';
+    const canCharge = fine.status === 'Open';
     const canWaive = fine.status === 'Open';
 
     return (
@@ -169,12 +202,6 @@ const FinesList = () => {
         </TableCell>
 
         <TableCell>
-          <Badge variant={fine.liability === 'Individual' || fine.liability === 'Customer' ? 'default' : 'secondary'}>
-            {fine.liability === "Customer" ? "Individual" : fine.liability}
-          </Badge>
-        </TableCell>
-
-        <TableCell>
           <FineStatusBadge
             status={fine.status}
             dueDate={fine.due_date}
@@ -186,47 +213,46 @@ const FinesList = () => {
           ${Number(fine.amount).toLocaleString()}
         </TableCell>
 
-        <TableCell className="text-right">
-          <div className="flex items-center gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => router.push(`/fines/${fine.id}`)}
-            >
-              <Eye className="h-4 w-4 mr-1" />
-              View
-            </Button>
+        <TableCell>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => router.push(`/fines/${fine.id}`)}
+          >
+            <Eye className="h-4 w-4" />
+          </Button>
+        </TableCell>
 
-            {(canCharge || canWaive) && (
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button variant="ghost" size="sm">
-                    <MoreVertical className="h-4 w-4" />
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end">
-                  {canCharge && (
-                    <DropdownMenuItem
-                      onClick={() => chargeFineAction.mutate(fine.id)}
-                      disabled={chargeFineAction.isPending}
-                    >
-                      <CreditCard className="h-4 w-4 mr-2" />
-                      Charge to Customer
-                    </DropdownMenuItem>
-                  )}
-                  {canWaive && (
-                    <DropdownMenuItem
-                      onClick={() => waiveFineAction.mutate(fine.id)}
-                      disabled={waiveFineAction.isPending}
-                    >
-                      <Ban className="h-4 w-4 mr-2" />
-                      Waive Fine
-                    </DropdownMenuItem>
-                  )}
-                </DropdownMenuContent>
-              </DropdownMenu>
-            )}
-          </div>
+        <TableCell className="text-right">
+          {(canCharge || canWaive) && (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" size="sm">
+                  <MoreVertical className="h-4 w-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                {canCharge && (
+                  <DropdownMenuItem
+                    onClick={() => chargeFineAction.mutate(fine.id)}
+                    disabled={chargeFineAction.isPending}
+                  >
+                    <CreditCard className="h-4 w-4 mr-2" />
+                    Charge to Customer
+                  </DropdownMenuItem>
+                )}
+                {canWaive && (
+                  <DropdownMenuItem
+                    onClick={() => waiveFineAction.mutate(fine.id)}
+                    disabled={waiveFineAction.isPending}
+                  >
+                    <Ban className="h-4 w-4 mr-2" />
+                    Waive Fine
+                  </DropdownMenuItem>
+                )}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )}
         </TableCell>
       </TableRow>
     );
@@ -257,18 +283,18 @@ const FinesList = () => {
                 <ArrowUpDown className="h-4 w-4" />
               </div>
             </TableHead>
-            <TableHead>Liability</TableHead>
             <TableHead>Status</TableHead>
             <TableHead
-              className="text-right cursor-pointer hover:bg-muted/50"
+              className="text-left cursor-pointer hover:bg-muted/50"
               onClick={() => handleSort('amount')}
             >
-              <div className="flex items-center justify-end gap-1">
+              <div className="flex items-center gap-1">
                 Amount
                 <ArrowUpDown className="h-4 w-4" />
               </div>
             </TableHead>
-            <TableHead className="text-right">Actions</TableHead>
+            <TableHead className="w-12">View</TableHead>
+            <TableHead className="text-right w-12">Actions</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -281,7 +307,7 @@ const FinesList = () => {
                   <AlertTriangle className="h-12 w-12 text-muted-foreground" />
                   <p className="text-lg font-medium">No fines found</p>
                   <p className="text-muted-foreground">
-                    {filters.status.length > 0 || filters.liability.length > 0 || filters.vehicleSearch || filters.customerSearch
+                    {filters.status.length > 0 || filters.vehicleSearch || filters.customerSearch || filters.search
                       ? "Try adjusting your filters"
                       : "Get started by adding your first fine"
                     }
@@ -330,7 +356,7 @@ const FinesList = () => {
       <FineKPIs />
 
       {/* Filters */}
-      <FineFilters onFiltersChange={setFilters} />
+      <FineFilters onFiltersChange={handleFiltersChange} />
 
       {/* Bulk Action Bar */}
       {selectedFines.length > 0 && (
@@ -341,24 +367,47 @@ const FinesList = () => {
       )}
 
       {/* Fines Table */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <AlertTriangle className="h-5 w-5 text-primary" />
-            Fines & Penalties
-          </CardTitle>
-          <CardDescription>
-            View and manage all fines
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          {isLoading ? (
-            <div className="text-center py-8">Loading fines...</div>
-          ) : (
-            renderFinesTable(filteredFines)
+      {isLoading ? (
+        <div className="text-center py-8">Loading fines...</div>
+      ) : (
+        <>
+          <Card>
+            <CardContent className="p-0">
+              {renderFinesTable(filteredFines)}
+            </CardContent>
+          </Card>
+
+          {/* Pagination */}
+          {totalFines > 0 && (
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+              <p className="text-sm text-muted-foreground">
+                Showing {startIndex + 1}-{endIndex} of {totalFines} fines
+              </p>
+              <div className="flex items-center gap-2 w-full sm:w-auto flex-wrap justify-center sm:justify-end">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
+                  disabled={currentPage === 1}
+                >
+                  Previous
+                </Button>
+                <span className="text-sm text-muted-foreground whitespace-nowrap">
+                  Page {currentPage} of {totalPages || 1}
+                </span>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setCurrentPage(Math.min(totalPages, currentPage + 1))}
+                  disabled={currentPage === totalPages || totalPages <= 1}
+                >
+                  Next
+                </Button>
+              </div>
+            </div>
           )}
-        </CardContent>
-      </Card>
+        </>
+      )}
     </div>
   );
 };

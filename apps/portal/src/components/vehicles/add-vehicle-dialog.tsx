@@ -20,6 +20,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { useQueryClient } from "@tanstack/react-query";
 import { useTenant } from "@/contexts/TenantContext";
+import { useAuditLog } from "@/hooks/use-audit-log";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
 import { addVehicleDialogSchema, type AddVehicleDialogFormValues } from "@/client-schemas/vehicles/add-vehicle-dialog";
@@ -41,6 +42,7 @@ export const AddVehicleDialog = ({ open, onOpenChange }: AddVehicleDialogProps) 
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const { tenant } = useTenant();
+  const { logAction } = useAuditLog();
 
   const form = useForm<VehicleFormData>({
     resolver: zodResolver(addVehicleDialogSchema),
@@ -238,6 +240,16 @@ export const AddVehicleDialog = ({ open, onOpenChange }: AddVehicleDialogProps) 
         .single();
 
       if (error) throw error;
+
+      // Audit log for vehicle creation
+      if (insertedVehicle?.id) {
+        logAction({
+          action: "vehicle_created",
+          entityType: "vehicle",
+          entityId: insertedVehicle.id,
+          details: { reg: normalizedReg, make: data.make, model: data.model }
+        });
+      }
 
       // Upload photos if any were selected
       if (photoFiles.length > 0 && insertedVehicle) {

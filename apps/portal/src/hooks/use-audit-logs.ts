@@ -141,12 +141,67 @@ export function useAdminUsers() {
 export function formatActionName(action: string): string {
   // Special cases for better formatting
   const actionMap: Record<string, string> = {
+    // Settings
     update_settings: "Update Settings",
+    settings_updated: "Settings Updated",
+    // Users
     create_user: "Create User",
     update_user: "Update User",
     delete_user: "Delete User",
+    user_created: "User Created",
+    user_updated: "User Updated",
+    user_deleted: "User Deleted",
+    // Customers
     blocked_customer: "Block Customer",
     unblocked_customer: "Unblock Customer",
+    customer_created: "Customer Created",
+    customer_updated: "Customer Updated",
+    customer_deleted: "Customer Deleted",
+    customer_blocked: "Customer Blocked",
+    customer_unblocked: "Customer Unblocked",
+    customer_approved: "Customer Approved",
+    customer_rejected: "Customer Rejected",
+    // Identities
+    identity_blocked: "Identity Blocked",
+    identity_unblocked: "Identity Unblocked",
+    // Vehicles
+    vehicle_created: "Vehicle Created",
+    vehicle_updated: "Vehicle Updated",
+    vehicle_deleted: "Vehicle Deleted",
+    vehicle_status_changed: "Vehicle Status Changed",
+    // Rentals
+    rental_created: "Rental Created",
+    rental_updated: "Rental Updated",
+    rental_cancelled: "Rental Cancelled",
+    rental_closed: "Rental Closed",
+    rental_extended: "Rental Extended",
+    // Payments
+    payment_created: "Payment Created",
+    payment_captured: "Payment Captured",
+    payment_refunded: "Payment Refunded",
+    payment_failed: "Payment Failed",
+    // Fines
+    fine_created: "Fine Created",
+    fine_updated: "Fine Updated",
+    fine_deleted: "Fine Deleted",
+    fine_charged: "Fine Charged",
+    fine_waived: "Fine Waived",
+    fine_paid: "Fine Paid",
+    // Invoices
+    invoice_created: "Invoice Created",
+    invoice_updated: "Invoice Updated",
+    invoice_deleted: "Invoice Deleted",
+    invoice_sent: "Invoice Sent",
+    // Documents
+    document_uploaded: "Document Uploaded",
+    document_updated: "Document Updated",
+    document_deleted: "Document Deleted",
+    // Plates
+    plate_created: "Plate Created",
+    plate_updated: "Plate Updated",
+    plate_deleted: "Plate Deleted",
+    plate_assigned: "Plate Assigned",
+    plate_unassigned: "Plate Unassigned",
   };
 
   if (actionMap[action]) {
@@ -162,14 +217,44 @@ export function formatActionName(action: string): string {
 
 // Helper to get action color
 export function getActionColor(action: string): string {
-  if (action.includes("rejected") || action.includes("deleted") || action.includes("blocked")) {
+  // Destructive actions (red)
+  if (
+    action.includes("rejected") ||
+    action.includes("deleted") ||
+    action.includes("blocked") ||
+    action.includes("cancelled") ||
+    action.includes("failed") ||
+    action.includes("waived")
+  ) {
     return "text-red-600 bg-red-50 dark:bg-red-950/20";
   }
-  if (action.includes("approved") || action.includes("created") || action.includes("unblocked")) {
+  // Success actions (green)
+  if (
+    action.includes("approved") ||
+    action.includes("created") ||
+    action.includes("unblocked") ||
+    action.includes("captured") ||
+    action.includes("paid") ||
+    action.includes("uploaded") ||
+    action.includes("assigned")
+  ) {
     return "text-green-600 bg-green-50 dark:bg-green-950/20";
   }
-  if (action.includes("updated") || action.includes("changed")) {
+  // Update/change actions (blue)
+  if (
+    action.includes("updated") ||
+    action.includes("changed") ||
+    action.includes("extended") ||
+    action.includes("closed")
+  ) {
     return "text-blue-600 bg-blue-50 dark:bg-blue-950/20";
+  }
+  // Financial actions (amber/yellow)
+  if (
+    action.includes("refunded") ||
+    action.includes("charged")
+  ) {
+    return "text-amber-600 bg-amber-50 dark:bg-amber-950/20";
   }
   return "text-gray-600 bg-gray-50 dark:bg-gray-800";
 }

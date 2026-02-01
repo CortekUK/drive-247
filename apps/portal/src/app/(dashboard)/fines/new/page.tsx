@@ -13,22 +13,30 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage, FormDescription } from "@/components/ui/form";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { ArrowLeft, AlertTriangle, Save } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useTenant } from "@/contexts/TenantContext";
+import { useAuditLog } from "@/hooks/use-audit-log";
 import { DatePickerInput } from "@/components/shared/forms/date-picker-input";
 import { CurrencyInput } from "@/components/shared/forms/currency-input";
 import { EnhancedFileUpload } from "@/components/fines/enhanced-file-upload";
 
 const fineSchema = z.object({
-  type: z.enum(["PCN", "Speeding", "Other"]),
+  type: z.string().min(1, "Fine type is required"),
   vehicle_id: z.string().min(1, "Vehicle is required"),
   customer_id: z.string().min(1, "Customer is required"),
   reference_no: z.string().optional(),
   issue_date: z.date(),
   due_date: z.date(),
   amount: z.number().min(1, "Amount must be at least $1"),
-  liability: z.enum(["Customer", "Company"]),
   notes: z.string().optional(),
 }).refine((data) => data.due_date >= data.issue_date, {
   message: "Due date must be on or after issue date",
@@ -47,8 +55,12 @@ const CreateFine = () => {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const { tenant } = useTenant();
+  const { logAction } = useAuditLog();
   const [loading, setLoading] = useState(false);
   const [evidenceFiles, setEvidenceFiles] = useState<FileWithPreview[]>([]);
+  const [showOtherTypeDialog, setShowOtherTypeDialog] = useState(false);
+  const [otherTypeValue, setOtherTypeValue] = useState("");
+  const [selectedTypeOption, setSelectedTypeOption] = useState("PCN");
 
   const form = useForm<FineFormData>({
     resolver: zodResolver(fineSchema),
@@ -60,12 +72,17 @@ const CreateFine = () => {
       issue_date: new Date(),
       due_date: new Date(new Date().getTime() + 28 * 24 * 60 * 60 * 1000), // 28 days from now
       amount: undefined,
-      liability: "Customer",
       notes: "",
     },
   });
 
   const watchedIssueDate = form.watch("issue_date");
+  const selectedCustomerId = form.watch("customer_id");
+
+  // Clear vehicle selection when customer changes
+  useEffect(() => {
+    form.setValue("vehicle_id", "");
+  }, [selectedCustomerId, form]);
 
   // Auto-update due date when issue date changes
   const handleIssueDateChange = (date: Date | undefined) => {
@@ -82,14 +99,13 @@ const CreateFine = () => {
     if (process.env.NODE_ENV !== 'development') return;
 
     const handleDevFillFine = (e: CustomEvent<{
-      type: 'PCN' | 'Speeding' | 'Other';
+      type: string;
       vehicle_id: string;
       customer_id: string;
       reference_no: string;
       issue_date: Date;
       due_date: Date;
       amount: number;
-      liability: 'Customer' | 'Company';
       notes: string;
     }>) => {
       const data = e.detail;
@@ -97,13 +113,13 @@ const CreateFine = () => {
 
       // Set form values
       form.setValue('type', data.type);
+      setSelectedTypeOption(['PCN', 'Speeding'].includes(data.type) ? data.type : 'Other');
       form.setValue('vehicle_id', data.vehicle_id);
       form.setValue('customer_id', data.customer_id);
       form.setValue('reference_no', data.reference_no);
       form.setValue('issue_date', new Date(data.issue_date));
       form.setValue('due_date', new Date(data.due_date));
       form.setValue('amount', data.amount);
-      form.setValue('liability', data.liability);
       form.setValue('notes', data.notes);
 
       // Trigger form validation
@@ -141,9 +157,9 @@ const CreateFine = () => {
   });
 
   const { data: vehicles } = useQuery({
-    queryKey: ["rented-vehicles", tenant?.id],
+    queryKey: ["rented-vehicles-for-customer", tenant?.id, selectedCustomerId],
     queryFn: async () => {
-      // Get unique vehicles that have been added to rentals
+      // Get unique vehicles that have been rented by this specific customer
       let query = supabase
         .from("rentals")
         .select(`
@@ -162,6 +178,11 @@ const CreateFine = () => {
         query = query.eq("tenant_id", tenant.id);
       }
 
+      // Filter by selected customer
+      if (selectedCustomerId) {
+        query = query.eq("customer_id", selectedCustomerId);
+      }
+
       const { data, error } = await query;
 
       if (error) throw error;
@@ -176,7 +197,7 @@ const CreateFine = () => {
 
       return Array.from(uniqueVehiclesMap.values());
     },
-    enabled: !!tenant,
+    enabled: !!tenant && !!selectedCustomerId,
   });
 
   const createFineMutation = useMutation({
@@ -192,7 +213,6 @@ const CreateFine = () => {
           issue_date: data.issue_date.toISOString().split('T')[0],
           due_date: data.due_date.toISOString().split('T')[0],
           amount: data.amount,
-          liability: data.liability,
           notes: data.notes || null,
           status: "Open",
           tenant_id: tenant?.id || null,
@@ -237,11 +257,25 @@ const CreateFine = () => {
         title: "Fine Created",
         description: `Fine ${fine.reference_no || fine.id.slice(0, 8)} created successfully. Not charged yet.`,
       });
+
+      // Audit log for fine creation
+      logAction({
+        action: "fine_created",
+        entityType: "fine",
+        entityId: fine.id,
+        details: {
+          reference_no: fine.reference_no,
+          amount: fine.amount,
+          type: fine.type
+        }
+      });
+
       queryClient.invalidateQueries({ queryKey: ["fines-list"] });
       queryClient.invalidateQueries({ queryKey: ["fines-kpis"] });
       queryClient.invalidateQueries({ queryKey: ["customer-fines"] });
       queryClient.invalidateQueries({ queryKey: ["customer-fine-stats"] });
       queryClient.invalidateQueries({ queryKey: ["fines-enhanced"] });
+      queryClient.invalidateQueries({ queryKey: ["audit-logs"] });
       router.push("/fines");
     },
     onError: (error) => {
@@ -305,38 +339,34 @@ const CreateFine = () => {
                       render={({ field }) => (
                         <FormItem>
                           <FormLabel>Fine Type <span className="text-red-500">*</span></FormLabel>
-                          <Select onValueChange={field.onChange} defaultValue={field.value}>
+                          <Select
+                            value={selectedTypeOption}
+                            onValueChange={(value) => {
+                              if (value === "Other") {
+                                setShowOtherTypeDialog(true);
+                              } else {
+                                setSelectedTypeOption(value);
+                                field.onChange(value);
+                              }
+                            }}
+                          >
                             <FormControl>
                               <SelectTrigger>
-                                <SelectValue placeholder="Select fine type" />
+                                <SelectValue placeholder="Select fine type">
+                                  {field.value && !["PCN", "Speeding"].includes(field.value)
+                                    ? field.value
+                                    : field.value === "PCN"
+                                      ? "Parking Citation"
+                                      : field.value === "Speeding"
+                                        ? "Speeding Violation"
+                                        : "Select fine type"}
+                                </SelectValue>
                               </SelectTrigger>
                             </FormControl>
                             <SelectContent>
                               <SelectItem value="PCN">Parking Citation</SelectItem>
                               <SelectItem value="Speeding">Speeding Violation</SelectItem>
                               <SelectItem value="Other">Other</SelectItem>
-                            </SelectContent>
-                          </Select>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-
-                    <FormField
-                      control={form.control}
-                      name="liability"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Liability <span className="text-red-500">*</span></FormLabel>
-                          <Select onValueChange={field.onChange} defaultValue={field.value}>
-                            <FormControl>
-                              <SelectTrigger>
-                                <SelectValue />
-                              </SelectTrigger>
-                            </FormControl>
-                            <SelectContent>
-                              <SelectItem value="Customer">Individual</SelectItem>
-                              <SelectItem value="Company">Company</SelectItem>
                             </SelectContent>
                           </Select>
                           <FormMessage />
@@ -356,13 +386,20 @@ const CreateFine = () => {
                           <Select onValueChange={field.onChange} value={field.value}>
                             <FormControl>
                               <SelectTrigger>
-                                <SelectValue placeholder="Select customer" />
+                                <SelectValue placeholder="Select customer">
+                                  {selectedCustomer ? selectedCustomer.name : "Select customer"}
+                                </SelectValue>
                               </SelectTrigger>
                             </FormControl>
-                            <SelectContent>
+                            <SelectContent className="max-h-[300px]">
                               {customers?.map((customer) => (
-                                <SelectItem key={customer.id} value={customer.id}>
-                                  {customer.name} • {customer.email || customer.phone || customer.customer_type}
+                                <SelectItem key={customer.id} value={customer.id} className="py-2">
+                                  <div className="flex flex-col items-start w-[250px]">
+                                    <span className="font-medium truncate w-full">{customer.name}</span>
+                                    <span className="text-xs text-muted-foreground truncate w-full">
+                                      {customer.email || customer.phone || customer.customer_type}
+                                    </span>
+                                  </div>
                                 </SelectItem>
                               ))}
                             </SelectContent>
@@ -378,20 +415,33 @@ const CreateFine = () => {
                       render={({ field }) => (
                         <FormItem>
                           <FormLabel>Vehicle <span className="text-red-500">*</span></FormLabel>
-                          <Select onValueChange={field.onChange} value={field.value}>
+                          <Select
+                            onValueChange={field.onChange}
+                            value={field.value}
+                            disabled={!selectedCustomerId}
+                          >
                             <FormControl>
                               <SelectTrigger>
-                                <SelectValue placeholder="Select vehicle" />
+                                <SelectValue placeholder={!selectedCustomerId ? "Select customer first" : "Select vehicle"} />
                               </SelectTrigger>
                             </FormControl>
                             <SelectContent>
-                              {vehicles?.map((vehicle) => (
-                                <SelectItem key={vehicle.id} value={vehicle.id}>
-                                  {vehicle.reg} • {vehicle.make} {vehicle.model}
-                                </SelectItem>
-                              ))}
+                              {vehicles && vehicles.length > 0 ? (
+                                vehicles.map((vehicle) => (
+                                  <SelectItem key={vehicle.id} value={vehicle.id}>
+                                    {vehicle.reg} • {vehicle.make} {vehicle.model}
+                                  </SelectItem>
+                                ))
+                              ) : (
+                                <div className="px-2 py-4 text-sm text-muted-foreground text-center">
+                                  No vehicles found for this customer
+                                </div>
+                              )}
                             </SelectContent>
                           </Select>
+                          {!selectedCustomerId && (
+                            <p className="text-xs text-muted-foreground">Select a customer first to see their rented vehicles</p>
+                          )}
                           <FormMessage />
                         </FormItem>
                       )}
@@ -567,11 +617,6 @@ const CreateFine = () => {
               </div>
 
               <div>
-                <p className="text-sm font-medium text-muted-foreground">Liability</p>
-                <p className="font-medium">{form.watch("liability")}</p>
-              </div>
-
-              <div>
                 <p className="text-sm font-medium text-muted-foreground">Status After Creation</p>
                 <p className="font-medium text-amber-600">Open (Not Charged)</p>
               </div>
@@ -588,6 +633,50 @@ const CreateFine = () => {
           </Card>
         </div>
       </div>
+
+      {/* Other Type Dialog */}
+      <Dialog open={showOtherTypeDialog} onOpenChange={setShowOtherTypeDialog}>
+        <DialogContent className="sm:max-w-[400px]">
+          <DialogHeader>
+            <DialogTitle>Custom Fine Type</DialogTitle>
+            <DialogDescription>
+              Enter a custom name for this fine type
+            </DialogDescription>
+          </DialogHeader>
+          <div className="py-4">
+            <Input
+              placeholder="e.g., Red Light Violation, Toll Evasion..."
+              value={otherTypeValue}
+              onChange={(e) => setOtherTypeValue(e.target.value)}
+              autoFocus
+            />
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setShowOtherTypeDialog(false);
+                setOtherTypeValue("");
+              }}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={() => {
+                if (otherTypeValue.trim()) {
+                  form.setValue("type", otherTypeValue.trim());
+                  setSelectedTypeOption("Other");
+                  setShowOtherTypeDialog(false);
+                  setOtherTypeValue("");
+                }
+              }}
+              disabled={!otherTypeValue.trim()}
+            >
+              Confirm
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
