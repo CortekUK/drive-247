@@ -114,6 +114,10 @@ export interface Tenant {
   sunday_enabled: boolean | null;
   sunday_open: string | null;
   sunday_close: string | null;
+
+  // Delivery & Collection settings
+  delivery_enabled: boolean | null;
+  collection_enabled: boolean | null;
 }
 
 interface TenantContextType {
@@ -259,7 +263,8 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
                 thursday_enabled, thursday_open, thursday_close,
                 friday_enabled, friday_open, friday_close,
                 saturday_enabled, saturday_open, saturday_close,
-                sunday_enabled, sunday_open, sunday_close
+                sunday_enabled, sunday_open, sunday_close,
+                delivery_enabled, collection_enabled
               `)
               .eq('slug', defaultSlug)
               .eq('status', 'active')
@@ -374,7 +379,9 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
           saturday_close,
           sunday_enabled,
           sunday_open,
-          sunday_close
+          sunday_close,
+          delivery_enabled,
+          collection_enabled
         `)
         .eq('slug', slug)
         .eq('status', 'active')

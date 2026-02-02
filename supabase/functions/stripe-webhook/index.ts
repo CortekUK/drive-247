@@ -70,9 +70,138 @@ serve(async (req) => {
 
         const rentalId = session.client_reference_id || session.metadata?.rental_id;
         const isPreAuth = session.metadata?.preauth_mode === "true";
+        const isInstallment = session.metadata?.checkout_type === "installment";
 
         if (!rentalId) {
           console.log("No rental ID in session, skipping");
+          break;
+        }
+
+        // Handle installment checkout completion
+        if (isInstallment) {
+          console.log("Installment checkout completed for rental:", rentalId);
+
+          // Update payment record with payment intent ID
+          const { data: existingPaymentRecord } = await supabase
+            .from("payments")
+            .select("id")
+            .eq("stripe_checkout_session_id", session.id)
+            .single();
+
+          if (existingPaymentRecord) {
+            await supabase
+              .from("payments")
+              .update({
+                stripe_payment_intent_id: session.payment_intent as string,
+                status: "Applied",
+                capture_status: "captured",
+                updated_at: new Date().toISOString(),
+              })
+              .eq("id", existingPaymentRecord.id);
+            console.log("Updated upfront payment:", existingPaymentRecord.id);
+          }
+
+          // Activate the installment plan
+          const { data: installmentPlan } = await supabase
+            .from("installment_plans")
+            .select("id")
+            .eq("rental_id", rentalId)
+            .eq("status", "pending")
+            .single();
+
+          if (installmentPlan) {
+            // Get the payment method ID from the PaymentIntent
+            // When setup_future_usage is set, the payment_method is attached to the customer
+            let paymentMethodId: string | null = null;
+            if (session.payment_intent) {
+              try {
+                // Retrieve the PaymentIntent to get the payment_method
+                const paymentIntent = await stripe.paymentIntents.retrieve(
+                  session.payment_intent as string,
+                  stripeOptions
+                );
+                paymentMethodId = paymentIntent.payment_method as string;
+                console.log("Retrieved payment method from PaymentIntent:", paymentMethodId);
+              } catch (err) {
+                console.error("Error retrieving PaymentIntent for payment method:", err);
+              }
+            }
+
+            // Activate the plan
+            await supabase
+              .from("installment_plans")
+              .update({
+                status: "active",
+                upfront_paid: true,
+                upfront_payment_id: existingPaymentRecord?.id,
+                stripe_payment_method_id: paymentMethodId,
+                updated_at: new Date().toISOString(),
+              })
+              .eq("id", installmentPlan.id);
+
+            console.log("Installment plan activated:", installmentPlan.id, "Payment method:", paymentMethodId);
+
+            // Update rental status
+            await supabase
+              .from("rentals")
+              .update({
+                payment_status: "fulfilled",
+                updated_at: new Date().toISOString(),
+              })
+              .eq("id", rentalId);
+          }
+
+          // Send booking confirmation notification
+          try {
+            const { data: rental } = await supabase
+              .from("rentals")
+              .select(`
+                id, start_date, end_date, monthly_amount, tenant_id,
+                customer:customers(id, name, email, phone),
+                vehicle:vehicles(id, make, model, reg)
+              `)
+              .eq("id", rentalId)
+              .single();
+
+            if (rental && rental.customer && rental.vehicle) {
+              const vehicleName = rental.vehicle.make && rental.vehicle.model
+                ? `${rental.vehicle.make} ${rental.vehicle.model}`
+                : rental.vehicle.reg;
+
+              await fetch(
+                `${Deno.env.get("SUPABASE_URL")}/functions/v1/notify-booking-pending`,
+                {
+                  method: "POST",
+                  headers: {
+                    "Content-Type": "application/json",
+                    Authorization: `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`,
+                  },
+                  body: JSON.stringify({
+                    paymentId: existingPaymentRecord?.id || '',
+                    rentalId,
+                    tenantId: rental.tenant_id,
+                    customerId: rental.customer.id,
+                    customerName: rental.customer.name,
+                    customerEmail: rental.customer.email,
+                    customerPhone: rental.customer.phone,
+                    vehicleName,
+                    vehicleMake: rental.vehicle.make,
+                    vehicleModel: rental.vehicle.model,
+                    vehicleReg: rental.vehicle.reg,
+                    pickupDate: new Date(rental.start_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
+                    returnDate: new Date(rental.end_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
+                    amount: rental.monthly_amount || (session.amount_total ? session.amount_total / 100 : 0),
+                    bookingRef: rentalId.substring(0, 8).toUpperCase(),
+                    paymentMode: 'installment',
+                  }),
+                }
+              );
+              console.log("Installment booking notification sent");
+            }
+          } catch (notifyError) {
+            console.error("Error sending installment booking notification:", notifyError);
+          }
+
           break;
         }
 
@@ -344,6 +473,39 @@ serve(async (req) => {
             );
           }
         }
+
+        // BONZAH INSURANCE: Confirm payment and issue policy if bonzah_policy_id is present
+        const bonzahPolicyId = session.metadata?.bonzah_policy_id;
+        if (bonzahPolicyId) {
+          console.log("Confirming Bonzah insurance payment for policy:", bonzahPolicyId);
+          try {
+            const bonzahResponse = await fetch(
+              `${Deno.env.get("SUPABASE_URL")}/functions/v1/bonzah-confirm-payment`,
+              {
+                method: "POST",
+                headers: {
+                  "Content-Type": "application/json",
+                  Authorization: `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`,
+                },
+                body: JSON.stringify({
+                  policy_record_id: bonzahPolicyId,
+                  stripe_payment_intent_id: session.payment_intent as string,
+                }),
+              }
+            );
+
+            if (bonzahResponse.ok) {
+              const bonzahResult = await bonzahResponse.json();
+              console.log("Bonzah policy issued successfully:", bonzahResult.policy_no);
+            } else {
+              const errorText = await bonzahResponse.text();
+              console.error("Failed to confirm Bonzah payment:", errorText);
+            }
+          } catch (bonzahError) {
+            console.error("Error calling bonzah-confirm-payment:", bonzahError);
+            // Don't fail the webhook for Bonzah errors - payment was still successful
+          }
+        }
         break;
       }
 
@@ -351,7 +513,54 @@ serve(async (req) => {
         const paymentIntent = event.data.object as Stripe.PaymentIntent;
         console.log("PaymentIntent succeeded:", paymentIntent.id);
 
-        // Update payment record if exists
+        // Check if this is an installment payment
+        if (paymentIntent.metadata?.type === 'installment') {
+          const installmentId = paymentIntent.metadata.installment_id;
+          console.log("Processing installment payment success:", installmentId);
+
+          if (installmentId) {
+            // Get installment details
+            const { data: installment } = await supabase
+              .from("scheduled_installments")
+              .select("id, amount, customer_id, rental_id, tenant_id, installment_number, installment_plan_id")
+              .eq("id", installmentId)
+              .single();
+
+            if (installment && installment.status !== 'paid') {
+              // Create payment record
+              const { data: payment } = await supabase
+                .from("payments")
+                .insert({
+                  customer_id: installment.customer_id,
+                  rental_id: installment.rental_id,
+                  amount: installment.amount,
+                  payment_date: new Date().toISOString().split("T")[0],
+                  method: "Card",
+                  payment_type: "Payment",
+                  status: "Applied",
+                  verification_status: "auto_approved",
+                  stripe_payment_intent_id: paymentIntent.id,
+                  capture_status: "captured",
+                  tenant_id: installment.tenant_id,
+                })
+                .select()
+                .single();
+
+              // Mark installment as paid
+              await supabase.rpc("mark_installment_paid", {
+                p_installment_id: installmentId,
+                p_payment_id: payment?.id,
+                p_stripe_payment_intent_id: paymentIntent.id,
+                p_stripe_charge_id: paymentIntent.latest_charge as string,
+              });
+
+              console.log("Installment marked as paid:", installmentId, "Payment:", payment?.id);
+            }
+          }
+          break;
+        }
+
+        // Regular payment handling (non-installment)
         const { data: payment } = await supabase
           .from("payments")
           .select("id, capture_status")
@@ -417,7 +626,64 @@ serve(async (req) => {
         const paymentIntent = event.data.object as Stripe.PaymentIntent;
         console.log("PaymentIntent failed:", paymentIntent.id);
 
-        // Notify customer of failed payment
+        // Check if this is an installment payment
+        if (paymentIntent.metadata?.type === 'installment') {
+          const installmentId = paymentIntent.metadata.installment_id;
+          console.log("Processing installment payment failure:", installmentId);
+
+          if (installmentId) {
+            // Get failure reason from Stripe
+            const failureReason = paymentIntent.last_payment_error?.message || 'Payment failed';
+
+            // Mark installment as failed
+            await supabase.rpc("mark_installment_failed", {
+              p_installment_id: installmentId,
+              p_failure_reason: failureReason,
+              p_stripe_payment_intent_id: paymentIntent.id,
+            });
+
+            console.log("Installment marked as failed:", installmentId, "Reason:", failureReason);
+
+            // Send failure notification
+            try {
+              const { data: installment } = await supabase
+                .from("scheduled_installments")
+                .select(`
+                  id, amount, installment_number, tenant_id,
+                  customer:customers(name, email)
+                `)
+                .eq("id", installmentId)
+                .single();
+
+              if (installment?.customer) {
+                await fetch(
+                  `${Deno.env.get("SUPABASE_URL")}/functions/v1/send-installment-failed`,
+                  {
+                    method: "POST",
+                    headers: {
+                      "Content-Type": "application/json",
+                      Authorization: `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`,
+                    },
+                    body: JSON.stringify({
+                      installmentId,
+                      customerEmail: installment.customer.email,
+                      customerName: installment.customer.name,
+                      amount: installment.amount,
+                      installmentNumber: installment.installment_number,
+                      failureReason,
+                      tenantId: installment.tenant_id,
+                    }),
+                  }
+                );
+              }
+            } catch (notifyError) {
+              console.error("Failed to send installment failure notification:", notifyError);
+            }
+          }
+          break;
+        }
+
+        // Regular payment failure handling (non-installment)
         const rentalId = paymentIntent.metadata?.rental_id;
         if (rentalId) {
           // Get customer details

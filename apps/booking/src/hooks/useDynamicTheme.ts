@@ -4,7 +4,7 @@ import { useEffect } from 'react';
 import { useTheme } from 'next-themes';
 import { useBrandingSettings } from './useBrandingSettings';
 
-// Default theme colors for Drive917 Client - matches index.css
+// Default theme colors for Drive247 Client - matches index.css
 const DEFAULT_COLORS = {
   light: {
     background: '0 0% 95%',
@@ -304,7 +304,7 @@ export function useDynamicTheme() {
     if (branding.app_name) {
       // Only update if on home page or if title doesn't have a specific page name
       const currentTitle = document.title;
-      if (!currentTitle || currentTitle === 'Drive 917' || currentTitle.includes('Drive917')) {
+      if (!currentTitle || currentTitle === 'Drive 247' || currentTitle.includes('Drive247')) {
         document.title = branding.app_name;
       }
     }

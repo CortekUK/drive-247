@@ -137,7 +137,7 @@ export function ContactCardEditor({ content, onSave, isSaving }: ContactCardEdit
                     <FormItem>
                       <FormLabel>Email Address</FormLabel>
                       <FormControl>
-                        <Input type="email" placeholder="info@drive917.com" {...field} />
+                        <Input type="email" placeholder="info@drive247.com" {...field} />
                       </FormControl>
                       <FormMessage />
                     </FormItem>

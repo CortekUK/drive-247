@@ -207,7 +207,7 @@ const RentalsList = () => {
               <div className="text-2xl font-bold text-muted-foreground">
                 {stats.closed}
               </div>
-              <p className="text-sm text-muted-foreground">Closed</p>
+              <p className="text-sm text-muted-foreground">Completed</p>
             </CardContent>
           </Card>
           <Card className="bg-gradient-to-br from-amber-500/10 to-amber-500/5 border-amber-500/20 hover:border-amber-500/40 transition-all duration-200 cursor-pointer hover:shadow-md">
@@ -288,7 +288,7 @@ const RentalsList = () => {
                         <TableCell>
                           <Badge
                             variant={
-                              rental.computed_status === "Closed"
+                              rental.computed_status === "Completed"
                                 ? "secondary"
                                 : rental.computed_status === "Cancelled" || rental.computed_status === "Rejected"
                                 ? "destructive"

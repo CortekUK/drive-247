@@ -104,7 +104,7 @@ export function ServiceHighlightsEditor({ content, onSave, isSaving }: ServiceHi
               Service Highlights
             </CardTitle>
             <CardDescription>
-              The "Why Choose Drive917" section with service cards
+              The "Why Choose Drive247" section with service cards
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-6">
@@ -116,7 +116,7 @@ export function ServiceHighlightsEditor({ content, onSave, isSaving }: ServiceHi
                   <FormItem>
                     <FormLabel>Section Title</FormLabel>
                     <FormControl>
-                      <Input placeholder="Why Choose Drive917" {...field} />
+                      <Input placeholder="Why Choose Drive247" {...field} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>

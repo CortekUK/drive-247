@@ -47,7 +47,6 @@ interface Customer {
   customer_type: "Individual" | "Company";
   status: string;
   whatsapp_opt_in: boolean;
-  high_switcher?: boolean;
   license_number?: string;
   id_number?: string;
   is_blocked?: boolean;
@@ -83,7 +82,7 @@ const CustomerDetail = () => {
       const { data, error } = await (supabase as any)
         .from("customers")
         .select(`
-          id, name, email, phone, customer_type, status, whatsapp_opt_in, high_switcher,
+          id, name, email, phone, customer_type, status, whatsapp_opt_in,
           license_number, id_number, is_blocked, blocked_at, blocked_reason,
           nok_full_name, nok_relationship, nok_phone, nok_email, nok_address
         `)
@@ -216,9 +215,6 @@ const CustomerDetail = () => {
                   <Ban className="h-3 w-3 mr-1" />
                   Blocked
                 </Badge>
-              )}
-              {customer.high_switcher && (
-                <Badge variant="secondary">High Switcher</Badge>
               )}
             </div>
             <p className="text-muted-foreground text-sm">

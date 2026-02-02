@@ -40,7 +40,7 @@ Primary table for rental companies (tenants).
 | Column | Type | Description |
 |--------|------|-------------|
 | id | UUID | Primary key |
-| slug | TEXT | Unique subdomain identifier (e.g., "drive917") |
+| slug | TEXT | Unique subdomain identifier (e.g., "drive247") |
 | company_name | TEXT | Display name of the company |
 | status | TEXT | active, inactive, suspended |
 | subscription_plan | TEXT | Subscription tier |

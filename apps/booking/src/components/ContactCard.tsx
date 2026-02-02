@@ -32,7 +32,7 @@ const ContactCard = () => {
                     {content.contact_card?.call_button_text || "Call Now"}
                   </Button>
                 </a>
-                <a href={`mailto:${content.contact_card?.email || "info@drive917.com"}`}>
+                <a href={`mailto:${content.contact_card?.email || "info@drive247.com"}`}>
                   <Button
                     size="lg"
                     variant="outline"

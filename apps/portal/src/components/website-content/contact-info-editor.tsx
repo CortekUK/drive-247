@@ -105,7 +105,7 @@ export function ContactInfoEditor({ content, onSave, isSaving }: ContactInfoEdit
                   <FormItem>
                     <FormLabel>Email Address</FormLabel>
                     <FormControl>
-                      <Input {...field} type="email" placeholder="info@drive917.com" />
+                      <Input {...field} type="email" placeholder="info@drive247.com" />
                     </FormControl>
                     <FormMessage />
                   </FormItem>

@@ -48,7 +48,7 @@ export function HeroSectionEditor({ content, onSave, isSaving }: HeroSectionEdit
                 <FormItem>
                   <FormLabel>Page Title</FormLabel>
                   <FormControl>
-                    <Input {...field} placeholder="Contact Drive917" />
+                    <Input {...field} placeholder="Contact Drive247" />
                   </FormControl>
                   <FormDescription>
                     The main heading displayed at the top of the page

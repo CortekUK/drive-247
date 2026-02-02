@@ -265,7 +265,7 @@ export const useEnhancedRentals = (filters: RentalFilters = {}) => {
       const stats: RentalStats = {
         total: enhancedRentals.length,
         active: enhancedRentals.filter(r => r.computed_status === "Active").length,
-        closed: enhancedRentals.filter(r => r.computed_status === "Closed").length,
+        closed: enhancedRentals.filter(r => r.computed_status === "Completed").length,
         pending: enhancedRentals.filter(r => r.computed_status === "Pending").length,
         avgDuration: enhancedRentals.length > 0
           ? Math.round(enhancedRentals.reduce((sum, r) => sum + r.duration_months, 0) / enhancedRentals.length)

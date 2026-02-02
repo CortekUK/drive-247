@@ -193,7 +193,8 @@ const Pricing = () => {
       .select(`
         *,
         vehicle_photos (
-          photo_url
+          photo_url,
+          display_order
         )
       `)
       .order("daily_rent");
@@ -206,7 +207,14 @@ const Pricing = () => {
     const { data, error } = await query;
 
     if (!error && data) {
-      setVehicles(data as any);
+      // Sort vehicle_photos by display_order for each vehicle
+      const vehiclesWithSortedPhotos = data.map(vehicle => ({
+        ...vehicle,
+        vehicle_photos: vehicle.vehicle_photos
+          ? [...vehicle.vehicle_photos].sort((a: any, b: any) => (a.display_order || 0) - (b.display_order || 0))
+          : []
+      }));
+      setVehicles(vehiclesWithSortedPhotos as any);
     } else if (error) {
       console.error("Error loading vehicles:", error);
     }
@@ -425,9 +433,16 @@ const Pricing = () => {
                             >
                               {vehicle.colour}
                             </Badge>
+                            {/* Status badge with different styling for Rented */}
                             <Badge
                               variant="outline"
-                              className="px-2 py-0.5 text-xs rounded-full bg-secondary/50 border-accent/30 text-foreground"
+                              className={`px-2 py-0.5 text-xs rounded-full ${
+                                vehicle.status === 'Rented'
+                                  ? 'bg-amber-500/20 border-amber-500/50 text-amber-600 dark:text-amber-400 font-medium'
+                                  : vehicle.status === 'Available'
+                                    ? 'bg-green-500/20 border-green-500/50 text-green-600 dark:text-green-400 font-medium'
+                                    : 'bg-secondary/50 border-accent/30 text-foreground'
+                              }`}
                             >
                               {vehicle.status}
                             </Badge>
@@ -473,9 +488,15 @@ const Pricing = () => {
                             </div>
                           </div>
                           <div className="flex gap-2">
-                            <a href="/#booking">
-                              <Button size="sm" className="gradient-accent w-24">Book Now</Button>
-                            </a>
+                            {vehicle.status === 'Rented' ? (
+                              <Button size="sm" disabled className="w-24 opacity-50 cursor-not-allowed">
+                                Rented
+                              </Button>
+                            ) : (
+                              <a href="/#booking">
+                                <Button size="sm" className="gradient-accent w-24">Book Now</Button>
+                              </a>
+                            )}
                             <Link href={`/fleet/${vehicle.id}`}>
                               <Button size="sm" variant="outline" className="border-accent/30 w-24">Details</Button>
                             </Link>

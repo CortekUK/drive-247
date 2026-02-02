@@ -7,7 +7,7 @@ import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { format, addDays, differenceInHours, differenceInDays, parseISO } from "date-fns";
 import { toZonedTime, fromZonedTime } from "date-fns-tz";
-import { CalendarIcon, MapPin, Clock, ChevronRight, AlertCircle, Loader2 } from "lucide-react";
+import { CalendarIcon, MapPin, Clock, ChevronRight, AlertCircle, Loader2, Truck, RotateCcw, Car } from "lucide-react";
 import Navigation from "@/components/Navigation";
 import Footer from "@/components/Footer";
 import SEO from "@/components/SEO";
@@ -24,6 +24,7 @@ import { Calendar } from "@/components/ui/calendar";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { useTenant } from "@/contexts/TenantContext";
+import { useDeliveryLocations, DeliveryLocation } from "@/hooks/useDeliveryLocations";
 
 const TIMEZONE = "America/Los_Angeles";
 const MIN_RENTAL_DAYS = 30;
@@ -93,6 +94,13 @@ export default function Booking() {
   const { tenant } = useTenant();
   const [sameAsPickup, setSameAsPickup] = useState(true);
 
+  // Delivery & Collection state
+  const { deliveryLocations, collectionLocations, isLoading: isLoadingDeliveryLocations } = useDeliveryLocations();
+  const [requestDelivery, setRequestDelivery] = useState(false);
+  const [deliveryLocationId, setDeliveryLocationId] = useState<string | null>(null);
+  const [requestCollection, setRequestCollection] = useState(false);
+  const [collectionLocationId, setCollectionLocationId] = useState<string | null>(null);
+
   // Create schema with tenant's minimum age
   const minimumAge = tenant?.minimum_rental_age || 18;
   const rentalDetailsSchema = createRentalDetailsSchema(minimumAge);
@@ -127,6 +135,11 @@ export default function Booking() {
           if (data.returnDate) data.returnDate = parseISO(data.returnDate);
           form.reset(data);
           setSameAsPickup(data.sameAsPickup ?? true);
+          // Load delivery/collection state
+          setRequestDelivery(data.requestDelivery ?? false);
+          setDeliveryLocationId(data.deliveryLocationId ?? null);
+          setRequestCollection(data.requestCollection ?? false);
+          setCollectionLocationId(data.collectionLocationId ?? null);
         } catch (e) {
           console.error("Failed to load booking context:", e);
         }
@@ -159,6 +172,16 @@ export default function Booking() {
   }, [watchPickupLocation, sameAsPickup]);
 
   const onSubmit = (data: RentalDetailsForm) => {
+    // Validate delivery/collection location selection
+    if (requestDelivery && !deliveryLocationId) {
+      toast.error("Please select a delivery location");
+      return;
+    }
+    if (requestCollection && !collectionLocationId) {
+      toast.error("Please select a collection location");
+      return;
+    }
+
     // Calculate age from DOB
     const calculateAge = (dob: Date): number => {
       const today = new Date();
@@ -186,6 +209,10 @@ export default function Booking() {
       params.set("promo", data.promoCode);
     }
 
+    // Get selected delivery/collection location objects
+    const selectedDeliveryLocation = deliveryLocations.find(l => l.id === deliveryLocationId) || null;
+    const selectedCollectionLocation = collectionLocations.find(l => l.id === collectionLocationId) || null;
+
     // Save to localStorage
     if (typeof window !== 'undefined') {
       const saveData = {
@@ -194,6 +221,13 @@ export default function Booking() {
         returnDate: data.returnDate.toISOString(),
         driverDOB: data.driverDOB ? data.driverDOB.toISOString() : null,
         driverAge: driverAge,
+        // Delivery/Collection data
+        requestDelivery,
+        deliveryLocationId,
+        deliveryLocation: selectedDeliveryLocation,
+        requestCollection,
+        collectionLocationId,
+        collectionLocation: selectedCollectionLocation,
       };
       localStorage.setItem("booking_context", JSON.stringify(saveData));
 
@@ -250,10 +284,10 @@ export default function Booking() {
   return (
     <div className="min-h-screen bg-background">
       <SEO
-        title="Rental Booking — Drive 917"
-        description="Book your luxury vehicle rental with Drive 917. Choose pickup and return details for premium cars in Los Angeles."
+        title="Rental Booking — Drive 247"
+        description="Book your luxury vehicle rental with Drive 247. Choose pickup and return details for premium cars in Los Angeles."
         keywords="luxury car rental booking, Los Angeles car rental, premium vehicle booking"
-        canonical={typeof window !== 'undefined' ? `${window.location.origin}/booking` : 'https://drive917.com/booking'}
+        canonical={typeof window !== 'undefined' ? `${window.location.origin}/booking` : 'https://drive247.com/booking'}
       />
       <Navigation />
 
@@ -367,6 +401,144 @@ export default function Booking() {
                           </FormItem>
                         )}
                       />
+                    )}
+
+                    {/* Delivery & Collection Service Section */}
+                    {(tenant?.delivery_enabled || tenant?.collection_enabled) && (
+                      <div className="border-t border-accent/20 pt-6 mt-6">
+                        <h3 className="text-xl font-semibold mb-4 flex items-center gap-2 text-foreground">
+                          <Truck className="w-5 h-5 text-accent" />
+                          {tenant?.delivery_enabled && tenant?.collection_enabled
+                            ? "Delivery & Collection Service"
+                            : tenant?.delivery_enabled
+                            ? "Delivery Service"
+                            : "Collection Service"}
+                        </h3>
+
+                        {/* Delivery Option */}
+                        {tenant?.delivery_enabled && deliveryLocations.length > 0 && (
+                          <div className="space-y-3 mb-4">
+                            <div className="flex items-center gap-3">
+                              <Checkbox
+                                id="requestDelivery"
+                                checked={requestDelivery}
+                                onCheckedChange={(checked) => {
+                                  setRequestDelivery(checked as boolean);
+                                  if (!checked) setDeliveryLocationId(null);
+                                }}
+                              />
+                              <Label htmlFor="requestDelivery" className="cursor-pointer flex items-center gap-2">
+                                <Car className="w-4 h-4 text-green-600" />
+                                Request Delivery
+                                <span className="text-sm text-muted-foreground">(We deliver the car to you)</span>
+                              </Label>
+                            </div>
+
+                            {requestDelivery && (
+                              <div className="ml-7">
+                                <Label className="text-sm text-muted-foreground mb-2 block">Deliver to:</Label>
+                                <Select
+                                  value={deliveryLocationId || ""}
+                                  onValueChange={(value) => setDeliveryLocationId(value || null)}
+                                >
+                                  <SelectTrigger className="h-12">
+                                    <SelectValue placeholder="Select delivery location" />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    {deliveryLocations.map((loc) => (
+                                      <SelectItem key={loc.id} value={loc.id}>
+                                        {loc.name} - +{new Intl.NumberFormat('en-GB', { style: 'currency', currency: tenant?.currency_code || 'GBP' }).format(loc.delivery_fee)}
+                                      </SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
+                              </div>
+                            )}
+                          </div>
+                        )}
+
+                        {/* Collection Option */}
+                        {tenant?.collection_enabled && collectionLocations.length > 0 && (
+                          <div className="space-y-3 mb-4">
+                            <div className="flex items-center gap-3">
+                              <Checkbox
+                                id="requestCollection"
+                                checked={requestCollection}
+                                onCheckedChange={(checked) => {
+                                  setRequestCollection(checked as boolean);
+                                  if (!checked) setCollectionLocationId(null);
+                                }}
+                              />
+                              <Label htmlFor="requestCollection" className="cursor-pointer flex items-center gap-2">
+                                <RotateCcw className="w-4 h-4 text-blue-600" />
+                                Request Collection
+                                <span className="text-sm text-muted-foreground">(We collect the car from you)</span>
+                              </Label>
+                            </div>
+
+                            {requestCollection && (
+                              <div className="ml-7">
+                                <Label className="text-sm text-muted-foreground mb-2 block">Collect from:</Label>
+                                <Select
+                                  value={collectionLocationId || ""}
+                                  onValueChange={(value) => setCollectionLocationId(value || null)}
+                                >
+                                  <SelectTrigger className="h-12">
+                                    <SelectValue placeholder="Select collection location" />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    {collectionLocations.map((loc) => (
+                                      <SelectItem key={loc.id} value={loc.id}>
+                                        {loc.name} - +{new Intl.NumberFormat('en-GB', { style: 'currency', currency: tenant?.currency_code || 'GBP' }).format(loc.collection_fee)}
+                                      </SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
+                              </div>
+                            )}
+                          </div>
+                        )}
+
+                        {/* Fee Summary */}
+                        {(() => {
+                          const deliveryFee = requestDelivery && deliveryLocationId
+                            ? deliveryLocations.find(l => l.id === deliveryLocationId)?.delivery_fee || 0
+                            : 0;
+                          const collectionFee = requestCollection && collectionLocationId
+                            ? collectionLocations.find(l => l.id === collectionLocationId)?.collection_fee || 0
+                            : 0;
+                          const totalServiceFee = deliveryFee + collectionFee;
+
+                          if (totalServiceFee === 0) return null;
+
+                          const formatCurrency = (amount: number) =>
+                            new Intl.NumberFormat('en-GB', {
+                              style: 'currency',
+                              currency: tenant?.currency_code || 'GBP'
+                            }).format(amount);
+
+                          return (
+                            <div className="p-3 bg-muted/30 rounded-lg mt-4">
+                              {deliveryFee > 0 && (
+                                <div className="flex justify-between text-sm">
+                                  <span>Delivery Fee</span>
+                                  <span>+{formatCurrency(deliveryFee)}</span>
+                                </div>
+                              )}
+                              {collectionFee > 0 && (
+                                <div className="flex justify-between text-sm">
+                                  <span>Collection Fee</span>
+                                  <span>+{formatCurrency(collectionFee)}</span>
+                                </div>
+                              )}
+                              <div className="flex justify-between font-semibold border-t border-accent/20 mt-2 pt-2">
+                                <span>Service Total</span>
+                                <span className="text-accent">{formatCurrency(totalServiceFee)}</span>
+                              </div>
+                            </div>
+                          );
+                        })()}
+                      </div>
                     )}
 
                     {/* Pickup Date & Time */}

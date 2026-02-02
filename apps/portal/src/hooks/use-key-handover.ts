@@ -20,6 +20,7 @@ export interface KeyHandover {
   rental_id: string;
   handover_type: HandoverType;
   notes: string | null;
+  mileage: number | null;
   handed_at: string | null;
   handed_by: string | null;
   created_at: string;
@@ -259,7 +260,7 @@ export function useKeyHandover(rentalId: string | undefined) {
               id,
               make,
               model,
-              registration_number,
+              reg,
               color
             )
           `)
@@ -294,7 +295,7 @@ export function useKeyHandover(rentalId: string | undefined) {
           // Send rental started notification to customer
           try {
             const customer = rental.customer as { name: string; email: string; phone: string } | null;
-            const vehicle = rental.vehicle as { make: string; model: string; registration_number: string; color: string } | null;
+            const vehicle = rental.vehicle as { make: string; model: string; reg: string; color: string } | null;
 
             console.log('Rental started - preparing notification:', {
               customerEmail: customer?.email,
@@ -308,7 +309,7 @@ export function useKeyHandover(rentalId: string | undefined) {
                 customerEmail: customer.email,
                 customerPhone: customer.phone,
                 vehicleName: `${vehicle.make} ${vehicle.model}`,
-                vehicleReg: vehicle.registration_number,
+                vehicleReg: vehicle.reg,
                 vehicleMake: vehicle.make,
                 vehicleModel: vehicle.model,
                 vehicleColor: vehicle.color,
@@ -549,6 +550,53 @@ export function useKeyHandover(rentalId: string | undefined) {
     },
   });
 
+  // Update mileage
+  const updateMileage = useMutation({
+    mutationFn: async ({ type, mileage }: { type: HandoverType; mileage: number | null }) => {
+      if (!rentalId) throw new Error("Rental ID required");
+
+      const handover = await ensureHandover.mutateAsync(type);
+
+      const { error } = await supabase
+        .from("rental_key_handovers")
+        .update({ mileage })
+        .eq("id", handover.id);
+
+      if (error) throw error;
+
+      // If this is the return handover (receiving), also update the vehicle's current_mileage
+      if (type === "receiving" && mileage) {
+        const { data: rental } = await supabase
+          .from("rentals")
+          .select("vehicle_id")
+          .eq("id", rentalId)
+          .maybeSingle();
+
+        if (rental?.vehicle_id) {
+          await supabase
+            .from("vehicles")
+            .update({ current_mileage: mileage })
+            .eq("id", rental.vehicle_id);
+        }
+      }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["key-handovers", rentalId] });
+      queryClient.invalidateQueries({ queryKey: ["vehicles-list"] });
+      toast({
+        title: "Mileage Updated",
+        description: "Odometer reading has been recorded.",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Update Failed",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
   return {
     handovers,
     isLoading,
@@ -560,9 +608,11 @@ export function useKeyHandover(rentalId: string | undefined) {
     markKeyHanded,
     unmarkKeyHanded,
     updateNotes,
+    updateMileage,
     isUploading: uploadPhoto.isPending,
     isDeleting: deletePhoto.isPending,
     isMarkingHanded: markKeyHanded.isPending,
     isUnmarkingHanded: unmarkKeyHanded.isPending,
+    isUpdatingMileage: updateMileage.isPending,
   };
 }

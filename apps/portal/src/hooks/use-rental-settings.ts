@@ -3,6 +3,13 @@ import { supabase } from '@/integrations/supabase/client';
 import { useTenant } from '@/contexts/TenantContext';
 import { toast } from '@/hooks/use-toast';
 
+export interface InstallmentConfig {
+  min_days_for_weekly: number;
+  min_days_for_monthly: number;
+  max_installments_weekly: number;
+  max_installments_monthly: number;
+}
+
 export interface RentalSettings {
   min_rental_days: number | null;
   max_rental_days: number | null;
@@ -23,6 +30,9 @@ export interface RentalSettings {
   working_hours_open: string | null;
   working_hours_close: string | null;
   working_hours_always_open: boolean | null;
+  // Installment settings
+  installments_enabled: boolean | null;
+  installment_config: InstallmentConfig | null;
 }
 
 const DEFAULT_RENTAL_SETTINGS: RentalSettings = {
@@ -45,6 +55,14 @@ const DEFAULT_RENTAL_SETTINGS: RentalSettings = {
   working_hours_open: '09:00',
   working_hours_close: '17:00',
   working_hours_always_open: false,
+  // Installment defaults
+  installments_enabled: false,
+  installment_config: {
+    min_days_for_weekly: 7,
+    min_days_for_monthly: 30,
+    max_installments_weekly: 4,
+    max_installments_monthly: 6,
+  },
 };
 
 /**
@@ -93,7 +111,9 @@ export const useRentalSettings = () => {
           working_hours_enabled,
           working_hours_open,
           working_hours_close,
-          working_hours_always_open
+          working_hours_always_open,
+          installments_enabled,
+          installment_config
         `)
         .eq('id', tenant.id)
         .single();
@@ -148,7 +168,9 @@ export const useRentalSettings = () => {
           working_hours_enabled,
           working_hours_open,
           working_hours_close,
-          working_hours_always_open
+          working_hours_always_open,
+          installments_enabled,
+          installment_config
         `);
 
       if (error) {

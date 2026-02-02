@@ -15,13 +15,15 @@ import { Badge } from "@/components/ui/badge";
 import { supabase } from "@/integrations/supabase/client";
 import { useTenant } from "@/contexts/TenantContext";
 import { toast } from "sonner";
-import { ChevronRight, ChevronLeft, Check, Baby, Coffee, MapPin, UserCheck, Car, Crown, TrendingUp, Users as GroupIcon, Calculator, Shield, CheckCircle, CalendarIcon, Clock, Search, Grid3x3, List, SlidersHorizontal, X, AlertCircle, FileCheck, RefreshCw, Upload, Gauge, User } from "lucide-react";
+import { ChevronRight, ChevronLeft, Check, Baby, Coffee, MapPin, UserCheck, Car, Crown, TrendingUp, Users as GroupIcon, Calculator, Shield, CheckCircle, CalendarIcon, Clock, Search, Grid3x3, List, SlidersHorizontal, X, AlertCircle, FileCheck, RefreshCw, Upload, Gauge, User, Loader2 } from "lucide-react";
 import { format, differenceInHours } from "date-fns";
 import { cn } from "@/lib/utils";
 import BookingConfirmation from "./BookingConfirmation";
 import LocationPicker from "./LocationPicker";
 import BookingCheckoutStep from "./BookingCheckoutStep";
 import InsuranceUploadDialog from "./insurance-upload-dialog";
+import BonzahInsuranceSelector from "./BonzahInsuranceSelector";
+import type { CoverageOptions } from "@/hooks/useBonzahPremium";
 import AIScanProgress from "./ai-scan-progress";
 import AIVerificationQR from "./AIVerificationQR";
 import { stripePromise } from "@/config/stripe";
@@ -179,6 +181,16 @@ const MultiStepBookingWidget = () => {
   const [showUploadDialog, setShowUploadDialog] = useState(false);
   const [uploadedDocumentId, setUploadedDocumentId] = useState<string | null>(null);
   const [scanningDocument, setScanningDocument] = useState(false);
+
+  // Bonzah insurance state
+  const [bonzahCoverage, setBonzahCoverage] = useState<CoverageOptions>({
+    cdw: false,
+    rcli: false,
+    sli: false,
+    pai: false,
+  });
+  const [bonzahPremium, setBonzahPremium] = useState<number>(0);
+  const [bonzahPolicyId, setBonzahPolicyId] = useState<string | null>(null);
 
   // Identity verification state
   const [verificationSessionId, setVerificationSessionId] = useState<string | null>(null);
@@ -680,7 +692,8 @@ const MultiStepBookingWidget = () => {
       .select(`
         *,
         vehicle_photos (
-          photo_url
+          photo_url,
+          display_order
         )
       `)
       .eq("tenant_id", tenant.id)
@@ -690,8 +703,15 @@ const MultiStepBookingWidget = () => {
     const { data: vehiclesData } = await vehiclesQuery;
 
     if (vehiclesData) {
+      // Sort vehicle_photos by display_order for each vehicle
+      const vehiclesWithSortedPhotos = vehiclesData.map(vehicle => ({
+        ...vehicle,
+        vehicle_photos: vehicle.vehicle_photos
+          ? [...vehicle.vehicle_photos].sort((a: any, b: any) => (a.display_order || 0) - (b.display_order || 0))
+          : []
+      }));
       // Cast to Vehicle[] since we know the shape matches
-      setVehicles(vehiclesData as unknown as Vehicle[]);
+      setVehicles(vehiclesWithSortedPhotos as unknown as Vehicle[]);
 
       // Calculate price range from vehicles based on current price filter mode (default: daily)
       const prices = vehiclesData
@@ -2291,13 +2311,17 @@ const MultiStepBookingWidget = () => {
         if (!phoneValue) {
           newErrors.customerPhone = "Phone number is required";
         } else {
-          const cleaned = phoneValue.replace(/[\s\-()]/g, '');
+          // Strip country code (e.g., +1, +44) and non-digit characters for validation
+          let cleaned = phoneValue.replace(/[\s\-()]/g, '');
+          // Remove country code prefix if present (e.g., +1, +44, +353)
+          if (cleaned.startsWith('+')) {
+            cleaned = cleaned.replace(/^\+\d{1,3}/, '');
+          }
           const digitCount = (cleaned.match(/\d/g) || []).length;
-          if (digitCount < 7 || digitCount > 15) {
-            newErrors.customerPhone = "Please enter a valid phone number (7-15 digits)";
-          } else if (cleaned.startsWith('+') && !/^\+\d+$/.test(cleaned)) {
-            newErrors.customerPhone = "Invalid phone number format";
-          } else if (!cleaned.startsWith('+') && !/^\d+$/.test(cleaned.replace(/[\s\-()]/g, ''))) {
+          // Validate local number is 7-12 digits (most countries)
+          if (digitCount < 7 || digitCount > 12) {
+            newErrors.customerPhone = "Please enter a valid phone number (7-12 digits)";
+          } else if (!/^\d+$/.test(cleaned)) {
             newErrors.customerPhone = "Phone number should contain only digits";
           }
         }
@@ -2426,6 +2450,19 @@ const MultiStepBookingWidget = () => {
 
     // Insurance step - just move to customer details (Step 4)
     setCurrentStep(4);
+  };
+
+  // Handle Bonzah coverage change from BonzahInsuranceSelector
+  const handleBonzahCoverageChange = (coverage: CoverageOptions, premium: number) => {
+    setBonzahCoverage(coverage);
+    setBonzahPremium(premium);
+  };
+
+  // Handle skip insurance from BonzahInsuranceSelector
+  const handleBonzahSkipInsurance = () => {
+    setBonzahCoverage({ cdw: false, rcli: false, sli: false, pai: false });
+    setBonzahPremium(0);
+    setBonzahPolicyId(null);
   };
 
   // Step 4: Customer Details
@@ -3614,7 +3651,7 @@ const MultiStepBookingWidget = () => {
             </div>
             {/* Sidebar Summary (Desktop Only) */}
             <div className="hidden lg:block">
-              <Card className="sticky top-24 p-6 bg-card border-primary/20 space-y-4">
+              <Card className="sticky top-24 p-6 bg-card border-primary/20 space-y-4 max-h-[calc(100vh-7rem)] overflow-y-auto">
                 <h4 className="font-display text-xl font-semibold">Your Trip</h4>
 
                 <div className="space-y-3 text-sm">
@@ -3743,6 +3780,25 @@ const MultiStepBookingWidget = () => {
             <p className="text-base text-muted-foreground max-w-2xl mx-auto">
               Protect your rental with insurance coverage. Choose from your existing policy or get instant coverage through our partner.
             </p>
+
+            {/* Insurance Status Indicator */}
+            {uploadedDocumentId && (
+              <div className="flex items-center justify-center gap-2 mt-4">
+                <div className={`inline-flex items-center gap-2 px-4 py-2 rounded-full ${scanningDocument ? 'bg-amber-500/10 border border-amber-500/30' : 'bg-primary/10 border border-primary/30'}`}>
+                  {scanningDocument ? (
+                    <>
+                      <Loader2 className="w-4 h-4 text-amber-500 animate-spin" />
+                      <span className="text-sm font-medium text-amber-600">Verifying insurance...</span>
+                    </>
+                  ) : (
+                    <>
+                      <CheckCircle className="w-4 h-4 text-primary" />
+                      <span className="text-sm font-medium text-primary">Insurance document uploaded</span>
+                    </>
+                  )}
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Insurance Question */}
@@ -3833,14 +3889,12 @@ const MultiStepBookingWidget = () => {
               {uploadedDocumentId ? (
                 <Card className="overflow-hidden border-2 border-primary/30 bg-card">
                   <div className="p-8 space-y-6">
-                    {/* Header with icon */}
-                    <div className="flex items-start gap-6">
-                      <div className="flex-shrink-0">
-                        <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center">
-                          <FileCheck className="w-8 h-8 text-primary" />
-                        </div>
+                    {/* Header with icon - centered */}
+                    <div className="flex flex-col items-center text-center gap-4">
+                      <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center">
+                        <FileCheck className="w-8 h-8 text-primary" />
                       </div>
-                      <div className="flex-1">
+                      <div>
                         <h4 className="text-xl font-semibold text-foreground mb-2">
                           Documents Uploaded Successfully!
                         </h4>
@@ -3878,22 +3932,32 @@ const MultiStepBookingWidget = () => {
                             100% complete
                           </p>
 
-                          {/* Subtle AI indicator */}
+                          {/* AI indicator - shows scanning state or completion */}
                           <div className="flex items-center justify-center gap-2 pt-2">
-                            <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-primary/10 border border-primary/20">
-                              <div className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse"></div>
-                              <span className="text-xs text-muted-foreground">AI-assisted verification</span>
-                            </div>
+                            {scanningDocument ? (
+                              <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-primary/10 border border-primary/20">
+                                <div className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse"></div>
+                                <span className="text-xs text-muted-foreground">AI verification in progress...</span>
+                              </div>
+                            ) : (
+                              <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-primary/10 border border-primary/20">
+                                <CheckCircle className="w-3.5 h-3.5 text-primary" />
+                                <span className="text-xs text-muted-foreground">Document uploaded successfully</span>
+                              </div>
+                            )}
                           </div>
                         </div>
                       </div>
                     </div>
 
-                    {/* Footer message */}
-                    <div className="flex items-center justify-center gap-2 text-sm text-muted-foreground">
-                      <CheckCircle className="w-4 h-4 text-primary" />
-                      <span>You can continue with your booking</span>
-                    </div>
+                    {/* Continue Button */}
+                    <Button
+                      onClick={handleStep3Continue}
+                      size="lg"
+                      className="w-full sm:w-auto bg-primary hover:bg-primary/90 text-primary-foreground font-semibold shadow-md hover:shadow-lg transition-all px-8"
+                    >
+                      Continue to Details <ChevronRight className="ml-2 w-5 h-5" />
+                    </Button>
                   </div>
                 </Card>
               ) : (
@@ -3945,153 +4009,68 @@ const MultiStepBookingWidget = () => {
             </div>
           )}
 
-          {/* NO Path - Bonzah Instructions */}
+          {/* NO Path - Inline Bonzah Insurance Selector */}
           {hasInsurance === false && (
-            <div className="max-w-3xl mx-auto">
-              <Card className="overflow-hidden border-2 border-accent/30 bg-gradient-to-br from-accent/5 to-transparent">
-                <div className="p-8 md:p-10 space-y-8">
-                  {/* Header */}
-                  <div className="text-center space-y-4">
-                    <div className="inline-flex items-center justify-center w-20 h-20 rounded-full bg-accent/10">
-                      <Shield className="w-10 h-10 text-accent" />
-                    </div>
-                    <div>
-                      <h4 className="text-2xl font-bold mb-2">Get Instant Insurance Coverage</h4>
-                      <p className="text-muted-foreground max-w-xl mx-auto">
-                        Partner with Bonzah to get affordable, instant insurance coverage for your rental. Quick setup in just 5 minutes!
-                      </p>
-                    </div>
-                  </div>
+            <div className="max-w-4xl mx-auto space-y-6">
+              <BonzahInsuranceSelector
+                tripStartDate={formData.pickupDate || null}
+                tripEndDate={formData.dropoffDate || null}
+                pickupState="FL" // Default to Florida - TODO: extract from pickup location
+                onCoverageChange={handleBonzahCoverageChange}
+                onSkipInsurance={handleBonzahSkipInsurance}
+                initialCoverage={bonzahCoverage}
+              />
 
-                  {/* How it works */}
-                  <div className="bg-card/80 backdrop-blur rounded-xl p-6 md:p-8 border border-border/50">
-                    <h5 className="text-lg font-semibold mb-6 text-center">How It Works</h5>
-                    <div className="space-y-6">
-                      <div className="flex gap-4">
-                        <div className="flex-shrink-0">
-                          <div className="w-10 h-10 rounded-full bg-accent text-accent-foreground flex items-center justify-center font-bold text-lg">
-                            1
-                          </div>
-                        </div>
-                        <div className="pt-1">
-                          <h6 className="font-semibold mb-1">Get Instant Quote</h6>
-                          <p className="text-sm text-muted-foreground">
-                            Visit Bonzah's website and receive an instant quote tailored to your rental
-                          </p>
-                        </div>
-                      </div>
-                      <div className="flex gap-4">
-                        <div className="flex-shrink-0">
-                          <div className="w-10 h-10 rounded-full bg-accent text-accent-foreground flex items-center justify-center font-bold text-lg">
-                            2
-                          </div>
-                        </div>
-                        <div className="pt-1">
-                          <h6 className="font-semibold mb-1">Purchase Online</h6>
-                          <p className="text-sm text-muted-foreground">
-                            Complete your purchase securely online in just a few minutes
-                          </p>
-                        </div>
-                      </div>
-                      <div className="flex gap-4">
-                        <div className="flex-shrink-0">
-                          <div className="w-10 h-10 rounded-full bg-accent text-accent-foreground flex items-center justify-center font-bold text-lg">
-                            3
-                          </div>
-                        </div>
-                        <div className="pt-1">
-                          <h6 className="font-semibold mb-1">Upload Certificate</h6>
-                          <p className="text-sm text-muted-foreground">
-                            Upload your insurance certificate here to continue with your booking
-                          </p>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* CTA */}
-                  <div className="text-center space-y-4">
-                    <a
-                      href="https://bonzah.com"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-block w-full sm:w-auto"
-                    >
-                      <Button
-                        size="lg"
-                        className="bg-accent hover:bg-accent/90 px-8 w-full sm:w-auto"
-                      >
-                        <Shield className="mr-2 h-5 w-5" />
-                        Get Insurance from Bonzah
-                        <ChevronRight className="ml-2 h-5 w-5" />
-                      </Button>
-                    </a>
-                    <div className="flex items-center justify-center gap-2">
-                      <Button
-                        onClick={() => setHasInsurance(null)}
-                        variant="ghost"
-                        size="sm"
-                      >
-                        Go Back
-                      </Button>
-                    </div>
-                  </div>
-
-                  {/* Upload Section - After getting insurance from Bonzah */}
-                  <div className="border-t border-border/50 pt-8">
-                    <div className="text-center space-y-4">
-                      <h5 className="text-lg font-semibold">Already purchased from Bonzah?</h5>
-                      <p className="text-sm text-muted-foreground max-w-md mx-auto">
-                        Upload your insurance certificate to continue with your booking
-                      </p>
-                      {uploadedDocumentId ? (
-                        <div className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-primary/10 border border-primary/20">
-                          <CheckCircle className="w-5 h-5 text-primary" />
-                          <span className="text-sm font-medium text-primary">Certificate uploaded successfully</span>
-                        </div>
-                      ) : (
-                        <Button
-                          onClick={() => setShowUploadDialog(true)}
-                          size="lg"
-                          variant="outline"
-                          className="border-primary text-primary hover:bg-primary/10"
-                        >
-                          <Upload className="mr-2 h-5 w-5" />
-                          Upload Insurance Certificate
-                        </Button>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              </Card>
+              {/* Navigation for Bonzah flow */}
+              <div className="flex flex-col sm:flex-row gap-4 pt-4">
+                <Button
+                  onClick={() => setHasInsurance(null)}
+                  variant="outline"
+                  className="w-full sm:flex-1"
+                  size="lg"
+                >
+                  <ChevronLeft className="mr-2 w-5 h-5" /> Go Back
+                </Button>
+                <Button
+                  onClick={handleStep3Continue}
+                  className="w-full sm:flex-1 bg-primary hover:bg-primary/90 text-primary-foreground font-semibold shadow-md hover:shadow-lg transition-all"
+                  size="lg"
+                >
+                  Continue to Details <ChevronRight className="ml-2 w-5 h-5" />
+                </Button>
+              </div>
             </div>
           )}
 
-          {/* Navigation */}
-          <div className="flex flex-col sm:flex-row gap-4">
-            <Button
-              onClick={() => setCurrentStep(2)}
-              variant="outline"
-              className="w-full sm:flex-1"
-              size="lg"
-            >
-              <ChevronLeft className="mr-2 w-5 h-5" /> Back to Vehicles
-            </Button>
-            <Button
-              onClick={handleStep3Continue}
-              disabled={!uploadedDocumentId}
-              className="w-full sm:flex-1 bg-primary hover:bg-primary/90 text-primary-foreground font-semibold shadow-md hover:shadow-lg transition-all disabled:opacity-50"
-              size="lg"
-            >
-              Continue to Details <ChevronRight className="ml-2 w-5 h-5" />
-            </Button>
-          </div>
-          {/* Requirement notice */}
-          {!uploadedDocumentId && (
-            <p className="text-center text-sm text-muted-foreground">
-              <AlertCircle className="w-4 h-4 inline mr-1" />
-              Please upload your insurance certificate to continue
-            </p>
+          {/* Navigation - Only show for YES path (upload flow) when hasInsurance is true */}
+          {hasInsurance === true && (
+            <>
+              <div className="flex flex-col sm:flex-row gap-4">
+                <Button
+                  onClick={() => setCurrentStep(2)}
+                  variant="outline"
+                  className="w-full sm:flex-1"
+                  size="lg"
+                >
+                  <ChevronLeft className="mr-2 w-5 h-5" /> Back to Vehicles
+                </Button>
+                <Button
+                  onClick={handleStep3Continue}
+                  disabled={!uploadedDocumentId}
+                  className="w-full sm:flex-1 bg-primary hover:bg-primary/90 text-primary-foreground font-semibold shadow-md hover:shadow-lg transition-all disabled:opacity-50"
+                  size="lg"
+                >
+                  Continue to Details <ChevronRight className="ml-2 w-5 h-5" />
+                </Button>
+              </div>
+              {/* Requirement notice */}
+              {!uploadedDocumentId && (
+                <p className="text-center text-sm text-muted-foreground">
+                  <AlertCircle className="w-4 h-4 inline mr-1" />
+                  Please upload your insurance certificate to continue
+                </p>
+              )}
+            </>
           )}
         </div>}
 
@@ -4502,6 +4481,8 @@ const MultiStepBookingWidget = () => {
             vehicleTotal={estimatedBooking?.total || 0}
             promoDetails={promoDetails}
             onBack={() => setCurrentStep(4)}
+            bonzahPremium={bonzahPremium}
+            bonzahPolicyId={bonzahPolicyId}
           />
         </div>}
 

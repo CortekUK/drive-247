@@ -24,7 +24,7 @@ export function AppSidebar() {
   const { appUser } = useAuthStore();
 
   // Get app name and logo from tenant branding or fallback to defaults
-  const appName = branding?.app_name || 'DRIVE917';
+  const appName = branding?.app_name || 'DRIVE247';
   const shortName = appName.length > 4 ? appName.substring(0, 4) : appName;
   const logoUrl = branding?.logo_url;
 

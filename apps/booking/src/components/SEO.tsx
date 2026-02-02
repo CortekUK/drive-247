@@ -14,7 +14,7 @@ interface SEOProps {
 const SEO = ({ title, description, keywords, schema, canonical }: SEOProps) => {
   const { branding } = useBrandingSettings();
 
-  const siteUrl = 'https://drive917.com';
+  const siteUrl = 'https://drive247.com';
   const appName = branding.app_name || 'Drive 247';
   const fullTitle = `${appName} | ${title}`;
 

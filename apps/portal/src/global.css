@@ -2,14 +2,14 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Drive917 Design System
+/* Drive247 Design System
 All colors, gradients, fonts, etc should be defined here.
 All colors MUST be HSL.
 */
 
 @layer base {
   :root {
-    /* Drive917 Color System - Light Mode: Elegant Ivory, Dark Green & Gold */
+    /* Drive247 Color System - Light Mode: Elegant Ivory, Dark Green & Gold */
     --background: 42 30% 96%;   /* Light Ivory/Cream */
     --foreground: 159 21% 20%;  /* Dark Forest Green Text */
 
@@ -55,7 +55,7 @@ All colors MUST be HSL.
 
     --radius: 0.5rem;
 
-    /* Drive917 Sidebar - Light Mode */
+    /* Drive247 Sidebar - Light Mode */
     --sidebar-background: 42 30% 98%;
     --sidebar-foreground: 159 21% 20%;
     --sidebar-primary: 41 49% 56%;  /* Gold active state */
@@ -65,18 +65,18 @@ All colors MUST be HSL.
     --sidebar-border: 159 15% 80%;
     --sidebar-ring: 41 49% 56%;
 
-    /* Drive917 Gradients - Light Mode */
+    /* Drive247 Gradients - Light Mode */
     --gradient-primary: linear-gradient(135deg, hsl(41 49% 56%), hsl(41 49% 66%));
     --gradient-success: linear-gradient(135deg, hsl(142 76% 36%), hsl(142 76% 44%));
     --gradient-warning: linear-gradient(135deg, hsl(41 92% 48%), hsl(41 92% 58%));
     --gradient-subtle: linear-gradient(135deg, hsl(159 15% 92%), hsl(159 15% 88%));
 
-    /* Drive917 Shadows - Light Mode */
+    /* Drive247 Shadows - Light Mode */
     --shadow-sm: 0 1px 2px 0 hsl(159 21% 20% / 0.08);
     --shadow-card: 0 4px 6px -1px hsl(159 21% 20% / 0.1), 0 2px 4px -1px hsl(159 21% 20% / 0.06);
     --shadow-hover: 0 10px 15px -3px hsl(41 49% 56% / 0.15), 0 4px 6px -2px hsl(41 49% 56% / 0.1);
 
-    /* Smooth Drive917 Animations */
+    /* Smooth Drive247 Animations */
     --transition-all: all 200ms cubic-bezier(0.4, 0, 0.2, 1);
     --transition-smooth: all 300ms cubic-bezier(0.4, 0, 0.2, 1);
     
@@ -125,7 +125,7 @@ All colors MUST be HSL.
     --input: 159 15% 25%;
     --ring: 41 49% 60%;
 
-    /* Drive917 Sidebar - Dark Mode */
+    /* Drive247 Sidebar - Dark Mode */
     --sidebar-background: 159 21% 10%;
     --sidebar-foreground: 42 30% 92%;
     --sidebar-primary: 41 49% 60%;
@@ -167,7 +167,7 @@ All colors MUST be HSL.
     -moz-osx-font-smoothing: grayscale;
   }
 
-  /* Drive917 Typography */
+  /* Drive247 Typography */
   h1 {
     @apply text-5xl font-bold;  /* 48px */
   }
@@ -201,7 +201,7 @@ All colors MUST be HSL.
 
 @layer components {
 
-  /* Drive917 Component Styles */
+  /* Drive247 Component Styles */
   
   /* Override browser autofill styling for consistent input backgrounds */
   input:-webkit-autofill,

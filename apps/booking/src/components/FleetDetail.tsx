@@ -90,7 +90,8 @@ export default function FleetDetail() {
         .select(`
           *,
           vehicle_photos (
-            photo_url
+            photo_url,
+            display_order
           )
         `)
         .eq("id", id);
@@ -102,7 +103,14 @@ export default function FleetDetail() {
       const { data: vehicleData, error: vehicleError } = await vehicleQuery.single();
 
       if (vehicleError) throw vehicleError;
-      setVehicle(vehicleData as any);
+      // Sort vehicle_photos by display_order
+      const vehicleWithSortedPhotos = vehicleData ? {
+        ...vehicleData,
+        vehicle_photos: vehicleData.vehicle_photos
+          ? [...vehicleData.vehicle_photos].sort((a: any, b: any) => (a.display_order || 0) - (b.display_order || 0))
+          : []
+      } : null;
+      setVehicle(vehicleWithSortedPhotos as any);
 
       // Load similar vehicles (same make)
       if (vehicleData && vehicleData.make) {
@@ -111,7 +119,8 @@ export default function FleetDetail() {
           .select(`
             *,
             vehicle_photos (
-              photo_url
+              photo_url,
+              display_order
             )
           `)
           .eq("make", vehicleData.make)
@@ -123,7 +132,14 @@ export default function FleetDetail() {
 
         const { data: similarData } = await similarQuery.limit(3);
 
-        setSimilarVehicles(similarData as any || []);
+        // Sort photos for similar vehicles too
+        const similarWithSortedPhotos = similarData?.map(v => ({
+          ...v,
+          vehicle_photos: v.vehicle_photos
+            ? [...v.vehicle_photos].sort((a: any, b: any) => (a.display_order || 0) - (b.display_order || 0))
+            : []
+        })) || [];
+        setSimilarVehicles(similarWithSortedPhotos as any);
       }
 
       // Load service inclusions

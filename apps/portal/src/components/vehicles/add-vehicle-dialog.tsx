@@ -732,13 +732,13 @@ export const AddVehicleDialog = ({ open, onOpenChange }: AddVehicleDialogProps) 
                   />
                 </div>
 
-                <div className="grid grid-cols-4 gap-3">
+                <div className="grid grid-cols-2 md:grid-cols-5 gap-3 items-start">
                   <FormField
                     control={form.control}
                     name="daily_rent"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Daily Rent ($) <span className="text-red-500">*</span></FormLabel>
+                        <FormLabel className="whitespace-nowrap">Daily ($) <span className="text-red-500">*</span></FormLabel>
                         <FormControl>
                           <Input
                             type="number"
@@ -767,7 +767,7 @@ export const AddVehicleDialog = ({ open, onOpenChange }: AddVehicleDialogProps) 
                     name="weekly_rent"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Weekly Rent ($) <span className="text-red-500">*</span></FormLabel>
+                        <FormLabel className="whitespace-nowrap">Weekly ($) <span className="text-red-500">*</span></FormLabel>
                         <FormControl>
                           <Input
                             type="number"
@@ -796,7 +796,7 @@ export const AddVehicleDialog = ({ open, onOpenChange }: AddVehicleDialogProps) 
                     name="monthly_rent"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Monthly Rent ($) <span className="text-red-500">*</span></FormLabel>
+                        <FormLabel className="whitespace-nowrap">Monthly ($) <span className="text-red-500">*</span></FormLabel>
                         <FormControl>
                           <Input
                             type="number"
@@ -825,7 +825,7 @@ export const AddVehicleDialog = ({ open, onOpenChange }: AddVehicleDialogProps) 
                     name="security_deposit"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Deposit ($)</FormLabel>
+                        <FormLabel className="whitespace-nowrap">Deposit ($)</FormLabel>
                         <FormControl>
                           <Input
                             type="number"
@@ -849,7 +849,7 @@ export const AddVehicleDialog = ({ open, onOpenChange }: AddVehicleDialogProps) 
                     name="allowed_mileage"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Allowed Mileage</FormLabel>
+                        <FormLabel className="whitespace-nowrap">Mileage/mo</FormLabel>
                         <FormControl>
                           <Input
                             type="number"
@@ -863,9 +863,6 @@ export const AddVehicleDialog = ({ open, onOpenChange }: AddVehicleDialogProps) 
                             }}
                           />
                         </FormControl>
-                        <FormDescription className="text-xs">
-                          Miles/month (leave blank for unlimited)
-                        </FormDescription>
                         <FormMessage />
                       </FormItem>
                     )}

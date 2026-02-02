@@ -93,14 +93,22 @@ export default function FleetDetail() {
         .select(`
           *,
           vehicle_photos (
-            photo_url
+            photo_url,
+            display_order
           )
         `)
         .eq("id", id)
         .single();
 
       if (vehicleError) throw vehicleError;
-      setVehicle(vehicleData as any);
+      // Sort vehicle_photos by display_order
+      const vehicleWithSortedPhotos = vehicleData ? {
+        ...vehicleData,
+        vehicle_photos: vehicleData.vehicle_photos
+          ? [...vehicleData.vehicle_photos].sort((a: any, b: any) => (a.display_order || 0) - (b.display_order || 0))
+          : []
+      } : null;
+      setVehicle(vehicleWithSortedPhotos as any);
 
       // Load similar vehicles (same make)
       if (vehicleData && vehicleData.make) {
@@ -109,14 +117,22 @@ export default function FleetDetail() {
           .select(`
             *,
             vehicle_photos (
-              photo_url
+              photo_url,
+              display_order
             )
           `)
           .eq("make", vehicleData.make)
           .neq("id", id)
           .limit(3);
 
-        setSimilarVehicles(similarData as any || []);
+        // Sort photos for similar vehicles too
+        const similarWithSortedPhotos = similarData?.map(v => ({
+          ...v,
+          vehicle_photos: v.vehicle_photos
+            ? [...v.vehicle_photos].sort((a: any, b: any) => (a.display_order || 0) - (b.display_order || 0))
+            : []
+        })) || [];
+        setSimilarVehicles(similarWithSortedPhotos as any);
       }
 
       // Load service inclusions
@@ -341,13 +357,6 @@ export default function FleetDetail() {
                         <div>
                           <p className="text-[10px] text-muted-foreground uppercase">Colour</p>
                           <p className="text-sm font-semibold">{vehicle.colour}</p>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-2 p-2 rounded-lg bg-accent/5">
-                        <Briefcase className="w-3 h-3 text-accent" />
-                        <div>
-                          <p className="text-[10px] text-muted-foreground uppercase">Status</p>
-                          <p className="text-sm font-semibold">{vehicle.status}</p>
                         </div>
                       </div>
                     </div>

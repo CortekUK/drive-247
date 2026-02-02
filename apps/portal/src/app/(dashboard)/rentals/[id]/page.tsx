@@ -11,7 +11,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
-import { FileText, ArrowLeft, DollarSign, Plus, X, Send, Download, Ban, Check, AlertTriangle, Loader2, Shield, CheckCircle, XCircle, ExternalLink, UserCheck, IdCard, Camera, FileSignature, Clock, Mail, RefreshCw, Trash2, Receipt, Percent, Car, Undo2 } from "lucide-react";
+import { FileText, ArrowLeft, DollarSign, Plus, X, Send, Download, Ban, Check, AlertTriangle, Loader2, Shield, CheckCircle, XCircle, ExternalLink, UserCheck, IdCard, Camera, FileSignature, Clock, Mail, RefreshCw, Trash2, Receipt, Percent, Car, Undo2, Truck, MapPin, Key, KeyRound } from "lucide-react";
 import { AddPaymentDialog } from "@/components/shared/dialogs/add-payment-dialog";
 import { RefundDialog } from "@/components/shared/dialogs/refund-dialog";
 import { useToast } from "@/hooks/use-toast";
@@ -22,8 +22,11 @@ import { useRentalInvoice, useRentalPaymentBreakdown, useRentalRefundBreakdown }
 import { RentalLedger } from "@/components/rentals/rental-ledger";
 import { KeyHandoverSection } from "@/components/rentals/key-handover-section";
 import { KeyHandoverActionBanner } from "@/components/rentals/key-handover-action-banner";
+import { MileageSummaryCard } from "@/components/rentals/mileage-summary-card";
 import { CancelRentalDialog } from "@/components/shared/dialogs/cancel-rental-dialog";
 import RejectionDialog from "@/components/rentals/rejection-dialog";
+import InstallmentPlanCard from "@/components/rentals/InstallmentPlanCard";
+import { formatCurrency } from "@/lib/formatters";
 
 interface Rental {
   id: string;
@@ -44,6 +47,14 @@ interface Rental {
   customer_id?: string;
   customers: { id: string; name: string; email?: string; phone?: string | null };
   vehicles: { id: string; reg: string; make: string; model: string; status?: string };
+  // Delivery & Collection fields
+  uses_delivery_service?: boolean;
+  delivery_location_id?: string;
+  delivery_address?: string;
+  delivery_fee?: number;
+  collection_location_id?: string;
+  collection_address?: string;
+  collection_fee?: number;
 }
 
 const RentalDetail = () => {
@@ -164,6 +175,38 @@ const RentalDetail = () => {
   });
 
   const isKeyHandoverCompleted = !!keyHandoverStatus?.handed_at;
+
+  // Fetch key return status
+  const { data: keyReturnStatus } = useQuery({
+    queryKey: ["key-return-status", id],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("rental_key_handovers")
+        .select("id, handover_type, handed_at")
+        .eq("rental_id", id)
+        .eq("handover_type", "receiving")
+        .maybeSingle();
+
+      if (error) {
+        console.error("Error fetching key return:", error);
+        return null;
+      }
+      return data;
+    },
+    enabled: !!id,
+  });
+
+  const isKeyReturnCompleted = !!keyReturnStatus?.handed_at;
+
+  // Helper to scroll to key handover section
+  const scrollToKeyHandover = () => {
+    const element = document.getElementById('key-handover-section');
+    if (element) {
+      const yOffset = -90;
+      const y = element.getBoundingClientRect().top + window.pageYOffset + yOffset;
+      window.scrollTo({ top: y, behavior: 'smooth' });
+    }
+  };
 
   // Sync DB status to 'Active' if all conditions are met but DB status is still 'Pending'
   // This handles edge cases where the status update might have failed
@@ -569,7 +612,7 @@ const RentalDetail = () => {
   // Compute rental status based on approval_status, payment_status, AND key handover
   const computeStatus = (rental: Rental): string => {
     if (rental.status === 'Cancelled') return 'Cancelled';
-    if (rental.status === 'Closed') return 'Closed';
+    if (rental.status === 'Closed') return 'Completed';
     if (rental.approval_status === 'rejected') return 'Rejected';
 
     // Only show as Active if ALL conditions are met:
@@ -683,7 +726,7 @@ const RentalDetail = () => {
 
   const getStatusVariant = (status: string) => {
     if (status === 'Active') return 'default';
-    if (status === 'Closed') return 'secondary';
+    if (status === 'Completed') return 'secondary';
     if (status === 'Pending') return 'outline';
     return 'outline';
   };
@@ -721,6 +764,35 @@ const RentalDetail = () => {
             <p className="text-muted-foreground">
               {rental.customers?.name} • {rental.vehicles?.reg}
             </p>
+            {/* Key Status Badges */}
+            <div className="flex gap-2 mt-2">
+              <Badge
+                variant="outline"
+                className={`cursor-pointer transition-colors ${
+                  isKeyHandoverCompleted
+                    ? 'bg-green-500/10 text-green-600 border-green-500 hover:bg-green-500/20'
+                    : 'bg-amber-500/10 text-amber-600 border-amber-500 hover:bg-amber-500/20'
+                }`}
+                onClick={scrollToKeyHandover}
+              >
+                <Key className="h-3 w-3 mr-1" />
+                {isKeyHandoverCompleted ? 'Keys Collected' : 'Keys Not Collected'}
+              </Badge>
+              {isKeyHandoverCompleted && (
+                <Badge
+                  variant="outline"
+                  className={`cursor-pointer transition-colors ${
+                    isKeyReturnCompleted
+                      ? 'bg-green-500/10 text-green-600 border-green-500 hover:bg-green-500/20'
+                      : 'bg-amber-500/10 text-amber-600 border-amber-500 hover:bg-amber-500/20'
+                  }`}
+                  onClick={scrollToKeyHandover}
+                >
+                  <KeyRound className="h-3 w-3 mr-1" />
+                  {isKeyReturnCompleted ? 'Keys Returned' : 'Return Pending'}
+                </Badge>
+              )}
+            </div>
           </div>
         </div>
         <div className="flex gap-2">
@@ -792,8 +864,8 @@ const RentalDetail = () => {
             </>
           )}
 
-          {/* Closed/Cancelled/Rejected Rental - Show Delete button */}
-          {(displayStatus === 'Closed' || displayStatus === 'Cancelled' || displayStatus === 'Rejected') && (
+          {/* Completed/Cancelled/Rejected Rental - Show Delete button */}
+          {(displayStatus === 'Completed' || displayStatus === 'Cancelled' || displayStatus === 'Rejected') && (
             <Button
               variant="outline"
               className="text-destructive"
@@ -1175,6 +1247,46 @@ const RentalDetail = () => {
             </div>
           </div>
 
+          {/* Delivery & Collection Info */}
+          {rental.uses_delivery_service && (
+            <div className="border rounded-lg p-4">
+              <div className="flex items-center gap-2 mb-3">
+                <Truck className="h-4 w-4 text-accent" />
+                <p className="text-xs uppercase tracking-wider text-muted-foreground">Delivery & Collection</p>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {rental.delivery_address && (
+                  <div className="bg-muted/20 rounded-lg p-3">
+                    <div className="flex items-center gap-2 mb-2">
+                      <MapPin className="h-4 w-4 text-green-600" />
+                      <p className="text-sm font-medium">Delivery Location</p>
+                    </div>
+                    <p className="text-sm text-muted-foreground">{rental.delivery_address}</p>
+                    {rental.delivery_fee && rental.delivery_fee > 0 && (
+                      <p className="text-sm font-medium mt-2">
+                        Fee: ${Number(rental.delivery_fee).toFixed(2)}
+                      </p>
+                    )}
+                  </div>
+                )}
+                {rental.collection_address && (
+                  <div className="bg-muted/20 rounded-lg p-3">
+                    <div className="flex items-center gap-2 mb-2">
+                      <MapPin className="h-4 w-4 text-blue-600" />
+                      <p className="text-sm font-medium">Collection Location</p>
+                    </div>
+                    <p className="text-sm text-muted-foreground">{rental.collection_address}</p>
+                    {rental.collection_fee && rental.collection_fee > 0 && (
+                      <p className="text-sm font-medium mt-2">
+                        Fee: ${Number(rental.collection_fee).toFixed(2)}
+                      </p>
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
           {/* Status Overview */}
           <div className="border rounded-lg p-4">
             <p className="text-xs uppercase tracking-wider text-muted-foreground mb-3">Status Overview</p>
@@ -1186,7 +1298,7 @@ const RentalDetail = () => {
                   className={
                     displayStatus === 'Active'
                       ? 'bg-emerald-950/50 text-emerald-300 border-emerald-800'
-                      : displayStatus === 'Closed'
+                      : displayStatus === 'Completed'
                       ? 'bg-slate-800/50 text-slate-300 border-slate-700'
                       : displayStatus === 'Cancelled' || displayStatus === 'Rejected'
                       ? 'bg-red-950/50 text-red-300 border-red-800'
@@ -1259,6 +1371,23 @@ const RentalDetail = () => {
         </CardContent>
       </Card>
 
+      {/* Key Handover Section - Operations */}
+      {id && (
+        <KeyHandoverSection
+          rentalId={id}
+          rentalStatus={displayStatus}
+          needsAction={needsKeyHandover}
+        />
+      )}
+
+      {/* Mileage Summary */}
+      {id && rental?.vehicles?.id && (
+        <MileageSummaryCard
+          rentalId={id}
+          vehicleId={rental.vehicles.id}
+        />
+      )}
+
       {/* DocuSign Agreement Section */}
       <Card>
         <CardHeader>
@@ -1328,7 +1457,7 @@ const RentalDetail = () => {
               )}
 
               {/* Send DocuSign Button - only show if not signed */}
-              {!rental.signed_document_id && displayStatus !== 'Closed' && (
+              {!rental.signed_document_id && displayStatus !== 'Completed' && (
                 <Button
                   variant="outline"
                   onClick={async () => {
@@ -2181,12 +2310,11 @@ const RentalDetail = () => {
         </CardContent>
       </Card>
 
-      {/* Key Handover Section */}
+      {/* Installment Plan Section */}
       {id && (
-        <KeyHandoverSection
+        <InstallmentPlanCard
           rentalId={id}
-          rentalStatus={displayStatus}
-          needsAction={needsKeyHandover}
+          formatCurrency={formatCurrency}
         />
       )}
 

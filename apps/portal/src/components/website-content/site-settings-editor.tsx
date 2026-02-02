@@ -154,7 +154,7 @@ export function SiteSettingsEditor({
                 type="email"
                 value={contactData.email}
                 onChange={(e) => setContactData({ ...contactData, email: e.target.value })}
-                placeholder="info@drive917.com"
+                placeholder="info@drive247.com"
               />
             </div>
 
@@ -257,7 +257,7 @@ export function SiteSettingsEditor({
                   id="facebook"
                   value={socialData.facebook || ""}
                   onChange={(e) => setSocialData({ ...socialData, facebook: e.target.value })}
-                  placeholder="https://facebook.com/drive917"
+                  placeholder="https://facebook.com/drive247"
                 />
               </div>
               <div className="space-y-2">
@@ -266,7 +266,7 @@ export function SiteSettingsEditor({
                   id="instagram"
                   value={socialData.instagram || ""}
                   onChange={(e) => setSocialData({ ...socialData, instagram: e.target.value })}
-                  placeholder="https://instagram.com/drive917"
+                  placeholder="https://instagram.com/drive247"
                 />
               </div>
               <div className="space-y-2">
@@ -275,7 +275,7 @@ export function SiteSettingsEditor({
                   id="twitter"
                   value={socialData.twitter || ""}
                   onChange={(e) => setSocialData({ ...socialData, twitter: e.target.value })}
-                  placeholder="https://twitter.com/drive917"
+                  placeholder="https://twitter.com/drive247"
                 />
               </div>
               <div className="space-y-2">
@@ -284,7 +284,7 @@ export function SiteSettingsEditor({
                   id="linkedin"
                   value={socialData.linkedin || ""}
                   onChange={(e) => setSocialData({ ...socialData, linkedin: e.target.value })}
-                  placeholder="https://linkedin.com/company/drive917"
+                  placeholder="https://linkedin.com/company/drive247"
                 />
               </div>
               <div className="space-y-2">
@@ -293,7 +293,7 @@ export function SiteSettingsEditor({
                   id="youtube"
                   value={socialData.youtube || ""}
                   onChange={(e) => setSocialData({ ...socialData, youtube: e.target.value })}
-                  placeholder="https://youtube.com/@drive917"
+                  placeholder="https://youtube.com/@drive247"
                 />
               </div>
               <div className="space-y-2">
@@ -302,7 +302,7 @@ export function SiteSettingsEditor({
                   id="tiktok"
                   value={socialData.tiktok || ""}
                   onChange={(e) => setSocialData({ ...socialData, tiktok: e.target.value })}
-                  placeholder="https://tiktok.com/@drive917"
+                  placeholder="https://tiktok.com/@drive247"
                 />
               </div>
             </div>

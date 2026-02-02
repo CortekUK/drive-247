@@ -7,7 +7,7 @@ export default {
   theme: {
     container: {
       center: true,
-      padding: "1.5rem",  /* 24px padding as per Drive917 */
+      padding: "1.5rem",  /* 24px padding as per Drive247 */
       screens: {
         "2xl": "1400px",
       },

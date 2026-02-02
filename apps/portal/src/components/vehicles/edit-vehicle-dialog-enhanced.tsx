@@ -479,13 +479,13 @@ export const EditVehicleDialogEnhanced = ({ vehicle, open, onOpenChange }: EditV
                 <h3 className="font-semibold text-sm">Rental Rates</h3>
               </div>
 
-              <div className="grid grid-cols-4 gap-4">
+              <div className="grid grid-cols-2 md:grid-cols-5 gap-4 items-start">
                 <FormField
                   control={form.control}
                   name="daily_rent"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Daily Rent ($) <span className="text-red-500">*</span></FormLabel>
+                      <FormLabel className="whitespace-nowrap">Daily ($) <span className="text-red-500">*</span></FormLabel>
                       <FormControl>
                         <Input
                           type="number"
@@ -499,7 +499,6 @@ export const EditVehicleDialogEnhanced = ({ vehicle, open, onOpenChange }: EditV
                             field.onChange(value === '' ? undefined : parseFloat(value));
                           }}
                           onKeyDown={(e) => {
-                            // Prevent negative sign, e, and E
                             if (e.key === '-' || e.key === 'e' || e.key === 'E') {
                               e.preventDefault();
                             }
@@ -516,7 +515,7 @@ export const EditVehicleDialogEnhanced = ({ vehicle, open, onOpenChange }: EditV
                   name="weekly_rent"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Weekly Rent ($) <span className="text-red-500">*</span></FormLabel>
+                      <FormLabel className="whitespace-nowrap">Weekly ($) <span className="text-red-500">*</span></FormLabel>
                       <FormControl>
                         <Input
                           type="number"
@@ -530,7 +529,6 @@ export const EditVehicleDialogEnhanced = ({ vehicle, open, onOpenChange }: EditV
                             field.onChange(value === '' ? undefined : parseFloat(value));
                           }}
                           onKeyDown={(e) => {
-                            // Prevent negative sign, e, and E
                             if (e.key === '-' || e.key === 'e' || e.key === 'E') {
                               e.preventDefault();
                             }
@@ -547,7 +545,7 @@ export const EditVehicleDialogEnhanced = ({ vehicle, open, onOpenChange }: EditV
                   name="monthly_rent"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Monthly Rent ($) <span className="text-red-500">*</span></FormLabel>
+                      <FormLabel className="whitespace-nowrap">Monthly ($) <span className="text-red-500">*</span></FormLabel>
                       <FormControl>
                         <Input
                           type="number"
@@ -561,7 +559,6 @@ export const EditVehicleDialogEnhanced = ({ vehicle, open, onOpenChange }: EditV
                             field.onChange(value === '' ? undefined : parseFloat(value));
                           }}
                           onKeyDown={(e) => {
-                            // Prevent negative sign, e, and E
                             if (e.key === '-' || e.key === 'e' || e.key === 'E') {
                               e.preventDefault();
                             }
@@ -578,7 +575,7 @@ export const EditVehicleDialogEnhanced = ({ vehicle, open, onOpenChange }: EditV
                   name="security_deposit"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Deposit ($)</FormLabel>
+                      <FormLabel className="whitespace-nowrap">Deposit ($)</FormLabel>
                       <FormControl>
                         <Input
                           type="number"
@@ -608,7 +605,7 @@ export const EditVehicleDialogEnhanced = ({ vehicle, open, onOpenChange }: EditV
                   name="allowed_mileage"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Allowed Mileage</FormLabel>
+                      <FormLabel className="whitespace-nowrap">Mileage/mo</FormLabel>
                       <FormControl>
                         <Input
                           type="number"
@@ -627,7 +624,6 @@ export const EditVehicleDialogEnhanced = ({ vehicle, open, onOpenChange }: EditV
                           }}
                         />
                       </FormControl>
-                      <p className="text-xs text-muted-foreground">Miles/month (blank = unlimited)</p>
                       <FormMessage />
                     </FormItem>
                   )}

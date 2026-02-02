@@ -291,7 +291,7 @@ export function StripeConnectSettings() {
                   }
                 </h4>
                 <Badge variant={isConnected ? 'default' : isPending ? 'secondary' : 'destructive'}>
-                  {tenantStatus?.stripe_account_status || 'Not Set Up'}
+                  {tenantStatus?.stripe_account_status?.toUpperCase() || 'NOT SET UP'}
                 </Badge>
               </div>
               <p className={`text-sm mt-1 ${

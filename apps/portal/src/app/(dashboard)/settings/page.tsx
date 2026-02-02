@@ -20,7 +20,7 @@ import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { format } from 'date-fns';
-import { Calendar as CalendarIcon, Settings as SettingsIcon, Building2, Bell, Zap, Upload, Save, Loader2, Database, AlertTriangle, Trash2, CreditCard, Palette, Link2, CheckCircle2, AlertCircle, ExternalLink, MapPin, FileText, Car, Mail, ShieldX, FilePenLine, Receipt, Banknote, Shield, Copy, Check, Clock } from 'lucide-react';
+import { Calendar as CalendarIcon, Settings as SettingsIcon, Building2, Bell, Zap, Upload, Save, Loader2, Database, AlertTriangle, Trash2, CreditCard, Palette, Link2, CheckCircle2, AlertCircle, ExternalLink, MapPin, FileText, Car, Mail, ShieldX, FilePenLine, Receipt, Banknote, Shield, Copy, Check, Clock, Truck } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
 import { useOrgSettings } from '@/hooks/use-org-settings';
 import { useTenantBranding } from '@/hooks/use-tenant-branding';
@@ -35,6 +35,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { OGImageUpload } from '@/components/settings/og-image-upload';
 import { StripeConnectSettings } from '@/components/settings/stripe-connect-settings';
 import { LocationSettings } from '@/components/settings/location-settings';
+import { DeliveryCollectionSettings } from '@/components/settings/delivery-collection-settings';
 
 const Settings = () => {
   const queryClient = useQueryClient();
@@ -85,6 +86,19 @@ const Settings = () => {
     service_fee_value: 0,
     deposit_mode: 'global' as 'global' | 'per_vehicle',
     global_deposit_amount: 0,
+    // Installment settings
+    installments_enabled: false,
+    installment_config: {
+      min_days_for_weekly: 7,
+      min_days_for_monthly: 30,
+      max_installments_weekly: 4,
+      max_installments_monthly: 6,
+    } as {
+      min_days_for_weekly: number;
+      min_days_for_monthly: number;
+      max_installments_weekly: number;
+      max_installments_monthly: number;
+    },
   });
 
   // Sync rental form with loaded settings
@@ -100,6 +114,14 @@ const Settings = () => {
         service_fee_value: rentalSettings.service_fee_value ?? rentalSettings.service_fee_amount ?? 0,
         deposit_mode: rentalSettings.deposit_mode ?? 'global',
         global_deposit_amount: rentalSettings.global_deposit_amount ?? 0,
+        // Installment settings
+        installments_enabled: rentalSettings.installments_enabled ?? false,
+        installment_config: rentalSettings.installment_config ?? {
+          min_days_for_weekly: 7,
+          min_days_for_monthly: 30,
+          max_installments_weekly: 4,
+          max_installments_monthly: 6,
+        },
       });
     }
   }, [rentalSettings]);
@@ -680,7 +702,7 @@ const Settings = () => {
 
       {/* Settings Tabs */}
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-        <TabsList className="grid w-full grid-cols-9">
+        <TabsList className="grid w-full grid-cols-10">
           <TabsTrigger value="branding" className="flex items-center gap-2">
             <Palette className="h-4 w-4" />
             <span className="hidden sm:inline">Branding</span>
@@ -700,6 +722,10 @@ const Settings = () => {
           <TabsTrigger value="locations" className="flex items-center gap-2">
             <MapPin className="h-4 w-4" />
             <span className="hidden sm:inline">Locations</span>
+          </TabsTrigger>
+          <TabsTrigger value="delivery" className="flex items-center gap-2">
+            <Truck className="h-4 w-4" />
+            <span className="hidden sm:inline">Delivery</span>
           </TabsTrigger>
           <TabsTrigger value="rental" className="flex items-center gap-2">
             <Car className="h-4 w-4" />
@@ -1479,6 +1505,11 @@ const Settings = () => {
           <LocationSettings />
         </TabsContent>
 
+        {/* Delivery & Collection Tab */}
+        <TabsContent value="delivery" className="space-y-6">
+          <DeliveryCollectionSettings />
+        </TabsContent>
+
         {/* Rental Tab */}
         <TabsContent value="rental" className="space-y-6">
           <Card>
@@ -1866,6 +1897,175 @@ const Settings = () => {
                   <Save className="h-4 w-4" />
                 )}
                 Save Deposit Settings
+              </Button>
+            </CardContent>
+          </Card>
+
+          {/* Installment Payments Configuration Card */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Banknote className="h-5 w-5 text-primary" />
+                Installment Payments
+              </CardTitle>
+              <CardDescription>
+                Allow customers to split rental payments into scheduled installments
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              {/* Enable Installments Toggle */}
+              <div className="flex items-center justify-between p-4 border rounded-lg">
+                <div className="space-y-1">
+                  <h4 className="font-medium">Enable Installment Payments</h4>
+                  <p className="text-sm text-muted-foreground">
+                    Let customers pay rental costs in weekly or monthly installments
+                  </p>
+                </div>
+                <Switch
+                  checked={rentalForm.installments_enabled ?? false}
+                  onCheckedChange={(checked) => {
+                    setRentalForm(prev => ({ ...prev, installments_enabled: checked }));
+                  }}
+                />
+              </div>
+
+              {rentalForm.installments_enabled && (
+                <div className="space-y-6 p-4 border rounded-lg bg-muted/30">
+                  <h4 className="font-medium text-sm">Installment Configuration</h4>
+
+                  {/* Weekly Installments */}
+                  <div className="space-y-3">
+                    <Label className="text-sm font-medium">Weekly Installments</Label>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="min_days_weekly" className="text-xs text-muted-foreground">
+                          Minimum rental days
+                        </Label>
+                        <Input
+                          id="min_days_weekly"
+                          type="number"
+                          min="7"
+                          value={rentalForm.installment_config?.min_days_for_weekly ?? 7}
+                          onChange={(e) => {
+                            const value = parseInt(e.target.value) || 7;
+                            setRentalForm(prev => ({
+                              ...prev,
+                              installment_config: {
+                                ...prev.installment_config,
+                                min_days_for_weekly: value,
+                              }
+                            }));
+                          }}
+                          className="w-full"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="max_weekly" className="text-xs text-muted-foreground">
+                          Maximum installments
+                        </Label>
+                        <Input
+                          id="max_weekly"
+                          type="number"
+                          min="2"
+                          max="12"
+                          value={rentalForm.installment_config?.max_installments_weekly ?? 4}
+                          onChange={(e) => {
+                            const value = parseInt(e.target.value) || 4;
+                            setRentalForm(prev => ({
+                              ...prev,
+                              installment_config: {
+                                ...prev.installment_config,
+                                max_installments_weekly: Math.min(12, Math.max(2, value)),
+                              }
+                            }));
+                          }}
+                          className="w-full"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Monthly Installments */}
+                  <div className="space-y-3">
+                    <Label className="text-sm font-medium">Monthly Installments</Label>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="min_days_monthly" className="text-xs text-muted-foreground">
+                          Minimum rental days
+                        </Label>
+                        <Input
+                          id="min_days_monthly"
+                          type="number"
+                          min="30"
+                          value={rentalForm.installment_config?.min_days_for_monthly ?? 30}
+                          onChange={(e) => {
+                            const value = parseInt(e.target.value) || 30;
+                            setRentalForm(prev => ({
+                              ...prev,
+                              installment_config: {
+                                ...prev.installment_config,
+                                min_days_for_monthly: value,
+                              }
+                            }));
+                          }}
+                          className="w-full"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="max_monthly" className="text-xs text-muted-foreground">
+                          Maximum installments
+                        </Label>
+                        <Input
+                          id="max_monthly"
+                          type="number"
+                          min="2"
+                          max="12"
+                          value={rentalForm.installment_config?.max_installments_monthly ?? 6}
+                          onChange={(e) => {
+                            const value = parseInt(e.target.value) || 6;
+                            setRentalForm(prev => ({
+                              ...prev,
+                              installment_config: {
+                                ...prev.installment_config,
+                                max_installments_monthly: Math.min(12, Math.max(2, value)),
+                              }
+                            }));
+                          }}
+                          className="w-full"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  <Alert>
+                    <AlertDescription>
+                      <strong>How it works:</strong> Customers pay the security deposit and service fee upfront.
+                      The rental cost + tax is split into scheduled payments charged automatically to their saved card.
+                    </AlertDescription>
+                  </Alert>
+                </div>
+              )}
+
+              <Button
+                onClick={async () => {
+                  try {
+                    await updateRentalSettings({
+                      installments_enabled: rentalForm.installments_enabled,
+                      installment_config: rentalForm.installment_config,
+                    });
+                  } catch (error) {
+                    console.error('Failed to update installment settings:', error);
+                  }
+                }}
+                disabled={isUpdatingRentalSettings}
+                className="flex items-center gap-2"
+              >
+                {isUpdatingRentalSettings ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Save className="h-4 w-4" />
+                )}
+                Save Installment Settings
               </Button>
             </CardContent>
           </Card>

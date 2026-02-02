@@ -245,7 +245,7 @@ const CustomersList = () => {
 
       // High switcher filter
       if (highSwitcherFilter !== "all") {
-        const isHighSwitcher = customer.high_switcher || false;
+        const isHighSwitcher = customer.high_switcher === true;
         if (highSwitcherFilter === "yes" && !isHighSwitcher) return false;
         if (highSwitcherFilter === "no" && isHighSwitcher) return false;
       }
@@ -658,11 +658,6 @@ const CustomersList = () => {
                               {customer.name}
                             </button>
                             <div className="flex items-center gap-1">
-                              {customer.high_switcher && (
-                                <Badge variant="secondary" className="text-xs bg-gray-800 text-white">
-                                  High Switcher
-                                </Badge>
-                              )}
                               {hasNextOfKin(customer) && (
                                 <div title="Emergency contact on file">
                                   <Shield className="h-3 w-3 text-muted-foreground" />
@@ -772,13 +767,6 @@ const CustomersList = () => {
                                       Edit
                                     </DropdownMenuItem>
                                     <DropdownMenuSeparator />
-                                    <DropdownMenuItem
-                                      onClick={() => handleRejectClick(customer)}
-                                      className="text-red-600 focus:text-red-600"
-                                    >
-                                      <XCircle className="h-4 w-4 mr-2" />
-                                      Reject Customer
-                                    </DropdownMenuItem>
                                     <DropdownMenuItem
                                       onClick={() => handleBlockClick(customer)}
                                       className="text-orange-600 focus:text-orange-600"

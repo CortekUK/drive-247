@@ -127,7 +127,7 @@ export const getRentalStatus = (startDate: string, endDate: string | null, statu
 
   // If explicitly set to Closed in database, respect that
   if (status === "Closed") {
-    return "Closed";
+    return "Completed";
   }
 
   const today = new Date();
@@ -138,11 +138,11 @@ export const getRentalStatus = (startDate: string, endDate: string | null, statu
     return "Upcoming";
   }
 
-  // If there's an end date and it's in the past, it's closed
+  // If there's an end date and it's in the past, it's completed
   if (endDate) {
     const end = parseISO(endDate);
     if (!isAfter(end, today)) {
-      return "Closed";
+      return "Completed";
     }
   }
 

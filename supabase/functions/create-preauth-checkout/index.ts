@@ -23,6 +23,9 @@ interface PreAuthCheckoutRequest {
   returnDate: string
   protectionPlan?: string
   tenantId?: string
+  // Bonzah insurance
+  insuranceAmount?: number
+  bonzahPolicyId?: string
 }
 
 serve(async (req) => {
@@ -109,25 +112,44 @@ serve(async (req) => {
       console.log('Creating checkout session on connected account:', stripeAccountId)
     }
 
+    // Build line items array
+    const lineItems: Stripe.Checkout.SessionCreateParams.LineItem[] = [
+      {
+        price_data: {
+          currency: 'usd',
+          product_data: {
+            name: 'Vehicle Rental Deposit',
+            description: `${body.vehicleName} - ${body.pickupDate} to ${body.returnDate}`,
+            images: [], // Could add vehicle image here
+          },
+          unit_amount: Math.round(body.totalAmount * 100),
+        },
+        quantity: 1,
+      },
+    ]
+
+    // Add insurance line item if present
+    if (body.insuranceAmount && body.insuranceAmount > 0) {
+      console.log('Adding Bonzah insurance line item:', body.insuranceAmount)
+      lineItems.push({
+        price_data: {
+          currency: 'usd',
+          product_data: {
+            name: 'Bonzah Insurance Premium',
+            description: 'Rental car insurance coverage',
+          },
+          unit_amount: Math.round(body.insuranceAmount * 100),
+        },
+        quantity: 1,
+      })
+    }
+
     // Create Stripe Checkout Session (this creates the PaymentIntent internally)
     const session = await stripe.checkout.sessions.create({
       payment_method_types: ['card'],
       mode: 'payment',
       payment_intent_data: paymentIntentData,
-      line_items: [
-        {
-          price_data: {
-            currency: 'usd',
-            product_data: {
-              name: 'Vehicle Rental Deposit',
-              description: `${body.vehicleName} - ${body.pickupDate} to ${body.returnDate}`,
-              images: [], // Could add vehicle image here
-            },
-            unit_amount: Math.round(body.totalAmount * 100),
-          },
-          quantity: 1,
-        },
-      ],
+      line_items: lineItems,
       customer_email: body.customerEmail,
       client_reference_id: body.rentalId,
       success_url: `${origin}/booking-pending?session_id={CHECKOUT_SESSION_ID}&rental_id=${body.rentalId}`,
@@ -139,6 +161,7 @@ serve(async (req) => {
         preauth_mode: 'true',
         stripe_account_id: stripeAccountId || '',
         stripe_mode: stripeMode, // Track which mode was used
+        bonzah_policy_id: body.bonzahPolicyId || '', // Track Bonzah policy for webhook
       },
     }, stripeOptions)
 

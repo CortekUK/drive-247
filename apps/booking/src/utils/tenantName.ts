@@ -1,19 +1,19 @@
 /**
  * Utility for replacing default/generic company names with the tenant's actual name.
- * This ensures CMS content that contains "Drive917" or "Drive 917" is dynamically
+ * This ensures CMS content that contains "Drive247" or "Drive 247" is dynamically
  * replaced with the current tenant's app_name.
  */
 
 // Default company names that should be replaced with the tenant's actual name
 const DEFAULT_COMPANY_NAMES = [
-  'Drive917',
-  'Drive 917',
-  'drive917',
+  'Drive247',
+  'Drive 247',
+  'drive247',
   'drive 917',
 ];
 
 /**
- * Replaces default company names (Drive917, Drive 917) with the tenant's actual app_name.
+ * Replaces default company names (Drive247, Drive 247) with the tenant's actual app_name.
  * This is used when displaying CMS content to ensure tenant branding is correct.
  *
  * @param text - The text to process (can be undefined/null)
@@ -30,7 +30,7 @@ export const replaceCompanyName = (
   // Using case-insensitive regex to catch all variations
   return text
     .replace(/Drive\s*917/gi, tenantAppName)
-    .replace(/Drive917/gi, tenantAppName);
+    .replace(/Drive247/gi, tenantAppName);
 };
 
 /**

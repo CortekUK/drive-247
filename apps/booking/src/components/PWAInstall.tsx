@@ -86,7 +86,7 @@ const PWAInstall = ({ title, description }: PWAInstallProps) => {
                 <CheckCircle2 className="h-6 w-6 text-accent" /> App Installed
               </h3>
               <p className="text-base text-muted-foreground">
-                Drive917 is installed on your device. Find it on your home screen for quick access.
+                Drive247 is installed on your device. Find it on your home screen for quick access.
               </p>
             </div>
           </div>
@@ -101,10 +101,10 @@ const PWAInstall = ({ title, description }: PWAInstallProps) => {
         <div className="pwa-card">
           <div className="flex-1">
             <h3 className="text-2xl md:text-3xl font-display font-bold mb-2 text-foreground">
-              {title || "Install Drive917"}
+              {title || "Install Drive247"}
             </h3>
             <p className="text-base text-muted-foreground mb-6">
-              {description || "Add Drive917 to your home screen for fast, seamless bookings in Los Angeles and beyond."}
+              {description || "Add Drive247 to your home screen for fast, seamless bookings in Los Angeles and beyond."}
             </p>
 
             <div className="flex flex-wrap gap-3 mb-4">
@@ -156,7 +156,7 @@ const PWAInstall = ({ title, description }: PWAInstallProps) => {
                         <li>Tap the <strong className="text-foreground">Share</strong> button at the bottom of Safari</li>
                         <li>Scroll down and choose <strong className="text-foreground">Add to Home Screen</strong></li>
                         <li>Tap <strong className="text-foreground">Add</strong> in the top right</li>
-                        <li>Find the Drive917 icon on your home screen</li>
+                        <li>Find the Drive247 icon on your home screen</li>
                       </ol>
                     </div>
                   </TabsContent>

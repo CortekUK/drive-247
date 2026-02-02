@@ -235,10 +235,10 @@ const About = () => {
             {/* Stats Section */}
             <div ref={statsRef} className="grid md:grid-cols-4 gap-8 mb-12 animate-fade-in animation-delay-400">
               {(content.stats?.items && content.stats.items.length > 0 ? content.stats.items : [
-                { icon: "clock", label: "YEARS EXPERIENCE", value: "", suffix: "+", use_dynamic: true, dynamic_source: "years_experience" },
-                { icon: "car", label: "RENTALS COMPLETED", value: "", suffix: "+", use_dynamic: true, dynamic_source: "total_rentals" },
-                { icon: "crown", label: "PREMIUM VEHICLES", value: "", suffix: "+", use_dynamic: true, dynamic_source: "active_vehicles" },
-                { icon: "star", label: "CLIENT RATING", value: "", suffix: "", use_dynamic: true, dynamic_source: "avg_rating" },
+                { icon: "clock", label: "YEARS EXPERIENCE", value: "0", suffix: "+", use_dynamic: false, dynamic_source: "years_experience" },
+                { icon: "car", label: "RENTALS COMPLETED", value: "0", suffix: "+", use_dynamic: false, dynamic_source: "total_rentals" },
+                { icon: "crown", label: "PREMIUM VEHICLES", value: "0", suffix: "+", use_dynamic: false, dynamic_source: "active_vehicles" },
+                { icon: "star", label: "CLIENT RATING", value: "0", suffix: "", use_dynamic: false, dynamic_source: "avg_rating" },
               ]).map((item, index) => {
                 const IconComponent = getIcon(item.icon);
 

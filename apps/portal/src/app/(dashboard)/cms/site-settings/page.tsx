@@ -92,14 +92,14 @@ export default function CMSSiteSettingsEditor() {
 
   const logoContent = getSectionContent<LogoContent>("logo", {
     logo_url: "",
-    logo_alt: "Drive 917",
+    logo_alt: "Drive 247",
     favicon_url: "",
   });
 
   const contactContent = getSectionContent<SiteContactContent>("contact", {
     phone: "+19725156635",
     phone_display: "(972) 515-6635",
-    email: "info@drive917.com",
+    email: "info@drive247.com",
     address_line1: "",
     address_line2: "",
     city: "Dallas",
@@ -119,7 +119,7 @@ export default function CMSSiteSettingsEditor() {
   });
 
   const footerContent = getSectionContent<FooterContent>("footer", {
-    copyright_text: `© ${new Date().getFullYear()} Drive 917. All rights reserved.`,
+    copyright_text: `© ${new Date().getFullYear()} Drive 247. All rights reserved.`,
     tagline: "Premium Car Rentals in Dallas",
   });
 
@@ -165,7 +165,7 @@ export default function CMSSiteSettingsEditor() {
               <AlertDialogHeader>
                 <AlertDialogTitle>Reset to Default Content?</AlertDialogTitle>
                 <AlertDialogDescription>
-                  This will replace all Site Settings with Drive 917 default content.
+                  This will replace all Site Settings with Drive 247 default content.
                   This action cannot be undone, but you can restore previous versions from the History.
                 </AlertDialogDescription>
               </AlertDialogHeader>

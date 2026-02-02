@@ -12,7 +12,6 @@ export const customerFormModalSchema = z.object({
   license_number: z.string().min(1, "Driver's License is required"),
   id_number: z.string().optional(),
   whatsapp_opt_in: z.boolean(),
-  high_switcher: z.boolean(),
   status: z.enum(['Active', 'Inactive']),
   notes: z.string().optional(),
   nok_full_name: z.string()

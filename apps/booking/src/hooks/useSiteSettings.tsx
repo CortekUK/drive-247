@@ -221,7 +221,7 @@ export const useSiteSettings = () => {
   });
 
   // Build immediate settings from tenant while CMS query runs
-  // This prevents flash of default "Drive917" branding
+  // This prevents flash of default "Drive247" branding
   const immediateSettings: SiteSettings = tenant ? {
     ...defaultSettings,
     id: tenant.id,

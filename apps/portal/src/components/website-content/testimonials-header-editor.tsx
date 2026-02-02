@@ -68,7 +68,7 @@ export function TestimonialsHeaderEditor({ content, onSave, isSaving }: Testimon
                 <FormItem>
                   <FormLabel>Section Title</FormLabel>
                   <FormControl>
-                    <Input placeholder="Why Dallas Drivers Choose Drive917" {...field} />
+                    <Input placeholder="Why Dallas Drivers Choose Drive247" {...field} />
                   </FormControl>
                   <FormDescription>
                     The testimonials themselves are managed in the Testimonials section of the admin.

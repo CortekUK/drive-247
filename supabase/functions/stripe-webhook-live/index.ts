@@ -364,6 +364,39 @@ serve(async (req) => {
             );
           }
         }
+
+        // BONZAH INSURANCE: Confirm payment and issue policy if bonzah_policy_id is present
+        const bonzahPolicyId = session.metadata?.bonzah_policy_id;
+        if (bonzahPolicyId) {
+          console.log("[LIVE MODE] Confirming Bonzah insurance payment for policy:", bonzahPolicyId);
+          try {
+            const bonzahResponse = await fetch(
+              `${Deno.env.get("SUPABASE_URL")}/functions/v1/bonzah-confirm-payment`,
+              {
+                method: "POST",
+                headers: {
+                  "Content-Type": "application/json",
+                  Authorization: `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`,
+                },
+                body: JSON.stringify({
+                  policy_record_id: bonzahPolicyId,
+                  stripe_payment_intent_id: session.payment_intent as string,
+                }),
+              }
+            );
+
+            if (bonzahResponse.ok) {
+              const bonzahResult = await bonzahResponse.json();
+              console.log("[LIVE MODE] Bonzah policy issued successfully:", bonzahResult.policy_no);
+            } else {
+              const errorText = await bonzahResponse.text();
+              console.error("[LIVE MODE] Failed to confirm Bonzah payment:", errorText);
+            }
+          } catch (bonzahError) {
+            console.error("[LIVE MODE] Error calling bonzah-confirm-payment:", bonzahError);
+            // Don't fail the webhook for Bonzah errors - payment was still successful
+          }
+        }
         break;
       }
 

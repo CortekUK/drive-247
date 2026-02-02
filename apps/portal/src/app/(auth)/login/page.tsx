@@ -69,7 +69,7 @@ function LoginPageContent() {
 
   // Get logo from tenant branding or use default
   const logoUrl = branding?.logo_url || "/logo.png";
-  const appName = branding?.app_name || "Drive917";
+  const appName = branding?.app_name || "Drive247";
 
   // Role-based redirect logic
   const getRedirectPath = (): string => {

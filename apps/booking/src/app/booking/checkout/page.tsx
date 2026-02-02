@@ -9,13 +9,14 @@ import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import { ArrowLeft, Check, Shield, CreditCard, Loader2 } from "lucide-react";
+import { ArrowLeft, Check, Shield, CreditCard, Loader2, Truck } from "lucide-react";
 import Navigation from "@/components/Navigation";
 import Footer from "@/components/Footer";
 import SEO from "@/components/SEO";
 import { z } from "zod";
 import BookingConfirmation from "@/components/BookingConfirmation";
 import { useTenant } from "@/contexts/TenantContext";
+import InstallmentSelector, { InstallmentOption, InstallmentConfig } from "@/components/InstallmentSelector";
 
 const checkoutSchema = z.object({
   customerName: z.string().min(2, "Name must be at least 2 characters"),
@@ -32,6 +33,23 @@ interface PricingExtra {
   description: string | null;
 }
 
+interface DeliveryLocation {
+  id: string;
+  name: string;
+  address: string;
+  delivery_fee: number;
+  collection_fee: number;
+}
+
+interface DeliveryData {
+  requestDelivery: boolean;
+  deliveryLocationId: string | null;
+  deliveryLocation: DeliveryLocation | null;
+  requestCollection: boolean;
+  collectionLocationId: string | null;
+  collectionLocation: DeliveryLocation | null;
+}
+
 const BookingCheckoutContent = () => {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -43,7 +61,25 @@ const BookingCheckoutContent = () => {
   const [errors, setErrors] = useState<{[key: string]: string}>({});
   const [showConfirmation, setShowConfirmation] = useState(false);
   const [confirmedBooking, setConfirmedBooking] = useState<any>(null);
-  
+  const [deliveryData, setDeliveryData] = useState<DeliveryData>({
+    requestDelivery: false,
+    deliveryLocationId: null,
+    deliveryLocation: null,
+    requestCollection: false,
+    collectionLocationId: null,
+    collectionLocation: null,
+  });
+
+  // Installment state
+  const [selectedInstallmentPlan, setSelectedInstallmentPlan] = useState<InstallmentOption | null>(null);
+  const [installmentConfig, setInstallmentConfig] = useState<InstallmentConfig>({
+    min_days_for_weekly: 7,
+    min_days_for_monthly: 30,
+    max_installments_weekly: 4,
+    max_installments_monthly: 6,
+  });
+  const [installmentsEnabled, setInstallmentsEnabled] = useState(false);
+
   const [formData, setFormData] = useState({
     customerName: "",
     customerEmail: "",
@@ -86,6 +122,40 @@ const BookingCheckoutContent = () => {
 
       if (vError) throw vError;
       setVehicleDetails(vehicle);
+
+      // Load delivery/collection data from localStorage
+      const bookingContext = localStorage.getItem("booking_context");
+      if (bookingContext) {
+        try {
+          const ctx = JSON.parse(bookingContext);
+          setDeliveryData({
+            requestDelivery: ctx.requestDelivery || false,
+            deliveryLocationId: ctx.deliveryLocationId || null,
+            deliveryLocation: ctx.deliveryLocation || null,
+            requestCollection: ctx.requestCollection || false,
+            collectionLocationId: ctx.collectionLocationId || null,
+            collectionLocation: ctx.collectionLocation || null,
+          });
+        } catch (e) {
+          console.error("Failed to parse booking context for delivery data:", e);
+        }
+      }
+
+      // Load installment configuration from tenant
+      if (tenant?.id) {
+        const { data: tenantData } = await supabase
+          .from("tenants")
+          .select("installments_enabled, installment_config")
+          .eq("id", tenant.id)
+          .single();
+
+        if (tenantData) {
+          setInstallmentsEnabled(tenantData.installments_enabled || false);
+          if (tenantData.installment_config) {
+            setInstallmentConfig(tenantData.installment_config as InstallmentConfig);
+          }
+        }
+      }
     } catch (error: any) {
       toast.error("Failed to load booking details");
       console.error(error);
@@ -116,6 +186,67 @@ const BookingCheckoutContent = () => {
 
   const calculateTotal = () => {
     return calculateVehiclePrice() + calculateExtrasTotal();
+  };
+
+  // Complete total calculation including all fees
+  const calculateCompleteTotal = () => {
+    const vehiclePrice = calculateVehiclePrice();
+    const extrasTotal = calculateExtrasTotal();
+
+    // Delivery/Collection fees
+    const deliveryFee = deliveryData.requestDelivery && deliveryData.deliveryLocation
+      ? deliveryData.deliveryLocation.delivery_fee || 0
+      : 0;
+    const collectionFee = deliveryData.requestCollection && deliveryData.collectionLocation
+      ? deliveryData.collectionLocation.collection_fee || 0
+      : 0;
+
+    const subtotal = vehiclePrice + extrasTotal + deliveryFee + collectionFee;
+
+    // Tax (if enabled)
+    const taxPercentage = tenant?.tax_percentage || 0;
+    const taxAmount = tenant?.tax_enabled
+      ? subtotal * (taxPercentage / 100)
+      : 0;
+
+    // Service fee (if enabled)
+    const serviceFee = tenant?.service_fee_enabled
+      ? (tenant?.service_fee_amount || 0)
+      : 0;
+
+    // Security deposit
+    const deposit = tenant?.deposit_mode === 'global'
+      ? (tenant?.global_deposit_amount || 0)
+      : (vehicleDetails?.security_deposit || 0);
+
+    return {
+      vehiclePrice,
+      extrasTotal,
+      deliveryFee,
+      collectionFee,
+      subtotal,
+      taxAmount,
+      taxPercentage,
+      serviceFee,
+      deposit,
+      grandTotal: subtotal + taxAmount + serviceFee + deposit,
+    };
+  };
+
+  const totals = calculateCompleteTotal();
+
+  // Calculate installment breakdown
+  // Upfront: Deposit + Service Fee + Delivery Fee + Collection Fee (paid immediately)
+  // Installable: Vehicle Price + Extras + Tax (split into installments)
+  const upfrontAmount = totals.deposit + totals.serviceFee + totals.deliveryFee + totals.collectionFee;
+  const installableAmount = totals.vehiclePrice + totals.extrasTotal + totals.taxAmount; // Rental costs only
+
+  // Format currency based on tenant settings
+  const formatCurrency = (amount: number) => {
+    return new Intl.NumberFormat('en-GB', {
+      style: 'currency',
+      currency: tenant?.currency_code || 'GBP',
+    }).format(amount);
   };
 
   const handleExtraToggle = (extraId: string) => {
@@ -322,6 +453,9 @@ const BookingCheckoutContent = () => {
       // Determine rental period type based on duration
       const rentalPeriodType = days >= 28 ? "Monthly" : days >= 7 ? "Weekly" : "Daily";
 
+      // Get current totals for delivery/collection fees
+      const currentTotals = calculateCompleteTotal();
+
       const { data: rental, error: rentalError } = await supabase
         .from("rentals")
         .insert({
@@ -332,7 +466,15 @@ const BookingCheckoutContent = () => {
           monthly_amount: monthlyAmount,
           rental_period_type: rentalPeriodType,
           status: "Pending",  // Pending until payment confirmed
-          tenant_id: tenant?.id
+          tenant_id: tenant?.id,
+          // Delivery/Collection data
+          uses_delivery_service: deliveryData.requestDelivery || deliveryData.requestCollection,
+          delivery_location_id: deliveryData.deliveryLocationId || null,
+          delivery_address: deliveryData.deliveryLocation?.address || null,
+          delivery_fee: currentTotals.deliveryFee,
+          collection_location_id: deliveryData.collectionLocationId || null,
+          collection_address: deliveryData.collectionLocation?.address || null,
+          collection_fee: currentTotals.collectionFee,
         })
         .select()
         .single();
@@ -362,13 +504,61 @@ const BookingCheckoutContent = () => {
         // Don't throw - rental is created
       });
 
-      // Show confirmation screen
+      // Step 8: Handle payment based on installment selection
+      const vehicleName = vehicleDetails?.name || `${vehicleDetails?.make} ${vehicleDetails?.model}` || "Vehicle";
+      const currentTotalsForPayment = calculateCompleteTotal();
+
+      // Check if installment plan is selected (not "full" payment)
+      if (selectedInstallmentPlan && selectedInstallmentPlan.type !== 'full' && installmentsEnabled) {
+        console.log("Creating installment checkout for rental:", rental.id);
+        console.log("Plan:", selectedInstallmentPlan.type, "Installments:", selectedInstallmentPlan.numberOfInstallments);
+
+        // Call the installment checkout edge function
+        const { data: checkoutData, error: checkoutError } = await supabase.functions.invoke(
+          'create-installment-checkout',
+          {
+            body: {
+              rentalId: rental.id,
+              customerId: customer.id,
+              customerEmail: customerEmail,
+              customerName: customerName,
+              customerPhone: customerPhone,
+              vehicleId: vehicleId,
+              vehicleName: vehicleName,
+              upfrontAmount: currentTotalsForPayment.deposit + currentTotalsForPayment.serviceFee,
+              installableAmount: currentTotalsForPayment.subtotal + currentTotalsForPayment.taxAmount,
+              planType: selectedInstallmentPlan.type,
+              numberOfInstallments: selectedInstallmentPlan.numberOfInstallments,
+              pickupDate: pickupDate,
+              returnDate: returnDate,
+              startDate: pickupDate, // First installment due on rental start
+              tenantId: tenant?.id,
+            },
+          }
+        );
+
+        if (checkoutError) {
+          console.error("Installment checkout error:", checkoutError);
+          throw new Error(checkoutError.message || "Failed to create installment checkout");
+        }
+
+        if (checkoutData?.url) {
+          // Redirect to Stripe checkout
+          toast.success("Redirecting to payment...");
+          window.location.href = checkoutData.url;
+          return;
+        } else {
+          throw new Error("No checkout URL returned");
+        }
+      }
+
+      // Regular flow (full payment or no installments) - show confirmation screen
       setConfirmedBooking({
         pickupLocation,
         dropoffLocation: returnLocation || pickupLocation,
         pickupDate,
         pickupTime: "09:00",
-        vehicleName: vehicleDetails?.name || vehicleDetails?.make + " " + vehicleDetails?.model || "Vehicle",
+        vehicleName: vehicleName,
         totalPrice: monthlyAmount.toString(),
         customerName,
         customerEmail
@@ -554,13 +744,27 @@ const BookingCheckoutContent = () => {
                   )}
                 </div>
               </Card>
+
+              {/* Installment Payment Options */}
+              {calculateRentalDays() >= 7 && (
+                <InstallmentSelector
+                  rentalDays={calculateRentalDays()}
+                  installableAmount={installableAmount}
+                  upfrontAmount={upfrontAmount}
+                  config={installmentConfig}
+                  enabled={installmentsEnabled}
+                  onSelectPlan={setSelectedInstallmentPlan}
+                  selectedPlan={selectedInstallmentPlan}
+                  formatCurrency={formatCurrency}
+                />
+              )}
             </div>
 
             {/* Right Column - Summary */}
             <div className="lg:col-span-1">
               <Card className="p-6 sticky top-24">
                 <h3 className="text-lg font-semibold mb-4">Booking Summary</h3>
-                
+
                 {vehicleDetails && (
                   <div className="space-y-3 pb-4 border-b border-border">
                     <div className="flex justify-between text-sm">
@@ -573,7 +777,7 @@ const BookingCheckoutContent = () => {
                     </div>
                     <div className="flex justify-between text-sm">
                       <span className="text-muted-foreground">Vehicle Cost</span>
-                      <span className="font-medium">${calculateVehiclePrice().toLocaleString()}</span>
+                      <span className="font-medium">{formatCurrency(totals.vehiclePrice)}</span>
                     </div>
                   </div>
                 )}
@@ -586,17 +790,103 @@ const BookingCheckoutContent = () => {
                       return extra ? (
                         <div key={extraId} className="flex justify-between text-sm">
                           <span className="text-muted-foreground">{extra.extra_name}</span>
-                          <span className="font-medium">${extra.price}</span>
+                          <span className="font-medium">{formatCurrency(extra.price)}</span>
                         </div>
                       ) : null;
                     })}
                   </div>
                 )}
 
+                {/* Delivery & Collection Section */}
+                {(totals.deliveryFee > 0 || totals.collectionFee > 0) && (
+                  <div className="space-y-2 py-4 border-b border-border">
+                    <p className="text-sm font-medium flex items-center gap-2">
+                      <Truck className="w-4 h-4 text-accent" />
+                      Delivery & Collection
+                    </p>
+                    {totals.deliveryFee > 0 && (
+                      <div className="flex justify-between text-sm">
+                        <span className="text-muted-foreground">
+                          Delivery to: {deliveryData.deliveryLocation?.name}
+                        </span>
+                        <span className="font-medium">+{formatCurrency(totals.deliveryFee)}</span>
+                      </div>
+                    )}
+                    {totals.collectionFee > 0 && (
+                      <div className="flex justify-between text-sm">
+                        <span className="text-muted-foreground">
+                          Collection from: {deliveryData.collectionLocation?.name}
+                        </span>
+                        <span className="font-medium">+{formatCurrency(totals.collectionFee)}</span>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Subtotal */}
+                <div className="py-4 border-b border-border">
+                  <div className="flex justify-between text-sm font-medium">
+                    <span>Subtotal</span>
+                    <span>{formatCurrency(totals.subtotal)}</span>
+                  </div>
+                </div>
+
+                {/* Tax, Service Fee, Deposit */}
+                <div className="space-y-2 py-4 border-b border-border">
+                  {totals.taxAmount > 0 && (
+                    <div className="flex justify-between text-sm">
+                      <span className="text-muted-foreground">Tax ({totals.taxPercentage}%)</span>
+                      <span className="font-medium">+{formatCurrency(totals.taxAmount)}</span>
+                    </div>
+                  )}
+                  {totals.serviceFee > 0 && (
+                    <div className="flex justify-between text-sm">
+                      <span className="text-muted-foreground">Service Fee</span>
+                      <span className="font-medium">+{formatCurrency(totals.serviceFee)}</span>
+                    </div>
+                  )}
+                  {totals.deposit > 0 && (
+                    <div className="flex justify-between text-sm">
+                      <span className="text-muted-foreground">Security Deposit</span>
+                      <span className="font-medium">+{formatCurrency(totals.deposit)}</span>
+                    </div>
+                  )}
+                </div>
+
                 <div className="pt-4 space-y-4">
-                  <div className="flex justify-between items-baseline">
-                    <span className="text-lg font-semibold">Total</span>
-                    <span className="text-2xl font-bold text-accent">${calculateTotal().toLocaleString()}</span>
+                  {/* Grand Total - Highlighted Section */}
+                  <div className="bg-accent/10 border-2 border-accent/30 rounded-lg p-4 -mx-2">
+                    {selectedInstallmentPlan && selectedInstallmentPlan.type !== 'full' ? (
+                      <>
+                        <div className="flex justify-between items-center mb-3">
+                          <div>
+                            <span className="text-sm text-muted-foreground block">Pay Today</span>
+                            <span className="text-lg font-semibold">Upfront Amount</span>
+                          </div>
+                          <span className="text-2xl font-bold text-accent">{formatCurrency(upfrontAmount)}</span>
+                        </div>
+                        <div className="border-t border-accent/20 pt-3">
+                          <div className="flex justify-between text-sm">
+                            <span className="text-muted-foreground">
+                              Then {selectedInstallmentPlan.numberOfInstallments} {selectedInstallmentPlan.type} payments of
+                            </span>
+                            <span className="font-medium">{formatCurrency(selectedInstallmentPlan.installmentAmount)}</span>
+                          </div>
+                          <div className="flex justify-between text-sm mt-1">
+                            <span className="text-muted-foreground">Total Contract Value</span>
+                            <span className="font-medium">{formatCurrency(totals.grandTotal)}</span>
+                          </div>
+                        </div>
+                      </>
+                    ) : (
+                      <div className="flex justify-between items-center">
+                        <div>
+                          <span className="text-sm text-muted-foreground block">Total Amount Due</span>
+                          <span className="text-lg font-semibold">Grand Total</span>
+                        </div>
+                        <span className="text-3xl font-bold text-accent">{formatCurrency(totals.grandTotal)}</span>
+                      </div>
+                    )}
                   </div>
 
                   <Button
@@ -606,7 +896,15 @@ const BookingCheckoutContent = () => {
                     disabled={loading}
                   >
                     {loading ? (
-                      <>Processing...</>
+                      <>
+                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                        Processing...
+                      </>
+                    ) : selectedInstallmentPlan && selectedInstallmentPlan.type !== 'full' ? (
+                      <>
+                        <CreditCard className="w-4 h-4 mr-2" />
+                        Pay {formatCurrency(upfrontAmount)} & Setup Installments
+                      </>
                     ) : (
                       <>
                         <Check className="w-4 h-4 mr-2" />

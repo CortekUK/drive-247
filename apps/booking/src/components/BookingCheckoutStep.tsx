@@ -33,6 +33,9 @@ interface BookingCheckoutStepProps {
   vehicleTotal: number; // Original price before promo discount
   promoDetails?: PromoDetails | null;
   onBack: () => void;
+  // Bonzah insurance props
+  bonzahPremium?: number;
+  bonzahPolicyId?: string | null;
 }
 
 export default function BookingCheckoutStep({
@@ -42,7 +45,9 @@ export default function BookingCheckoutStep({
   rentalDuration,
   vehicleTotal,
   promoDetails,
-  onBack
+  onBack,
+  bonzahPremium = 0,
+  bonzahPolicyId = null,
 }: BookingCheckoutStepProps) {
   const router = useRouter();
   const { tenant } = useTenant();
@@ -147,8 +152,8 @@ export default function BookingCheckoutStep({
   };
 
   const calculateGrandTotal = () => {
-    // Grand total = discounted vehicle price + tax + service fee + security deposit
-    return calculateDiscountedVehicleTotal() + calculateTaxAmount() + calculateServiceFee() + calculateSecurityDeposit();
+    // Grand total = discounted vehicle price + tax + service fee + security deposit + insurance
+    return calculateDiscountedVehicleTotal() + calculateTaxAmount() + calculateServiceFee() + calculateSecurityDeposit() + bonzahPremium;
   };
 
   // Check if this is an enquiry-based tenant (e.g., Kedic Services)
@@ -250,6 +255,9 @@ export default function BookingCheckoutStep({
           pickupDate: formData.pickupDate,
           returnDate: formData.dropoffDate,
           tenantId: tenant?.id, // Explicitly pass tenant_id
+          // Bonzah insurance data
+          insuranceAmount: bonzahPremium,
+          bonzahPolicyId: bonzahPolicyId,
         },
       });
 
@@ -1106,10 +1114,25 @@ export default function BookingCheckoutStep({
                     </div>
                   )}
 
-                  <div className="pt-3 border-t border-accent/30">
+                  {/* Bonzah Insurance line item - only show when > 0 */}
+                  {bonzahPremium > 0 && (
+                    <div className="flex justify-between text-sm">
+                      <span className="text-muted-foreground flex items-center gap-1">
+                        <Shield className="w-3 h-3" />
+                        Bonzah Insurance
+                      </span>
+                      <span className="font-medium">${bonzahPremium.toFixed(2)}</span>
+                    </div>
+                  )}
+
+                  {/* Grand Total - Highlighted Section */}
+                  <div className="mt-3 bg-accent/10 border-2 border-accent/30 rounded-lg p-4 -mx-2">
                     <div className="flex justify-between items-center">
-                      <span className="text-lg font-semibold">Total</span>
-                      <span className="text-2xl font-bold text-accent">
+                      <div>
+                        <span className="text-xs text-muted-foreground block">Amount Due</span>
+                        <span className="text-lg font-semibold">Grand Total</span>
+                      </div>
+                      <span className="text-3xl font-bold text-accent">
                         ${calculateGrandTotal().toFixed(2)}
                       </span>
                     </div>
