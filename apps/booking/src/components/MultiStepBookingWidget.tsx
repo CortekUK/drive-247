@@ -4009,36 +4009,152 @@ const MultiStepBookingWidget = () => {
             </div>
           )}
 
-          {/* NO Path - Inline Bonzah Insurance Selector */}
+          {/* NO Path - Bonzah Instructions (External Link) */}
           {hasInsurance === false && (
-            <div className="max-w-4xl mx-auto space-y-6">
-              <BonzahInsuranceSelector
-                tripStartDate={formData.pickupDate || null}
-                tripEndDate={formData.dropoffDate || null}
-                pickupState="FL" // Default to Florida - TODO: extract from pickup location
-                onCoverageChange={handleBonzahCoverageChange}
-                onSkipInsurance={handleBonzahSkipInsurance}
-                initialCoverage={bonzahCoverage}
-              />
+            <div className="max-w-3xl mx-auto">
+              <Card className="overflow-hidden border-2 border-accent/30 bg-gradient-to-br from-accent/5 to-transparent">
+                <div className="p-8 md:p-10 space-y-8">
+                  {/* Header */}
+                  <div className="text-center space-y-4">
+                    <div className="inline-flex items-center justify-center w-20 h-20 rounded-full bg-accent/10">
+                      <Shield className="w-10 h-10 text-accent" />
+                    </div>
+                    <div>
+                      <h4 className="text-2xl font-bold mb-2">Get Instant Insurance Coverage</h4>
+                      <p className="text-muted-foreground max-w-xl mx-auto">
+                        Partner with Bonzah to get affordable, instant insurance coverage for your rental. Quick setup in just 5 minutes!
+                      </p>
+                    </div>
+                  </div>
 
-              {/* Navigation for Bonzah flow */}
-              <div className="flex flex-col sm:flex-row gap-4 pt-4">
+                  {/* How it works */}
+                  <div className="bg-card/80 backdrop-blur rounded-xl p-6 md:p-8 border border-border/50">
+                    <h5 className="text-lg font-semibold mb-6 text-center">How It Works</h5>
+                    <div className="space-y-6">
+                      <div className="flex gap-4">
+                        <div className="flex-shrink-0">
+                          <div className="w-10 h-10 rounded-full bg-accent text-accent-foreground flex items-center justify-center font-bold text-lg">
+                            1
+                          </div>
+                        </div>
+                        <div className="pt-1">
+                          <h6 className="font-semibold mb-1">Get Instant Quote</h6>
+                          <p className="text-sm text-muted-foreground">
+                            Visit Bonzah's website and receive an instant quote tailored to your rental
+                          </p>
+                        </div>
+                      </div>
+                      <div className="flex gap-4">
+                        <div className="flex-shrink-0">
+                          <div className="w-10 h-10 rounded-full bg-accent text-accent-foreground flex items-center justify-center font-bold text-lg">
+                            2
+                          </div>
+                        </div>
+                        <div className="pt-1">
+                          <h6 className="font-semibold mb-1">Purchase Online</h6>
+                          <p className="text-sm text-muted-foreground">
+                            Complete your purchase securely online in just a few minutes
+                          </p>
+                        </div>
+                      </div>
+                      <div className="flex gap-4">
+                        <div className="flex-shrink-0">
+                          <div className="w-10 h-10 rounded-full bg-accent text-accent-foreground flex items-center justify-center font-bold text-lg">
+                            3
+                          </div>
+                        </div>
+                        <div className="pt-1">
+                          <h6 className="font-semibold mb-1">Upload Certificate</h6>
+                          <p className="text-sm text-muted-foreground">
+                            Upload your insurance certificate here to continue with your booking
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* CTA */}
+                  <div className="text-center space-y-4">
+                    <a
+                      href="https://bonzah.com"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-block w-full sm:w-auto"
+                    >
+                      <Button
+                        size="lg"
+                        className="bg-accent hover:bg-accent/90 px-8 w-full sm:w-auto"
+                      >
+                        <Shield className="mr-2 h-5 w-5" />
+                        Get Insurance from Bonzah
+                        <ChevronRight className="ml-2 h-5 w-5" />
+                      </Button>
+                    </a>
+                    <div className="flex items-center justify-center gap-2">
+                      <Button
+                        onClick={() => setHasInsurance(null)}
+                        variant="ghost"
+                        size="sm"
+                      >
+                        Go Back
+                      </Button>
+                    </div>
+                  </div>
+
+                  {/* Upload Section - After getting insurance from Bonzah */}
+                  <div className="border-t border-border/50 pt-8">
+                    <div className="text-center space-y-4">
+                      <h5 className="text-lg font-semibold">Already purchased from Bonzah?</h5>
+                      <p className="text-sm text-muted-foreground max-w-md mx-auto">
+                        Upload your insurance certificate to continue with your booking
+                      </p>
+                      {uploadedDocumentId ? (
+                        <div className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-primary/10 border border-primary/20">
+                          <CheckCircle className="w-5 h-5 text-primary" />
+                          <span className="text-sm font-medium text-primary">Certificate uploaded successfully</span>
+                        </div>
+                      ) : (
+                        <Button
+                          onClick={() => setShowUploadDialog(true)}
+                          size="lg"
+                          variant="outline"
+                          className="border-primary text-primary hover:bg-primary/10"
+                        >
+                          <Upload className="mr-2 h-5 w-5" />
+                          Upload Insurance Certificate
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </Card>
+
+              {/* Navigation for NO path */}
+              <div className="flex flex-col sm:flex-row gap-4 mt-6">
                 <Button
-                  onClick={() => setHasInsurance(null)}
+                  onClick={() => setCurrentStep(2)}
                   variant="outline"
                   className="w-full sm:flex-1"
                   size="lg"
                 >
-                  <ChevronLeft className="mr-2 w-5 h-5" /> Go Back
+                  <ChevronLeft className="mr-2 w-5 h-5" /> Back to Vehicles
                 </Button>
                 <Button
                   onClick={handleStep3Continue}
-                  className="w-full sm:flex-1 bg-primary hover:bg-primary/90 text-primary-foreground font-semibold shadow-md hover:shadow-lg transition-all"
+                  disabled={!uploadedDocumentId}
+                  className="w-full sm:flex-1 bg-primary hover:bg-primary/90 text-primary-foreground font-semibold shadow-md hover:shadow-lg transition-all disabled:opacity-50"
                   size="lg"
                 >
                   Continue to Details <ChevronRight className="ml-2 w-5 h-5" />
                 </Button>
               </div>
+              {/* Requirement notice */}
+              {!uploadedDocumentId && (
+                <p className="text-center text-sm text-muted-foreground mt-4">
+                  <AlertCircle className="w-4 h-4 inline mr-1" />
+                  Please upload your insurance certificate to continue
+                </p>
+              )}
             </div>
           )}
 
