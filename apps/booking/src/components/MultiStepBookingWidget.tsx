@@ -140,6 +140,11 @@ const MultiStepBookingWidget = () => {
     customerPhone: "",
     customerType: "",
     licenseNumber: "",
+    licenseState: "",
+    addressStreet: "",
+    addressCity: "",
+    addressState: "",
+    addressZip: "",
     verificationSessionId: "",
     customerTimezone: "", // Will be set from tenant timezone or detected browser timezone
   });
@@ -1516,6 +1521,8 @@ const MultiStepBookingWidget = () => {
     setFormData({
       pickupLocation: "",
       dropoffLocation: "",
+      pickupLocationId: "",
+      returnLocationId: "",
       pickupDate: "",
       dropoffDate: "",
       pickupTime: "",
@@ -1529,9 +1536,13 @@ const MultiStepBookingWidget = () => {
       customerPhone: "",
       customerType: "",
       licenseNumber: "",
-      pickupLocationId: "",
-      returnLocationId: "",
+      licenseState: "",
+      addressStreet: "",
+      addressCity: "",
+      addressState: "",
+      addressZip: "",
       verificationSessionId: "",
+      customerTimezone: "",
     });
     setPromoDetails(null);
     setPromoError(null);
@@ -4179,6 +4190,205 @@ const MultiStepBookingWidget = () => {
               </div>
             </div>
 
+            {/* Address Information - Required for Bonzah Insurance */}
+            {bonzahPremium > 0 && (
+              <div className="border-t border-border/50 pt-6">
+                <h4 className="text-base sm:text-lg font-semibold mb-4 flex items-center gap-2">
+                  Address Information
+                  <span className="text-xs font-normal text-muted-foreground">(Required for insurance)</span>
+                </h4>
+
+                {/* Street Address */}
+                <div className="space-y-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="addressStreet" className="font-medium">Street Address *</Label>
+                    <Input
+                      id="addressStreet"
+                      value={formData.addressStreet}
+                      onChange={e => setFormData({ ...formData, addressStreet: e.target.value })}
+                      placeholder="123 Main Street"
+                      className="h-12 focus-visible:ring-primary"
+                    />
+                  </div>
+
+                  {/* City, State, Zip */}
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="addressCity" className="font-medium">City *</Label>
+                      <Input
+                        id="addressCity"
+                        value={formData.addressCity}
+                        onChange={e => setFormData({ ...formData, addressCity: e.target.value })}
+                        placeholder="Miami"
+                        className="h-12 focus-visible:ring-primary"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="addressState" className="font-medium">State *</Label>
+                      <Select value={formData.addressState} onValueChange={value => setFormData({ ...formData, addressState: value })}>
+                        <SelectTrigger id="addressState" className="h-12 focus-visible:ring-primary">
+                          <SelectValue placeholder="Select state" />
+                        </SelectTrigger>
+                        <SelectContent position="popper" sideOffset={4}>
+                          <SelectItem value="AL">Alabama</SelectItem>
+                          <SelectItem value="AK">Alaska</SelectItem>
+                          <SelectItem value="AZ">Arizona</SelectItem>
+                          <SelectItem value="AR">Arkansas</SelectItem>
+                          <SelectItem value="CA">California</SelectItem>
+                          <SelectItem value="CO">Colorado</SelectItem>
+                          <SelectItem value="CT">Connecticut</SelectItem>
+                          <SelectItem value="DE">Delaware</SelectItem>
+                          <SelectItem value="FL">Florida</SelectItem>
+                          <SelectItem value="GA">Georgia</SelectItem>
+                          <SelectItem value="HI">Hawaii</SelectItem>
+                          <SelectItem value="ID">Idaho</SelectItem>
+                          <SelectItem value="IL">Illinois</SelectItem>
+                          <SelectItem value="IN">Indiana</SelectItem>
+                          <SelectItem value="IA">Iowa</SelectItem>
+                          <SelectItem value="KS">Kansas</SelectItem>
+                          <SelectItem value="KY">Kentucky</SelectItem>
+                          <SelectItem value="LA">Louisiana</SelectItem>
+                          <SelectItem value="ME">Maine</SelectItem>
+                          <SelectItem value="MD">Maryland</SelectItem>
+                          <SelectItem value="MA">Massachusetts</SelectItem>
+                          <SelectItem value="MI">Michigan</SelectItem>
+                          <SelectItem value="MN">Minnesota</SelectItem>
+                          <SelectItem value="MS">Mississippi</SelectItem>
+                          <SelectItem value="MO">Missouri</SelectItem>
+                          <SelectItem value="MT">Montana</SelectItem>
+                          <SelectItem value="NE">Nebraska</SelectItem>
+                          <SelectItem value="NV">Nevada</SelectItem>
+                          <SelectItem value="NH">New Hampshire</SelectItem>
+                          <SelectItem value="NJ">New Jersey</SelectItem>
+                          <SelectItem value="NM">New Mexico</SelectItem>
+                          <SelectItem value="NY">New York</SelectItem>
+                          <SelectItem value="NC">North Carolina</SelectItem>
+                          <SelectItem value="ND">North Dakota</SelectItem>
+                          <SelectItem value="OH">Ohio</SelectItem>
+                          <SelectItem value="OK">Oklahoma</SelectItem>
+                          <SelectItem value="OR">Oregon</SelectItem>
+                          <SelectItem value="PA">Pennsylvania</SelectItem>
+                          <SelectItem value="RI">Rhode Island</SelectItem>
+                          <SelectItem value="SC">South Carolina</SelectItem>
+                          <SelectItem value="SD">South Dakota</SelectItem>
+                          <SelectItem value="TN">Tennessee</SelectItem>
+                          <SelectItem value="TX">Texas</SelectItem>
+                          <SelectItem value="UT">Utah</SelectItem>
+                          <SelectItem value="VT">Vermont</SelectItem>
+                          <SelectItem value="VA">Virginia</SelectItem>
+                          <SelectItem value="WA">Washington</SelectItem>
+                          <SelectItem value="WV">West Virginia</SelectItem>
+                          <SelectItem value="WI">Wisconsin</SelectItem>
+                          <SelectItem value="WY">Wyoming</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="addressZip" className="font-medium">ZIP Code *</Label>
+                      <Input
+                        id="addressZip"
+                        value={formData.addressZip}
+                        onChange={e => setFormData({ ...formData, addressZip: e.target.value })}
+                        placeholder="33101"
+                        className="h-12 focus-visible:ring-primary"
+                        maxLength={10}
+                      />
+                    </div>
+                  </div>
+
+                  {/* Driver's License */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="licenseNumber" className="font-medium">Driver's License Number *</Label>
+                      <Input
+                        id="licenseNumber"
+                        value={formData.licenseNumber}
+                        onChange={e => setFormData({ ...formData, licenseNumber: e.target.value })}
+                        placeholder="License number"
+                        className="h-12 focus-visible:ring-primary"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="licenseState" className="font-medium">License State *</Label>
+                      <Select value={formData.licenseState} onValueChange={value => setFormData({ ...formData, licenseState: value })}>
+                        <SelectTrigger id="licenseState" className="h-12 focus-visible:ring-primary">
+                          <SelectValue placeholder="Select state" />
+                        </SelectTrigger>
+                        <SelectContent position="popper" sideOffset={4}>
+                          <SelectItem value="AL">Alabama</SelectItem>
+                          <SelectItem value="AK">Alaska</SelectItem>
+                          <SelectItem value="AZ">Arizona</SelectItem>
+                          <SelectItem value="AR">Arkansas</SelectItem>
+                          <SelectItem value="CA">California</SelectItem>
+                          <SelectItem value="CO">Colorado</SelectItem>
+                          <SelectItem value="CT">Connecticut</SelectItem>
+                          <SelectItem value="DE">Delaware</SelectItem>
+                          <SelectItem value="FL">Florida</SelectItem>
+                          <SelectItem value="GA">Georgia</SelectItem>
+                          <SelectItem value="HI">Hawaii</SelectItem>
+                          <SelectItem value="ID">Idaho</SelectItem>
+                          <SelectItem value="IL">Illinois</SelectItem>
+                          <SelectItem value="IN">Indiana</SelectItem>
+                          <SelectItem value="IA">Iowa</SelectItem>
+                          <SelectItem value="KS">Kansas</SelectItem>
+                          <SelectItem value="KY">Kentucky</SelectItem>
+                          <SelectItem value="LA">Louisiana</SelectItem>
+                          <SelectItem value="ME">Maine</SelectItem>
+                          <SelectItem value="MD">Maryland</SelectItem>
+                          <SelectItem value="MA">Massachusetts</SelectItem>
+                          <SelectItem value="MI">Michigan</SelectItem>
+                          <SelectItem value="MN">Minnesota</SelectItem>
+                          <SelectItem value="MS">Mississippi</SelectItem>
+                          <SelectItem value="MO">Missouri</SelectItem>
+                          <SelectItem value="MT">Montana</SelectItem>
+                          <SelectItem value="NE">Nebraska</SelectItem>
+                          <SelectItem value="NV">Nevada</SelectItem>
+                          <SelectItem value="NH">New Hampshire</SelectItem>
+                          <SelectItem value="NJ">New Jersey</SelectItem>
+                          <SelectItem value="NM">New Mexico</SelectItem>
+                          <SelectItem value="NY">New York</SelectItem>
+                          <SelectItem value="NC">North Carolina</SelectItem>
+                          <SelectItem value="ND">North Dakota</SelectItem>
+                          <SelectItem value="OH">Ohio</SelectItem>
+                          <SelectItem value="OK">Oklahoma</SelectItem>
+                          <SelectItem value="OR">Oregon</SelectItem>
+                          <SelectItem value="PA">Pennsylvania</SelectItem>
+                          <SelectItem value="RI">Rhode Island</SelectItem>
+                          <SelectItem value="SC">South Carolina</SelectItem>
+                          <SelectItem value="SD">South Dakota</SelectItem>
+                          <SelectItem value="TN">Tennessee</SelectItem>
+                          <SelectItem value="TX">Texas</SelectItem>
+                          <SelectItem value="UT">Utah</SelectItem>
+                          <SelectItem value="VT">Vermont</SelectItem>
+                          <SelectItem value="VA">Virginia</SelectItem>
+                          <SelectItem value="WA">Washington</SelectItem>
+                          <SelectItem value="WV">West Virginia</SelectItem>
+                          <SelectItem value="WI">Wisconsin</SelectItem>
+                          <SelectItem value="WY">Wyoming</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+
+                  {/* Date of Birth */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="driverDOB" className="font-medium">Date of Birth *</Label>
+                      <Input
+                        id="driverDOB"
+                        type="date"
+                        value={formData.driverDOB}
+                        onChange={e => setFormData({ ...formData, driverDOB: e.target.value })}
+                        className="h-12 focus-visible:ring-primary"
+                        max={new Date(new Date().setFullYear(new Date().getFullYear() - 21)).toISOString().split('T')[0]}
+                      />
+                      <p className="text-xs text-muted-foreground">Driver must be at least 21 years old</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
             {/* Identity Verification Section */}
             <div className="border-t border-border/50 pt-6 sm:pt-8">
               <h4 className="text-base sm:text-lg font-semibold mb-2 flex items-center gap-2">
@@ -4482,7 +4692,7 @@ const MultiStepBookingWidget = () => {
             promoDetails={promoDetails}
             onBack={() => setCurrentStep(4)}
             bonzahPremium={bonzahPremium}
-            bonzahPolicyId={bonzahPolicyId}
+            bonzahCoverage={bonzahCoverage}
           />
         </div>}
 

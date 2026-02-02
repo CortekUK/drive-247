@@ -22,6 +22,13 @@ interface PromoDetails {
   id: string;
 }
 
+interface BonzahCoverage {
+  cdw: boolean;
+  rcli: boolean;
+  sli: boolean;
+  pai: boolean;
+}
+
 interface BookingCheckoutStepProps {
   formData: any;
   selectedVehicle: any;
@@ -35,7 +42,7 @@ interface BookingCheckoutStepProps {
   onBack: () => void;
   // Bonzah insurance props
   bonzahPremium?: number;
-  bonzahPolicyId?: string | null;
+  bonzahCoverage?: BonzahCoverage;
 }
 
 export default function BookingCheckoutStep({
@@ -47,7 +54,7 @@ export default function BookingCheckoutStep({
   promoDetails,
   onBack,
   bonzahPremium = 0,
-  bonzahPolicyId = null,
+  bonzahCoverage,
 }: BookingCheckoutStepProps) {
   const router = useRouter();
   const { tenant } = useTenant();
@@ -59,6 +66,9 @@ export default function BookingCheckoutStep({
   const [generatedInvoice, setGeneratedInvoice] = useState<any>(null);
   const [createdRentalData, setCreatedRentalData] = useState<any>(null);
   const [sendingDocuSign, setSendingDocuSign] = useState(false);
+
+  // Bonzah policy ID - created dynamically during checkout
+  const [bonzahPolicyId, setBonzahPolicyId] = useState<string | null>(null);
 
   // Calculate rental period type based on duration
   // Pricing tiers: > 30 days = monthly, 7-30 days = weekly, < 7 days = daily
@@ -183,6 +193,90 @@ export default function BookingCheckoutStep({
     }
   };
 
+  // Function to create Bonzah insurance quote
+  const createBonzahQuote = async (
+    rentalId: string,
+    customerId: string,
+    tenantId: string
+  ): Promise<string | null> => {
+    // Skip if no insurance selected
+    if (!bonzahPremium || bonzahPremium <= 0 || !bonzahCoverage) {
+      console.log('[Bonzah] No insurance selected, skipping quote creation');
+      return null;
+    }
+
+    // Check if any coverage is actually selected
+    const hasCoverage = bonzahCoverage.cdw || bonzahCoverage.rcli || bonzahCoverage.sli || bonzahCoverage.pai;
+    if (!hasCoverage) {
+      console.log('[Bonzah] No coverage options selected, skipping quote creation');
+      return null;
+    }
+
+    try {
+      console.log('[Bonzah] Creating insurance quote...');
+      console.log('[Bonzah] Coverage:', bonzahCoverage);
+      console.log('[Bonzah] Form data:', {
+        licenseNumber: formData.licenseNumber,
+        licenseState: formData.licenseState,
+        driverDOB: formData.driverDOB,
+        addressStreet: formData.addressStreet,
+        addressCity: formData.addressCity,
+        addressState: formData.addressState,
+        addressZip: formData.addressZip,
+      });
+
+      const { data, error } = await supabase.functions.invoke('bonzah-create-quote', {
+        body: {
+          rental_id: rentalId,
+          customer_id: customerId,
+          tenant_id: tenantId,
+          trip_dates: {
+            start: formData.pickupDate,
+            end: formData.dropoffDate,
+          },
+          pickup_state: formData.addressState || 'FL', // Use customer's state or default to FL
+          coverage: bonzahCoverage,
+          renter: {
+            first_name: formData.customerName.split(' ')[0] || formData.customerName,
+            last_name: formData.customerName.split(' ').slice(1).join(' ') || formData.customerName,
+            dob: formData.driverDOB,
+            email: formData.customerEmail,
+            phone: formData.customerPhone,
+            address: {
+              street: formData.addressStreet,
+              city: formData.addressCity,
+              state: formData.addressState,
+              zip: formData.addressZip,
+            },
+            license: {
+              number: formData.licenseNumber,
+              state: formData.licenseState,
+            },
+          },
+        },
+      });
+
+      if (error) {
+        console.error('[Bonzah] Error creating quote:', error);
+        toast.error('Failed to create insurance quote. Insurance will not be included.');
+        return null;
+      }
+
+      if (data?.policy_record_id) {
+        console.log('[Bonzah] Quote created successfully:', data);
+        setBonzahPolicyId(data.policy_record_id);
+        return data.policy_record_id;
+      }
+
+      console.error('[Bonzah] No policy_record_id in response:', data);
+      return null;
+    } catch (err) {
+      console.error('[Bonzah] Exception creating quote:', err);
+      toast.error('Failed to create insurance quote. Insurance will not be included.');
+      return null;
+    }
+  };
+
   // Function to redirect to Stripe payment (auto mode - immediate capture)
   const redirectToStripePayment = async () => {
     if (!createdRentalData) {
@@ -257,7 +351,7 @@ export default function BookingCheckoutStep({
           tenantId: tenant?.id, // Explicitly pass tenant_id
           // Bonzah insurance data
           insuranceAmount: bonzahPremium,
-          bonzahPolicyId: bonzahPolicyId,
+          bonzahPolicyId: createdRentalData.bonzahPolicyId || null,
         },
       });
 
@@ -657,7 +751,19 @@ export default function BookingCheckoutStep({
       // Vehicle will only be marked as "Rented" when admin clicks Approve
       console.log('⏳ Vehicle status unchanged - awaiting admin approval');
 
-      // Step 4: Create invoice (with fallback to local if DB fails)
+      // Step 4.5: Create Bonzah insurance quote if coverage was selected
+      let createdBonzahPolicyId: string | null = null;
+      if (bonzahPremium > 0 && bonzahCoverage && tenant?.id) {
+        console.log('🛡️ Creating Bonzah insurance quote...');
+        createdBonzahPolicyId = await createBonzahQuote(rental.id, customer.id, tenant.id);
+        if (createdBonzahPolicyId) {
+          console.log('✅ Bonzah quote created:', createdBonzahPolicyId);
+        } else {
+          console.log('⚠️ Bonzah quote creation failed or skipped');
+        }
+      }
+
+      // Step 5: Create invoice (with fallback to local if DB fails)
       const promoDiscount = calculatePromoDiscount();
       const discountedVehicleTotal = calculateDiscountedVehicleTotal();
 
@@ -702,11 +808,12 @@ export default function BookingCheckoutStep({
       localStorage.setItem('pendingPaymentDetails', JSON.stringify(paymentDetails));
       console.log('✅ Payment details stored:', paymentDetails);
 
-      // Store rental and invoice data for later use
+      // Store rental and invoice data for later use (including Bonzah policy ID)
       setCreatedRentalData({
         customer,
         rental,
         vehicle: selectedVehicle,
+        bonzahPolicyId: createdBonzahPolicyId,
       });
 
       // Link any existing insurance documents to this rental

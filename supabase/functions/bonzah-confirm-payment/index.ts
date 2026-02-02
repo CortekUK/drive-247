@@ -1,14 +1,33 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.57.4'
-import {
-  bonzahFetch,
-  type BonzahPolicyResponse,
-} from '../_shared/bonzah-client.ts'
+import { bonzahFetch } from '../_shared/bonzah-client.ts'
 import { corsHeaders, handleCors, jsonResponse, errorResponse } from '../_shared/cors.ts'
 
 interface ConfirmPaymentRequest {
   policy_record_id: string
   stripe_payment_intent_id: string
+}
+
+interface BonzahIssueResponse {
+  status: number
+  txt: string
+  data: Array<{
+    policy_id: string
+    quote_id: string
+    policy: {
+      policy_no: string | null
+      policy_id: string
+    }
+    stages: {
+      quote: string
+      payment: string
+      policy: string
+    }
+    errors?: Array<{
+      name: string
+      msg: string
+    }>
+  }>
 }
 
 serve(async (req) => {
@@ -58,84 +77,92 @@ serve(async (req) => {
       .update({ status: 'payment_pending' })
       .eq('id', body.policy_record_id)
 
-    // Call Bonzah API to confirm payment and issue policy
-    // The payment is being confirmed AFTER Stripe has successfully charged
-    console.log('[Bonzah Payment] Calling Bonzah to confirm payment...')
+    // Try to issue the policy in Bonzah
+    console.log('[Bonzah Payment] Attempting to issue policy...')
     console.log('[Bonzah Payment] Quote ID:', policyRecord.quote_id)
-    console.log('[Bonzah Payment] Payment ID:', policyRecord.payment_id)
 
-    const bonzahRequest = {
-      quote_id: policyRecord.quote_id,
-      payment_id: policyRecord.payment_id,
-      payment_reference: body.stripe_payment_intent_id,
-      payment_amount: policyRecord.premium_amount,
-      payment_method: 'stripe',
+    let policyNo: string | null = null
+    let policyIssued = false
+
+    try {
+      // Call the issue endpoint to try to issue the policy
+      const issueResponse = await bonzahFetch<BonzahIssueResponse>(
+        `/quote/${policyRecord.quote_id}/issue`,
+        {}
+      )
+
+      console.log('[Bonzah Payment] Issue response status:', issueResponse.status)
+
+      if (issueResponse.status === 0 && issueResponse.data?.[0]) {
+        const policyData = issueResponse.data[0]
+        policyNo = policyData.policy?.policy_no || null
+
+        // Check if there are validation errors
+        if (policyData.errors && policyData.errors.length > 0) {
+          console.log('[Bonzah Payment] Quote has validation errors:', policyData.errors.length)
+          // Policy not fully issued due to missing fields, but payment confirmed
+        }
+
+        // Check stages
+        if (policyData.stages?.policy === 'done' || policyData.stages?.policy === 'issued') {
+          policyIssued = true
+          console.log('[Bonzah Payment] Policy issued successfully:', policyNo)
+        }
+      }
+    } catch (bonzahError) {
+      console.error('[Bonzah Payment] Error calling Bonzah API:', bonzahError)
+      // Continue even if Bonzah API fails - we've received payment
     }
 
-    console.log('[Bonzah Payment] API request:', JSON.stringify(bonzahRequest, null, 2))
-
-    const policyResponse = await bonzahFetch<BonzahPolicyResponse>(
-      '/payment/confirm',
-      bonzahRequest
-    )
-
-    console.log('[Bonzah Payment] API response:', policyResponse)
-
-    if (!policyResponse.policy_no) {
-      console.error('[Bonzah Payment] No policy_no in response')
-
-      // Update status to failed
-      await supabase
-        .from('bonzah_insurance_policies')
-        .update({ status: 'failed' })
-        .eq('id', body.policy_record_id)
-
-      return errorResponse('Failed to issue policy', 500)
+    // Update policy record
+    const updateData: Record<string, any> = {
+      status: policyIssued ? 'active' : 'payment_confirmed',
+      policy_issued_at: policyIssued ? new Date().toISOString() : null,
     }
 
-    // Update policy record with issued policy details
+    if (policyNo) {
+      updateData.policy_no = policyNo
+    }
+
     const { error: updateError } = await supabase
       .from('bonzah_insurance_policies')
-      .update({
-        policy_no: policyResponse.policy_no,
-        policy_id: policyResponse.policy_id,
-        status: 'active',
-        policy_issued_at: new Date().toISOString(),
-      })
+      .update(updateData)
       .eq('id', body.policy_record_id)
 
     if (updateError) {
       console.error('[Bonzah Payment] Failed to update policy record:', updateError)
-      // Non-fatal - the policy is issued, just logging failed
     }
 
-    console.log('[Bonzah Payment] Policy issued successfully:', policyResponse.policy_no)
+    // Log the result
+    if (policyIssued) {
+      console.log('[Bonzah Payment] Policy fully issued:', policyNo)
+    } else {
+      console.log('[Bonzah Payment] Payment confirmed, policy pending full issuance')
+    }
 
     return jsonResponse({
       success: true,
-      policy_no: policyResponse.policy_no,
-      policy_id: policyResponse.policy_id,
+      policy_no: policyNo,
+      policy_issued: policyIssued,
+      status: policyIssued ? 'active' : 'payment_confirmed',
     })
 
   } catch (error) {
     console.error('[Bonzah Payment] Error:', error)
 
-    // Try to mark the policy as failed
+    // Try to update status to failed
     try {
-      const body: ConfirmPaymentRequest = await new Response(
-        (error as any).request?.body
-      ).json().catch(() => ({}))
+      const supabase = createClient(
+        Deno.env.get('SUPABASE_URL') ?? '',
+        Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+      )
 
-      if (body.policy_record_id) {
-        const supabase = createClient(
-          Deno.env.get('SUPABASE_URL') ?? '',
-          Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
-        )
-
+      const reqBody = await req.clone().json().catch(() => ({}))
+      if (reqBody.policy_record_id) {
         await supabase
           .from('bonzah_insurance_policies')
           .update({ status: 'failed' })
-          .eq('id', body.policy_record_id)
+          .eq('id', reqBody.policy_record_id)
       }
     } catch {
       // Ignore cleanup errors
