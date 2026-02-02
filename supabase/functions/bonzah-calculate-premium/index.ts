@@ -1,11 +1,14 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
-import {
-  bonzahFetch,
-  formatDateForBonzah,
-  type CoverageTypes,
-  type PremiumResponse
-} from '../_shared/bonzah-client.ts'
+import { type PremiumResponse } from '../_shared/bonzah-client.ts'
 import { corsHeaders, handleCors, jsonResponse, errorResponse } from '../_shared/cors.ts'
+
+// Bonzah insurance rates per 24 hours (from Bonzah API)
+const RATES = {
+  CDW: 26.95,   // Collision Damage Waiver
+  RCLI: 20.18,  // Renter's Contingent Liability Insurance
+  SLI: 11.20,   // Supplemental Liability Insurance
+  PAI: 6.90,    // Personal Accident Insurance
+}
 
 interface CalculatePremiumRequest {
   trip_start_date: string    // YYYY-MM-DD
@@ -15,6 +18,18 @@ interface CalculatePremiumRequest {
   rcli_cover: boolean
   sli_cover: boolean
   pai_cover: boolean
+}
+
+/**
+ * Calculate the number of rental days (24-hour periods)
+ */
+function calculateDays(startDate: string, endDate: string): number {
+  const start = new Date(startDate)
+  const end = new Date(endDate)
+  const diffTime = Math.abs(end.getTime() - start.getTime())
+  const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24))
+  // Minimum 1 day
+  return Math.max(diffDays, 1)
 }
 
 serve(async (req) => {
@@ -46,43 +61,32 @@ serve(async (req) => {
       })
     }
 
-    // Build coverage array based on selections
-    const coverages: string[] = []
-    if (body.cdw_cover) coverages.push('CDW')
-    if (body.rcli_cover) coverages.push('RCLI')
-    if (body.sli_cover) coverages.push('SLI')
-    if (body.pai_cover) coverages.push('PAI')
+    // Calculate number of rental days
+    const days = calculateDays(body.trip_start_date, body.trip_end_date)
+    console.log('[Bonzah Premium] Rental days:', days)
 
-    // Call Bonzah API to get premium quote
-    const bonzahRequest = {
-      trip_start_date: formatDateForBonzah(body.trip_start_date),
-      trip_end_date: formatDateForBonzah(body.trip_end_date),
-      pickup_state: body.pickup_state,
-      coverages: coverages,
-    }
+    // Calculate premiums based on selected coverages
+    const cdwPremium = body.cdw_cover ? Math.round(RATES.CDW * days * 100) / 100 : 0
+    const rcliPremium = body.rcli_cover ? Math.round(RATES.RCLI * days * 100) / 100 : 0
+    const sliPremium = body.sli_cover ? Math.round(RATES.SLI * days * 100) / 100 : 0
+    const paiPremium = body.pai_cover ? Math.round(RATES.PAI * days * 100) / 100 : 0
 
-    console.log('[Bonzah Premium] API request:', bonzahRequest)
+    const totalPremium = Math.round((cdwPremium + rcliPremium + sliPremium + paiPremium) * 100) / 100
 
-    const response = await bonzahFetch<{
-      premium: number
-      breakdown?: {
-        CDW?: number
-        RCLI?: number
-        SLI?: number
-        PAI?: number
-      }
-    }>('/quote/calculate-premium', bonzahRequest)
-
-    console.log('[Bonzah Premium] API response:', response)
+    console.log('[Bonzah Premium] Calculated:', {
+      days,
+      total: totalPremium,
+      breakdown: { cdw: cdwPremium, rcli: rcliPremium, sli: sliPremium, pai: paiPremium }
+    })
 
     // Format response
     const result: PremiumResponse = {
-      total_premium: response.premium || 0,
+      total_premium: totalPremium,
       breakdown: {
-        cdw: response.breakdown?.CDW || 0,
-        rcli: response.breakdown?.RCLI || 0,
-        sli: response.breakdown?.SLI || 0,
-        pai: response.breakdown?.PAI || 0,
+        cdw: cdwPremium,
+        rcli: rcliPremium,
+        sli: sliPremium,
+        pai: paiPremium,
       }
     }
 

@@ -4,7 +4,8 @@
 // Token cache with expiry
 let cachedToken: { token: string; expiresAt: number } | null = null;
 
-const BONZAH_API_URL = Deno.env.get('BONZAH_API_URL') || 'https://bonzah.sb.insillion.com/bb1';
+// API base URL - note: /api/v1 is the API path, /bb1 is the portal
+const BONZAH_API_URL = Deno.env.get('BONZAH_API_URL') || 'https://bonzah.sb.insillion.com/api/v1';
 const BONZAH_USERNAME = Deno.env.get('BONZAH_USERNAME') || '';
 const BONZAH_PASSWORD = Deno.env.get('BONZAH_PASSWORD') || '';
 
@@ -22,37 +23,39 @@ export async function getBonzahToken(): Promise<string> {
 
   console.log('[Bonzah] Authenticating with API...');
 
-  const response = await fetch(`${BONZAH_API_URL}/auth/login`, {
+  // Bonzah/Insillion API uses 'email' and 'pwd' fields, endpoint is /auth
+  const response = await fetch(`${BONZAH_API_URL}/auth`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({
-      username: BONZAH_USERNAME,
-      password: BONZAH_PASSWORD,
+      email: BONZAH_USERNAME,
+      pwd: BONZAH_PASSWORD,
     }),
   });
 
-  if (!response.ok) {
-    const errorText = await response.text();
-    console.error('[Bonzah] Authentication failed:', errorText);
-    throw new Error(`Bonzah authentication failed: ${response.status}`);
+  const responseData = await response.json();
+
+  // Check for API-level error (status !== 0 means error)
+  if (responseData.status !== 0) {
+    console.error('[Bonzah] Authentication failed:', responseData);
+    throw new Error(`Bonzah authentication failed: ${responseData.txt || 'Unknown error'}`);
   }
 
-  const data = await response.json();
-
-  if (!data.token) {
-    console.error('[Bonzah] No token in response:', data);
+  // Token is nested in data.token
+  if (!responseData.data?.token) {
+    console.error('[Bonzah] No token in response:', responseData);
     throw new Error('Bonzah authentication did not return a token');
   }
 
   // Cache the token
   cachedToken = {
-    token: data.token,
+    token: responseData.data.token,
     expiresAt: Date.now() + TOKEN_TTL_MS,
   };
 
-  console.log('[Bonzah] Authentication successful');
+  console.log('[Bonzah] Authentication successful for:', responseData.data.email);
   return cachedToken.token;
 }
 
@@ -74,24 +77,28 @@ export async function bonzahFetch<T = unknown>(
     method,
     headers: {
       'Content-Type': 'application/json',
-      'Authorization': `Bearer ${token}`,
+      'in-auth-token': token, // Bonzah/Insillion uses this header instead of Authorization
     },
     body: method === 'POST' ? JSON.stringify(body) : undefined,
   });
 
   const responseText = await response.text();
 
-  if (!response.ok) {
-    console.error(`[Bonzah] API error ${response.status}:`, responseText);
-    throw new Error(`Bonzah API error: ${response.status} - ${responseText}`);
-  }
-
+  let responseData;
   try {
-    return JSON.parse(responseText) as T;
+    responseData = JSON.parse(responseText);
   } catch {
     console.error('[Bonzah] Failed to parse response:', responseText);
     throw new Error('Failed to parse Bonzah API response');
   }
+
+  // Bonzah API returns status: 0 for success, negative for errors
+  if (responseData.status !== 0 && responseData.status !== undefined) {
+    console.error(`[Bonzah] API error:`, responseData);
+    throw new Error(`Bonzah API error: ${responseData.txt || 'Unknown error'}`);
+  }
+
+  return responseData as T;
 }
 
 /**
