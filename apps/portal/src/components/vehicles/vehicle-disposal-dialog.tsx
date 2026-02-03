@@ -159,7 +159,7 @@ export function VehicleDisposalDialog({ vehicle, onDisposal, open: controlledOpe
               render={({ field }) => (
                 <FormItem className="flex flex-col">
                   <FormLabel>Disposal Date</FormLabel>
-                  <Popover>
+                  <Popover modal={true}>
                     <PopoverTrigger asChild>
                       <FormControl>
                         <Button

@@ -208,12 +208,21 @@ export interface ExtrasContent {
   footer_text: string;
 }
 
+// Carousel Media Item for mixed image/video carousel
+export interface CarouselMediaItem {
+  url: string;
+  type: 'image' | 'video';
+  alt?: string;
+  thumbnail?: string;
+}
+
 // Home Page Content Types
 export interface HomeHeroContent {
   headline: string;
   subheading: string;
   background_image?: string;
-  carousel_images?: string[];
+  carousel_images?: string[]; // Kept for backwards compatibility
+  carousel_media?: CarouselMediaItem[]; // New: mixed media array
   phone_number: string;
   phone_cta_text: string;
   book_cta_text: string;
@@ -376,6 +385,9 @@ export const usePageContent = (slug: string) => {
     queryFn: async (): Promise<PageContent | null> => {
       try {
         // Helper function to fetch page with optional tenant filter
+        // TEMP: Also fetch draft pages for development testing
+        const isDev = typeof window !== 'undefined' && window.location.hostname.includes('localhost');
+
         const fetchPage = async (tenantId: string | null) => {
           let query = supabase
             .from("cms_pages")
@@ -390,8 +402,12 @@ export const usePageContent = (slug: string) => {
                 is_visible
               )
             `)
-            .eq("slug", slug)
-            .eq("status", "published");
+            .eq("slug", slug);
+
+          // In dev mode, fetch both draft and published; in prod, only published
+          if (!isDev) {
+            query = query.eq("status", "published");
+          }
 
           // Filter by tenant if provided
           if (tenantId) {
@@ -412,7 +428,7 @@ export const usePageContent = (slug: string) => {
           // 2. If not found, try global content (tenant_id IS NULL) - NOT content from other tenants
           if (result.error?.code === "PGRST116") {
             console.log(`[CMS] No tenant-specific content for ${slug}, trying global (tenant_id IS NULL)...`);
-            result = await supabase
+            let globalQuery = supabase
               .from("cms_pages")
               .select(`
                 id,
@@ -426,9 +442,13 @@ export const usePageContent = (slug: string) => {
                 )
               `)
               .eq("slug", slug)
-              .eq("status", "published")
-              .is("tenant_id", null)
-              .single();
+              .is("tenant_id", null);
+
+            if (!isDev) {
+              globalQuery = globalQuery.eq("status", "published");
+            }
+
+            result = await globalQuery.single();
           }
 
           // Note: We intentionally do NOT fall back to content from other tenants.
@@ -437,7 +457,7 @@ export const usePageContent = (slug: string) => {
         } else {
           // No tenant context - only fetch global content (tenant_id IS NULL)
           console.log(`[CMS] No tenant context, fetching global content for ${slug}...`);
-          result = await supabase
+          let noTenantQuery = supabase
             .from("cms_pages")
             .select(`
               id,
@@ -451,9 +471,13 @@ export const usePageContent = (slug: string) => {
               )
             `)
             .eq("slug", slug)
-            .eq("status", "published")
-            .is("tenant_id", null)
-            .single();
+            .is("tenant_id", null);
+
+          if (!isDev) {
+            noTenantQuery = noTenantQuery.eq("status", "published");
+          }
+
+          result = await noTenantQuery.single();
         }
 
         const { data: page, error } = result;
@@ -492,33 +516,33 @@ export const usePageContent = (slug: string) => {
 // Default content for Contact page (used as fallback)
 export const defaultContactContent: PageContent = {
   hero: {
-    title: "Contact Drive917",
+    title: "Contact Drive247",
     subtitle: "Get in touch for premium vehicle rentals, chauffeur services, and exclusive offers in Los Angeles.",
   },
   contact_info: {
     phone: {
-      number: "+44 800 123 4567",
+      number: "+1 800 123 4567",
       availability: "24 hours a day, 7 days a week, 365 days a year",
     },
     email: {
-      address: "info@drive917.com",
-      response_time: "Response within 2 hours during business hours (PST)",
+      address: "info@drive247.com",
+      response_time: "Response within 2 hours during business hours (CST)",
     },
     office: {
-      address: "123 Luxury Lane, London, UK",
+      address: "123 Luxury Lane, Dallas, TX",
     },
     whatsapp: {
-      number: "+447900123456",
-      description: "Quick response for urgent enquiries",
+      number: "+18001234567",
+      description: "Quick response for urgent inquiries",
     },
   },
   contact_form: {
     title: "Send Us a Message",
     subtitle: "We typically reply within 2 hours during business hours.",
-    success_message: "Thank you for contacting Drive917. Our concierge team will respond within 2 hours during business hours (PST).",
-    gdpr_text: "I consent to being contacted regarding my enquiry.",
+    success_message: "Thank you for contacting Drive247. Our concierge team will respond within 2 hours during business hours (CST).",
+    gdpr_text: "I consent to being contacted regarding my inquiry.",
     submit_button_text: "Send Message",
-    subject_options: ["General Enquiry", "Corporate Rental", "Vehicle Availability", "Partnerships"],
+    subject_options: ["General Inquiry", "Corporate Rental", "Vehicle Availability", "Partnerships"],
   },
   trust_badges: {
     badges: [
@@ -540,13 +564,13 @@ export const defaultContactContent: PageContent = {
     ],
   },
   seo: {
-    title: "Contact Drive917 — Los Angeles Luxury Car Rentals",
-    description: "Get in touch with Drive917 for premium vehicle rentals, chauffeur services, and exclusive offers in Los Angeles.",
-    keywords: "contact Drive917, luxury car rental Los Angeles, premium vehicle rental contact, chauffeur service inquiry",
+    title: "Contact Drive247 — Los Angeles Luxury Car Rentals",
+    description: "Get in touch with Drive247 for premium vehicle rentals, chauffeur services, and exclusive offers in Los Angeles.",
+    keywords: "contact Drive247, luxury car rental Los Angeles, premium vehicle rental contact, chauffeur service inquiry",
   },
   pwa_install: {
-    title: "Install Drive917",
-    description: "Scan the QR code to add Drive917 to your home screen for fast, seamless bookings in Los Angeles and beyond.",
+    title: "Install Drive247",
+    description: "Scan the QR code to add Drive247 to your home screen for fast, seamless bookings in Los Angeles and beyond.",
   },
 };
 // Default content for Reviews page (used as fallback)
@@ -557,14 +581,14 @@ export const defaultReviewsContent: PageContent = {
   },
   feedback_cta: {
     title: "Would you like to share your experience?",
-    description: "We value your feedback and would love to hear about your rental experience with Drive917.",
+    description: "We value your feedback and would love to hear about your rental experience with Drive247.",
     button_text: "Submit Feedback",
-    empty_state_message: "Be the first to share your Drive917 experience.",
+    empty_state_message: "Be the first to share your Drive247 experience.",
   },
   seo: {
-    title: "Drive917 — Customer Reviews",
-    description: "Read verified customer reviews of Drive917's luxury car rentals. Real experiences from our distinguished clientele.",
-    keywords: "Drive917 reviews, luxury car rental reviews, customer testimonials, verified reviews",
+    title: "Drive247 — Customer Reviews",
+    description: "Read verified customer reviews of Drive247's luxury car rentals. Real experiences from our distinguished clientele.",
+    keywords: "Drive247 reviews, luxury car rental reviews, customer testimonials, verified reviews",
   },
 };
 
@@ -572,17 +596,17 @@ export const defaultReviewsContent: PageContent = {
 // Default content for About page (used as fallback)
 export const defaultAboutContent: PageContent = {
   hero: {
-    title: "About Drive917",
-    subtitle: "Setting the standard for premium luxury vehicle rentals across the United Kingdom.",
+    title: "About Drive247",
+    subtitle: "Setting the standard for premium luxury vehicle rentals across the United States.",
   },
   about_story: {
     title: "Excellence in Every Rental",
     founded_year: "2010",
-    content: `<p>Drive917 was founded with a simple vision: to provide the highest standard of premium vehicle rentals with unmatched flexibility and service.</p>
+    content: `<p>Drive247 was founded with a simple vision: to provide the highest standard of premium vehicle rentals with unmatched flexibility and service.</p>
 <p>What began as a boutique rental service has grown into the trusted choice for executives, professionals, and discerning clients who demand the finest vehicles with exceptional service.</p>
 <p>Our founders recognized the need for a rental service that truly understood the unique requirements of premium vehicle hire—offering flexible daily, weekly, and monthly rates without compromising on quality.</p>
-<p>Discretion, reliability, and uncompromising quality became the pillars upon which Drive917 was built.</p>
-<p>Drive917 operates a fleet of the finest vehicles, each maintained to the highest standards and equipped with premium amenities. From Rolls-Royce to Range Rover, every vehicle represents automotive excellence.</p>
+<p>Discretion, reliability, and uncompromising quality became the pillars upon which Drive247 was built.</p>
+<p>Drive247 operates a fleet of the finest vehicles, each maintained to the highest standards and equipped with premium amenities. From Rolls-Royce to Range Rover, every vehicle represents automotive excellence.</p>
 <p>We offer flexible rental periods tailored to your needs—whether it's a day, a week, or a month, we provide premium vehicles with transparent pricing and exceptional service.</p>
 <p>Our commitment extends beyond just providing vehicles. We ensure every rental includes comprehensive insurance, 24/7 support, and meticulous vehicle preparation.</p>
 <p>We will never claim to be the biggest company — but what we are, is the pinnacle of excellence in luxury vehicle rentals.</p>
@@ -601,33 +625,33 @@ export const defaultAboutContent: PageContent = {
       {
         icon: "clock",
         label: "YEARS EXPERIENCE",
-        value: "",
+        value: "0",
         suffix: "+",
-        use_dynamic: true,
+        use_dynamic: false,
         dynamic_source: "years_experience",
       },
       {
         icon: "car",
         label: "RENTALS COMPLETED",
-        value: "",
+        value: "0",
         suffix: "+",
-        use_dynamic: true,
+        use_dynamic: false,
         dynamic_source: "total_rentals",
       },
       {
         icon: "crown",
         label: "PREMIUM VEHICLES",
-        value: "",
+        value: "0",
         suffix: "+",
-        use_dynamic: true,
+        use_dynamic: false,
         dynamic_source: "active_vehicles",
       },
       {
         icon: "star",
         label: "CLIENT RATING",
-        value: "",
+        value: "0",
         suffix: "",
-        use_dynamic: true,
+        use_dynamic: false,
         dynamic_source: "avg_rating",
       },
     ],
@@ -643,7 +667,7 @@ export const defaultAboutContent: PageContent = {
       {
         icon: "crown",
         title: "Premium Fleet",
-        description: "From the Rolls-Royce Phantom to the Range Rover Autobiography, every vehicle represents British excellence and comfort.",
+        description: "From the Rolls-Royce Phantom to the Range Rover Autobiography, every vehicle represents automotive excellence and comfort.",
       },
       {
         icon: "shield",
@@ -653,13 +677,13 @@ export const defaultAboutContent: PageContent = {
       {
         icon: "clock",
         title: "24/7 Availability",
-        description: "Whether weekday or weekend, we're ready to respond at a moment's notice — anywhere across the UK.",
+        description: "Whether weekday or weekend, we're ready to respond at a moment's notice — anywhere across the USA.",
       },
     ],
   },
   faq_cta: {
     title: "Still have questions?",
-    description: "Our team is here to help. Contact us for personalised assistance.",
+    description: "Our team is here to help. Contact us for personalized assistance.",
     button_text: "Call Us",
   },
   final_cta: {
@@ -668,9 +692,9 @@ export const defaultAboutContent: PageContent = {
     tagline: "Professional • Discreet • 24/7 Availability",
   },
   seo: {
-    title: "About Drive917 — Premium Luxury Car Rentals",
-    description: "Discover Drive917 — the UK's trusted name in premium car rentals, offering unmatched quality, flexibility, and discretion.",
-    keywords: "about Drive917, luxury car rental UK, premium vehicle hire, executive car rental, luxury fleet",
+    title: "About Drive247 — Premium Luxury Car Rentals",
+    description: "Discover Drive247 — the USA's trusted name in premium car rentals, offering unmatched quality, flexibility, and discretion.",
+    keywords: "about Drive247, luxury car rental USA, premium vehicle hire, executive car rental, luxury fleet",
   },
 };
 
@@ -746,7 +770,7 @@ export const defaultFleetContent: PageContent = {
     monthly: { title: "Monthly", description: "Exclusive long-term rates for regular clients." },
   },
   inclusions: {
-    section_title: "Every Drive917 Rental Includes",
+    section_title: "Every Drive247 Rental Includes",
     section_subtitle: "Peace of mind and premium service come standard with every vehicle.",
     standard_title: "Standard Inclusions",
     standard_items: [
@@ -801,7 +825,7 @@ export const defaultHomeContent: PageContent = {
     line2: "Online",
   },
   service_highlights: {
-    title: "Why Choose Drive917",
+    title: "Why Choose Drive247",
     subtitle: "Delivering excellence through premium vehicle rentals and exceptional service.",
     services: [
       { icon: "ThumbsUp", title: "Outstanding Services", description: "Experience top-tier car rental services tailored for your convenience. Our well-maintained vehicles, transparent pricing, and seamless booking process ensure a hassle-free journey every time." },
@@ -818,7 +842,7 @@ export const defaultHomeContent: PageContent = {
     trust_points: ["Dallas–Fort Worth Area", "Transparent Rates", "24/7 Support"],
   },
   testimonials_header: {
-    title: "Why Dallas Drivers Choose Drive917",
+    title: "Why Dallas Drivers Choose Drive247",
   },
   home_cta: {
     title: "Ready to Book Your Dallas Rental?",
@@ -831,13 +855,13 @@ export const defaultHomeContent: PageContent = {
     title: "Have Questions About Your Rental?",
     description: "We're here to help 7 days a week. Reach out to our Dallas team for quick answers and booking support.",
     phone_number: "+19725156635",
-    email: "info@drive917.com",
+    email: "info@drive247.com",
     call_button_text: "Call Now",
     email_button_text: "Email Us",
   },
   seo: {
     title: "Premium Luxury Car Rentals",
-    description: "Rent premium luxury vehicles with Drive917. Flexible daily, weekly, and monthly rates. Top-tier fleet and exceptional service.",
+    description: "Rent premium luxury vehicles with Drive247. Flexible daily, weekly, and monthly rates. Top-tier fleet and exceptional service.",
     keywords: "luxury car rental, premium vehicle hire, exotic car rental, Dallas car rental",
   },
 };
@@ -847,7 +871,7 @@ export const defaultPrivacyContent: PageContent = {
   privacy_content: {
     title: "Privacy Policy",
     content: `<h2>Introduction</h2>
-<p>Drive917 is committed to protecting your privacy and ensuring the security of your personal information. This policy outlines how we collect, use, and safeguard your data.</p>
+<p>Drive247 is committed to protecting your privacy and ensuring the security of your personal information. This policy outlines how we collect, use, and safeguard your data.</p>
 
 <h2>Information We Collect</h2>
 <p>We collect information necessary to provide our services, including:</p>
@@ -882,13 +906,13 @@ export const defaultPrivacyContent: PageContent = {
 </ul>
 
 <h2>Contact Us</h2>
-<p>For any privacy-related questions or requests, please contact us at <a href="mailto:privacy@drive917.com">privacy@drive917.com</a></p>`,
+<p>For any privacy-related questions or requests, please contact us at <a href="mailto:privacy@drive247.com">privacy@drive247.com</a></p>`,
     last_updated: new Date().toISOString().split('T')[0],
   },
   seo: {
     title: "Privacy Policy | Drive 917",
-    description: "Learn about how Drive917 collects, uses, and protects your personal information.",
-    keywords: "privacy policy, data protection, Drive917 privacy",
+    description: "Learn about how Drive247 collects, uses, and protects your personal information.",
+    keywords: "privacy policy, data protection, Drive247 privacy",
   },
 };
 
@@ -897,7 +921,7 @@ export const defaultTermsContent: PageContent = {
   terms_content: {
     title: "Terms of Service",
     content: `<h2>Service Agreement</h2>
-<p>By booking our services, you agree to these terms and conditions. Drive917 reserves the right to modify these terms at any time, with changes effective immediately upon posting.</p>
+<p>By booking our services, you agree to these terms and conditions. Drive247 reserves the right to modify these terms at any time, with changes effective immediately upon posting.</p>
 
 <h2>Booking and Payment</h2>
 <ul>
@@ -925,7 +949,7 @@ export const defaultTermsContent: PageContent = {
 </ul>
 
 <h2>Liability</h2>
-<p>While we take every precaution to ensure your safety and comfort, Drive917's liability is limited to the value of the service provided. We are not liable for delays caused by circumstances beyond our control, including traffic, weather, or road conditions.</p>
+<p>While we take every precaution to ensure your safety and comfort, Drive247's liability is limited to the value of the service provided. We are not liable for delays caused by circumstances beyond our control, including traffic, weather, or road conditions.</p>
 
 <h2>Confidentiality</h2>
 <p>All client information is kept strictly confidential unless disclosure is required by law.</p>`,
@@ -933,8 +957,8 @@ export const defaultTermsContent: PageContent = {
   },
   seo: {
     title: "Terms of Service | Drive 917",
-    description: "Read the terms and conditions for Drive917 car rental services.",
-    keywords: "terms of service, rental terms, Drive917 terms",
+    description: "Read the terms and conditions for Drive247 car rental services.",
+    keywords: "terms of service, rental terms, Drive247 terms",
   },
 };
 
@@ -948,7 +972,7 @@ export const defaultSiteSettings: PageContent = {
   site_contact: {
     phone: "+19725156635",
     phone_display: "(972) 515-6635",
-    email: "info@drive917.com",
+    email: "info@drive247.com",
     address_line1: "",
     address_line2: "",
     city: "Dallas",

@@ -169,7 +169,7 @@ export const CloseRentalDialog = ({ open, onOpenChange, rental }: CloseRentalDia
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel>End Date <span className="text-red-500">*</span></FormLabel>
-                      <Popover>
+                      <Popover modal={true}>
                         <PopoverTrigger asChild>
                           <FormControl>
                             <Button
@@ -223,7 +223,7 @@ export const CloseRentalDialog = ({ open, onOpenChange, rental }: CloseRentalDia
               <AlertTriangle className="h-4 w-4 text-orange-600" />
               <AlertDescription className="text-orange-800">
                 <strong>Warning:</strong> This will permanently close the rental agreement. 
-                The rental status will be changed to "Closed" and the end date will be set to {formatInTimeZone(form.getValues('end_date'), 'America/New_York', "MM/dd/yyyy")}.
+                The rental status will be changed to "Completed" and the end date will be set to {formatInTimeZone(form.getValues('end_date'), 'America/New_York', "MM/dd/yyyy")}.
               </AlertDescription>
             </Alert>
 

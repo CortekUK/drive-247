@@ -1,15 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
 import { format } from "date-fns";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -42,11 +35,9 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import {
-  History,
   X,
   User,
   Calendar as CalendarIcon,
-  ExternalLink,
   FileText,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -60,15 +51,24 @@ import {
 } from "@/hooks/use-audit-logs";
 
 const AuditLogs = () => {
-  const router = useRouter();
   const [filters, setFilters] = useState<AuditLogsFilters>({});
+  const [currentPage, setCurrentPage] = useState(1);
+  const pageSize = 25;
 
   const { data: logs, isLoading } = useAuditLogs(filters);
   const { data: actions } = useAuditLogActions();
   const { data: adminUsers } = useAdminUsers();
 
+  // Pagination
+  const totalLogs = logs?.length || 0;
+  const totalPages = Math.ceil(totalLogs / pageSize);
+  const startIndex = (currentPage - 1) * pageSize;
+  const endIndex = Math.min(startIndex + pageSize, totalLogs);
+  const paginatedLogs = logs?.slice(startIndex, endIndex) || [];
+
   const clearFilters = () => {
     setFilters({});
+    setCurrentPage(1);
   };
 
   const hasActiveFilters =
@@ -77,30 +77,6 @@ const AuditLogs = () => {
     filters.actorId ||
     filters.dateFrom ||
     filters.dateTo;
-
-  const navigateToEntity = (entityType: string | null, entityId: string | null) => {
-    if (!entityType || !entityId) return;
-
-    switch (entityType) {
-      case "customer":
-        router.push(`/customers/${entityId}`);
-        break;
-      case "rental":
-        router.push(`/rentals/${entityId}`);
-        break;
-      case "vehicle":
-        router.push(`/vehicles/${entityId}`);
-        break;
-      case "payment":
-        router.push(`/payments/${entityId}`);
-        break;
-      case "fine":
-        router.push(`/fines/${entityId}`);
-        break;
-      default:
-        break;
-    }
-  };
 
   if (isLoading) {
     return (
@@ -111,12 +87,10 @@ const AuditLogs = () => {
             <Skeleton className="h-4 w-64" />
           </div>
         </div>
+        <Skeleton className="h-10 w-full" />
         <Card>
-          <CardHeader>
-            <Skeleton className="h-6 w-48" />
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
+          <CardContent className="p-0">
+            <div className="space-y-4 p-4">
               {[...Array(10)].map((_, i) => (
                 <Skeleton key={i} className="h-16 w-full" />
               ))}
@@ -139,188 +113,176 @@ const AuditLogs = () => {
         </div>
       </div>
 
-      {/* Main Content */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <History className="h-5 w-5 text-primary" />
-            Activity History
-          </CardTitle>
-          <CardDescription>
-            View all actions performed in the system
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          {/* Filters */}
-          <div className="mb-6 space-y-4">
-            <div className="flex flex-wrap gap-4 items-center">
-              <Select
-                value={filters.entityType || "all"}
-                onValueChange={(value) =>
-                  setFilters((prev) => ({
-                    ...prev,
-                    entityType: value === "all" ? undefined : value,
-                  }))
-                }
-              >
-                <SelectTrigger className="w-full sm:w-48">
-                  <SelectValue placeholder="Entity type" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Entities</SelectItem>
-                  <SelectItem value="customer">Customer</SelectItem>
-                  <SelectItem value="rental">Rental</SelectItem>
-                  <SelectItem value="vehicle">Vehicle</SelectItem>
-                  <SelectItem value="payment">Payment</SelectItem>
-                  <SelectItem value="fine">Fine</SelectItem>
-                </SelectContent>
-              </Select>
+      {/* Filters */}
+      <div className="space-y-4">
+        <div className="flex flex-wrap gap-4 items-center">
+          <Select
+            value={filters.entityType || "all"}
+            onValueChange={(value) =>
+              setFilters((prev) => ({
+                ...prev,
+                entityType: value === "all" ? undefined : value,
+              }))
+            }
+          >
+            <SelectTrigger className="w-full sm:w-48">
+              <SelectValue placeholder="Entity type" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Entities</SelectItem>
+              <SelectItem value="customer">Customer</SelectItem>
+              <SelectItem value="rental">Rental</SelectItem>
+              <SelectItem value="vehicle">Vehicle</SelectItem>
+              <SelectItem value="payment">Payment</SelectItem>
+              <SelectItem value="fine">Fine</SelectItem>
+              <SelectItem value="invoice">Invoice</SelectItem>
+              <SelectItem value="document">Document</SelectItem>
+              <SelectItem value="plate">Plate</SelectItem>
+              <SelectItem value="identity">Identity</SelectItem>
+              <SelectItem value="user">User</SelectItem>
+              <SelectItem value="settings">Settings</SelectItem>
+            </SelectContent>
+          </Select>
 
-              <Select
-                value={filters.action || "all"}
-                onValueChange={(value) =>
-                  setFilters((prev) => ({
-                    ...prev,
-                    action: value === "all" ? undefined : value,
-                  }))
-                }
-              >
-                <SelectTrigger className="w-full sm:w-48">
-                  <SelectValue placeholder="Action type" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Actions</SelectItem>
-                  {actions?.map((action) => (
-                    <SelectItem key={action} value={action}>
-                      {formatActionName(action)}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+          <Select
+            value={filters.action || "all"}
+            onValueChange={(value) =>
+              setFilters((prev) => ({
+                ...prev,
+                action: value === "all" ? undefined : value,
+              }))
+            }
+          >
+            <SelectTrigger className="w-full sm:w-48">
+              <SelectValue placeholder="Action type" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Actions</SelectItem>
+              {actions?.map((action) => (
+                <SelectItem key={action} value={action}>
+                  {formatActionName(action)}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
 
-              <Select
-                value={filters.actorId || "all"}
-                onValueChange={(value) =>
-                  setFilters((prev) => ({
-                    ...prev,
-                    actorId: value === "all" ? undefined : value,
-                  }))
-                }
-              >
-                <SelectTrigger className="w-full sm:w-48">
-                  <SelectValue placeholder="Performed by" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Users</SelectItem>
-                  {adminUsers?.map((user) => (
-                    <SelectItem key={user.id} value={user.id}>
-                      {user.name || user.email}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+          <Select
+            value={filters.actorId || "all"}
+            onValueChange={(value) =>
+              setFilters((prev) => ({
+                ...prev,
+                actorId: value === "all" ? undefined : value,
+              }))
+            }
+          >
+            <SelectTrigger className="w-full sm:w-48">
+              <SelectValue placeholder="Performed by" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Users</SelectItem>
+              {adminUsers?.map((user) => (
+                <SelectItem key={user.id} value={user.id}>
+                  {user.name || user.email}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
 
-            {/* Date Range Section - Separated */}
-            <div className="pt-4 border-t">
-              <div className="flex flex-col sm:flex-row sm:items-center gap-3">
-                <span className="text-sm font-medium text-muted-foreground">
-                  Date Range:
-                </span>
-                
-                <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 flex-1">
-                  <Popover>
-                    <PopoverTrigger asChild>
-                      <Button
-                        variant="outline"
-                        className={cn(
-                          "w-full sm:w-[160px] justify-between text-left font-normal",
-                          !filters.dateFrom && "text-muted-foreground"
-                        )}
-                      >
-                        {filters.dateFrom ? (
-                          format(new Date(filters.dateFrom), "MMM dd, yyyy")
-                        ) : (
-                          <span>From date</span>
-                        )}
-                        <CalendarIcon className="ml-2 h-4 w-4" />
-                      </Button>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-auto p-0" align="start">
-                      <CalendarComponent
-                        mode="single"
-                        selected={
-                          filters.dateFrom
-                            ? new Date(filters.dateFrom)
-                            : undefined
-                        }
-                        onSelect={(date) =>
-                          setFilters((prev) => ({
-                            ...prev,
-                            dateFrom: date ? format(date, "yyyy-MM-dd") : undefined,
-                          }))
-                        }
-                        initialFocus
-                      />
-                    </PopoverContent>
-                  </Popover>
+        {/* Date Range Section */}
+        <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+          <span className="text-sm font-medium text-muted-foreground">
+            Date Range:
+          </span>
 
-                  <span className="text-muted-foreground text-center sm:text-left">to</span>
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 flex-1">
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button
+                  variant="outline"
+                  className={cn(
+                    "w-full sm:w-[160px] justify-between text-left font-normal",
+                    !filters.dateFrom && "text-muted-foreground"
+                  )}
+                >
+                  {filters.dateFrom ? (
+                    format(new Date(filters.dateFrom), "MMM dd, yyyy")
+                  ) : (
+                    <span>From date</span>
+                  )}
+                  <CalendarIcon className="ml-2 h-4 w-4" />
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-auto p-0" align="start">
+                <CalendarComponent
+                  mode="single"
+                  selected={
+                    filters.dateFrom
+                      ? new Date(filters.dateFrom)
+                      : undefined
+                  }
+                  onSelect={(date) =>
+                    setFilters((prev) => ({
+                      ...prev,
+                      dateFrom: date ? format(date, "yyyy-MM-dd") : undefined,
+                    }))
+                  }
+                  initialFocus
+                />
+              </PopoverContent>
+            </Popover>
 
-                  <Popover>
-                    <PopoverTrigger asChild>
-                      <Button
-                        variant="outline"
-                        className={cn(
-                          "w-full sm:w-[160px] justify-between text-left font-normal",
-                          !filters.dateTo && "text-muted-foreground"
-                        )}
-                      >
-                        {filters.dateTo ? (
-                          format(new Date(filters.dateTo), "MMM dd, yyyy")
-                        ) : (
-                          <span>To date</span>
-                        )}
-                        <CalendarIcon className="ml-2 h-4 w-4" />
-                      </Button>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-auto p-0" align="start">
-                      <CalendarComponent
-                        mode="single"
-                        selected={
-                          filters.dateTo ? new Date(filters.dateTo) : undefined
-                        }
-                        onSelect={(date) =>
-                          setFilters((prev) => ({
-                            ...prev,
-                            dateTo: date ? format(date, "yyyy-MM-dd") : undefined,
-                          }))
-                        }
-                        initialFocus
-                      />
-                    </PopoverContent>
-                  </Popover>
-                </div>
+            <span className="text-muted-foreground text-center sm:text-left">to</span>
 
-                {hasActiveFilters && (
-                  <Button variant="outline" size="sm" onClick={clearFilters} className="w-full sm:w-auto">
-                    <X className="h-4 w-4 mr-1" />
-                    Clear Filters
-                  </Button>
-                )}
-              </div>
-            </div>
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button
+                  variant="outline"
+                  className={cn(
+                    "w-full sm:w-[160px] justify-between text-left font-normal",
+                    !filters.dateTo && "text-muted-foreground"
+                  )}
+                >
+                  {filters.dateTo ? (
+                    format(new Date(filters.dateTo), "MMM dd, yyyy")
+                  ) : (
+                    <span>To date</span>
+                  )}
+                  <CalendarIcon className="ml-2 h-4 w-4" />
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-auto p-0" align="start">
+                <CalendarComponent
+                  mode="single"
+                  selected={
+                    filters.dateTo ? new Date(filters.dateTo) : undefined
+                  }
+                  onSelect={(date) =>
+                    setFilters((prev) => ({
+                      ...prev,
+                      dateTo: date ? format(date, "yyyy-MM-dd") : undefined,
+                    }))
+                  }
+                  initialFocus
+                />
+              </PopoverContent>
+            </Popover>
           </div>
 
-          {/* Results info */}
-          <div className="flex items-center justify-between mb-4">
-            <p className="text-sm text-muted-foreground">
-              Showing {logs?.length || 0} log entries
-            </p>
-          </div>
+          {hasActiveFilters && (
+            <Button variant="outline" size="sm" onClick={clearFilters} className="w-full sm:w-auto">
+              <X className="h-4 w-4 mr-1" />
+              Clear Filters
+            </Button>
+          )}
+        </div>
+      </div>
 
-          {logs && logs.length > 0 ? (
-            <div className="rounded-md border">
+      {/* Audit Logs Table */}
+      {logs && logs.length > 0 ? (
+        <>
+          <Card>
+            <CardContent className="p-0">
               <Table>
                 <TableHeader>
                   <TableRow>
@@ -329,11 +291,10 @@ const AuditLogs = () => {
                     <TableHead>Entity</TableHead>
                     <TableHead>Details</TableHead>
                     <TableHead>Performed By</TableHead>
-                    <TableHead className="w-[80px]"></TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {logs.map((log) => (
+                  {paginatedLogs.map((log) => (
                     <TableRow key={log.id}>
                       <TableCell className="whitespace-nowrap">
                         <div className="flex items-center gap-2">
@@ -418,43 +379,58 @@ const AuditLogs = () => {
                           </span>
                         </div>
                       </TableCell>
-                      <TableCell>
-                        {log.entity_type && log.entity_id && (
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() =>
-                              navigateToEntity(log.entity_type, log.entity_id)
-                            }
-                          >
-                            <ExternalLink className="h-4 w-4" />
-                          </Button>
-                        )}
-                      </TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
               </Table>
+            </CardContent>
+          </Card>
+
+          {/* Pagination */}
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+            <p className="text-sm text-muted-foreground">
+              Showing {startIndex + 1}-{endIndex} of {totalLogs} log entries
+            </p>
+            <div className="flex items-center gap-2 w-full sm:w-auto flex-wrap justify-center sm:justify-end">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
+                disabled={currentPage === 1}
+              >
+                Previous
+              </Button>
+              <span className="text-sm text-muted-foreground whitespace-nowrap">
+                Page {currentPage} of {totalPages || 1}
+              </span>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setCurrentPage(Math.min(totalPages, currentPage + 1))}
+                disabled={currentPage === totalPages || totalPages <= 1}
+              >
+                Next
+              </Button>
             </div>
-          ) : (
-            <div className="text-center py-12">
-              <FileText className="mx-auto h-12 w-12 text-muted-foreground mb-4" />
-              <h3 className="text-lg font-medium mb-2">No audit logs found</h3>
-              <p className="text-muted-foreground mb-4">
-                {hasActiveFilters
-                  ? "Try adjusting your filter criteria"
-                  : "Activity logs will appear here as actions are performed"}
-              </p>
-              {hasActiveFilters && (
-                <Button variant="outline" onClick={clearFilters}>
-                  <X className="h-4 w-4 mr-2" />
-                  Clear Filters
-                </Button>
-              )}
-            </div>
+          </div>
+        </>
+      ) : (
+        <div className="text-center py-12">
+          <FileText className="mx-auto h-12 w-12 text-muted-foreground mb-4" />
+          <h3 className="text-lg font-medium mb-2">No audit logs found</h3>
+          <p className="text-muted-foreground mb-4">
+            {hasActiveFilters
+              ? "Try adjusting your filter criteria"
+              : "Activity logs will appear here as actions are performed"}
+          </p>
+          {hasActiveFilters && (
+            <Button variant="outline" onClick={clearFilters}>
+              <X className="h-4 w-4 mr-2" />
+              Clear Filters
+            </Button>
           )}
-        </CardContent>
-      </Card>
+        </div>
+      )}
     </div>
   );
 };

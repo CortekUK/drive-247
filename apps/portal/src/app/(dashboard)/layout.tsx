@@ -15,6 +15,7 @@ import {
   SidebarInset,
 } from "@/components/ui/sidebar";
 import { Skeleton } from "@/components/ui/skeleton";
+import { ChatSidebar } from "@/components/chat";
 
 function LoadingSkeleton() {
   return (
@@ -105,7 +106,11 @@ export default function DashboardLayout({
             {children}
           </main>
         </SidebarInset>
+
+        {/* RAG Chatbot */}
+        <ChatSidebar />
       </SidebarProvider>
     </DynamicThemeProvider>
   );
 }
+

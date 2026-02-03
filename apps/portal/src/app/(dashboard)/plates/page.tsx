@@ -6,7 +6,7 @@ import { useSearchParams, useRouter } from "next/navigation";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -44,7 +44,6 @@ import {
   FileText,
   Download,
   Copy,
-  Filter,
   X
 } from "lucide-react";
 import { format } from "date-fns";
@@ -415,59 +414,46 @@ export default function PlatesListEnhanced() {
       </div>
 
       {/* Filters */}
-      <Card>
-        <CardHeader className="pb-4">
-          <CardTitle className="text-lg flex items-center gap-2">
-            <Filter className="h-5 w-5" />
-            Filters
-            {hasActiveFilters && (
-              <Button variant="ghost" size="sm" onClick={clearFilters}>
-                <X className="h-4 w-4 mr-1" />
-                Clear
-              </Button>
-            )}
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input
-                placeholder="Search plates, vehicles, suppliers..."
-                value={searchTerm}
-                onChange={(e) => handleSearch(e.target.value)}
-                className="pl-10"
-              />
-            </div>
-            <Select value={statusFilter} onValueChange={handleStatusFilter}>
-              <SelectTrigger>
-                <SelectValue placeholder="All Statuses" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Statuses</SelectItem>
-                <SelectItem value="ordered">Ordered</SelectItem>
-                <SelectItem value="received">Received</SelectItem>
-                <SelectItem value="assigned">Assigned</SelectItem>
-                <SelectItem value="fitted">Fitted (Legacy)</SelectItem>
-                <SelectItem value="expired">Expired</SelectItem>
-              </SelectContent>
-            </Select>
-            <Select value={documentFilter} onValueChange={handleDocumentFilter}>
-              <SelectTrigger>
-                <SelectValue placeholder="All Documents" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Documents</SelectItem>
-                <SelectItem value="yes">Has Document</SelectItem>
-                <SelectItem value="no">No Document</SelectItem>
-              </SelectContent>
-            </Select>
-            <div className="text-sm text-muted-foreground flex items-center">
-              Showing {paginatedPlates.length} of {totalCount} plates
-            </div>
-          </div>
-        </CardContent>
-      </Card>
+      <div className="flex flex-wrap gap-4 items-center">
+        <div className="relative flex-1 min-w-[200px]">
+          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <Input
+            placeholder="Search plates, vehicles, suppliers..."
+            value={searchTerm}
+            onChange={(e) => handleSearch(e.target.value)}
+            className="pl-10"
+          />
+        </div>
+        <Select value={statusFilter} onValueChange={handleStatusFilter}>
+          <SelectTrigger className="w-[150px]">
+            <SelectValue placeholder="All Statuses" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Statuses</SelectItem>
+            <SelectItem value="ordered">Ordered</SelectItem>
+            <SelectItem value="received">Received</SelectItem>
+            <SelectItem value="assigned">Assigned</SelectItem>
+            <SelectItem value="fitted">Fitted (Legacy)</SelectItem>
+            <SelectItem value="expired">Expired</SelectItem>
+          </SelectContent>
+        </Select>
+        <Select value={documentFilter} onValueChange={handleDocumentFilter}>
+          <SelectTrigger className="w-[150px]">
+            <SelectValue placeholder="All Documents" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Documents</SelectItem>
+            <SelectItem value="yes">Has Document</SelectItem>
+            <SelectItem value="no">No Document</SelectItem>
+          </SelectContent>
+        </Select>
+        {hasActiveFilters && (
+          <Button variant="outline" size="sm" onClick={clearFilters}>
+            <X className="h-4 w-4 mr-1" />
+            Clear Filters
+          </Button>
+        )}
+      </div>
 
       {/* Table */}
       <Card>
@@ -644,42 +630,45 @@ export default function PlatesListEnhanced() {
       </Card>
 
       {/* Pagination */}
-      {totalPages > 1 && (
-        <div className="flex items-center justify-between">
-          <div className="text-sm text-muted-foreground">
-            Page {currentPage} of {totalPages}
-          </div>
-          <div className="flex items-center gap-2">
-            <Button
-              variant="outline"
-              disabled={currentPage === 1}
-              onClick={() => updateFilters({ page: currentPage - 1 })}
-            >
-              Previous
-            </Button>
-            <Button
-              variant="outline"
-              disabled={currentPage === totalPages}
-              onClick={() => updateFilters({ page: currentPage + 1 })}
-            >
-              Next
-            </Button>
-            <Select
-              value={pageSize.toString()}
-              onValueChange={(value) => updateFilters({ size: parseInt(value), page: 1 })}
-            >
-              <SelectTrigger className="w-20">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="25">25</SelectItem>
-                <SelectItem value="50">50</SelectItem>
-                <SelectItem value="100">100</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+        <div className="text-sm text-muted-foreground">
+          Showing {paginatedPlates.length} of {totalCount} plates
         </div>
-      )}
+        <div className="flex items-center gap-2 w-full sm:w-auto flex-wrap justify-center sm:justify-end">
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={currentPage === 1}
+            onClick={() => updateFilters({ page: currentPage - 1 })}
+          >
+            Previous
+          </Button>
+          <span className="text-sm text-muted-foreground whitespace-nowrap">
+            Page {currentPage} of {totalPages || 1}
+          </span>
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={currentPage === totalPages || totalPages <= 1}
+            onClick={() => updateFilters({ page: currentPage + 1 })}
+          >
+            Next
+          </Button>
+          <Select
+            value={pageSize.toString()}
+            onValueChange={(value) => updateFilters({ size: parseInt(value), page: 1 })}
+          >
+            <SelectTrigger className="w-20">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="25">25</SelectItem>
+              <SelectItem value="50">50</SelectItem>
+              <SelectItem value="100">100</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
 
       {/* Dialogs */}
       <EnhancedAddPlateDialog

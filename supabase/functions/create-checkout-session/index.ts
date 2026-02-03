@@ -1,11 +1,6 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.57.4'
-import Stripe from 'https://esm.sh/stripe@14.21.0?target=deno'
-
-const stripe = new Stripe(Deno.env.get('STRIPE_SECRET_KEY') || '', {
-  apiVersion: '2023-10-16',
-  httpClient: Stripe.createFetchHttpClient(),
-})
+import { getStripeClient, getConnectAccountId, type StripeMode } from '../_shared/stripe-client.ts'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -41,13 +36,14 @@ serve(async (req) => {
     let tenantId: string | null = bodyTenantId || null
     let companyName = 'Drive 917'
     let currencyCode = 'usd'
-    let stripeAccountId: string | null = null
+    let stripeMode: StripeMode = 'test' // Default to test mode for safety
+    let tenantData: any = null
 
     // Try to get tenant by slug first, then by ID, then from rental
     if (slug) {
       const { data: tenant, error: tenantError } = await supabaseClient
         .from('tenants')
-        .select('id, company_name, currency_code, stripe_account_id, stripe_onboarding_complete')
+        .select('id, company_name, currency_code, stripe_mode, stripe_account_id, stripe_onboarding_complete')
         .eq('slug', slug)
         .eq('status', 'active')
         .single()
@@ -56,18 +52,15 @@ serve(async (req) => {
         tenantId = tenant.id
         companyName = tenant.company_name || companyName
         currencyCode = (tenant.currency_code || 'USD').toLowerCase()
-
-        // Only use Stripe Connect if tenant has completed onboarding
-        if (tenant.stripe_account_id && tenant.stripe_onboarding_complete) {
-          stripeAccountId = tenant.stripe_account_id
-          console.log('Using Stripe Connect account from slug:', stripeAccountId)
-        }
+        stripeMode = (tenant.stripe_mode as StripeMode) || 'test'
+        tenantData = tenant
+        console.log('Tenant loaded from slug:', tenantId, 'mode:', stripeMode)
       }
     } else if (tenantId) {
       // Lookup tenant by ID if slug not provided
       const { data: tenant, error: tenantError } = await supabaseClient
         .from('tenants')
-        .select('id, company_name, currency_code, stripe_account_id, stripe_onboarding_complete')
+        .select('id, company_name, currency_code, stripe_mode, stripe_account_id, stripe_onboarding_complete')
         .eq('id', tenantId)
         .eq('status', 'active')
         .single()
@@ -75,11 +68,9 @@ serve(async (req) => {
       if (tenant && !tenantError) {
         companyName = tenant.company_name || companyName
         currencyCode = (tenant.currency_code || 'USD').toLowerCase()
-
-        if (tenant.stripe_account_id && tenant.stripe_onboarding_complete) {
-          stripeAccountId = tenant.stripe_account_id
-          console.log('Using Stripe Connect account from tenantId:', stripeAccountId)
-        }
+        stripeMode = (tenant.stripe_mode as StripeMode) || 'test'
+        tenantData = tenant
+        console.log('Tenant loaded from ID:', tenantId, 'mode:', stripeMode)
       }
     } else if (rentalId) {
       // Fallback: get tenant from rental
@@ -94,23 +85,27 @@ serve(async (req) => {
 
         const { data: tenant } = await supabaseClient
           .from('tenants')
-          .select('company_name, currency_code, stripe_account_id, stripe_onboarding_complete')
+          .select('company_name, currency_code, stripe_mode, stripe_account_id, stripe_onboarding_complete')
           .eq('id', tenantId)
           .single()
 
         if (tenant) {
           companyName = tenant.company_name || companyName
           currencyCode = (tenant.currency_code || 'USD').toLowerCase()
-
-          if (tenant.stripe_account_id && tenant.stripe_onboarding_complete) {
-            stripeAccountId = tenant.stripe_account_id
-            console.log('Using Stripe Connect account from rental:', stripeAccountId)
-          }
+          stripeMode = (tenant.stripe_mode as StripeMode) || 'test'
+          tenantData = tenant
+          console.log('Tenant loaded from rental:', tenantId, 'mode:', stripeMode)
         }
       }
     }
 
-    console.log('Checkout session - tenantId:', tenantId, 'stripeAccountId:', stripeAccountId)
+    // Get Stripe client for the tenant's mode
+    const stripe = getStripeClient(stripeMode)
+
+    // Determine which Connect account to use based on tenant mode
+    const stripeAccountId = tenantData ? getConnectAccountId(tenantData) : null
+
+    console.log('Checkout session - tenantId:', tenantId, 'mode:', stripeMode, 'connectAccount:', stripeAccountId)
 
     // Create Stripe Checkout Session
     const sessionConfig: any = {
@@ -143,13 +138,83 @@ serve(async (req) => {
         customer_name: customerName,
         tenant_id: tenantId,
         tenant_slug: slug,
+        stripe_mode: stripeMode, // Track which mode was used
       },
     }
 
     // For direct charges: create checkout session on connected account
     const stripeOptions = stripeAccountId ? { stripeAccount: stripeAccountId } : undefined;
+    if (stripeAccountId) {
+      console.log(`Creating checkout session on connected account (${stripeMode} mode):`, stripeAccountId)
+    } else {
+      console.log(`Creating checkout session on platform account (${stripeMode} mode)`)
+    }
 
     const session = await stripe.checkout.sessions.create(sessionConfig, stripeOptions)
+
+    // CRITICAL FIX: Save stripe_checkout_session_id to payment record
+    // This allows the webhook to find and update the payment when checkout completes
+    if (referenceId) {
+      // First try to update existing payment record (portal flow)
+      const { data: updatedPayment, error: updateError } = await supabaseClient
+        .from('payments')
+        .update({
+          stripe_checkout_session_id: session.id,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('rental_id', referenceId)
+        .is('stripe_checkout_session_id', null)
+        .select('id')
+
+      if (updateError) {
+        console.error('Failed to update payment with session ID:', updateError)
+      } else if (updatedPayment && updatedPayment.length > 0) {
+        console.log('✅ Updated existing payment with session ID:', updatedPayment[0].id, 'session:', session.id)
+      } else {
+        // No existing payment found - create one (booking app flow)
+        console.log('No existing payment found, creating new payment record for rental:', referenceId)
+
+        // Get rental details
+        const { data: rental } = await supabaseClient
+          .from('rentals')
+          .select('customer_id, vehicle_id, monthly_amount, tenant_id')
+          .eq('id', referenceId)
+          .single()
+
+        if (rental) {
+          const paymentAmount = Math.round(totalAmount * 100) / 100 // From checkout session
+          const today = new Date().toISOString().split('T')[0]
+
+          const { data: createdPayment, error: createError } = await supabaseClient
+            .from('payments')
+            .insert({
+              rental_id: referenceId,
+              customer_id: rental.customer_id,
+              vehicle_id: rental.vehicle_id,
+              tenant_id: rental.tenant_id || tenantId,
+              amount: paymentAmount,
+              payment_date: today,
+              method: 'Card',
+              payment_type: 'Payment',
+              status: 'Applied',
+              verification_status: 'auto_approved', // Stripe verified payment
+              stripe_checkout_session_id: session.id,
+              capture_status: 'requires_capture',
+              booking_source: 'website',
+              created_at: new Date().toISOString(),
+              updated_at: new Date().toISOString(),
+            })
+            .select('id')
+            .single()
+
+          if (createError) {
+            console.error('Failed to create payment record:', createError)
+          } else {
+            console.log('✅ Created new payment with session ID:', createdPayment.id, 'session:', session.id)
+          }
+        }
+      }
+    }
 
     return new Response(
       JSON.stringify({ sessionId: session.id, url: session.url }),

@@ -5,6 +5,7 @@ import { useMutation, useQueryClient, useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { useTenant } from "@/contexts/TenantContext";
+import { useAuditLog } from "@/hooks/use-audit-log";
 
 import {
   Dialog,
@@ -56,6 +57,7 @@ export default function AddCustomerDocumentDialog({
 }: AddCustomerDocumentDialogProps) {
   const queryClient = useQueryClient();
   const { tenant } = useTenant();
+  const { logAction } = useAuditLog();
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [dragActive, setDragActive] = useState(false);
 
@@ -198,19 +200,38 @@ export default function AddCustomerDocumentDialog({
 
         const { error } = await updateQuery;
         if (error) throw error;
+        return { isUpdate: true, documentId, documentData };
       } else {
-        const { error } = await supabase
+        const { data: newDoc, error } = await supabase
           .from("customer_documents")
           .insert({
             ...documentData,
             tenant_id: tenant?.id || null,
-          });
+          })
+          .select("id")
+          .single();
         if (error) throw error;
+        return { isUpdate: false, documentId: newDoc?.id, documentData };
       }
     },
-    onSuccess: () => {
+    onSuccess: (result) => {
+      // Audit log for document upload/update
+      if (result?.documentId) {
+        logAction({
+          action: result.isUpdate ? "document_updated" : "document_uploaded",
+          entityType: "document",
+          entityId: result.documentId,
+          details: {
+            document_type: result.documentData.document_type,
+            document_name: result.documentData.document_name,
+            customer_id: customerId
+          }
+        });
+      }
+
       // Invalidate all customer-documents queries to ensure refresh
       queryClient.invalidateQueries({ queryKey: ["customer-documents"] });
+      queryClient.invalidateQueries({ queryKey: ["audit-logs"] });
       toast.success(documentId ? "Document updated successfully" : "Document added successfully");
       form.reset();
       setSelectedFile(null);
@@ -431,7 +452,7 @@ export default function AddCustomerDocumentDialog({
                     <FormLabel>
                       {showInsuranceFields ? "Policy Start Date" : "Start Date"}
                     </FormLabel>
-                    <Popover>
+                    <Popover modal={true}>
                       <PopoverTrigger asChild>
                         <FormControl>
                           <Button
@@ -476,7 +497,7 @@ export default function AddCustomerDocumentDialog({
                     <FormLabel>
                       {showInsuranceFields ? "Policy End Date" : "End Date (Expiry)"}
                     </FormLabel>
-                    <Popover>
+                    <Popover modal={true}>
                       <PopoverTrigger asChild>
                         <FormControl>
                           <Button

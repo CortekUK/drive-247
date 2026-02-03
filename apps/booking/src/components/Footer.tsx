@@ -31,13 +31,13 @@ const Footer = () => {
             {settings.logo_url ? (
               <img
                 src={settings.logo_url}
-                alt={settings.logo_alt || "Drive917"}
-                className="h-20 w-32 mb-4 object-cover"
+                alt={settings.logo_alt || "Drive247"}
+                className="h-20 w-auto max-w-[160px] mb-4 object-contain"
               />
             ) : (
               <>
                 <h3 className="text-xl font-display font-bold text-white mb-2 uppercase tracking-wide">
-                  {settings.company_name || "Drive917"}
+                  {settings.company_name || "Drive247"}
                 </h3>
                 <div className="w-12 h-[2px] mb-4" style={{ backgroundColor: 'hsl(var(--accent))' }}></div>
               </>

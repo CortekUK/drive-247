@@ -46,7 +46,7 @@ export function PWAInstallEditor({ content, onSave, isSaving }: PWAInstallEditor
             id="pwa-title"
             value={formData.title}
             onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-            placeholder="Install Drive917"
+            placeholder="Install Drive247"
           />
         </div>
 
@@ -56,7 +56,7 @@ export function PWAInstallEditor({ content, onSave, isSaving }: PWAInstallEditor
             id="pwa-description"
             value={formData.description}
             onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-            placeholder="Scan the QR code to add Drive917 to your home screen..."
+            placeholder="Scan the QR code to add Drive247 to your home screen..."
             rows={3}
           />
         </div>
@@ -65,10 +65,10 @@ export function PWAInstallEditor({ content, onSave, isSaving }: PWAInstallEditor
         <div className="border rounded-lg p-4 bg-muted/30">
           <p className="text-sm text-muted-foreground mb-2">Preview</p>
           <h3 className="text-xl font-display font-bold mb-1">
-            {formData.title || "Install Drive917"}
+            {formData.title || "Install Drive247"}
           </h3>
           <p className="text-sm text-muted-foreground">
-            {formData.description || "Scan the QR code to add Drive917 to your home screen for fast, seamless bookings in Los Angeles and beyond."}
+            {formData.description || "Scan the QR code to add Drive247 to your home screen for fast, seamless bookings in Los Angeles and beyond."}
           </p>
         </div>
 

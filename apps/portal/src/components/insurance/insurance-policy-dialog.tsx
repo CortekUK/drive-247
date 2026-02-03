@@ -295,7 +295,7 @@ export function InsurancePolicyDialog({
                 render={({ field }) => (
                   <FormItem className="flex flex-col">
                     <FormLabel>Start Date <span className="text-red-500">*</span></FormLabel>
-                    <Popover>
+                    <Popover modal={true}>
                       <PopoverTrigger asChild>
                         <FormControl>
                           <Button
@@ -335,7 +335,7 @@ export function InsurancePolicyDialog({
                 render={({ field }) => (
                   <FormItem className="flex flex-col">
                     <FormLabel>Expiry Date <span className="text-red-500">*</span></FormLabel>
-                    <Popover>
+                    <Popover modal={true}>
                       <PopoverTrigger asChild>
                         <FormControl>
                           <Button

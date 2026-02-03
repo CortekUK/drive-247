@@ -16,6 +16,8 @@ export const editVehicleEnhancedSchema = z.object({
   monthly_rent: z.number({ required_error: "Monthly rent is required", invalid_type_error: "Monthly rent must be a number" }).min(0, "Monthly rent must be positive"),
   // Security deposit
   security_deposit: z.union([z.number().min(0, "Security deposit must be positive"), z.undefined(), z.null()]).optional(),
+  // Allowed mileage per month (miles)
+  allowed_mileage: z.union([z.number().int().min(1, "Mileage must be at least 1 mile"), z.undefined(), z.null()]).optional(),
   // MOT & TAX fields
   mot_due_date: z.date().optional(),
   tax_due_date: z.date().optional(),

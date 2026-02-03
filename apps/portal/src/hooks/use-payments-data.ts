@@ -22,6 +22,10 @@ export interface PaymentRow {
   verified_at: string | null;
   rejection_reason: string | null;
   is_manual_mode: boolean;
+  // Fields needed for reverse payment check
+  stripe_payment_intent_id: string | null;
+  refund_status: string | null;
+  refund_reason: string | null;
 
   customers: {
     id: string;

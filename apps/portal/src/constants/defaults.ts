@@ -202,10 +202,10 @@ export const COMPANY_DEFAULTS = {
   PHONE_DISPLAY: "(972) 515-6635",
 
   /** Company email address */
-  EMAIL: "info@drive917.com",
+  EMAIL: "info@drive247.com",
 
   /** Company name */
-  NAME: "Drive 917",
+  NAME: "Drive 247",
 
   /** Business address */
   ADDRESS: {

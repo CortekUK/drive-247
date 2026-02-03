@@ -164,7 +164,6 @@ export default function DevPanel() {
                 id_number: `ID${randomSuffix}${Math.floor(Math.random() * 100000)}`,
                 status: 'Active' as const,
                 whatsapp_opt_in: true,
-                high_switcher: false,
             }
 
             // Insert customer directly into Supabase
@@ -180,7 +179,6 @@ export default function DevPanel() {
                     id_number: customerData.id_number,
                     status: customerData.status,
                     whatsapp_opt_in: customerData.whatsapp_opt_in,
-                    high_switcher: customerData.high_switcher,
                     tenant_id: tenantId,
                 })
                 .select()

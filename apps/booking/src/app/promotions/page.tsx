@@ -17,6 +17,8 @@ import { Crown, Calendar, Tag, ChevronRight, Info } from "lucide-react";
 import { format, isBefore, isAfter, isToday } from "date-fns";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { usePageContent, defaultPromotionsContent, mergeWithDefaults, defaultPromotionsCarouselImages } from "@/hooks/usePageContent";
+import { useBrandingSettings } from "@/hooks/useBrandingSettings";
+import { createCompanyNameReplacer } from "@/utils/tenantName";
 
 interface Promotion {
   id: string;
@@ -39,6 +41,7 @@ interface Vehicle {
 
 const Promotions = () => {
   const { tenant } = useTenant();
+  const { branding } = useBrandingSettings();
   const [promotions, setPromotions] = useState<Promotion[]>([]);
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
   const [filteredPromotions, setFilteredPromotions] = useState<Promotion[]>([]);
@@ -52,6 +55,10 @@ const Promotions = () => {
   // CMS Content
   const { data: rawContent } = usePageContent("promotions");
   const content = mergeWithDefaults(rawContent, defaultPromotionsContent);
+
+  // Use the tenant's app_name for dynamic titles
+  const appName = branding.app_name || 'Drive 247';
+  const replaceCompanyName = createCompanyNameReplacer(appName);
 
   // Hero carousel images - use CMS images if set, otherwise use defaults
   const heroCarouselImages = content.promotions_hero?.carousel_images?.length
@@ -171,9 +178,9 @@ const Promotions = () => {
   return (
     <>
       <SEO
-        title={content.seo?.title || "Promotions & Offers | Drive 917 - Exclusive Luxury Car Rental Deals"}
-        description={content.seo?.description || "Exclusive deals on luxury car rentals with daily, weekly, and monthly rates. Limited-time Drive 917 offers with transparent savings."}
-        keywords={content.seo?.keywords || "luxury car rental deals, car rental promotions, exclusive offers, discount car hire, Drive 917 deals"}
+        title={content.seo?.title ? replaceCompanyName(content.seo.title) : `Promotions & Offers | ${appName} - Exclusive Luxury Car Rental Deals`}
+        description={content.seo?.description ? replaceCompanyName(content.seo.description) : `Exclusive deals on luxury car rentals with daily, weekly, and monthly rates. Limited-time ${appName} offers with transparent savings.`}
+        keywords={content.seo?.keywords ? replaceCompanyName(content.seo.keywords) : `luxury car rental deals, car rental promotions, exclusive offers, discount car hire, ${appName} deals`}
       />
       <div className="min-h-screen flex flex-col bg-background">
         <Navigation />

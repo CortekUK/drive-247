@@ -16,6 +16,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { useQueryClient } from "@tanstack/react-query";
 import { useTenant } from "@/contexts/TenantContext";
+import { useAuditLog } from "@/hooks/use-audit-log";
 import { customerFormModalSchema, type CustomerFormModalFormValues } from "@/client-schemas/customers/customer-form-modal";
 
 type CustomerFormData = CustomerFormModalFormValues;
@@ -28,7 +29,6 @@ interface Customer {
   customer_type: "Individual" | "Company";
   status: string;
   whatsapp_opt_in: boolean;
-  high_switcher?: boolean;
   license_number?: string;
   id_number?: string;
   is_blocked?: boolean;
@@ -53,6 +53,7 @@ export const CustomerFormModal = ({ open, onOpenChange, customer }: CustomerForm
   const [blockWarning, setBlockWarning] = useState<{ isBlocked: boolean; reason?: string; type?: string } | null>(null);
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const { logAction } = useAuditLog();
   const isEditing = !!customer;
 
   const form = useForm<CustomerFormData>({
@@ -65,7 +66,6 @@ export const CustomerFormModal = ({ open, onOpenChange, customer }: CustomerForm
       license_number: "",
       id_number: "",
       whatsapp_opt_in: false,
-      high_switcher: false,
       status: "Active",
       notes: "",
       nok_full_name: "",
@@ -94,7 +94,6 @@ export const CustomerFormModal = ({ open, onOpenChange, customer }: CustomerForm
         license_number: customer.license_number || "",
         id_number: customer.id_number || "",
         whatsapp_opt_in: customer.whatsapp_opt_in,
-        high_switcher: customer.high_switcher || false,
         status: customer.status as "Active" | "Inactive",
         notes: "",
         nok_full_name: customer.nok_full_name || "",
@@ -113,7 +112,6 @@ export const CustomerFormModal = ({ open, onOpenChange, customer }: CustomerForm
         license_number: "",
         id_number: "",
         whatsapp_opt_in: false,
-        high_switcher: false,
         status: "Active",
         notes: "",
         nok_full_name: "",
@@ -138,7 +136,6 @@ export const CustomerFormModal = ({ open, onOpenChange, customer }: CustomerForm
       id_number: string;
       status?: 'Active' | 'Inactive';
       whatsapp_opt_in?: boolean;
-      high_switcher?: boolean;
       notes?: string;
     }>) => {
       const data = e.detail;
@@ -153,7 +150,6 @@ export const CustomerFormModal = ({ open, onOpenChange, customer }: CustomerForm
       if (data.customer_type) form.setValue('customer_type', data.customer_type);
       if (data.status) form.setValue('status', data.status);
       if (data.whatsapp_opt_in !== undefined) form.setValue('whatsapp_opt_in', data.whatsapp_opt_in);
-      if (data.high_switcher !== undefined) form.setValue('high_switcher', data.high_switcher);
       if (data.notes) form.setValue('notes', data.notes);
 
       // Trigger validation
@@ -353,7 +349,6 @@ export const CustomerFormModal = ({ open, onOpenChange, customer }: CustomerForm
         license_number: data.license_number || null,
         id_number: data.id_number || null,
         whatsapp_opt_in: data.whatsapp_opt_in,
-        high_switcher: data.high_switcher,
         status: data.status,
         nok_full_name: data.nok_full_name || null,
         nok_relationship: data.nok_relationship || null,
@@ -381,16 +376,36 @@ export const CustomerFormModal = ({ open, onOpenChange, customer }: CustomerForm
 
         if (error) throw error;
 
+        // Audit log for customer update
+        logAction({
+          action: "customer_updated",
+          entityType: "customer",
+          entityId: customer.id,
+          details: { customer_name: data.name }
+        });
+
         toast({
           title: "Customer Updated",
           description: `${data.name} has been updated successfully.`,
         });
       } else {
-        const { error } = await supabase
+        const { data: newCustomer, error } = await supabase
           .from("customers")
-          .insert(payload);
+          .insert(payload)
+          .select("id")
+          .single();
 
         if (error) throw error;
+
+        // Audit log for customer creation
+        if (newCustomer?.id) {
+          logAction({
+            action: "customer_created",
+            entityType: "customer",
+            entityId: newCustomer.id,
+            details: { customer_name: data.name }
+          });
+        }
 
         toast({
           title: "Customer Added",
@@ -499,27 +514,6 @@ export const CustomerFormModal = ({ open, onOpenChange, customer }: CustomerForm
                 )}
               />
             </div>
-
-            <FormField
-              control={form.control}
-              name="high_switcher"
-              render={({ field }) => (
-                <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4">
-                  <div className="space-y-0.5">
-                    <FormLabel className="text-base">High Switcher</FormLabel>
-                    <div className="text-sm text-muted-foreground">
-                      Customer frequently changes cars
-                    </div>
-                  </div>
-                  <FormControl>
-                    <Switch
-                      checked={field.value}
-                      onCheckedChange={field.onChange}
-                    />
-                  </FormControl>
-                </FormItem>
-              )}
-            />
 
             <FormField
               control={form.control}

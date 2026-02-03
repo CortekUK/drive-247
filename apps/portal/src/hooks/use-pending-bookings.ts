@@ -125,8 +125,12 @@ export const usePendingBookingsCount = () => {
       const { count, error } = await query;
 
       if (error) {
-        // Only log if there's an actual error message
-        if (error.message || error.code) {
+        // Ignore network errors (e.g., "Failed to fetch") as they are transient
+        // Only log actual database/query errors
+        const isNetworkError = error.message?.includes("Failed to fetch") ||
+                               error.message?.includes("NetworkError") ||
+                               error.message?.includes("AbortError");
+        if (!isNetworkError && (error.message || error.code)) {
           console.error("Error fetching pending bookings count:", error.message || error);
         }
         return 0;
@@ -137,5 +141,12 @@ export const usePendingBookingsCount = () => {
     enabled: !!tenant,
     staleTime: 30 * 1000,
     refetchInterval: 60 * 1000,
+    retry: (failureCount, error) => {
+      // Don't retry on network errors more than once
+      if (error?.message?.includes("Failed to fetch")) {
+        return failureCount < 1;
+      }
+      return failureCount < 3;
+    },
   });
 };

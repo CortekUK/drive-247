@@ -38,6 +38,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
+import { useAuditLog } from "@/hooks/use-audit-log";
 
 interface Vehicle {
   id: string;
@@ -62,6 +63,8 @@ interface Vehicle {
   daily_rent?: number;
   weekly_rent?: number;
   monthly_rent?: number;
+  // Mileage allowance
+  allowed_mileage?: number | null;
   // MOT & TAX fields
   mot_due_date?: string;
   tax_due_date?: string;
@@ -126,6 +129,7 @@ export default function VehicleDetail() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { toast } = useToast();
+  const { logAction } = useAuditLog();
   const [showAddFineDialog, setShowAddFineDialog] = useState(false);
   const [showEditDialog, setShowEditDialog] = useState(false);
   const [showDisposeDialog, setShowDisposeDialog] = useState(false);
@@ -493,6 +497,10 @@ export default function VehicleDetail() {
                 {vehicle.year && <MetricItem label="Year" value={vehicle.year} />}
                 <MetricItem label="Color" value={vehicle.colour} />
                 {vehicle.fuel_type && <MetricItem label="Fuel Type" value={vehicle.fuel_type === 'Petrol' ? 'Gas' : vehicle.fuel_type} />}
+                <MetricItem
+                  label="Allowed Mileage"
+                  value={vehicle.allowed_mileage ? `${vehicle.allowed_mileage.toLocaleString()} mi/month` : 'Unlimited'}
+                />
                 <div className="flex items-center gap-2">
                   <span className="text-xs text-muted-foreground">Acquisition:</span>
                   <AcquisitionBadge acquisitionType={vehicle.acquisition_type} />
@@ -822,6 +830,14 @@ export default function VehicleDetail() {
                     .eq('id', vehicle.id);
 
                   if (error) throw error;
+
+                  // Audit log for vehicle deletion
+                  logAction({
+                    action: "vehicle_deleted",
+                    entityType: "vehicle",
+                    entityId: vehicle.id,
+                    details: { reg: vehicle.reg, make: vehicle.make, model: vehicle.model }
+                  });
 
                   toast({
                     title: "Vehicle deleted",

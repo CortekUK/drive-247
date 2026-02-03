@@ -47,7 +47,6 @@ interface Customer {
   customer_type: "Individual" | "Company";
   status: string;
   whatsapp_opt_in: boolean;
-  high_switcher?: boolean;
   license_number?: string;
   id_number?: string;
   is_blocked?: boolean;
@@ -75,8 +74,7 @@ const CustomerDetail = () => {
   const [blockDialogOpen, setBlockDialogOpen] = useState(false);
   const [blockReason, setBlockReason] = useState("");
 
-  const { addBlockedIdentity, unblockCustomer, isLoading: blockingLoading } = useCustomerBlockingActions();
-  const [isBlocking, setIsBlocking] = useState(false);
+  const { blockCustomer, unblockCustomer, isLoading: blockingLoading } = useCustomerBlockingActions();
 
   const { data: customer, isLoading, refetch: refetchCustomer } = useQuery({
     queryKey: ["customer", id],
@@ -84,7 +82,7 @@ const CustomerDetail = () => {
       const { data, error } = await (supabase as any)
         .from("customers")
         .select(`
-          id, name, email, phone, customer_type, status, whatsapp_opt_in, high_switcher,
+          id, name, email, phone, customer_type, status, whatsapp_opt_in,
           license_number, id_number, is_blocked, blocked_at, blocked_reason,
           nok_full_name, nok_relationship, nok_phone, nok_email, nok_address
         `)
@@ -95,52 +93,29 @@ const CustomerDetail = () => {
       return data as Customer;
     },
     enabled: !!id,
+    staleTime: 0, // Always fetch fresh data
   });
 
   const handleBlockCustomer = async () => {
-    if (!blockReason.trim() || !customer || !customer.email) return;
+    if (!blockReason.trim() || !id) return;
 
-    setIsBlocking(true);
-    try {
-      // First block the customer directly in database
-      const { error: blockError } = await (supabase as any)
-        .from('customers')
-        .update({
-          is_blocked: true,
-          blocked_at: new Date().toISOString(),
-          blocked_reason: blockReason
-        })
-        .eq('id', id);
-
-      if (blockError) throw blockError;
-
-      // Add email to blocked identities list
-      await addBlockedIdentity.mutateAsync({
-        identityType: 'email',
-        identityNumber: customer.email,
-        reason: blockReason,
-        notes: `Blocked from customer: ${customer.name}`
-      });
-
-      // Check and update global blacklist (auto-adds if blocked by 3+ tenants)
-      await (supabase as any).rpc('check_and_update_global_blacklist', {
-        p_email: customer.email
-      });
-
-      setBlockDialogOpen(false);
-      setBlockReason("");
-      refetchCustomer();
-    } catch (error: any) {
-      console.error('Failed to block customer:', error);
-    } finally {
-      setIsBlocking(false);
-    }
+    blockCustomer.mutate(
+      { customerId: id, reason: blockReason },
+      {
+        onSuccess: async () => {
+          setBlockDialogOpen(false);
+          setBlockReason("");
+          await refetchCustomer();
+        }
+      }
+    );
   };
 
-  const handleUnblockCustomer = () => {
+  const handleUnblockCustomer = async () => {
     unblockCustomer.mutate(id!, {
-      onSuccess: () => {
-        refetchCustomer();
+      onSuccess: async () => {
+        // Force refetch to ensure UI updates immediately
+        await refetchCustomer();
       }
     });
   };
@@ -240,9 +215,6 @@ const CustomerDetail = () => {
                   <Ban className="h-3 w-3 mr-1" />
                   Blocked
                 </Badge>
-              )}
-              {customer.high_switcher && (
-                <Badge variant="secondary">High Switcher</Badge>
               )}
             </div>
             <p className="text-muted-foreground text-sm">
@@ -1018,9 +990,9 @@ const CustomerDetail = () => {
             <Button
               variant="destructive"
               onClick={handleBlockCustomer}
-              disabled={!blockReason.trim() || isBlocking || !customer.email}
+              disabled={!blockReason.trim() || blockCustomer.isPending}
             >
-              {isBlocking ? "Blocking..." : "Block Customer"}
+              {blockCustomer.isPending ? "Blocking..." : "Block Customer"}
             </Button>
           </DialogFooter>
         </DialogContent>

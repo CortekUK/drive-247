@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -9,16 +9,16 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 
 import { Checkbox } from "@/components/ui/checkbox";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { AlertTriangle, Plus, Eye, Filter, MoreVertical, CreditCard, Ban, Receipt, Scale, ArrowUpDown } from "lucide-react";
+import { AlertTriangle, Plus, Eye, MoreVertical, CreditCard, Ban, ArrowUpDown } from "lucide-react";
 import { FineStatusBadge } from "@/components/shared/status/fine-status-badge";
 import { FineKPIs } from "@/components/fines/fine-kpis";
 import { FineFilters, FineFilterState } from "@/components/fines/fine-filters";
 import { BulkActionBar } from "@/components/fines/bulk-action-bar";
-import { AuthorityPaymentDialog } from "@/components/fines/authority-payment-dialog";
 import { useFinesData, EnhancedFine } from "@/hooks/use-fines-data";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
+import { useAuditLog } from "@/hooks/use-audit-log";
 import { cn } from "@/lib/utils";
 
 const FinesList = () => {
@@ -26,27 +26,22 @@ const FinesList = () => {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const searchParams = useSearchParams();
+  const { logAction } = useAuditLog();
 
   // State for filtering, sorting, and selection
   const [filters, setFilters] = useState<FineFilterState>({
     status: [],
-    liability: [],
     vehicleSearch: '',
     customerSearch: '',
+    search: '',
   });
 
   const [sortBy, setSortBy] = useState('created_at');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
-  
-  const [selectedFines, setSelectedFines] = useState<string[]>([]);
+  const [currentPage, setCurrentPage] = useState(1);
+  const pageSize = 25;
 
-  // Authority payment dialog state
-  const [authorityPaymentDialog, setAuthorityPaymentDialog] = useState<{
-    open: boolean;
-    fineId?: string;
-    amount?: number;
-    reference?: string;
-  }>({ open: false });
+  const [selectedFines, setSelectedFines] = useState<string[]>([]);
 
   // Fetch fines data with current filters
   const { data: finesData, isLoading, error } = useFinesData({
@@ -55,8 +50,19 @@ const FinesList = () => {
     sortOrder,
   });
 
-  // All fines
-  const filteredFines = finesData?.fines || [];
+  // All fines with pagination
+  const allFines = finesData?.fines || [];
+  const totalFines = allFines.length;
+  const totalPages = Math.ceil(totalFines / pageSize);
+  const startIndex = (currentPage - 1) * pageSize;
+  const endIndex = Math.min(startIndex + pageSize, totalFines);
+  const filteredFines = allFines.slice(startIndex, endIndex);
+
+  // Reset to page 1 when filters change
+  const handleFiltersChange = (newFilters: FineFilterState) => {
+    setFilters(newFilters);
+    setCurrentPage(1);
+  };
 
   // Get selected fine objects for bulk actions
   const selectedFineObjects = filteredFines.filter(fine => selectedFines.includes(fine.id));
@@ -69,12 +75,21 @@ const FinesList = () => {
       });
       if (error) throw error;
       if (!data.success) throw new Error(data.error || 'Failed to charge fine');
-      return data;
+      return { ...data, fineId };
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
       toast({ title: "Fine charged to customer account successfully" });
       queryClient.invalidateQueries({ queryKey: ["fines-enhanced"] });
       queryClient.invalidateQueries({ queryKey: ["fines-kpis"] });
+      queryClient.invalidateQueries({ queryKey: ["audit-logs"] });
+
+      // Audit log
+      logAction({
+        action: "fine_charged",
+        entityType: "fine",
+        entityId: data.fineId,
+        details: { amount: data.amount }
+      });
     },
     onError: (error: any) => {
       toast({
@@ -92,39 +107,26 @@ const FinesList = () => {
       });
       if (error) throw error;
       if (!data.success) throw new Error(data.error || 'Failed to waive fine');
-      return data;
+      return { ...data, fineId };
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
       toast({ title: "Fine waived successfully" });
       queryClient.invalidateQueries({ queryKey: ["fines-enhanced"] });
       queryClient.invalidateQueries({ queryKey: ["fines-kpis"] });
+      queryClient.invalidateQueries({ queryKey: ["audit-logs"] });
+
+      // Audit log
+      logAction({
+        action: "fine_waived",
+        entityType: "fine",
+        entityId: data.fineId,
+        details: { amount: data.amount }
+      });
     },
     onError: (error: any) => {
       toast({
         title: "Error",
         description: error.message || "Failed to waive fine",
-        variant: "destructive",
-      });
-    },
-  });
-
-  const appealFineAction = useMutation({
-    mutationFn: async (fineId: string) => {
-      const { data, error } = await supabase.functions.invoke('apply-fine', {
-        body: { fineId, action: 'appeal' }
-      });
-      if (error) throw error;
-      if (!data.success) throw new Error(data.error || 'Failed to mark as appealed');
-      return data;
-    },
-    onSuccess: () => {
-      toast({ title: "Fine marked as appealed" });
-      queryClient.invalidateQueries({ queryKey: ["fines-enhanced"] });
-    },
-    onError: (error: any) => {
-      toast({
-        title: "Error",
-        description: error.message || "Failed to mark fine as appealed",
         variant: "destructive",
       });
     },
@@ -155,9 +157,8 @@ const FinesList = () => {
 
   // Render individual fine row
   const renderFineRow = (fine: EnhancedFine) => {
-    const canCharge = fine.liability === 'Individual' || fine.liability === 'Customer' && (fine.status === 'Open' || fine.status === 'Appealed');
-    const canWaive = fine.status === 'Open' || fine.status === 'Appealed';
-    const canAppeal = fine.status === 'Open';
+    const canCharge = fine.status === 'Open';
+    const canWaive = fine.status === 'Open';
 
     return (
       <TableRow
@@ -201,41 +202,29 @@ const FinesList = () => {
         </TableCell>
 
         <TableCell>
-          <Badge variant={fine.liability === 'Individual' || fine.liability === 'Customer' ? 'default' : 'secondary'}>
-            {fine.liability === "Customer" ? "Individual" : fine.liability}
-          </Badge>
-        </TableCell>
-
-        <TableCell>
-          <div className="flex items-center gap-2">
-            <FineStatusBadge
-              status={fine.status}
-              dueDate={fine.due_date}
-              remainingAmount={fine.amount}
-            />
-            {fine.isAuthoritySettled && (
-              <Badge variant="secondary" className="text-green-700 bg-green-100 text-xs">
-                Authority Settled
-              </Badge>
-            )}
-          </div>
+          <FineStatusBadge
+            status={fine.status}
+            dueDate={fine.due_date}
+            remainingAmount={fine.amount}
+          />
         </TableCell>
 
         <TableCell className="text-left font-medium">
           ${Number(fine.amount).toLocaleString()}
         </TableCell>
 
-        <TableCell className="text-right">
-          <div className="flex items-center gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => router.push(`/fines/${fine.id}`)}
-            >
-              <Eye className="h-4 w-4 mr-1" />
-              View
-            </Button>
+        <TableCell>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => router.push(`/fines/${fine.id}`)}
+          >
+            <Eye className="h-4 w-4" />
+          </Button>
+        </TableCell>
 
+        <TableCell className="text-right">
+          {(canCharge || canWaive) && (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="ghost" size="sm">
@@ -252,29 +241,6 @@ const FinesList = () => {
                     Charge to Customer
                   </DropdownMenuItem>
                 )}
-
-                <DropdownMenuItem
-                  onClick={() => setAuthorityPaymentDialog({
-                    open: true,
-                    fineId: fine.id,
-                    amount: fine.amount,
-                    reference: fine.reference_no || undefined,
-                  })}
-                >
-                  <Receipt className="h-4 w-4 mr-2" />
-                  Record Authority Payment
-                </DropdownMenuItem>
-
-                {canAppeal && (
-                  <DropdownMenuItem
-                    onClick={() => appealFineAction.mutate(fine.id)}
-                    disabled={appealFineAction.isPending}
-                  >
-                    <Scale className="h-4 w-4 mr-2" />
-                    Mark as Appealed
-                  </DropdownMenuItem>
-                )}
-
                 {canWaive && (
                   <DropdownMenuItem
                     onClick={() => waiveFineAction.mutate(fine.id)}
@@ -286,7 +252,7 @@ const FinesList = () => {
                 )}
               </DropdownMenuContent>
             </DropdownMenu>
-          </div>
+          )}
         </TableCell>
       </TableRow>
     );
@@ -317,18 +283,18 @@ const FinesList = () => {
                 <ArrowUpDown className="h-4 w-4" />
               </div>
             </TableHead>
-            <TableHead>Liability</TableHead>
             <TableHead>Status</TableHead>
             <TableHead
-              className="text-right cursor-pointer hover:bg-muted/50"
+              className="text-left cursor-pointer hover:bg-muted/50"
               onClick={() => handleSort('amount')}
             >
-              <div className="flex items-center justify-end gap-1">
+              <div className="flex items-center gap-1">
                 Amount
                 <ArrowUpDown className="h-4 w-4" />
               </div>
             </TableHead>
-            <TableHead className="text-right">Actions</TableHead>
+            <TableHead className="w-12">View</TableHead>
+            <TableHead className="text-right w-12">Actions</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -341,7 +307,7 @@ const FinesList = () => {
                   <AlertTriangle className="h-12 w-12 text-muted-foreground" />
                   <p className="text-lg font-medium">No fines found</p>
                   <p className="text-muted-foreground">
-                    {filters.status.length > 0 || filters.liability.length > 0 || filters.vehicleSearch || filters.customerSearch
+                    {filters.status.length > 0 || filters.vehicleSearch || filters.customerSearch || filters.search
                       ? "Try adjusting your filters"
                       : "Get started by adding your first fine"
                     }
@@ -367,8 +333,6 @@ const FinesList = () => {
     );
   }
 
-  
-
   return (
     <div className="container mx-auto p-6 space-y-6">
       {/* Header */}
@@ -392,7 +356,7 @@ const FinesList = () => {
       <FineKPIs />
 
       {/* Filters */}
-      <FineFilters onFiltersChange={setFilters} />
+      <FineFilters onFiltersChange={handleFiltersChange} />
 
       {/* Bulk Action Bar */}
       {selectedFines.length > 0 && (
@@ -403,33 +367,47 @@ const FinesList = () => {
       )}
 
       {/* Fines Table */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <AlertTriangle className="h-5 w-5 text-primary" />
-            Fines & Penalties
-          </CardTitle>
-          <CardDescription>
-            View and manage all fines
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          {isLoading ? (
-            <div className="text-center py-8">Loading fines...</div>
-          ) : (
-            renderFinesTable(filteredFines)
-          )}
-        </CardContent>
-      </Card>
+      {isLoading ? (
+        <div className="text-center py-8">Loading fines...</div>
+      ) : (
+        <>
+          <Card>
+            <CardContent className="p-0">
+              {renderFinesTable(filteredFines)}
+            </CardContent>
+          </Card>
 
-      {/* Authority Payment Dialog */}
-      <AuthorityPaymentDialog
-        open={authorityPaymentDialog.open}
-        onOpenChange={(open) => setAuthorityPaymentDialog(prev => ({ ...prev, open }))}
-        fineId={authorityPaymentDialog.fineId || ''}
-        fineAmount={authorityPaymentDialog.amount || 0}
-        fineReference={authorityPaymentDialog.reference}
-      />
+          {/* Pagination */}
+          {totalFines > 0 && (
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+              <p className="text-sm text-muted-foreground">
+                Showing {startIndex + 1}-{endIndex} of {totalFines} fines
+              </p>
+              <div className="flex items-center gap-2 w-full sm:w-auto flex-wrap justify-center sm:justify-end">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
+                  disabled={currentPage === 1}
+                >
+                  Previous
+                </Button>
+                <span className="text-sm text-muted-foreground whitespace-nowrap">
+                  Page {currentPage} of {totalPages || 1}
+                </span>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setCurrentPage(Math.min(totalPages, currentPage + 1))}
+                  disabled={currentPage === totalPages || totalPages <= 1}
+                >
+                  Next
+                </Button>
+              </div>
+            </div>
+          )}
+        </>
+      )}
     </div>
   );
 };

@@ -1,5 +1,5 @@
 /**
- * Tenant-Aware Query Utilities for Drive917 Client
+ * Tenant-Aware Query Utilities for Drive247 Client
  *
  * This module provides utilities for making tenant-scoped database queries
  * in the customer-facing booking application.

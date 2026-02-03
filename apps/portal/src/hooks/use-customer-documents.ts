@@ -2,6 +2,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { useTenant } from "@/contexts/TenantContext";
+import { useAuditLog } from "@/hooks/use-audit-log";
 
 export interface CustomerDocument {
   id: string;
@@ -58,13 +59,14 @@ export function useCustomerDocuments(customerId: string) {
 export function useDeleteCustomerDocument() {
   const queryClient = useQueryClient();
   const { tenant } = useTenant();
+  const { logAction } = useAuditLog();
 
   return useMutation({
     mutationFn: async (documentId: string) => {
       // First get the document to find the file URL
       let selectQuery = supabase
         .from("customer_documents")
-        .select("file_url, customer_id")
+        .select("file_url, customer_id, document_type, document_name")
         .eq("id", documentId);
 
       if (tenant?.id) {
@@ -94,11 +96,26 @@ export function useDeleteCustomerDocument() {
       const { error } = await deleteQuery;
 
       if (error) throw error;
-      return document?.customer_id;
+      return { customerId: document?.customer_id, documentId, documentType: document?.document_type, documentName: document?.document_name };
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
+      // Audit log for document deletion
+      if (data?.documentId) {
+        logAction({
+          action: "document_deleted",
+          entityType: "document",
+          entityId: data.documentId,
+          details: {
+            document_type: data.documentType,
+            document_name: data.documentName,
+            customer_id: data.customerId
+          }
+        });
+      }
+
       // Invalidate all customer-documents queries to ensure refresh
       queryClient.invalidateQueries({ queryKey: ["customer-documents"] });
+      queryClient.invalidateQueries({ queryKey: ["audit-logs"] });
       toast.success("Document deleted successfully");
     },
     onError: (error) => {

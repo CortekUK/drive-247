@@ -55,7 +55,7 @@ export function SEOEditor({ content, onSave, isSaving }: SEOEditorProps) {
                 <FormItem>
                   <FormLabel>Page Title</FormLabel>
                   <FormControl>
-                    <Input {...field} placeholder="Contact Drive917 — Los Angeles Luxury Car Rentals" />
+                    <Input {...field} placeholder="Contact Drive247 — Los Angeles Luxury Car Rentals" />
                   </FormControl>
                   <FormDescription className="flex justify-between">
                     <span>The title shown in browser tabs and search results</span>
@@ -78,7 +78,7 @@ export function SEOEditor({ content, onSave, isSaving }: SEOEditorProps) {
                     <Textarea
                       {...field}
                       rows={3}
-                      placeholder="Get in touch with Drive917 for premium vehicle rentals, chauffeur services, and exclusive offers..."
+                      placeholder="Get in touch with Drive247 for premium vehicle rentals, chauffeur services, and exclusive offers..."
                     />
                   </FormControl>
                   <FormDescription className="flex justify-between">
@@ -101,7 +101,7 @@ export function SEOEditor({ content, onSave, isSaving }: SEOEditorProps) {
                   <FormControl>
                     <Input
                       {...field}
-                      placeholder="contact Drive917, luxury car rental, chauffeur service inquiry"
+                      placeholder="contact Drive247, luxury car rental, chauffeur service inquiry"
                     />
                   </FormControl>
                   <FormDescription>
@@ -123,7 +123,7 @@ export function SEOEditor({ content, onSave, isSaving }: SEOEditorProps) {
                   {form.watch("title") || "Page Title"}
                 </p>
                 <p className="text-green-700 text-sm">
-                  drive917.com/contact
+                  drive247.com/contact
                 </p>
                 <p className="text-sm text-muted-foreground line-clamp-2">
                   {form.watch("description") || "Meta description will appear here..."}

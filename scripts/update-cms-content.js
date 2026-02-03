@@ -152,6 +152,62 @@ const TENANT_CONTENT = {
     hours: "24/7",
     specialty: "Full fleet - Economy, SUV, Minivan & Luxury vehicles including Audi & BMW",
     region: "Miami"
+  },
+
+  // JANGRAM CAR RENTAL
+  jangramrentals: {
+    name: "Jangram Car Rental",
+    shortName: "Jangram",
+    tagline: "Tesla & Car Rentals in Denver",
+    phone: "+1 (720) 507-8414",
+    phoneDisplay: "(720) 507-8414",
+    email: "Niv.turo@gmail.com",
+    location: "Denver, Colorado",
+    hours: "24/7",
+    specialty: "Tesla EVs, economy cars, and RAV-4 SUVs",
+    region: "Denver"
+  },
+
+  // REVTEK RENTALS
+  revtekrentals: {
+    name: "RevTek Rentals",
+    shortName: "RevTek",
+    tagline: "Quality Car Rentals in Jacksonville",
+    phone: "+1 (904) 320-2299",
+    phoneDisplay: "(904) 320-2299",
+    email: "revtekrentals@gmail.com",
+    location: "Jacksonville, Florida",
+    hours: "24/7",
+    specialty: "Quality mid-tier vehicles at competitive rates",
+    region: "Jacksonville"
+  },
+
+  // VITALIS RENTAL
+  vitalisrental: {
+    name: "Vitalis Rental",
+    shortName: "Vitalis",
+    tagline: "Premium Luxury Car Rentals in South Florida",
+    phone: "+1 (954) 226-0352",
+    phoneDisplay: "(954) 226-0352",
+    email: "jordanvitalis1206@gmail.com",
+    location: "South Florida",
+    hours: "24 Hours Mon-Fri",
+    specialty: "Premium luxury vehicles - BMW M3, M4, M340, GLE AMG, Porsche 911, Lamborghini Urus",
+    region: "South Florida"
+  },
+
+  // EDIBERTH CAR RENTALS
+  ediberthcarrentals: {
+    name: "Ediberth Car Rentals",
+    shortName: "Ediberth",
+    tagline: "Affordable Car Rentals in Maryland",
+    phone: "+1 (410) 200-1904",
+    phoneDisplay: "(410) 200-1904",
+    email: "edi@ediberthcarrentals.org",
+    location: "Stevensville, Maryland",
+    hours: "24/7",
+    specialty: "Affordable economy cars at budget-friendly rates",
+    region: "Maryland"
   }
 };
 

@@ -1,11 +1,7 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.57.4'
 import Stripe from 'https://esm.sh/stripe@14.21.0?target=deno'
-
-const stripe = new Stripe(Deno.env.get('STRIPE_SECRET_KEY') || '', {
-  apiVersion: '2023-10-16',
-  httpClient: Stripe.createFetchHttpClient(),
-})
+import { getStripeClient, getConnectAccountId, type StripeMode } from '../_shared/stripe-client.ts'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -27,6 +23,9 @@ interface PreAuthCheckoutRequest {
   returnDate: string
   protectionPlan?: string
   tenantId?: string
+  // Bonzah insurance
+  insuranceAmount?: number
+  bonzahPolicyId?: string
 }
 
 serve(async (req) => {
@@ -48,7 +47,8 @@ serve(async (req) => {
 
     // Get tenant_id from rental if not provided
     let tenantId = body.tenantId
-    let stripeAccountId: string | null = null
+    let stripeMode: StripeMode = 'test' // Default to test mode for safety
+    let tenantData: any = null
 
     if (!tenantId && body.rentalId) {
       const { data: rental } = await supabase
@@ -59,25 +59,27 @@ serve(async (req) => {
       tenantId = rental?.tenant_id
     }
 
-    // Get tenant's Stripe Connect account if available
+    // Get tenant's Stripe mode and Connect account if available
     if (tenantId) {
       const { data: tenant } = await supabase
         .from('tenants')
-        .select('stripe_account_id, stripe_onboarding_complete')
+        .select('stripe_mode, stripe_account_id, stripe_onboarding_complete')
         .eq('id', tenantId)
         .single()
 
-      if (tenant?.stripe_account_id && tenant?.stripe_onboarding_complete) {
-        stripeAccountId = tenant.stripe_account_id
-        console.log('Using Stripe Connect account:', stripeAccountId)
-      } else {
-        console.log('No Stripe Connect account configured for tenant:', tenantId)
-        if (tenant) {
-          console.log('stripe_account_id:', tenant.stripe_account_id)
-          console.log('stripe_onboarding_complete:', tenant.stripe_onboarding_complete)
-        }
+      if (tenant) {
+        stripeMode = (tenant.stripe_mode as StripeMode) || 'test'
+        tenantData = tenant
+        console.log('Tenant loaded:', tenantId, 'mode:', stripeMode)
       }
     }
+
+    // Get Stripe client for the tenant's mode
+    const stripe = getStripeClient(stripeMode)
+
+    // Determine which Connect account to use based on tenant mode
+    const stripeAccountId = tenantData ? getConnectAccountId(tenantData) : null
+    console.log('Pre-auth checkout - mode:', stripeMode, 'connectAccount:', stripeAccountId)
 
     // Calculate pre-auth expiry (7 days from now)
     const preauthExpiresAt = new Date()
@@ -110,25 +112,44 @@ serve(async (req) => {
       console.log('Creating checkout session on connected account:', stripeAccountId)
     }
 
+    // Build line items array
+    const lineItems: Stripe.Checkout.SessionCreateParams.LineItem[] = [
+      {
+        price_data: {
+          currency: 'usd',
+          product_data: {
+            name: 'Vehicle Rental Deposit',
+            description: `${body.vehicleName} - ${body.pickupDate} to ${body.returnDate}`,
+            images: [], // Could add vehicle image here
+          },
+          unit_amount: Math.round(body.totalAmount * 100),
+        },
+        quantity: 1,
+      },
+    ]
+
+    // Add insurance line item if present
+    if (body.insuranceAmount && body.insuranceAmount > 0) {
+      console.log('Adding Bonzah insurance line item:', body.insuranceAmount)
+      lineItems.push({
+        price_data: {
+          currency: 'usd',
+          product_data: {
+            name: 'Bonzah Insurance Premium',
+            description: 'Rental car insurance coverage',
+          },
+          unit_amount: Math.round(body.insuranceAmount * 100),
+        },
+        quantity: 1,
+      })
+    }
+
     // Create Stripe Checkout Session (this creates the PaymentIntent internally)
     const session = await stripe.checkout.sessions.create({
       payment_method_types: ['card'],
       mode: 'payment',
       payment_intent_data: paymentIntentData,
-      line_items: [
-        {
-          price_data: {
-            currency: 'usd',
-            product_data: {
-              name: 'Vehicle Rental Deposit',
-              description: `${body.vehicleName} - ${body.pickupDate} to ${body.returnDate}`,
-              images: [], // Could add vehicle image here
-            },
-            unit_amount: Math.round(body.totalAmount * 100),
-          },
-          quantity: 1,
-        },
-      ],
+      line_items: lineItems,
       customer_email: body.customerEmail,
       client_reference_id: body.rentalId,
       success_url: `${origin}/booking-pending?session_id={CHECKOUT_SESSION_ID}&rental_id=${body.rentalId}`,
@@ -139,6 +160,8 @@ serve(async (req) => {
         booking_source: 'website',
         preauth_mode: 'true',
         stripe_account_id: stripeAccountId || '',
+        stripe_mode: stripeMode, // Track which mode was used
+        bonzah_policy_id: body.bonzahPolicyId || '', // Track Bonzah policy for webhook
       },
     }, stripeOptions)
 
@@ -157,7 +180,7 @@ serve(async (req) => {
         method: 'Stripe',
         payment_type: 'InitialFee',
         status: 'Pending',
-        verification_status: 'pending',
+        verification_status: 'auto_approved', // Stripe verified payment
         is_manual_mode: true,
         stripe_checkout_session_id: session.id,
         capture_status: 'requires_capture',

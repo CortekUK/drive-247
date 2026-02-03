@@ -12,6 +12,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import SEO from "@/components/SEO";
 import Navigation from "@/components/Navigation";
 import Footer from "@/components/Footer";
+import { usePageContent, defaultFleetContent, mergeWithDefaults } from "@/hooks/usePageContent";
 import { ArrowLeft, Users, Briefcase, Gauge, Droplet, Check, AlertCircle } from "lucide-react";
 import { toast } from "sonner";
 
@@ -59,6 +60,10 @@ export default function FleetDetail() {
   const [loading, setLoading] = useState(true);
   const [isDescriptionExpanded, setIsDescriptionExpanded] = useState(false);
 
+  // Get CMS content for fleet page (to check if inclusions are configured)
+  const { data: rawContent } = usePageContent("fleet");
+  const content = mergeWithDefaults(rawContent, defaultFleetContent);
+
   // Description helper
   const MAX_DESCRIPTION_LENGTH = 200;
 
@@ -88,14 +93,22 @@ export default function FleetDetail() {
         .select(`
           *,
           vehicle_photos (
-            photo_url
+            photo_url,
+            display_order
           )
         `)
         .eq("id", id)
         .single();
 
       if (vehicleError) throw vehicleError;
-      setVehicle(vehicleData as any);
+      // Sort vehicle_photos by display_order
+      const vehicleWithSortedPhotos = vehicleData ? {
+        ...vehicleData,
+        vehicle_photos: vehicleData.vehicle_photos
+          ? [...vehicleData.vehicle_photos].sort((a: any, b: any) => (a.display_order || 0) - (b.display_order || 0))
+          : []
+      } : null;
+      setVehicle(vehicleWithSortedPhotos as any);
 
       // Load similar vehicles (same make)
       if (vehicleData && vehicleData.make) {
@@ -104,14 +117,22 @@ export default function FleetDetail() {
           .select(`
             *,
             vehicle_photos (
-              photo_url
+              photo_url,
+              display_order
             )
           `)
           .eq("make", vehicleData.make)
           .neq("id", id)
           .limit(3);
 
-        setSimilarVehicles(similarData as any || []);
+        // Sort photos for similar vehicles too
+        const similarWithSortedPhotos = similarData?.map(v => ({
+          ...v,
+          vehicle_photos: v.vehicle_photos
+            ? [...v.vehicle_photos].sort((a: any, b: any) => (a.display_order || 0) - (b.display_order || 0))
+            : []
+        })) || [];
+        setSimilarVehicles(similarWithSortedPhotos as any);
       }
 
       // Load service inclusions
@@ -132,27 +153,6 @@ export default function FleetDetail() {
 
   const scrollToBooking = () => {
     router.push("/#booking");
-  };
-
-  const getStatusBadge = () => {
-    if (!vehicle) return null;
-
-    const statusColors: Record<string, { variant: "default" | "destructive" | "secondary"; className: string }> = {
-      "Available": { variant: "default", className: "bg-green-500/20 text-green-400 border-green-500/30" },
-      "Rented": { variant: "secondary", className: "bg-blue-500/20 text-blue-400 border-blue-500/30" },
-      "Maintenance": { variant: "destructive", className: "" },
-    };
-
-    const status = statusColors[vehicle.status] || { variant: "secondary" as const, className: "" };
-
-    return (
-      <Badge
-        variant={status.variant}
-        className={status.className}
-      >
-        {vehicle.status}
-      </Badge>
-    );
   };
 
   const getVehicleName = (vehicle: Vehicle) => {
@@ -226,18 +226,6 @@ export default function FleetDetail() {
           <div className="absolute top-0 left-0 w-full h-px bg-gradient-to-r from-accent/50 via-accent to-accent/50" />
 
           <div className="relative container mx-auto px-4 h-full flex flex-col justify-end pb-12">
-            {/* Status Badge - Top */}
-            <div className="absolute top-8 left-4 md:left-8">
-              {vehicle.status === 'Available' ? (
-                <span className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-green-500/20 border border-green-500/30 backdrop-blur-sm">
-                  <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
-                  <span className="text-sm text-green-500 dark:text-green-400 font-medium">Available Now</span>
-                </span>
-              ) : (
-                getStatusBadge()
-              )}
-            </div>
-
             {/* Main Content */}
             <div className="max-w-3xl">
               {/* Vehicle Make Badge */}
@@ -342,9 +330,8 @@ export default function FleetDetail() {
               <div>
                 <Card className="bg-card border-accent/20">
                   <CardHeader className="pb-2">
-                    <CardTitle className="flex items-center justify-between text-lg">
-                      <span>Specifications</span>
-                      {getStatusBadge()}
+                    <CardTitle className="text-lg">
+                      Specifications
                     </CardTitle>
                   </CardHeader>
                   <CardContent>
@@ -372,13 +359,6 @@ export default function FleetDetail() {
                           <p className="text-sm font-semibold">{vehicle.colour}</p>
                         </div>
                       </div>
-                      <div className="flex items-center gap-2 p-2 rounded-lg bg-accent/5">
-                        <Briefcase className="w-3 h-3 text-accent" />
-                        <div>
-                          <p className="text-[10px] text-muted-foreground uppercase">Status</p>
-                          <p className="text-sm font-semibold">{vehicle.status}</p>
-                        </div>
-                      </div>
                     </div>
                   </CardContent>
                 </Card>
@@ -387,124 +367,65 @@ export default function FleetDetail() {
           </div>
         </section>
 
-        {/* Pricing Section */}
-        <section className="py-16 relative overflow-hidden">
-          <div className="absolute inset-0 bg-gradient-to-b from-accent/10 dark:from-accent/5 via-transparent to-accent/10 dark:to-accent/5" />
-          <div className="container mx-auto px-4 relative">
-            <div className="max-w-4xl mx-auto">
-              {/* Elegant Header */}
-              <div className="text-center mb-10">
-                <p className="text-accent text-sm tracking-[0.3em] uppercase mb-2">Transparent Pricing</p>
-                <h2 className="font-serif text-3xl font-bold">Select Your Rate</h2>
-              </div>
+        {/* What's Included Section - Only show if tenant has configured inclusions via CMS */}
+        {rawContent?.inclusions && (
+          <section className="py-16 relative overflow-hidden">
+            <div className="absolute inset-0 bg-gradient-to-b from-transparent via-accent/10 dark:via-accent/5 to-transparent" />
+            <div className="container mx-auto px-4 relative">
+              <div className="max-w-5xl mx-auto">
+                {/* Header */}
+                <div className="text-center mb-10">
+                  <p className="text-accent text-xs tracking-[0.3em] uppercase mb-2">Premium Service</p>
+                  <h3 className="font-serif text-2xl font-bold">{content.inclusions?.section_title || "Included with Every Rental"}</h3>
+                </div>
 
-              {/* Premium Pricing Cards */}
-              <div className="grid md:grid-cols-3 gap-6">
-                {/* Daily */}
-                <div className="group relative">
-                  <div className="p-8 rounded-2xl border border-accent/10 bg-card dark:bg-card/50 backdrop-blur-sm text-center hover:border-accent/30 hover:shadow-[0_0_30px_-10px] hover:shadow-accent/30 transition-all duration-300">
-                    <p className="text-xs tracking-[0.2em] uppercase text-muted-foreground mb-4">Daily</p>
-                    <div className="flex items-baseline justify-center gap-1">
-                      <span className="text-lg text-muted-foreground">$</span>
-                      <span className="text-4xl font-serif font-bold text-foreground">{vehicle.daily_rent}</span>
+                {/* Features Grid */}
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                  <div className="group p-6 rounded-2xl border border-accent/10 bg-card dark:bg-card/30 backdrop-blur-sm text-center hover:border-accent/30 transition-all duration-300">
+                    <div className="w-12 h-12 rounded-full bg-accent/10 flex items-center justify-center mx-auto mb-4 group-hover:bg-accent/20 transition-colors">
+                      <svg className="w-5 h-5 text-accent" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+                      </svg>
                     </div>
-                    <p className="text-xs text-muted-foreground mt-3">Perfect for day trips</p>
+                    <h4 className="font-medium text-sm mb-1">Full Insurance</h4>
+                    <p className="text-xs text-muted-foreground">Comprehensive coverage</p>
                   </div>
-                </div>
 
-                {/* Weekly - Featured */}
-                <div className="group relative -mt-2 md:-mt-4">
-                  <div className="p-8 pt-10 rounded-2xl bg-card text-center border-2 border-accent shadow-[0_0_40px_-10px] shadow-accent/50">
-                    <div className="absolute -top-3 left-1/2 -translate-x-1/2">
-                      <span className="bg-accent text-accent-foreground text-[10px] tracking-[0.15em] uppercase px-4 py-1.5 rounded-full font-semibold shadow-lg">Most Popular</span>
+                  <div className="group p-6 rounded-2xl border border-accent/10 bg-card dark:bg-card/30 backdrop-blur-sm text-center hover:border-accent/30 transition-all duration-300">
+                    <div className="w-12 h-12 rounded-full bg-accent/10 flex items-center justify-center mx-auto mb-4 group-hover:bg-accent/20 transition-colors">
+                      <svg className="w-5 h-5 text-accent" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
                     </div>
-                    <p className="text-xs tracking-[0.2em] uppercase text-accent mb-4">Weekly</p>
-                    <div className="flex items-baseline justify-center gap-1">
-                      <span className="text-lg text-accent">$</span>
-                      <span className="text-5xl font-serif font-bold text-foreground">{vehicle.weekly_rent}</span>
+                    <h4 className="font-medium text-sm mb-1">24/7 Concierge</h4>
+                    <p className="text-xs text-muted-foreground">Always available</p>
+                  </div>
+
+                  <div className="group p-6 rounded-2xl border border-accent/10 bg-card dark:bg-card/30 backdrop-blur-sm text-center hover:border-accent/30 transition-all duration-300">
+                    <div className="w-12 h-12 rounded-full bg-accent/10 flex items-center justify-center mx-auto mb-4 group-hover:bg-accent/20 transition-colors">
+                      <svg className="w-5 h-5 text-accent" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                      </svg>
                     </div>
-                    <p className="text-xs text-muted-foreground mt-3">Best value for your journey</p>
-                    <div className="mt-6">
-                      <Button onClick={scrollToBooking} className="w-full bg-accent text-accent-foreground hover:bg-accent/90">
-                        Select Weekly
-                      </Button>
+                    <h4 className="font-medium text-sm mb-1">Free Delivery</h4>
+                    <p className="text-xs text-muted-foreground">To your location</p>
+                  </div>
+
+                  <div className="group p-6 rounded-2xl border border-accent/10 bg-card dark:bg-card/30 backdrop-blur-sm text-center hover:border-accent/30 transition-all duration-300">
+                    <div className="w-12 h-12 rounded-full bg-accent/10 flex items-center justify-center mx-auto mb-4 group-hover:bg-accent/20 transition-colors">
+                      <svg className="w-5 h-5 text-accent" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z" />
+                      </svg>
                     </div>
+                    <h4 className="font-medium text-sm mb-1">Premium Detail</h4>
+                    <p className="text-xs text-muted-foreground">Immaculate condition</p>
                   </div>
-                </div>
-
-                {/* Monthly */}
-                <div className="group relative">
-                  <div className="p-8 rounded-2xl border border-accent/10 bg-card dark:bg-card/50 backdrop-blur-sm text-center hover:border-accent/30 hover:shadow-[0_0_30px_-10px] hover:shadow-accent/30 transition-all duration-300">
-                    <p className="text-xs tracking-[0.2em] uppercase text-muted-foreground mb-4">Monthly</p>
-                    <div className="flex items-baseline justify-center gap-1">
-                      <span className="text-lg text-muted-foreground">$</span>
-                      <span className="text-4xl font-serif font-bold text-foreground">{vehicle.monthly_rent}</span>
-                    </div>
-                    <p className="text-xs text-muted-foreground mt-3">Extended luxury experience</p>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </section>
-
-        {/* What's Included Section */}
-        <section className="py-16 relative overflow-hidden">
-          <div className="absolute inset-0 bg-gradient-to-b from-transparent via-accent/10 dark:via-accent/5 to-transparent" />
-          <div className="container mx-auto px-4 relative">
-            <div className="max-w-5xl mx-auto">
-              {/* Header */}
-              <div className="text-center mb-10">
-                <p className="text-accent text-xs tracking-[0.3em] uppercase mb-2">Premium Service</p>
-                <h3 className="font-serif text-2xl font-bold">Included with Every Rental</h3>
-              </div>
-
-              {/* Features Grid */}
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                <div className="group p-6 rounded-2xl border border-accent/10 bg-card dark:bg-card/30 backdrop-blur-sm text-center hover:border-accent/30 transition-all duration-300">
-                  <div className="w-12 h-12 rounded-full bg-accent/10 flex items-center justify-center mx-auto mb-4 group-hover:bg-accent/20 transition-colors">
-                    <svg className="w-5 h-5 text-accent" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
-                    </svg>
-                  </div>
-                  <h4 className="font-medium text-sm mb-1">Full Insurance</h4>
-                  <p className="text-xs text-muted-foreground">Comprehensive coverage</p>
-                </div>
-
-                <div className="group p-6 rounded-2xl border border-accent/10 bg-card dark:bg-card/30 backdrop-blur-sm text-center hover:border-accent/30 transition-all duration-300">
-                  <div className="w-12 h-12 rounded-full bg-accent/10 flex items-center justify-center mx-auto mb-4 group-hover:bg-accent/20 transition-colors">
-                    <svg className="w-5 h-5 text-accent" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                    </svg>
-                  </div>
-                  <h4 className="font-medium text-sm mb-1">24/7 Concierge</h4>
-                  <p className="text-xs text-muted-foreground">Always available</p>
-                </div>
-
-                <div className="group p-6 rounded-2xl border border-accent/10 bg-card dark:bg-card/30 backdrop-blur-sm text-center hover:border-accent/30 transition-all duration-300">
-                  <div className="w-12 h-12 rounded-full bg-accent/10 flex items-center justify-center mx-auto mb-4 group-hover:bg-accent/20 transition-colors">
-                    <svg className="w-5 h-5 text-accent" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
-                    </svg>
-                  </div>
-                  <h4 className="font-medium text-sm mb-1">Free Delivery</h4>
-                  <p className="text-xs text-muted-foreground">To your location</p>
-                </div>
-
-                <div className="group p-6 rounded-2xl border border-accent/10 bg-card dark:bg-card/30 backdrop-blur-sm text-center hover:border-accent/30 transition-all duration-300">
-                  <div className="w-12 h-12 rounded-full bg-accent/10 flex items-center justify-center mx-auto mb-4 group-hover:bg-accent/20 transition-colors">
-                    <svg className="w-5 h-5 text-accent" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z" />
-                    </svg>
-                  </div>
-                  <h4 className="font-medium text-sm mb-1">Premium Detail</h4>
-                  <p className="text-xs text-muted-foreground">Immaculate condition</p>
                 </div>
               </div>
             </div>
-          </div>
-        </section>
+          </section>
+        )}
 
         {/* Similar Vehicles Section */}
         {similarVehicles.length > 0 && (

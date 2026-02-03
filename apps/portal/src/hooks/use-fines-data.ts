@@ -10,7 +10,6 @@ export interface EnhancedFine {
   issue_date: string;
   due_date: string;
   amount: number;
-  liability: string;
   status: string;
   notes: string | null;
   customer_id: string | null;
@@ -47,7 +46,6 @@ interface UseFinesDataParams {
 export const useFinesData = ({
   filters = {
     status: [],
-    liability: [],
     vehicleSearch: '',
     customerSearch: '',
   },
@@ -76,10 +74,6 @@ export const useFinesData = ({
       // Apply filters
       if (filters.status && filters.status.length > 0) {
         query = query.in('status', filters.status);
-      }
-
-      if (filters.liability && filters.liability.length > 0) {
-        query = query.in('liability', filters.liability);
       }
 
       // Note: Vehicle and customer search will be applied client-side after fetching
@@ -122,10 +116,16 @@ export const useFinesData = ({
       // Apply sorting
       query = query.order(sortBy, { ascending: sortOrder === 'asc' });
 
-      // Apply pagination
-      const startIndex = (page - 1) * pageSize;
-      const endIndex = startIndex + pageSize - 1;
-      query = query.range(startIndex, endIndex);
+      // Don't apply database pagination if we have a search term
+      // because search is done client-side on foreign table columns
+      const hasClientSideSearch = filters.search?.trim() || filters.vehicleSearch?.trim() || filters.customerSearch?.trim();
+
+      if (!hasClientSideSearch) {
+        // Apply pagination only when no client-side search
+        const startIndex = (page - 1) * pageSize;
+        const endIndex = startIndex + pageSize - 1;
+        query = query.range(startIndex, endIndex);
+      }
 
       const { data, error, count } = await query;
       
@@ -156,6 +156,23 @@ export const useFinesData = ({
       });
 
       // Apply client-side filters for foreign table columns
+      // Unified search - searches across reference, type, vehicle, and customer
+      if (filters.search && filters.search.trim()) {
+        const search = filters.search.trim().toLowerCase();
+        enhancedFines = enhancedFines.filter(fine =>
+          fine.reference_no?.toLowerCase().includes(search) ||
+          fine.type?.toLowerCase().includes(search) ||
+          fine.id?.toLowerCase().includes(search) ||
+          fine.vehicles?.reg?.toLowerCase().includes(search) ||
+          fine.vehicles?.make?.toLowerCase().includes(search) ||
+          fine.vehicles?.model?.toLowerCase().includes(search) ||
+          fine.customers?.name?.toLowerCase().includes(search) ||
+          fine.customers?.email?.toLowerCase().includes(search) ||
+          fine.customers?.phone?.toLowerCase().includes(search)
+        );
+      }
+
+      // Legacy vehicle search (for backwards compatibility)
       if (filters.vehicleSearch && filters.vehicleSearch.trim()) {
         const search = filters.vehicleSearch.trim().toLowerCase();
         enhancedFines = enhancedFines.filter(fine =>
@@ -165,6 +182,7 @@ export const useFinesData = ({
         );
       }
 
+      // Legacy customer search (for backwards compatibility)
       if (filters.customerSearch && filters.customerSearch.trim()) {
         const search = filters.customerSearch.trim().toLowerCase();
         enhancedFines = enhancedFines.filter(fine =>

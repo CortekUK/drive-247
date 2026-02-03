@@ -1,5 +1,5 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Users, Building, UserCheck, TrendingUp, XCircle } from "lucide-react";
+import { Users, Building, UserCheck, XCircle } from "lucide-react";
 
 interface Customer {
   id: string;
@@ -10,7 +10,6 @@ interface Customer {
   customer_type?: "Individual" | "Company";
   status: string;
   whatsapp_opt_in: boolean;
-  high_switcher?: boolean;
   is_blocked?: boolean;
 }
 
@@ -24,7 +23,6 @@ export const CustomerSummaryCards = ({ customers }: CustomerSummaryCardsProps) =
   const totalCustomers = nonBlockedCustomers.length;
   const activeCustomers = nonBlockedCustomers.filter(c => c.status === 'Active').length;
   const rejectedCustomers = nonBlockedCustomers.filter(c => c.status === 'Rejected').length;
-  const highSwitchers = nonBlockedCustomers.filter(c => c.high_switcher).length;
   const companies = nonBlockedCustomers.filter(c => c.customer_type === 'Company').length;
 
   const cards = [
@@ -47,10 +45,10 @@ export const CustomerSummaryCards = ({ customers }: CustomerSummaryCardsProps) =
       description: "Customers pending review"
     },
     {
-      title: "High Switchers",
-      value: highSwitchers,
-      icon: TrendingUp,
-      description: "Frequent car changers"
+      title: "Companies",
+      value: companies,
+      icon: Building,
+      description: "Business customers"
     }
   ];
 
@@ -64,8 +62,8 @@ export const CustomerSummaryCards = ({ customers }: CustomerSummaryCardsProps) =
             return baseClasses + "bg-gradient-to-br from-success/10 to-success/5 border-success/20 hover:border-success/40";
           } else if (card.title === "Rejected") {
             return baseClasses + "bg-gradient-to-br from-red-500/10 to-red-500/5 border-red-500/20 hover:border-red-500/40";
-          } else if (card.title === "High Switchers") {
-            return baseClasses + "bg-gradient-to-br from-warning/10 to-warning/5 border-warning/20 hover:border-warning/40";
+          } else if (card.title === "Companies") {
+            return baseClasses + "bg-gradient-to-br from-blue-500/10 to-blue-500/5 border-blue-500/20 hover:border-blue-500/40";
           } else {
             return baseClasses + "bg-card hover:bg-accent/50 border";
           }
@@ -77,8 +75,8 @@ export const CustomerSummaryCards = ({ customers }: CustomerSummaryCardsProps) =
             return baseClasses + "text-success";
           } else if (card.title === "Rejected") {
             return baseClasses + "text-red-500";
-          } else if (card.title === "High Switchers") {
-            return baseClasses + "text-warning";
+          } else if (card.title === "Companies") {
+            return baseClasses + "text-blue-500";
           } else {
             return baseClasses + "text-primary";
           }

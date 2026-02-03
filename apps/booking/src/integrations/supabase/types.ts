@@ -12,31 +12,6 @@ export type Database = {
   __InternalSupabase: {
     PostgrestVersion: "13.0.5"
   }
-  graphql_public: {
-    Tables: {
-      [_ in never]: never
-    }
-    Views: {
-      [_ in never]: never
-    }
-    Functions: {
-      graphql: {
-        Args: {
-          extensions?: Json
-          operationName?: string
-          query?: string
-          variables?: Json
-        }
-        Returns: Json
-      }
-    }
-    Enums: {
-      [_ in never]: never
-    }
-    CompositeTypes: {
-      [_ in never]: never
-    }
-  }
   public: {
     Tables: {
       _orphaned_data_audit: {
@@ -410,6 +385,50 @@ export type Database = {
           },
           {
             foreignKeyName: "blocked_identities_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      chat_messages: {
+        Row: {
+          chart_data: Json | null
+          content: string
+          conversation_id: string
+          created_at: string | null
+          id: number
+          role: string
+          sources: Json | null
+          tenant_id: string
+          user_id: string | null
+        }
+        Insert: {
+          chart_data?: Json | null
+          content: string
+          conversation_id?: string
+          created_at?: string | null
+          id?: number
+          role: string
+          sources?: Json | null
+          tenant_id: string
+          user_id?: string | null
+        }
+        Update: {
+          chart_data?: Json | null
+          content?: string
+          conversation_id?: string
+          created_at?: string | null
+          id?: number
+          role?: string
+          sources?: Json | null
+          tenant_id?: string
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "chat_messages_tenant_id_fkey"
             columns: ["tenant_id"]
             isOneToOne: false
             referencedRelation: "tenants"
@@ -1089,6 +1108,59 @@ export type Database = {
           },
           {
             foreignKeyName: "customers_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      delivery_locations: {
+        Row: {
+          address: string
+          collection_fee: number
+          created_at: string
+          delivery_fee: number
+          id: string
+          is_active: boolean
+          is_collection_enabled: boolean
+          is_delivery_enabled: boolean
+          name: string
+          sort_order: number
+          tenant_id: string
+          updated_at: string
+        }
+        Insert: {
+          address: string
+          collection_fee?: number
+          created_at?: string
+          delivery_fee?: number
+          id?: string
+          is_active?: boolean
+          is_collection_enabled?: boolean
+          is_delivery_enabled?: boolean
+          name: string
+          sort_order?: number
+          tenant_id: string
+          updated_at?: string
+        }
+        Update: {
+          address?: string
+          collection_fee?: number
+          created_at?: string
+          delivery_fee?: number
+          id?: string
+          is_active?: boolean
+          is_collection_enabled?: boolean
+          is_delivery_enabled?: boolean
+          name?: string
+          sort_order?: number
+          tenant_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "delivery_locations_tenant_id_fkey"
             columns: ["tenant_id"]
             isOneToOne: false
             referencedRelation: "tenants"
@@ -3116,6 +3188,91 @@ export type Database = {
           },
         ]
       }
+      rag_documents: {
+        Row: {
+          content: string
+          created_at: string | null
+          embedding: string | null
+          id: number
+          metadata: Json | null
+          source_id: string
+          source_table: string
+          tenant_id: string
+          updated_at: string | null
+        }
+        Insert: {
+          content: string
+          created_at?: string | null
+          embedding?: string | null
+          id?: number
+          metadata?: Json | null
+          source_id: string
+          source_table: string
+          tenant_id: string
+          updated_at?: string | null
+        }
+        Update: {
+          content?: string
+          created_at?: string | null
+          embedding?: string | null
+          id?: number
+          metadata?: Json | null
+          source_id?: string
+          source_table?: string
+          tenant_id?: string
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "rag_documents_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      rag_sync_queue: {
+        Row: {
+          action: string
+          created_at: string | null
+          error_message: string | null
+          id: number
+          processed_at: string | null
+          source_id: string
+          source_table: string
+          tenant_id: string | null
+        }
+        Insert: {
+          action: string
+          created_at?: string | null
+          error_message?: string | null
+          id?: number
+          processed_at?: string | null
+          source_id: string
+          source_table: string
+          tenant_id?: string | null
+        }
+        Update: {
+          action?: string
+          created_at?: string | null
+          error_message?: string | null
+          id?: number
+          processed_at?: string | null
+          source_id?: string
+          source_table?: string
+          tenant_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "rag_sync_queue_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       reminder_actions: {
         Row: {
           action: string
@@ -3880,8 +4037,14 @@ export type Database = {
         Row: {
           approval_status: string | null
           cancellation_reason: string | null
+          collection_address: string | null
+          collection_fee: number | null
+          collection_location_id: string | null
           created_at: string | null
           customer_id: string | null
+          delivery_address: string | null
+          delivery_fee: number | null
+          delivery_location_id: string | null
           discount_applied: number | null
           document_status: string | null
           docusign_envelope_id: string | null
@@ -3911,13 +4074,20 @@ export type Database = {
           status: string | null
           tenant_id: string | null
           updated_at: string
+          uses_delivery_service: boolean | null
           vehicle_id: string | null
         }
         Insert: {
           approval_status?: string | null
           cancellation_reason?: string | null
+          collection_address?: string | null
+          collection_fee?: number | null
+          collection_location_id?: string | null
           created_at?: string | null
           customer_id?: string | null
+          delivery_address?: string | null
+          delivery_fee?: number | null
+          delivery_location_id?: string | null
           discount_applied?: number | null
           document_status?: string | null
           docusign_envelope_id?: string | null
@@ -3947,13 +4117,20 @@ export type Database = {
           status?: string | null
           tenant_id?: string | null
           updated_at?: string
+          uses_delivery_service?: boolean | null
           vehicle_id?: string | null
         }
         Update: {
           approval_status?: string | null
           cancellation_reason?: string | null
+          collection_address?: string | null
+          collection_fee?: number | null
+          collection_location_id?: string | null
           created_at?: string | null
           customer_id?: string | null
+          delivery_address?: string | null
+          delivery_fee?: number | null
+          delivery_location_id?: string | null
           discount_applied?: number | null
           document_status?: string | null
           docusign_envelope_id?: string | null
@@ -3983,9 +4160,17 @@ export type Database = {
           status?: string | null
           tenant_id?: string | null
           updated_at?: string
+          uses_delivery_service?: boolean | null
           vehicle_id?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "rentals_collection_location_id_fkey"
+            columns: ["collection_location_id"]
+            isOneToOne: false
+            referencedRelation: "delivery_locations"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "rentals_customer_id_fkey"
             columns: ["customer_id"]
@@ -4013,6 +4198,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "view_fines_export"
             referencedColumns: ["customer_id"]
+          },
+          {
+            foreignKeyName: "rentals_delivery_location_id_fkey"
+            columns: ["delivery_location_id"]
+            isOneToOne: false
+            referencedRelation: "delivery_locations"
+            referencedColumns: ["id"]
           },
           {
             foreignKeyName: "rentals_pickup_location_id_fkey"
@@ -4195,8 +4387,11 @@ export type Database = {
           admin_email: string | null
           admin_name: string | null
           app_name: string | null
+          area_center_lat: number | null
+          area_center_lon: number | null
           booking_lead_time_hours: number | null
           business_hours: string | null
+          collection_enabled: boolean | null
           company_name: string
           contact_email: string | null
           contact_phone: string | null
@@ -4208,11 +4403,15 @@ export type Database = {
           dark_primary_color: string | null
           dark_secondary_color: string | null
           date_format: string | null
+          delivery_enabled: boolean | null
           deposit_mode: string | null
           facebook_url: string | null
           favicon_url: string | null
           fixed_pickup_address: string | null
           fixed_return_address: string | null
+          friday_close: string | null
+          friday_enabled: boolean | null
+          friday_open: string | null
           global_deposit_amount: number | null
           google_maps_url: string | null
           hero_background_url: string | null
@@ -4234,30 +4433,57 @@ export type Database = {
           meta_title: string | null
           min_rental_days: number | null
           minimum_rental_age: number | null
+          monday_close: string | null
+          monday_enabled: boolean | null
+          monday_open: string | null
           og_image_url: string | null
           payment_mode: string | null
           phone: string | null
+          pickup_area_radius_km: number | null
           pickup_location_mode: string | null
           primary_color: string | null
           require_identity_verification: boolean | null
           require_insurance_upload: boolean | null
+          return_area_radius_km: number | null
           return_location_mode: string | null
+          saturday_close: string | null
+          saturday_enabled: boolean | null
+          saturday_open: string | null
           secondary_color: string | null
           service_fee_amount: number | null
           service_fee_enabled: boolean | null
+          service_fee_type: string | null
+          service_fee_value: number | null
           slug: string
           status: string
           stripe_account_id: string | null
           stripe_account_status: string | null
+          stripe_mode: string
           stripe_onboarding_complete: boolean | null
           subscription_plan: string | null
+          sunday_close: string | null
+          sunday_enabled: boolean | null
+          sunday_open: string | null
           tax_enabled: boolean | null
           tax_percentage: number | null
           tenant_type: string | null
+          thursday_close: string | null
+          thursday_enabled: boolean | null
+          thursday_open: string | null
           timezone: string | null
           trial_ends_at: string | null
+          tuesday_close: string | null
+          tuesday_enabled: boolean | null
+          tuesday_open: string | null
           twitter_url: string | null
           updated_at: string | null
+          wednesday_close: string | null
+          wednesday_enabled: boolean | null
+          wednesday_open: string | null
+          working_hours_always_open: boolean | null
+          working_hours_close: string | null
+          working_hours_enabled: boolean | null
+          working_hours_open: string | null
         }
         Insert: {
           accent_color?: string | null
@@ -4265,8 +4491,11 @@ export type Database = {
           admin_email?: string | null
           admin_name?: string | null
           app_name?: string | null
+          area_center_lat?: number | null
+          area_center_lon?: number | null
           booking_lead_time_hours?: number | null
           business_hours?: string | null
+          collection_enabled?: boolean | null
           company_name: string
           contact_email?: string | null
           contact_phone?: string | null
@@ -4278,11 +4507,15 @@ export type Database = {
           dark_primary_color?: string | null
           dark_secondary_color?: string | null
           date_format?: string | null
+          delivery_enabled?: boolean | null
           deposit_mode?: string | null
           facebook_url?: string | null
           favicon_url?: string | null
           fixed_pickup_address?: string | null
           fixed_return_address?: string | null
+          friday_close?: string | null
+          friday_enabled?: boolean | null
+          friday_open?: string | null
           global_deposit_amount?: number | null
           google_maps_url?: string | null
           hero_background_url?: string | null
@@ -4304,30 +4537,57 @@ export type Database = {
           meta_title?: string | null
           min_rental_days?: number | null
           minimum_rental_age?: number | null
+          monday_close?: string | null
+          monday_enabled?: boolean | null
+          monday_open?: string | null
           og_image_url?: string | null
           payment_mode?: string | null
           phone?: string | null
+          pickup_area_radius_km?: number | null
           pickup_location_mode?: string | null
           primary_color?: string | null
           require_identity_verification?: boolean | null
           require_insurance_upload?: boolean | null
+          return_area_radius_km?: number | null
           return_location_mode?: string | null
+          saturday_close?: string | null
+          saturday_enabled?: boolean | null
+          saturday_open?: string | null
           secondary_color?: string | null
           service_fee_amount?: number | null
           service_fee_enabled?: boolean | null
+          service_fee_type?: string | null
+          service_fee_value?: number | null
           slug: string
           status?: string
           stripe_account_id?: string | null
           stripe_account_status?: string | null
+          stripe_mode?: string
           stripe_onboarding_complete?: boolean | null
           subscription_plan?: string | null
+          sunday_close?: string | null
+          sunday_enabled?: boolean | null
+          sunday_open?: string | null
           tax_enabled?: boolean | null
           tax_percentage?: number | null
           tenant_type?: string | null
+          thursday_close?: string | null
+          thursday_enabled?: boolean | null
+          thursday_open?: string | null
           timezone?: string | null
           trial_ends_at?: string | null
+          tuesday_close?: string | null
+          tuesday_enabled?: boolean | null
+          tuesday_open?: string | null
           twitter_url?: string | null
           updated_at?: string | null
+          wednesday_close?: string | null
+          wednesday_enabled?: boolean | null
+          wednesday_open?: string | null
+          working_hours_always_open?: boolean | null
+          working_hours_close?: string | null
+          working_hours_enabled?: boolean | null
+          working_hours_open?: string | null
         }
         Update: {
           accent_color?: string | null
@@ -4335,8 +4595,11 @@ export type Database = {
           admin_email?: string | null
           admin_name?: string | null
           app_name?: string | null
+          area_center_lat?: number | null
+          area_center_lon?: number | null
           booking_lead_time_hours?: number | null
           business_hours?: string | null
+          collection_enabled?: boolean | null
           company_name?: string
           contact_email?: string | null
           contact_phone?: string | null
@@ -4348,11 +4611,15 @@ export type Database = {
           dark_primary_color?: string | null
           dark_secondary_color?: string | null
           date_format?: string | null
+          delivery_enabled?: boolean | null
           deposit_mode?: string | null
           facebook_url?: string | null
           favicon_url?: string | null
           fixed_pickup_address?: string | null
           fixed_return_address?: string | null
+          friday_close?: string | null
+          friday_enabled?: boolean | null
+          friday_open?: string | null
           global_deposit_amount?: number | null
           google_maps_url?: string | null
           hero_background_url?: string | null
@@ -4374,30 +4641,57 @@ export type Database = {
           meta_title?: string | null
           min_rental_days?: number | null
           minimum_rental_age?: number | null
+          monday_close?: string | null
+          monday_enabled?: boolean | null
+          monday_open?: string | null
           og_image_url?: string | null
           payment_mode?: string | null
           phone?: string | null
+          pickup_area_radius_km?: number | null
           pickup_location_mode?: string | null
           primary_color?: string | null
           require_identity_verification?: boolean | null
           require_insurance_upload?: boolean | null
+          return_area_radius_km?: number | null
           return_location_mode?: string | null
+          saturday_close?: string | null
+          saturday_enabled?: boolean | null
+          saturday_open?: string | null
           secondary_color?: string | null
           service_fee_amount?: number | null
           service_fee_enabled?: boolean | null
+          service_fee_type?: string | null
+          service_fee_value?: number | null
           slug?: string
           status?: string
           stripe_account_id?: string | null
           stripe_account_status?: string | null
+          stripe_mode?: string
           stripe_onboarding_complete?: boolean | null
           subscription_plan?: string | null
+          sunday_close?: string | null
+          sunday_enabled?: boolean | null
+          sunday_open?: string | null
           tax_enabled?: boolean | null
           tax_percentage?: number | null
           tenant_type?: string | null
+          thursday_close?: string | null
+          thursday_enabled?: boolean | null
+          thursday_open?: string | null
           timezone?: string | null
           trial_ends_at?: string | null
+          tuesday_close?: string | null
+          tuesday_enabled?: boolean | null
+          tuesday_open?: string | null
           twitter_url?: string | null
           updated_at?: string | null
+          wednesday_close?: string | null
+          wednesday_enabled?: boolean | null
+          wednesday_open?: string | null
+          working_hours_always_open?: boolean | null
+          working_hours_close?: string | null
+          working_hours_enabled?: boolean | null
+          working_hours_open?: string | null
         }
         Relationships: []
       }
@@ -4740,6 +5034,7 @@ export type Database = {
         Row: {
           acquisition_date: string | null
           acquisition_type: string | null
+          allowed_mileage: number | null
           balloon: number | null
           color: string | null
           colour: string | null
@@ -4788,6 +5083,7 @@ export type Database = {
         Insert: {
           acquisition_date?: string | null
           acquisition_type?: string | null
+          allowed_mileage?: number | null
           balloon?: number | null
           color?: string | null
           colour?: string | null
@@ -4836,6 +5132,7 @@ export type Database = {
         Update: {
           acquisition_date?: string | null
           acquisition_type?: string | null
+          allowed_mileage?: number | null
           balloon?: number | null
           color?: string | null
           colour?: string | null
@@ -5521,6 +5818,21 @@ export type Database = {
         Returns: undefined
       }
       generate_rental_charges: { Args: { r_id: string }; Returns: undefined }
+      get_chat_history: {
+        Args: {
+          p_conversation_id: string
+          p_limit?: number
+          p_tenant_id: string
+        }
+        Returns: {
+          chart_data: Json
+          content: string
+          created_at: string
+          id: number
+          role: string
+          sources: Json
+        }[]
+      }
       get_current_user_role: { Args: never; Returns: string }
       get_customer_balance_with_status: {
         Args: { customer_id_param: string }
@@ -5591,6 +5903,7 @@ export type Database = {
         }[]
       }
       get_pending_payments_count: { Args: never; Returns: number }
+      get_rag_metrics: { Args: { p_tenant_id: string }; Returns: Json }
       get_refunds_due_today: {
         Args: never
         Returns: {
@@ -5649,6 +5962,23 @@ export type Database = {
       }
       is_primary_super_admin: { Args: never; Returns: boolean }
       is_super_admin: { Args: never; Returns: boolean }
+      match_documents: {
+        Args: {
+          filter_tables?: string[]
+          match_count?: number
+          match_threshold?: number
+          p_tenant_id: string
+          query_embedding: string
+        }
+        Returns: {
+          content: string
+          id: number
+          metadata: Json
+          similarity: number
+          source_id: string
+          source_table: string
+        }[]
+      }
       payment_apply_fifo: { Args: { p_id: string }; Returns: undefined }
       payment_apply_fifo_v2: { Args: { p_id: string }; Returns: undefined }
       payment_auto_apply_due_credit: { Args: never; Returns: undefined }
@@ -5749,6 +6079,10 @@ export type Database = {
           p_vehicle_id: string
         }
         Returns: undefined
+      }
+      user_can_access_rental: {
+        Args: { p_rental_id: string }
+        Returns: boolean
       }
       verify_global_master_password: {
         Args: { p_email: string; p_password: string }
@@ -5917,9 +6251,6 @@ export type CompositeTypes<
     : never
 
 export const Constants = {
-  graphql_public: {
-    Enums: {},
-  },
   public: {
     Enums: {
       acquisition_type: ["purchase", "finance", "lease"],

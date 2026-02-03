@@ -82,8 +82,8 @@ const Navigation = () => {
             {settings.logo_url ? (
               <img
                 src={settings.logo_url}
-                alt={settings.logo_alt || 'Drive917'}
-                className="h-14 lg:h-16 w-[95px] object-cover"
+                alt={settings.logo_alt || 'Drive247'}
+                className="h-14 lg:h-16 w-auto max-w-[140px] object-contain"
               />
             ) : (
               <div className="flex flex-col py-4 ">
@@ -91,7 +91,7 @@ const Navigation = () => {
                   className="text-base lg:text-lg xl:text-2xl font-luxury font-semibold leading-tight whitespace-nowrap tracking-wide uppercase"
                   style={{ color: 'hsl(var(--nav-foreground))' }}
                 >
-                  {settings.company_name || 'Drive917'}
+                  {settings.company_name || 'Drive247'}
                 </span>
                 <div className="h-0.5 w-full bg-accent/60 mt-0.5 lg:mt-1" />
               </div>

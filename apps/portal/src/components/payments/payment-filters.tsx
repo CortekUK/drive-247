@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { CalendarIcon, X, Search, Filter, Clock } from "lucide-react";
+import { CalendarIcon, X, Search, Filter } from "lucide-react";
 import { formatInTimeZone } from "date-fns-tz";
 import { cn } from "@/lib/utils";
 import { useQuery } from "@tanstack/react-query";
@@ -195,12 +195,7 @@ export const PaymentFilters = ({ onFiltersChange }: PaymentFiltersProps) => {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">All Statuses</SelectItem>
-                  <SelectItem value="pending">
-                    <div className="flex items-center gap-2">
-                      <Clock className="h-3 w-3 text-orange-500" />
-                      Pending Review
-                    </div>
-                  </SelectItem>
+                  <SelectItem value="pending">Pending Review</SelectItem>
                   <SelectItem value="approved">Approved</SelectItem>
                   <SelectItem value="rejected">Rejected</SelectItem>
                   <SelectItem value="auto_approved">Auto-Approved</SelectItem>

@@ -35,13 +35,18 @@ export interface UpdatePickupLocationInput {
   sort_order?: number;
 }
 
-export type LocationMode = 'fixed' | 'custom' | 'multiple';
+export type LocationMode = 'fixed' | 'custom' | 'multiple' | 'area_around';
 
 export interface LocationSettings {
   pickup_location_mode: LocationMode;
   return_location_mode: LocationMode;
   fixed_pickup_address: string | null;
   fixed_return_address: string | null;
+  // Fields for area_around mode
+  pickup_area_radius_km: number | null;
+  return_area_radius_km: number | null;
+  area_center_lat: number | null;
+  area_center_lon: number | null;
 }
 
 const DEFAULT_LOCATION_SETTINGS: LocationSettings = {
@@ -49,6 +54,10 @@ const DEFAULT_LOCATION_SETTINGS: LocationSettings = {
   return_location_mode: 'custom',
   fixed_pickup_address: null,
   fixed_return_address: null,
+  pickup_area_radius_km: 25,
+  return_area_radius_km: 25,
+  area_center_lat: null,
+  area_center_lon: null,
 };
 
 /**
@@ -82,7 +91,11 @@ export const usePickupLocations = () => {
           pickup_location_mode,
           return_location_mode,
           fixed_pickup_address,
-          fixed_return_address
+          fixed_return_address,
+          pickup_area_radius_km,
+          return_area_radius_km,
+          area_center_lat,
+          area_center_lon
         `)
         .eq('id', tenant.id)
         .single();
@@ -97,6 +110,10 @@ export const usePickupLocations = () => {
         return_location_mode: (data?.return_location_mode as LocationMode) || 'custom',
         fixed_pickup_address: data?.fixed_pickup_address || null,
         fixed_return_address: data?.fixed_return_address || null,
+        pickup_area_radius_km: data?.pickup_area_radius_km ?? 25,
+        return_area_radius_km: data?.return_area_radius_km ?? 25,
+        area_center_lat: data?.area_center_lat || null,
+        area_center_lon: data?.area_center_lon || null,
       };
     },
     enabled: !!tenant?.id,
@@ -147,13 +164,26 @@ export const usePickupLocations = () => {
 
       const { data, error } = await supabase
         .from('tenants')
-        .update(updates)
+        .update({
+          pickup_location_mode: updates.pickup_location_mode,
+          return_location_mode: updates.return_location_mode,
+          fixed_pickup_address: updates.fixed_pickup_address,
+          fixed_return_address: updates.fixed_return_address,
+          pickup_area_radius_km: updates.pickup_area_radius_km,
+          return_area_radius_km: updates.return_area_radius_km,
+          area_center_lat: updates.area_center_lat,
+          area_center_lon: updates.area_center_lon,
+        })
         .eq('id', tenant.id)
         .select(`
           pickup_location_mode,
           return_location_mode,
           fixed_pickup_address,
-          fixed_return_address
+          fixed_return_address,
+          pickup_area_radius_km,
+          return_area_radius_km,
+          area_center_lat,
+          area_center_lon
         `)
         .single();
 
@@ -167,6 +197,10 @@ export const usePickupLocations = () => {
         return_location_mode: (data?.return_location_mode as LocationMode) || 'custom',
         fixed_pickup_address: data?.fixed_pickup_address || null,
         fixed_return_address: data?.fixed_return_address || null,
+        pickup_area_radius_km: data?.pickup_area_radius_km ?? 25,
+        return_area_radius_km: data?.return_area_radius_km ?? 25,
+        area_center_lat: data?.area_center_lat || null,
+        area_center_lon: data?.area_center_lon || null,
       };
     },
     onSuccess: (data) => {

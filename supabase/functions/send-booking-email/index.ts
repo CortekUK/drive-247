@@ -33,11 +33,11 @@ serve(async (req) => {
     )
 
     // Default tenant values
-    let companyName = 'Drive 917'
+    let companyName = 'Drive 247'
     let primaryColor = '#FFD700'
     let accentColor = '#FFD700'
     let logoUrl = ''
-    let tenantSupportEmail = supportEmail || 'support@drive917.com'
+    let tenantSupportEmail = supportEmail || 'support@drive247.com'
 
     // Fetch tenant details for email customization
     if (slug) {

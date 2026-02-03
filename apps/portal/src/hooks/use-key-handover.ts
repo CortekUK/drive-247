@@ -20,6 +20,7 @@ export interface KeyHandover {
   rental_id: string;
   handover_type: HandoverType;
   notes: string | null;
+  mileage: number | null;
   handed_at: string | null;
   handed_by: string | null;
   created_at: string;
@@ -241,18 +242,17 @@ export function useKeyHandover(rentalId: string | undefined) {
       // If giving key, check if rental is approved before setting to Active
       if (type === "giving") {
         // First, get the rental with customer and vehicle info for notifications
-        const { data: rental, error: rentalError } = await supabase
+        let rentalQuery = supabase
           .from("rentals")
           .select(`
+            id,
             approval_status,
             payment_status,
-            booking_reference,
             start_date,
             end_date,
             customer:customers(
               id,
-              first_name,
-              last_name,
+              name,
               email,
               phone
             ),
@@ -260,15 +260,21 @@ export function useKeyHandover(rentalId: string | undefined) {
               id,
               make,
               model,
-              registration_number,
+              reg,
               color
             )
           `)
-          .eq("id", rentalId)
-          .single();
+          .eq("id", rentalId);
+
+        // Add tenant filter if available
+        if (tenant?.id) {
+          rentalQuery = rentalQuery.eq("tenant_id", tenant.id);
+        }
+
+        const { data: rental, error: rentalError } = await rentalQuery.single();
 
         if (rentalError) {
-          console.error('Error fetching rental for key handover:', rentalError);
+          console.error('Error fetching rental for key handover:', rentalError.message || rentalError);
         }
         console.log('Key handover - rental data:', {
           approval_status: rental?.approval_status,
@@ -288,8 +294,8 @@ export function useKeyHandover(rentalId: string | undefined) {
 
           // Send rental started notification to customer
           try {
-            const customer = rental.customer as { first_name: string; last_name: string; email: string; phone: string } | null;
-            const vehicle = rental.vehicle as { make: string; model: string; registration_number: string; color: string } | null;
+            const customer = rental.customer as { name: string; email: string; phone: string } | null;
+            const vehicle = rental.vehicle as { make: string; model: string; reg: string; color: string } | null;
 
             console.log('Rental started - preparing notification:', {
               customerEmail: customer?.email,
@@ -299,15 +305,15 @@ export function useKeyHandover(rentalId: string | undefined) {
 
             if (customer?.email && vehicle) {
               const notifyPayload = {
-                customerName: `${customer.first_name} ${customer.last_name}`,
+                customerName: customer.name,
                 customerEmail: customer.email,
                 customerPhone: customer.phone,
                 vehicleName: `${vehicle.make} ${vehicle.model}`,
-                vehicleReg: vehicle.registration_number,
+                vehicleReg: vehicle.reg,
                 vehicleMake: vehicle.make,
                 vehicleModel: vehicle.model,
                 vehicleColor: vehicle.color,
-                bookingRef: rental.booking_reference || rentalId,
+                bookingRef: rentalId,
                 startDate: rental.start_date ? new Date(rental.start_date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : '',
                 endDate: rental.end_date ? new Date(rental.end_date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : '',
                 tenantId: tenant?.id,
@@ -331,18 +337,18 @@ export function useKeyHandover(rentalId: string | undefined) {
             // Don't throw - notification failure shouldn't block the handover
           }
 
-          return { type, becameActive: true };
+          return { type, becameActive: true, depositRefunded: false, depositAmount: 0 };
         }
 
-        return { type, becameActive: false };
+        return { type, becameActive: false, depositRefunded: false, depositAmount: 0 };
       }
 
-      // If receiving key, update rental status to Closed and vehicle to Available
+      // If receiving key, update rental status to Closed, vehicle to Available, and refund security deposit
       if (type === "receiving") {
-        // Get the vehicle_id from the rental
+        // Get the rental details including vehicle_id and tenant_id
         const { data: rental } = await supabase
           .from("rentals")
-          .select("vehicle_id")
+          .select("vehicle_id, tenant_id, customer_id")
           .eq("id", rentalId)
           .maybeSingle();
 
@@ -361,17 +367,65 @@ export function useKeyHandover(rentalId: string | undefined) {
             .update({ status: "Available" })
             .eq("id", rental.vehicle_id);
         }
+
+        // Auto-refund security deposit
+        // First, check if there's a security deposit that was paid
+        const { data: invoice } = await supabase
+          .from("invoices")
+          .select("security_deposit")
+          .eq("rental_id", rentalId)
+          .order("created_at", { ascending: false })
+          .limit(1)
+          .maybeSingle();
+
+        const securityDeposit = invoice?.security_deposit || 0;
+
+        if (securityDeposit > 0) {
+          console.log(`[KEY-HANDOVER] Auto-refunding security deposit: $${securityDeposit} for rental ${rentalId}`);
+
+          try {
+            // Call the process-refund edge function
+            const { data: refundResult, error: refundError } = await supabase.functions.invoke('process-refund', {
+              body: {
+                rentalId,
+                refundType: 'full',
+                refundAmount: securityDeposit,
+                category: 'Security Deposit',
+                reason: 'Automatic refund - keys returned and rental closed',
+                processedBy: 'system',
+                tenantId: rental?.tenant_id || tenant?.id,
+              }
+            });
+
+            if (refundError) {
+              console.error('[KEY-HANDOVER] Security deposit refund failed:', refundError);
+              // Don't throw - rental closure is more important than refund
+            } else {
+              console.log('[KEY-HANDOVER] Security deposit refunded successfully:', refundResult);
+            }
+          } catch (refundErr) {
+            console.error('[KEY-HANDOVER] Error processing security deposit refund:', refundErr);
+            // Don't throw - rental closure is more important
+          }
+        }
+
+        return { type, becameActive: false, depositRefunded: securityDeposit > 0, depositAmount: securityDeposit };
       }
 
-      return { type, becameActive: false };
+      return { type, becameActive: false, depositRefunded: false, depositAmount: 0 };
     },
-    onSuccess: ({ type, becameActive }) => {
+    onSuccess: ({ type, becameActive, depositRefunded, depositAmount }) => {
       queryClient.invalidateQueries({ queryKey: ["key-handovers", rentalId] });
       queryClient.invalidateQueries({ queryKey: ["key-handover-status", rentalId] });
       queryClient.invalidateQueries({ queryKey: ["rental", rentalId] });
       queryClient.invalidateQueries({ queryKey: ["rentals-list"] });
       queryClient.invalidateQueries({ queryKey: ["enhanced-rentals"] });
       queryClient.invalidateQueries({ queryKey: ["vehicles-list"] });
+      // Also invalidate payment/invoice data for refund updates
+      queryClient.invalidateQueries({ queryKey: ["rental-totals"] });
+      queryClient.invalidateQueries({ queryKey: ["rental-invoice"] });
+      queryClient.invalidateQueries({ queryKey: ["rental-payments"] });
+      queryClient.invalidateQueries({ queryKey: ["payments-data"] });
 
       if (type === "giving") {
         toast({
@@ -381,10 +435,18 @@ export function useKeyHandover(rentalId: string | undefined) {
             : "Key handover recorded. Rental will become active once approved.",
         });
       } else {
-        toast({
-          title: "Key Received",
-          description: "Rental is now closed.",
-        });
+        // Key received - rental closed
+        if (depositRefunded && depositAmount && depositAmount > 0) {
+          toast({
+            title: "Key Received & Deposit Refunded",
+            description: `Rental is now closed. Security deposit of $${depositAmount.toFixed(2)} has been refunded to the customer.`,
+          });
+        } else {
+          toast({
+            title: "Key Received",
+            description: "Rental is now closed.",
+          });
+        }
       }
     },
     onError: (error: Error) => {
@@ -488,6 +550,53 @@ export function useKeyHandover(rentalId: string | undefined) {
     },
   });
 
+  // Update mileage
+  const updateMileage = useMutation({
+    mutationFn: async ({ type, mileage }: { type: HandoverType; mileage: number | null }) => {
+      if (!rentalId) throw new Error("Rental ID required");
+
+      const handover = await ensureHandover.mutateAsync(type);
+
+      const { error } = await supabase
+        .from("rental_key_handovers")
+        .update({ mileage })
+        .eq("id", handover.id);
+
+      if (error) throw error;
+
+      // If this is the return handover (receiving), also update the vehicle's current_mileage
+      if (type === "receiving" && mileage) {
+        const { data: rental } = await supabase
+          .from("rentals")
+          .select("vehicle_id")
+          .eq("id", rentalId)
+          .maybeSingle();
+
+        if (rental?.vehicle_id) {
+          await supabase
+            .from("vehicles")
+            .update({ current_mileage: mileage })
+            .eq("id", rental.vehicle_id);
+        }
+      }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["key-handovers", rentalId] });
+      queryClient.invalidateQueries({ queryKey: ["vehicles-list"] });
+      toast({
+        title: "Mileage Updated",
+        description: "Odometer reading has been recorded.",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Update Failed",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
   return {
     handovers,
     isLoading,
@@ -499,9 +608,11 @@ export function useKeyHandover(rentalId: string | undefined) {
     markKeyHanded,
     unmarkKeyHanded,
     updateNotes,
+    updateMileage,
     isUploading: uploadPhoto.isPending,
     isDeleting: deletePhoto.isPending,
     isMarkingHanded: markKeyHanded.isPending,
     isUnmarkingHanded: unmarkKeyHanded.isPending,
+    isUpdatingMileage: updateMileage.isPending,
   };
 }

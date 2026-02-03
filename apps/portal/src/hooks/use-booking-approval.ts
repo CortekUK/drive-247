@@ -1,6 +1,7 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
+import { useAuditLog } from "./use-audit-log";
 
 interface ApproveBookingParams {
   paymentId: string;
@@ -23,6 +24,7 @@ interface BookingActionResult {
 
 export const useApproveBooking = () => {
   const queryClient = useQueryClient();
+  const { logAction } = useAuditLog();
 
   return useMutation({
     mutationFn: async ({
@@ -59,6 +61,24 @@ export const useApproveBooking = () => {
       queryClient.invalidateQueries({ queryKey: ["payments"] });
       queryClient.invalidateQueries({ queryKey: ["vehicles"] });
 
+      // Audit log for rental creation
+      if (data.rentalId) {
+        logAction({
+          action: "rental_created",
+          entityType: "rental",
+          entityId: data.rentalId,
+          details: { payment_id: data.paymentId, method: "booking_approved" }
+        });
+      }
+
+      // Audit log for payment capture
+      logAction({
+        action: "payment_captured",
+        entityType: "payment",
+        entityId: data.paymentId,
+        details: { rental_id: data.rentalId }
+      });
+
       toast({
         title: "Booking Approved",
         description: `Payment captured successfully. Rental is now active.`,
@@ -77,13 +97,14 @@ export const useApproveBooking = () => {
 
 export const useRejectBooking = () => {
   const queryClient = useQueryClient();
+  const { logAction } = useAuditLog();
 
   return useMutation({
     mutationFn: async ({
       paymentId,
       rejectedBy,
       reason,
-    }: RejectBookingParams): Promise<BookingActionResult> => {
+    }: RejectBookingParams): Promise<BookingActionResult & { reason?: string }> => {
       console.log("Rejecting booking, payment ID:", paymentId);
 
       const { data, error } = await supabase.functions.invoke(
@@ -102,7 +123,7 @@ export const useRejectBooking = () => {
         throw new Error(data.error || "Failed to reject booking");
       }
 
-      return data;
+      return { ...data, reason };
     },
     onSuccess: (data) => {
       console.log("Booking rejected successfully:", data);
@@ -112,6 +133,16 @@ export const useRejectBooking = () => {
       queryClient.invalidateQueries({ queryKey: ["pending-bookings-count"] });
       queryClient.invalidateQueries({ queryKey: ["rentals"] });
       queryClient.invalidateQueries({ queryKey: ["payments"] });
+
+      // Audit log
+      if (data.rentalId) {
+        logAction({
+          action: "rental_cancelled",
+          entityType: "rental",
+          entityId: data.rentalId,
+          details: { payment_id: data.paymentId, reason: data.reason, method: "booking_rejected" }
+        });
+      }
 
       toast({
         title: "Booking Rejected",

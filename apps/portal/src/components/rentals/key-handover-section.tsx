@@ -1,12 +1,18 @@
 import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import {
   Key,
   KeyRound,
-  AlertCircle
+  AlertCircle,
+  AlertTriangle,
+  Gauge
 } from "lucide-react";
+import { cn } from "@/lib/utils";
 import { useKeyHandover, HandoverType } from "@/hooks/use-key-handover";
 import { KeyHandoverPhotos } from "@/components/rentals/key-handover-photos";
 import {
@@ -23,9 +29,11 @@ import {
 interface KeyHandoverSectionProps {
   rentalId: string;
   rentalStatus: string;
+  /** Whether to highlight this section as needing action */
+  needsAction?: boolean;
 }
 
-export const KeyHandoverSection = ({ rentalId, rentalStatus }: KeyHandoverSectionProps) => {
+export const KeyHandoverSection = ({ rentalId, rentalStatus, needsAction = false }: KeyHandoverSectionProps) => {
   const {
     givingHandover,
     receivingHandover,
@@ -34,6 +42,7 @@ export const KeyHandoverSection = ({ rentalId, rentalStatus }: KeyHandoverSectio
     markKeyHanded,
     unmarkKeyHanded,
     updateNotes,
+    updateMileage,
     isLoading,
     isUploading,
     isDeleting,
@@ -45,6 +54,8 @@ export const KeyHandoverSection = ({ rentalId, rentalStatus }: KeyHandoverSectio
   const [confirmUndo, setConfirmUndo] = useState<HandoverType | null>(null);
   const [givingNotes, setGivingNotes] = useState<string>("");
   const [receivingNotes, setReceivingNotes] = useState<string>("");
+  const [givingMileage, setGivingMileage] = useState<string>("");
+  const [receivingMileage, setReceivingMileage] = useState<string>("");
 
   // Sync local state with server data
   useEffect(() => {
@@ -54,6 +65,14 @@ export const KeyHandoverSection = ({ rentalId, rentalStatus }: KeyHandoverSectio
   useEffect(() => {
     setReceivingNotes(receivingHandover?.notes || "");
   }, [receivingHandover?.notes]);
+
+  useEffect(() => {
+    setGivingMileage(givingHandover?.mileage?.toString() || "");
+  }, [givingHandover?.mileage]);
+
+  useEffect(() => {
+    setReceivingMileage(receivingHandover?.mileage?.toString() || "");
+  }, [receivingHandover?.mileage]);
 
   const isClosed = rentalStatus === "Closed" || rentalStatus === "Completed";
 
@@ -89,14 +108,31 @@ export const KeyHandoverSection = ({ rentalId, rentalStatus }: KeyHandoverSectio
   }
 
   return (
-    <Card>
+    <Card
+      id="key-handover-section"
+      className={cn(
+        "transition-all duration-300",
+        needsAction && "border-amber-500 border-2 shadow-lg shadow-amber-100 dark:shadow-amber-900/20"
+      )}
+    >
       <CardHeader>
-        <CardTitle className="flex items-center gap-2">
-          <Key className="h-5 w-5 text-primary" />
-          Key Handover
-        </CardTitle>
+        <div className="flex items-center justify-between">
+          <CardTitle className="flex items-center gap-2">
+            <Key className={cn("h-5 w-5", needsAction ? "text-amber-600" : "text-primary")} />
+            Key Handover
+          </CardTitle>
+          {needsAction && (
+            <Badge variant="outline" className="border-amber-500 bg-amber-50 text-amber-700 dark:bg-amber-950 dark:text-amber-400">
+              <AlertTriangle className="h-3 w-3 mr-1" />
+              Action Required
+            </Badge>
+          )}
+        </div>
         <CardDescription>
-          Document car condition before giving and after receiving keys
+          {needsAction
+            ? "Complete the vehicle collection to activate this rental"
+            : "Document car condition before giving and after receiving keys"
+          }
         </CardDescription>
       </CardHeader>
       <CardContent>
@@ -122,11 +158,36 @@ export const KeyHandoverSection = ({ rentalId, rentalStatus }: KeyHandoverSectio
               disabled={givingCompleted || isClosed}
             />
 
+            {/* Mileage Input */}
+            <div>
+              <Label htmlFor="giving-mileage" className="text-sm font-medium flex items-center gap-2">
+                <Gauge className="h-4 w-4 text-muted-foreground" />
+                Odometer Reading
+              </Label>
+              <Input
+                id="giving-mileage"
+                type="number"
+                placeholder="Enter mileage at pickup"
+                value={givingMileage}
+                onChange={(e) => setGivingMileage(e.target.value)}
+                onBlur={() => {
+                  const mileageValue = givingMileage ? parseInt(givingMileage, 10) : null;
+                  if (mileageValue !== givingHandover?.mileage) {
+                    updateMileage.mutate({ type: "giving", mileage: mileageValue });
+                  }
+                }}
+                disabled={givingCompleted || isClosed}
+                className="mt-1"
+                min={0}
+              />
+              <p className="text-xs text-muted-foreground mt-1">Record the odometer reading when handing over keys</p>
+            </div>
+
             {/* Notes */}
             <div>
-              <label className="text-sm font-medium">Notes (Optional)</label>
+              <Label className="text-sm font-medium">Notes (Optional)</Label>
               <Textarea
-                placeholder="Fuel level, mileage, damages, etc."
+                placeholder="Fuel level, damages, condition notes, etc."
                 value={givingNotes}
                 onChange={(e) => setGivingNotes(e.target.value)}
                 onBlur={() => {
@@ -204,10 +265,37 @@ export const KeyHandoverSection = ({ rentalId, rentalStatus }: KeyHandoverSectio
               />
             )}
 
+            {/* Mileage Input */}
+            {givingCompleted && (
+              <div>
+                <Label htmlFor="receiving-mileage" className="text-sm font-medium flex items-center gap-2">
+                  <Gauge className="h-4 w-4 text-muted-foreground" />
+                  Odometer Reading
+                </Label>
+                <Input
+                  id="receiving-mileage"
+                  type="number"
+                  placeholder="Enter mileage at return"
+                  value={receivingMileage}
+                  onChange={(e) => setReceivingMileage(e.target.value)}
+                  onBlur={() => {
+                    const mileageValue = receivingMileage ? parseInt(receivingMileage, 10) : null;
+                    if (mileageValue !== receivingHandover?.mileage) {
+                      updateMileage.mutate({ type: "receiving", mileage: mileageValue });
+                    }
+                  }}
+                  disabled={receivingCompleted || isClosed}
+                  className="mt-1"
+                  min={0}
+                />
+                <p className="text-xs text-muted-foreground mt-1">Record the odometer reading when receiving keys back</p>
+              </div>
+            )}
+
             {/* Notes */}
             {givingCompleted && (
               <div>
-                <label className="text-sm font-medium">Notes (Optional)</label>
+                <Label className="text-sm font-medium">Notes (Optional)</Label>
                 <Textarea
                   placeholder="Condition upon return, damages, fuel level, etc."
                   value={receivingNotes}

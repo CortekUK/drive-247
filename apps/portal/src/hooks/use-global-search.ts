@@ -56,7 +56,7 @@ export const useGlobalSearch = () => {
     ? Object.values(results).reduce((total, categoryResults) => total + categoryResults.length, 0)
     : 0;
 
-  // Get flattened results for navigation (including insurance)
+  // Get flattened results for navigation (including insurance, invoices, documents)
   const allResults = results
     ? [
         ...results.customers,
@@ -66,6 +66,8 @@ export const useGlobalSearch = () => {
         ...results.payments,
         ...results.plates,
         ...results.insurance,
+        ...results.invoices,
+        ...results.documents,
       ]
     : [];
 
@@ -93,6 +95,8 @@ export const useGlobalSearch = () => {
       payments: [],
       plates: [],
       insurance: [],
+      invoices: [],
+      documents: [],
     },
     isLoading,
     error,

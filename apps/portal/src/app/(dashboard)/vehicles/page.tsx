@@ -24,6 +24,7 @@ import { useTenant } from "@/contexts/TenantContext";
 
 interface VehiclePhoto {
   photo_url: string;
+  display_order: number | null;
 }
 
 interface Vehicle {
@@ -60,6 +61,7 @@ interface FiltersState {
   search: string;
   status: string;
   make: string;
+  year: string;
   performance: PerformanceFilter;
   servicePlan: string;
   spareKey: string;
@@ -77,6 +79,7 @@ export default function VehiclesListEnhanced() {
     search: searchParams.get('search') || '',
     status: searchParams.get('status') || 'all',
     make: searchParams.get('make') || 'all',
+    year: searchParams.get('year') || 'all',
     performance: (searchParams.get('performance') as PerformanceFilter) || 'all',
     servicePlan: searchParams.get('servicePlan') || 'all',
     spareKey: searchParams.get('spareKey') || 'all',
@@ -124,7 +127,8 @@ export default function VehiclesListEnhanced() {
         .select(`
           *,
           vehicle_photos (
-            photo_url
+            photo_url,
+            display_order
           )
         `)
         .order("created_at", { ascending: false });
@@ -137,10 +141,14 @@ export default function VehiclesListEnhanced() {
 
       if (error) throw error;
 
-      // Transform to get only the first photo for each vehicle
+      // Transform to get only the first photo (by display_order) for each vehicle
       const transformedData = data?.map(vehicle => ({
         ...vehicle,
-        vehicle_photos: vehicle.vehicle_photos?.slice(0, 1) || []
+        vehicle_photos: vehicle.vehicle_photos
+          ?.sort((a: { display_order: number | null }, b: { display_order: number | null }) =>
+            (a.display_order ?? 999) - (b.display_order ?? 999)
+          )
+          .slice(0, 1) || []
       })) || [];
 
       return transformedData as Vehicle[];
@@ -215,6 +223,11 @@ export default function VehiclesListEnhanced() {
     // Make filter
     if (filters.make !== 'all') {
       filtered = filtered.filter(vehicle => vehicle.make === filters.make);
+    }
+
+    // Year filter
+    if (filters.year !== 'all') {
+      filtered = filtered.filter(vehicle => vehicle.year?.toString() === filters.year);
     }
 
     // Performance filter
@@ -302,6 +315,12 @@ export default function VehiclesListEnhanced() {
     return makes.sort();
   }, [vehicles]);
 
+  // Get unique years for filter
+  const uniqueYears = useMemo(() => {
+    const years = [...new Set(vehicles.map(v => v.year).filter(Boolean))] as number[];
+    return years.sort((a, b) => b - a); // Sort descending (newest first)
+  }, [vehicles]);
+
   const handleRowClick = (vehicleId: string) => {
     router.push(`/vehicles/${vehicleId}`);
   };
@@ -355,7 +374,7 @@ export default function VehiclesListEnhanced() {
       <FleetSummaryCards vehicles={filteredVehicles} />
 
       {/* Filters */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
         <div className="relative">
           <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
           <Input
@@ -390,6 +409,18 @@ export default function VehiclesListEnhanced() {
           </SelectContent>
         </Select>
 
+        <Select value={filters.year} onValueChange={(value) => updateFilters({ year: value })}>
+          <SelectTrigger>
+            <SelectValue placeholder="All Years" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Years</SelectItem>
+            {uniqueYears.map(year => (
+              <SelectItem key={year} value={year.toString()}>{year}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+
         <Select value={filters.performance} onValueChange={(value) => updateFilters({ performance: value as PerformanceFilter })}>
           <SelectTrigger>
             <SelectValue placeholder="All Performance" />
@@ -400,11 +431,6 @@ export default function VehiclesListEnhanced() {
             <SelectItem value="loss">Loss Making</SelectItem>
           </SelectContent>
         </Select>
-      </div>
-
-      {/* Results Info */}
-      <div className="text-sm text-muted-foreground">
-        Showing {paginatedVehicles.length} of {filteredVehicles.length} vehicles
       </div>
 
       {/* Table */}
@@ -496,8 +522,11 @@ export default function VehiclesListEnhanced() {
       )}
 
       {/* Pagination */}
-      {totalPages > 1 && (
-        <div className="flex justify-between items-center">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+        <div className="text-sm text-muted-foreground">
+          Showing {paginatedVehicles.length} of {filteredVehicles.length} vehicles
+        </div>
+        <div className="flex items-center gap-4 w-full sm:w-auto flex-wrap justify-center sm:justify-end">
           <div className="flex items-center gap-2">
             <span className="text-sm text-muted-foreground">Rows per page:</span>
             <Select value={pageSize.toString()} onValueChange={(value) => {
@@ -534,14 +563,14 @@ export default function VehiclesListEnhanced() {
               Previous
             </Button>
 
-            <span className="text-sm text-muted-foreground">
-              Page {currentPage} of {totalPages}
+            <span className="text-sm text-muted-foreground whitespace-nowrap">
+              Page {currentPage} of {totalPages || 1}
             </span>
 
             <Button
               variant="outline"
               size="sm"
-              disabled={currentPage === totalPages}
+              disabled={currentPage === totalPages || totalPages <= 1}
               onClick={() => {
                 setCurrentPage(currentPage + 1);
                 const params = new URLSearchParams(searchParams.toString());
@@ -553,7 +582,7 @@ export default function VehiclesListEnhanced() {
             </Button>
           </div>
         </div>
-      )}
+      </div>
     </div>
   );
 }

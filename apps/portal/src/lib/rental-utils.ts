@@ -55,12 +55,39 @@ export const calculateDuration = (startDate: string, endDate: string | null, per
       return Math.max(1, differenceInWeeks(end, start));
     case 'Monthly':
     default:
-      return Math.max(1, differenceInMonths(end, start));
+      // Calculate actual months
+      const months = differenceInMonths(end, start);
+      // If less than 1 month, return the fraction (will be formatted as days)
+      if (months === 0) {
+        return differenceInDays(end, start);
+      }
+      return months;
   }
 };
 
-export const formatDuration = (months: number, periodType: string = 'Monthly'): string => {
-  if (months === 0) {
+/**
+ * Calculate rental duration and return a formatted string with automatic unit detection
+ */
+export const formatRentalDuration = (startDate: string, endDate: string | null): string => {
+  const start = parseISO(startDate);
+  const end = endDate ? parseISO(endDate) : new Date();
+
+  const days = differenceInDays(end, start);
+  const weeks = differenceInWeeks(end, start);
+  const months = differenceInMonths(end, start);
+
+  // Auto-select best unit
+  if (months >= 1) {
+    return `${months} mo`;
+  } else if (weeks >= 1) {
+    return `${weeks} ${weeks === 1 ? 'week' : 'weeks'}`;
+  } else {
+    return `${Math.max(1, days)} ${days === 1 ? 'day' : 'days'}`;
+  }
+};
+
+export const formatDuration = (value: number, periodType: string = 'Monthly'): string => {
+  if (value === 0) {
     switch (periodType) {
       case 'Daily':
         return "0 days";
@@ -73,16 +100,21 @@ export const formatDuration = (months: number, periodType: string = 'Monthly'): 
 
   switch (periodType) {
     case 'Daily':
-      return `${months} ${months === 1 ? 'day' : 'days'}`;
+      return `${value} ${value === 1 ? 'day' : 'days'}`;
     case 'Weekly':
-      return `${months} ${months === 1 ? 'week' : 'weeks'}`;
+      return `${value} ${value === 1 ? 'week' : 'weeks'}`;
     case 'Monthly':
     default:
-      return `${months} mo`;
+      return `${value} mo`;
   }
 };
 
 export const getRentalStatus = (startDate: string, endDate: string | null, status: string): string => {
+  // If explicitly set to Cancelled in database, respect that (rental was cancelled)
+  if (status === "Cancelled") {
+    return "Cancelled";
+  }
+
   // If explicitly set to Pending in database, respect that (key not yet handed)
   if (status === "Pending") {
     return "Pending";
@@ -93,6 +125,11 @@ export const getRentalStatus = (startDate: string, endDate: string | null, statu
     return "Rejected";
   }
 
+  // If explicitly set to Closed in database, respect that
+  if (status === "Closed") {
+    return "Completed";
+  }
+
   const today = new Date();
   const start = parseISO(startDate);
 
@@ -101,17 +138,12 @@ export const getRentalStatus = (startDate: string, endDate: string | null, statu
     return "Upcoming";
   }
 
-  // If there's an end date and it's in the past, it's closed
+  // If there's an end date and it's in the past, it's completed
   if (endDate) {
     const end = parseISO(endDate);
     if (!isAfter(end, today)) {
-      return "Closed";
+      return "Completed";
     }
-  }
-
-  // If explicitly set to Closed in database, respect that
-  if (status === "Closed") {
-    return "Closed";
   }
 
   return "Active";

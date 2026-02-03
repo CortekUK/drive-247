@@ -227,7 +227,7 @@ export const EditVehicleDialog = ({ vehicle, open, onOpenChange }: EditVehicleDi
                     render={({ field }) => (
                       <FormItem>
                         <FormLabel>Acquisition Date</FormLabel>
-                        <Popover>
+                        <Popover modal={true}>
                           <PopoverTrigger asChild>
                             <FormControl>
                               <Button
@@ -478,7 +478,7 @@ export const EditVehicleDialog = ({ vehicle, open, onOpenChange }: EditVehicleDi
                     render={({ field }) => (
                       <FormItem>
                         <FormLabel>Inspection Due Date</FormLabel>
-                        <Popover>
+                        <Popover modal={true}>
                           <PopoverTrigger asChild>
                             <FormControl>
                               <Button
@@ -518,7 +518,7 @@ export const EditVehicleDialog = ({ vehicle, open, onOpenChange }: EditVehicleDi
                     render={({ field }) => (
                       <FormItem>
                         <FormLabel>Registration Due Date</FormLabel>
-                        <Popover>
+                        <Popover modal={true}>
                           <PopoverTrigger asChild>
                             <FormControl>
                               <Button
@@ -560,7 +560,7 @@ export const EditVehicleDialog = ({ vehicle, open, onOpenChange }: EditVehicleDi
                     render={({ field }) => (
                       <FormItem>
                         <FormLabel>Warranty Start Date</FormLabel>
-                        <Popover>
+                        <Popover modal={true}>
                           <PopoverTrigger asChild>
                             <FormControl>
                               <Button
@@ -600,7 +600,7 @@ export const EditVehicleDialog = ({ vehicle, open, onOpenChange }: EditVehicleDi
                     render={({ field }) => (
                       <FormItem>
                         <FormLabel>Warranty End Date</FormLabel>
-                        <Popover>
+                        <Popover modal={true}>
                           <PopoverTrigger asChild>
                             <FormControl>
                               <Button

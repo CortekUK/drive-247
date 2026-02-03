@@ -12,6 +12,7 @@ export interface CustomerData {
   type: string;
   tenant_id: string | null;
   profile_photo_url: string | null;
+  date_of_birth: string | null;
 }
 
 export interface CustomerUser {
@@ -70,7 +71,8 @@ const fetchCustomerUser = async (authUser: User, tenantId?: string): Promise<Cus
           customer_type,
           type,
           tenant_id,
-          profile_photo_url
+          profile_photo_url,
+          date_of_birth
         )
       `)
       .eq('auth_user_id', authUser.id);

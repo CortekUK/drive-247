@@ -2,17 +2,19 @@
 
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { 
-  Search, 
-  User, 
-  Car, 
-  Calendar, 
-  AlertTriangle, 
-  CreditCard, 
-  Hash, 
+import {
+  Search,
+  User,
+  Car,
+  Calendar,
+  AlertTriangle,
+  CreditCard,
+  Hash,
   Shield,
   Loader2,
-  Filter
+  Filter,
+  FileText,
+  File
 } from "lucide-react";
 import {
   Command,
@@ -34,6 +36,8 @@ import {
 import { Button } from "@/components/ui/button";
 import { useGlobalSearch } from "@/hooks/use-global-search";
 import { SearchResult } from "@/lib/search-service";
+import { useTenant } from "@/contexts/TenantContext";
+import { isInsuranceExemptTenant } from "@/config/tenant-config";
 
 // Entity icons - returns empty string (icons handled by Lucide components)
 const getEntityEmoji = (category: string): string => {
@@ -56,6 +60,10 @@ const getIcon = (iconName: string) => {
       return Hash;
     case "shield":
       return Shield;
+    case "file-text":
+      return FileText;
+    case "file":
+      return File;
     default:
       return Search;
   }
@@ -86,6 +94,8 @@ interface GlobalSearchProps {
 
 export const GlobalSearch = ({ open, onOpenChange }: GlobalSearchProps) => {
   const router = useRouter();
+  const { tenant } = useTenant();
+  const hideInsurance = isInsuranceExemptTenant(tenant?.id);
   const {
     query,
     setQuery,
@@ -216,8 +226,10 @@ export const GlobalSearch = ({ open, onOpenChange }: GlobalSearchProps) => {
                 <SelectItem value="rentals">Rentals</SelectItem>
                 <SelectItem value="fines">Fines</SelectItem>
                 <SelectItem value="payments">Payments</SelectItem>
-                <SelectItem value="insurance">Insurance</SelectItem>
+                {!hideInsurance && <SelectItem value="insurance">Insurance</SelectItem>}
                 <SelectItem value="plates">Plates</SelectItem>
+                <SelectItem value="invoices">Invoices</SelectItem>
+                <SelectItem value="documents">Documents</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -268,7 +280,7 @@ export const GlobalSearch = ({ open, onOpenChange }: GlobalSearchProps) => {
               <div className="space-y-2">
                 <h3 className="text-lg font-semibold text-foreground">Search Everything</h3>
                 <p className="text-sm text-muted-foreground max-w-md mx-auto">
-                  Instantly find customers, vehicles, rentals, fines, payments, insurance records, and license plates
+                  Instantly find customers, vehicles, rentals, fines, payments{!hideInsurance ? ', insurance,' : ','} invoices, documents, and plates
                 </p>
               </div>
 
@@ -324,8 +336,10 @@ export const GlobalSearch = ({ open, onOpenChange }: GlobalSearchProps) => {
               {renderGroup("Rentals", results.rentals, "")}
               {renderGroup("Fines", results.fines, "")}
               {renderGroup("Payments", results.payments, "")}
-              {renderGroup("Insurance", results.insurance, "")}
+              {!hideInsurance && renderGroup("Insurance", results.insurance, "")}
               {renderGroup("Plates", results.plates, "")}
+              {renderGroup("Invoices", results.invoices, "")}
+              {renderGroup("Documents", results.documents, "")}
             </div>
           )}
         </CommandList>

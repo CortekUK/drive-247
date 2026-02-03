@@ -15,14 +15,17 @@ import MultiStepBookingWidget from '@/components/MultiStepBookingWidget';
 import HeroCarousel from '@/components/HeroCarousel';
 import { Phone } from 'lucide-react';
 
-import { usePageContent, defaultHomeContent, mergeWithDefaults, defaultHomeCarouselImages } from '@/hooks/usePageContent';
+import { usePageContent, defaultHomeContent, mergeWithDefaults, defaultHomeCarouselImages, type CarouselMediaItem } from '@/hooks/usePageContent';
 import { Button } from '@/components/ui/button';
 import { useEffect, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useTenant } from '@/contexts/TenantContext';
+import { useBrandingSettings } from '@/hooks/useBrandingSettings';
+import { createCompanyNameReplacer } from '@/utils/tenantName';
 
 export default function Home() {
   const { tenant } = useTenant();
+  const { branding } = useBrandingSettings();
   const [testimonialStats, setTestimonialStats] = useState({
     avgRating: '5.0',
     count: '0'
@@ -32,10 +35,31 @@ export default function Home() {
   const { data: rawContent } = usePageContent('home');
   const content = mergeWithDefaults(rawContent, defaultHomeContent);
 
-  // Hero carousel images - use CMS images if set, otherwise use defaults
-  const heroCarouselImages = content.home_hero?.carousel_images?.length
-    ? content.home_hero.carousel_images
-    : defaultHomeCarouselImages;
+  // Use the tenant's app_name for dynamic titles
+  const appName = branding.app_name || 'Drive 247';
+  const replaceCompanyName = createCompanyNameReplacer(appName);
+
+  // Hero carousel media - prefer new carousel_media format, fall back to carousel_images, then defaults
+  const heroCarouselMedia: CarouselMediaItem[] | undefined = (() => {
+    // Debug: log what we're receiving from CMS
+    console.log('[Hero] home_hero content:', content.home_hero);
+    console.log('[Hero] carousel_media:', content.home_hero?.carousel_media);
+    console.log('[Hero] carousel_images:', content.home_hero?.carousel_images);
+
+    // First, try new carousel_media format
+    if (content.home_hero?.carousel_media?.length) {
+      console.log('[Hero] Using carousel_media format');
+      return content.home_hero.carousel_media;
+    }
+    // Fall back to old carousel_images format (convert to media items)
+    if (content.home_hero?.carousel_images?.length) {
+      console.log('[Hero] Using carousel_images format (legacy)');
+      return content.home_hero.carousel_images.map(url => ({ url, type: 'image' as const }));
+    }
+    // Use defaults
+    console.log('[Hero] Using default images');
+    return defaultHomeCarouselImages.map(url => ({ url, type: 'image' as const }));
+  })();
 
   // Handle hash scrolling on page load
   useEffect(() => {
@@ -84,13 +108,13 @@ export default function Home() {
   const businessSchema = {
     '@context': 'https://schema.org',
     '@type': 'LocalBusiness',
-    'name': 'Drive 917',
-    'description': 'Premium luxury car rentals in the UK',
-    'telephone': '+44-800-123-4567',
+    'name': appName,
+    'description': 'Premium luxury car rentals in the USA',
+    'telephone': '+1-800-123-4567',
     'address': {
       '@type': 'PostalAddress',
-      'addressLocality': 'London',
-      'addressCountry': 'UK'
+      'addressLocality': 'Dallas',
+      'addressCountry': 'US'
     },
     'priceRange': '$$$',
     'aggregateRating': {
@@ -103,9 +127,9 @@ export default function Home() {
   return (
     <div className="min-h-screen bg-background">
       <SEO
-        title={content.seo?.title || 'Premium Luxury Car Rentals'}
-        description={content.seo?.description || 'Rent premium luxury vehicles with Drive917. Flexible daily, weekly, and monthly rates. Top-tier fleet and exceptional service.'}
-        keywords={content.seo?.keywords || 'luxury car rental, premium vehicle hire, exotic car rental, Dallas car rental'}
+        title={content.seo?.title ? replaceCompanyName(content.seo.title) : 'Premium Luxury Car Rentals'}
+        description={content.seo?.description ? replaceCompanyName(content.seo.description) : `Rent premium luxury vehicles with ${appName}. Flexible daily, weekly, and monthly rates. Top-tier fleet and exceptional service.`}
+        keywords={content.seo?.keywords ? replaceCompanyName(content.seo.keywords) : 'luxury car rental, premium vehicle hire, exotic car rental, Dallas car rental'}
         schema={businessSchema}
       />
       <Navigation />
@@ -113,7 +137,7 @@ export default function Home() {
       {/* Hero Section with Carousel */}
       <section className="relative min-h-screen">
         <HeroCarousel
-          images={heroCarouselImages}
+          media={heroCarouselMedia}
           autoPlayInterval={5000}
           overlayStrength="medium"
           showScrollIndicator={true}

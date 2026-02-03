@@ -1,11 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.4";
 import Stripe from "https://esm.sh/stripe@14.21.0?target=deno";
-
-const stripe = new Stripe(Deno.env.get("STRIPE_SECRET_KEY") || "", {
-  apiVersion: "2023-10-16",
-  httpClient: Stripe.createFetchHttpClient(),
-});
+import { getStripeClient, getConnectAccountId, type StripeMode } from '../_shared/stripe-client.ts';
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -83,23 +79,27 @@ serve(async (req) => {
       vehicle = vehicleData;
     }
 
-    // Get tenant's Stripe Connect account
+    // Get tenant's Stripe mode and Connect account
     const tenantId = requestTenantId || rental.tenant_id;
     let stripeAccountId: string | null = null;
+    let stripeMode: StripeMode = 'test';
 
     if (tenantId) {
       const { data: tenant } = await supabase
         .from("tenants")
-        .select("stripe_account_id, stripe_onboarding_complete")
+        .select("stripe_mode, stripe_account_id, stripe_onboarding_complete")
         .eq("id", tenantId)
         .single();
 
-      if (tenant?.stripe_account_id && tenant?.stripe_onboarding_complete) {
-        stripeAccountId = tenant.stripe_account_id;
-        console.log("Using Stripe Connect account:", stripeAccountId);
+      if (tenant) {
+        stripeMode = (tenant.stripe_mode as StripeMode) || 'test';
+        stripeAccountId = getConnectAccountId(tenant);
+        console.log("Refund - tenantId:", tenantId, "mode:", stripeMode, "connectAccount:", stripeAccountId);
       }
     }
 
+    // Initialize mode-aware Stripe client
+    const stripe = getStripeClient(stripeMode);
     const stripeOptions = stripeAccountId ? { stripeAccount: stripeAccountId } : undefined;
 
     // Get related payment with Stripe payment intent

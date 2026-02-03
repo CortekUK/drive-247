@@ -70,7 +70,8 @@ const BookingVehiclesContent = () => {
         .select(`
           *,
           vehicle_photos (
-            photo_url
+            photo_url,
+            display_order
           )
         `)
         .eq("status", "Available");
@@ -91,7 +92,14 @@ const BookingVehiclesContent = () => {
         toast.info("No vehicles available at the moment");
       }
 
-      setVehicles(data as any || []);
+      // Sort vehicle_photos by display_order for each vehicle
+      const vehiclesWithSortedPhotos = data?.map(vehicle => ({
+        ...vehicle,
+        vehicle_photos: vehicle.vehicle_photos
+          ? [...vehicle.vehicle_photos].sort((a: any, b: any) => (a.display_order || 0) - (b.display_order || 0))
+          : []
+      })) || [];
+      setVehicles(vehiclesWithSortedPhotos as any);
     } catch (error: any) {
       toast.error("Failed to load vehicles");
       console.error("Error loading vehicles:", error);

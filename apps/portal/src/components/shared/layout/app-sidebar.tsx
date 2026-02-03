@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Car, Users, FileText, CreditCard, LayoutDashboard, Bell, BarChart3, AlertCircle, TrendingUp, Settings, Ban, Receipt, FolderOpen, UserX, Globe, History, Clock, UsersRound } from "lucide-react";
+import { Car, Users, FileText, CreditCard, LayoutDashboard, Bell, BarChart3, AlertCircle, TrendingUp, Settings, CalendarDays, Receipt, FolderOpen, UserX, Globe, History, Clock, UsersRound } from "lucide-react";
 import { Sidebar, SidebarContent, SidebarGroup, SidebarGroupContent, SidebarGroupLabel, SidebarHeader, SidebarMenu, SidebarMenuButton, SidebarMenuItem, SidebarFooter, useSidebar } from "@/components/ui/sidebar";
 import { useReminderStats } from "@/hooks/use-reminders";
 import { useOrgSettings } from "@/hooks/use-org-settings";
@@ -24,7 +24,7 @@ export function AppSidebar() {
   const { appUser } = useAuthStore();
 
   // Get app name and logo from tenant branding or fallback to defaults
-  const appName = branding?.app_name || 'DRIVE917';
+  const appName = branding?.app_name || 'DRIVE247';
   const shortName = appName.length > 4 ? appName.substring(0, 4) : appName;
   const logoUrl = branding?.logo_url;
 
@@ -88,9 +88,9 @@ export function AppSidebar() {
 
   // Operations navigation items
   const operationsNavigation = [{
-    name: "Blocked Dates",
+    name: "Availability Management",
     href: "/blocked-dates",
-    icon: Ban
+    icon: CalendarDays
   }, {
     name: "Reminders",
     href: "/reminders",

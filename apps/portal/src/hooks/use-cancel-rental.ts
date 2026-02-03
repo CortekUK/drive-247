@@ -1,6 +1,7 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
+import { useAuditLog } from "./use-audit-log";
 
 interface CancelRefundParams {
   rentalId: string;
@@ -38,9 +39,10 @@ interface CancelRefundResult {
 
 export const useCancelRental = () => {
   const queryClient = useQueryClient();
+  const { logAction } = useAuditLog();
 
   return useMutation({
-    mutationFn: async (params: CancelRefundParams): Promise<CancelRefundResult> => {
+    mutationFn: async (params: CancelRefundParams): Promise<CancelRefundResult & { params: CancelRefundParams }> => {
       // Call the cancel-rental-refund edge function
       const { data, error } = await supabase.functions.invoke("cancel-rental-refund", {
         body: params,
@@ -66,15 +68,44 @@ export const useCancelRental = () => {
         }
       }
 
-      return data;
+      return { ...data, params };
     },
     onSuccess: (data) => {
+      const { params } = data;
       // Invalidate relevant queries
       queryClient.invalidateQueries({ queryKey: ["rentals"] });
       queryClient.invalidateQueries({ queryKey: ["rental"] });
       queryClient.invalidateQueries({ queryKey: ["payments"] });
       queryClient.invalidateQueries({ queryKey: ["pending-bookings"] });
       queryClient.invalidateQueries({ queryKey: ["vehicles"] });
+
+      // Audit log for rental cancellation
+      logAction({
+        action: "rental_cancelled",
+        entityType: "rental",
+        entityId: params.rentalId,
+        details: {
+          reason: params.reason,
+          refund_type: params.refundType,
+          refund_amount: params.refundAmount,
+          cancelled_by: params.cancelledBy,
+          payment_id: params.paymentId
+        }
+      });
+
+      // Audit log for refund if applicable
+      if (data.refund && params.paymentId && (data.refund.type === "full" || data.refund.type === "partial")) {
+        logAction({
+          action: "payment_refunded",
+          entityType: "payment",
+          entityId: params.paymentId,
+          details: {
+            refund_type: data.refund.type,
+            refund_amount: data.refund.amount,
+            rental_id: params.rentalId
+          }
+        });
+      }
 
       let successMessage = "Rental cancelled successfully.";
       if (data.refund) {

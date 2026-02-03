@@ -211,7 +211,7 @@ export function InclusionsEditor({ content, onSave, isSaving }: InclusionsEditor
                   <FormItem>
                     <FormLabel>Section Title</FormLabel>
                     <FormControl>
-                      <Input placeholder="Every Drive917 Rental Includes" {...field} />
+                      <Input placeholder="Every Drive247 Rental Includes" {...field} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>

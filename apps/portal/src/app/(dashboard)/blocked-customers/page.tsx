@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -25,7 +25,8 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Ban, Plus, Trash2, User, CreditCard, Search, CheckCircle, AlertTriangle, Eye } from "lucide-react";
+import { Ban, Plus, Trash2, User, CreditCard, Search, CheckCircle, AlertTriangle, Eye, Check } from "lucide-react";
+import { cn } from "@/lib/utils";
 import { useCustomerBlockingActions, useBlockedIdentities } from "@/hooks/use-customer-blocking";
 import { format } from "date-fns";
 import { useToast } from "@/hooks/use-toast";
@@ -49,17 +50,60 @@ const BlockedCustomers = () => {
   const { toast } = useToast();
   const { tenant } = useTenant();
   const [searchTerm, setSearchTerm] = useState("");
+  const [customersPage, setCustomersPage] = useState(1);
+  const [identitiesPage, setIdentitiesPage] = useState(1);
+  const pageSize = 25;
   const [addIdentityDialogOpen, setAddIdentityDialogOpen] = useState(false);
   const [newIdentity, setNewIdentity] = useState({
     type: "license" as "license" | "id_card" | "passport" | "other",
     number: "",
+    name: "",
     reason: "",
     notes: ""
   });
   const [unblockCustomerDialog, setUnblockCustomerDialog] = useState<{ open: boolean; id: string; name: string } | null>(null);
   const [removeIdentityDialog, setRemoveIdentityDialog] = useState<{ open: boolean; id: string; number: string } | null>(null);
+  const [customerComboboxOpen, setCustomerComboboxOpen] = useState(false);
 
   const { unblockCustomer, addBlockedIdentity, removeBlockedIdentity, isLoading } = useCustomerBlockingActions();
+
+  // Fetch all customers for combobox (with license/ID for pre-fill)
+  const { data: allCustomers = [] } = useQuery({
+    queryKey: ["all-customers-list", tenant?.id],
+    queryFn: async () => {
+      let query = supabase
+        .from("customers")
+        .select("id, name, license_number, id_number")
+        .order("name");
+
+      if (tenant?.id) {
+        query = query.eq("tenant_id", tenant.id);
+      }
+
+      const { data, error } = await query;
+      if (error) throw error;
+      return data as { id: string; name: string; license_number: string | null; id_number: string | null }[];
+    },
+    enabled: !!tenant,
+  });
+
+  // Handle customer selection from combobox
+  const handleCustomerSelect = (customerId: string) => {
+    const customer = allCustomers.find(c => c.id === customerId);
+    if (customer) {
+      // Pre-fill name and identity number if available
+      const identityNumber = customer.license_number || customer.id_number || "";
+      const identityType = customer.license_number ? "license" : customer.id_number ? "id_card" : newIdentity.type;
+
+      setNewIdentity(prev => ({
+        ...prev,
+        name: customer.name,
+        number: identityNumber,
+        type: identityType
+      }));
+    }
+    setCustomerComboboxOpen(false);
+  };
   const { data: blockedIdentities, isLoading: identitiesLoading } = useBlockedIdentities();
 
   // Fetch blocked customers
@@ -109,11 +153,13 @@ const BlockedCustomers = () => {
       identityType: newIdentity.type,
       identityNumber: newIdentity.number.trim(),
       reason: newIdentity.reason.trim(),
-      notes: newIdentity.notes.trim() || undefined
+      notes: newIdentity.notes.trim() || undefined,
+      customerName: newIdentity.name.trim() || undefined
     }, {
       onSuccess: () => {
         setAddIdentityDialogOpen(false);
-        setNewIdentity({ type: "license", number: "", reason: "", notes: "" });
+        setNewIdentity({ type: "license", number: "", name: "", reason: "", notes: "" });
+        setCustomerComboboxOpen(false);
       }
     });
   };
@@ -139,8 +185,30 @@ const BlockedCustomers = () => {
   // Filter blocked identities
   const filteredIdentities = blockedIdentities?.filter(identity =>
     identity.identity_number.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    identity.reason.toLowerCase().includes(searchTerm.toLowerCase())
+    identity.reason.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    identity.customer_name?.toLowerCase().includes(searchTerm.toLowerCase())
   ) || [];
+
+  // Pagination for customers
+  const totalCustomersCount = filteredCustomers.length;
+  const totalCustomersPages = Math.ceil(totalCustomersCount / pageSize);
+  const customersStartIndex = (customersPage - 1) * pageSize;
+  const customersEndIndex = Math.min(customersStartIndex + pageSize, totalCustomersCount);
+  const paginatedCustomers = filteredCustomers.slice(customersStartIndex, customersEndIndex);
+
+  // Pagination for identities
+  const totalIdentitiesCount = filteredIdentities.length;
+  const totalIdentitiesPages = Math.ceil(totalIdentitiesCount / pageSize);
+  const identitiesStartIndex = (identitiesPage - 1) * pageSize;
+  const identitiesEndIndex = Math.min(identitiesStartIndex + pageSize, totalIdentitiesCount);
+  const paginatedIdentities = filteredIdentities.slice(identitiesStartIndex, identitiesEndIndex);
+
+  // Reset pages when search changes
+  const handleSearchChange = (value: string) => {
+    setSearchTerm(value);
+    setCustomersPage(1);
+    setIdentitiesPage(1);
+  };
 
   const getIdentityTypeBadge = (type: string) => {
     switch (type) {
@@ -208,7 +276,7 @@ const BlockedCustomers = () => {
           <Input
             placeholder="Search by name, email, license, or ID..."
             value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
+            onChange={(e) => handleSearchChange(e.target.value)}
             className="pl-9"
           />
         </div>
@@ -228,27 +296,19 @@ const BlockedCustomers = () => {
         </TabsList>
 
         {/* Blocked Customers Tab */}
-        <TabsContent value="customers">
-          <Card>
-            <CardHeader className="p-4 md:p-6">
-              <CardTitle className="text-lg md:text-xl">Blocked Customers</CardTitle>
-              <CardDescription className="text-xs md:text-sm">
-                Customers who are blocked from making new rentals
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="p-4 md:p-6 pt-0">
-              {customersLoading ? (
-                <div className="text-center py-8 text-muted-foreground">Loading...</div>
-              ) : filteredCustomers.length === 0 ? (
-                <div className="text-center py-8">
-                  <Ban className="h-12 w-12 mx-auto text-muted-foreground/30 mb-4" />
-                  <p className="text-muted-foreground">No blocked customers found</p>
-                </div>
-              ) : (
-                <>
-                  {/* Mobile Card View */}
-                  <div className="md:hidden space-y-3">
-                    {filteredCustomers.map((customer) => (
+        <TabsContent value="customers" className="space-y-4">
+          {customersLoading ? (
+            <div className="text-center py-8 text-muted-foreground">Loading...</div>
+          ) : filteredCustomers.length === 0 ? (
+            <div className="text-center py-8">
+              <Ban className="h-12 w-12 mx-auto text-muted-foreground/30 mb-4" />
+              <p className="text-muted-foreground">No blocked customers found</p>
+            </div>
+          ) : (
+            <>
+              {/* Mobile Card View */}
+              <div className="md:hidden space-y-3">
+                    {paginatedCustomers.map((customer) => (
                       <div key={customer.id} className="border rounded-lg p-4 space-y-3">
                         <div className="flex justify-between items-start">
                           <div>
@@ -302,121 +362,143 @@ const BlockedCustomers = () => {
                     ))}
                   </div>
 
-                  {/* Desktop Table View */}
-                  <div className="hidden md:block rounded-md border">
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead>Customer</TableHead>
-                          <TableHead>License / ID</TableHead>
-                          <TableHead>Blocked On</TableHead>
-                          <TableHead>Reason</TableHead>
-                          <TableHead className="text-right">Actions</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {filteredCustomers.map((customer) => (
-                          <TableRow key={customer.id}>
-                            <TableCell>
-                              <div>
-                                <div className="font-medium">{customer.name}</div>
-                                <div className="text-sm text-muted-foreground">
-                                  {customer.email || customer.phone || "No contact"}
+              {/* Desktop Table View */}
+              <Card className="hidden md:block">
+                <CardContent className="p-0">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Customer</TableHead>
+                        <TableHead>License / ID</TableHead>
+                        <TableHead>Blocked On</TableHead>
+                        <TableHead>Reason</TableHead>
+                        <TableHead className="text-right">Actions</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {paginatedCustomers.map((customer) => (
+                        <TableRow key={customer.id}>
+                          <TableCell>
+                            <div>
+                              <div className="font-medium">{customer.name}</div>
+                              <div className="text-sm text-muted-foreground">
+                                {customer.email || customer.phone || "No contact"}
+                              </div>
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            <div className="space-y-1">
+                              {customer.license_number && (
+                                <div className="text-sm">
+                                  <span className="text-muted-foreground">License:</span> {customer.license_number}
                                 </div>
-                              </div>
-                            </TableCell>
-                            <TableCell>
-                              <div className="space-y-1">
-                                {customer.license_number && (
-                                  <div className="text-sm">
-                                    <span className="text-muted-foreground">License:</span> {customer.license_number}
-                                  </div>
-                                )}
-                                {customer.id_number && (
-                                  <div className="text-sm">
-                                    <span className="text-muted-foreground">ID:</span> {customer.id_number}
-                                  </div>
-                                )}
-                                {!customer.license_number && !customer.id_number && (
-                                  <span className="text-muted-foreground text-sm">-</span>
-                                )}
-                              </div>
-                            </TableCell>
-                            <TableCell>
-                              {customer.blocked_at ? (
-                                format(new Date(customer.blocked_at), "MMM dd, yyyy")
-                              ) : (
-                                "-"
                               )}
-                            </TableCell>
-                            <TableCell>
-                              <span className="text-sm max-w-[200px] truncate block">
-                                {customer.blocked_reason || "-"}
-                              </span>
-                            </TableCell>
-                            <TableCell className="text-right">
-                              <div className="flex items-center justify-end gap-2">
-                                <Button
-                                  variant="outline"
-                                  size="sm"
-                                  onClick={() => router.push(`/customers/${customer.id}`)}
-                                >
-                                  <Eye className="h-4 w-4 mr-1" />
-                                  View
-                                </Button>
-                                <Button
-                                  variant="outline"
-                                  size="sm"
-                                  onClick={() => setUnblockCustomerDialog({ open: true, id: customer.id, name: customer.name })}
-                                  disabled={isLoading}
-                                  className="text-green-600 border-green-600 hover:bg-green-50"
-                                >
-                                  <CheckCircle className="h-4 w-4 mr-1" />
-                                  Unblock
-                                </Button>
-                              </div>
-                            </TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
+                              {customer.id_number && (
+                                <div className="text-sm">
+                                  <span className="text-muted-foreground">ID:</span> {customer.id_number}
+                                </div>
+                              )}
+                              {!customer.license_number && !customer.id_number && (
+                                <span className="text-muted-foreground text-sm">-</span>
+                              )}
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            {customer.blocked_at ? (
+                              format(new Date(customer.blocked_at), "MMM dd, yyyy")
+                            ) : (
+                              "-"
+                            )}
+                          </TableCell>
+                          <TableCell>
+                            <span className="text-sm max-w-[200px] truncate block">
+                              {customer.blocked_reason || "-"}
+                            </span>
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <div className="flex items-center justify-end gap-2">
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => router.push(`/customers/${customer.id}`)}
+                              >
+                                <Eye className="h-4 w-4 mr-1" />
+                                View
+                              </Button>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => setUnblockCustomerDialog({ open: true, id: customer.id, name: customer.name })}
+                                disabled={isLoading}
+                                className="text-green-600 border-green-600 hover:bg-green-50"
+                              >
+                                <CheckCircle className="h-4 w-4 mr-1" />
+                                Unblock
+                              </Button>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </CardContent>
+              </Card>
+
+              {/* Pagination */}
+              {totalCustomersPages > 1 && (
+                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                  <p className="text-sm text-muted-foreground">
+                    Showing {customersStartIndex + 1}-{customersEndIndex} of {totalCustomersCount} customers
+                  </p>
+                  <div className="flex items-center gap-2 w-full sm:w-auto flex-wrap justify-center sm:justify-end">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setCustomersPage(Math.max(1, customersPage - 1))}
+                      disabled={customersPage === 1}
+                    >
+                      Previous
+                    </Button>
+                    <span className="text-sm text-muted-foreground whitespace-nowrap">
+                      Page {customersPage} of {totalCustomersPages}
+                    </span>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setCustomersPage(Math.min(totalCustomersPages, customersPage + 1))}
+                      disabled={customersPage === totalCustomersPages}
+                    >
+                      Next
+                    </Button>
                   </div>
-                </>
+                </div>
               )}
-            </CardContent>
-          </Card>
+            </>
+          )}
         </TabsContent>
 
         {/* Blocked Identities Tab */}
-        <TabsContent value="identities">
-          <Card>
-            <CardHeader className="p-4 md:p-6">
-              <CardTitle className="text-lg md:text-xl">Blocked Identities</CardTitle>
-              <CardDescription className="text-xs md:text-sm">
-                License numbers, ID cards, and passports that are blacklisted. Any new customer with these identities will be automatically blocked.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="p-4 md:p-6 pt-0">
-              {identitiesLoading ? (
-                <div className="text-center py-8 text-muted-foreground">Loading...</div>
-              ) : filteredIdentities.length === 0 ? (
-                <div className="text-center py-8">
-                  <CreditCard className="h-12 w-12 mx-auto text-muted-foreground/30 mb-4" />
-                  <p className="text-muted-foreground">No blocked identities found</p>
-                  <Button
-                    variant="outline"
-                    className="mt-4"
-                    onClick={() => setAddIdentityDialogOpen(true)}
-                  >
-                    <Plus className="h-4 w-4 mr-2" />
-                    Add First Identity
-                  </Button>
-                </div>
-              ) : (
-                <>
-                  {/* Mobile Card View */}
-                  <div className="md:hidden space-y-3">
-                    {filteredIdentities.map((identity) => (
+        <TabsContent value="identities" className="space-y-4">
+          {identitiesLoading ? (
+            <div className="text-center py-8 text-muted-foreground">Loading...</div>
+          ) : filteredIdentities.length === 0 ? (
+            <div className="text-center py-8">
+              <CreditCard className="h-12 w-12 mx-auto text-muted-foreground/30 mb-4" />
+              <p className="text-muted-foreground">No blocked identities found</p>
+              <Button
+                variant="outline"
+                className="mt-4"
+                onClick={() => setAddIdentityDialogOpen(true)}
+              >
+                <Plus className="h-4 w-4 mr-2" />
+                Add First Identity
+              </Button>
+            </div>
+          ) : (
+            <>
+              {/* Mobile Card View */}
+              <div className="md:hidden space-y-3">
+                    {paginatedIdentities.map((identity) => (
                       <div key={identity.id} className="border rounded-lg p-4 space-y-3">
                         <div className="flex justify-between items-start">
                           <div className="space-y-1">
@@ -426,6 +508,11 @@ const BlockedCustomers = () => {
                             </div>
                           </div>
                         </div>
+                        {identity.customer_name && (
+                          <div className="text-sm">
+                            <span className="text-muted-foreground">Customer:</span> {identity.customer_name}
+                          </div>
+                        )}
                         <div className="text-sm">
                           <span className="text-muted-foreground">Reason:</span> {identity.reason}
                         </div>
@@ -451,75 +538,184 @@ const BlockedCustomers = () => {
                     ))}
                   </div>
 
-                  {/* Desktop Table View */}
-                  <div className="hidden md:block rounded-md border">
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead>Type</TableHead>
-                          <TableHead>Identity Number</TableHead>
-                          <TableHead>Reason</TableHead>
-                          <TableHead>Notes</TableHead>
-                          <TableHead>Added On</TableHead>
-                          <TableHead className="text-right">Actions</TableHead>
+              {/* Desktop Table View */}
+              <Card className="hidden md:block">
+                <CardContent className="p-0">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Type</TableHead>
+                        <TableHead>Customer</TableHead>
+                        <TableHead>Identity Number</TableHead>
+                        <TableHead>Reason</TableHead>
+                        <TableHead>Notes</TableHead>
+                        <TableHead>Added On</TableHead>
+                        <TableHead className="text-right">Actions</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {paginatedIdentities.map((identity) => (
+                        <TableRow key={identity.id}>
+                          <TableCell>
+                            {getIdentityTypeBadge(identity.identity_type)}
+                          </TableCell>
+                          <TableCell>
+                            <span className="text-sm font-medium">
+                              {identity.customer_name || "-"}
+                            </span>
+                          </TableCell>
+                          <TableCell className="font-mono font-medium">
+                            {identity.identity_number}
+                          </TableCell>
+                          <TableCell>
+                            <span className="text-sm max-w-[200px] truncate block">
+                              {identity.reason}
+                            </span>
+                          </TableCell>
+                          <TableCell>
+                            <span className="text-sm text-muted-foreground max-w-[150px] truncate block">
+                              {identity.notes || "-"}
+                            </span>
+                          </TableCell>
+                          <TableCell>
+                            {format(new Date(identity.created_at), "MMM dd, yyyy")}
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => setRemoveIdentityDialog({ open: true, id: identity.id, number: identity.identity_number })}
+                              disabled={isLoading}
+                              className="text-destructive border-destructive hover:bg-destructive/10"
+                            >
+                              <Trash2 className="h-4 w-4 mr-1" />
+                              Remove
+                            </Button>
+                          </TableCell>
                         </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {filteredIdentities.map((identity) => (
-                          <TableRow key={identity.id}>
-                            <TableCell>
-                              {getIdentityTypeBadge(identity.identity_type)}
-                            </TableCell>
-                            <TableCell className="font-mono font-medium">
-                              {identity.identity_number}
-                            </TableCell>
-                            <TableCell>
-                              <span className="text-sm max-w-[200px] truncate block">
-                                {identity.reason}
-                              </span>
-                            </TableCell>
-                            <TableCell>
-                              <span className="text-sm text-muted-foreground max-w-[150px] truncate block">
-                                {identity.notes || "-"}
-                              </span>
-                            </TableCell>
-                            <TableCell>
-                              {format(new Date(identity.created_at), "MMM dd, yyyy")}
-                            </TableCell>
-                            <TableCell className="text-right">
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={() => setRemoveIdentityDialog({ open: true, id: identity.id, number: identity.identity_number })}
-                                disabled={isLoading}
-                                className="text-destructive border-destructive hover:bg-destructive/10"
-                              >
-                                <Trash2 className="h-4 w-4 mr-1" />
-                                Remove
-                              </Button>
-                            </TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </CardContent>
+              </Card>
+
+              {/* Pagination for Identities */}
+              {totalIdentitiesPages > 1 && (
+                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                  <p className="text-sm text-muted-foreground">
+                    Showing {identitiesStartIndex + 1}-{identitiesEndIndex} of {totalIdentitiesCount} identities
+                  </p>
+                  <div className="flex items-center gap-2 w-full sm:w-auto flex-wrap justify-center sm:justify-end">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setIdentitiesPage(Math.max(1, identitiesPage - 1))}
+                      disabled={identitiesPage === 1}
+                    >
+                      Previous
+                    </Button>
+                    <span className="text-sm text-muted-foreground whitespace-nowrap">
+                      Page {identitiesPage} of {totalIdentitiesPages}
+                    </span>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setIdentitiesPage(Math.min(totalIdentitiesPages, identitiesPage + 1))}
+                      disabled={identitiesPage === totalIdentitiesPages}
+                    >
+                      Next
+                    </Button>
                   </div>
-                </>
+                </div>
               )}
-            </CardContent>
-          </Card>
+            </>
+          )}
         </TabsContent>
       </Tabs>
 
       {/* Add Identity Dialog */}
-      <Dialog open={addIdentityDialogOpen} onOpenChange={setAddIdentityDialogOpen}>
-        <DialogContent className="w-[calc(100%-2rem)] max-w-[425px] max-h-[90vh] flex flex-col rounded-lg mx-auto">
-          <DialogHeader className="pb-2">
-            <DialogTitle className="text-base">Add to Blocklist
-            </DialogTitle>
+      <Dialog open={addIdentityDialogOpen} onOpenChange={(open) => {
+        setAddIdentityDialogOpen(open);
+        if (!open) {
+          setCustomerComboboxOpen(false);
+        }
+      }}>
+        <DialogContent className="w-[calc(100%-2rem)] max-w-[425px] max-h-[90vh] flex flex-col rounded-lg mx-auto p-4">
+          <DialogHeader className="pb-1">
+            <DialogTitle className="text-base">Add to Blocklist</DialogTitle>
           </DialogHeader>
           <div className="flex-1 overflow-y-auto">
-            <div className="grid gap-4">
-              <div className="grid gap-2">
+            <div className="grid gap-3">
+              <div className="grid gap-1.5">
+                <Label htmlFor="customer-name" className="text-sm">Customer Name</Label>
+                <div className="relative">
+                  <div className="flex items-center border rounded-md px-3 h-9">
+                    <Search className="mr-2 h-4 w-4 shrink-0 opacity-50" />
+                    <input
+                      placeholder="Search or type customer name..."
+                      value={newIdentity.name}
+                      onChange={(e) => {
+                        setNewIdentity(prev => ({ ...prev, name: e.target.value }));
+                        setCustomerComboboxOpen(true);
+                      }}
+                      onFocus={() => setCustomerComboboxOpen(true)}
+                      className="flex h-full w-full bg-transparent text-sm outline-none placeholder:text-muted-foreground"
+                    />
+                    {newIdentity.name && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setNewIdentity(prev => ({ ...prev, name: "", number: "" }));
+                          setCustomerComboboxOpen(false);
+                        }}
+                        className="ml-2 text-muted-foreground hover:text-foreground"
+                      >
+                        ×
+                      </button>
+                    )}
+                  </div>
+                  {customerComboboxOpen && allCustomers.filter(customer =>
+                    customer.name.toLowerCase().includes(newIdentity.name.toLowerCase())
+                  ).length > 0 && (
+                    <div className="absolute z-50 w-full mt-1 bg-popover border rounded-md shadow-md">
+                      <div className="max-h-[200px] overflow-y-auto p-1">
+                        {allCustomers
+                          .filter(customer =>
+                            customer.name.toLowerCase().includes(newIdentity.name.toLowerCase())
+                          )
+                          .slice(0, 10)
+                          .map((customer) => (
+                            <div
+                              key={customer.id}
+                              className="relative flex cursor-pointer select-none items-center rounded-sm px-2 py-2 text-sm hover:bg-accent hover:text-accent-foreground"
+                              onMouseDown={(e) => {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                handleCustomerSelect(customer.id);
+                              }}
+                            >
+                              <Check
+                                className={cn(
+                                  "mr-2 h-4 w-4",
+                                  newIdentity.name === customer.name ? "opacity-100" : "opacity-0"
+                                )}
+                              />
+                              <div className="flex flex-col">
+                                <span>{customer.name}</span>
+                                {(customer.license_number || customer.id_number) && (
+                                  <span className="text-xs text-muted-foreground">
+                                    {customer.license_number ? `License: ${customer.license_number}` : `ID: ${customer.id_number}`}
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                          ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+              <div className="grid gap-1.5">
                 <Label htmlFor="identity-type" className="text-sm">Identity Type <span className="text-red-500">*</span></Label>
                 <Select
                   value={newIdentity.type}
@@ -527,7 +723,7 @@ const BlockedCustomers = () => {
                     setNewIdentity(prev => ({ ...prev, type: value }))
                   }
                 >
-                  <SelectTrigger id="identity-type" className="h-10">
+                  <SelectTrigger id="identity-type" className="h-9">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -538,28 +734,28 @@ const BlockedCustomers = () => {
                   </SelectContent>
                 </Select>
               </div>
-              <div className="grid gap-2">
+              <div className="grid gap-1.5">
                 <Label htmlFor="identity-number" className="text-sm">Identity Number <span className="text-red-500">*</span></Label>
                 <Input
                   id="identity-number"
                   placeholder="Enter license/ID/passport number"
                   value={newIdentity.number}
                   onChange={(e) => setNewIdentity(prev => ({ ...prev, number: e.target.value }))}
-                  className="h-10"
+                  className="h-9"
                 />
               </div>
-              <div className="grid gap-2">
+              <div className="grid gap-1.5">
                 <Label htmlFor="block-reason" className="text-sm">Reason <span className="text-red-500">*</span></Label>
                 <Textarea
                   id="block-reason"
                   placeholder="Why is this identity being blocked?"
                   value={newIdentity.reason}
                   onChange={(e) => setNewIdentity(prev => ({ ...prev, reason: e.target.value }))}
-                  rows={3}
+                  rows={2}
                   className="resize-none"
                 />
               </div>
-              <div className="grid gap-2">
+              <div className="grid gap-1.5">
                 <Label htmlFor="block-notes" className="text-sm">Notes (optional)</Label>
                 <Textarea
                   id="block-notes"
@@ -578,8 +774,11 @@ const BlockedCustomers = () => {
               </Alert>
             </div>
           </div>
-          <DialogFooter className="pt-4 flex-col-reverse sm:flex-row gap-2">
-            <Button variant="outline" className="w-full sm:w-auto" onClick={() => setAddIdentityDialogOpen(false)}>
+          <DialogFooter className="pt-3 flex-col-reverse sm:flex-row gap-2">
+            <Button variant="outline" className="w-full sm:w-auto" onClick={() => {
+              setAddIdentityDialogOpen(false);
+              setCustomerComboboxOpen(false);
+            }}>
               Cancel
             </Button>
             <Button

@@ -13,6 +13,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { useToast } from "@/hooks/use-toast";
 import { useTenant } from "@/contexts/TenantContext";
 import { formatCurrency } from "@/lib/invoice-utils";
+import { useAuditLog } from "@/hooks/use-audit-log";
 
 interface Invoice {
   id: string;
@@ -42,6 +43,7 @@ export const DeleteInvoiceDialog = ({
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const { tenant } = useTenant();
+  const { logAction } = useAuditLog();
 
   const deleteInvoiceMutation = useMutation({
     mutationFn: async () => {
@@ -65,7 +67,22 @@ export const DeleteInvoiceDialog = ({
         description: `Invoice ${invoice?.invoice_number} has been permanently deleted.`,
       });
 
+      // Audit log for invoice deletion
+      if (invoice?.id) {
+        logAction({
+          action: "invoice_deleted",
+          entityType: "invoice",
+          entityId: invoice.id,
+          details: {
+            invoice_number: invoice.invoice_number,
+            amount: invoice.total_amount,
+            customer_name: invoice.customers?.name
+          }
+        });
+      }
+
       queryClient.invalidateQueries({ queryKey: ["invoices-list"] });
+      queryClient.invalidateQueries({ queryKey: ["audit-logs"] });
       onOpenChange(false);
     },
     onError: (error: Error) => {

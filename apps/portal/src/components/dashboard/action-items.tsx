@@ -212,8 +212,10 @@ export const ActionItems = () => {
         <CardHeader className="pb-4">
           <div className="flex items-center justify-between">
             <div>
-              <CardTitle className="text-2xl font-bold">Performance Overview</CardTitle>
-              <CardDescription className="text-base">
+              <CardTitle className="text-xl sm:text-2xl font-bold bg-gradient-to-r from-primary to-primary/70 bg-clip-text text-transparent">
+                Performance Overview
+              </CardTitle>
+              <CardDescription className="text-sm sm:text-base">
                 {monthName}
               </CardDescription>
             </div>

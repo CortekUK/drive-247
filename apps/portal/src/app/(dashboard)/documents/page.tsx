@@ -1,12 +1,11 @@
 "use client";
 
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { FileText, Download, ExternalLink, CheckCircle, XCircle } from "lucide-react";
+import { FileText, Download, ExternalLink } from "lucide-react";
 import { EmptyState } from "@/components/shared/data-display/empty-state";
 import { format } from "date-fns";
 import { useState } from "react";
@@ -33,52 +32,9 @@ interface Document {
 
 export default function DocumentsList() {
   const [searchQuery, setSearchQuery] = useState("");
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(25);
   const { tenant } = useTenant();
-  const queryClient = useQueryClient();
-
-  // Mutation for approving documents
-  const approveDocumentMutation = useMutation({
-    mutationFn: async (documentId: string) => {
-      const { error } = await supabase
-        .from("customer_documents")
-        .update({
-          verified: true,
-          status: "Active",
-          updated_at: new Date().toISOString()
-        })
-        .eq("id", documentId);
-      if (error) throw error;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["completed-documents"] });
-      toast.success("Document approved successfully");
-    },
-    onError: () => {
-      toast.error("Failed to approve document");
-    },
-  });
-
-  // Mutation for rejecting documents
-  const rejectDocumentMutation = useMutation({
-    mutationFn: async (documentId: string) => {
-      const { error } = await supabase
-        .from("customer_documents")
-        .update({
-          verified: false,
-          status: "Expired",
-          updated_at: new Date().toISOString()
-        })
-        .eq("id", documentId);
-      if (error) throw error;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["completed-documents"] });
-      toast.success("Document rejected");
-    },
-    onError: () => {
-      toast.error("Failed to reject document");
-    },
-  });
 
   // Fetch completed documents from customer_documents table
   const { data: completedDocuments = [], isLoading: isLoadingCompleted } = useQuery({
@@ -160,6 +116,19 @@ export default function DocumentsList() {
     return matchesSearch;
   });
 
+  // Pagination
+  const totalDocuments = filteredDocuments.length;
+  const totalPages = Math.ceil(totalDocuments / pageSize);
+  const startIndex = (currentPage - 1) * pageSize;
+  const endIndex = Math.min(startIndex + pageSize, totalDocuments);
+  const paginatedDocuments = filteredDocuments.slice(startIndex, endIndex);
+
+  // Reset page when search changes
+  const handleSearchChange = (value: string) => {
+    setSearchQuery(value);
+    setCurrentPage(1);
+  };
+
   const getPublicUrl = (filePath: string) => {
     // If it's already a full URL, return as is
     if (filePath.startsWith('http://') || filePath.startsWith('https://')) {
@@ -196,49 +165,6 @@ export default function DocumentsList() {
     window.open(publicUrl, "_blank");
   };
 
-  const getDocumentTypeColor = (type?: string) => {
-    switch (type?.toLowerCase()) {
-      case "contract":
-      case "agreement":
-        return "default";
-      case "invoice":
-        return "secondary";
-      case "receipt":
-        return "outline";
-      default:
-        return "outline";
-    }
-  };
-
-  const getStatusColor = (status?: string) => {
-    switch (status?.toLowerCase()) {
-      case "signed":
-      case "completed":
-        return "default";
-      case "sent":
-        return "secondary";
-      case "pending":
-        return "outline";
-      default:
-        return "outline";
-    }
-  };
-
-  const getStatusLabel = (status?: string) => {
-    if (!status) return "—";
-    // Capitalize first letter
-    const capitalized = status.charAt(0).toUpperCase() + status.slice(1).toLowerCase();
-    // Replace "Active" with "Completed"
-    return capitalized === "Active" ? "Completed" : capitalized;
-  };
-
-  const getFileIcon = (mimeType?: string) => {
-    if (mimeType?.includes("pdf")) return "PDF";
-    if (mimeType?.includes("image")) return "IMG";
-    if (mimeType?.includes("word") || mimeType?.includes("document")) return "DOC";
-    return "FILE";
-  };
-
   if (isLoading) {
     return (
       <div className="space-y-6">
@@ -261,51 +187,39 @@ export default function DocumentsList() {
       </div>
 
       {/* Search */}
-      <Card>
-        <CardContent className="pt-6">
-          <Input
-            placeholder="Search by document name or customer..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full"
-          />
-        </CardContent>
-      </Card>
+      <div className="relative">
+        <Input
+          placeholder="Search by document name or customer..."
+          value={searchQuery}
+          onChange={(e) => handleSearchChange(e.target.value)}
+          className="w-full"
+        />
+      </div>
 
       {/* Documents Table */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <FileText className="h-5 w-5 text-primary" />
-            All Documents
-          </CardTitle>
-          <CardDescription>
-            Showing {filteredDocuments.length} of {documents.length} documents
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          {filteredDocuments.length === 0 ? (
-            <EmptyState
-              icon={FileText}
-              title="No documents found"
-              description={searchQuery
-                ? "No documents match your search criteria"
-                : "There are no documents in the system yet."}
-            />
-          ) : (
-            <div className="rounded-md border">
+      {paginatedDocuments.length === 0 ? (
+        <EmptyState
+          icon={FileText}
+          title="No documents found"
+          description={searchQuery
+            ? "No documents match your search criteria"
+            : "There are no documents in the system yet."}
+        />
+      ) : (
+        <>
+          <Card>
+            <CardContent className="p-0">
               <Table>
                 <TableHeader>
                   <TableRow>
                     <TableHead>Document Name</TableHead>
                     <TableHead>Customer</TableHead>
                     <TableHead>Created</TableHead>
-                    <TableHead>Status</TableHead>
                     <TableHead className="text-right">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {filteredDocuments.map((doc) => (
+                  {paginatedDocuments.map((doc) => (
                     <TableRow key={doc.id}>
                       <TableCell className="font-medium">{doc.document_name}</TableCell>
                       <TableCell className="font-medium text-foreground">
@@ -313,31 +227,6 @@ export default function DocumentsList() {
                       </TableCell>
                       <TableCell className="text-sm">
                         {format(new Date(doc.created_at), "MMM dd, yyyy HH:mm")}
-                      </TableCell>
-                      <TableCell>
-                        {doc.status ? (
-                          (doc.status?.toLowerCase() === "completed" || 
-                           doc.status?.toLowerCase() === "signed" || 
-                           doc.status?.toLowerCase() === "active") ? (
-                            <span 
-                              className="inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold"
-                              style={{
-                                backgroundColor: "#22c55e",
-                                color: "#ffffff",
-                                borderColor: "transparent",
-                                borderWidth: "1px"
-                              }}
-                            >
-                              {getStatusLabel(doc.status)}
-                            </span>
-                          ) : (
-                            <Badge variant={getStatusColor(doc.status)}>
-                              {getStatusLabel(doc.status)}
-                            </Badge>
-                          )
-                        ) : (
-                          "—"
-                        )}
                       </TableCell>
                       <TableCell className="text-right">
                         <div className="flex items-center justify-end gap-2">
@@ -357,31 +246,6 @@ export default function DocumentsList() {
                               >
                                 <ExternalLink className="h-4 w-4" />
                               </Button>
-                              {/* Approve/Reject buttons for pending documents */}
-                              {!doc.isRentalAgreement && doc.status?.toLowerCase() !== "active" && !doc.verified && (
-                                <>
-                                  <Button
-                                    variant="outline"
-                                    size="sm"
-                                    className="text-green-600 hover:text-green-700 hover:bg-green-50"
-                                    onClick={() => approveDocumentMutation.mutate(doc.id)}
-                                    disabled={approveDocumentMutation.isPending || rejectDocumentMutation.isPending}
-                                    title="Approve document"
-                                  >
-                                    <CheckCircle className="h-4 w-4" />
-                                  </Button>
-                                  <Button
-                                    variant="outline"
-                                    size="sm"
-                                    className="text-red-600 hover:text-red-700 hover:bg-red-50"
-                                    onClick={() => rejectDocumentMutation.mutate(doc.id)}
-                                    disabled={approveDocumentMutation.isPending || rejectDocumentMutation.isPending}
-                                    title="Reject document"
-                                  >
-                                    <XCircle className="h-4 w-4" />
-                                  </Button>
-                                </>
-                              )}
                             </>
                           ) : doc.isRentalAgreement ? (
                             <span className="text-sm text-muted-foreground">Pending signature</span>
@@ -394,10 +258,38 @@ export default function DocumentsList() {
                   ))}
                 </TableBody>
               </Table>
+            </CardContent>
+          </Card>
+
+          {/* Pagination */}
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+            <p className="text-sm text-muted-foreground">
+              Showing {startIndex + 1}-{endIndex} of {totalDocuments} documents
+            </p>
+            <div className="flex items-center gap-2 w-full sm:w-auto flex-wrap justify-center sm:justify-end">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
+                disabled={currentPage === 1}
+              >
+                Previous
+              </Button>
+              <span className="text-sm text-muted-foreground whitespace-nowrap">
+                Page {currentPage} of {totalPages || 1}
+              </span>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setCurrentPage(Math.min(totalPages, currentPage + 1))}
+                disabled={currentPage === totalPages || totalPages <= 1}
+              >
+                Next
+              </Button>
             </div>
-          )}
-        </CardContent>
-      </Card>
+          </div>
+        </>
+      )}
     </div>
   );
 }
