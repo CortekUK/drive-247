@@ -21,6 +21,7 @@ import {
   Shield,
   Home,
   ChevronLeft,
+  FileText,
 } from 'lucide-react';
 import { useSiteSettings } from '@/hooks/useSiteSettings';
 
@@ -42,6 +43,12 @@ const navItems = [
     href: '/portal/verification',
     icon: Shield,
     description: 'Manage your verification',
+  },
+  {
+    title: 'Insurance',
+    href: '/portal/documents',
+    icon: FileText,
+    description: 'Manage your insurance',
   },
 ];
 

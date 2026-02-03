@@ -280,12 +280,14 @@ export function AuthPromptDialog({
             id="signup-email"
             type="email"
             {...signupForm.register('email')}
-            disabled
-            className="bg-muted"
+            placeholder="Enter your email"
+            autoComplete="email"
           />
-          <p className="text-xs text-muted-foreground">
-            Using the email from your booking details
-          </p>
+          {signupForm.formState.errors.email && (
+            <p className="text-xs text-destructive">
+              {signupForm.formState.errors.email.message}
+            </p>
+          )}
         </div>
 
         <div className="space-y-2">

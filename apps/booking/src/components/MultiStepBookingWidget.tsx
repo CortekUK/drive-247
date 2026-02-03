@@ -37,6 +37,7 @@ import { useCustomerAuthStore } from "@/stores/customer-auth-store";
 import { useCustomerVerification } from "@/hooks/use-customer-verification";
 import { AuthPromptDialog } from "@/components/booking/AuthPromptDialog";
 import { getTimezonesByRegion, findTimezone, getDetectedTimezone } from "@/lib/timezones";
+import { useCustomerDocuments, getDocumentStatus } from "@/hooks/use-customer-documents";
 interface VehiclePhoto {
   photo_url: string;
 }
@@ -91,6 +92,7 @@ const MultiStepBookingWidget = () => {
   // Customer authentication state
   const { customerUser, session, loading: authLoading, initialized: authInitialized } = useCustomerAuthStore();
   const { data: customerVerification, isLoading: verificationLoading } = useCustomerVerification();
+  const { data: customerDocuments } = useCustomerDocuments();
   const [showAuthDialog, setShowAuthDialog] = useState(false);
   const [isCustomerDataPopulated, setIsCustomerDataPopulated] = useState(false);
 
@@ -103,6 +105,9 @@ const MultiStepBookingWidget = () => {
     customerUser?.customer?.identity_verification_status === 'verified';
   // Check if customer already has DOB in their profile
   const customerHasDOB = !!customerUser?.customer?.date_of_birth;
+  // Check if customer already has timezone in their profile
+  const customerHasTimezone = !!customerUser?.customer?.timezone;
+
   const [currentStep, setCurrentStep] = useState(1);
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
   const [extras, setExtras] = useState<PricingExtra[]>([]);
@@ -204,6 +209,13 @@ const MultiStepBookingWidget = () => {
   const [hasInsurance, setHasInsurance] = useState<boolean | null>(null);
   const [showUploadDialog, setShowUploadDialog] = useState(false);
   const [uploadedDocumentId, setUploadedDocumentId] = useState<string | null>(null);
+  const [selectedExistingDocument, setSelectedExistingDocument] = useState<string | null>(null);
+
+  // Filter to get only valid insurance documents for logged-in users
+  const existingInsuranceDocuments = customerDocuments?.filter(doc =>
+    doc.document_type === 'Insurance Certificate' &&
+    getDocumentStatus(doc.end_date) !== 'Expired'
+  ) || [];
   const [scanningDocument, setScanningDocument] = useState(false);
 
   // Bonzah insurance state
@@ -249,13 +261,16 @@ const MultiStepBookingWidget = () => {
     dropoffLon: null as number | null
   });
 
-  // Initialize customer timezone when tenant loads - default to tenant's timezone
+  // Initialize customer timezone - priority: 1) customer's saved timezone, 2) tenant's timezone
   useEffect(() => {
-    if (tenant?.timezone && !formData.customerTimezone) {
-      // Default to tenant's timezone so customer sees times in business timezone by default
-      setFormData(prev => ({ ...prev, customerTimezone: tenant.timezone }));
+    // If customer has a saved timezone, always use it (takes priority)
+    if (isAuthenticated && customerUser?.customer?.timezone) {
+      setFormData(prev => ({ ...prev, customerTimezone: customerUser.customer.timezone || '' }));
+    } else if (!formData.customerTimezone && tenant?.timezone) {
+      // Only use tenant's timezone as fallback if no timezone is set yet
+      setFormData(prev => ({ ...prev, customerTimezone: tenant.timezone || '' }));
     }
-  }, [tenant?.timezone, formData.customerTimezone]);
+  }, [tenant?.timezone, isAuthenticated, customerUser?.customer?.timezone]);
 
   useEffect(() => {
     loadData();
@@ -668,6 +683,17 @@ const MultiStepBookingWidget = () => {
     }
   }, [selectedExtras]);
 
+  // Auto-populate DOB from customer profile on Step 1 (when authenticated)
+  useEffect(() => {
+    if (isAuthenticated && authInitialized && !authLoading && customerUser?.customer?.date_of_birth) {
+      // Only update if DOB is empty (don't overwrite if user manually changed it)
+      if (!formData.driverDOB) {
+        console.log('✅ Auto-populating DOB from customer profile:', customerUser.customer.date_of_birth);
+        setFormData(prev => ({ ...prev, driverDOB: customerUser.customer.date_of_birth }));
+      }
+    }
+  }, [isAuthenticated, authInitialized, authLoading, customerUser?.customer?.date_of_birth]);
+
   // Auto-populate customer data when authenticated user reaches Step 4
   // IMPORTANT: For authenticated users, ALWAYS use their account data, overwriting any stale cached data
   useEffect(() => {
@@ -694,6 +720,9 @@ const MultiStepBookingWidget = () => {
         }
         if (customer.customer_type) {
           updates.customerType = customer.customer_type;
+        }
+        if (customer.date_of_birth) {
+          updates.driverDOB = customer.date_of_birth;
         }
 
         // For authenticated users, ALWAYS clear localStorage verification data
@@ -1260,6 +1289,11 @@ const MultiStepBookingWidget = () => {
               localStorage.setItem('verificationTimestamp', Date.now().toString());
               toast.success('Identity verified successfully! You can now continue with your booking.');
 
+              // Show auth dialog for guest users to save their verification
+              if (!isAuthenticated) {
+                setShowAuthDialog(true);
+              }
+
               // Track analytics
               if (typeof window !== 'undefined' && (window as any).gtag) {
                 (window as any).gtag('event', 'verification_completed', {
@@ -1394,6 +1428,11 @@ const MultiStepBookingWidget = () => {
         email: formData.customerEmail,
         result: 'verified',
       });
+    }
+
+    // Show auth dialog for guest users to save their verification
+    if (!isAuthenticated) {
+      setShowAuthDialog(true);
     }
   };
 
@@ -2920,30 +2959,45 @@ const MultiStepBookingWidget = () => {
               {/* Customer Timezone Selection */}
               <div className="space-y-2">
                 <Label className="font-medium">Your Timezone</Label>
-                <Select
-                  value={formData.customerTimezone}
-                  onValueChange={(value) => setFormData({ ...formData, customerTimezone: value })}
-                >
-                  <SelectTrigger className="h-12">
-                    <SelectValue placeholder="Select your timezone">
-                      {findTimezone(formData.customerTimezone)?.label || formData.customerTimezone || 'Select timezone'}
-                    </SelectValue>
-                  </SelectTrigger>
-                  <SelectContent className="max-h-[300px]">
-                    {getTimezonesByRegion().map((group) => (
-                      <div key={group.region}>
-                        <div className="px-2 py-1.5 text-sm font-semibold text-muted-foreground bg-muted/50">
-                          {group.label}
+                {/* Show read-only display for logged-in users with timezone in profile */}
+                {isAuthenticated && isCustomerDataPopulated && customerHasTimezone ? (
+                  <div className="space-y-2">
+                    <Input
+                      value={findTimezone(formData.customerTimezone)?.label || formData.customerTimezone}
+                      readOnly
+                      className="h-12 max-w-md bg-muted/50"
+                    />
+                    <p className="text-xs text-muted-foreground flex items-center gap-1">
+                      <CheckCircle className="w-3 h-3 text-primary" />
+                      From your account settings
+                    </p>
+                  </div>
+                ) : (
+                  <Select
+                    value={formData.customerTimezone}
+                    onValueChange={(value) => setFormData({ ...formData, customerTimezone: value })}
+                  >
+                    <SelectTrigger className="h-12 max-w-md">
+                      <SelectValue placeholder="Select your timezone">
+                        {findTimezone(formData.customerTimezone)?.label || formData.customerTimezone || 'Select timezone'}
+                      </SelectValue>
+                    </SelectTrigger>
+                    <SelectContent className="max-h-[300px]">
+                      {getTimezonesByRegion().map((group) => (
+                        <div key={group.region}>
+                          <div className="px-2 py-1.5 text-sm font-semibold text-muted-foreground bg-muted/50">
+                            {group.label}
+                          </div>
+                          {group.timezones.map((tz) => (
+                            <SelectItem key={tz.value} value={tz.value}>
+                              {tz.label}
+                            </SelectItem>
+                          ))}
                         </div>
-                        {group.timezones.map((tz) => (
-                          <SelectItem key={tz.value} value={tz.value}>
-                            {tz.label}
-                          </SelectItem>
-                        ))}
-                      </div>
-                    ))}
-                  </SelectContent>
-                </Select>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
               </div>
 
               {/* Business Timezone Notice */}
@@ -3096,78 +3150,96 @@ const MultiStepBookingWidget = () => {
               </div>
             </div>
 
-            {/* Row 3: Driver DOB and Promo Code */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              {/* Date of Birth */}
-              <div className="space-y-2">
-                <Label className="font-medium">Date of Birth *</Label>
-                <div className="grid grid-cols-3 gap-2">
-                  {/* Month Select */}
-                  <Select
-                    value={formData.driverDOB ? (parseDateString(formData.driverDOB).getMonth() + 1).toString().padStart(2, '0') : ""}
-                    onValueChange={(month) => {
-                      const currentDate = formData.driverDOB ? parseDateString(formData.driverDOB) : new Date(2000, 0, 1);
-                      const newDate = new Date(currentDate.getFullYear(), parseInt(month) - 1, Math.min(currentDate.getDate(), new Date(currentDate.getFullYear(), parseInt(month), 0).getDate()));
-                      const dateStr = format(newDate, "yyyy-MM-dd");
-                      setFormData({ ...formData, driverDOB: dateStr });
-                      validateField('driverDOB', dateStr);
-                    }}
-                  >
-                    <SelectTrigger className={cn("h-12", errors.driverDOB && "border-destructive")}>
-                      <SelectValue placeholder="Month" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'].map((month, i) => (
-                        <SelectItem key={i} value={(i + 1).toString().padStart(2, '0')}>{month}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  {/* Day Select */}
-                  <Select
-                    value={formData.driverDOB ? parseDateString(formData.driverDOB).getDate().toString() : ""}
-                    onValueChange={(day) => {
-                      const currentDate = formData.driverDOB ? parseDateString(formData.driverDOB) : new Date(2000, 0, 1);
-                      const newDate = new Date(currentDate.getFullYear(), currentDate.getMonth(), parseInt(day));
-                      const dateStr = format(newDate, "yyyy-MM-dd");
-                      setFormData({ ...formData, driverDOB: dateStr });
-                      validateField('driverDOB', dateStr);
-                    }}
-                  >
-                    <SelectTrigger className={cn("h-12", errors.driverDOB && "border-destructive")}>
-                      <SelectValue placeholder="Day" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {Array.from({ length: 31 }, (_, i) => (
-                        <SelectItem key={i + 1} value={(i + 1).toString()}>{i + 1}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  {/* Year Select */}
-                  <Select
-                    value={formData.driverDOB ? parseDateString(formData.driverDOB).getFullYear().toString() : ""}
-                    onValueChange={(year) => {
-                      const currentDate = formData.driverDOB ? parseDateString(formData.driverDOB) : new Date(2000, 0, 1);
-                      const newDate = new Date(parseInt(year), currentDate.getMonth(), Math.min(currentDate.getDate(), new Date(parseInt(year), currentDate.getMonth() + 1, 0).getDate()));
-                      const dateStr = format(newDate, "yyyy-MM-dd");
-                      setFormData({ ...formData, driverDOB: dateStr });
-                      validateField('driverDOB', dateStr);
-                    }}
-                  >
-                    <SelectTrigger className={cn("h-12", errors.driverDOB && "border-destructive")}>
-                      <SelectValue placeholder="Year" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {Array.from({ length: 100 }, (_, i) => new Date().getFullYear() - (tenant?.minimum_rental_age || 18) - i).map((year) => (
-                        <SelectItem key={year} value={year.toString()}>{year}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+            {/* Row 3: Driver DOB */}
+            <div className="space-y-2">
+              <Label className="font-medium">Date of Birth *</Label>
+              {/* Show read-only display for logged-in users with DOB in profile */}
+              {isAuthenticated && isCustomerDataPopulated && customerHasDOB ? (
+                <div className="space-y-2">
+                  <Input
+                    value={formData.driverDOB ? format(new Date(formData.driverDOB), "MMMM d, yyyy") : ""}
+                    readOnly
+                    className="h-12 max-w-md bg-muted/50"
+                  />
+                  <p className="text-xs text-muted-foreground flex items-center gap-1">
+                    <CheckCircle className="w-3 h-3 text-primary" />
+                    From your account profile
+                  </p>
+                  {formData.driverDOB && (
+                    <p className="text-sm text-muted-foreground">Age: <span className="font-medium text-foreground">{calculateAge(new Date(formData.driverDOB))} years old</span></p>
+                  )}
                 </div>
-                {formData.driverDOB && (
-                  <p className="text-sm text-muted-foreground">Age: <span className={cn("font-medium", errors.driverDOB ? "text-destructive" : "text-foreground")}>{calculateAge(parseDateString(formData.driverDOB))} years old</span></p>
-                )}
-                {errors.driverDOB && <p className="text-sm text-destructive">{errors.driverDOB}</p>}
-              </div>
+              ) : (
+                <>
+                  <div className="grid grid-cols-3 gap-2 max-w-md">
+                    {/* Month Select */}
+                    <Select
+                      value={formData.driverDOB ? (new Date(formData.driverDOB).getMonth() + 1).toString().padStart(2, '0') : ""}
+                      onValueChange={(month) => {
+                        const currentDate = formData.driverDOB ? new Date(formData.driverDOB) : new Date(2000, 0, 1);
+                        const newDate = new Date(currentDate.getFullYear(), parseInt(month) - 1, Math.min(currentDate.getDate(), new Date(currentDate.getFullYear(), parseInt(month), 0).getDate()));
+                        const dateStr = format(newDate, "yyyy-MM-dd");
+                        setFormData({ ...formData, driverDOB: dateStr });
+                        validateField('driverDOB', dateStr);
+                      }}
+                    >
+                      <SelectTrigger className={cn("h-12", errors.driverDOB && "border-destructive")}>
+                        <SelectValue placeholder="Month" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'].map((month, i) => (
+                          <SelectItem key={i} value={(i + 1).toString().padStart(2, '0')}>{month}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    {/* Day Select */}
+                    <Select
+                      value={formData.driverDOB ? new Date(formData.driverDOB).getDate().toString() : ""}
+                      onValueChange={(day) => {
+                        const currentDate = formData.driverDOB ? new Date(formData.driverDOB) : new Date(2000, 0, 1);
+                        const newDate = new Date(currentDate.getFullYear(), currentDate.getMonth(), parseInt(day));
+                        const dateStr = format(newDate, "yyyy-MM-dd");
+                        setFormData({ ...formData, driverDOB: dateStr });
+                        validateField('driverDOB', dateStr);
+                      }}
+                    >
+                      <SelectTrigger className={cn("h-12", errors.driverDOB && "border-destructive")}>
+                        <SelectValue placeholder="Day" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {Array.from({ length: 31 }, (_, i) => (
+                          <SelectItem key={i + 1} value={(i + 1).toString()}>{i + 1}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    {/* Year Select */}
+                    <Select
+                      value={formData.driverDOB ? new Date(formData.driverDOB).getFullYear().toString() : ""}
+                      onValueChange={(year) => {
+                        const currentDate = formData.driverDOB ? new Date(formData.driverDOB) : new Date(2000, 0, 1);
+                        const newDate = new Date(parseInt(year), currentDate.getMonth(), Math.min(currentDate.getDate(), new Date(parseInt(year), currentDate.getMonth() + 1, 0).getDate()));
+                        const dateStr = format(newDate, "yyyy-MM-dd");
+                        setFormData({ ...formData, driverDOB: dateStr });
+                        validateField('driverDOB', dateStr);
+                      }}
+                    >
+                      <SelectTrigger className={cn("h-12", errors.driverDOB && "border-destructive")}>
+                        <SelectValue placeholder="Year" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {Array.from({ length: 100 }, (_, i) => new Date().getFullYear() - (tenant?.minimum_rental_age || 18) - i).map((year) => (
+                          <SelectItem key={year} value={year.toString()}>{year}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  {formData.driverDOB && (
+                    <p className="text-sm text-muted-foreground">Age: <span className={cn("font-medium", errors.driverDOB ? "text-destructive" : "text-foreground")}>{calculateAge(new Date(formData.driverDOB))} years old</span></p>
+                  )}
+                  {errors.driverDOB && <p className="text-sm text-destructive">{errors.driverDOB}</p>}
+                </>
+              )}
+            </div>
 
               {/* Promo Code */}
               <div className="space-y-2">
@@ -3206,7 +3278,6 @@ const MultiStepBookingWidget = () => {
                   </p>
                 )}
               </div>
-            </div>
           </div>
 
           <Button
@@ -4049,11 +4120,7 @@ const MultiStepBookingWidget = () => {
                   <div className="grid md:grid-cols-2 gap-6">
                     {/* YES Option */}
                     <Card
-                      className="group relative overflow-hidden border-2 border-border hover:border-primary hover:shadow-lg transition-all cursor-pointer bg-gradient-to-br from-primary/5 to-transparent"
-                      onClick={() => {
-                        setHasInsurance(true);
-                        setShowUploadDialog(true);
-                      }}
+                      className="group relative overflow-hidden border-2 border-border hover:border-primary hover:shadow-lg transition-all bg-gradient-to-br from-primary/5 to-transparent"
                     >
                       <div className="p-8 text-center space-y-4">
                         <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-primary/10 mb-2">
@@ -4062,15 +4129,69 @@ const MultiStepBookingWidget = () => {
                         <div>
                           <h5 className="text-lg font-semibold mb-2">Yes, I Have Insurance</h5>
                           <p className="text-sm text-muted-foreground">
-                            Upload your current insurance certificate and we'll verify it instantly
+                            {isAuthenticated && existingInsuranceDocuments.length > 0
+                              ? "Select from your existing documents or upload a new one"
+                              : "Upload your current insurance certificate and we'll verify it instantly"}
                           </p>
                         </div>
+
+                        {/* Show dropdown for logged-in users with existing documents */}
+                        {isAuthenticated && existingInsuranceDocuments.length > 0 && (
+                          <div className="space-y-3">
+                            <Select
+                              value={selectedExistingDocument || ""}
+                              onValueChange={(value) => {
+                                setSelectedExistingDocument(value);
+                              }}
+                            >
+                              <SelectTrigger className="w-full">
+                                <SelectValue placeholder="Select existing insurance" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {existingInsuranceDocuments.map((doc) => (
+                                  <SelectItem key={doc.id} value={doc.id}>
+                                    {doc.insurance_provider || doc.document_name}
+                                    {doc.policy_number && ` - ${doc.policy_number}`}
+                                    {doc.end_date && ` (Expires: ${new Date(doc.end_date).toLocaleDateString()})`}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                            <Button
+                              className="w-full bg-primary hover:bg-primary/90"
+                              size="lg"
+                              disabled={!selectedExistingDocument}
+                              onClick={() => {
+                                if (selectedExistingDocument) {
+                                  setUploadedDocumentId(selectedExistingDocument);
+                                  setHasInsurance(true);
+                                }
+                              }}
+                            >
+                              <CheckCircle className="mr-2 h-5 w-5" />
+                              Use Selected Document
+                            </Button>
+                            <div className="relative">
+                              <div className="absolute inset-0 flex items-center">
+                                <span className="w-full border-t" />
+                              </div>
+                              <div className="relative flex justify-center text-xs uppercase">
+                                <span className="bg-card px-2 text-muted-foreground">or</span>
+                              </div>
+                            </div>
+                          </div>
+                        )}
+
                         <Button
                           className="w-full bg-primary hover:bg-primary/90"
                           size="lg"
+                          onClick={() => {
+                            setHasInsurance(true);
+                            setShowUploadDialog(true);
+                          }}
                         >
                           <Upload className="mr-2 h-5 w-5" />
-                          Upload Certificate
+                          Upload New Certificate
                         </Button>
                         <div className="pt-4 border-t border-border/50">
                           <p className="text-xs text-muted-foreground">
@@ -4807,6 +4928,10 @@ const MultiStepBookingWidget = () => {
                                 setVerificationStatus('verified');
                                 localStorage.setItem('verificationStatus', 'verified');
                                 toast.success('Identity verified! You can now continue with your booking.');
+                                // Show auth dialog for guest users to save their verification
+                                if (!isAuthenticated) {
+                                  setShowAuthDialog(true);
+                                }
                               }}
                               variant="outline"
                               className="border-green-500 text-green-600 hover:bg-green-500 hover:text-white w-full sm:w-auto"

@@ -19,7 +19,16 @@ import {
   CheckCircle,
   AlertCircle,
   Shield,
+  Globe,
 } from 'lucide-react';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import { getTimezonesByRegion, findTimezone } from '@/lib/timezones';
 import {
   Dialog,
   DialogContent,
@@ -41,6 +50,8 @@ export default function SettingsPage() {
   // Profile state
   const [name, setName] = useState(customerUser?.customer?.name || '');
   const [phone, setPhone] = useState(customerUser?.customer?.phone || '');
+  const [dateOfBirth, setDateOfBirth] = useState(customerUser?.customer?.date_of_birth || '');
+  const [timezone, setTimezone] = useState(customerUser?.customer?.timezone || '');
   const [isUpdatingProfile, setIsUpdatingProfile] = useState(false);
   const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
 
@@ -145,6 +156,8 @@ export default function SettingsPage() {
         .update({
           name: name.trim(),
           phone: phone.trim() || null,
+          date_of_birth: dateOfBirth || null,
+          timezone: timezone || null,
         })
         .eq('id', customerUser?.customer_id);
 
@@ -360,6 +373,50 @@ export default function SettingsPage() {
                 placeholder="Enter your phone number"
               />
             </div>
+          </div>
+
+          {/* Date of Birth */}
+          <div className="space-y-2 max-w-sm">
+            <Label htmlFor="dob">Date of Birth</Label>
+            <Input
+              id="dob"
+              type="date"
+              value={dateOfBirth}
+              onChange={(e) => setDateOfBirth(e.target.value)}
+            />
+            <p className="text-xs text-muted-foreground">
+              Your date of birth will be used to auto-fill booking forms
+            </p>
+          </div>
+
+          {/* Timezone */}
+          <div className="space-y-2 max-w-sm">
+            <Label>Timezone</Label>
+            <Select value={timezone} onValueChange={setTimezone}>
+              <SelectTrigger className="h-10">
+                <Globe className="h-4 w-4 mr-2 text-muted-foreground" />
+                <SelectValue placeholder="Select your timezone">
+                  {findTimezone(timezone)?.label || timezone || 'Select timezone'}
+                </SelectValue>
+              </SelectTrigger>
+              <SelectContent className="max-h-[300px]">
+                {getTimezonesByRegion().map((group) => (
+                  <div key={group.region}>
+                    <div className="px-2 py-1.5 text-sm font-semibold text-muted-foreground bg-muted/50">
+                      {group.label}
+                    </div>
+                    {group.timezones.map((tz) => (
+                      <SelectItem key={tz.value} value={tz.value}>
+                        {tz.label}
+                      </SelectItem>
+                    ))}
+                  </div>
+                ))}
+              </SelectContent>
+            </Select>
+            <p className="text-xs text-muted-foreground">
+              Your timezone will be used to show booking times in your local time
+            </p>
           </div>
 
           <Button onClick={handleUpdateProfile} disabled={isUpdatingProfile}>

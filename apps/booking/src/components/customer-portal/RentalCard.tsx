@@ -40,7 +40,7 @@ export function RentalCard({ rental }: RentalCardProps) {
   const vehicleImage =
     vehicle?.photo_url ||
     vehicle?.vehicle_photos?.[0]?.photo_url ||
-    '/placeholder-car.jpg';
+    '/placeholder.svg';
 
   const durationDays = differenceInDays(
     new Date(rental.end_date),
@@ -75,7 +75,7 @@ export function RentalCard({ rental }: RentalCardProps) {
             alt={vehicleName}
             className="w-full h-full object-cover"
             onError={(e) => {
-              (e.target as HTMLImageElement).src = '/placeholder-car.jpg';
+              (e.target as HTMLImageElement).src = '/placeholder.svg';
             }}
           />
         </div>
