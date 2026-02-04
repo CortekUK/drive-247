@@ -24,8 +24,13 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { formatDistanceToNow } from 'date-fns';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import { useSidebar } from '@/components/ui/sidebar';
+import { useSiteSettings } from '@/hooks/useSiteSettings';
+import { Separator } from '@/components/ui/separator';
 
 export function CustomerPortalHeader() {
+  const { state } = useSidebar();
+  const { settings } = useSiteSettings();
   const router = useRouter();
   const { notifications, unreadCount, markAsRead } = useCustomerNotifications();
   const { customerUser, signOut } = useCustomerAuthStore();
@@ -47,6 +52,22 @@ export function CustomerPortalHeader() {
   return (
     <header className="flex h-16 shrink-0 items-center gap-2 border-b px-4">
       <SidebarTrigger className="-ml-1" />
+      <Separator orientation="vertical" className="mr-2 h-4" />
+      {state === 'collapsed' && (
+        <Link href="/" className="flex items-center">
+          {settings.logo_url ? (
+            <img
+              src={settings.logo_url}
+              alt={settings.logo_alt || 'Logo'}
+              className="h-6 w-auto"
+            />
+          ) : (
+            <span className="font-semibold text-sm">
+              {settings.company_name || 'Drive247'}
+            </span>
+          )}
+        </Link>
+      )}
 
       <div className="flex-1" />
 

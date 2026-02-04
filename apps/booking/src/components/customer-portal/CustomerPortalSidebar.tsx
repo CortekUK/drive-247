@@ -23,6 +23,7 @@ import {
   ChevronLeft,
   FileText,
   MessageSquare,
+  CreditCard,
 } from 'lucide-react';
 import { useSiteSettings } from '@/hooks/useSiteSettings';
 import { useCustomerUnreadCount } from '@/hooks/use-customer-unread';
@@ -39,6 +40,12 @@ const navItems = [
     href: '/portal/bookings/history',
     icon: History,
     description: 'View your booking history',
+  },
+  {
+    title: 'Payments',
+    href: '/portal/payments',
+    icon: CreditCard,
+    description: 'View installments & payments',
   },
   {
     title: 'ID Verification',

@@ -80,21 +80,6 @@ export async function generateMetadata(): Promise<Metadata> {
   }
 }
 
-// Inline script to apply cached branding BEFORE React hydrates
-const brandingScript = `
-(function() {
-  try {
-    var cached = localStorage.getItem('tenant-branding-css');
-    if (cached) {
-      var style = document.createElement('style');
-      style.id = 'cached-branding';
-      style.textContent = cached;
-      document.head.appendChild(style);
-    }
-  } catch(e) {}
-})();
-`;
-
 export default function RootLayout({
   children,
 }: {
@@ -102,9 +87,6 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en" suppressHydrationWarning>
-      <head>
-        <script dangerouslySetInnerHTML={{ __html: brandingScript }} />
-      </head>
       <body className={inter.className} suppressHydrationWarning>
         <QueryClientProvider>
           <TenantProvider>

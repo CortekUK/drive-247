@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
 import { useTenant } from "@/contexts/TenantContext";
 import { toast } from "sonner";
+import { useBookingStore } from "@/stores/booking-store";
 import { Car, Users, Briefcase, Check, ArrowLeft } from "lucide-react";
 import Navigation from "@/components/Navigation";
 import Footer from "@/components/Footer";
@@ -41,6 +42,7 @@ const BookingVehicles = () => {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { tenant } = useTenant();
+  const { updateContext } = useBookingStore();
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedVehicle, setSelectedVehicle] = useState<string | null>(null);
@@ -129,18 +131,9 @@ const BookingVehicles = () => {
 
   const handleVehicleSelect = (vehicleId: string) => {
     setSelectedVehicle(vehicleId);
-    
-    // Store in localStorage
-    const bookingContext = {
-      pickupDate,
-      returnDate,
-      pickupLocation,
-      returnLocation,
-      driverAge,
-      promoCode,
-      vehicleId
-    };
-    localStorage.setItem("booking_context", JSON.stringify(bookingContext));
+
+    // Store in Zustand
+    updateContext({ selectedVehicleId: vehicleId });
 
     // Navigate to checkout
     const params = new URLSearchParams(searchParams?.toString() || "");

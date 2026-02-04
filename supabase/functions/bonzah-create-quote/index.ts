@@ -11,12 +11,31 @@ import { corsHeaders, handleCors, jsonResponse, errorResponse } from '../_shared
 // Bonzah Auto Rental Insurance product ID
 const PRODUCT_ID = 'M000000000006'
 
-// Insurance rates per 24 hours
+// Insurance rates per 24 hours (fallback calculation)
 const RATES = {
   CDW: 26.95,
   RCLI: 20.18,
   SLI: 11.20,
   PAI: 6.90,
+}
+
+// State name mapping (Bonzah requires full state names)
+const STATE_NAMES: Record<string, string> = {
+  'AL': 'Alabama', 'AK': 'Alaska', 'AZ': 'Arizona', 'AR': 'Arkansas', 'CA': 'California',
+  'CO': 'Colorado', 'CT': 'Connecticut', 'DE': 'Delaware', 'FL': 'Florida', 'GA': 'Georgia',
+  'HI': 'Hawaii', 'ID': 'Idaho', 'IL': 'Illinois', 'IN': 'Indiana', 'IA': 'Iowa',
+  'KS': 'Kansas', 'KY': 'Kentucky', 'LA': 'Louisiana', 'ME': 'Maine', 'MD': 'Maryland',
+  'MA': 'Massachusetts', 'MI': 'Michigan', 'MN': 'Minnesota', 'MS': 'Mississippi', 'MO': 'Missouri',
+  'MT': 'Montana', 'NE': 'Nebraska', 'NV': 'Nevada', 'NH': 'New Hampshire', 'NJ': 'New Jersey',
+  'NM': 'New Mexico', 'NY': 'New York', 'NC': 'North Carolina', 'ND': 'North Dakota', 'OH': 'Ohio',
+  'OK': 'Oklahoma', 'OR': 'Oregon', 'PA': 'Pennsylvania', 'RI': 'Rhode Island', 'SC': 'South Carolina',
+  'SD': 'South Dakota', 'TN': 'Tennessee', 'TX': 'Texas', 'UT': 'Utah', 'VT': 'Vermont',
+  'VA': 'Virginia', 'WA': 'Washington', 'WV': 'West Virginia', 'WI': 'Wisconsin', 'WY': 'Wyoming',
+  'DC': 'District of Columbia',
+}
+
+function getStateName(stateCode: string): string {
+  return STATE_NAMES[stateCode.toUpperCase()] || stateCode
 }
 
 interface CreateQuoteRequest {
@@ -32,24 +51,19 @@ interface CreateQuoteRequest {
   renter: RenterDetails
 }
 
+// Response from /Bonzah/quote endpoint with finalize=1
 interface BonzahQuoteApiResponse {
   status: number
   txt: string
-  data: Array<{
+  data: {
     quote_id: string
-    policy_id: string
-    quote: {
-      quote_id: string
-      data: {
-        total_premium: number
-        coverage_information: Array<{
-          optional_addon_cover_name: string
-          opted: string
-          optional_addon_premium: string | number
-        }>
-      }
-    }
-  }>
+    payment_id: string
+    total_amount: number
+    cdw_pdf_id?: string
+    rcli_pdf_id?: string
+    sli_pdf_id?: string
+    pai_pdf_id?: string
+  }
 }
 
 function calculateDays(startDate: string, endDate: string): number {
@@ -99,95 +113,86 @@ serve(async (req) => {
       return errorResponse('No coverage selected')
     }
 
-    // Step 1: Create initial quote with product_id and trip dates
-    const createQuoteRequest = {
+    // Get full state names for Bonzah API
+    const pickupStateFull = getStateName(body.pickup_state)
+    const residenceStateFull = getStateName(body.renter.address.state)
+    const licenseStateFull = getStateName(body.renter.license.state)
+
+    // Use the correct /Bonzah/quote endpoint with finalize=1
+    // This creates a complete quote and returns payment_id in one call
+    const createQuoteRequest: Record<string, unknown> = {
       product_id: PRODUCT_ID,
-      trip_start_date: formatDateForBonzah(body.trip_dates.start),
-      trip_end_date: formatDateForBonzah(body.trip_dates.end),
-      pickup_state: body.pickup_state,
-    }
-
-    console.log('[Bonzah Quote] Creating initial quote:', createQuoteRequest)
-
-    const createResponse = await bonzahFetch<BonzahQuoteApiResponse>('/quote', createQuoteRequest)
-
-    if (createResponse.status !== 0 || !createResponse.data?.[0]?.quote_id) {
-      console.error('[Bonzah Quote] Failed to create quote:', createResponse)
-      return errorResponse('Failed to create Bonzah quote', 500)
-    }
-
-    const quoteId = createResponse.data[0].quote_id
-    const policyId = createResponse.data[0].policy_id
-    console.log('[Bonzah Quote] Initial quote created:', quoteId)
-
-    // Step 2: Update quote with coverage selections and renter details
-    const coverageInfo = [
-      {
-        optional_addon_cover_name: 'Collision Damage Waiver (CDW)',
-        opted: body.coverage.cdw ? 'Yes' : 'No'
-      },
-      {
-        optional_addon_cover_name: "Renter's Contingent Liability Insurance (RCLI)",
-        opted: body.coverage.rcli ? 'Yes' : 'No'
-      },
-      {
-        optional_addon_cover_name: 'Supplemental Liability Insurance (SLI)',
-        opted: body.coverage.sli ? 'Yes' : 'No'
-      },
-      {
-        optional_addon_cover_name: 'Personal Accident Insurance (PAI)',
-        opted: body.coverage.pai ? 'Yes' : 'No'
-      }
-    ]
-
-    const updateQuoteRequest = {
-      // Coverage selections
-      coverage_information: coverageInfo,
-      // Trip dates
+      finalize: 1,  // Important: finalize=1 generates payment_id
+      // Trip details
       policy_start_date: formatDateForBonzah(body.trip_dates.start),
       policy_end_date: formatDateForBonzah(body.trip_dates.end),
+      pickup_state: pickupStateFull,
+      pickup_country: 'United States',
+      pickup_time: '10:00',
+      dropoff_time: '10:00',
+      dropoff_option: 'Same',
+      // Coverage selections
+      cdw_cover: body.coverage.cdw ? 'Yes' : 'No',
+      rcli_cover: body.coverage.rcli ? 'Yes' : 'No',
+      sli_cover: body.coverage.sli ? 'Yes' : 'No',
+      pai_cover: body.coverage.pai ? 'Yes' : 'No',
       // Renter details
       first_name: body.renter.first_name,
       last_name: body.renter.last_name,
       date_of_birth: formatDateForBonzah(body.renter.dob),
       email: body.renter.email,
-      phone_no: body.renter.phone,
+      phone_no: `1${body.renter.phone.replace(/\D/g, '')}`,  // Add country code
       // Address
       address_line_1: body.renter.address.street,
       city: body.renter.address.city,
-      state: body.renter.address.state,
+      state: residenceStateFull,
       zip_code: body.renter.address.zip,
       country: 'United States',
-      // Residence (same as address)
+      // Residence
       residence_country: 'United States',
-      residence_state: body.renter.address.state,
+      residence_state: residenceStateFull,
       // License
       license_no: body.renter.license.number,
-      license_state: body.renter.license.state,
-      // Required state field
-      select_state: body.pickup_state,
+      license_state: licenseStateFull,
     }
 
-    console.log('[Bonzah Quote] Updating quote with details')
-
-    const updateResponse = await bonzahFetch<BonzahQuoteApiResponse>(`/quote/${quoteId}`, updateQuoteRequest)
-
-    if (updateResponse.status !== 0) {
-      console.error('[Bonzah Quote] Failed to update quote:', updateResponse)
-      // Don't fail completely - we can still calculate premium locally
+    // CDW requires inspection_done field
+    if (body.coverage.cdw) {
+      createQuoteRequest.inspection_done = 'Rental Agency'
     }
 
-    // Calculate premium locally (more reliable than API calculation)
-    const days = calculateDays(body.trip_dates.start, body.trip_dates.end)
-    const premium =
-      (body.coverage.cdw ? RATES.CDW * days : 0) +
-      (body.coverage.rcli ? RATES.RCLI * days : 0) +
-      (body.coverage.sli ? RATES.SLI * days : 0) +
-      (body.coverage.pai ? RATES.PAI * days : 0)
+    console.log('[Bonzah Quote] Creating finalized quote via /Bonzah/quote')
 
-    const roundedPremium = Math.round(premium * 100) / 100
+    const createResponse = await bonzahFetch<BonzahQuoteApiResponse>('/Bonzah/quote', createQuoteRequest)
 
-    console.log('[Bonzah Quote] Calculated premium:', roundedPremium, 'for', days, 'days')
+    if (createResponse.status !== 0 || !createResponse.data?.quote_id) {
+      console.error('[Bonzah Quote] Failed to create quote:', createResponse)
+      return errorResponse(`Failed to create Bonzah quote: ${createResponse.txt || 'Unknown error'}`, 500)
+    }
+
+    const quoteId = createResponse.data.quote_id
+    const paymentId = createResponse.data.payment_id
+    const apiPremium = createResponse.data.total_amount
+
+    console.log('[Bonzah Quote] Quote created:', quoteId)
+    console.log('[Bonzah Quote] Payment ID:', paymentId)
+    console.log('[Bonzah Quote] API Premium:', apiPremium)
+
+    // Use API premium if available, otherwise calculate locally
+    let roundedPremium: number
+    if (apiPremium && apiPremium > 0) {
+      roundedPremium = Math.round(apiPremium * 100) / 100
+    } else {
+      // Fallback: Calculate premium locally
+      const days = calculateDays(body.trip_dates.start, body.trip_dates.end)
+      const premium =
+        (body.coverage.cdw ? RATES.CDW * days : 0) +
+        (body.coverage.rcli ? RATES.RCLI * days : 0) +
+        (body.coverage.sli ? RATES.SLI * days : 0) +
+        (body.coverage.pai ? RATES.PAI * days : 0)
+      roundedPremium = Math.round(premium * 100) / 100
+      console.log('[Bonzah Quote] Calculated premium locally:', roundedPremium, 'for', days, 'days')
+    }
 
     // Store quote in database
     const { data: policyRecord, error: dbError } = await supabase
@@ -198,8 +203,8 @@ serve(async (req) => {
         customer_id: body.customer_id,
         quote_id: quoteId,
         quote_no: null,
-        payment_id: null,
-        policy_id: policyId,
+        payment_id: paymentId,  // Store the payment_id from Bonzah
+        policy_id: null,  // Will be set after payment
         coverage_types: body.coverage,
         trip_start_date: body.trip_dates.start,
         trip_end_date: body.trip_dates.end,
@@ -235,7 +240,7 @@ serve(async (req) => {
     return jsonResponse({
       policy_record_id: policyRecord.id,
       quote_id: quoteId,
-      policy_id: policyId,
+      payment_id: paymentId,
       total_premium: roundedPremium,
     })
 

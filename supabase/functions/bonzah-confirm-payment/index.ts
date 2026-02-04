@@ -8,26 +8,18 @@ interface ConfirmPaymentRequest {
   stripe_payment_intent_id: string
 }
 
-interface BonzahIssueResponse {
+// Response from /Bonzah/payment endpoint
+interface BonzahPaymentResponse {
   status: number
   txt: string
-  data: Array<{
+  data: {
+    policy_no: string
     policy_id: string
-    quote_id: string
-    policy: {
-      policy_no: string | null
-      policy_id: string
-    }
-    stages: {
-      quote: string
-      payment: string
-      policy: string
-    }
-    errors?: Array<{
-      name: string
-      msg: string
-    }>
-  }>
+    cdw_pdf_id?: string
+    rcli_pdf_id?: string
+    sli_pdf_id?: string
+    pai_pdf_id?: string
+  }
 }
 
 serve(async (req) => {
@@ -77,51 +69,78 @@ serve(async (req) => {
       .update({ status: 'payment_pending' })
       .eq('id', body.policy_record_id)
 
-    // Try to issue the policy in Bonzah
-    console.log('[Bonzah Payment] Attempting to issue policy...')
-    console.log('[Bonzah Payment] Quote ID:', policyRecord.quote_id)
+    // Make payment to Bonzah using the correct /Bonzah/payment endpoint
+    console.log('[Bonzah Payment] Attempting payment...')
+    console.log('[Bonzah Payment] Payment ID:', policyRecord.payment_id)
+    console.log('[Bonzah Payment] Amount:', policyRecord.premium_amount)
 
     let policyNo: string | null = null
+    let policyId: string | null = null
     let policyIssued = false
+    let pdfIds: Record<string, string> = {}
+
+    if (!policyRecord.payment_id) {
+      console.error('[Bonzah Payment] No payment_id found in policy record')
+      return errorResponse('No payment_id found - quote may not have been finalized correctly', 400)
+    }
 
     try {
-      // Call the issue endpoint to try to issue the policy
-      const issueResponse = await bonzahFetch<BonzahIssueResponse>(
-        `/quote/${policyRecord.quote_id}/issue`,
-        {}
+      // Call the /Bonzah/payment endpoint to complete payment and issue policy
+      const paymentResponse = await bonzahFetch<BonzahPaymentResponse>(
+        '/Bonzah/payment',
+        {
+          payment_id: policyRecord.payment_id,
+          amount: policyRecord.premium_amount,
+        }
       )
 
-      console.log('[Bonzah Payment] Issue response status:', issueResponse.status)
+      console.log('[Bonzah Payment] Payment response status:', paymentResponse.status)
 
-      if (issueResponse.status === 0 && issueResponse.data?.[0]) {
-        const policyData = issueResponse.data[0]
-        policyNo = policyData.policy?.policy_no || null
+      if (paymentResponse.status === 0 && paymentResponse.data) {
+        policyNo = paymentResponse.data.policy_no
+        policyId = paymentResponse.data.policy_id
+        policyIssued = !!policyNo
 
-        // Check if there are validation errors
-        if (policyData.errors && policyData.errors.length > 0) {
-          console.log('[Bonzah Payment] Quote has validation errors:', policyData.errors.length)
-          // Policy not fully issued due to missing fields, but payment confirmed
-        }
+        // Collect PDF IDs if available
+        if (paymentResponse.data.cdw_pdf_id) pdfIds.cdw = paymentResponse.data.cdw_pdf_id
+        if (paymentResponse.data.rcli_pdf_id) pdfIds.rcli = paymentResponse.data.rcli_pdf_id
+        if (paymentResponse.data.sli_pdf_id) pdfIds.sli = paymentResponse.data.sli_pdf_id
+        if (paymentResponse.data.pai_pdf_id) pdfIds.pai = paymentResponse.data.pai_pdf_id
 
-        // Check stages
-        if (policyData.stages?.policy === 'done' || policyData.stages?.policy === 'issued') {
-          policyIssued = true
-          console.log('[Bonzah Payment] Policy issued successfully:', policyNo)
-        }
+        console.log('[Bonzah Payment] Policy issued:', policyNo)
+        console.log('[Bonzah Payment] PDF IDs:', pdfIds)
       }
     } catch (bonzahError) {
       console.error('[Bonzah Payment] Error calling Bonzah API:', bonzahError)
-      // Continue even if Bonzah API fails - we've received payment
+      // Store the error message for debugging
+      const errorMsg = bonzahError instanceof Error ? bonzahError.message : 'Unknown error'
+
+      // Update with failed status and error details
+      await supabase
+        .from('bonzah_insurance_policies')
+        .update({
+          status: 'failed',
+          // Store error in renter_details for debugging (could add a dedicated error field)
+        })
+        .eq('id', body.policy_record_id)
+
+      return errorResponse(`Bonzah payment failed: ${errorMsg}`, 500)
     }
 
-    // Update policy record
-    const updateData: Record<string, any> = {
+    // Update policy record with results
+    const updateData: Record<string, unknown> = {
       status: policyIssued ? 'active' : 'payment_confirmed',
       policy_issued_at: policyIssued ? new Date().toISOString() : null,
     }
 
-    if (policyNo) {
-      updateData.policy_no = policyNo
+    if (policyNo) updateData.policy_no = policyNo
+    if (policyId) updateData.policy_id = policyId
+    if (Object.keys(pdfIds).length > 0) {
+      // Store PDF IDs in coverage_types alongside existing data
+      updateData.coverage_types = {
+        ...policyRecord.coverage_types,
+        pdf_ids: pdfIds,
+      }
     }
 
     const { error: updateError } = await supabase
@@ -137,13 +156,15 @@ serve(async (req) => {
     if (policyIssued) {
       console.log('[Bonzah Payment] Policy fully issued:', policyNo)
     } else {
-      console.log('[Bonzah Payment] Payment confirmed, policy pending full issuance')
+      console.log('[Bonzah Payment] Payment confirmed, policy pending')
     }
 
     return jsonResponse({
       success: true,
       policy_no: policyNo,
+      policy_id: policyId,
       policy_issued: policyIssued,
+      pdf_ids: pdfIds,
       status: policyIssued ? 'active' : 'payment_confirmed',
     })
 

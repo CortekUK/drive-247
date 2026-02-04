@@ -18,19 +18,29 @@ interface InstallmentCheckoutRequest {
   customerPhone?: string
   vehicleId: string
   vehicleName: string
-  // Payment breakdown
-  upfrontAmount: number      // Deposit + Service Fee (charged immediately)
-  installableAmount: number  // Rental + Tax (split into installments)
+  // Payment breakdown (new structure - first installment paid upfront if configured)
+  baseUpfrontAmount: number       // Deposit + Service Fee + Delivery fees (based on what_gets_split)
+  firstInstallmentAmount: number  // First installment amount (paid upfront if chargeFirstUpfront is true)
+  upfrontAmount: number           // Total upfront = baseUpfront + firstInstallment (if applicable)
+  installableAmount: number       // Total rental costs to be split
+  installmentAmount: number       // Amount per scheduled installment
   // Installment configuration
   planType: 'weekly' | 'monthly'
-  numberOfInstallments: number
+  numberOfInstallments: number    // Total number of installments
+  scheduledInstallments: number   // Number of installments to schedule
   // Dates
   pickupDate: string
   returnDate: string
-  startDate: string          // First installment due date
+  startDate: string               // Rental start date
   // Optional
   tenantId?: string
   protectionPlan?: string
+  // Phase 3: Config settings
+  chargeFirstUpfront?: boolean           // Whether to charge first installment at checkout (default: true)
+  whatGetsSplit?: 'rental_only' | 'rental_tax' | 'rental_tax_extras'  // What's included in installments
+  gracePeriodDays?: number               // Days before marking overdue (default: 3)
+  maxRetryAttempts?: number              // Max retry attempts for failed payments (default: 3)
+  retryIntervalDays?: number             // Days between retries (default: 1)
 }
 
 serve(async (req) => {
@@ -48,19 +58,30 @@ serve(async (req) => {
     const body: InstallmentCheckoutRequest = await req.json()
     const origin = req.headers.get('origin') || 'https://drive-247.com'
 
+    // Extract config settings with defaults
+    const chargeFirstUpfront = body.chargeFirstUpfront !== false // Default: true
+    const whatGetsSplit = body.whatGetsSplit || 'rental_tax'
+    const gracePeriodDays = body.gracePeriodDays ?? 3
+    const maxRetryAttempts = body.maxRetryAttempts ?? 3
+    const retryIntervalDays = body.retryIntervalDays ?? 1
+
     console.log('Creating installment checkout for rental:', body.rentalId)
-    console.log('Plan type:', body.planType, 'Installments:', body.numberOfInstallments)
-    console.log('Upfront:', body.upfrontAmount, 'Installable:', body.installableAmount)
+    console.log('Plan type:', body.planType, 'Total Installments:', body.numberOfInstallments)
+    console.log('Scheduled Installments:', body.scheduledInstallments)
+    console.log('Charge first upfront:', chargeFirstUpfront, 'What gets split:', whatGetsSplit)
+    console.log('Upfront Total:', body.upfrontAmount, '(Base:', body.baseUpfrontAmount, '+ 1st Installment:', body.firstInstallmentAmount, ')')
+    console.log('Total Installable:', body.installableAmount)
+    console.log('Recovery config - Grace:', gracePeriodDays, 'Max retries:', maxRetryAttempts, 'Interval:', retryIntervalDays)
 
     // Validate inputs
     if (!body.rentalId || !body.customerId || !body.customerEmail) {
       throw new Error('Missing required fields: rentalId, customerId, customerEmail')
     }
-    if (body.upfrontAmount < 0 || body.installableAmount <= 0) {
+    if (body.upfrontAmount <= 0 || body.installableAmount <= 0) {
       throw new Error('Invalid payment amounts')
     }
-    if (body.numberOfInstallments < 1 || body.numberOfInstallments > 12) {
-      throw new Error('Invalid number of installments (must be 1-12)')
+    if (body.numberOfInstallments < 2 || body.numberOfInstallments > 12) {
+      throw new Error('Invalid number of installments (must be 2-12)')
     }
 
     // Get tenant_id from rental if not provided
@@ -99,10 +120,21 @@ serve(async (req) => {
 
     console.log('Stripe mode:', stripeMode, 'Connect account:', stripeAccountId)
 
-    // Calculate installment amount
-    const installmentAmount = Math.round((body.installableAmount / body.numberOfInstallments) * 100) / 100
+    // Use the installment amount provided (already calculated with proper rounding)
+    const installmentAmount = body.installmentAmount
 
-    // Total amount for checkout (upfront only - installments charged later)
+    // Calculate last installment amount (handles rounding - remainder goes to last)
+    // Total installable = first installment + (scheduled installments × installment amount)
+    // If there's a remainder, it goes to the last scheduled installment
+    const scheduledTotal = body.installableAmount - body.firstInstallmentAmount
+    const regularInstallmentsCount = body.scheduledInstallments > 1 ? body.scheduledInstallments - 1 : 0
+    const lastInstallmentAmount = regularInstallmentsCount > 0
+      ? Math.round((scheduledTotal - (installmentAmount * regularInstallmentsCount)) * 100) / 100
+      : scheduledTotal
+
+    console.log('Installment amounts - Regular:', installmentAmount, 'Last:', lastInstallmentAmount)
+
+    // Total amount for checkout = deposit + fees + FIRST installment
     const totalCheckoutAmount = body.upfrontAmount
 
     // Build metadata for tracking
@@ -120,10 +152,13 @@ serve(async (req) => {
       checkout_type: 'installment',
       plan_type: body.planType,
       number_of_installments: String(body.numberOfInstallments),
+      scheduled_installments: String(body.scheduledInstallments),
       upfront_amount: String(body.upfrontAmount),
+      base_upfront_amount: String(body.baseUpfrontAmount),
+      first_installment_amount: String(body.firstInstallmentAmount),
       installable_amount: String(body.installableAmount),
       installment_amount: String(installmentAmount),
-      first_installment_date: body.startDate,
+      first_installment_date: 'today', // First installment is paid at checkout
     }
 
     // Create or get Stripe Customer
@@ -162,31 +197,41 @@ serve(async (req) => {
     }
 
     // Create Checkout Session with:
-    // 1. Payment for upfront amount (captured immediately)
+    // 1. Payment for upfront amount (deposit + fees, optionally + first installment)
     // 2. SetupIntent to save card for future installment charges
+    const lineItemName = chargeFirstUpfront
+      ? 'Deposit, Fees & First Installment'
+      : 'Deposit & Fees'
+    const lineItemDescription = chargeFirstUpfront
+      ? `${body.vehicleName} - Deposit & Fees (${body.baseUpfrontAmount.toFixed(2)}) + 1st installment (${body.firstInstallmentAmount.toFixed(2)})`
+      : `${body.vehicleName} - Deposit & Fees (${body.baseUpfrontAmount.toFixed(2)})`
+    const paymentDescription = chargeFirstUpfront
+      ? `Installment Plan: ${body.vehicleName} - Upfront + 1st payment`
+      : `Installment Plan: ${body.vehicleName} - Upfront deposit & fees`
+
     const sessionParams: Stripe.Checkout.SessionCreateParams = {
       customer: stripeCustomerId,
       payment_method_types: ['card'],
       mode: 'payment',
-      // Charge the upfront amount
+      // Charge the upfront amount (includes first installment if configured)
       line_items: [
         {
           price_data: {
             currency: 'usd',
             product_data: {
-              name: 'Rental Deposit & Service Fee',
-              description: `${body.vehicleName} - Upfront payment (Deposit + Service Fee)`,
+              name: lineItemName,
+              description: lineItemDescription,
             },
             unit_amount: Math.round(totalCheckoutAmount * 100),
           },
           quantity: 1,
         },
       ],
-      // Save card for future use (installments)
+      // Save card for future use (remaining installments)
       payment_intent_data: {
         setup_future_usage: 'off_session', // KEY: This saves the card for future charges
         metadata: metadata,
-        description: `Installment Plan Upfront: ${body.vehicleName}`,
+        description: paymentDescription,
       },
       client_reference_id: body.rentalId,
       success_url: `${origin}/booking-success?session_id={CHECKOUT_SESSION_ID}&rental_id=${body.rentalId}&installment=true`,
@@ -201,7 +246,7 @@ serve(async (req) => {
     const session = await stripe.checkout.sessions.create(sessionParams, stripeOptions)
     console.log('Installment checkout session created:', session.id)
 
-    // Create initial payment record for upfront amount
+    // Create initial payment record for upfront amount (includes first installment)
     const { data: upfrontPayment, error: paymentError } = await supabase
       .from('payments')
       .insert({
@@ -215,7 +260,7 @@ serve(async (req) => {
         status: 'Pending',
         verification_status: 'auto_approved',
         stripe_checkout_session_id: session.id,
-        capture_status: 'captured', // Upfront is captured immediately
+        capture_status: 'captured',
         booking_source: 'website',
         tenant_id: tenantId,
       })
@@ -228,8 +273,27 @@ serve(async (req) => {
       console.log('Upfront payment record created:', upfrontPayment?.id)
     }
 
-    // Create the installment plan (will be activated after checkout success via webhook)
-    // Note: We create it now with 'pending' status, webhook will activate it
+    // Create the installment plan
+    // First installment is marked as paid (included in upfront)
+    const today = new Date().toISOString().split('T')[0]
+
+    // Calculate next due date for second installment
+    const nextDueDate = new Date(body.startDate)
+    if (body.planType === 'weekly') {
+      nextDueDate.setDate(nextDueDate.getDate() + 7)
+    } else {
+      nextDueDate.setMonth(nextDueDate.getMonth() + 1)
+    }
+
+    // Store config settings with the plan for use during processing
+    const planConfig = {
+      charge_first_upfront: chargeFirstUpfront,
+      what_gets_split: whatGetsSplit,
+      grace_period_days: gracePeriodDays,
+      max_retry_attempts: maxRetryAttempts,
+      retry_interval_days: retryIntervalDays,
+    }
+
     const { data: installmentPlan, error: planError } = await supabase
       .from('installment_plans')
       .insert({
@@ -240,11 +304,14 @@ serve(async (req) => {
         total_installable_amount: body.installableAmount,
         number_of_installments: body.numberOfInstallments,
         installment_amount: installmentAmount,
-        upfront_amount: body.upfrontAmount,
-        upfront_paid: false,
+        upfront_amount: body.baseUpfrontAmount, // Base upfront (deposit + fees)
+        upfront_paid: false, // Will be marked true after checkout success
+        paid_installments: chargeFirstUpfront ? 0 : 0, // Will be updated to 1 after checkout success if charging first upfront
+        total_paid: 0, // Will be updated after checkout success
         stripe_customer_id: stripeCustomerId,
         status: 'pending', // Will be activated after successful checkout
-        next_due_date: body.startDate,
+        next_due_date: body.scheduledInstallments > 0 ? nextDueDate.toISOString().split('T')[0] : null,
+        config: planConfig, // Store config settings
       })
       .select()
       .single()
@@ -257,23 +324,48 @@ serve(async (req) => {
     console.log('Installment plan created:', installmentPlan.id)
 
     // Create scheduled installments
+    // If chargeFirstUpfront is true: First installment is paid today, remaining are scheduled
+    // If chargeFirstUpfront is false: All installments are scheduled for future dates
     const scheduledInstallments = []
     let dueDate = new Date(body.startDate)
-    const intervalDays = body.planType === 'weekly' ? 7 : 30
 
+    // Create ALL installments
     for (let i = 1; i <= body.numberOfInstallments; i++) {
+      const isFirstInstallment = i === 1
+      const isLastInstallment = i === body.numberOfInstallments
+
+      // Use last installment amount for the final one (handles rounding remainder)
+      let amount: number
+      if (isLastInstallment && body.numberOfInstallments > 1) {
+        amount = lastInstallmentAmount
+      } else if (isFirstInstallment && chargeFirstUpfront) {
+        amount = body.firstInstallmentAmount
+      } else {
+        amount = installmentAmount
+      }
+
+      // Determine status based on whether first is charged upfront
+      let status: string
+      if (isFirstInstallment && chargeFirstUpfront) {
+        // First installment being charged at checkout - mark as processing
+        status = 'processing'
+      } else {
+        // Scheduled for future
+        status = 'scheduled'
+      }
+
       scheduledInstallments.push({
         installment_plan_id: installmentPlan.id,
         tenant_id: tenantId,
         rental_id: body.rentalId,
         customer_id: body.customerId,
         installment_number: i,
-        amount: installmentAmount,
+        amount: amount,
         due_date: dueDate.toISOString().split('T')[0],
-        status: 'scheduled',
+        status: status,
       })
 
-      // Move to next due date
+      // Move to next due date for subsequent installments
       if (body.planType === 'weekly') {
         dueDate.setDate(dueDate.getDate() + 7)
       } else {
@@ -290,7 +382,9 @@ serve(async (req) => {
       throw new Error('Failed to create scheduled installments')
     }
 
-    console.log('Created', scheduledInstallments.length, 'scheduled installments')
+    const processingCount = chargeFirstUpfront ? 1 : 0
+    const scheduledCount = body.numberOfInstallments - processingCount
+    console.log('Created', scheduledInstallments.length, 'installments (', processingCount, 'processing,', scheduledCount, 'scheduled)')
 
     // Update rental with installment plan reference
     await supabase
@@ -311,11 +405,15 @@ serve(async (req) => {
         // Summary for UI
         summary: {
           upfrontAmount: totalCheckoutAmount,
+          baseUpfrontAmount: body.baseUpfrontAmount,
+          firstInstallmentAmount: body.firstInstallmentAmount,
           installableAmount: body.installableAmount,
           numberOfInstallments: body.numberOfInstallments,
+          scheduledInstallments: body.scheduledInstallments,
           installmentAmount: installmentAmount,
+          lastInstallmentAmount: lastInstallmentAmount,
           planType: body.planType,
-          firstDueDate: body.startDate,
+          nextDueDate: body.scheduledInstallments > 0 ? nextDueDate.toISOString().split('T')[0] : null,
         },
       }),
       {

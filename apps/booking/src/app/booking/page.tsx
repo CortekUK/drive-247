@@ -24,7 +24,9 @@ import { Calendar } from "@/components/ui/calendar";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { useTenant } from "@/contexts/TenantContext";
-import { useDeliveryLocations, DeliveryLocation } from "@/hooks/useDeliveryLocations";
+import { useDeliveryLocations, type DeliveryLocation } from "@/hooks/useDeliveryLocations";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { useBookingStore } from "@/stores/booking-store";
 
 const TIMEZONE = "America/Los_Angeles";
 const MIN_RENTAL_DAYS = 30;
@@ -92,10 +94,15 @@ export default function Booking() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { tenant } = useTenant();
+  const { context: bookingContext, updateContext } = useBookingStore();
   const [sameAsPickup, setSameAsPickup] = useState(true);
 
-  // Delivery & Collection state
-  const { deliveryLocations, collectionLocations, isLoading: isLoadingDeliveryLocations } = useDeliveryLocations();
+  // Delivery option state: 'fixed' | 'location' | 'area' | null
+  const { locations: deliveryLocations, isLoading: isLoadingDeliveryLocations } = useDeliveryLocations();
+  const [deliveryOption, setDeliveryOption] = useState<'fixed' | 'location' | 'area' | null>(null);
+  const [selectedLocationId, setSelectedLocationId] = useState<string | null>(null);
+
+  // Legacy state for backward compatibility during transition
   const [requestDelivery, setRequestDelivery] = useState(false);
   const [deliveryLocationId, setDeliveryLocationId] = useState<string | null>(null);
   const [requestCollection, setRequestCollection] = useState(false);
@@ -124,26 +131,38 @@ export default function Booking() {
     },
   });
 
-  // Load from localStorage on mount
+  // Load from Zustand store on mount
   useEffect(() => {
-    if (typeof window !== 'undefined') {
-      const saved = localStorage.getItem("booking_context");
-      if (saved) {
-        try {
-          const data = JSON.parse(saved);
-          if (data.pickupDate) data.pickupDate = parseISO(data.pickupDate);
-          if (data.returnDate) data.returnDate = parseISO(data.returnDate);
-          form.reset(data);
-          setSameAsPickup(data.sameAsPickup ?? true);
-          // Load delivery/collection state
-          setRequestDelivery(data.requestDelivery ?? false);
-          setDeliveryLocationId(data.deliveryLocationId ?? null);
-          setRequestCollection(data.requestCollection ?? false);
-          setCollectionLocationId(data.collectionLocationId ?? null);
-        } catch (e) {
-          console.error("Failed to load booking context:", e);
-        }
+    if (bookingContext.pickupDate || bookingContext.pickupLocation) {
+      // Restore form from store
+      const formData: any = {};
+      if (bookingContext.pickupDate) formData.pickupDate = parseISO(bookingContext.pickupDate);
+      if (bookingContext.returnDate) formData.returnDate = parseISO(bookingContext.returnDate);
+      if (bookingContext.pickupTime) formData.pickupTime = bookingContext.pickupTime;
+      if (bookingContext.returnTime) formData.returnTime = bookingContext.returnTime;
+      if (bookingContext.pickupLocation) formData.pickupLocation = bookingContext.pickupLocation;
+      if (bookingContext.returnLocation) formData.returnLocation = bookingContext.returnLocation;
+      if (bookingContext.driverDOB) formData.driverDOB = parseISO(bookingContext.driverDOB);
+      if (bookingContext.promoCode) formData.promoCode = bookingContext.promoCode;
+      formData.sameAsPickup = bookingContext.sameAsPickup;
+
+      form.reset(formData);
+      setSameAsPickup(bookingContext.sameAsPickup);
+
+      // Load delivery option state
+      if (bookingContext.deliveryOption) {
+        setDeliveryOption(bookingContext.deliveryOption);
+        setSelectedLocationId(bookingContext.selectedLocationId ?? null);
+      } else if (bookingContext.requestDelivery) {
+        // Legacy data migration
+        setDeliveryOption('location');
+        setSelectedLocationId(bookingContext.deliveryLocationId ?? null);
       }
+      // Load legacy state for backward compatibility
+      setRequestDelivery(bookingContext.requestDelivery ?? false);
+      setDeliveryLocationId(bookingContext.deliveryLocationId ?? null);
+      setRequestCollection(bookingContext.requestCollection ?? false);
+      setCollectionLocationId(bookingContext.collectionLocationId ?? null);
     }
 
     // Also check URL params
@@ -172,13 +191,9 @@ export default function Booking() {
   }, [watchPickupLocation, sameAsPickup]);
 
   const onSubmit = (data: RentalDetailsForm) => {
-    // Validate delivery/collection location selection
-    if (requestDelivery && !deliveryLocationId) {
+    // Validate delivery location selection if 'location' option is chosen
+    if (deliveryOption === 'location' && !selectedLocationId) {
       toast.error("Please select a delivery location");
-      return;
-    }
-    if (requestCollection && !collectionLocationId) {
-      toast.error("Please select a collection location");
       return;
     }
 
@@ -209,37 +224,64 @@ export default function Booking() {
       params.set("promo", data.promoCode);
     }
 
-    // Get selected delivery/collection location objects
-    const selectedDeliveryLocation = deliveryLocations.find(l => l.id === deliveryLocationId) || null;
-    const selectedCollectionLocation = collectionLocations.find(l => l.id === collectionLocationId) || null;
+    // Get selected location object if applicable
+    const selectedLocation = deliveryLocations.find(l => l.id === selectedLocationId) || null;
 
-    // Save to localStorage
-    if (typeof window !== 'undefined') {
-      const saveData = {
-        ...data,
-        pickupDate: data.pickupDate.toISOString(),
-        returnDate: data.returnDate.toISOString(),
-        driverDOB: data.driverDOB ? data.driverDOB.toISOString() : null,
-        driverAge: driverAge,
-        // Delivery/Collection data
-        requestDelivery,
-        deliveryLocationId,
-        deliveryLocation: selectedDeliveryLocation,
-        requestCollection,
-        collectionLocationId,
-        collectionLocation: selectedCollectionLocation,
-      };
-      localStorage.setItem("booking_context", JSON.stringify(saveData));
-
-      // Analytics event
-      if ((window as any).gtag) {
-        (window as any).gtag("event", "booking_step1_submitted", {
-          pickup_location: data.pickupLocation,
-          return_location: data.returnLocation,
-          driver_age: driverAge,
-          has_promo: !!data.promoCode,
-        });
+    // Calculate delivery fee based on option
+    const calculateDeliveryFee = () => {
+      if (deliveryOption === 'location' && selectedLocation) {
+        return selectedLocation.delivery_fee || 0;
       }
+      if (deliveryOption === 'area') {
+        return tenant?.area_delivery_fee || 0;
+      }
+      return 0;
+    };
+
+    // Save to Zustand store
+    updateContext({
+      pickupDate: data.pickupDate.toISOString(),
+      returnDate: data.returnDate.toISOString(),
+      pickupTime: data.pickupTime,
+      returnTime: data.returnTime,
+      pickupLocation: data.pickupLocation,
+      returnLocation: data.returnLocation,
+      sameAsPickup: data.sameAsPickup,
+      driverDOB: data.driverDOB ? data.driverDOB.toISOString() : null,
+      driverAge: driverAge,
+      promoCode: data.promoCode || null,
+      // Delivery option data
+      deliveryOption: deliveryOption || 'fixed',
+      selectedLocationId,
+      selectedLocation: selectedLocation ? {
+        id: selectedLocation.id,
+        name: selectedLocation.name,
+        address: selectedLocation.address,
+        delivery_fee: selectedLocation.delivery_fee,
+      } : null,
+      deliveryFee: calculateDeliveryFee(),
+      // Legacy fields for backward compatibility
+      requestDelivery: deliveryOption === 'location' || deliveryOption === 'area',
+      deliveryLocationId: selectedLocationId,
+      deliveryLocation: selectedLocation ? {
+        id: selectedLocation.id,
+        name: selectedLocation.name,
+        address: selectedLocation.address,
+        delivery_fee: selectedLocation.delivery_fee,
+      } : null,
+      requestCollection: false,
+      collectionLocationId: null,
+      collectionLocation: null,
+    });
+
+    // Analytics event
+    if (typeof window !== 'undefined' && (window as any).gtag) {
+      (window as any).gtag("event", "booking_step1_submitted", {
+        pickup_location: data.pickupLocation,
+        return_location: data.returnLocation,
+        driver_age: driverAge,
+        has_promo: !!data.promoCode,
+      });
     }
 
     toast.success("Rental details saved. Loading available vehicles...");
@@ -333,213 +375,351 @@ export default function Booking() {
               <Card className="p-8 shadow-metal border-accent/20">
                 <Form {...form}>
                   <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
-                    {/* Pickup Location */}
-                    <FormField
-                      control={form.control}
-                      name="pickupLocation"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel className="text-base flex items-center gap-2">
-                            <MapPin className="w-4 h-4 text-accent" />
-                            Pickup Location *
-                          </FormLabel>
-                          <FormControl>
-                            <LocationAutocomplete
-                              id="pickupLocation"
-                              value={field.value}
-                              onChange={(value) => field.onChange(value)}
-                              placeholder="Enter pickup address in Los Angeles"
-                              className="h-12"
+                    {/* Pickup & Return Options - NEW UI */}
+                    {(() => {
+                      // Check which options are enabled
+                      const fixedEnabled = tenant?.fixed_address_enabled ?? true;
+                      const multipleEnabled = tenant?.multiple_locations_enabled && deliveryLocations.length > 0;
+                      const areaEnabled = tenant?.area_around_enabled;
+
+                      // Count enabled options
+                      const enabledCount = [fixedEnabled, multipleEnabled, areaEnabled].filter(Boolean).length;
+
+                      // If multiple options are available, show the selection UI
+                      const showDeliveryOptions = enabledCount > 1 || multipleEnabled || areaEnabled;
+
+                      const formatCurrency = (amount: number) =>
+                        new Intl.NumberFormat('en-GB', {
+                          style: 'currency',
+                          currency: tenant?.currency_code || 'GBP'
+                        }).format(amount);
+
+                      // Calculate delivery fee based on selected option
+                      const getDeliveryFee = () => {
+                        if (deliveryOption === 'location' && selectedLocationId) {
+                          const location = deliveryLocations.find(l => l.id === selectedLocationId);
+                          return location?.delivery_fee || 0;
+                        }
+                        if (deliveryOption === 'area') {
+                          return tenant?.area_delivery_fee || 0;
+                        }
+                        return 0;
+                      };
+
+                      const deliveryFee = getDeliveryFee();
+
+                      if (!showDeliveryOptions) {
+                        // Only fixed address enabled - show simple location input
+                        return (
+                          <>
+                            {/* Pickup Location */}
+                            <FormField
+                              control={form.control}
+                              name="pickupLocation"
+                              render={({ field }) => (
+                                <FormItem>
+                                  <FormLabel className="text-base flex items-center gap-2">
+                                    <Car className="w-4 h-4 text-green-600" />
+                                    Pickup *
+                                  </FormLabel>
+                                  {tenant?.fixed_pickup_address ? (
+                                    <div className="p-3 bg-muted/30 rounded-lg border">
+                                      <p className="text-sm flex items-center gap-2">
+                                        <MapPin className="w-4 h-4 text-accent" />
+                                        {tenant.fixed_pickup_address}
+                                      </p>
+                                    </div>
+                                  ) : (
+                                    <FormControl>
+                                      <LocationAutocomplete
+                                        id="pickupLocation"
+                                        value={field.value}
+                                        onChange={(value) => field.onChange(value)}
+                                        placeholder="Enter pickup address"
+                                        className="h-12"
+                                      />
+                                    </FormControl>
+                                  )}
+                                  <FormMessage />
+                                </FormItem>
+                              )}
                             />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
 
-                    {/* Same as Pickup Toggle */}
-                    <FormField
-                      control={form.control}
-                      name="sameAsPickup"
-                      render={({ field }) => (
-                        <FormItem className="flex items-center gap-3 space-y-0">
-                          <FormControl>
-                            <Checkbox
-                              checked={field.value}
-                              onCheckedChange={field.onChange}
-                              id="sameAsPickup"
+                            {/* Return Location */}
+                            <FormField
+                              control={form.control}
+                              name="returnLocation"
+                              render={({ field }) => (
+                                <FormItem>
+                                  <FormLabel className="text-base flex items-center gap-2">
+                                    <RotateCcw className="w-4 h-4 text-blue-600" />
+                                    Return *
+                                  </FormLabel>
+                                  {tenant?.fixed_return_address || tenant?.fixed_pickup_address ? (
+                                    <div className="p-3 bg-muted/30 rounded-lg border">
+                                      <p className="text-sm flex items-center gap-2">
+                                        <MapPin className="w-4 h-4 text-accent" />
+                                        {tenant?.fixed_return_address || tenant?.fixed_pickup_address}
+                                      </p>
+                                    </div>
+                                  ) : (
+                                    <FormControl>
+                                      <LocationAutocomplete
+                                        id="returnLocation"
+                                        value={field.value}
+                                        onChange={(value) => field.onChange(value)}
+                                        placeholder="Enter return address"
+                                        className="h-12"
+                                      />
+                                    </FormControl>
+                                  )}
+                                  <FormMessage />
+                                </FormItem>
+                              )}
                             />
-                          </FormControl>
-                          <FormLabel htmlFor="sameAsPickup" className="text-sm font-normal cursor-pointer">
-                            Return to same location
-                          </FormLabel>
-                        </FormItem>
-                      )}
-                    />
+                          </>
+                        );
+                      }
 
-                    {/* Return Location */}
-                    {!sameAsPickup && (
-                      <FormField
-                        control={form.control}
-                        name="returnLocation"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel className="text-base flex items-center gap-2">
-                              <MapPin className="w-4 h-4 text-accent" />
-                              Return Location *
-                            </FormLabel>
-                            <FormControl>
-                              <LocationAutocomplete
-                                id="returnLocation"
-                                value={field.value}
-                                onChange={(value) => field.onChange(value)}
-                                placeholder="Enter return address in Los Angeles"
-                                className="h-12"
-                              />
-                            </FormControl>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-                    )}
+                      // Multiple options available - show radio selection
+                      return (
+                        <div className="space-y-6">
+                          <div>
+                            <h3 className="text-xl font-semibold mb-4 flex items-center gap-2 text-foreground">
+                              <Truck className="w-5 h-5 text-accent" />
+                              Pickup & Return Options
+                            </h3>
 
-                    {/* Delivery & Collection Service Section */}
-                    {(tenant?.delivery_enabled || tenant?.collection_enabled) && (
-                      <div className="border-t border-accent/20 pt-6 mt-6">
-                        <h3 className="text-xl font-semibold mb-4 flex items-center gap-2 text-foreground">
-                          <Truck className="w-5 h-5 text-accent" />
-                          {tenant?.delivery_enabled && tenant?.collection_enabled
-                            ? "Delivery & Collection Service"
-                            : tenant?.delivery_enabled
-                            ? "Delivery Service"
-                            : "Collection Service"}
-                        </h3>
-
-                        {/* Delivery Option */}
-                        {tenant?.delivery_enabled && deliveryLocations.length > 0 && (
-                          <div className="space-y-3 mb-4">
-                            <div className="flex items-center gap-3">
-                              <Checkbox
-                                id="requestDelivery"
-                                checked={requestDelivery}
-                                onCheckedChange={(checked) => {
-                                  setRequestDelivery(checked as boolean);
-                                  if (!checked) setDeliveryLocationId(null);
-                                }}
-                              />
-                              <Label htmlFor="requestDelivery" className="cursor-pointer flex items-center gap-2">
-                                <Car className="w-4 h-4 text-green-600" />
-                                Request Delivery
-                                <span className="text-sm text-muted-foreground">(We deliver the car to you)</span>
-                              </Label>
-                            </div>
-
-                            {requestDelivery && (
-                              <div className="ml-7">
-                                <Label className="text-sm text-muted-foreground mb-2 block">Deliver to:</Label>
-                                <Select
-                                  value={deliveryLocationId || ""}
-                                  onValueChange={(value) => setDeliveryLocationId(value || null)}
+                            <RadioGroup
+                              value={deliveryOption || (fixedEnabled ? 'fixed' : multipleEnabled ? 'location' : 'area')}
+                              onValueChange={(value) => {
+                                setDeliveryOption(value as 'fixed' | 'location' | 'area');
+                                if (value !== 'location') {
+                                  setSelectedLocationId(null);
+                                }
+                                // Set pickup/return location based on selection
+                                if (value === 'fixed' && tenant?.fixed_pickup_address) {
+                                  form.setValue('pickupLocation', tenant.fixed_pickup_address);
+                                  form.setValue('returnLocation', tenant.fixed_return_address || tenant.fixed_pickup_address);
+                                }
+                              }}
+                              className="space-y-3"
+                            >
+                              {/* Fixed Address Option (Free) */}
+                              {fixedEnabled && (
+                                <div
+                                  className={cn(
+                                    "rounded-lg border p-4 cursor-pointer transition-all",
+                                    (deliveryOption === 'fixed' || (!deliveryOption && fixedEnabled))
+                                      ? "border-accent bg-accent/5 ring-1 ring-accent"
+                                      : "border-border hover:border-muted-foreground/50"
+                                  )}
+                                  onClick={() => {
+                                    setDeliveryOption('fixed');
+                                    if (tenant?.fixed_pickup_address) {
+                                      form.setValue('pickupLocation', tenant.fixed_pickup_address);
+                                      form.setValue('returnLocation', tenant.fixed_return_address || tenant.fixed_pickup_address);
+                                    }
+                                  }}
                                 >
-                                  <SelectTrigger className="h-12">
-                                    <SelectValue placeholder="Select delivery location" />
-                                  </SelectTrigger>
-                                  <SelectContent>
-                                    {deliveryLocations.map((loc) => (
-                                      <SelectItem key={loc.id} value={loc.id}>
-                                        {loc.name} - +{new Intl.NumberFormat('en-GB', { style: 'currency', currency: tenant?.currency_code || 'GBP' }).format(loc.delivery_fee)}
-                                      </SelectItem>
-                                    ))}
-                                  </SelectContent>
-                                </Select>
-                              </div>
-                            )}
-                          </div>
-                        )}
+                                  <div className="flex items-start gap-3">
+                                    <RadioGroupItem value="fixed" id="option-fixed" className="mt-1" />
+                                    <div className="flex-1">
+                                      <div className="flex items-center gap-2">
+                                        <Label htmlFor="option-fixed" className="font-medium cursor-pointer">
+                                          Self Pickup & Return
+                                        </Label>
+                                        <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full font-medium">
+                                          FREE
+                                        </span>
+                                      </div>
+                                      <p className="text-sm text-muted-foreground mt-1">
+                                        Pick up and return the vehicle at our location
+                                      </p>
+                                      {tenant?.fixed_pickup_address && (
+                                        <p className="text-sm text-foreground mt-2 flex items-center gap-1">
+                                          <MapPin className="w-3 h-3" />
+                                          {tenant.fixed_pickup_address}
+                                        </p>
+                                      )}
+                                    </div>
+                                  </div>
+                                </div>
+                              )}
 
-                        {/* Collection Option */}
-                        {tenant?.collection_enabled && collectionLocations.length > 0 && (
-                          <div className="space-y-3 mb-4">
-                            <div className="flex items-center gap-3">
-                              <Checkbox
-                                id="requestCollection"
-                                checked={requestCollection}
-                                onCheckedChange={(checked) => {
-                                  setRequestCollection(checked as boolean);
-                                  if (!checked) setCollectionLocationId(null);
-                                }}
-                              />
-                              <Label htmlFor="requestCollection" className="cursor-pointer flex items-center gap-2">
-                                <RotateCcw className="w-4 h-4 text-blue-600" />
-                                Request Collection
-                                <span className="text-sm text-muted-foreground">(We collect the car from you)</span>
-                              </Label>
-                            </div>
-
-                            {requestCollection && (
-                              <div className="ml-7">
-                                <Label className="text-sm text-muted-foreground mb-2 block">Collect from:</Label>
-                                <Select
-                                  value={collectionLocationId || ""}
-                                  onValueChange={(value) => setCollectionLocationId(value || null)}
+                              {/* Multiple Locations Option (Paid) */}
+                              {multipleEnabled && (
+                                <div
+                                  className={cn(
+                                    "rounded-lg border p-4 cursor-pointer transition-all",
+                                    deliveryOption === 'location'
+                                      ? "border-accent bg-accent/5 ring-1 ring-accent"
+                                      : "border-border hover:border-muted-foreground/50"
+                                  )}
+                                  onClick={() => setDeliveryOption('location')}
                                 >
-                                  <SelectTrigger className="h-12">
-                                    <SelectValue placeholder="Select collection location" />
-                                  </SelectTrigger>
-                                  <SelectContent>
-                                    {collectionLocations.map((loc) => (
-                                      <SelectItem key={loc.id} value={loc.id}>
-                                        {loc.name} - +{new Intl.NumberFormat('en-GB', { style: 'currency', currency: tenant?.currency_code || 'GBP' }).format(loc.collection_fee)}
-                                      </SelectItem>
-                                    ))}
-                                  </SelectContent>
-                                </Select>
-                              </div>
-                            )}
-                          </div>
-                        )}
+                                  <div className="flex items-start gap-3">
+                                    <RadioGroupItem value="location" id="option-location" className="mt-1" />
+                                    <div className="flex-1">
+                                      <div className="flex items-center gap-2">
+                                        <Label htmlFor="option-location" className="font-medium cursor-pointer">
+                                          Delivery to Your Location
+                                        </Label>
+                                        <span className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full font-medium">
+                                          PAID
+                                        </span>
+                                      </div>
+                                      <p className="text-sm text-muted-foreground mt-1">
+                                        We deliver and collect from your chosen location
+                                      </p>
 
-                        {/* Fee Summary */}
-                        {(() => {
-                          const deliveryFee = requestDelivery && deliveryLocationId
-                            ? deliveryLocations.find(l => l.id === deliveryLocationId)?.delivery_fee || 0
-                            : 0;
-                          const collectionFee = requestCollection && collectionLocationId
-                            ? collectionLocations.find(l => l.id === collectionLocationId)?.collection_fee || 0
-                            : 0;
-                          const totalServiceFee = deliveryFee + collectionFee;
+                                      {deliveryOption === 'location' && (
+                                        <div className="mt-3" onClick={(e) => e.stopPropagation()}>
+                                          <Select
+                                            value={selectedLocationId || ""}
+                                            onValueChange={(value) => {
+                                              setSelectedLocationId(value || null);
+                                              const loc = deliveryLocations.find(l => l.id === value);
+                                              if (loc) {
+                                                form.setValue('pickupLocation', loc.address);
+                                                form.setValue('returnLocation', loc.address);
+                                              }
+                                            }}
+                                          >
+                                            <SelectTrigger className="h-12">
+                                              <SelectValue placeholder="Select a location" />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                              {deliveryLocations.map((loc) => (
+                                                <SelectItem key={loc.id} value={loc.id}>
+                                                  {loc.name} {loc.delivery_fee > 0 ? `- +${formatCurrency(loc.delivery_fee)}` : '- Free'}
+                                                </SelectItem>
+                                              ))}
+                                            </SelectContent>
+                                          </Select>
+                                        </div>
+                                      )}
+                                    </div>
+                                  </div>
+                                </div>
+                              )}
 
-                          if (totalServiceFee === 0) return null;
+                              {/* Area Delivery Option (Flat Fee) */}
+                              {areaEnabled && (
+                                <div
+                                  className={cn(
+                                    "rounded-lg border p-4 cursor-pointer transition-all",
+                                    deliveryOption === 'area'
+                                      ? "border-accent bg-accent/5 ring-1 ring-accent"
+                                      : "border-border hover:border-muted-foreground/50"
+                                  )}
+                                  onClick={() => setDeliveryOption('area')}
+                                >
+                                  <div className="flex items-start gap-3">
+                                    <RadioGroupItem value="area" id="option-area" className="mt-1" />
+                                    <div className="flex-1">
+                                      <div className="flex items-center gap-2">
+                                        <Label htmlFor="option-area" className="font-medium cursor-pointer">
+                                          Area Delivery
+                                        </Label>
+                                        <span className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full font-medium">
+                                          +{formatCurrency(tenant?.area_delivery_fee || 0)}
+                                        </span>
+                                      </div>
+                                      <p className="text-sm text-muted-foreground mt-1">
+                                        We deliver and collect anywhere within {tenant?.pickup_area_radius_km || 25}km
+                                      </p>
 
-                          const formatCurrency = (amount: number) =>
-                            new Intl.NumberFormat('en-GB', {
-                              style: 'currency',
-                              currency: tenant?.currency_code || 'GBP'
-                            }).format(amount);
+                                      {deliveryOption === 'area' && (
+                                        <div className="mt-4 space-y-4" onClick={(e) => e.stopPropagation()}>
+                                          <FormField
+                                            control={form.control}
+                                            name="pickupLocation"
+                                            render={({ field }) => (
+                                              <FormItem>
+                                                <FormLabel className="text-sm">Delivery Address *</FormLabel>
+                                                <FormControl>
+                                                  <LocationAutocomplete
+                                                    id="pickupLocation"
+                                                    value={field.value}
+                                                    onChange={(value) => {
+                                                      field.onChange(value);
+                                                      if (sameAsPickup) {
+                                                        form.setValue('returnLocation', value);
+                                                      }
+                                                    }}
+                                                    placeholder="Enter your delivery address"
+                                                    className="h-12"
+                                                  />
+                                                </FormControl>
+                                                <FormMessage />
+                                              </FormItem>
+                                            )}
+                                          />
 
-                          return (
-                            <div className="p-3 bg-muted/30 rounded-lg mt-4">
-                              {deliveryFee > 0 && (
-                                <div className="flex justify-between text-sm">
+                                          <div className="flex items-center gap-2">
+                                            <Checkbox
+                                              id="sameAsPickupArea"
+                                              checked={sameAsPickup}
+                                              onCheckedChange={(checked) => {
+                                                setSameAsPickup(checked as boolean);
+                                                form.setValue('sameAsPickup', checked as boolean);
+                                                if (checked) {
+                                                  form.setValue('returnLocation', form.getValues('pickupLocation'));
+                                                }
+                                              }}
+                                            />
+                                            <Label htmlFor="sameAsPickupArea" className="text-sm cursor-pointer">
+                                              Collection from same address
+                                            </Label>
+                                          </div>
+
+                                          {!sameAsPickup && (
+                                            <FormField
+                                              control={form.control}
+                                              name="returnLocation"
+                                              render={({ field }) => (
+                                                <FormItem>
+                                                  <FormLabel className="text-sm">Collection Address *</FormLabel>
+                                                  <FormControl>
+                                                    <LocationAutocomplete
+                                                      id="returnLocation"
+                                                      value={field.value}
+                                                      onChange={(value) => field.onChange(value)}
+                                                      placeholder="Enter your collection address"
+                                                      className="h-12"
+                                                    />
+                                                  </FormControl>
+                                                  <FormMessage />
+                                                </FormItem>
+                                              )}
+                                            />
+                                          )}
+                                        </div>
+                                      )}
+                                    </div>
+                                  </div>
+                                </div>
+                              )}
+                            </RadioGroup>
+
+                            {/* Fee Summary */}
+                            {deliveryFee > 0 && (
+                              <div className="p-3 bg-muted/30 rounded-lg mt-4">
+                                <div className="flex justify-between font-semibold">
                                   <span>Delivery Fee</span>
-                                  <span>+{formatCurrency(deliveryFee)}</span>
+                                  <span className="text-accent">+{formatCurrency(deliveryFee)}</span>
                                 </div>
-                              )}
-                              {collectionFee > 0 && (
-                                <div className="flex justify-between text-sm">
-                                  <span>Collection Fee</span>
-                                  <span>+{formatCurrency(collectionFee)}</span>
-                                </div>
-                              )}
-                              <div className="flex justify-between font-semibold border-t border-accent/20 mt-2 pt-2">
-                                <span>Service Total</span>
-                                <span className="text-accent">{formatCurrency(totalServiceFee)}</span>
+                                <p className="text-xs text-muted-foreground mt-1">
+                                  Same fee applies for both delivery and collection
+                                </p>
                               </div>
-                            </div>
-                          );
-                        })()}
-                      </div>
-                    )}
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })()}
+
 
                     {/* Pickup Date & Time */}
                     <div className="grid md:grid-cols-2 gap-4">

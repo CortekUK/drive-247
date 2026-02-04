@@ -15,7 +15,7 @@ import { Badge } from "@/components/ui/badge";
 import { supabase } from "@/integrations/supabase/client";
 import { useTenant } from "@/contexts/TenantContext";
 import { toast } from "sonner";
-import { ChevronRight, ChevronLeft, Check, Baby, Coffee, MapPin, UserCheck, Car, Crown, TrendingUp, Users as GroupIcon, Calculator, Shield, CheckCircle, CalendarIcon, Clock, Search, Grid3x3, List, SlidersHorizontal, X, AlertCircle, FileCheck, RefreshCw, Upload, Gauge, User, Loader2 } from "lucide-react";
+import { ChevronRight, ChevronLeft, Check, Baby, Coffee, MapPin, UserCheck, Car, Crown, TrendingUp, Users as GroupIcon, Calculator, Shield, CheckCircle, CalendarIcon, Clock, Search, Grid3x3, List, SlidersHorizontal, X, AlertCircle, FileCheck, RefreshCw, Upload, Gauge, User, Loader2, Globe } from "lucide-react";
 import { format, differenceInHours } from "date-fns";
 import { cn } from "@/lib/utils";
 import BookingConfirmation from "./BookingConfirmation";
@@ -34,6 +34,7 @@ import { canCustomerBook } from "@/lib/tenantQueries";
 import { sanitizeName, sanitizeEmail, sanitizePhone, sanitizeLocation, sanitizeTextArea, isInputSafe } from "@/lib/sanitize";
 import { createVeriffFrame, MESSAGES } from "@veriff/incontext-sdk";
 import { useCustomerAuthStore } from "@/stores/customer-auth-store";
+import { useBookingStore } from "@/stores/booking-store";
 import { useCustomerVerification } from "@/hooks/use-customer-verification";
 import { AuthPromptDialog } from "@/components/booking/AuthPromptDialog";
 import { getTimezonesByRegion, findTimezone, getDetectedTimezone } from "@/lib/timezones";
@@ -88,6 +89,7 @@ const MultiStepBookingWidget = () => {
   const { tenant } = useTenant();
   const workingHours = useWorkingHours();
   const skipInsurance = isInsuranceExemptTenant(tenant?.id);
+  const { updateContext: updateBookingContext } = useBookingStore();
 
   // Customer authentication state
   const { customerUser, session, loading: authLoading, initialized: authInitialized } = useCustomerAuthStore();
@@ -151,6 +153,8 @@ const MultiStepBookingWidget = () => {
     dropoffLocation: "",
     pickupLocationId: "",
     returnLocationId: "",
+    pickupDeliveryFee: 0,
+    returnDeliveryFee: 0,
     pickupDate: "",
     dropoffDate: "",
     pickupTime: "",
@@ -1494,6 +1498,9 @@ const MultiStepBookingWidget = () => {
       return sum + (extra?.price || 0);
     }, 0);
 
+    // Calculate delivery fees
+    const deliveryFees = (formData.pickupDeliveryFee || 0) + (formData.returnDeliveryFee || 0);
+
     // Apply promo code logic
     let discountedRentalPrice = rentalPrice;
     let discountAmount = 0;
@@ -1511,7 +1518,7 @@ const MultiStepBookingWidget = () => {
           discountAmount = promoDetails.value;
           discountedRentalPrice = Math.max(0, basePrice - discountAmount);
         }
-        // If basePrice <= value, we don't apply it here (or treat as 0). 
+        // If basePrice <= value, we don't apply it here (or treat as 0).
         // We will handle the UI error display in the vehicle card loop.
       } else if (promoDetails.type === "percentage") {
         discountAmount = (basePrice * promoDetails.value) / 100;
@@ -1519,13 +1526,16 @@ const MultiStepBookingWidget = () => {
       }
     }
 
-    const totalPrice = discountedRentalPrice + extrasTotal;
+    const totalPrice = discountedRentalPrice + extrasTotal + deliveryFees;
     return {
       rentalPrice,
       discountedRentalPrice,
       discountAmount,
       rentalDays,
       extrasTotal,
+      deliveryFees,
+      pickupDeliveryFee: formData.pickupDeliveryFee || 0,
+      returnDeliveryFee: formData.returnDeliveryFee || 0,
       totalPrice
     };
   };
@@ -1787,6 +1797,8 @@ const MultiStepBookingWidget = () => {
       dropoffLocation: "",
       pickupLocationId: "",
       returnLocationId: "",
+      pickupDeliveryFee: 0,
+      returnDeliveryFee: 0,
       pickupDate: "",
       dropoffDate: "",
       pickupTime: "",
@@ -2028,7 +2040,7 @@ const MultiStepBookingWidget = () => {
     const duration = calculateRentalDuration();
     if (!duration) return null;
     const days = duration.days;
-    let total = 0;
+    let vehicleTotal = 0;
     const dailyRent = vehicle.daily_rent || 0;
     const weeklyRent = vehicle.weekly_rent || 0;
     const monthlyRent = vehicle.monthly_rent || 0;
@@ -2038,20 +2050,27 @@ const MultiStepBookingWidget = () => {
     // 7-30 days: weekly rate (days/7 × weekly_rent)
     // < 7 days: daily rate (days × daily_rent)
     if (days > 30 && monthlyRent > 0) {
-      total = (days / 30) * monthlyRent;
+      vehicleTotal = (days / 30) * monthlyRent;
     } else if (days >= 7 && days <= 30 && weeklyRent > 0) {
-      total = (days / 7) * weeklyRent;
+      vehicleTotal = (days / 7) * weeklyRent;
     } else if (dailyRent > 0) {
-      total = days * dailyRent;
+      vehicleTotal = days * dailyRent;
     } else if (weeklyRent > 0) {
       // Fallback: estimate from weekly if no daily
-      total = (days / 7) * weeklyRent;
+      vehicleTotal = (days / 7) * weeklyRent;
     } else if (monthlyRent > 0) {
       // Fallback: estimate from monthly if no daily/weekly
-      total = (days / 30) * monthlyRent;
+      vehicleTotal = (days / 30) * monthlyRent;
     }
+
+    // Add delivery fees
+    const deliveryFees = (formData.pickupDeliveryFee || 0) + (formData.returnDeliveryFee || 0);
+    const total = vehicleTotal + deliveryFees;
+
     return {
       total,
+      vehicleTotal,
+      deliveryFees,
       days
     };
   };
@@ -2647,6 +2666,10 @@ const MultiStepBookingWidget = () => {
       const bookingContext = {
         pickupLocation: formData.pickupLocation,
         dropoffLocation: formData.dropoffLocation,
+        pickupLocationId: formData.pickupLocationId,
+        returnLocationId: formData.returnLocationId,
+        pickupDeliveryFee: formData.pickupDeliveryFee,
+        returnDeliveryFee: formData.returnDeliveryFee,
         pickupDate: formData.pickupDate,
         pickupTime: formData.pickupTime,
         dropoffDate: formData.dropoffDate,
@@ -2657,7 +2680,7 @@ const MultiStepBookingWidget = () => {
         promoCode: formData.promoCode,
         young_driver: isYoungDriver
       };
-      localStorage.setItem('booking_context', JSON.stringify(bookingContext));
+      updateBookingContext(bookingContext as any);
 
       // DEBUG: Check if verification session ID is still in formData before moving to step 2
       console.log('📝 Moving to Step 2 with formData:', formData);
@@ -2693,17 +2716,9 @@ const MultiStepBookingWidget = () => {
       }
 
       // Update booking context
-      const bookingContext = JSON.parse(localStorage.getItem('booking_context') || '{}');
-      localStorage.setItem('booking_context', JSON.stringify({
-        ...bookingContext,
-        vehicle_id: formData.vehicleId,
-        viewMode,
-        filters: {
-          search: searchTerm,
-          categories: selectedCategories,
-          sortBy
-        }
-      }));
+      updateBookingContext({
+        selectedVehicleId: formData.vehicleId,
+      } as any);
       // Skip insurance step for exempt tenants (like Kedic Services)
       if (skipInsurance) {
         setCurrentStep(4); // Skip directly to customer details
@@ -2904,11 +2919,12 @@ const MultiStepBookingWidget = () => {
                   type="pickup"
                   value={formData.pickupLocation}
                   locationId={formData.pickupLocationId}
-                  onChange={(address, locId, lat, lon) => {
+                  onChange={(address, locId, lat, lon, deliveryFee) => {
                     setFormData({
                       ...formData,
                       pickupLocation: address,
                       pickupLocationId: locId || "",
+                      pickupDeliveryFee: deliveryFee ?? 0,
                     });
                     setLocationCoords({
                       ...locationCoords,
@@ -2921,7 +2937,6 @@ const MultiStepBookingWidget = () => {
                   placeholder="Enter pickup address"
                   className="h-12 focus-visible:ring-primary"
                 />
-                <p className="text-xs text-muted-foreground">Start typing an address or landmark</p>
                 {errors.pickupLocation && <p className="text-sm text-destructive">{errors.pickupLocation}</p>}
               </div>
 
@@ -2932,11 +2947,12 @@ const MultiStepBookingWidget = () => {
                   type="return"
                   value={formData.dropoffLocation}
                   locationId={formData.returnLocationId}
-                  onChange={(address, locId, lat, lon) => {
+                  onChange={(address, locId, lat, lon, deliveryFee) => {
                     setFormData({
                       ...formData,
                       dropoffLocation: address,
                       returnLocationId: locId || "",
+                      returnDeliveryFee: deliveryFee ?? 0,
                     });
                     setLocationCoords({
                       ...locationCoords,
@@ -2949,68 +2965,75 @@ const MultiStepBookingWidget = () => {
                   placeholder="Enter return address"
                   className="h-12 focus-visible:ring-primary"
                 />
-                <p className="text-xs text-muted-foreground">Start typing an address or landmark</p>
                 {errors.dropoffLocation && <p className="text-sm text-destructive">{errors.dropoffLocation}</p>}
               </div>
             </div>
 
             {/* Timezone Selection & Business Hours Info */}
-            <div className="space-y-4">
-              {/* Customer Timezone Selection */}
-              <div className="space-y-2">
-                <Label className="font-medium">Your Timezone</Label>
-                {/* Show read-only display for logged-in users with timezone in profile */}
-                {isAuthenticated && isCustomerDataPopulated && customerHasTimezone ? (
-                  <div className="space-y-2">
-                    <Input
-                      value={findTimezone(formData.customerTimezone)?.label || formData.customerTimezone}
-                      readOnly
-                      className="h-12 max-w-md bg-muted/50"
-                    />
-                    <p className="text-xs text-muted-foreground flex items-center gap-1">
-                      <CheckCircle className="w-3 h-3 text-primary" />
-                      From your account settings
-                    </p>
-                  </div>
-                ) : (
-                  <Select
-                    value={formData.customerTimezone}
-                    onValueChange={(value) => setFormData({ ...formData, customerTimezone: value })}
-                  >
-                    <SelectTrigger className="h-12 max-w-md">
-                      <SelectValue placeholder="Select your timezone">
-                        {findTimezone(formData.customerTimezone)?.label || formData.customerTimezone || 'Select timezone'}
-                      </SelectValue>
-                    </SelectTrigger>
-                    <SelectContent className="max-h-[300px]">
-                      {getTimezonesByRegion().map((group) => (
-                        <div key={group.region}>
-                          <div className="px-2 py-1.5 text-sm font-semibold text-muted-foreground bg-muted/50">
-                            {group.label}
-                          </div>
-                          {group.timezones.map((tz) => (
-                            <SelectItem key={tz.value} value={tz.value}>
-                              {tz.label}
-                            </SelectItem>
-                          ))}
-                        </div>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                )}
+            <div className="rounded-lg border bg-card p-4 space-y-4">
+              <div className="flex items-center gap-2">
+                <Globe className="h-4 w-4 text-muted-foreground" />
+                <span className="text-sm font-medium">Timezone Settings</span>
               </div>
 
-              {/* Business Timezone Notice */}
-              <div className="flex items-center gap-2 p-3 bg-muted/50 rounded-lg text-sm">
-                <Clock className="h-4 w-4 text-muted-foreground flex-shrink-0" />
-                <div>
-                  <span className="text-muted-foreground">Business operates in </span>
-                  <span className="font-medium">{findTimezone(workingHours.timezone)?.label || workingHours.timezone}</span>
-                  {!workingHours.isAlwaysOpen && (
-                    <span className="text-muted-foreground">
-                      {" "}({workingHours.formattedOpenTime} - {workingHours.formattedCloseTime})
-                    </span>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {/* Customer Timezone */}
+                <div className="space-y-2">
+                  <Label className="text-xs text-muted-foreground uppercase tracking-wide">Your Timezone</Label>
+                  {isAuthenticated && isCustomerDataPopulated && customerHasTimezone ? (
+                    <div className="flex items-center gap-2 p-3 rounded-md bg-muted/50 border">
+                      <div className="flex-1">
+                        <p className="font-medium text-sm">
+                          {findTimezone(formData.customerTimezone)?.label || formData.customerTimezone}
+                        </p>
+                        <p className="text-xs text-muted-foreground flex items-center gap-1 mt-0.5">
+                          <CheckCircle className="w-3 h-3 text-green-500" />
+                          From account settings
+                        </p>
+                      </div>
+                    </div>
+                  ) : (
+                    <Select
+                      value={formData.customerTimezone}
+                      onValueChange={(value) => setFormData({ ...formData, customerTimezone: value })}
+                    >
+                      <SelectTrigger className="h-auto py-3">
+                        <SelectValue placeholder="Select your timezone">
+                          {findTimezone(formData.customerTimezone)?.label || formData.customerTimezone || 'Select timezone'}
+                        </SelectValue>
+                      </SelectTrigger>
+                      <SelectContent className="max-h-[300px]">
+                        {getTimezonesByRegion().map((group) => (
+                          <div key={group.region}>
+                            <div className="px-2 py-1.5 text-sm font-semibold text-muted-foreground bg-muted/50">
+                              {group.label}
+                            </div>
+                            {group.timezones.map((tz) => (
+                              <SelectItem key={tz.value} value={tz.value}>
+                                {tz.label}
+                              </SelectItem>
+                            ))}
+                          </div>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   )}
+                </div>
+
+                {/* Business Hours */}
+                <div className="space-y-2">
+                  <Label className="text-xs text-muted-foreground uppercase tracking-wide">Business Hours</Label>
+                  <div className="flex items-center gap-2 p-3 rounded-md bg-muted/50 border">
+                    <Clock className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+                    <div className="flex-1">
+                      <p className="font-medium text-sm">
+                        {findTimezone(workingHours.timezone)?.label || workingHours.timezone}
+                      </p>
+                      <p className="text-xs text-muted-foreground mt-0.5">
+                        {workingHours.isAlwaysOpen ? 'Open 24/7' : `${workingHours.formattedOpenTime} - ${workingHours.formattedCloseTime}`}
+                      </p>
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
@@ -4044,6 +4067,29 @@ const MultiStepBookingWidget = () => {
                       })()}
                     </div>
                   </div>
+
+                  {/* Delivery fees breakdown */}
+                  {estimatedBooking.deliveryFees > 0 && (
+                    <div className="text-xs space-y-1 pt-2 border-t border-border/30">
+                      <div className="flex justify-between text-muted-foreground">
+                        <span>Vehicle rental</span>
+                        <span>${estimatedBooking.vehicleTotal.toFixed(0)}</span>
+                      </div>
+                      {formData.pickupDeliveryFee > 0 && (
+                        <div className="flex justify-between text-muted-foreground">
+                          <span>Pickup delivery</span>
+                          <span>+${formData.pickupDeliveryFee.toFixed(0)}</span>
+                        </div>
+                      )}
+                      {formData.returnDeliveryFee > 0 && (
+                        <div className="flex justify-between text-muted-foreground">
+                          <span>Return collection</span>
+                          <span>+${formData.returnDeliveryFee.toFixed(0)}</span>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
                   <p className="text-xs text-muted-foreground">
                     Final total at checkout
                   </p>
@@ -5143,11 +5189,13 @@ const MultiStepBookingWidget = () => {
               days: 1,
               formatted: '1 day'
             }}
-            vehicleTotal={estimatedBooking?.total || 0}
+            vehicleTotal={estimatedBooking?.vehicleTotal || 0}
             promoDetails={promoDetails}
             onBack={() => setCurrentStep(4)}
             bonzahPremium={bonzahPremium}
             bonzahCoverage={bonzahCoverage}
+            pickupDeliveryFee={formData.pickupDeliveryFee}
+            returnDeliveryFee={formData.returnDeliveryFee}
           />
         </div>}
 

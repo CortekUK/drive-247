@@ -1,12 +1,12 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
-import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
+import { Checkbox } from '@/components/ui/checkbox';
 import { LocationAutocomplete } from '@/components/ui/location-autocomplete';
 import {
   Dialog,
@@ -28,35 +28,30 @@ import {
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
 import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table';
-import {
   MapPin,
   Plus,
   Pencil,
   Trash2,
   Loader2,
   Save,
-  Car,
+  Building2,
+  Navigation,
   RotateCcw,
-  List,
-  Locate,
+  Truck,
+  MapPinned,
+  CircleDot,
 } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
 import {
   usePickupLocations,
-  LocationMode,
   PickupLocation,
 } from '@/hooks/use-pickup-locations';
+import { cn } from '@/lib/utils';
 
 interface LocationFormData {
   name: string;
   address: string;
+  delivery_fee: number;
   is_pickup_enabled: boolean;
   is_return_enabled: boolean;
 }
@@ -64,8 +59,18 @@ interface LocationFormData {
 const EMPTY_FORM: LocationFormData = {
   name: '',
   address: '',
+  delivery_fee: 0,
   is_pickup_enabled: true,
   is_return_enabled: true,
+};
+
+const formatCurrency = (amount: number) => {
+  return new Intl.NumberFormat('en-GB', {
+    style: 'currency',
+    currency: 'GBP',
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 2,
+  }).format(amount);
 };
 
 export function LocationSettings() {
@@ -84,17 +89,24 @@ export function LocationSettings() {
     isDeleting,
   } = usePickupLocations();
 
-  // Pickup settings
-  const [pickupMode, setPickupMode] = useState<LocationMode>('custom');
+  // PICKUP options
+  const [pickupFixedEnabled, setPickupFixedEnabled] = useState(true);
+  const [pickupMultipleEnabled, setPickupMultipleEnabled] = useState(false);
+  const [pickupAreaEnabled, setPickupAreaEnabled] = useState(false);
+
+  // RETURN options
+  const [returnFixedEnabled, setReturnFixedEnabled] = useState(true);
+  const [returnMultipleEnabled, setReturnMultipleEnabled] = useState(false);
+  const [returnAreaEnabled, setReturnAreaEnabled] = useState(false);
+
+  // Fixed addresses
   const [fixedPickupAddress, setFixedPickupAddress] = useState('');
-  const [pickupAreaRadius, setPickupAreaRadius] = useState<number>(25);
-
-  // Return settings
-  const [returnMode, setReturnMode] = useState<LocationMode>('custom');
   const [fixedReturnAddress, setFixedReturnAddress] = useState('');
-  const [returnAreaRadius, setReturnAreaRadius] = useState<number>(25);
+  const [sameReturnAddress, setSameReturnAddress] = useState(true);
 
-  // Area around center point (shared for pickup & return)
+  // Area settings
+  const [areaRadius, setAreaRadius] = useState<number>(25);
+  const [areaDeliveryFee, setAreaDeliveryFee] = useState<number>(0);
   const [areaCenterAddress, setAreaCenterAddress] = useState('');
   const [areaCenterLat, setAreaCenterLat] = useState<number | null>(null);
   const [areaCenterLon, setAreaCenterLon] = useState<number | null>(null);
@@ -105,20 +117,26 @@ export function LocationSettings() {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingLocation, setEditingLocation] = useState<PickupLocation | null>(null);
   const [formData, setFormData] = useState<LocationFormData>(EMPTY_FORM);
-  const [dialogType, setDialogType] = useState<'pickup' | 'return' | 'both'>('both');
 
   // Sync local state with fetched settings
   useEffect(() => {
     if (locationSettings) {
-      setPickupMode(locationSettings.pickup_location_mode || 'custom');
-      setReturnMode(locationSettings.return_location_mode || 'custom');
+      setPickupFixedEnabled(locationSettings.fixed_address_enabled ?? true);
+      setPickupMultipleEnabled(locationSettings.multiple_locations_enabled ?? false);
+      setPickupAreaEnabled(locationSettings.area_around_enabled ?? false);
+      setReturnFixedEnabled(locationSettings.fixed_address_enabled ?? true);
+      setReturnMultipleEnabled(locationSettings.multiple_locations_enabled ?? false);
+      setReturnAreaEnabled(locationSettings.area_around_enabled ?? false);
       setFixedPickupAddress(locationSettings.fixed_pickup_address || '');
       setFixedReturnAddress(locationSettings.fixed_return_address || '');
-      setPickupAreaRadius(locationSettings.pickup_area_radius_km ?? 25);
-      setReturnAreaRadius(locationSettings.return_area_radius_km ?? 25);
+      setSameReturnAddress(
+        !locationSettings.fixed_return_address ||
+        locationSettings.fixed_return_address === locationSettings.fixed_pickup_address
+      );
+      setAreaRadius(locationSettings.pickup_area_radius_km ?? 25);
+      setAreaDeliveryFee(locationSettings.area_delivery_fee ?? 0);
       setAreaCenterLat(locationSettings.area_center_lat);
       setAreaCenterLon(locationSettings.area_center_lon);
-      // Generate address display from coordinates if available
       if (locationSettings.area_center_lat && locationSettings.area_center_lon && !areaCenterAddress) {
         setAreaCenterAddress(`${locationSettings.area_center_lat.toFixed(4)}, ${locationSettings.area_center_lon.toFixed(4)}`);
       }
@@ -126,43 +144,52 @@ export function LocationSettings() {
     }
   }, [locationSettings]);
 
-  // Track changes
   useEffect(() => {
     if (!locationSettings) return;
+    setHasChanges(true);
+  }, [pickupFixedEnabled, pickupMultipleEnabled, pickupAreaEnabled, returnFixedEnabled, returnMultipleEnabled, returnAreaEnabled, fixedPickupAddress, fixedReturnAddress, sameReturnAddress, areaRadius, areaDeliveryFee, areaCenterLat, areaCenterLon]);
 
-    const changed =
-      pickupMode !== (locationSettings.pickup_location_mode || 'custom') ||
-      returnMode !== (locationSettings.return_location_mode || 'custom') ||
-      fixedPickupAddress !== (locationSettings.fixed_pickup_address || '') ||
-      fixedReturnAddress !== (locationSettings.fixed_return_address || '') ||
-      pickupAreaRadius !== (locationSettings.pickup_area_radius_km ?? 25) ||
-      returnAreaRadius !== (locationSettings.return_area_radius_km ?? 25) ||
-      areaCenterLat !== locationSettings.area_center_lat ||
-      areaCenterLon !== locationSettings.area_center_lon;
-    setHasChanges(changed);
-  }, [pickupMode, returnMode, fixedPickupAddress, fixedReturnAddress, pickupAreaRadius, returnAreaRadius, areaCenterLat, areaCenterLon, locationSettings]);
-
-  // Filter locations by type
   const pickupLocations = locations.filter(loc => loc.is_pickup_enabled);
   const returnLocations = locations.filter(loc => loc.is_return_enabled);
 
   const handleSaveSettings = async () => {
+    if (!pickupFixedEnabled && !pickupMultipleEnabled && !pickupAreaEnabled) {
+      toast({ title: 'Error', description: 'Enable at least one pickup option.', variant: 'destructive' });
+      return;
+    }
+    if (!returnFixedEnabled && !returnMultipleEnabled && !returnAreaEnabled) {
+      toast({ title: 'Error', description: 'Enable at least one return option.', variant: 'destructive' });
+      return;
+    }
+    if (pickupFixedEnabled && !fixedPickupAddress.trim()) {
+      toast({ title: 'Error', description: 'Enter the fixed pickup address.', variant: 'destructive' });
+      return;
+    }
+    if (returnFixedEnabled && !sameReturnAddress && !fixedReturnAddress.trim()) {
+      toast({ title: 'Error', description: 'Enter the fixed return address.', variant: 'destructive' });
+      return;
+    }
+    const areaUsed = pickupAreaEnabled || returnAreaEnabled;
+    if (areaUsed && (!areaCenterLat || !areaCenterLon)) {
+      toast({ title: 'Error', description: 'Set the center point for area delivery.', variant: 'destructive' });
+      return;
+    }
+
     try {
-      const isAreaAroundUsed = pickupMode === 'area_around' || returnMode === 'area_around';
       await updateSettings({
-        pickup_location_mode: pickupMode,
-        return_location_mode: returnMode,
-        fixed_pickup_address: pickupMode === 'fixed' ? fixedPickupAddress : null,
-        fixed_return_address: returnMode === 'fixed' ? fixedReturnAddress : null,
-        pickup_area_radius_km: pickupMode === 'area_around' ? pickupAreaRadius : null,
-        return_area_radius_km: returnMode === 'area_around' ? returnAreaRadius : null,
-        area_center_lat: isAreaAroundUsed ? areaCenterLat : null,
-        area_center_lon: isAreaAroundUsed ? areaCenterLon : null,
+        fixed_address_enabled: pickupFixedEnabled || returnFixedEnabled,
+        multiple_locations_enabled: pickupMultipleEnabled || returnMultipleEnabled,
+        area_around_enabled: pickupAreaEnabled || returnAreaEnabled,
+        fixed_pickup_address: pickupFixedEnabled ? fixedPickupAddress : null,
+        fixed_return_address: returnFixedEnabled ? (sameReturnAddress ? fixedPickupAddress : fixedReturnAddress) : null,
+        pickup_area_radius_km: areaUsed ? areaRadius : null,
+        return_area_radius_km: areaUsed ? areaRadius : null,
+        area_delivery_fee: areaUsed ? areaDeliveryFee : 0,
+        area_center_lat: areaUsed ? areaCenterLat : null,
+        area_center_lon: areaUsed ? areaCenterLon : null,
       });
       setHasChanges(false);
-    } catch (error) {
-      // Error handled in hook
-    }
+    } catch (error) {}
   };
 
   const handleCenterAddressChange = (address: string, lat?: number, lon?: number) => {
@@ -174,23 +201,18 @@ export function LocationSettings() {
     setHasChanges(true);
   };
 
-  const handleOpenAddDialog = (type: 'pickup' | 'return') => {
+  const handleOpenAddDialog = () => {
     setEditingLocation(null);
-    setDialogType(type);
-    setFormData({
-      ...EMPTY_FORM,
-      is_pickup_enabled: type === 'pickup',
-      is_return_enabled: type === 'return',
-    });
+    setFormData(EMPTY_FORM);
     setIsDialogOpen(true);
   };
 
   const handleOpenEditDialog = (location: PickupLocation) => {
     setEditingLocation(location);
-    setDialogType('both');
     setFormData({
       name: location.name,
       address: location.address,
+      delivery_fee: location.delivery_fee,
       is_pickup_enabled: location.is_pickup_enabled,
       is_return_enabled: location.is_return_enabled,
     });
@@ -199,20 +221,20 @@ export function LocationSettings() {
 
   const handleSaveLocation = async () => {
     if (!formData.name.trim() || !formData.address.trim()) {
-      toast({
-        title: 'Validation Error',
-        description: 'Please enter both name and address.',
-        variant: 'destructive',
-      });
+      toast({ title: 'Error', description: 'Enter both name and address.', variant: 'destructive' });
       return;
     }
-
+    if (!formData.is_pickup_enabled && !formData.is_return_enabled) {
+      toast({ title: 'Error', description: 'Enable at least pickup or return.', variant: 'destructive' });
+      return;
+    }
     try {
       if (editingLocation) {
         await updateLocation({
           id: editingLocation.id,
           name: formData.name.trim(),
           address: formData.address.trim(),
+          delivery_fee: formData.delivery_fee,
           is_pickup_enabled: formData.is_pickup_enabled,
           is_return_enabled: formData.is_return_enabled,
         });
@@ -220,6 +242,7 @@ export function LocationSettings() {
         await createLocation({
           name: formData.name.trim(),
           address: formData.address.trim(),
+          delivery_fee: formData.delivery_fee,
           is_pickup_enabled: formData.is_pickup_enabled,
           is_return_enabled: formData.is_return_enabled,
         });
@@ -227,592 +250,570 @@ export function LocationSettings() {
       setIsDialogOpen(false);
       setFormData(EMPTY_FORM);
       setEditingLocation(null);
-    } catch (error) {
-      // Error handled in hook
-    }
+    } catch (error) {}
   };
 
   const handleDeleteLocation = async (id: string) => {
-    try {
-      await deleteLocation(id);
-    } catch (error) {
-      // Error handled in hook
-    }
+    try { await deleteLocation(id); } catch (error) {}
   };
 
   const handleToggleActive = async (location: PickupLocation) => {
-    try {
-      await updateLocation({
-        id: location.id,
-        is_active: !location.is_active,
-      });
-    } catch (error) {
-      // Error handled in hook
-    }
+    try { await updateLocation({ id: location.id, is_active: !location.is_active }); } catch (error) {}
   };
 
   if (isLoadingSettings) {
     return (
-      <Card>
-        <CardContent className="flex items-center justify-center p-6">
-          <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-          <span className="ml-2 text-muted-foreground">Loading location settings...</span>
-        </CardContent>
-      </Card>
+      <div className="flex items-center justify-center p-12">
+        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+      </div>
     );
   }
 
-  // Inline locations table component
-  const LocationsTable = ({
-    type,
-    locationsList
-  }: {
-    type: 'pickup' | 'return';
-    locationsList: PickupLocation[]
-  }) => (
-    <div className="mt-4 ml-6 space-y-3">
-      <div className="flex items-center justify-between">
-        <p className="text-sm text-muted-foreground">
-          {locationsList.length === 0
-            ? 'No locations added yet'
-            : `${locationsList.length} location${locationsList.length > 1 ? 's' : ''}`}
-        </p>
-        <Button size="sm" variant="outline" onClick={() => handleOpenAddDialog(type)}>
-          <Plus className="mr-1 h-3 w-3" />
-          Add
-        </Button>
-      </div>
-
-      {locationsList.length > 0 && (
-        <div className="rounded-md border">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Name</TableHead>
-                <TableHead>Address</TableHead>
-                <TableHead className="w-[60px] text-center">Active</TableHead>
-                <TableHead className="w-[70px] text-right">Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {locationsList.map((location) => (
-                <TableRow key={location.id} className={!location.is_active ? 'opacity-50' : ''}>
-                  <TableCell className="font-medium py-2">{location.name}</TableCell>
-                  <TableCell className="text-muted-foreground text-sm py-2 max-w-[180px] truncate">
-                    {location.address}
-                  </TableCell>
-                  <TableCell className="text-center py-2">
-                    <Switch
-                      checked={location.is_active}
-                      onCheckedChange={() => handleToggleActive(location)}
-                      disabled={isUpdating}
-                    />
-                  </TableCell>
-                  <TableCell className="text-right py-2">
-                    <div className="flex items-center justify-end gap-1">
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-7 w-7"
-                        onClick={() => handleOpenEditDialog(location)}
-                      >
-                        <Pencil className="h-3 w-3" />
-                      </Button>
-                      <AlertDialog>
-                        <AlertDialogTrigger asChild>
-                          <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive">
-                            <Trash2 className="h-3 w-3" />
-                          </Button>
-                        </AlertDialogTrigger>
-                        <AlertDialogContent>
-                          <AlertDialogHeader>
-                            <AlertDialogTitle>Delete Location</AlertDialogTitle>
-                            <AlertDialogDescription>
-                              Are you sure you want to delete "{location.name}"?
-                            </AlertDialogDescription>
-                          </AlertDialogHeader>
-                          <AlertDialogFooter>
-                            <AlertDialogCancel>Cancel</AlertDialogCancel>
-                            <AlertDialogAction
-                              onClick={() => handleDeleteLocation(location.id)}
-                              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                            >
-                              Delete
-                            </AlertDialogAction>
-                          </AlertDialogFooter>
-                        </AlertDialogContent>
-                      </AlertDialog>
-                    </div>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </div>
-      )}
-    </div>
-  );
-
   return (
-    <div className="space-y-6">
-      {/* Pickup Location Settings */}
-      <Card>
-        <CardHeader className="pb-4">
-          <CardTitle className="flex items-center gap-2 text-lg">
-            <Car className="h-5 w-5 text-green-600" />
-            Pickup Location
-          </CardTitle>
-          <CardDescription>
-            How customers select where to pick up the vehicle
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <RadioGroup
-            value={pickupMode}
-            onValueChange={(value: LocationMode) => {
-              setPickupMode(value);
-              setHasChanges(true);
-            }}
-            className="space-y-3"
-          >
-            {/* Fixed Address Option */}
-            <div
-              className={`rounded-lg border p-3 cursor-pointer transition-all ${pickupMode === 'fixed'
-                ? 'border-accent bg-accent/10 ring-1 ring-accent'
-                : 'border-border hover:border-muted-foreground/50'
-                }`}
-              onClick={() => { setPickupMode('fixed'); setHasChanges(true); }}
-            >
-              <div className="flex items-start space-x-3">
-                <RadioGroupItem value="fixed" id="pickup-fixed" className="mt-0.5" />
-                <div className="flex-1">
-                  <Label htmlFor="pickup-fixed" className="font-medium cursor-pointer">
-                    Fixed Address
-                  </Label>
-                  <p className="text-sm text-muted-foreground">
-                    All customers pick up from one location
-                  </p>
-                </div>
+    <div className="space-y-6 max-w-5xl">
+      {/* Two Column Layout for Pickup & Return */}
+      <div className="grid lg:grid-cols-2 gap-6">
+        {/* PICKUP OPTIONS CARD */}
+        <Card className="overflow-hidden">
+          <div className="bg-muted/30 border-b px-6 py-4">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-muted flex items-center justify-center">
+                <Truck className="h-5 w-5 text-foreground" />
               </div>
-              {pickupMode === 'fixed' && (
-                <div className="mt-3 ml-6" onClick={(e) => e.stopPropagation()}>
+              <div>
+                <h2 className="text-base font-semibold">Pickup Options</h2>
+                <p className="text-muted-foreground text-sm">How customers receive vehicles</p>
+              </div>
+            </div>
+          </div>
+          <CardContent className="p-0">
+            {/* Fixed Address */}
+            <div className={cn(
+              "p-5 border-b transition-colors",
+              pickupFixedEnabled && "bg-muted/20"
+            )}>
+              <div className="flex items-start justify-between gap-4">
+                <div className="flex gap-3">
+                  <div className={cn(
+                    "w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0",
+                    pickupFixedEnabled
+                      ? "bg-primary/10 text-primary"
+                      : "bg-muted text-muted-foreground"
+                  )}>
+                    <Building2 className="h-5 w-5" />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className="font-semibold text-sm">Your Location</span>
+                      <span className="text-[10px] font-medium uppercase tracking-wider px-2 py-0.5 rounded-full bg-muted text-muted-foreground">
+                        Free
+                      </span>
+                    </div>
+                    <p className="text-xs text-muted-foreground">Customer picks up at your address</p>
+                  </div>
+                </div>
+                <Switch
+                  checked={pickupFixedEnabled}
+                  onCheckedChange={(c) => { setPickupFixedEnabled(c); setHasChanges(true); }}
+                />
+              </div>
+              {pickupFixedEnabled && (
+                <div className="mt-4 pl-[52px]">
                   <LocationAutocomplete
                     value={fixedPickupAddress}
-                    onChange={(value) => {
-                      setFixedPickupAddress(value);
-                      setHasChanges(true);
-                    }}
-                    placeholder="Enter the fixed pickup address"
+                    onChange={(v) => { setFixedPickupAddress(v); setHasChanges(true); }}
+                    placeholder="Enter your pickup address..."
+                    className="text-sm"
                   />
                 </div>
               )}
             </div>
 
-            {/* Custom Option */}
-            <div
-              className={`rounded-lg border p-3 cursor-pointer transition-all ${pickupMode === 'custom'
-                ? 'border-accent bg-accent/10 ring-1 ring-accent'
-                : 'border-border hover:border-muted-foreground/50'
-                }`}
-              onClick={() => { setPickupMode('custom'); setHasChanges(true); }}
-            >
-              <div className="flex items-start space-x-3">
-                <RadioGroupItem value="custom" id="pickup-custom" className="mt-0.5" />
-                <div className="flex-1">
-                  <Label htmlFor="pickup-custom" className="font-medium cursor-pointer">
-                    Custom
-                  </Label>
-                  <p className="text-sm text-muted-foreground">
-                    Customers can enter any address
-                  </p>
-                </div>
-              </div>
-            </div>
-
-            {/* Multiple Select Option */}
-            <div
-              className={`rounded-lg border p-3 cursor-pointer transition-all ${pickupMode === 'multiple'
-                ? 'border-accent bg-accent/10 ring-1 ring-accent'
-                : 'border-border hover:border-muted-foreground/50'
-                }`}
-              onClick={() => { setPickupMode('multiple'); setHasChanges(true); }}
-            >
-              <div className="flex items-start space-x-3">
-                <RadioGroupItem value="multiple" id="pickup-multiple" className="mt-0.5" />
-                <div className="flex-1">
-                  <Label htmlFor="pickup-multiple" className="font-medium cursor-pointer flex items-center gap-2">
-                    <List className="h-4 w-4" />
-                    Multiple Locations
-                  </Label>
-                  <p className="text-sm text-muted-foreground">
-                    Customers choose from predefined locations
-                  </p>
-                </div>
-              </div>
-              {pickupMode === 'multiple' && (
-                <div onClick={(e) => e.stopPropagation()}>
-                  <LocationsTable type="pickup" locationsList={pickupLocations} />
-                </div>
-              )}
-            </div>
-
-            {/* Area Around Option */}
-            <div
-              className={`rounded-lg border p-3 cursor-pointer transition-all ${pickupMode === 'area_around'
-                ? 'border-accent bg-accent/10 ring-1 ring-accent'
-                : 'border-border hover:border-muted-foreground/50'
-                }`}
-              onClick={() => { setPickupMode('area_around'); setHasChanges(true); }}
-            >
-              <div className="flex items-start space-x-3">
-                <RadioGroupItem value="area_around" id="pickup-area_around" className="mt-0.5" />
-                <div className="flex-1">
-                  <Label htmlFor="pickup-area_around" className="font-medium cursor-pointer flex items-center gap-2">
-                    <Locate className="h-4 w-4" />
-                    Area Around
-                  </Label>
-                  <p className="text-sm text-muted-foreground">
-                    Customers search within a radius from a center point
-                  </p>
-                </div>
-              </div>
-              {pickupMode === 'area_around' && (
-                <div className="mt-3 ml-6 space-y-4" onClick={(e) => e.stopPropagation()}>
-                  <div className="space-y-2">
-                    <Label htmlFor="pickup-center" className="text-sm">
-                      Center Point Location:
-                    </Label>
-                    <LocationAutocomplete
-                      id="pickup-center"
-                      value={areaCenterAddress}
-                      onChange={handleCenterAddressChange}
-                      placeholder="Search for center location..."
-                    />
-                    {areaCenterLat && areaCenterLon && (
-                      <p className="text-xs text-muted-foreground">
-                        Coordinates: {areaCenterLat.toFixed(4)}, {areaCenterLon.toFixed(4)}
-                      </p>
-                    )}
+            {/* Predefined Locations */}
+            <div className={cn(
+              "p-5 border-b transition-colors",
+              pickupMultipleEnabled && "bg-muted/20"
+            )}>
+              <div className="flex items-start justify-between gap-4">
+                <div className="flex gap-3">
+                  <div className={cn(
+                    "w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0",
+                    pickupMultipleEnabled
+                      ? "bg-primary/10 text-primary"
+                      : "bg-muted text-muted-foreground"
+                  )}>
+                    <MapPinned className="h-5 w-5" />
                   </div>
-                  <div className="flex items-center gap-3">
-                    <Label htmlFor="pickup-radius" className="text-sm whitespace-nowrap">
-                      Maximum Radius:
-                    </Label>
-                    <div className="flex items-center gap-2">
-                      <Input
-                        id="pickup-radius"
-                        type="text"
-                        inputMode="numeric"
-                        pattern="[0-9]*"
-                        value={pickupAreaRadius}
-                        onChange={(e) => {
-                          const rawValue = e.target.value.replace(/[^0-9]/g, '');
-                          if (rawValue === '') {
-                            setPickupAreaRadius(0 as any);
-                          } else {
-                            const numValue = Math.min(100, Math.max(1, parseInt(rawValue)));
-                            setPickupAreaRadius(numValue);
-                          }
-                          setHasChanges(true);
-                        }}
-                        onBlur={(e) => {
-                          const value = parseInt(e.target.value);
-                          if (!value || value < 1) {
-                            setPickupAreaRadius(25);
-                          }
-                        }}
-                        className="w-20"
-                      />
-                      <span className="text-sm text-muted-foreground">km</span>
+                  <div>
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className="font-semibold text-sm">Delivery Locations</span>
+                      <span className="text-[10px] font-medium uppercase tracking-wider px-2 py-0.5 rounded-full bg-muted text-muted-foreground">
+                        Paid
+                      </span>
                     </div>
+                    <p className="text-xs text-muted-foreground">Deliver to predefined spots</p>
                   </div>
-                  <p className="text-xs text-muted-foreground">
-                    Customers can only select addresses within this distance from the center point.
-                  </p>
                 </div>
-              )}
-            </div>
-          </RadioGroup>
-        </CardContent>
-      </Card>
-
-      {/* Return Location Settings */}
-      <Card>
-        <CardHeader className="pb-4">
-          <CardTitle className="flex items-center gap-2 text-lg">
-            <RotateCcw className="h-5 w-5 text-blue-600" />
-            Return Location
-          </CardTitle>
-          <CardDescription>
-            How customers select where to return the vehicle
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <RadioGroup
-            value={returnMode}
-            onValueChange={(value: LocationMode) => {
-              setReturnMode(value);
-              setHasChanges(true);
-            }}
-            className="space-y-3"
-          >
-            {/* Fixed Address Option */}
-            <div
-              className={`rounded-lg border p-3 cursor-pointer transition-all ${returnMode === 'fixed'
-                ? 'border-accent bg-accent/10 ring-1 ring-accent'
-                : 'border-border hover:border-muted-foreground/50'
-                }`}
-              onClick={() => { setReturnMode('fixed'); setHasChanges(true); }}
-            >
-              <div className="flex items-start space-x-3">
-                <RadioGroupItem value="fixed" id="return-fixed" className="mt-0.5" />
-                <div className="flex-1">
-                  <Label htmlFor="return-fixed" className="font-medium cursor-pointer">
-                    Fixed Address
-                  </Label>
-                  <p className="text-sm text-muted-foreground">
-                    All customers return to one location
-                  </p>
-                </div>
+                <Switch
+                  checked={pickupMultipleEnabled}
+                  onCheckedChange={(c) => { setPickupMultipleEnabled(c); setHasChanges(true); }}
+                />
               </div>
-              {returnMode === 'fixed' && (
-                <div className="mt-3 ml-6" onClick={(e) => e.stopPropagation()}>
-                  <LocationAutocomplete
-                    value={fixedReturnAddress}
-                    onChange={(value) => {
-                      setFixedReturnAddress(value);
-                      setHasChanges(true);
-                    }}
-                    placeholder="Enter the fixed return address"
+              {pickupMultipleEnabled && (
+                <div className="mt-4 pl-[52px]">
+                  <LocationsGrid
+                    locations={pickupLocations}
+                    onAdd={handleOpenAddDialog}
+                    onEdit={handleOpenEditDialog}
+                    onDelete={handleDeleteLocation}
+                    onToggleActive={handleToggleActive}
+                    isUpdating={isUpdating}
                   />
                 </div>
               )}
             </div>
 
-            {/* Custom Option */}
-            <div
-              className={`rounded-lg border p-3 cursor-pointer transition-all ${returnMode === 'custom'
-                ? 'border-accent bg-accent/10 ring-1 ring-accent'
-                : 'border-border hover:border-muted-foreground/50'
-                }`}
-              onClick={() => { setReturnMode('custom'); setHasChanges(true); }}
-            >
-              <div className="flex items-start space-x-3">
-                <RadioGroupItem value="custom" id="return-custom" className="mt-0.5" />
-                <div className="flex-1">
-                  <Label htmlFor="return-custom" className="font-medium cursor-pointer">
-                    Custom
-                  </Label>
-                  <p className="text-sm text-muted-foreground">
-                    Customers can enter any address
-                  </p>
-                </div>
-              </div>
-            </div>
-
-            {/* Multiple Select Option */}
-            <div
-              className={`rounded-lg border p-3 cursor-pointer transition-all ${returnMode === 'multiple'
-                ? 'border-accent bg-accent/10 ring-1 ring-accent'
-                : 'border-border hover:border-muted-foreground/50'
-                }`}
-              onClick={() => { setReturnMode('multiple'); setHasChanges(true); }}
-            >
-              <div className="flex items-start space-x-3">
-                <RadioGroupItem value="multiple" id="return-multiple" className="mt-0.5" />
-                <div className="flex-1">
-                  <Label htmlFor="return-multiple" className="font-medium cursor-pointer flex items-center gap-2">
-                    <List className="h-4 w-4" />
-                    Multiple Locations
-                  </Label>
-                  <p className="text-sm text-muted-foreground">
-                    Customers choose from predefined locations
-                  </p>
-                </div>
-              </div>
-              {returnMode === 'multiple' && (
-                <div onClick={(e) => e.stopPropagation()}>
-                  <LocationsTable type="return" locationsList={returnLocations} />
-                </div>
-              )}
-            </div>
-
-            {/* Area Around Option */}
-            <div
-              className={`rounded-lg border p-3 cursor-pointer transition-all ${returnMode === 'area_around'
-                ? 'border-accent bg-accent/10 ring-1 ring-accent'
-                : 'border-border hover:border-muted-foreground/50'
-                }`}
-              onClick={() => { setReturnMode('area_around'); setHasChanges(true); }}
-            >
-              <div className="flex items-start space-x-3">
-                <RadioGroupItem value="area_around" id="return-area_around" className="mt-0.5" />
-                <div className="flex-1">
-                  <Label htmlFor="return-area_around" className="font-medium cursor-pointer flex items-center gap-2">
-                    <Locate className="h-4 w-4" />
-                    Area Around
-                  </Label>
-                  <p className="text-sm text-muted-foreground">
-                    Customers search within a radius from a center point
-                  </p>
-                </div>
-              </div>
-              {returnMode === 'area_around' && (
-                <div className="mt-3 ml-6 space-y-4" onClick={(e) => e.stopPropagation()}>
-                  <div className="space-y-2">
-                    <Label htmlFor="return-center" className="text-sm">
-                      Center Point Location:
-                    </Label>
-                    <LocationAutocomplete
-                      id="return-center"
-                      value={areaCenterAddress}
-                      onChange={handleCenterAddressChange}
-                      placeholder="Search for center location..."
-                    />
-                    {areaCenterLat && areaCenterLon && (
-                      <p className="text-xs text-muted-foreground">
-                        Coordinates: {areaCenterLat.toFixed(4)}, {areaCenterLon.toFixed(4)}
-                      </p>
-                    )}
+            {/* Area Delivery */}
+            <div className={cn(
+              "p-5 transition-colors",
+              pickupAreaEnabled && "bg-muted/20"
+            )}>
+              <div className="flex items-start justify-between gap-4">
+                <div className="flex gap-3">
+                  <div className={cn(
+                    "w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0",
+                    pickupAreaEnabled
+                      ? "bg-primary/10 text-primary"
+                      : "bg-muted text-muted-foreground"
+                  )}>
+                    <CircleDot className="h-5 w-5" />
                   </div>
-                  <div className="flex items-center gap-3">
-                    <Label htmlFor="return-radius" className="text-sm whitespace-nowrap">
-                      Maximum Radius:
-                    </Label>
-                    <div className="flex items-center gap-2">
-                      <Input
-                        id="return-radius"
-                        type="text"
-                        inputMode="numeric"
-                        pattern="[0-9]*"
-                        value={returnAreaRadius}
-                        onChange={(e) => {
-                          const rawValue = e.target.value.replace(/[^0-9]/g, '');
-                          if (rawValue === '') {
-                            setReturnAreaRadius(0 as any);
-                          } else {
-                            const numValue = Math.min(100, Math.max(1, parseInt(rawValue)));
-                            setReturnAreaRadius(numValue);
-                          }
-                          setHasChanges(true);
-                        }}
-                        onBlur={(e) => {
-                          const value = parseInt(e.target.value);
-                          if (!value || value < 1) {
-                            setReturnAreaRadius(25);
-                          }
-                        }}
-                        className="w-20"
-                      />
-                      <span className="text-sm text-muted-foreground">km</span>
+                  <div>
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className="font-semibold text-sm">Area Delivery</span>
+                      <span className="text-[10px] font-medium uppercase tracking-wider px-2 py-0.5 rounded-full bg-muted text-muted-foreground">
+                        Paid
+                      </span>
                     </div>
+                    <p className="text-xs text-muted-foreground">Deliver anywhere within radius</p>
                   </div>
-                  <p className="text-xs text-muted-foreground">
-                    Customers can only select addresses within this distance from the center point.
-                  </p>
+                </div>
+                <Switch
+                  checked={pickupAreaEnabled}
+                  onCheckedChange={(c) => { setPickupAreaEnabled(c); setHasChanges(true); }}
+                />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* RETURN OPTIONS CARD */}
+        <Card className="overflow-hidden">
+          <div className="bg-muted/30 border-b px-6 py-4">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-muted flex items-center justify-center">
+                <RotateCcw className="h-5 w-5 text-foreground" />
+              </div>
+              <div>
+                <h2 className="text-base font-semibold">Return Options</h2>
+                <p className="text-muted-foreground text-sm">How customers return vehicles</p>
+              </div>
+            </div>
+          </div>
+          <CardContent className="p-0">
+            {/* Fixed Address */}
+            <div className={cn(
+              "p-5 border-b transition-colors",
+              returnFixedEnabled && "bg-muted/20"
+            )}>
+              <div className="flex items-start justify-between gap-4">
+                <div className="flex gap-3">
+                  <div className={cn(
+                    "w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0",
+                    returnFixedEnabled
+                      ? "bg-primary/10 text-primary"
+                      : "bg-muted text-muted-foreground"
+                  )}>
+                    <Building2 className="h-5 w-5" />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className="font-semibold text-sm">Your Location</span>
+                      <span className="text-[10px] font-medium uppercase tracking-wider px-2 py-0.5 rounded-full bg-muted text-muted-foreground">
+                        Free
+                      </span>
+                    </div>
+                    <p className="text-xs text-muted-foreground">Customer returns at your address</p>
+                  </div>
+                </div>
+                <Switch
+                  checked={returnFixedEnabled}
+                  onCheckedChange={(c) => { setReturnFixedEnabled(c); setHasChanges(true); }}
+                />
+              </div>
+              {returnFixedEnabled && (
+                <div className="mt-4 pl-[52px] space-y-3">
+                  <label className="flex items-center gap-2 text-sm cursor-pointer">
+                    <Checkbox
+                      checked={sameReturnAddress}
+                      onCheckedChange={(c) => { setSameReturnAddress(c as boolean); setHasChanges(true); }}
+                    />
+                    <span className="text-muted-foreground">Same as pickup address</span>
+                  </label>
+                  {!sameReturnAddress && (
+                    <LocationAutocomplete
+                      value={fixedReturnAddress}
+                      onChange={(v) => { setFixedReturnAddress(v); setHasChanges(true); }}
+                      placeholder="Enter return address..."
+                      className="text-sm"
+                    />
+                  )}
                 </div>
               )}
             </div>
-          </RadioGroup>
-        </CardContent>
-      </Card>
 
-      {/* Save Button */}
+            {/* Predefined Locations */}
+            <div className={cn(
+              "p-5 border-b transition-colors",
+              returnMultipleEnabled && "bg-muted/20"
+            )}>
+              <div className="flex items-start justify-between gap-4">
+                <div className="flex gap-3">
+                  <div className={cn(
+                    "w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0",
+                    returnMultipleEnabled
+                      ? "bg-primary/10 text-primary"
+                      : "bg-muted text-muted-foreground"
+                  )}>
+                    <MapPinned className="h-5 w-5" />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className="font-semibold text-sm">Collection Locations</span>
+                      <span className="text-[10px] font-medium uppercase tracking-wider px-2 py-0.5 rounded-full bg-muted text-muted-foreground">
+                        Paid
+                      </span>
+                    </div>
+                    <p className="text-xs text-muted-foreground">Collect from predefined spots</p>
+                  </div>
+                </div>
+                <Switch
+                  checked={returnMultipleEnabled}
+                  onCheckedChange={(c) => { setReturnMultipleEnabled(c); setHasChanges(true); }}
+                />
+              </div>
+              {returnMultipleEnabled && (
+                <div className="mt-4 pl-[52px]">
+                  <LocationsGrid
+                    locations={returnLocations}
+                    onAdd={handleOpenAddDialog}
+                    onEdit={handleOpenEditDialog}
+                    onDelete={handleDeleteLocation}
+                    onToggleActive={handleToggleActive}
+                    isUpdating={isUpdating}
+                  />
+                </div>
+              )}
+            </div>
+
+            {/* Area Collection */}
+            <div className={cn(
+              "p-5 transition-colors",
+              returnAreaEnabled && "bg-muted/20"
+            )}>
+              <div className="flex items-start justify-between gap-4">
+                <div className="flex gap-3">
+                  <div className={cn(
+                    "w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0",
+                    returnAreaEnabled
+                      ? "bg-primary/10 text-primary"
+                      : "bg-muted text-muted-foreground"
+                  )}>
+                    <CircleDot className="h-5 w-5" />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className="font-semibold text-sm">Area Collection</span>
+                      <span className="text-[10px] font-medium uppercase tracking-wider px-2 py-0.5 rounded-full bg-muted text-muted-foreground">
+                        Paid
+                      </span>
+                    </div>
+                    <p className="text-xs text-muted-foreground">Collect from anywhere within radius</p>
+                  </div>
+                </div>
+                <Switch
+                  checked={returnAreaEnabled}
+                  onCheckedChange={(c) => { setReturnAreaEnabled(c); setHasChanges(true); }}
+                />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* AREA SETTINGS */}
+      {(pickupAreaEnabled || returnAreaEnabled) && (
+        <Card className="overflow-hidden">
+          <div className="bg-muted/30 border-b px-6 py-4">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-muted flex items-center justify-center">
+                <Navigation className="h-5 w-5 text-foreground" />
+              </div>
+              <div>
+                <h2 className="text-base font-semibold">Area Settings</h2>
+                <p className="text-muted-foreground text-sm">Configure delivery radius and fees</p>
+              </div>
+            </div>
+          </div>
+          <CardContent className="p-6">
+            <div className="grid md:grid-cols-3 gap-6">
+              <div className="md:col-span-2 space-y-2">
+                <Label className="text-sm font-medium">Service Center Point</Label>
+                <LocationAutocomplete
+                  value={areaCenterAddress}
+                  onChange={handleCenterAddressChange}
+                  placeholder="Search for center location..."
+                />
+                {areaCenterLat && areaCenterLon && (
+                  <p className="text-xs text-muted-foreground">
+                    Coordinates: {areaCenterLat.toFixed(4)}, {areaCenterLon.toFixed(4)}
+                  </p>
+                )}
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label className="text-sm font-medium">Radius</Label>
+                  <div className="relative">
+                    <Input
+                      type="number"
+                      value={areaRadius}
+                      onChange={(e) => { setAreaRadius(Math.max(1, parseInt(e.target.value) || 25)); setHasChanges(true); }}
+                      className="pr-10"
+                      min={1}
+                      max={100}
+                    />
+                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">km</span>
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <Label className="text-sm font-medium">Fee</Label>
+                  <div className="relative">
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">£</span>
+                    <Input
+                      type="number"
+                      value={areaDeliveryFee}
+                      onChange={(e) => { setAreaDeliveryFee(Math.max(0, parseFloat(e.target.value) || 0)); setHasChanges(true); }}
+                      className="pl-7"
+                      min={0}
+                      step={0.01}
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="mt-4 p-3 rounded-lg bg-muted/50 border">
+              <p className="text-sm text-muted-foreground">
+                Customers can enter any address within <strong className="text-foreground">{areaRadius}km</strong> of your center point.
+                A fee of <strong className="text-foreground">{formatCurrency(areaDeliveryFee)}</strong> will apply per delivery/collection.
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* SAVE BUTTON */}
       <div className="flex justify-end">
-        <Button onClick={handleSaveSettings} disabled={!hasChanges || isUpdatingSettings}>
+        <Button
+          onClick={handleSaveSettings}
+          disabled={!hasChanges || isUpdatingSettings}
+          size="lg"
+          className="min-w-[160px]"
+        >
           {isUpdatingSettings ? (
-            <>
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              Saving...
-            </>
+            <Loader2 className="h-4 w-4 animate-spin" />
           ) : (
             <>
               <Save className="mr-2 h-4 w-4" />
-              Save Settings
+              Save Changes
             </>
           )}
         </Button>
       </div>
 
-      {/* Add/Edit Location Dialog */}
+      {/* ADD/EDIT DIALOG */}
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-        <DialogContent>
+        <DialogContent className="sm:max-w-lg">
           <DialogHeader>
-            <DialogTitle>
+            <DialogTitle className="flex items-center gap-2">
+              <MapPin className="h-5 w-5 text-primary" />
               {editingLocation ? 'Edit Location' : 'Add Location'}
             </DialogTitle>
             <DialogDescription>
-              {editingLocation
-                ? 'Update the location details'
-                : `Add a new ${dialogType} location`}
+              {editingLocation ? 'Update the location details' : 'Add a new delivery or collection point'}
             </DialogDescription>
           </DialogHeader>
-          <div className="space-y-4 py-4">
+
+          <div className="space-y-5 py-4">
             <div className="space-y-2">
-              <Label htmlFor="locationName">Name *</Label>
+              <Label className="text-sm font-medium">Location Name</Label>
               <Input
-                id="locationName"
                 value={formData.name}
-                onChange={(e) => setFormData((prev) => ({ ...prev, name: e.target.value }))}
-                placeholder="e.g., Downtown Office"
+                onChange={(e) => setFormData(p => ({ ...p, name: e.target.value }))}
+                placeholder="e.g., Heathrow Airport Terminal 5"
               />
             </div>
+
             <div className="space-y-2">
-              <Label htmlFor="locationAddress">Address *</Label>
+              <Label className="text-sm font-medium">Address</Label>
               <LocationAutocomplete
-                id="locationAddress"
                 value={formData.address}
-                onChange={(value) => setFormData((prev) => ({ ...prev, address: value }))}
-                placeholder="Start typing an address..."
+                onChange={(v) => setFormData(p => ({ ...p, address: v }))}
+                placeholder="Search for address..."
               />
             </div>
-            {editingLocation && (
-              <div className="space-y-3 pt-2">
-                <Label>Available for</Label>
-                <div className="flex items-center space-x-6">
-                  <div className="flex items-center space-x-2">
-                    <Switch
-                      id="is_pickup_enabled"
-                      checked={formData.is_pickup_enabled}
-                      onCheckedChange={(checked) =>
-                        setFormData((prev) => ({ ...prev, is_pickup_enabled: checked }))
-                      }
-                    />
-                    <Label htmlFor="is_pickup_enabled" className="cursor-pointer">
-                      Pickup
-                    </Label>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <Switch
-                      id="is_return_enabled"
-                      checked={formData.is_return_enabled}
-                      onCheckedChange={(checked) =>
-                        setFormData((prev) => ({ ...prev, is_return_enabled: checked }))
-                      }
-                    />
-                    <Label htmlFor="is_return_enabled" className="cursor-pointer">
-                      Return
-                    </Label>
-                  </div>
-                </div>
+
+            <div className="space-y-2">
+              <Label className="text-sm font-medium">Delivery/Collection Fee</Label>
+              <div className="relative w-32">
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">£</span>
+                <Input
+                  type="number"
+                  value={formData.delivery_fee}
+                  onChange={(e) => setFormData(p => ({ ...p, delivery_fee: Math.max(0, parseFloat(e.target.value) || 0) }))}
+                  className="pl-7"
+                  min={0}
+                  step={0.01}
+                />
               </div>
-            )}
+            </div>
+
+            <div className="space-y-3 pt-4 border-t">
+              <Label className="text-sm font-medium">Available for</Label>
+              <div className="flex gap-6">
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <Checkbox
+                    checked={formData.is_pickup_enabled}
+                    onCheckedChange={(c) => setFormData(p => ({ ...p, is_pickup_enabled: c as boolean }))}
+                  />
+                  <span className="text-sm flex items-center gap-1.5">
+                    <Truck className="h-3.5 w-3.5" />
+                    Pickup (Delivery)
+                  </span>
+                </label>
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <Checkbox
+                    checked={formData.is_return_enabled}
+                    onCheckedChange={(c) => setFormData(p => ({ ...p, is_return_enabled: c as boolean }))}
+                  />
+                  <span className="text-sm flex items-center gap-1.5">
+                    <RotateCcw className="h-3.5 w-3.5" />
+                    Return (Collection)
+                  </span>
+                </label>
+              </div>
+            </div>
           </div>
+
           <DialogFooter>
-            <Button variant="outline" onClick={() => setIsDialogOpen(false)}>
-              Cancel
-            </Button>
+            <Button variant="outline" onClick={() => setIsDialogOpen(false)}>Cancel</Button>
             <Button onClick={handleSaveLocation} disabled={isCreating || isUpdating}>
-              {isCreating || isUpdating ? (
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              ) : (
-                <Save className="mr-2 h-4 w-4" />
-              )}
-              {editingLocation ? 'Update' : 'Add'}
+              {(isCreating || isUpdating) && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              {editingLocation ? 'Save Changes' : 'Add Location'}
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
+    </div>
+  );
+}
+
+// Locations Grid Component
+function LocationsGrid({
+  locations,
+  onAdd,
+  onEdit,
+  onDelete,
+  onToggleActive,
+  isUpdating,
+}: {
+  locations: PickupLocation[];
+  onAdd: () => void;
+  onEdit: (location: PickupLocation) => void;
+  onDelete: (id: string) => void;
+  onToggleActive: (location: PickupLocation) => void;
+  isUpdating: boolean;
+}) {
+  return (
+    <div className="space-y-3">
+      {locations.length > 0 && (
+        <div className="space-y-2">
+          {locations.map((location) => (
+            <div
+              key={location.id}
+              className={cn(
+                "flex items-center gap-3 p-3 rounded-xl border bg-background transition-all",
+                location.is_active
+                  ? "border-border"
+                  : "border-border/40 opacity-60"
+              )}
+            >
+              <div className="w-8 h-8 rounded-lg bg-muted flex items-center justify-center flex-shrink-0">
+                <MapPin className="h-4 w-4 text-muted-foreground" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2">
+                  <span className="font-medium text-sm">{location.name}</span>
+                  <span className="text-xs font-medium text-primary">
+                    {formatCurrency(location.delivery_fee)}
+                  </span>
+                </div>
+                <p className="text-xs text-muted-foreground truncate">{location.address}</p>
+              </div>
+              <div className="flex items-center gap-1 flex-shrink-0">
+                <Switch
+                  checked={location.is_active}
+                  onCheckedChange={() => onToggleActive(location)}
+                  disabled={isUpdating}
+                  className="scale-90"
+                />
+                <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => onEdit(location)}>
+                  <Pencil className="h-3.5 w-3.5" />
+                </Button>
+                <AlertDialog>
+                  <AlertDialogTrigger asChild>
+                    <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:text-destructive">
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </Button>
+                  </AlertDialogTrigger>
+                  <AlertDialogContent>
+                    <AlertDialogHeader>
+                      <AlertDialogTitle>Delete "{location.name}"?</AlertDialogTitle>
+                      <AlertDialogDescription>This cannot be undone.</AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                      <AlertDialogCancel>Cancel</AlertDialogCancel>
+                      <AlertDialogAction
+                        onClick={() => onDelete(location.id)}
+                        className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                      >
+                        Delete
+                      </AlertDialogAction>
+                    </AlertDialogFooter>
+                  </AlertDialogContent>
+                </AlertDialog>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <Button variant="outline" size="sm" onClick={onAdd} className="w-full border-dashed">
+        <Plus className="mr-2 h-4 w-4" />
+        Add Location
+      </Button>
     </div>
   );
 }

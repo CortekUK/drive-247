@@ -145,11 +145,12 @@ const Navigation = () => {
                       </div>
                     </DropdownMenuLabel>
                     <DropdownMenuSeparator />
-                    <DropdownMenuItem asChild>
-                      <Link href="/portal" className="flex items-center cursor-pointer text-popover-foreground">
-                        <LayoutDashboard className="mr-2 h-4 w-4" />
-                        <span>My Portal</span>
-                      </Link>
+                    <DropdownMenuItem
+                      onClick={() => router.push('/portal')}
+                      className="flex items-center cursor-pointer text-popover-foreground"
+                    >
+                      <LayoutDashboard className="mr-2 h-4 w-4" />
+                      <span>My Portal</span>
                     </DropdownMenuItem>
                     <DropdownMenuSeparator />
                     <DropdownMenuItem

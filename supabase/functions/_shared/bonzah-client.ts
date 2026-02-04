@@ -94,8 +94,12 @@ export async function bonzahFetch<T = unknown>(
 
   // Bonzah API returns status: 0 for success, negative for errors
   if (responseData.status !== 0 && responseData.status !== undefined) {
-    console.error(`[Bonzah] API error:`, responseData);
-    throw new Error(`Bonzah API error: ${responseData.txt || 'Unknown error'}`);
+    console.error(`[Bonzah] API error (status ${responseData.status}):`, responseData);
+    // Include the status code in the error for better debugging
+    const errorMsg = responseData.txt || 'Unknown error';
+    const error = new Error(`Bonzah API error: ${errorMsg}`) as Error & { bonzahStatus: number };
+    error.bonzahStatus = responseData.status;
+    throw error;
   }
 
   return responseData as T;

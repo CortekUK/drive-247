@@ -115,9 +115,15 @@ export interface Tenant {
   sunday_open: string | null;
   sunday_close: string | null;
 
-  // Delivery & Collection settings
+  // Delivery & Collection settings (legacy)
   delivery_enabled: boolean | null;
   collection_enabled: boolean | null;
+
+  // New simplified location options
+  fixed_address_enabled: boolean | null;
+  multiple_locations_enabled: boolean | null;
+  area_around_enabled: boolean | null;
+  area_delivery_fee: number | null;
 }
 
 interface TenantContextType {
@@ -264,7 +270,8 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
                 friday_enabled, friday_open, friday_close,
                 saturday_enabled, saturday_open, saturday_close,
                 sunday_enabled, sunday_open, sunday_close,
-                delivery_enabled, collection_enabled
+                delivery_enabled, collection_enabled,
+                fixed_address_enabled, multiple_locations_enabled, area_around_enabled, area_delivery_fee
               `)
               .eq('slug', defaultSlug)
               .eq('status', 'active')
@@ -381,7 +388,11 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
           sunday_open,
           sunday_close,
           delivery_enabled,
-          collection_enabled
+          collection_enabled,
+          fixed_address_enabled,
+          multiple_locations_enabled,
+          area_around_enabled,
+          area_delivery_fee
         `)
         .eq('slug', slug)
         .eq('status', 'active')

@@ -23,6 +23,7 @@ import { Calendar } from "@/components/ui/calendar";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
+import { useBookingStore } from "@/stores/booking-store";
 
 const TIMEZONE = "America/Los_Angeles";
 const MIN_RENTAL_DAYS = 30;
@@ -72,6 +73,7 @@ type RentalDetailsForm = z.infer<typeof rentalDetailsSchema>;
 export default function Booking() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const { context: bookingContext, updateContext } = useBookingStore();
   const [sameAsPickup, setSameAsPickup] = useState(true);
   const [pickupLocationId, setPickupLocationId] = useState<string | undefined>(undefined);
   const [returnLocationId, setReturnLocationId] = useState<string | undefined>(undefined);
@@ -96,22 +98,25 @@ export default function Booking() {
   });
 
 
-  // Load from localStorage on mount
+  // Load from Zustand store on mount
   useEffect(() => {
-    const saved = localStorage.getItem("booking_context");
-    if (saved) {
-      try {
-        const data = JSON.parse(saved);
-        if (data.pickupDate) data.pickupDate = parseISO(data.pickupDate);
-        if (data.returnDate) data.returnDate = parseISO(data.returnDate);
-        form.reset(data);
-        setSameAsPickup(data.sameAsPickup ?? true);
-        // Restore location IDs
-        if (data.pickupLocationId) setPickupLocationId(data.pickupLocationId);
-        if (data.returnLocationId) setReturnLocationId(data.returnLocationId);
-      } catch (e) {
-        console.error("Failed to load booking context:", e);
-      }
+    if (bookingContext.pickupDate || bookingContext.pickupLocation) {
+      const formData: any = {};
+      if (bookingContext.pickupDate) formData.pickupDate = parseISO(bookingContext.pickupDate);
+      if (bookingContext.returnDate) formData.returnDate = parseISO(bookingContext.returnDate);
+      if (bookingContext.pickupTime) formData.pickupTime = bookingContext.pickupTime;
+      if (bookingContext.returnTime) formData.returnTime = bookingContext.returnTime;
+      if (bookingContext.pickupLocation) formData.pickupLocation = bookingContext.pickupLocation;
+      if (bookingContext.returnLocation) formData.returnLocation = bookingContext.returnLocation;
+      if (bookingContext.promoCode) formData.promoCode = bookingContext.promoCode;
+      formData.sameAsPickup = bookingContext.sameAsPickup;
+
+      form.reset(formData);
+      setSameAsPickup(bookingContext.sameAsPickup);
+
+      // Restore location IDs from context if available
+      if ((bookingContext as any).pickupLocationId) setPickupLocationId((bookingContext as any).pickupLocationId);
+      if ((bookingContext as any).returnLocationId) setReturnLocationId((bookingContext as any).returnLocationId);
     }
 
     // Also check URL params
@@ -169,15 +174,17 @@ export default function Booking() {
       params.set("rlid", returnLocationId);
     }
 
-    // Save to localStorage
-    const saveData = {
-      ...data,
+    // Save to Zustand store
+    updateContext({
       pickupDate: data.pickupDate.toISOString(),
       returnDate: data.returnDate.toISOString(),
-      pickupLocationId,
-      returnLocationId,
-    };
-    localStorage.setItem("booking_context", JSON.stringify(saveData));
+      pickupTime: data.pickupTime,
+      returnTime: data.returnTime,
+      pickupLocation: data.pickupLocation,
+      returnLocation: data.returnLocation,
+      sameAsPickup: data.sameAsPickup,
+      promoCode: data.promoCode || null,
+    } as any);
 
     // Analytics event
     if (typeof window !== "undefined" && (window as any).gtag) {

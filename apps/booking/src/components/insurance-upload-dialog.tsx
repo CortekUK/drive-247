@@ -9,6 +9,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { Upload, FileText, X, Loader2, AlertCircle } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { useBookingStore } from "@/stores/booking-store";
 
 interface Props {
   open: boolean;
@@ -23,16 +24,16 @@ export default function InsuranceUploadDialog({ open, onOpenChange, onUploadComp
   const [files, setFiles] = useState<File[]>([]);
   const [uploading, setUploading] = useState(false);
   const [dragActive, setDragActive] = useState(false);
+  const { addPendingInsuranceFile, clearPendingInsuranceFiles } = useBookingStore();
 
   // Ref for synchronous double-click prevention (state updates are async)
   const isUploadingRef = useRef(false);
 
-  // Clear localStorage when dialog opens to prevent duplicates
-  // Use useEffect to ensure it runs reliably
+  // Clear store when dialog opens to prevent duplicates
   useEffect(() => {
     if (open) {
-      console.log('[INSURANCE-UPLOAD] Dialog opened - clearing old pending files from localStorage');
-      localStorage.removeItem('pending_insurance_files');
+      console.log('[INSURANCE-UPLOAD] Dialog opened - clearing old pending files from store');
+      clearPendingInsuranceFiles();
     }
   }, [open]);
 
@@ -174,18 +175,15 @@ export default function InsuranceUploadDialog({ open, onOpenChange, onUploadComp
           throw new Error(`Failed to upload ${file.name}: ${uploadError.message}`);
         }
 
-        // Store file metadata in localStorage for later use at checkout
+        // Store file metadata in Zustand store for later use at checkout
         // No temp customer or document records are created in the database
-        const pendingFileInfo = {
+        addPendingInsuranceFile({
           file_path: filePath,
           file_name: file.name,
           file_size: file.size,
           mime_type: file.type,
           uploaded_at: new Date().toISOString()
-        };
-        const existingFiles = JSON.parse(localStorage.getItem('pending_insurance_files') || '[]');
-        existingFiles.push(pendingFileInfo);
-        localStorage.setItem('pending_insurance_files', JSON.stringify(existingFiles));
+        });
 
         uploadedFilePaths.push(filePath);
 

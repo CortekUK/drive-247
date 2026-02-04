@@ -2,6 +2,26 @@ import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useCustomerAuthStore } from '@/stores/customer-auth-store';
 
+export interface CustomerRentalInstallmentPlan {
+  id: string;
+  plan_type: string;
+  status: string;
+  total_installable_amount: number;
+  upfront_amount: number;
+  installment_amount: number;
+  number_of_installments: number;
+  paid_installments: number | null;
+  total_paid: number | null;
+  next_due_date: string | null;
+  scheduled_installments: {
+    id: string;
+    installment_number: number;
+    amount: number;
+    due_date: string;
+    status: string;
+  }[];
+}
+
 export interface CustomerRental {
   id: string;
   start_date: string;
@@ -14,6 +34,7 @@ export interface CustomerRental {
   pickup_location: string | null;
   return_location: string | null;
   created_at: string;
+  has_installment_plan: boolean | null;
   vehicles: {
     id: string;
     reg: string;
@@ -23,6 +44,7 @@ export interface CustomerRental {
     photo_url: string | null;
     vehicle_photos: { photo_url: string }[];
   } | null;
+  installment_plans: CustomerRentalInstallmentPlan[] | null;
 }
 
 export function useCustomerRentals(status: 'current' | 'past') {
@@ -49,6 +71,7 @@ export function useCustomerRentals(status: 'current' | 'past') {
           pickup_location,
           return_location,
           created_at,
+          has_installment_plan,
           vehicles (
             id,
             reg,
@@ -57,6 +80,25 @@ export function useCustomerRentals(status: 'current' | 'past') {
             colour,
             photo_url,
             vehicle_photos (photo_url)
+          ),
+          installment_plans!installment_plans_rental_id_fkey (
+            id,
+            plan_type,
+            status,
+            total_installable_amount,
+            upfront_amount,
+            installment_amount,
+            number_of_installments,
+            paid_installments,
+            total_paid,
+            next_due_date,
+            scheduled_installments (
+              id,
+              installment_number,
+              amount,
+              due_date,
+              status
+            )
           )
         `)
         .eq('customer_id', customerUser.customer_id);

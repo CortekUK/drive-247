@@ -342,6 +342,7 @@ export type Database = {
         Row: {
           blocked_by: string | null
           created_at: string | null
+          customer_name: string | null
           id: string
           identity_number: string
           identity_type: string
@@ -354,6 +355,7 @@ export type Database = {
         Insert: {
           blocked_by?: string | null
           created_at?: string | null
+          customer_name?: string | null
           id?: string
           identity_number: string
           identity_type: string
@@ -366,6 +368,7 @@ export type Database = {
         Update: {
           blocked_by?: string | null
           created_at?: string | null
+          customer_name?: string | null
           id?: string
           identity_number?: string
           identity_type?: string
@@ -385,6 +388,129 @@ export type Database = {
           },
           {
             foreignKeyName: "blocked_identities_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      bonzah_insurance_policies: {
+        Row: {
+          coverage_types: Json
+          created_at: string | null
+          customer_id: string
+          id: string
+          payment_id: string | null
+          pickup_state: string
+          policy_id: string | null
+          policy_issued_at: string | null
+          policy_no: string | null
+          premium_amount: number
+          quote_id: string
+          quote_no: string | null
+          rental_id: string | null
+          renter_details: Json
+          status: string
+          tenant_id: string | null
+          trip_end_date: string
+          trip_start_date: string
+          updated_at: string | null
+        }
+        Insert: {
+          coverage_types: Json
+          created_at?: string | null
+          customer_id: string
+          id?: string
+          payment_id?: string | null
+          pickup_state: string
+          policy_id?: string | null
+          policy_issued_at?: string | null
+          policy_no?: string | null
+          premium_amount: number
+          quote_id: string
+          quote_no?: string | null
+          rental_id?: string | null
+          renter_details: Json
+          status?: string
+          tenant_id?: string | null
+          trip_end_date: string
+          trip_start_date: string
+          updated_at?: string | null
+        }
+        Update: {
+          coverage_types?: Json
+          created_at?: string | null
+          customer_id?: string
+          id?: string
+          payment_id?: string | null
+          pickup_state?: string
+          policy_id?: string | null
+          policy_issued_at?: string | null
+          policy_no?: string | null
+          premium_amount?: number
+          quote_id?: string
+          quote_no?: string | null
+          rental_id?: string | null
+          renter_details?: Json
+          status?: string
+          tenant_id?: string | null
+          trip_end_date?: string
+          trip_start_date?: string
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "bonzah_insurance_policies_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "customers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "bonzah_insurance_policies_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "v_customer_credit"
+            referencedColumns: ["customer_id"]
+          },
+          {
+            foreignKeyName: "bonzah_insurance_policies_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "view_aging_receivables"
+            referencedColumns: ["customer_id"]
+          },
+          {
+            foreignKeyName: "bonzah_insurance_policies_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "view_fines_export"
+            referencedColumns: ["customer_id"]
+          },
+          {
+            foreignKeyName: "bonzah_insurance_policies_rental_id_fkey"
+            columns: ["rental_id"]
+            isOneToOne: false
+            referencedRelation: "rentals"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "bonzah_insurance_policies_rental_id_fkey"
+            columns: ["rental_id"]
+            isOneToOne: false
+            referencedRelation: "v_rental_credit"
+            referencedColumns: ["rental_id"]
+          },
+          {
+            foreignKeyName: "bonzah_insurance_policies_rental_id_fkey"
+            columns: ["rental_id"]
+            isOneToOne: false
+            referencedRelation: "view_rentals_export"
+            referencedColumns: ["rental_id"]
+          },
+          {
+            foreignKeyName: "bonzah_insurance_policies_tenant_id_fkey"
             columns: ["tenant_id"]
             isOneToOne: false
             referencedRelation: "tenants"
@@ -1016,6 +1142,7 @@ export type Database = {
           blocked_reason: string | null
           created_at: string | null
           customer_type: string | null
+          date_of_birth: string | null
           email: string | null
           high_switcher: boolean | null
           id: string
@@ -1035,7 +1162,9 @@ export type Database = {
           rejected_by: string | null
           rejection_reason: string | null
           status: string | null
+          stripe_customer_id: string | null
           tenant_id: string | null
+          timezone: string | null
           type: string
           updated_at: string
           whatsapp_opt_in: boolean | null
@@ -1045,6 +1174,7 @@ export type Database = {
           blocked_reason?: string | null
           created_at?: string | null
           customer_type?: string | null
+          date_of_birth?: string | null
           email?: string | null
           high_switcher?: boolean | null
           id?: string
@@ -1064,7 +1194,9 @@ export type Database = {
           rejected_by?: string | null
           rejection_reason?: string | null
           status?: string | null
+          stripe_customer_id?: string | null
           tenant_id?: string | null
+          timezone?: string | null
           type: string
           updated_at?: string
           whatsapp_opt_in?: boolean | null
@@ -1074,6 +1206,7 @@ export type Database = {
           blocked_reason?: string | null
           created_at?: string | null
           customer_type?: string | null
+          date_of_birth?: string | null
           email?: string | null
           high_switcher?: boolean | null
           id?: string
@@ -1093,7 +1226,9 @@ export type Database = {
           rejected_by?: string | null
           rejection_reason?: string | null
           status?: string | null
+          stripe_customer_id?: string | null
           tenant_id?: string | null
+          timezone?: string | null
           type?: string
           updated_at?: string
           whatsapp_opt_in?: boolean | null
@@ -1710,6 +1845,195 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "tenants"
             referencedColumns: ["id"]
+          },
+        ]
+      }
+      installment_notifications: {
+        Row: {
+          created_at: string
+          id: string
+          installment_id: string
+          notification_type: string
+          sent_at: string
+          tenant_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          installment_id: string
+          notification_type: string
+          sent_at?: string
+          tenant_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          installment_id?: string
+          notification_type?: string
+          sent_at?: string
+          tenant_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "installment_notifications_installment_id_fkey"
+            columns: ["installment_id"]
+            isOneToOne: false
+            referencedRelation: "scheduled_installments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "installment_notifications_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      installment_plans: {
+        Row: {
+          created_at: string | null
+          customer_id: string
+          id: string
+          installment_amount: number
+          next_due_date: string | null
+          number_of_installments: number
+          paid_installments: number | null
+          plan_type: string
+          rental_id: string
+          status: string
+          stripe_customer_id: string | null
+          stripe_payment_method_id: string | null
+          stripe_setup_intent_id: string | null
+          tenant_id: string
+          total_installable_amount: number
+          total_paid: number | null
+          updated_at: string | null
+          upfront_amount: number
+          upfront_paid: boolean | null
+          upfront_payment_id: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          customer_id: string
+          id?: string
+          installment_amount: number
+          next_due_date?: string | null
+          number_of_installments: number
+          paid_installments?: number | null
+          plan_type: string
+          rental_id: string
+          status?: string
+          stripe_customer_id?: string | null
+          stripe_payment_method_id?: string | null
+          stripe_setup_intent_id?: string | null
+          tenant_id: string
+          total_installable_amount: number
+          total_paid?: number | null
+          updated_at?: string | null
+          upfront_amount?: number
+          upfront_paid?: boolean | null
+          upfront_payment_id?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          customer_id?: string
+          id?: string
+          installment_amount?: number
+          next_due_date?: string | null
+          number_of_installments?: number
+          paid_installments?: number | null
+          plan_type?: string
+          rental_id?: string
+          status?: string
+          stripe_customer_id?: string | null
+          stripe_payment_method_id?: string | null
+          stripe_setup_intent_id?: string | null
+          tenant_id?: string
+          total_installable_amount?: number
+          total_paid?: number | null
+          updated_at?: string | null
+          upfront_amount?: number
+          upfront_paid?: boolean | null
+          upfront_payment_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "installment_plans_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "customers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "installment_plans_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "v_customer_credit"
+            referencedColumns: ["customer_id"]
+          },
+          {
+            foreignKeyName: "installment_plans_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "view_aging_receivables"
+            referencedColumns: ["customer_id"]
+          },
+          {
+            foreignKeyName: "installment_plans_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "view_fines_export"
+            referencedColumns: ["customer_id"]
+          },
+          {
+            foreignKeyName: "installment_plans_rental_id_fkey"
+            columns: ["rental_id"]
+            isOneToOne: false
+            referencedRelation: "rentals"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "installment_plans_rental_id_fkey"
+            columns: ["rental_id"]
+            isOneToOne: false
+            referencedRelation: "v_rental_credit"
+            referencedColumns: ["rental_id"]
+          },
+          {
+            foreignKeyName: "installment_plans_rental_id_fkey"
+            columns: ["rental_id"]
+            isOneToOne: false
+            referencedRelation: "view_rentals_export"
+            referencedColumns: ["rental_id"]
+          },
+          {
+            foreignKeyName: "installment_plans_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "installment_plans_upfront_payment_id_fkey"
+            columns: ["upfront_payment_id"]
+            isOneToOne: false
+            referencedRelation: "payments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "installment_plans_upfront_payment_id_fkey"
+            columns: ["upfront_payment_id"]
+            isOneToOne: false
+            referencedRelation: "v_payment_remaining"
+            referencedColumns: ["payment_id"]
+          },
+          {
+            foreignKeyName: "installment_plans_upfront_payment_id_fkey"
+            columns: ["upfront_payment_id"]
+            isOneToOne: false
+            referencedRelation: "view_payments_export"
+            referencedColumns: ["payment_id"]
           },
         ]
       }
@@ -2840,6 +3164,7 @@ export type Database = {
         Row: {
           address: string
           created_at: string
+          delivery_fee: number
           id: string
           is_active: boolean
           is_pickup_enabled: boolean
@@ -2852,6 +3177,7 @@ export type Database = {
         Insert: {
           address: string
           created_at?: string
+          delivery_fee?: number
           id?: string
           is_active?: boolean
           is_pickup_enabled?: boolean
@@ -2864,6 +3190,7 @@ export type Database = {
         Update: {
           address?: string
           created_at?: string
+          delivery_fee?: number
           id?: string
           is_active?: boolean
           is_pickup_enabled?: boolean
@@ -4039,6 +4366,7 @@ export type Database = {
       rentals: {
         Row: {
           approval_status: string | null
+          bonzah_policy_id: string | null
           cancellation_reason: string | null
           collection_address: string | null
           collection_fee: number | null
@@ -4048,6 +4376,7 @@ export type Database = {
           delivery_address: string | null
           delivery_fee: number | null
           delivery_location_id: string | null
+          delivery_option: string | null
           discount_applied: number | null
           document_status: string | null
           docusign_envelope_id: string | null
@@ -4056,7 +4385,10 @@ export type Database = {
           envelope_completed_at: string | null
           envelope_created_at: string | null
           envelope_sent_at: string | null
+          has_installment_plan: boolean | null
           id: string
+          installment_plan_id: string | null
+          insurance_premium: number | null
           insurance_status: string | null
           monthly_amount: number
           payment_mode: string | null
@@ -4082,6 +4414,7 @@ export type Database = {
         }
         Insert: {
           approval_status?: string | null
+          bonzah_policy_id?: string | null
           cancellation_reason?: string | null
           collection_address?: string | null
           collection_fee?: number | null
@@ -4091,6 +4424,7 @@ export type Database = {
           delivery_address?: string | null
           delivery_fee?: number | null
           delivery_location_id?: string | null
+          delivery_option?: string | null
           discount_applied?: number | null
           document_status?: string | null
           docusign_envelope_id?: string | null
@@ -4099,7 +4433,10 @@ export type Database = {
           envelope_completed_at?: string | null
           envelope_created_at?: string | null
           envelope_sent_at?: string | null
+          has_installment_plan?: boolean | null
           id?: string
+          installment_plan_id?: string | null
+          insurance_premium?: number | null
           insurance_status?: string | null
           monthly_amount: number
           payment_mode?: string | null
@@ -4125,6 +4462,7 @@ export type Database = {
         }
         Update: {
           approval_status?: string | null
+          bonzah_policy_id?: string | null
           cancellation_reason?: string | null
           collection_address?: string | null
           collection_fee?: number | null
@@ -4134,6 +4472,7 @@ export type Database = {
           delivery_address?: string | null
           delivery_fee?: number | null
           delivery_location_id?: string | null
+          delivery_option?: string | null
           discount_applied?: number | null
           document_status?: string | null
           docusign_envelope_id?: string | null
@@ -4142,7 +4481,10 @@ export type Database = {
           envelope_completed_at?: string | null
           envelope_created_at?: string | null
           envelope_sent_at?: string | null
+          has_installment_plan?: boolean | null
           id?: string
+          installment_plan_id?: string | null
+          insurance_premium?: number | null
           insurance_status?: string | null
           monthly_amount?: number
           payment_mode?: string | null
@@ -4167,6 +4509,13 @@ export type Database = {
           vehicle_id?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "rentals_bonzah_policy_id_fkey"
+            columns: ["bonzah_policy_id"]
+            isOneToOne: false
+            referencedRelation: "bonzah_insurance_policies"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "rentals_collection_location_id_fkey"
             columns: ["collection_location_id"]
@@ -4207,6 +4556,13 @@ export type Database = {
             columns: ["delivery_location_id"]
             isOneToOne: false
             referencedRelation: "delivery_locations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "rentals_installment_plan_id_fkey"
+            columns: ["installment_plan_id"]
+            isOneToOne: false
+            referencedRelation: "installment_plans"
             referencedColumns: ["id"]
           },
           {
@@ -4264,6 +4620,171 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "view_pl_by_vehicle"
             referencedColumns: ["vehicle_id"]
+          },
+        ]
+      }
+      scheduled_installments: {
+        Row: {
+          amount: number
+          created_at: string | null
+          customer_id: string
+          due_date: string
+          failure_count: number | null
+          id: string
+          installment_number: number
+          installment_plan_id: string
+          last_attempted_at: string | null
+          last_failure_reason: string | null
+          ledger_entry_id: string | null
+          paid_at: string | null
+          payment_id: string | null
+          rental_id: string
+          status: string
+          stripe_charge_id: string | null
+          stripe_payment_intent_id: string | null
+          tenant_id: string
+          updated_at: string | null
+        }
+        Insert: {
+          amount: number
+          created_at?: string | null
+          customer_id: string
+          due_date: string
+          failure_count?: number | null
+          id?: string
+          installment_number: number
+          installment_plan_id: string
+          last_attempted_at?: string | null
+          last_failure_reason?: string | null
+          ledger_entry_id?: string | null
+          paid_at?: string | null
+          payment_id?: string | null
+          rental_id: string
+          status?: string
+          stripe_charge_id?: string | null
+          stripe_payment_intent_id?: string | null
+          tenant_id: string
+          updated_at?: string | null
+        }
+        Update: {
+          amount?: number
+          created_at?: string | null
+          customer_id?: string
+          due_date?: string
+          failure_count?: number | null
+          id?: string
+          installment_number?: number
+          installment_plan_id?: string
+          last_attempted_at?: string | null
+          last_failure_reason?: string | null
+          ledger_entry_id?: string | null
+          paid_at?: string | null
+          payment_id?: string | null
+          rental_id?: string
+          status?: string
+          stripe_charge_id?: string | null
+          stripe_payment_intent_id?: string | null
+          tenant_id?: string
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "scheduled_installments_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "customers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "scheduled_installments_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "v_customer_credit"
+            referencedColumns: ["customer_id"]
+          },
+          {
+            foreignKeyName: "scheduled_installments_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "view_aging_receivables"
+            referencedColumns: ["customer_id"]
+          },
+          {
+            foreignKeyName: "scheduled_installments_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "view_fines_export"
+            referencedColumns: ["customer_id"]
+          },
+          {
+            foreignKeyName: "scheduled_installments_installment_plan_id_fkey"
+            columns: ["installment_plan_id"]
+            isOneToOne: false
+            referencedRelation: "installment_plans"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "scheduled_installments_ledger_entry_id_fkey"
+            columns: ["ledger_entry_id"]
+            isOneToOne: false
+            referencedRelation: "ledger_entries"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "scheduled_installments_ledger_entry_id_fkey"
+            columns: ["ledger_entry_id"]
+            isOneToOne: false
+            referencedRelation: "view_customer_statements"
+            referencedColumns: ["entry_id"]
+          },
+          {
+            foreignKeyName: "scheduled_installments_payment_id_fkey"
+            columns: ["payment_id"]
+            isOneToOne: false
+            referencedRelation: "payments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "scheduled_installments_payment_id_fkey"
+            columns: ["payment_id"]
+            isOneToOne: false
+            referencedRelation: "v_payment_remaining"
+            referencedColumns: ["payment_id"]
+          },
+          {
+            foreignKeyName: "scheduled_installments_payment_id_fkey"
+            columns: ["payment_id"]
+            isOneToOne: false
+            referencedRelation: "view_payments_export"
+            referencedColumns: ["payment_id"]
+          },
+          {
+            foreignKeyName: "scheduled_installments_rental_id_fkey"
+            columns: ["rental_id"]
+            isOneToOne: false
+            referencedRelation: "rentals"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "scheduled_installments_rental_id_fkey"
+            columns: ["rental_id"]
+            isOneToOne: false
+            referencedRelation: "v_rental_credit"
+            referencedColumns: ["rental_id"]
+          },
+          {
+            foreignKeyName: "scheduled_installments_rental_id_fkey"
+            columns: ["rental_id"]
+            isOneToOne: false
+            referencedRelation: "view_rentals_export"
+            referencedColumns: ["rental_id"]
+          },
+          {
+            foreignKeyName: "scheduled_installments_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
           },
         ]
       }
@@ -4390,8 +4911,10 @@ export type Database = {
           admin_email: string | null
           admin_name: string | null
           app_name: string | null
+          area_around_enabled: boolean | null
           area_center_lat: number | null
           area_center_lon: number | null
+          area_delivery_fee: number | null
           booking_lead_time_hours: number | null
           business_hours: string | null
           collection_enabled: boolean | null
@@ -4410,6 +4933,7 @@ export type Database = {
           deposit_mode: string | null
           facebook_url: string | null
           favicon_url: string | null
+          fixed_address_enabled: boolean | null
           fixed_pickup_address: string | null
           fixed_return_address: string | null
           friday_close: string | null
@@ -4420,6 +4944,8 @@ export type Database = {
           hero_background_url: string | null
           id: string
           instagram_url: string | null
+          installment_config: Json | null
+          installments_enabled: boolean | null
           integration_bonzah: boolean | null
           integration_canopy: boolean | null
           integration_veriff: boolean | null
@@ -4439,6 +4965,7 @@ export type Database = {
           monday_close: string | null
           monday_enabled: boolean | null
           monday_open: string | null
+          multiple_locations_enabled: boolean | null
           og_image_url: string | null
           payment_mode: string | null
           phone: string | null
@@ -4494,8 +5021,10 @@ export type Database = {
           admin_email?: string | null
           admin_name?: string | null
           app_name?: string | null
+          area_around_enabled?: boolean | null
           area_center_lat?: number | null
           area_center_lon?: number | null
+          area_delivery_fee?: number | null
           booking_lead_time_hours?: number | null
           business_hours?: string | null
           collection_enabled?: boolean | null
@@ -4514,6 +5043,7 @@ export type Database = {
           deposit_mode?: string | null
           facebook_url?: string | null
           favicon_url?: string | null
+          fixed_address_enabled?: boolean | null
           fixed_pickup_address?: string | null
           fixed_return_address?: string | null
           friday_close?: string | null
@@ -4524,6 +5054,8 @@ export type Database = {
           hero_background_url?: string | null
           id?: string
           instagram_url?: string | null
+          installment_config?: Json | null
+          installments_enabled?: boolean | null
           integration_bonzah?: boolean | null
           integration_canopy?: boolean | null
           integration_veriff?: boolean | null
@@ -4543,6 +5075,7 @@ export type Database = {
           monday_close?: string | null
           monday_enabled?: boolean | null
           monday_open?: string | null
+          multiple_locations_enabled?: boolean | null
           og_image_url?: string | null
           payment_mode?: string | null
           phone?: string | null
@@ -4598,8 +5131,10 @@ export type Database = {
           admin_email?: string | null
           admin_name?: string | null
           app_name?: string | null
+          area_around_enabled?: boolean | null
           area_center_lat?: number | null
           area_center_lon?: number | null
+          area_delivery_fee?: number | null
           booking_lead_time_hours?: number | null
           business_hours?: string | null
           collection_enabled?: boolean | null
@@ -4618,6 +5153,7 @@ export type Database = {
           deposit_mode?: string | null
           facebook_url?: string | null
           favicon_url?: string | null
+          fixed_address_enabled?: boolean | null
           fixed_pickup_address?: string | null
           fixed_return_address?: string | null
           friday_close?: string | null
@@ -4628,6 +5164,8 @@ export type Database = {
           hero_background_url?: string | null
           id?: string
           instagram_url?: string | null
+          installment_config?: Json | null
+          installments_enabled?: boolean | null
           integration_bonzah?: boolean | null
           integration_canopy?: boolean | null
           integration_veriff?: boolean | null
@@ -4647,6 +5185,7 @@ export type Database = {
           monday_close?: string | null
           monday_enabled?: boolean | null
           monday_open?: string | null
+          multiple_locations_enabled?: boolean | null
           og_image_url?: string | null
           payment_mode?: string | null
           phone?: string | null
@@ -5776,6 +6315,10 @@ export type Database = {
         Args: { p_vehicle_id: string }
         Returns: number
       }
+      cancel_installment_plan: {
+        Args: { p_plan_id: string; p_reason?: string }
+        Returns: boolean
+      }
       check_and_update_global_blacklist: {
         Args: { p_email: string }
         Returns: boolean
@@ -5794,6 +6337,21 @@ export type Database = {
           overlapping_policy_number: string
           overlapping_start_date: string
         }[]
+      }
+      create_installment_plan: {
+        Args: {
+          p_customer_id: string
+          p_number_of_installments: number
+          p_plan_type: string
+          p_rental_id: string
+          p_start_date: string
+          p_stripe_customer_id?: string
+          p_stripe_payment_method_id?: string
+          p_tenant_id: string
+          p_total_installable_amount: number
+          p_upfront_amount: number
+        }
+        Returns: string
       }
       delete_rental_cascade: {
         Args: { rental_uuid: string }
@@ -5870,6 +6428,21 @@ export type Database = {
           vehicle_reg: string
         }[]
       }
+      get_due_installments: {
+        Args: { p_process_date?: string }
+        Returns: {
+          amount: number
+          customer_id: string
+          due_date: string
+          id: string
+          installment_number: number
+          installment_plan_id: string
+          rental_id: string
+          stripe_customer_id: string
+          stripe_payment_method_id: string
+          tenant_id: string
+        }[]
+      }
       get_effective_tenant_id: { Args: never; Returns: string }
       get_expiring_bookings: {
         Args: never
@@ -5879,6 +6452,30 @@ export type Database = {
           days_remaining: number
           payment_id: string
           rental_id: string
+          vehicle_reg: string
+        }[]
+      }
+      get_installment_plan_summary: {
+        Args: { p_rental_id: string }
+        Returns: Json
+      }
+      get_installments_for_reminder: {
+        Args: never
+        Returns: {
+          amount: number
+          customer_email: string
+          customer_id: string
+          customer_name: string
+          customer_phone: string
+          due_date: string
+          installment_id: string
+          installment_number: number
+          plan_id: string
+          rental_id: string
+          rental_number: string
+          tenant_id: string
+          vehicle_make: string
+          vehicle_model: string
           vehicle_reg: string
         }[]
       }
@@ -5968,6 +6565,25 @@ export type Database = {
       }
       is_primary_super_admin: { Args: never; Returns: boolean }
       is_super_admin: { Args: never; Returns: boolean }
+      mark_installment_failed: {
+        Args: {
+          p_failure_reason: string
+          p_installment_id: string
+          p_stripe_payment_intent_id?: string
+        }
+        Returns: boolean
+      }
+      mark_installment_paid: {
+        Args: {
+          p_installment_id: string
+          p_ledger_entry_id?: string
+          p_payment_id: string
+          p_stripe_charge_id?: string
+          p_stripe_payment_intent_id?: string
+        }
+        Returns: boolean
+      }
+      mark_overdue_installments: { Args: never; Returns: undefined }
       match_documents: {
         Args: {
           filter_tables?: string[]
@@ -6022,6 +6638,14 @@ export type Database = {
       }
       recalculate_vehicle_pl: {
         Args: { p_vehicle_id: string }
+        Returns: undefined
+      }
+      record_installment_notification: {
+        Args: {
+          p_installment_id: string
+          p_notification_type: string
+          p_sent_at?: string
+        }
         Returns: undefined
       }
       record_payment: {

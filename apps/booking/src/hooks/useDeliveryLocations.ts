@@ -10,19 +10,17 @@ export interface DeliveryLocation {
   name: string;
   address: string;
   delivery_fee: number;
-  collection_fee: number;
-  is_delivery_enabled: boolean;
-  is_collection_enabled: boolean;
+  is_pickup_enabled: boolean;
+  is_return_enabled: boolean;
   is_active: boolean;
   sort_order: number;
 }
 
 /**
- * Hook to fetch delivery/collection locations for the booking app.
+ * Hook to fetch delivery/pickup locations for the booking app.
  *
- * Returns only active locations, split into:
- * - deliveryLocations: Locations where is_delivery_enabled = true
- * - collectionLocations: Locations where is_collection_enabled = true
+ * Returns active locations from the pickup_locations table with delivery fees,
+ * along with filtered lists for pickup-enabled and return-enabled locations.
  */
 export function useDeliveryLocations() {
   const { tenant } = useTenant();
@@ -39,8 +37,8 @@ export function useDeliveryLocations() {
       }
 
       const { data, error } = await supabase
-        .from('delivery_locations')
-        .select('*')
+        .from('pickup_locations')
+        .select('id, tenant_id, name, address, delivery_fee, is_pickup_enabled, is_return_enabled, is_active, sort_order')
         .eq('tenant_id', tenant.id)
         .eq('is_active', true)
         .order('sort_order', { ascending: true });
@@ -56,18 +54,13 @@ export function useDeliveryLocations() {
     staleTime: 5 * 60 * 1000, // 5 minutes
   });
 
-  // Filter locations by service type
-  const deliveryLocations = (locations || []).filter(
-    (loc) => loc.is_delivery_enabled
-  );
-  const collectionLocations = (locations || []).filter(
-    (loc) => loc.is_collection_enabled
-  );
+  const allLocations = locations || [];
 
   return {
-    locations: locations || [],
-    deliveryLocations,
-    collectionLocations,
+    locations: allLocations,
+    // Filtered lists for pickup and return
+    pickupLocations: allLocations.filter(l => l.is_pickup_enabled),
+    returnLocations: allLocations.filter(l => l.is_return_enabled),
     isLoading,
     error,
   };

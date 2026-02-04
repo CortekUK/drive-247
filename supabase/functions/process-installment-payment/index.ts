@@ -40,12 +40,30 @@ serve(async (req) => {
       throw new Error('Failed to fetch due installments')
     }
 
-    if (!dueInstallments || dueInstallments.length === 0) {
-      console.log('No due installments found')
+    // Also get failed installments that are eligible for retry
+    const { data: retryInstallments, error: retryError } = await supabase
+      .rpc('get_installments_for_retry', { p_process_date: processDate })
+
+    if (retryError) {
+      console.error('Error fetching retry installments:', retryError)
+      // Don't throw - just log and continue with due installments
+    }
+
+    // Combine both lists, avoiding duplicates
+    const dueIds = new Set((dueInstallments || []).map((i: any) => i.id))
+    const allInstallments = [
+      ...(dueInstallments || []),
+      ...((retryInstallments || []).filter((i: any) => !dueIds.has(i.id))),
+    ]
+
+    if (allInstallments.length === 0) {
+      console.log('No due or retry-eligible installments found')
       return new Response(
         JSON.stringify({
-          message: 'No due installments to process',
+          message: 'No installments to process',
           processed: 0,
+          dueCount: 0,
+          retryCount: 0,
           results: [],
         }),
         {
@@ -55,13 +73,16 @@ serve(async (req) => {
       )
     }
 
-    console.log('Found', dueInstallments.length, 'due installments')
+    console.log('Found', (dueInstallments || []).length, 'due installments and',
+      ((retryInstallments || []).filter((i: any) => !dueIds.has(i.id))).length, 'retry-eligible installments')
 
     const results: ProcessResult[] = []
 
-    // Process each due installment
-    for (const installment of dueInstallments) {
-      console.log('Processing installment:', installment.id, 'Amount:', installment.amount)
+    // Process each installment (due + retries)
+    for (const installment of allInstallments) {
+      const isRetry = installment.failure_count && installment.failure_count > 0
+      console.log('Processing installment:', installment.id, 'Amount:', installment.amount,
+        isRetry ? `(Retry #${installment.failure_count + 1})` : '(New)')
 
       try {
         // Mark as processing
@@ -246,8 +267,11 @@ serve(async (req) => {
     // Summary
     const successful = results.filter(r => r.success).length
     const failed = results.filter(r => !r.success).length
+    const dueCount = (dueInstallments || []).length
+    const retryCount = ((retryInstallments || []).filter((i: any) => !dueIds.has(i.id))).length
 
-    console.log('Processing complete. Success:', successful, 'Failed:', failed)
+    console.log('Processing complete. Success:', successful, 'Failed:', failed,
+      '| Due:', dueCount, 'Retries:', retryCount)
 
     return new Response(
       JSON.stringify({
@@ -255,6 +279,8 @@ serve(async (req) => {
         processed: results.length,
         successful,
         failed,
+        dueCount,
+        retryCount,
         results,
       }),
       {

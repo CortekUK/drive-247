@@ -134,6 +134,17 @@ export const useCustomerAuthStore = create<CustomerAuthState>()((set, get) => ({
         return { error: { message: 'Failed to create user account' } };
       }
 
+      // Check if this is a "fake" user response (email already exists)
+      // Supabase returns a user object even when the email exists for security reasons,
+      // but the user won't have identities if it's a fake response
+      if (!authData.user.identities || authData.user.identities.length === 0) {
+        return {
+          error: {
+            message: 'An account with this email already exists. Please sign in instead.'
+          }
+        };
+      }
+
       // Create customer record if we have a customer ID from booking
       // or find existing / create a new customer with provided details
       let customerId = options.customerId;
@@ -223,12 +234,39 @@ export const useCustomerAuthStore = create<CustomerAuthState>()((set, get) => ({
       }
 
       if (data.user) {
-        const customerUser = await fetchCustomerUser(data.user);
+        let customerUser = await fetchCustomerUser(data.user);
 
         if (!customerUser) {
-          // User exists in auth but not as a customer
-          // This could be an admin user trying to use customer login
-          return { error: { message: 'No customer account found for this email' } };
+          // User exists in auth but no customer_users link
+          // Check if there's a customer record with their email that we can link
+          const { data: existingCustomer } = await supabase
+            .from('customers')
+            .select('id, tenant_id')
+            .eq('email', email)
+            .maybeSingle();
+
+          if (existingCustomer) {
+            // Create the missing customer_users link
+            const { error: linkError } = await supabase
+              .from('customer_users')
+              .insert({
+                auth_user_id: data.user.id,
+                customer_id: existingCustomer.id,
+                tenant_id: existingCustomer.tenant_id,
+              });
+
+            if (!linkError) {
+              // Fetch the newly created customer user
+              customerUser = await fetchCustomerUser(data.user);
+            } else {
+              console.error('Error auto-linking customer user:', linkError);
+            }
+          }
+
+          if (!customerUser) {
+            // Still no customer user - this could be an admin user trying to use customer login
+            return { error: { message: 'No customer account found for this email' } };
+          }
         }
 
         set({

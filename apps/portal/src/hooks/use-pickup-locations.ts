@@ -8,6 +8,7 @@ export interface PickupLocation {
   tenant_id: string;
   name: string;
   address: string;
+  delivery_fee: number;
   is_pickup_enabled: boolean;
   is_return_enabled: boolean;
   is_active: boolean;
@@ -19,6 +20,7 @@ export interface PickupLocation {
 export interface CreatePickupLocationInput {
   name: string;
   address: string;
+  delivery_fee?: number;
   is_pickup_enabled?: boolean;
   is_return_enabled?: boolean;
   is_active?: boolean;
@@ -29,6 +31,7 @@ export interface UpdatePickupLocationInput {
   id: string;
   name?: string;
   address?: string;
+  delivery_fee?: number;
   is_pickup_enabled?: boolean;
   is_return_enabled?: boolean;
   is_active?: boolean;
@@ -38,15 +41,20 @@ export interface UpdatePickupLocationInput {
 export type LocationMode = 'fixed' | 'custom' | 'multiple' | 'area_around';
 
 export interface LocationSettings {
+  // Legacy single-select modes (kept for backward compatibility)
   pickup_location_mode: LocationMode;
   return_location_mode: LocationMode;
   fixed_pickup_address: string | null;
   fixed_return_address: string | null;
-  // Fields for area_around mode
   pickup_area_radius_km: number | null;
   return_area_radius_km: number | null;
   area_center_lat: number | null;
   area_center_lon: number | null;
+  // New multi-select boolean flags
+  fixed_address_enabled: boolean;
+  multiple_locations_enabled: boolean;
+  area_around_enabled: boolean;
+  area_delivery_fee: number;
 }
 
 const DEFAULT_LOCATION_SETTINGS: LocationSettings = {
@@ -58,6 +66,10 @@ const DEFAULT_LOCATION_SETTINGS: LocationSettings = {
   return_area_radius_km: 25,
   area_center_lat: null,
   area_center_lon: null,
+  fixed_address_enabled: true,
+  multiple_locations_enabled: false,
+  area_around_enabled: false,
+  area_delivery_fee: 0,
 };
 
 /**
@@ -95,7 +107,11 @@ export const usePickupLocations = () => {
           pickup_area_radius_km,
           return_area_radius_km,
           area_center_lat,
-          area_center_lon
+          area_center_lon,
+          fixed_address_enabled,
+          multiple_locations_enabled,
+          area_around_enabled,
+          area_delivery_fee
         `)
         .eq('id', tenant.id)
         .single();
@@ -114,6 +130,10 @@ export const usePickupLocations = () => {
         return_area_radius_km: data?.return_area_radius_km ?? 25,
         area_center_lat: data?.area_center_lat || null,
         area_center_lon: data?.area_center_lon || null,
+        fixed_address_enabled: data?.fixed_address_enabled ?? true,
+        multiple_locations_enabled: data?.multiple_locations_enabled ?? false,
+        area_around_enabled: data?.area_around_enabled ?? false,
+        area_delivery_fee: data?.area_delivery_fee ?? 0,
       };
     },
     enabled: !!tenant?.id,
@@ -162,18 +182,24 @@ export const usePickupLocations = () => {
         throw new Error('No tenant ID available');
       }
 
+      // Build update object with only defined values
+      const updateData: Record<string, unknown> = {};
+      if (updates.pickup_location_mode !== undefined) updateData.pickup_location_mode = updates.pickup_location_mode;
+      if (updates.return_location_mode !== undefined) updateData.return_location_mode = updates.return_location_mode;
+      if (updates.fixed_pickup_address !== undefined) updateData.fixed_pickup_address = updates.fixed_pickup_address;
+      if (updates.fixed_return_address !== undefined) updateData.fixed_return_address = updates.fixed_return_address;
+      if (updates.pickup_area_radius_km !== undefined) updateData.pickup_area_radius_km = updates.pickup_area_radius_km;
+      if (updates.return_area_radius_km !== undefined) updateData.return_area_radius_km = updates.return_area_radius_km;
+      if (updates.area_center_lat !== undefined) updateData.area_center_lat = updates.area_center_lat;
+      if (updates.area_center_lon !== undefined) updateData.area_center_lon = updates.area_center_lon;
+      if (updates.fixed_address_enabled !== undefined) updateData.fixed_address_enabled = updates.fixed_address_enabled;
+      if (updates.multiple_locations_enabled !== undefined) updateData.multiple_locations_enabled = updates.multiple_locations_enabled;
+      if (updates.area_around_enabled !== undefined) updateData.area_around_enabled = updates.area_around_enabled;
+      if (updates.area_delivery_fee !== undefined) updateData.area_delivery_fee = updates.area_delivery_fee;
+
       const { data, error } = await supabase
         .from('tenants')
-        .update({
-          pickup_location_mode: updates.pickup_location_mode,
-          return_location_mode: updates.return_location_mode,
-          fixed_pickup_address: updates.fixed_pickup_address,
-          fixed_return_address: updates.fixed_return_address,
-          pickup_area_radius_km: updates.pickup_area_radius_km,
-          return_area_radius_km: updates.return_area_radius_km,
-          area_center_lat: updates.area_center_lat,
-          area_center_lon: updates.area_center_lon,
-        })
+        .update(updateData)
         .eq('id', tenant.id)
         .select(`
           pickup_location_mode,
@@ -183,7 +209,11 @@ export const usePickupLocations = () => {
           pickup_area_radius_km,
           return_area_radius_km,
           area_center_lat,
-          area_center_lon
+          area_center_lon,
+          fixed_address_enabled,
+          multiple_locations_enabled,
+          area_around_enabled,
+          area_delivery_fee
         `)
         .single();
 
@@ -201,6 +231,10 @@ export const usePickupLocations = () => {
         return_area_radius_km: data?.return_area_radius_km ?? 25,
         area_center_lat: data?.area_center_lat || null,
         area_center_lon: data?.area_center_lon || null,
+        fixed_address_enabled: data?.fixed_address_enabled ?? true,
+        multiple_locations_enabled: data?.multiple_locations_enabled ?? false,
+        area_around_enabled: data?.area_around_enabled ?? false,
+        area_delivery_fee: data?.area_delivery_fee ?? 0,
       };
     },
     onSuccess: (data) => {
@@ -234,6 +268,7 @@ export const usePickupLocations = () => {
           tenant_id: tenant.id,
           name: input.name,
           address: input.address,
+          delivery_fee: input.delivery_fee ?? 0,
           is_pickup_enabled: input.is_pickup_enabled ?? true,
           is_return_enabled: input.is_return_enabled ?? true,
           is_active: input.is_active ?? true,

@@ -11,6 +11,7 @@ import { ChevronLeft, CreditCard, Shield, Calendar, MapPin, Clock, Car, User, Lo
 import { supabase } from "@/integrations/supabase/client";
 import { useTenant } from "@/contexts/TenantContext";
 import { useCustomerAuthStore } from "@/stores/customer-auth-store";
+import { useBookingStore } from "@/stores/booking-store";
 import { format } from "date-fns";
 import { isEnquiryBasedTenant } from "@/config/tenant-config";
 import { InvoiceDialog } from "@/components/InvoiceDialog";
@@ -45,6 +46,9 @@ interface BookingCheckoutStepProps {
   // Bonzah insurance props
   bonzahPremium?: number;
   bonzahCoverage?: BonzahCoverage;
+  // Delivery fee props
+  pickupDeliveryFee?: number;
+  returnDeliveryFee?: number;
 }
 
 export default function BookingCheckoutStep({
@@ -57,10 +61,13 @@ export default function BookingCheckoutStep({
   onBack,
   bonzahPremium = 0,
   bonzahCoverage,
+  pickupDeliveryFee = 0,
+  returnDeliveryFee = 0,
 }: BookingCheckoutStepProps) {
   const router = useRouter();
   const { tenant } = useTenant();
   const { customerUser } = useCustomerAuthStore();
+  const { pendingInsuranceFiles, clearPendingInsuranceFiles } = useBookingStore();
   const [agreeTerms, setAgreeTerms] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const [showAuthDialog, setShowAuthDialog] = useState(false);
@@ -165,9 +172,14 @@ export default function BookingCheckoutStep({
     return tenant?.global_deposit_amount ?? 0;
   };
 
+  // Calculate total delivery fees
+  const calculateDeliveryFees = (): number => {
+    return (pickupDeliveryFee || 0) + (returnDeliveryFee || 0);
+  };
+
   const calculateGrandTotal = () => {
-    // Grand total = discounted vehicle price + tax + service fee + security deposit + insurance
-    return calculateDiscountedVehicleTotal() + calculateTaxAmount() + calculateServiceFee() + calculateSecurityDeposit() + bonzahPremium;
+    // Grand total = discounted vehicle price + delivery fees + tax + service fee + security deposit + insurance
+    return calculateDiscountedVehicleTotal() + calculateDeliveryFees() + calculateTaxAmount() + calculateServiceFee() + calculateSecurityDeposit() + bonzahPremium;
   };
 
   // Check if this is an enquiry-based tenant (e.g., Kedic Services)
@@ -712,6 +724,9 @@ export default function BookingCheckoutStep({
         pickup_location_id: formData.pickupLocationId || null,
         return_location: formData.dropoffLocation || null,
         return_location_id: formData.returnLocationId || null,
+        // Delivery fees
+        delivery_fee: pickupDeliveryFee || 0,
+        collection_fee: returnDeliveryFee || 0,
       };
 
       if (tenant?.id) {
@@ -815,15 +830,12 @@ export default function BookingCheckoutStep({
       // Insurance is uploaded before rental creation with a temp customer,
       // so we need to update both customer_id and rental_id
       try {
-        // Get pending insurance docs from localStorage (stored during upload)
-        // Check BOTH localStorage keys for backwards compatibility
+        // Get pending insurance files from Zustand store (stored during upload)
+        const pendingFiles = pendingInsuranceFiles || [];
+
+        // Legacy: Check localStorage for old-style pending docs (for backwards compatibility)
         const pendingDocs = typeof window !== 'undefined'
           ? JSON.parse(localStorage.getItem('pending_insurance_docs') || '[]')
-          : [];
-
-        // Also check for files stored by insurance-upload-dialog (pending_insurance_files)
-        const pendingFiles = typeof window !== 'undefined'
-          ? JSON.parse(localStorage.getItem('pending_insurance_files') || '[]')
           : [];
 
         console.log('🔍 Found pending insurance docs:', pendingDocs.length, 'pending files:', pendingFiles.length);
@@ -865,9 +877,9 @@ export default function BookingCheckoutStep({
             }
           }
 
-          // Clear pending docs from localStorage
+          // Clear legacy pending docs from localStorage
           localStorage.removeItem('pending_insurance_docs');
-          console.log('✅ Insurance documents linked to rental and cleaned up');
+          console.log('✅ Legacy insurance documents linked to rental and cleaned up');
         }
 
         // Handle new-style pending files (only uploaded to storage, need DB insert)
@@ -961,8 +973,8 @@ export default function BookingCheckoutStep({
             }
           }
 
-          // Clear pending files from localStorage
-          localStorage.removeItem('pending_insurance_files');
+          // Clear pending files from Zustand store
+          clearPendingInsuranceFiles();
           console.log('✅ Insurance files processed and cleaned up');
         }
 
@@ -1198,16 +1210,28 @@ export default function BookingCheckoutStep({
 
                   {/* Discounted subtotal - show when promo is applied */}
                   {promoDetails && calculatePromoDiscount() > 0 && (
-                    <div className="flex justify-between text-sm pb-3 border-b border-border">
+                    <div className="flex justify-between text-sm">
                       <span className="text-muted-foreground">Subtotal</span>
                       <span className="font-medium text-green-600">${calculateDiscountedVehicleTotal().toFixed(2)}</span>
                     </div>
                   )}
 
-                  {/* Border when no promo */}
-                  {(!promoDetails || calculatePromoDiscount() === 0) && (
-                    <div className="pb-3 border-b border-border" />
+                  {/* Delivery fees - only show when > 0 */}
+                  {pickupDeliveryFee > 0 && (
+                    <div className="flex justify-between text-sm">
+                      <span className="text-muted-foreground">Pickup Delivery</span>
+                      <span className="font-medium">${pickupDeliveryFee.toFixed(2)}</span>
+                    </div>
                   )}
+                  {returnDeliveryFee > 0 && (
+                    <div className="flex justify-between text-sm">
+                      <span className="text-muted-foreground">Return Collection</span>
+                      <span className="font-medium">${returnDeliveryFee.toFixed(2)}</span>
+                    </div>
+                  )}
+
+                  {/* Border separator */}
+                  <div className="pb-3 border-b border-border" />
 
                   {/* Tax line item - only show when tax is enabled */}
                   {tenant?.tax_enabled && (tenant?.tax_percentage ?? 0) > 0 && (

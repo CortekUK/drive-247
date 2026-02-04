@@ -8,6 +8,7 @@ import { Card } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { supabase } from "@/integrations/supabase/client"
 import { toast } from "sonner"
+import { useBookingStore } from "@/stores/booking-store"
 
 // Only render in development
 const IS_DEV = process.env.NODE_ENV === 'development'
@@ -67,6 +68,7 @@ export default function DevJumpPanel() {
   const [isMinimized, setIsMinimized] = useState(true)
   const [isLoading, setIsLoading] = useState<number | null>(null)
   const [isUploadingInsurance, setIsUploadingInsurance] = useState(false)
+  const { clearContext: clearBookingStore, addPendingInsuranceFile } = useBookingStore()
 
   // Don't render anything in production
   if (!IS_DEV) {
@@ -205,13 +207,22 @@ export default function DevJumpPanel() {
 
       console.log('🔧 DEV: Document record created:', docData.id)
 
-      // Store in localStorage for the booking flow
+      // Store in localStorage for legacy cleanup logic (temp customer removal)
       const tempDocInfo = {
         temp_customer_id: tempCustomer.id,
         document_id: docData.id,
         file_url: filePath
       }
       localStorage.setItem('pending_insurance_docs', JSON.stringify([tempDocInfo]))
+
+      // Also add to Zustand store for the new flow
+      addPendingInsuranceFile({
+        file_path: filePath,
+        file_name: 'Sample_insurance.png',
+        file_size: file.size,
+        mime_type: 'image/png',
+        uploaded_at: new Date().toISOString()
+      })
 
       toast.success('✓ Sample insurance uploaded & verified!')
       return { documentId: docData.id, fileUrl: filePath }
@@ -309,8 +320,11 @@ export default function DevJumpPanel() {
   }
 
   const clearAllData = () => {
+    // Clear Zustand store
+    clearBookingStore()
+
+    // Clear localStorage keys (keeping for backward compatibility and other dev data)
     const keysToRemove = [
-      "booking_context",
       "verificationSessionId",
       "verificationStatus",
       "verificationTimestamp",

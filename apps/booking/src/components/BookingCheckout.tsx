@@ -10,6 +10,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { supabase } from "@/integrations/supabase/client";
 import { useTenant } from "@/contexts/TenantContext";
 import { toast } from "sonner";
+import { useBookingStore } from "@/stores/booking-store";
 import { ArrowLeft, Check, Shield } from "lucide-react";
 import Navigation from "@/components/Navigation";
 import Footer from "@/components/Footer";
@@ -36,6 +37,7 @@ const BookingCheckout = () => {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { tenant } = useTenant();
+  const { context: bookingContext, pendingInsuranceFiles, clearPendingInsuranceFiles } = useBookingStore();
   const [loading, setLoading] = useState(false);
   const [extras, setExtras] = useState<PricingExtra[]>([]);
   const [selectedExtras, setSelectedExtras] = useState<string[]>([]);
@@ -154,14 +156,15 @@ const BookingCheckout = () => {
 
     setLoading(true);
     try {
-      // Get customer data from localStorage (saved in Step 1)
-      const bookingContext = localStorage.getItem("booking_context");
-      if (!bookingContext) {
+      // Get customer data from Zustand store (saved in Step 1)
+      const customerName = (bookingContext as any).customerName;
+      const customerEmail = (bookingContext as any).customerEmail;
+      const customerPhone = (bookingContext as any).customerPhone;
+      const customerType = (bookingContext as any).customerType;
+
+      if (!customerEmail) {
         throw new Error("Customer information not found. Please restart booking.");
       }
-
-      const context = JSON.parse(bookingContext);
-      const { customerName, customerEmail, customerPhone, customerType } = context;
 
       // Step 1: Create or find customer
       let customer;
@@ -204,14 +207,15 @@ const BookingCheckout = () => {
       }
 
       // Step 2: Link any pending insurance documents to the customer
-      const pendingInsuranceFiles = JSON.parse(localStorage.getItem('pending_insurance_files') || '[]');
+      // Get pending files from Zustand store
+      const filesToProcess = pendingInsuranceFiles || [];
 
       // Deduplicate files by file_path to prevent duplicate inserts
       const uniqueFiles = Array.from(
-        new Map(pendingInsuranceFiles.map((file: any) => [file.file_path, file])).values()
+        new Map(filesToProcess.map((file: any) => [file.file_path, file])).values()
       );
 
-      console.log(`[CHECKOUT] Processing ${uniqueFiles.length} unique insurance documents (${pendingInsuranceFiles.length} total in localStorage)`);
+      console.log(`[CHECKOUT] Processing ${uniqueFiles.length} unique insurance documents (${filesToProcess.length} total in store)`);
 
       for (const fileInfo of uniqueFiles) {
         // Check if a document with the same filename already exists for this customer
@@ -302,9 +306,9 @@ const BookingCheckout = () => {
         }
       }
 
-      // Clear localStorage immediately after processing to prevent duplicates on retry
-      localStorage.removeItem('pending_insurance_files');
-      console.log('[CHECKOUT] Cleared pending_insurance_files from localStorage');
+      // Clear store immediately after processing to prevent duplicates on retry
+      clearPendingInsuranceFiles();
+      console.log('[CHECKOUT] Cleared pending_insurance_files from store');
 
       // Step 3: Check if Individual customer already has active rental
       if (customer.customer_type === "Individual") {

@@ -127,7 +127,29 @@ serve(async (req) => {
               }
             }
 
-            // Activate the plan
+            // Mark the first installment as paid (it was included in the upfront payment)
+            const { data: firstInstallment } = await supabase
+              .from("scheduled_installments")
+              .select("id, amount")
+              .eq("installment_plan_id", installmentPlan.id)
+              .eq("installment_number", 1)
+              .single();
+
+            if (firstInstallment) {
+              await supabase
+                .from("scheduled_installments")
+                .update({
+                  status: "paid",
+                  paid_at: new Date().toISOString(),
+                  payment_id: existingPaymentRecord?.id,
+                  stripe_payment_intent_id: session.payment_intent as string,
+                  updated_at: new Date().toISOString(),
+                })
+                .eq("id", firstInstallment.id);
+              console.log("First installment marked as paid:", firstInstallment.id);
+            }
+
+            // Activate the plan and update counters
             await supabase
               .from("installment_plans")
               .update({
@@ -135,11 +157,13 @@ serve(async (req) => {
                 upfront_paid: true,
                 upfront_payment_id: existingPaymentRecord?.id,
                 stripe_payment_method_id: paymentMethodId,
+                paid_installments: 1, // First installment paid at checkout
+                total_paid: firstInstallment?.amount || 0,
                 updated_at: new Date().toISOString(),
               })
               .eq("id", installmentPlan.id);
 
-            console.log("Installment plan activated:", installmentPlan.id, "Payment method:", paymentMethodId);
+            console.log("Installment plan activated:", installmentPlan.id, "Payment method:", paymentMethodId, "1st installment paid");
 
             // Update rental status
             await supabase

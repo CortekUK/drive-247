@@ -8,18 +8,29 @@ import { Badge } from '@/components/ui/badge';
 import { Calendar, CreditCard, Clock, ChevronDown, ChevronUp } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
+export type WhatGetsSplit = 'rental_only' | 'rental_tax' | 'rental_tax_extras';
+
 export interface InstallmentConfig {
   min_days_for_weekly: number;
   min_days_for_monthly: number;
   max_installments_weekly: number;
   max_installments_monthly: number;
+  // Phase 3 additions
+  charge_first_upfront?: boolean;
+  what_gets_split?: WhatGetsSplit;
+  grace_period_days?: number;
+  max_retry_attempts?: number;
+  retry_interval_days?: number;
 }
 
 export interface InstallmentOption {
   type: 'full' | 'weekly' | 'monthly';
-  numberOfInstallments: number;
-  installmentAmount: number;
-  totalAmount: number;
+  numberOfInstallments: number;       // Total number of installments
+  scheduledInstallments: number;      // Number of installments to schedule (excludes first)
+  installmentAmount: number;          // Amount per scheduled installment
+  firstInstallmentAmount: number;     // First installment amount (paid upfront)
+  totalAmount: number;                // Total installable amount
+  upfrontTotal: number;               // Total amount paid today (deposit + fees + first installment)
   label: string;
   description: string;
 }
@@ -48,20 +59,37 @@ export default function InstallmentSelector({
   const [expanded, setExpanded] = useState(true);
 
   // Calculate available installment options based on rental duration and config
+  // If charge_first_upfront is true (default), first installment is charged at checkout
+  // If false, all installments are scheduled for future dates
+  const chargeFirstUpfront = config.charge_first_upfront !== false; // Default to true
+
   const availableOptions = useMemo((): InstallmentOption[] => {
     const options: InstallmentOption[] = [];
 
     // Always add "Pay in Full" option
+    const fullAmount = installableAmount + upfrontAmount;
     options.push({
       type: 'full',
       numberOfInstallments: 1,
-      installmentAmount: installableAmount + upfrontAmount,
-      totalAmount: installableAmount + upfrontAmount,
+      scheduledInstallments: 0,
+      installmentAmount: fullAmount,
+      firstInstallmentAmount: fullAmount,
+      totalAmount: fullAmount,
+      upfrontTotal: fullAmount,
       label: 'Pay in Full',
-      description: `Pay ${formatCurrency(installableAmount + upfrontAmount)} now`,
+      description: `Pay ${formatCurrency(fullAmount)} now`,
     });
 
     if (!enabled) return options;
+
+    // Helper to calculate installments with rounding to last
+    const calculateInstallments = (total: number, count: number) => {
+      // Base amount for each installment (rounded down)
+      const baseAmount = Math.floor((total / count) * 100) / 100;
+      // Last installment gets the remainder to ensure total is exact
+      const lastAmount = Math.round((total - (baseAmount * (count - 1))) * 100) / 100;
+      return { baseAmount, lastAmount };
+    };
 
     // Check if weekly installments are available
     if (rentalDays >= config.min_days_for_weekly) {
@@ -71,14 +99,28 @@ export default function InstallmentSelector({
       );
 
       if (maxWeekly >= 2) {
-        const installmentAmount = Math.round((installableAmount / maxWeekly) * 100) / 100;
+        const { baseAmount, lastAmount } = calculateInstallments(installableAmount, maxWeekly);
+
+        // If charging first upfront: first installment paid now, remaining scheduled
+        // If not: all installments are scheduled
+        const firstInstallment = chargeFirstUpfront ? baseAmount : 0;
+        const scheduledCount = chargeFirstUpfront ? maxWeekly - 1 : maxWeekly;
+        const upfrontTotal = upfrontAmount + firstInstallment;
+
+        const description = chargeFirstUpfront
+          ? `Pay ${formatCurrency(upfrontTotal)} today, then ${formatCurrency(baseAmount)}/week × ${scheduledCount}`
+          : `Pay ${formatCurrency(upfrontAmount)} today, then ${formatCurrency(baseAmount)}/week × ${scheduledCount}`;
+
         options.push({
           type: 'weekly',
           numberOfInstallments: maxWeekly,
-          installmentAmount,
+          scheduledInstallments: scheduledCount,
+          installmentAmount: baseAmount,
+          firstInstallmentAmount: firstInstallment,
           totalAmount: installableAmount,
+          upfrontTotal,
           label: `Weekly (${maxWeekly} payments)`,
-          description: `Pay ${formatCurrency(upfrontAmount)} now, then ${formatCurrency(installmentAmount)}/week`,
+          description,
         });
       }
     }
@@ -91,20 +133,34 @@ export default function InstallmentSelector({
       );
 
       if (maxMonthly >= 2) {
-        const installmentAmount = Math.round((installableAmount / maxMonthly) * 100) / 100;
+        const { baseAmount, lastAmount } = calculateInstallments(installableAmount, maxMonthly);
+
+        // If charging first upfront: first installment paid now, remaining scheduled
+        // If not: all installments are scheduled
+        const firstInstallment = chargeFirstUpfront ? baseAmount : 0;
+        const scheduledCount = chargeFirstUpfront ? maxMonthly - 1 : maxMonthly;
+        const upfrontTotal = upfrontAmount + firstInstallment;
+
+        const description = chargeFirstUpfront
+          ? `Pay ${formatCurrency(upfrontTotal)} today, then ${formatCurrency(baseAmount)}/month × ${scheduledCount}`
+          : `Pay ${formatCurrency(upfrontAmount)} today, then ${formatCurrency(baseAmount)}/month × ${scheduledCount}`;
+
         options.push({
           type: 'monthly',
           numberOfInstallments: maxMonthly,
-          installmentAmount,
+          scheduledInstallments: scheduledCount,
+          installmentAmount: baseAmount,
+          firstInstallmentAmount: firstInstallment,
           totalAmount: installableAmount,
+          upfrontTotal,
           label: `Monthly (${maxMonthly} payments)`,
-          description: `Pay ${formatCurrency(upfrontAmount)} now, then ${formatCurrency(installmentAmount)}/month`,
+          description,
         });
       }
     }
 
     return options;
-  }, [rentalDays, installableAmount, upfrontAmount, config, enabled, formatCurrency]);
+  }, [rentalDays, installableAmount, upfrontAmount, config, enabled, formatCurrency, chargeFirstUpfront]);
 
   // If only "Pay in Full" is available, auto-select it and don't show selector
   if (availableOptions.length === 1) {
@@ -190,19 +246,28 @@ export default function InstallmentSelector({
                         Payment Schedule
                       </p>
                       <div className="space-y-1.5">
-                        <div className="flex justify-between text-sm">
-                          <span className="flex items-center gap-1">
+                        {/* Today: Deposit + Fees (+ First Installment if charging upfront) */}
+                        <div className="flex justify-between text-sm bg-accent/10 -mx-2 px-2 py-1 rounded">
+                          <span className="flex items-center gap-1 font-medium">
                             <Calendar className="w-3 h-3 text-accent" />
-                            Today (Deposit + Fees)
+                            Today
                           </span>
-                          <span className="font-medium">{formatCurrency(upfrontAmount)}</span>
+                          <span className="font-bold text-accent">{formatCurrency(option.upfrontTotal)}</span>
                         </div>
-                        {Array.from({ length: option.numberOfInstallments }).map((_, i) => (
+                        <div className="text-xs text-muted-foreground pl-4 -mt-1">
+                          {chargeFirstUpfront && option.firstInstallmentAmount > 0
+                            ? `Deposit + Fees (${formatCurrency(upfrontAmount)}) + 1st installment (${formatCurrency(option.firstInstallmentAmount)})`
+                            : `Deposit + Fees (${formatCurrency(upfrontAmount)})`
+                          }
+                        </div>
+
+                        {/* Scheduled installments */}
+                        {Array.from({ length: option.scheduledInstallments }).map((_, i) => (
                           <div key={i} className="flex justify-between text-sm">
                             <span className="text-muted-foreground">
                               {option.type === 'weekly'
-                                ? `Week ${i + 1}`
-                                : `Month ${i + 1}`}
+                                ? `Week ${chargeFirstUpfront ? i + 2 : i + 1}`
+                                : `Month ${chargeFirstUpfront ? i + 2 : i + 1}`}
                             </span>
                             <span className="font-medium">{formatCurrency(option.installmentAmount)}</span>
                           </div>
