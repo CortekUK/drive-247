@@ -352,6 +352,26 @@ const RentalDetail = () => {
     enabled: !!id && !!tenant?.id && !!rental?.customers?.id,
   });
 
+  // Fetch Bonzah insurance policy for this rental
+  const { data: bonzahPolicy, isLoading: isLoadingBonzahPolicy } = useQuery({
+    queryKey: ["rental-bonzah-policy", id, tenant?.id],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("bonzah_insurance_policies")
+        .select("*")
+        .eq("rental_id", id)
+        .maybeSingle();
+
+      if (error) {
+        console.error("Error fetching Bonzah policy:", error);
+        return null;
+      }
+
+      return data;
+    },
+    enabled: !!id && !!tenant?.id,
+  });
+
   // Fetch identity verification for this customer (by customer_id or by email)
   const { data: identityVerification, isLoading: isLoadingVerification } = useQuery({
     queryKey: ["customer-identity-verification", rental?.customers?.id, rental?.customers?.email, tenant?.id],
@@ -1559,6 +1579,100 @@ const RentalDetail = () => {
           </div>
         </CardContent>
       </Card>
+
+      {/* Bonzah Insurance Policy Card - Show if policy exists for this rental */}
+      {bonzahPolicy && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Shield className="h-5 w-5 text-green-600" />
+              Bonzah Insurance Policy
+              <Badge variant={bonzahPolicy.status === 'active' ? 'default' : bonzahPolicy.status === 'quoted' ? 'secondary' : 'outline'}>
+                {bonzahPolicy.status === 'active' ? 'Active' : bonzahPolicy.status === 'quoted' ? 'Quoted' : bonzahPolicy.status === 'payment_confirmed' ? 'Payment Confirmed' : bonzahPolicy.status}
+              </Badge>
+            </CardTitle>
+            <CardDescription>
+              Rental car insurance purchased through Bonzah
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {/* Policy Details */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <div>
+                <p className="text-sm text-muted-foreground">Policy Number</p>
+                <p className="font-medium">{bonzahPolicy.policy_no || 'Pending'}</p>
+              </div>
+              <div>
+                <p className="text-sm text-muted-foreground">Quote ID</p>
+                <p className="font-medium font-mono text-sm">{bonzahPolicy.quote_id}</p>
+              </div>
+              <div>
+                <p className="text-sm text-muted-foreground">Premium</p>
+                <p className="font-medium text-green-600">{formatCurrency(bonzahPolicy.premium_amount)}</p>
+              </div>
+              <div>
+                <p className="text-sm text-muted-foreground">Coverage Period</p>
+                <p className="font-medium">{new Date(bonzahPolicy.trip_start_date).toLocaleDateString()} - {new Date(bonzahPolicy.trip_end_date).toLocaleDateString()}</p>
+              </div>
+            </div>
+
+            {/* Coverage Types */}
+            <div>
+              <p className="text-sm text-muted-foreground mb-2">Coverage Types</p>
+              <div className="flex flex-wrap gap-2">
+                {(bonzahPolicy.coverage_types as any)?.cdw && (
+                  <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">
+                    <CheckCircle className="h-3 w-3 mr-1" /> CDW - Collision Damage Waiver
+                  </Badge>
+                )}
+                {(bonzahPolicy.coverage_types as any)?.rcli && (
+                  <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">
+                    <CheckCircle className="h-3 w-3 mr-1" /> RCLI - Liability Insurance
+                  </Badge>
+                )}
+                {(bonzahPolicy.coverage_types as any)?.sli && (
+                  <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">
+                    <CheckCircle className="h-3 w-3 mr-1" /> SLI - Supplemental Liability
+                  </Badge>
+                )}
+                {(bonzahPolicy.coverage_types as any)?.pai && (
+                  <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">
+                    <CheckCircle className="h-3 w-3 mr-1" /> PAI - Personal Accident
+                  </Badge>
+                )}
+              </div>
+            </div>
+
+            {/* Renter Details */}
+            {bonzahPolicy.renter_details && (
+              <div>
+                <p className="text-sm text-muted-foreground mb-2">Insured Renter</p>
+                <div className="bg-muted/50 rounded-lg p-3 text-sm">
+                  <p className="font-medium">
+                    {(bonzahPolicy.renter_details as any)?.first_name} {(bonzahPolicy.renter_details as any)?.last_name}
+                  </p>
+                  <p className="text-muted-foreground">
+                    License: {(bonzahPolicy.renter_details as any)?.license?.number} ({(bonzahPolicy.renter_details as any)?.license?.state})
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {/* Bonzah Portal Link */}
+            <div className="pt-2 border-t">
+              <a
+                href="https://bonzah.sb.insillion.com/bb1/"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1 text-sm text-blue-600 hover:underline"
+              >
+                <ExternalLink className="h-4 w-4" />
+                View in Bonzah Portal
+              </a>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Insurance Verification Card - Hidden for insurance-exempt tenants like Kedic Services */}
       {!skipInsurance && (
