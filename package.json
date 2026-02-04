@@ -13,6 +13,7 @@
     "dev:portal": "turbo run dev --filter=portal",
     "dev:web": "turbo run dev --filter=web",
     "dev:admin": "turbo run dev --filter=admin",
+    "dev:chat": "turbo run dev --filter=chat-server",
     "build": "turbo run build",
     "lint": "turbo run lint",
     "update-branding": "node scripts/bulk-update-branding.js",

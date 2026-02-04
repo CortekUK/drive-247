@@ -33,7 +33,11 @@ import { isInsuranceExemptTenant } from "@/config/tenant-config";
 import { canCustomerBook } from "@/lib/tenantQueries";
 import { sanitizeName, sanitizeEmail, sanitizePhone, sanitizeLocation, sanitizeTextArea, isInputSafe } from "@/lib/sanitize";
 import { createVeriffFrame, MESSAGES } from "@veriff/incontext-sdk";
+import { useCustomerAuthStore } from "@/stores/customer-auth-store";
+import { useCustomerVerification } from "@/hooks/use-customer-verification";
+import { AuthPromptDialog } from "@/components/booking/AuthPromptDialog";
 import { getTimezonesByRegion, findTimezone, getDetectedTimezone } from "@/lib/timezones";
+import { useCustomerDocuments, getDocumentStatus } from "@/hooks/use-customer-documents";
 interface VehiclePhoto {
   photo_url: string;
 }
@@ -84,6 +88,26 @@ const MultiStepBookingWidget = () => {
   const { tenant } = useTenant();
   const workingHours = useWorkingHours();
   const skipInsurance = isInsuranceExemptTenant(tenant?.id);
+
+  // Customer authentication state
+  const { customerUser, session, loading: authLoading, initialized: authInitialized } = useCustomerAuthStore();
+  const { data: customerVerification, isLoading: verificationLoading } = useCustomerVerification();
+  const { data: customerDocuments } = useCustomerDocuments();
+  const [showAuthDialog, setShowAuthDialog] = useState(false);
+  const [isCustomerDataPopulated, setIsCustomerDataPopulated] = useState(false);
+
+  // Check if user is authenticated with valid session
+  const isAuthenticated = !!customerUser && !!session;
+  // Check if authenticated user is already verified
+  const isCustomerAlreadyVerified = customerVerification?.review_result === 'GREEN' ||
+    customerVerification?.status === 'approved' ||
+    customerVerification?.status === 'verified' ||
+    customerUser?.customer?.identity_verification_status === 'verified';
+  // Check if customer already has DOB in their profile
+  const customerHasDOB = !!customerUser?.customer?.date_of_birth;
+  // Check if customer already has timezone in their profile
+  const customerHasTimezone = !!customerUser?.customer?.timezone;
+
   const [currentStep, setCurrentStep] = useState(1);
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
   const [extras, setExtras] = useState<PricingExtra[]>([]);
@@ -185,6 +209,13 @@ const MultiStepBookingWidget = () => {
   const [hasInsurance, setHasInsurance] = useState<boolean | null>(null);
   const [showUploadDialog, setShowUploadDialog] = useState(false);
   const [uploadedDocumentId, setUploadedDocumentId] = useState<string | null>(null);
+  const [selectedExistingDocument, setSelectedExistingDocument] = useState<string | null>(null);
+
+  // Filter to get only valid insurance documents for logged-in users
+  const existingInsuranceDocuments = customerDocuments?.filter(doc =>
+    doc.document_type === 'Insurance Certificate' &&
+    getDocumentStatus(doc.end_date) !== 'Expired'
+  ) || [];
   const [scanningDocument, setScanningDocument] = useState(false);
 
   // Bonzah insurance state
@@ -230,13 +261,16 @@ const MultiStepBookingWidget = () => {
     dropoffLon: null as number | null
   });
 
-  // Initialize customer timezone when tenant loads - default to tenant's timezone
+  // Initialize customer timezone - priority: 1) customer's saved timezone, 2) tenant's timezone
   useEffect(() => {
-    if (tenant?.timezone && !formData.customerTimezone) {
-      // Default to tenant's timezone so customer sees times in business timezone by default
-      setFormData(prev => ({ ...prev, customerTimezone: tenant.timezone }));
+    // If customer has a saved timezone, always use it (takes priority)
+    if (isAuthenticated && customerUser?.customer?.timezone) {
+      setFormData(prev => ({ ...prev, customerTimezone: customerUser.customer.timezone || '' }));
+    } else if (!formData.customerTimezone && tenant?.timezone) {
+      // Only use tenant's timezone as fallback if no timezone is set yet
+      setFormData(prev => ({ ...prev, customerTimezone: tenant.timezone || '' }));
     }
-  }, [tenant?.timezone, formData.customerTimezone]);
+  }, [tenant?.timezone, isAuthenticated, customerUser?.customer?.timezone]);
 
   useEffect(() => {
     loadData();
@@ -394,14 +428,16 @@ const MultiStepBookingWidget = () => {
     if (savedVerificationSessionId && savedVerificationStatus && !isExpired) {
       setVerificationSessionId(savedVerificationSessionId);
       setVerificationStatus(savedVerificationStatus);
+      // Only restore verification session ID and license number from localStorage
+      // DO NOT restore customerName here - it will be handled by auth auto-populate for authenticated users
+      // This prevents localStorage data from overwriting the authenticated user's actual account data
       setFormData(prev => ({
         ...prev,
         verificationSessionId: savedVerificationSessionId,
-        // Restore verified data if available
-        ...(savedVerifiedName && { customerName: savedVerifiedName }),
+        // Only restore license number (not name - that comes from auth or will be entered by user)
         ...(savedLicenseNumber && { licenseNumber: savedLicenseNumber }),
       }));
-      console.log('✅ Loaded verification from localStorage:', savedVerificationSessionId, savedVerificationStatus, savedVerifiedName);
+      console.log('✅ Loaded verification session from localStorage:', savedVerificationSessionId, savedVerificationStatus);
     } else if (isExpired && savedVerificationSessionId) {
       // Clear expired verification data
       console.log('🕐 Verification data expired, clearing...');
@@ -578,14 +614,29 @@ const MultiStepBookingWidget = () => {
   }, [tenant?.id]);
 
   // Restore form data from sessionStorage on mount (preserves data when navigating away)
+  // For authenticated users, we DO NOT restore customer personal data (name, email)
+  // because that will be handled by the auth auto-populate effect with their actual account data
   useEffect(() => {
     const savedFormData = sessionStorage.getItem('booking_form_data');
     if (savedFormData) {
       try {
         const parsed = JSON.parse(savedFormData);
-        // Merge with existing formData to preserve verification data
+
+        // For authenticated users, ALWAYS clear customer personal fields from sessionStorage
+        // Their actual data will come from the auth auto-populate effect
+        // This ensures we never show stale data from a previous verification or different session
+        if (isAuthenticated && customerUser?.customer) {
+          console.log('🔐 Authenticated user detected - clearing sessionStorage customer data to use account data');
+          delete parsed.customerName;
+          delete parsed.customerEmail;
+          // Keep phone and customerType as they might be editable
+          // delete parsed.licenseNumber; // Keep license from verification
+          // delete parsed.verificationSessionId; // Keep verification session
+        }
+
+        // Merge with existing formData to preserve verification data and trip details
         setFormData(prev => ({ ...prev, ...parsed }));
-        console.log('✅ Restored form data from sessionStorage');
+        console.log('✅ Restored form data from sessionStorage (customer data excluded for auth users)');
       } catch (e) {
         console.error('Failed to restore form data:', e);
       }
@@ -609,7 +660,7 @@ const MultiStepBookingWidget = () => {
         console.error('Failed to restore extras:', e);
       }
     }
-  }, []);
+  }, [isAuthenticated, customerUser?.customer?.email]);
 
   // Persist form data to sessionStorage on every change
   useEffect(() => {
@@ -631,6 +682,209 @@ const MultiStepBookingWidget = () => {
       sessionStorage.setItem('booking_selected_extras', JSON.stringify(selectedExtras));
     }
   }, [selectedExtras]);
+
+  // Auto-populate DOB from customer profile on Step 1 (when authenticated)
+  useEffect(() => {
+    if (isAuthenticated && authInitialized && !authLoading && customerUser?.customer?.date_of_birth) {
+      // Only update if DOB is empty (don't overwrite if user manually changed it)
+      if (!formData.driverDOB) {
+        console.log('✅ Auto-populating DOB from customer profile:', customerUser.customer.date_of_birth);
+        setFormData(prev => ({ ...prev, driverDOB: customerUser.customer.date_of_birth }));
+      }
+    }
+  }, [isAuthenticated, authInitialized, authLoading, customerUser?.customer?.date_of_birth]);
+
+  // Auto-populate customer data when authenticated user reaches Step 4
+  // IMPORTANT: For authenticated users, ALWAYS use their account data, overwriting any stale cached data
+  useEffect(() => {
+    // Only auto-populate once and only when on step 4 with authenticated user
+    if (currentStep === 4 && isAuthenticated && !isCustomerDataPopulated && !authLoading && authInitialized) {
+      const customer = customerUser?.customer;
+      if (customer) {
+        console.log('✅ Auto-populating form with authenticated customer data:', customer.name);
+
+        // Build update object with available customer data
+        // For authenticated users, ALWAYS overwrite with their actual account data
+        // This ensures we don't show stale cached data from sessionStorage
+        const updates: Partial<typeof formData> = {};
+
+        // Always use authenticated user's data (overwrite any stale cached values)
+        if (customer.name) {
+          updates.customerName = customer.name;
+        }
+        if (customer.email) {
+          updates.customerEmail = customer.email;
+        }
+        if (customer.phone) {
+          updates.customerPhone = customer.phone;
+        }
+        if (customer.customer_type) {
+          updates.customerType = customer.customer_type;
+        }
+        if (customer.date_of_birth) {
+          updates.driverDOB = customer.date_of_birth;
+        }
+
+        // For authenticated users, ALWAYS clear localStorage verification data
+        // Their verification status comes from their account, not localStorage
+        // This prevents stale localStorage data from a different session/user from affecting the UI
+        console.log('🧹 Clearing localStorage verification for authenticated user');
+        localStorage.removeItem('verificationSessionId');
+        localStorage.removeItem('verificationStatus');
+        localStorage.removeItem('verificationTimestamp');
+        localStorage.removeItem('verificationToken');
+        localStorage.removeItem('verifiedCustomerName');
+        localStorage.removeItem('verifiedLicenseNumber');
+        localStorage.removeItem('verificationVendorData');
+
+        // If customer is already verified from their account, set verification status
+        if (isCustomerAlreadyVerified) {
+          setVerificationStatus('verified');
+          // Store the verification session ID if available
+          if (customerVerification?.session_id) {
+            setVerificationSessionId(customerVerification.session_id);
+            updates.verificationSessionId = customerVerification.session_id;
+          }
+          // Set license number from verification if available
+          if (customerVerification?.document_number) {
+            updates.licenseNumber = customerVerification.document_number;
+          }
+        } else {
+          // User is authenticated but NOT verified yet - reset verification state to init
+          // This ensures they go through verification process fresh
+          setVerificationStatus('init');
+          setVerificationSessionId('');
+        }
+
+        // Apply updates - this overwrites any stale data
+        if (Object.keys(updates).length > 0) {
+          setFormData(prev => ({ ...prev, ...updates }));
+        }
+
+        setIsCustomerDataPopulated(true);
+      }
+    }
+  }, [currentStep, isAuthenticated, isCustomerDataPopulated, authLoading, authInitialized, customerUser, customerVerification, isCustomerAlreadyVerified]);
+
+  // Reset populated flag when user logs out
+  useEffect(() => {
+    if (!isAuthenticated && isCustomerDataPopulated) {
+      setIsCustomerDataPopulated(false);
+    }
+  }, [isAuthenticated, isCustomerDataPopulated]);
+
+  // Handle mid-booking sign-in: When user signs in during booking flow (any step),
+  // immediately update their data and verification status
+  // This handles the case: user skips auth at step 4, goes to step 5, then signs in
+  useEffect(() => {
+    // Only trigger when user becomes authenticated AND we haven't populated yet
+    // AND we're past the initial loading state
+    if (isAuthenticated && !isCustomerDataPopulated && authInitialized && !authLoading && !verificationLoading) {
+      const customer = customerUser?.customer;
+      if (customer) {
+        console.log('🔐 Mid-booking sign-in detected, syncing user data:', customer.name);
+
+        // Build update object with customer data
+        const updates: Partial<typeof formData> = {};
+
+        if (customer.name) {
+          updates.customerName = customer.name;
+        }
+        if (customer.email) {
+          updates.customerEmail = customer.email;
+        }
+        if (customer.phone) {
+          updates.customerPhone = customer.phone;
+        }
+        if (customer.customer_type) {
+          updates.customerType = customer.customer_type;
+        }
+
+        // For authenticated users, ALWAYS clear localStorage verification data
+        // Their verification status comes from their account, not localStorage
+        console.log('🧹 Clearing localStorage verification for authenticated user (mid-booking sign-in)');
+        localStorage.removeItem('verificationSessionId');
+        localStorage.removeItem('verificationStatus');
+        localStorage.removeItem('verificationTimestamp');
+        localStorage.removeItem('verificationToken');
+        localStorage.removeItem('verifiedCustomerName');
+        localStorage.removeItem('verifiedLicenseNumber');
+        localStorage.removeItem('verificationVendorData');
+
+        // Check if user is already verified from their account
+        if (isCustomerAlreadyVerified) {
+          console.log('✅ User has existing verification, setting verified status');
+          setVerificationStatus('verified');
+
+          if (customerVerification?.session_id) {
+            setVerificationSessionId(customerVerification.session_id);
+            updates.verificationSessionId = customerVerification.session_id;
+          }
+          if (customerVerification?.document_number) {
+            updates.licenseNumber = customerVerification.document_number;
+          }
+        } else {
+          // User is authenticated but NOT verified yet - reset verification state
+          setVerificationStatus('init');
+          setVerificationSessionId('');
+        }
+
+        // Apply updates
+        if (Object.keys(updates).length > 0) {
+          setFormData(prev => ({ ...prev, ...updates }));
+        }
+
+        setIsCustomerDataPopulated(true);
+      }
+    }
+  }, [isAuthenticated, isCustomerDataPopulated, authInitialized, authLoading, verificationLoading, customerUser, customerVerification, isCustomerAlreadyVerified]);
+
+  // When customerVerification data loads/changes after sign-in, update verification status
+  // This handles async loading of verification data after authentication
+  useEffect(() => {
+    if (isAuthenticated && isCustomerDataPopulated && !verificationLoading && customerVerification) {
+      // Check if we need to update verification status based on newly loaded data
+      const isVerified = customerVerification.review_result === 'GREEN' ||
+        customerVerification.status === 'approved' ||
+        customerVerification.status === 'verified';
+
+      if (isVerified && verificationStatus !== 'verified') {
+        console.log('✅ Verification data loaded, updating status to verified');
+        setVerificationStatus('verified');
+
+        if (customerVerification.session_id) {
+          setVerificationSessionId(customerVerification.session_id);
+        }
+        if (customerVerification.document_number && !formData.licenseNumber) {
+          setFormData(prev => ({
+            ...prev,
+            licenseNumber: customerVerification.document_number || '',
+            verificationSessionId: customerVerification.session_id || ''
+          }));
+        }
+      }
+    }
+  }, [isAuthenticated, isCustomerDataPopulated, verificationLoading, customerVerification, verificationStatus]);
+
+  // Check for session expiry when reaching Step 4
+  // If user was authenticated but session expired, show auth dialog
+  useEffect(() => {
+    if (currentStep === 4 && authInitialized && !authLoading) {
+      // Check if there's evidence of previous authentication but no current session
+      const hadPreviousSession = sessionStorage.getItem('booking_had_auth_session') === 'true';
+
+      if (hadPreviousSession && !isAuthenticated) {
+        // Session expired, show auth dialog
+        console.log('🔐 Session expired, prompting for re-authentication');
+        setShowAuthDialog(true);
+        // Clear the flag to avoid repeated prompts
+        sessionStorage.removeItem('booking_had_auth_session');
+      } else if (isAuthenticated) {
+        // Mark that user had an authenticated session
+        sessionStorage.setItem('booking_had_auth_session', 'true');
+      }
+    }
+  }, [currentStep, authInitialized, authLoading, isAuthenticated]);
 
   // Warn user about unsaved data when leaving page
   useEffect(() => {
@@ -1035,6 +1289,11 @@ const MultiStepBookingWidget = () => {
               localStorage.setItem('verificationTimestamp', Date.now().toString());
               toast.success('Identity verified successfully! You can now continue with your booking.');
 
+              // Show auth dialog for guest users to save their verification
+              if (!isAuthenticated) {
+                setShowAuthDialog(true);
+              }
+
               // Track analytics
               if (typeof window !== 'undefined' && (window as any).gtag) {
                 (window as any).gtag('event', 'verification_completed', {
@@ -1169,6 +1428,11 @@ const MultiStepBookingWidget = () => {
         email: formData.customerEmail,
         result: 'verified',
       });
+    }
+
+    // Show auth dialog for guest users to save their verification
+    if (!isAuthenticated) {
+      setShowAuthDialog(true);
     }
   };
 
@@ -2695,30 +2959,45 @@ const MultiStepBookingWidget = () => {
               {/* Customer Timezone Selection */}
               <div className="space-y-2">
                 <Label className="font-medium">Your Timezone</Label>
-                <Select
-                  value={formData.customerTimezone}
-                  onValueChange={(value) => setFormData({ ...formData, customerTimezone: value })}
-                >
-                  <SelectTrigger className="h-12">
-                    <SelectValue placeholder="Select your timezone">
-                      {findTimezone(formData.customerTimezone)?.label || formData.customerTimezone || 'Select timezone'}
-                    </SelectValue>
-                  </SelectTrigger>
-                  <SelectContent className="max-h-[300px]">
-                    {getTimezonesByRegion().map((group) => (
-                      <div key={group.region}>
-                        <div className="px-2 py-1.5 text-sm font-semibold text-muted-foreground bg-muted/50">
-                          {group.label}
+                {/* Show read-only display for logged-in users with timezone in profile */}
+                {isAuthenticated && isCustomerDataPopulated && customerHasTimezone ? (
+                  <div className="space-y-2">
+                    <Input
+                      value={findTimezone(formData.customerTimezone)?.label || formData.customerTimezone}
+                      readOnly
+                      className="h-12 max-w-md bg-muted/50"
+                    />
+                    <p className="text-xs text-muted-foreground flex items-center gap-1">
+                      <CheckCircle className="w-3 h-3 text-primary" />
+                      From your account settings
+                    </p>
+                  </div>
+                ) : (
+                  <Select
+                    value={formData.customerTimezone}
+                    onValueChange={(value) => setFormData({ ...formData, customerTimezone: value })}
+                  >
+                    <SelectTrigger className="h-12 max-w-md">
+                      <SelectValue placeholder="Select your timezone">
+                        {findTimezone(formData.customerTimezone)?.label || formData.customerTimezone || 'Select timezone'}
+                      </SelectValue>
+                    </SelectTrigger>
+                    <SelectContent className="max-h-[300px]">
+                      {getTimezonesByRegion().map((group) => (
+                        <div key={group.region}>
+                          <div className="px-2 py-1.5 text-sm font-semibold text-muted-foreground bg-muted/50">
+                            {group.label}
+                          </div>
+                          {group.timezones.map((tz) => (
+                            <SelectItem key={tz.value} value={tz.value}>
+                              {tz.label}
+                            </SelectItem>
+                          ))}
                         </div>
-                        {group.timezones.map((tz) => (
-                          <SelectItem key={tz.value} value={tz.value}>
-                            {tz.label}
-                          </SelectItem>
-                        ))}
-                      </div>
-                    ))}
-                  </SelectContent>
-                </Select>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
               </div>
 
               {/* Business Timezone Notice */}
@@ -2871,78 +3150,96 @@ const MultiStepBookingWidget = () => {
               </div>
             </div>
 
-            {/* Row 3: Driver DOB and Promo Code */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              {/* Date of Birth */}
-              <div className="space-y-2">
-                <Label className="font-medium">Date of Birth *</Label>
-                <div className="grid grid-cols-3 gap-2">
-                  {/* Month Select */}
-                  <Select
-                    value={formData.driverDOB ? (parseDateString(formData.driverDOB).getMonth() + 1).toString().padStart(2, '0') : ""}
-                    onValueChange={(month) => {
-                      const currentDate = formData.driverDOB ? parseDateString(formData.driverDOB) : new Date(2000, 0, 1);
-                      const newDate = new Date(currentDate.getFullYear(), parseInt(month) - 1, Math.min(currentDate.getDate(), new Date(currentDate.getFullYear(), parseInt(month), 0).getDate()));
-                      const dateStr = format(newDate, "yyyy-MM-dd");
-                      setFormData({ ...formData, driverDOB: dateStr });
-                      validateField('driverDOB', dateStr);
-                    }}
-                  >
-                    <SelectTrigger className={cn("h-12", errors.driverDOB && "border-destructive")}>
-                      <SelectValue placeholder="Month" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'].map((month, i) => (
-                        <SelectItem key={i} value={(i + 1).toString().padStart(2, '0')}>{month}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  {/* Day Select */}
-                  <Select
-                    value={formData.driverDOB ? parseDateString(formData.driverDOB).getDate().toString() : ""}
-                    onValueChange={(day) => {
-                      const currentDate = formData.driverDOB ? parseDateString(formData.driverDOB) : new Date(2000, 0, 1);
-                      const newDate = new Date(currentDate.getFullYear(), currentDate.getMonth(), parseInt(day));
-                      const dateStr = format(newDate, "yyyy-MM-dd");
-                      setFormData({ ...formData, driverDOB: dateStr });
-                      validateField('driverDOB', dateStr);
-                    }}
-                  >
-                    <SelectTrigger className={cn("h-12", errors.driverDOB && "border-destructive")}>
-                      <SelectValue placeholder="Day" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {Array.from({ length: 31 }, (_, i) => (
-                        <SelectItem key={i + 1} value={(i + 1).toString()}>{i + 1}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  {/* Year Select */}
-                  <Select
-                    value={formData.driverDOB ? parseDateString(formData.driverDOB).getFullYear().toString() : ""}
-                    onValueChange={(year) => {
-                      const currentDate = formData.driverDOB ? parseDateString(formData.driverDOB) : new Date(2000, 0, 1);
-                      const newDate = new Date(parseInt(year), currentDate.getMonth(), Math.min(currentDate.getDate(), new Date(parseInt(year), currentDate.getMonth() + 1, 0).getDate()));
-                      const dateStr = format(newDate, "yyyy-MM-dd");
-                      setFormData({ ...formData, driverDOB: dateStr });
-                      validateField('driverDOB', dateStr);
-                    }}
-                  >
-                    <SelectTrigger className={cn("h-12", errors.driverDOB && "border-destructive")}>
-                      <SelectValue placeholder="Year" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {Array.from({ length: 100 }, (_, i) => new Date().getFullYear() - (tenant?.minimum_rental_age || 18) - i).map((year) => (
-                        <SelectItem key={year} value={year.toString()}>{year}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+            {/* Row 3: Driver DOB */}
+            <div className="space-y-2">
+              <Label className="font-medium">Date of Birth *</Label>
+              {/* Show read-only display for logged-in users with DOB in profile */}
+              {isAuthenticated && isCustomerDataPopulated && customerHasDOB ? (
+                <div className="space-y-2">
+                  <Input
+                    value={formData.driverDOB ? format(new Date(formData.driverDOB), "MMMM d, yyyy") : ""}
+                    readOnly
+                    className="h-12 max-w-md bg-muted/50"
+                  />
+                  <p className="text-xs text-muted-foreground flex items-center gap-1">
+                    <CheckCircle className="w-3 h-3 text-primary" />
+                    From your account profile
+                  </p>
+                  {formData.driverDOB && (
+                    <p className="text-sm text-muted-foreground">Age: <span className="font-medium text-foreground">{calculateAge(new Date(formData.driverDOB))} years old</span></p>
+                  )}
                 </div>
-                {formData.driverDOB && (
-                  <p className="text-sm text-muted-foreground">Age: <span className={cn("font-medium", errors.driverDOB ? "text-destructive" : "text-foreground")}>{calculateAge(parseDateString(formData.driverDOB))} years old</span></p>
-                )}
-                {errors.driverDOB && <p className="text-sm text-destructive">{errors.driverDOB}</p>}
-              </div>
+              ) : (
+                <>
+                  <div className="grid grid-cols-3 gap-2 max-w-md">
+                    {/* Month Select */}
+                    <Select
+                      value={formData.driverDOB ? (new Date(formData.driverDOB).getMonth() + 1).toString().padStart(2, '0') : ""}
+                      onValueChange={(month) => {
+                        const currentDate = formData.driverDOB ? new Date(formData.driverDOB) : new Date(2000, 0, 1);
+                        const newDate = new Date(currentDate.getFullYear(), parseInt(month) - 1, Math.min(currentDate.getDate(), new Date(currentDate.getFullYear(), parseInt(month), 0).getDate()));
+                        const dateStr = format(newDate, "yyyy-MM-dd");
+                        setFormData({ ...formData, driverDOB: dateStr });
+                        validateField('driverDOB', dateStr);
+                      }}
+                    >
+                      <SelectTrigger className={cn("h-12", errors.driverDOB && "border-destructive")}>
+                        <SelectValue placeholder="Month" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'].map((month, i) => (
+                          <SelectItem key={i} value={(i + 1).toString().padStart(2, '0')}>{month}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    {/* Day Select */}
+                    <Select
+                      value={formData.driverDOB ? new Date(formData.driverDOB).getDate().toString() : ""}
+                      onValueChange={(day) => {
+                        const currentDate = formData.driverDOB ? new Date(formData.driverDOB) : new Date(2000, 0, 1);
+                        const newDate = new Date(currentDate.getFullYear(), currentDate.getMonth(), parseInt(day));
+                        const dateStr = format(newDate, "yyyy-MM-dd");
+                        setFormData({ ...formData, driverDOB: dateStr });
+                        validateField('driverDOB', dateStr);
+                      }}
+                    >
+                      <SelectTrigger className={cn("h-12", errors.driverDOB && "border-destructive")}>
+                        <SelectValue placeholder="Day" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {Array.from({ length: 31 }, (_, i) => (
+                          <SelectItem key={i + 1} value={(i + 1).toString()}>{i + 1}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    {/* Year Select */}
+                    <Select
+                      value={formData.driverDOB ? new Date(formData.driverDOB).getFullYear().toString() : ""}
+                      onValueChange={(year) => {
+                        const currentDate = formData.driverDOB ? new Date(formData.driverDOB) : new Date(2000, 0, 1);
+                        const newDate = new Date(parseInt(year), currentDate.getMonth(), Math.min(currentDate.getDate(), new Date(parseInt(year), currentDate.getMonth() + 1, 0).getDate()));
+                        const dateStr = format(newDate, "yyyy-MM-dd");
+                        setFormData({ ...formData, driverDOB: dateStr });
+                        validateField('driverDOB', dateStr);
+                      }}
+                    >
+                      <SelectTrigger className={cn("h-12", errors.driverDOB && "border-destructive")}>
+                        <SelectValue placeholder="Year" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {Array.from({ length: 100 }, (_, i) => new Date().getFullYear() - (tenant?.minimum_rental_age || 18) - i).map((year) => (
+                          <SelectItem key={year} value={year.toString()}>{year}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  {formData.driverDOB && (
+                    <p className="text-sm text-muted-foreground">Age: <span className={cn("font-medium", errors.driverDOB ? "text-destructive" : "text-foreground")}>{calculateAge(new Date(formData.driverDOB))} years old</span></p>
+                  )}
+                  {errors.driverDOB && <p className="text-sm text-destructive">{errors.driverDOB}</p>}
+                </>
+              )}
+            </div>
 
               {/* Promo Code */}
               <div className="space-y-2">
@@ -2981,7 +3278,6 @@ const MultiStepBookingWidget = () => {
                   </p>
                 )}
               </div>
-            </div>
           </div>
 
           <Button
@@ -3824,11 +4120,7 @@ const MultiStepBookingWidget = () => {
                   <div className="grid md:grid-cols-2 gap-6">
                     {/* YES Option */}
                     <Card
-                      className="group relative overflow-hidden border-2 border-border hover:border-primary hover:shadow-lg transition-all cursor-pointer bg-gradient-to-br from-primary/5 to-transparent"
-                      onClick={() => {
-                        setHasInsurance(true);
-                        setShowUploadDialog(true);
-                      }}
+                      className="group relative overflow-hidden border-2 border-border hover:border-primary hover:shadow-lg transition-all bg-gradient-to-br from-primary/5 to-transparent"
                     >
                       <div className="p-8 text-center space-y-4">
                         <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-primary/10 mb-2">
@@ -3837,15 +4129,69 @@ const MultiStepBookingWidget = () => {
                         <div>
                           <h5 className="text-lg font-semibold mb-2">Yes, I Have Insurance</h5>
                           <p className="text-sm text-muted-foreground">
-                            Upload your current insurance certificate and we'll verify it instantly
+                            {isAuthenticated && existingInsuranceDocuments.length > 0
+                              ? "Select from your existing documents or upload a new one"
+                              : "Upload your current insurance certificate and we'll verify it instantly"}
                           </p>
                         </div>
+
+                        {/* Show dropdown for logged-in users with existing documents */}
+                        {isAuthenticated && existingInsuranceDocuments.length > 0 && (
+                          <div className="space-y-3">
+                            <Select
+                              value={selectedExistingDocument || ""}
+                              onValueChange={(value) => {
+                                setSelectedExistingDocument(value);
+                              }}
+                            >
+                              <SelectTrigger className="w-full">
+                                <SelectValue placeholder="Select existing insurance" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {existingInsuranceDocuments.map((doc) => (
+                                  <SelectItem key={doc.id} value={doc.id}>
+                                    {doc.insurance_provider || doc.document_name}
+                                    {doc.policy_number && ` - ${doc.policy_number}`}
+                                    {doc.end_date && ` (Expires: ${new Date(doc.end_date).toLocaleDateString()})`}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                            <Button
+                              className="w-full bg-primary hover:bg-primary/90"
+                              size="lg"
+                              disabled={!selectedExistingDocument}
+                              onClick={() => {
+                                if (selectedExistingDocument) {
+                                  setUploadedDocumentId(selectedExistingDocument);
+                                  setHasInsurance(true);
+                                }
+                              }}
+                            >
+                              <CheckCircle className="mr-2 h-5 w-5" />
+                              Use Selected Document
+                            </Button>
+                            <div className="relative">
+                              <div className="absolute inset-0 flex items-center">
+                                <span className="w-full border-t" />
+                              </div>
+                              <div className="relative flex justify-center text-xs uppercase">
+                                <span className="bg-card px-2 text-muted-foreground">or</span>
+                              </div>
+                            </div>
+                          </div>
+                        )}
+
                         <Button
                           className="w-full bg-primary hover:bg-primary/90"
                           size="lg"
+                          onClick={() => {
+                            setHasInsurance(true);
+                            setShowUploadDialog(true);
+                          }}
                         >
                           <Upload className="mr-2 h-5 w-5" />
-                          Upload Certificate
+                          Upload New Certificate
                         </Button>
                         <div className="pt-4 border-t border-border/50">
                           <p className="text-xs text-muted-foreground">
@@ -4094,6 +4440,31 @@ const MultiStepBookingWidget = () => {
             </h3>
           </div>
 
+          {/* Authenticated User Banner */}
+          {isAuthenticated && isCustomerDataPopulated && (
+            <div className="bg-primary/5 border border-primary/20 rounded-lg p-4">
+              <div className="flex items-center gap-3">
+                <div className="p-2 rounded-full bg-primary/10">
+                  <UserCheck className="w-5 h-5 text-primary" />
+                </div>
+                <div className="flex-1">
+                  <p className="text-sm font-medium text-foreground">
+                    Welcome back, {customerUser?.customer?.name}!
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    Your details have been auto-filled from your account.
+                    {isCustomerAlreadyVerified && ' Your ID is already verified.'}
+                  </p>
+                </div>
+                {isCustomerAlreadyVerified && (
+                  <Badge variant="default" className="bg-green-500 hover:bg-green-500/90 text-white">
+                    <CheckCircle className="w-3 h-3 mr-1" /> Verified
+                  </Badge>
+                )}
+              </div>
+            </div>
+          )}
+
           {/* Form Fields */}
           <div className="space-y-8">
             {/* Row 1: Customer Name & Email */}
@@ -4113,12 +4484,20 @@ const MultiStepBookingWidget = () => {
                     validateField('customerName', value);
                   }}
                   placeholder="Enter your full name"
-                  className={cn("h-12 focus-visible:ring-primary", verificationStatus === 'verified' && "bg-muted cursor-not-allowed")}
-                  disabled={verificationStatus === 'verified'}
+                  className={cn(
+                    "h-12 focus-visible:ring-primary",
+                    (verificationStatus === 'verified' || (isAuthenticated && isCustomerAlreadyVerified)) && "bg-muted cursor-not-allowed"
+                  )}
+                  disabled={verificationStatus === 'verified' || (isAuthenticated && isCustomerAlreadyVerified)}
                 />
-                {verificationStatus === 'verified' && (
+                {verificationStatus === 'verified' && !isCustomerAlreadyVerified && (
                   <p className="text-xs text-green-600 flex items-center gap-1">
                     <CheckCircle className="w-3 h-3" /> Verified from ID document
+                  </p>
+                )}
+                {isAuthenticated && isCustomerDataPopulated && isCustomerAlreadyVerified && (
+                  <p className="text-xs text-green-600 flex items-center gap-1">
+                    <CheckCircle className="w-3 h-3" /> From your verified account
                   </p>
                 )}
                 {errors.customerName && <p className="text-sm text-destructive">{errors.customerName}</p>}
@@ -4140,8 +4519,17 @@ const MultiStepBookingWidget = () => {
                     validateField('customerEmail', value);
                   }}
                   placeholder="your@email.com"
-                  className="h-12 focus-visible:ring-primary"
+                  className={cn(
+                    "h-12 focus-visible:ring-primary",
+                    isAuthenticated && isCustomerDataPopulated && "bg-muted/50"
+                  )}
+                  readOnly={isAuthenticated && isCustomerDataPopulated}
                 />
+                {isAuthenticated && isCustomerDataPopulated && (
+                  <p className="text-xs text-muted-foreground flex items-center gap-1">
+                    <UserCheck className="w-3 h-3" /> From your account
+                  </p>
+                )}
                 {errors.customerEmail && <p className="text-sm text-destructive">{errors.customerEmail}</p>}
               </div>
             </div>
@@ -4155,6 +4543,7 @@ const MultiStepBookingWidget = () => {
                   value={formData.customerPhone}
                   defaultCountry="US"
                   onChange={value => {
+                    // Allow phone changes even for authenticated users (they might want to use different phone)
                     setFormData({
                       ...formData,
                       customerPhone: value
@@ -4165,6 +4554,11 @@ const MultiStepBookingWidget = () => {
                   error={!!errors.customerPhone}
                   className="h-12"
                 />
+                {isAuthenticated && isCustomerDataPopulated && formData.customerPhone && (
+                  <p className="text-xs text-muted-foreground flex items-center gap-1">
+                    <UserCheck className="w-3 h-3" /> From your account (editable)
+                  </p>
+                )}
                 {errors.customerPhone && <p className="text-sm text-destructive">{errors.customerPhone}</p>}
               </div>
 
@@ -4398,7 +4792,62 @@ const MultiStepBookingWidget = () => {
                 <strong>Required:</strong> To ensure security and compliance, all customers must complete identity verification before proceeding with their rental.
               </p>
 
-              {verificationStatus === 'init' && (
+              {/* Already Verified from Account - Show green success state */}
+              {isAuthenticated && isCustomerAlreadyVerified && verificationStatus === 'verified' && (
+                <div className="bg-green-500/10 border border-green-500/20 rounded-lg p-4 sm:p-5">
+                  <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
+                    <div className="flex items-start gap-3 flex-1">
+                      <div className="p-2 rounded-full bg-green-500/20 flex-shrink-0">
+                        <Shield className="w-6 h-6 text-green-500" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm sm:text-base font-semibold mb-1 text-green-600 dark:text-green-500">
+                          Already Verified
+                        </p>
+                        <p className="text-xs sm:text-sm text-muted-foreground">
+                          Your identity has been verified from your account. You don't need to verify again.
+                        </p>
+                        {customerVerification && (
+                          <div className="mt-3 grid grid-cols-2 gap-3 text-xs">
+                            {customerVerification.document_type && (
+                              <div>
+                                <span className="text-muted-foreground">Document Type:</span>
+                                <p className="font-medium capitalize">{customerVerification.document_type.replace('_', ' ')}</p>
+                              </div>
+                            )}
+                            {customerVerification.document_number && (
+                              <div>
+                                <span className="text-muted-foreground">Document Number:</span>
+                                <p className="font-medium">****{customerVerification.document_number.slice(-4)}</p>
+                              </div>
+                            )}
+                            {customerVerification.verification_provider && (
+                              <div>
+                                <span className="text-muted-foreground">Verified via:</span>
+                                <p className="font-medium capitalize">
+                                  {customerVerification.verification_provider === 'ai' ? 'AI Verification' : 'Veriff'}
+                                </p>
+                              </div>
+                            )}
+                            {customerVerification.ai_face_match_score && (
+                              <div>
+                                <span className="text-muted-foreground">Face Match:</span>
+                                <p className="font-medium">{Math.round(customerVerification.ai_face_match_score * 100)}%</p>
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                    <Badge variant="default" className="bg-green-500 hover:bg-green-500/90 text-white self-start">
+                      <CheckCircle className="w-3 h-3 mr-1" /> Verified
+                    </Badge>
+                  </div>
+                </div>
+              )}
+
+              {/* Not verified yet - show verification required */}
+              {verificationStatus === 'init' && !isCustomerAlreadyVerified && (
                 <div className="bg-destructive/10 border border-destructive/20 rounded-lg p-3 sm:p-4">
                   <div className="flex items-start gap-2 sm:gap-3">
                     <AlertCircle className="w-5 h-5 text-destructive mt-0.5 flex-shrink-0" />
@@ -4479,6 +4928,10 @@ const MultiStepBookingWidget = () => {
                                 setVerificationStatus('verified');
                                 localStorage.setItem('verificationStatus', 'verified');
                                 toast.success('Identity verified! You can now continue with your booking.');
+                                // Show auth dialog for guest users to save their verification
+                                if (!isAuthenticated) {
+                                  setShowAuthDialog(true);
+                                }
                               }}
                               variant="outline"
                               className="border-green-500 text-green-600 hover:bg-green-500 hover:text-white w-full sm:w-auto"
@@ -4526,7 +4979,9 @@ const MultiStepBookingWidget = () => {
                 </>
               )}
 
-              {verificationStatus === 'verified' && (
+              {/* Show this verification box ONLY for non-authenticated users who verified during this session */}
+              {/* Authenticated users with existing verification see the "Already Verified" box above instead */}
+              {verificationStatus === 'verified' && !(isAuthenticated && isCustomerAlreadyVerified) && (
                 <div className="bg-green-500/10 border border-green-500/20 rounded-lg p-3 sm:p-4">
                   <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
                     <div className="flex items-start gap-2 sm:gap-3 flex-1">
@@ -4737,6 +5192,29 @@ const MultiStepBookingWidget = () => {
         } finally {
           setScanningDocument(false);
         }
+      }}
+    />
+
+    {/* Auth Prompt Dialog for session expiry */}
+    <AuthPromptDialog
+      open={showAuthDialog}
+      onOpenChange={setShowAuthDialog}
+      prefillEmail={formData.customerEmail}
+      onSkip={() => {
+        setShowAuthDialog(false);
+        // User chose to continue as guest
+      }}
+      onSuccess={() => {
+        setShowAuthDialog(false);
+        // Reset flags to trigger re-sync of user data and verification
+        // The useEffect hooks will detect auth change and fetch fresh data
+        setIsCustomerDataPopulated(false);
+        // Reset verification status to 'init' so it gets recalculated from user's account
+        // If user has existing verification, it will be set to 'verified' by the effect
+        if (verificationStatus !== 'verified') {
+          setVerificationStatus('init');
+        }
+        console.log('🔐 Auth success, triggering data re-sync');
       }}
     />
   </>;

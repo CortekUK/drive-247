@@ -3,7 +3,6 @@
     "allow": [
       "Bash(grep -E \"$|\\$\")",
       "Bash(grep:*)",
-      "Bash(npx supabase:*)",
       "Bash(cat:*)",
       "Bash(lsof:*)",
       "Bash(xargs kill:*)",
@@ -27,34 +26,20 @@
       "Bash(node scripts/create-site-settings-page.js:*)",
       "Bash(npm ls:*)",
       "Bash(taskkill //F //PID 15100)",
-      "Bash(git reset:*)",
-      "Bash(git commit -m \"$\\(cat <<''EOF''\nfix\\(portal\\): vehicle fixes - service type, document upload, disposal dialog\n\n- Add service_type field to service records with dropdown selection\n- Rename Description to Notes in service record form\n- Fix document upload not showing after upload \\(query key mismatch\\)\n- Fix vehicle disposal dialog height issue with scroll\n- Add .env and .claude/ to gitignore\n\n🤖 Generated with [Claude Code]\\(https://claude.com/claude-code\\)\n\nCo-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>\nEOF\n\\)\")",
-      "Bash(git push:*)",
-      "Bash(npx tsc:*)",
-      "Bash(git add:*)",
-      "Bash(git commit:*)",
       "Bash(taskkill //F //PID 20896)",
       "Bash(git checkout:*)",
       "Bash(find:*)",
       "Bash(git rm:*)",
       "Bash(npm run lint:*)",
       "Bash(npx next lint)",
-      "Bash(node scripts/update-cms-content.js:*)",
-      "Bash(npm run build:*)",
-      "Bash(npx next build:*)",
-      "Bash(supabase functions deploy:*)",
-      "Bash(git -C /home/haseeb-raza/Desktop/drive-247 log --oneline -20 -- \"*veriff*\" \"*verify*\" \"*identity*\")",
-      "Bash(git -C /home/haseeb-raza/Desktop/drive-247 log -p --since=\"2 weeks ago\" -- \"apps/booking/src/app/verify\" \"apps/booking/src/components/MultiStepBookingWidget.tsx\" \"apps/booking/src/app/api/check-veriff-status\")",
-      "Bash(__NEW_LINE_55a4d4bb315f26bf__ echo \"\")",
-      "Bash(xargs -I{} sh -c 'echo \"\"=== {} ===\"\" && grep -i stripe {} 2>/dev/null | head -5')",
-      "Bash(supabase functions logs:*)",
-      "Bash(xargs cat:*)",
-      "Bash(supabase secrets:*)",
-      "Bash(supabase functions list:*)",
-      "Bash(./node_modules/.bin/tsc:*)",
-      "Bash(npm exec:*)"
+      "Bash(xargs:*)",
+      "mcp__ide__getDiagnostics"
     ],
     "deny": [],
     "ask": []
-  }
+  },
+  "enableAllProjectMcpServers": true,
+  "enabledMcpjsonServers": [
+    "supabase"
+  ]
 }

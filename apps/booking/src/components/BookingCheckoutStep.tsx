@@ -10,9 +10,11 @@ import { toast } from "sonner";
 import { ChevronLeft, CreditCard, Shield, Calendar, MapPin, Clock, Car, User, Loader2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useTenant } from "@/contexts/TenantContext";
+import { useCustomerAuthStore } from "@/stores/customer-auth-store";
 import { format } from "date-fns";
 import { isEnquiryBasedTenant } from "@/config/tenant-config";
 import { InvoiceDialog } from "@/components/InvoiceDialog";
+import { AuthPromptDialog } from "@/components/booking/AuthPromptDialog";
 import { createInvoiceWithFallback, Invoice } from "@/lib/invoiceUtils";
 
 interface PromoDetails {
@@ -58,8 +60,10 @@ export default function BookingCheckoutStep({
 }: BookingCheckoutStepProps) {
   const router = useRouter();
   const { tenant } = useTenant();
+  const { customerUser } = useCustomerAuthStore();
   const [agreeTerms, setAgreeTerms] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [showAuthDialog, setShowAuthDialog] = useState(false);
 
   // Dialog states
   const [showInvoiceDialog, setShowInvoiceDialog] = useState(false);
@@ -482,17 +486,8 @@ export default function BookingCheckoutStep({
     }
   };
 
-  const handlePayment = async () => {
-    if (!agreeTerms) {
-      toast.error("You must agree to the terms and conditions");
-      return;
-    }
-
-    // Prevent double submission
-    if (isProcessing) {
-      return;
-    }
-
+  // Actual payment processing - called after auth check
+  const proceedWithPayment = async () => {
     if (typeof window !== 'undefined' && (window as any).gtag) {
       (window as any).gtag('event', 'checkout_submitted', {
         vehicle_id: selectedVehicle.id,
@@ -995,6 +990,28 @@ export default function BookingCheckoutStep({
     }
   };
 
+  // Handle payment button click - shows auth dialog if not authenticated
+  const handlePayment = async () => {
+    if (!agreeTerms) {
+      toast.error("You must agree to the terms and conditions");
+      return;
+    }
+
+    // Prevent double submission
+    if (isProcessing) {
+      return;
+    }
+
+    // If user is not authenticated, show auth dialog first
+    if (!customerUser) {
+      setShowAuthDialog(true);
+      return;
+    }
+
+    // User is authenticated, proceed directly to payment
+    proceedWithPayment();
+  };
+
   // Show loading state if vehicle is not yet loaded
   if (!selectedVehicle) {
     return (
@@ -1336,6 +1353,23 @@ export default function BookingCheckoutStep({
           }}
         />
       )}
+
+      {/* Auth Prompt Dialog - shown before payment for unauthenticated users */}
+      <AuthPromptDialog
+        open={showAuthDialog}
+        onOpenChange={setShowAuthDialog}
+        prefillEmail={formData.customerEmail}
+        customerName={formData.customerName}
+        customerPhone={formData.customerPhone}
+        onSkip={() => {
+          setShowAuthDialog(false);
+          proceedWithPayment();
+        }}
+        onSuccess={() => {
+          setShowAuthDialog(false);
+          proceedWithPayment();
+        }}
+      />
 
     </div>
   );

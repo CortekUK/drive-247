@@ -12,6 +12,7 @@ import { ThemeInitializer } from '@/components/ThemeInitializer';
 import GDPRConsent from '@/components/GDPRConsent';
 import ScrollToTopOnNavigate from '@/components/ScrollToTopOnNavigate';
 import { TenantProvider } from '@/contexts/TenantContext';
+import { CustomerAuthProvider } from '@/providers/CustomerAuthProvider';
 import DevJumpPanel from '@/components/DevJumpPanel';
 
 const inter = Inter({ subsets: ['latin'] });
@@ -107,7 +108,8 @@ export default function RootLayout({
       <body className={inter.className} suppressHydrationWarning>
         <QueryClientProvider>
           <TenantProvider>
-            <ThemeProvider
+            <CustomerAuthProvider>
+              <ThemeProvider
               attribute="class"
               defaultTheme="dark"
               enableSystem={true}
@@ -124,7 +126,8 @@ export default function RootLayout({
                   {children}
                 </TooltipProvider>
               </ThemeInitializer>
-            </ThemeProvider>
+              </ThemeProvider>
+            </CustomerAuthProvider>
           </TenantProvider>
         </QueryClientProvider>
       </body>
