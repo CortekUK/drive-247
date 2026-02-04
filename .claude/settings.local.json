@@ -3,7 +3,6 @@
     "allow": [
       "Bash(grep -E \"$|\\$\")",
       "Bash(grep:*)",
-      "Bash(npx supabase:*)",
       "Bash(cat:*)",
       "Bash(lsof:*)",
       "Bash(xargs kill:*)",
@@ -32,13 +31,15 @@
       "Bash(find:*)",
       "Bash(git rm:*)",
       "Bash(npm run lint:*)",
-      "Bash(npx next lint)"
+      "Bash(npx next lint)",
+      "Bash(xargs:*)",
+      "mcp__ide__getDiagnostics"
     ],
     "deny": [],
     "ask": []
   },
+  "enableAllProjectMcpServers": true,
   "enabledMcpjsonServers": [
     "supabase"
-  ],
-  "enableAllProjectMcpServers": true
+  ]
 }

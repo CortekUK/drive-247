@@ -10,6 +10,7 @@ import {
   SidebarInset,
 } from '@/components/ui/sidebar';
 import { Skeleton } from '@/components/ui/skeleton';
+import { CustomerSocketProvider } from '@/contexts/CustomerSocketContext';
 
 function LoadingSkeleton() {
   return (
@@ -66,14 +67,16 @@ export default function CustomerPortalLayout({
   }
 
   return (
-    <SidebarProvider>
-      <CustomerPortalSidebar />
-      <SidebarInset className="overflow-x-hidden">
-        <CustomerPortalHeader />
-        <main className="flex flex-1 flex-col gap-4 p-4 pt-4">
-          {children}
-        </main>
-      </SidebarInset>
-    </SidebarProvider>
+    <CustomerSocketProvider>
+      <SidebarProvider>
+        <CustomerPortalSidebar />
+        <SidebarInset className="overflow-x-hidden">
+          <CustomerPortalHeader />
+          <main className="flex flex-1 flex-col gap-4 p-4 pt-4">
+            {children}
+          </main>
+        </SidebarInset>
+      </SidebarProvider>
+    </CustomerSocketProvider>
   );
 }

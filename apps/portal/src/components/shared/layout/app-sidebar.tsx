@@ -2,12 +2,13 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Car, Users, FileText, CreditCard, LayoutDashboard, Bell, BarChart3, AlertCircle, TrendingUp, Settings, CalendarDays, Receipt, FolderOpen, UserX, Globe, History, Clock, UsersRound } from "lucide-react";
+import { Car, Users, FileText, CreditCard, LayoutDashboard, Bell, BarChart3, AlertCircle, TrendingUp, Settings, CalendarDays, Receipt, FolderOpen, UserX, Globe, History, Clock, UsersRound, MessageSquare } from "lucide-react";
 import { Sidebar, SidebarContent, SidebarGroup, SidebarGroupContent, SidebarGroupLabel, SidebarHeader, SidebarMenu, SidebarMenuButton, SidebarMenuItem, SidebarFooter, useSidebar } from "@/components/ui/sidebar";
 import { useReminderStats } from "@/hooks/use-reminders";
 import { useOrgSettings } from "@/hooks/use-org-settings";
 import { useTenantBranding } from "@/hooks/use-tenant-branding";
 import { usePendingBookingsCount } from "@/hooks/use-pending-bookings";
+import { useUnreadCount } from "@/hooks/use-unread-count";
 import { useAuthStore } from "@/stores/auth-store";
 
 export function AppSidebar() {
@@ -21,6 +22,7 @@ export function AppSidebar() {
   const { settings } = useOrgSettings();
   const { branding } = useTenantBranding();
   const { data: pendingBookingsCount } = usePendingBookingsCount();
+  const { unreadCount: chatUnreadCount } = useUnreadCount();
   const { appUser } = useAuthStore();
 
   // Get app name and logo from tenant branding or fallback to defaults
@@ -78,6 +80,12 @@ export function AppSidebar() {
       name: "Documents",
       href: "/documents",
       icon: FolderOpen
+    },
+    {
+      name: "Messages",
+      href: "/messages",
+      icon: MessageSquare,
+      badge: chatUnreadCount || 0
     },
     {
       name: "Fines",
@@ -172,9 +180,17 @@ export function AppSidebar() {
             <SidebarMenu>
               {mainNavigation.map(item => <SidebarMenuItem key={item.name}>
                   <SidebarMenuButton asChild isActive={isActive(item.href)} tooltip={collapsed ? item.name : undefined} className="transition-all duration-200 ease-in-out">
-                    <Link href={item.href}>
-                      <item.icon className="h-4 w-4 shrink-0 transition-all duration-200 ease-in-out" />
-                      <span className={`transition-all duration-200 ease-in-out ${collapsed ? "sr-only opacity-0 w-0" : "opacity-100"}`}>{item.name}</span>
+                    <Link href={item.href} className="flex items-center justify-between w-full">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <item.icon className="h-4 w-4 shrink-0 transition-all duration-200 ease-in-out" />
+                        <span className={`transition-all duration-200 ease-in-out ${collapsed ? "sr-only opacity-0 w-0" : "truncate opacity-100"}`}>{item.name}</span>
+                      </div>
+                      {!collapsed && item.badge !== undefined && item.badge > 0 && <span className="inline-flex items-center justify-center px-2 py-1 text-xs font-bold leading-none text-white bg-destructive rounded-full shrink-0 transition-all duration-200 ease-in-out animate-in fade-in">
+                          {item.badge}
+                        </span>}
+                      {collapsed && item.badge !== undefined && item.badge > 0 && <span className="absolute -top-1 -right-1 inline-flex items-center justify-center w-4 h-4 text-[10px] font-bold leading-none text-white bg-destructive rounded-full transition-all duration-200 ease-in-out animate-in fade-in">
+                          {item.badge > 9 ? '9+' : item.badge}
+                        </span>}
                     </Link>
                   </SidebarMenuButton>
                 </SidebarMenuItem>)}

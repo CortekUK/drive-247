@@ -22,8 +22,10 @@ import {
   Home,
   ChevronLeft,
   FileText,
+  MessageSquare,
 } from 'lucide-react';
 import { useSiteSettings } from '@/hooks/useSiteSettings';
+import { useCustomerUnreadCount } from '@/hooks/use-customer-unread';
 
 const navItems = [
   {
@@ -50,12 +52,19 @@ const navItems = [
     icon: FileText,
     description: 'Manage your insurance',
   },
+  {
+    title: 'Messages',
+    href: '/portal/messages',
+    icon: MessageSquare,
+    description: 'Chat with support',
+  },
 ];
 
 export function CustomerPortalSidebar() {
   const pathname = usePathname();
   const { settings } = useSiteSettings();
   const { state } = useSidebar();
+  const { unreadCount } = useCustomerUnreadCount();
 
   return (
     <Sidebar collapsible="icon">
@@ -91,6 +100,8 @@ export function CustomerPortalSidebar() {
               {navItems.map((item) => {
                 const isActive = pathname === item.href ||
                   (item.href !== '/portal/bookings' && pathname.startsWith(item.href));
+                const isMessages = item.href === '/portal/messages';
+                const showBadge = isMessages && unreadCount > 0;
 
                 return (
                   <SidebarMenuItem key={item.href}>
@@ -99,9 +110,21 @@ export function CustomerPortalSidebar() {
                       isActive={isActive}
                       tooltip={item.title}
                     >
-                      <Link href={item.href}>
-                        <item.icon className="h-4 w-4" />
-                        <span>{item.title}</span>
+                      <Link href={item.href} className="flex items-center justify-between w-full">
+                        <div className="flex items-center gap-2">
+                          <item.icon className="h-4 w-4" />
+                          <span>{item.title}</span>
+                        </div>
+                        {showBadge && state === 'expanded' && (
+                          <span className="inline-flex items-center justify-center px-2 py-0.5 text-xs font-bold leading-none text-white bg-destructive rounded-full">
+                            {unreadCount > 99 ? '99+' : unreadCount}
+                          </span>
+                        )}
+                        {showBadge && state === 'collapsed' && (
+                          <span className="absolute -top-1 -right-1 inline-flex items-center justify-center w-4 h-4 text-[10px] font-bold leading-none text-white bg-destructive rounded-full">
+                            {unreadCount > 9 ? '9+' : unreadCount}
+                          </span>
+                        )}
                       </Link>
                     </SidebarMenuButton>
                   </SidebarMenuItem>

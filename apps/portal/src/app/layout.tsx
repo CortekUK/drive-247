@@ -8,6 +8,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { useEffect, useState } from "react";
 import { useAuthStore } from "@/stores/auth-store";
 import { TenantProvider } from "@/contexts/TenantContext";
+import { SocketProvider } from "@/contexts/SocketContext";
 import DevPanel from "@/components/shared/DevPanel";
 import "@/global.css";
 
@@ -84,6 +85,7 @@ export default function RootLayout({
       <body suppressHydrationWarning>
         <QueryClientProvider client={queryClient}>
           <TenantProvider>
+            <SocketProvider>
             <AuthInitializer>
               <ThemeProvider
                 attribute="class"
@@ -101,6 +103,7 @@ export default function RootLayout({
                 </TooltipProvider>
               </ThemeProvider>
             </AuthInitializer>
+            </SocketProvider>
           </TenantProvider>
         </QueryClientProvider>
       </body>
