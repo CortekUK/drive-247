@@ -50,11 +50,18 @@ export interface LocationSettings {
   return_area_radius_km: number | null;
   area_center_lat: number | null;
   area_center_lon: number | null;
-  // New multi-select boolean flags
+  // Legacy combined flags (deprecated - use separate flags below)
   fixed_address_enabled: boolean;
   multiple_locations_enabled: boolean;
   area_around_enabled: boolean;
   area_delivery_fee: number;
+  // Separate pickup/return settings
+  pickup_fixed_enabled: boolean;
+  return_fixed_enabled: boolean;
+  pickup_multiple_locations_enabled: boolean;
+  return_multiple_locations_enabled: boolean;
+  pickup_area_enabled: boolean;
+  return_area_enabled: boolean;
 }
 
 const DEFAULT_LOCATION_SETTINGS: LocationSettings = {
@@ -70,6 +77,13 @@ const DEFAULT_LOCATION_SETTINGS: LocationSettings = {
   multiple_locations_enabled: false,
   area_around_enabled: false,
   area_delivery_fee: 0,
+  // Separate pickup/return settings
+  pickup_fixed_enabled: true,
+  return_fixed_enabled: true,
+  pickup_multiple_locations_enabled: false,
+  return_multiple_locations_enabled: false,
+  pickup_area_enabled: false,
+  return_area_enabled: false,
 };
 
 /**
@@ -111,7 +125,13 @@ export const usePickupLocations = () => {
           fixed_address_enabled,
           multiple_locations_enabled,
           area_around_enabled,
-          area_delivery_fee
+          area_delivery_fee,
+          pickup_fixed_enabled,
+          return_fixed_enabled,
+          pickup_multiple_locations_enabled,
+          return_multiple_locations_enabled,
+          pickup_area_enabled,
+          return_area_enabled
         `)
         .eq('id', tenant.id)
         .single();
@@ -134,6 +154,12 @@ export const usePickupLocations = () => {
         multiple_locations_enabled: data?.multiple_locations_enabled ?? false,
         area_around_enabled: data?.area_around_enabled ?? false,
         area_delivery_fee: data?.area_delivery_fee ?? 0,
+        pickup_fixed_enabled: data?.pickup_fixed_enabled ?? true,
+        return_fixed_enabled: data?.return_fixed_enabled ?? true,
+        pickup_multiple_locations_enabled: data?.pickup_multiple_locations_enabled ?? false,
+        return_multiple_locations_enabled: data?.return_multiple_locations_enabled ?? false,
+        pickup_area_enabled: data?.pickup_area_enabled ?? false,
+        return_area_enabled: data?.return_area_enabled ?? false,
       };
     },
     enabled: !!tenant?.id,
@@ -196,6 +222,13 @@ export const usePickupLocations = () => {
       if (updates.multiple_locations_enabled !== undefined) updateData.multiple_locations_enabled = updates.multiple_locations_enabled;
       if (updates.area_around_enabled !== undefined) updateData.area_around_enabled = updates.area_around_enabled;
       if (updates.area_delivery_fee !== undefined) updateData.area_delivery_fee = updates.area_delivery_fee;
+      // Separate pickup/return settings
+      if (updates.pickup_fixed_enabled !== undefined) updateData.pickup_fixed_enabled = updates.pickup_fixed_enabled;
+      if (updates.return_fixed_enabled !== undefined) updateData.return_fixed_enabled = updates.return_fixed_enabled;
+      if (updates.pickup_multiple_locations_enabled !== undefined) updateData.pickup_multiple_locations_enabled = updates.pickup_multiple_locations_enabled;
+      if (updates.return_multiple_locations_enabled !== undefined) updateData.return_multiple_locations_enabled = updates.return_multiple_locations_enabled;
+      if (updates.pickup_area_enabled !== undefined) updateData.pickup_area_enabled = updates.pickup_area_enabled;
+      if (updates.return_area_enabled !== undefined) updateData.return_area_enabled = updates.return_area_enabled;
 
       const { data, error } = await supabase
         .from('tenants')
@@ -213,7 +246,13 @@ export const usePickupLocations = () => {
           fixed_address_enabled,
           multiple_locations_enabled,
           area_around_enabled,
-          area_delivery_fee
+          area_delivery_fee,
+          pickup_fixed_enabled,
+          return_fixed_enabled,
+          pickup_multiple_locations_enabled,
+          return_multiple_locations_enabled,
+          pickup_area_enabled,
+          return_area_enabled
         `)
         .single();
 
@@ -235,6 +274,12 @@ export const usePickupLocations = () => {
         multiple_locations_enabled: data?.multiple_locations_enabled ?? false,
         area_around_enabled: data?.area_around_enabled ?? false,
         area_delivery_fee: data?.area_delivery_fee ?? 0,
+        pickup_fixed_enabled: data?.pickup_fixed_enabled ?? true,
+        return_fixed_enabled: data?.return_fixed_enabled ?? true,
+        pickup_multiple_locations_enabled: data?.pickup_multiple_locations_enabled ?? false,
+        return_multiple_locations_enabled: data?.return_multiple_locations_enabled ?? false,
+        pickup_area_enabled: data?.pickup_area_enabled ?? false,
+        return_area_enabled: data?.return_area_enabled ?? false,
       };
     },
     onSuccess: (data) => {

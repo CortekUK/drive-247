@@ -28,13 +28,14 @@ import {
   Gift,
   History,
   Loader2,
+  Mail,
   Shield,
   User,
   ArrowLeft,
 } from 'lucide-react';
 import { toast } from 'sonner';
 
-type AuthMode = 'prompt' | 'signup' | 'login' | 'forgot-password';
+type AuthMode = 'prompt' | 'signup' | 'login' | 'forgot-password' | 'check-email';
 
 interface AuthPromptDialogProps {
   open: boolean;
@@ -84,6 +85,7 @@ export function AuthPromptDialog({
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [confirmationEmail, setConfirmationEmail] = useState('');
 
   const { signUp, signIn, resetPassword } = useCustomerAuthStore();
   const { tenant } = useTenant();
@@ -108,7 +110,7 @@ export function AuthPromptDialog({
   const handleSignup = async (data: SignupFormData) => {
     setIsLoading(true);
     try {
-      const { error } = await signUp(data.email, data.password, {
+      const { error, data: signupData } = await signUp(data.email, data.password, {
         customerId,
         tenantId: tenant?.id,
         customerName,
@@ -126,6 +128,14 @@ export function AuthPromptDialog({
         return;
       }
 
+      // Check if email confirmation is required
+      if (signupData?.needsEmailConfirmation) {
+        setConfirmationEmail(data.email);
+        setMode('check-email');
+        return;
+      }
+
+      // If no email confirmation needed, user is already logged in
       toast.success('Account created successfully!');
       onSuccess();
     } catch (error) {
@@ -520,6 +530,52 @@ export function AuthPromptDialog({
     </>
   );
 
+  const renderCheckEmailMode = () => (
+    <>
+      <DialogHeader className="text-center">
+        <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-accent/10">
+          <Mail className="h-8 w-8 text-accent" />
+        </div>
+        <DialogTitle className="text-xl">Check Your Email</DialogTitle>
+        <DialogDescription className="text-center">
+          We've sent a confirmation link to
+        </DialogDescription>
+      </DialogHeader>
+
+      <div className="py-4 space-y-4">
+        <div className="bg-muted/50 rounded-lg p-3 text-center">
+          <p className="font-medium text-foreground">{confirmationEmail}</p>
+        </div>
+
+        <p className="text-sm text-muted-foreground text-center">
+          Click the link in the email to confirm your account. You'll be automatically logged in and redirected back here.
+        </p>
+
+        <div className="bg-accent/5 border border-accent/20 rounded-lg p-3">
+          <p className="text-xs text-muted-foreground">
+            <strong className="text-foreground">Didn't receive the email?</strong> Check your spam folder or try signing up again.
+          </p>
+        </div>
+      </div>
+
+      <div className="flex flex-col gap-3 pt-2">
+        <Button variant="outline" onClick={handleSkip} className="w-full">
+          Continue Without Account
+        </Button>
+        <Button
+          variant="ghost"
+          onClick={() => {
+            setMode('signup');
+            signupForm.setValue('email', confirmationEmail);
+          }}
+          className="w-full text-xs"
+        >
+          Try a different email
+        </Button>
+      </div>
+    </>
+  );
+
   return (
     <Dialog open={open} onOpenChange={handleClose}>
       <DialogContent className="sm:max-w-md">
@@ -527,6 +583,7 @@ export function AuthPromptDialog({
         {mode === 'signup' && renderSignupMode()}
         {mode === 'login' && renderLoginMode()}
         {mode === 'forgot-password' && renderForgotPasswordMode()}
+        {mode === 'check-email' && renderCheckEmailMode()}
       </DialogContent>
     </Dialog>
   );

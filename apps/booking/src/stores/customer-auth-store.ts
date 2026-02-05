@@ -120,7 +120,7 @@ export const useCustomerAuthStore = create<CustomerAuthState>()((set, get) => ({
         password,
         options: {
           emailRedirectTo: typeof window !== 'undefined'
-            ? `${window.location.origin}/portal`
+            ? `${window.location.origin}/auth/callback`
             : undefined,
         }
       });
@@ -203,6 +203,8 @@ export const useCustomerAuthStore = create<CustomerAuthState>()((set, get) => ({
       // Fetch the complete customer user data
       const customerUser = await fetchCustomerUser(authData.user, options.tenantId);
 
+      // Note: If email confirmation is enabled, authData.session will be null
+      // The user will be logged in automatically when they click the confirmation link
       set({
         user: authData.user,
         session: authData.session,
@@ -210,7 +212,9 @@ export const useCustomerAuthStore = create<CustomerAuthState>()((set, get) => ({
         loading: false
       });
 
-      return { error: null, data: authData };
+      // Return needsEmailConfirmation flag so UI can show appropriate message
+      const needsEmailConfirmation = !authData.session;
+      return { error: null, data: { ...authData, needsEmailConfirmation, email } };
     } catch (error) {
       console.error('Unexpected sign up error:', error);
       return { error: { message: 'An unexpected error occurred' } };

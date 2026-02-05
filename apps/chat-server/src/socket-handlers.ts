@@ -101,7 +101,8 @@ export function registerSocketHandlers(io: TypedServer): void {
         }
       } catch (error) {
         console.error('Error joining room:', error);
-        socket.emit('error', { message: 'Failed to join room' });
+        const errorMessage = error instanceof Error ? error.message : 'Failed to join room';
+        socket.emit('error', { message: `Failed to join room: ${errorMessage}` });
       }
     });
 
@@ -194,7 +195,8 @@ export function registerSocketHandlers(io: TypedServer): void {
         console.log(`Message sent in room ${roomId} and ${tenantRoomId} by ${senderType}:${senderId}`);
       } catch (error) {
         console.error('Error sending message:', error);
-        socket.emit('error', { message: 'Failed to send message' });
+        const errorMessage = error instanceof Error ? error.message : 'Failed to send message';
+        socket.emit('error', { message: `Failed to send message: ${errorMessage}` });
       }
     });
 
@@ -221,7 +223,8 @@ export function registerSocketHandlers(io: TypedServer): void {
         }
       } catch (error) {
         console.error('Error marking messages read:', error);
-        socket.emit('error', { message: 'Failed to mark messages as read' });
+        const errorMessage = error instanceof Error ? error.message : 'Failed to mark messages as read';
+        socket.emit('error', { message: `Failed to mark messages as read: ${errorMessage}` });
       }
     });
 

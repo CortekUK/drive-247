@@ -23,13 +23,20 @@ export function ThemeInitializer({ children }: ThemeInitializerProps) {
   const [isReady, setIsReady] = useState(false);
 
   useEffect(() => {
-    // Only set ready when BOTH tenant data AND branding are loaded
-    // This ensures company name, logo, and colors are all ready
-    if (!tenantLoading && !brandingLoading && tenant && branding) {
-      // Small delay to ensure CSS variables are applied
-      requestAnimationFrame(() => {
+    // Set ready when loading is complete
+    // If tenant exists, wait for branding too
+    // If no tenant (e.g., auth callback on root domain), proceed without branding
+    if (!tenantLoading && !brandingLoading) {
+      if (tenant && branding) {
+        // Full tenant context - wait for CSS variables
+        requestAnimationFrame(() => {
+          setIsReady(true);
+        });
+      } else if (!tenant) {
+        // No tenant context (e.g., auth callback, development without subdomain)
+        // Allow rendering without tenant branding
         setIsReady(true);
-      });
+      }
     }
   }, [tenant, tenantLoading, branding, brandingLoading]);
 

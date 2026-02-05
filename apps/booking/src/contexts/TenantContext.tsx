@@ -119,11 +119,19 @@ export interface Tenant {
   delivery_enabled: boolean | null;
   collection_enabled: boolean | null;
 
-  // New simplified location options
+  // New simplified location options (legacy combined flags)
   fixed_address_enabled: boolean | null;
   multiple_locations_enabled: boolean | null;
   area_around_enabled: boolean | null;
   area_delivery_fee: number | null;
+
+  // Separate pickup/return location settings
+  pickup_fixed_enabled: boolean | null;
+  return_fixed_enabled: boolean | null;
+  pickup_multiple_locations_enabled: boolean | null;
+  return_multiple_locations_enabled: boolean | null;
+  pickup_area_enabled: boolean | null;
+  return_area_enabled: boolean | null;
 }
 
 interface TenantContextType {
@@ -271,7 +279,10 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
                 saturday_enabled, saturday_open, saturday_close,
                 sunday_enabled, sunday_open, sunday_close,
                 delivery_enabled, collection_enabled,
-                fixed_address_enabled, multiple_locations_enabled, area_around_enabled, area_delivery_fee
+                fixed_address_enabled, multiple_locations_enabled, area_around_enabled, area_delivery_fee,
+                pickup_fixed_enabled, return_fixed_enabled,
+                pickup_multiple_locations_enabled, return_multiple_locations_enabled,
+                pickup_area_enabled, return_area_enabled
               `)
               .eq('slug', defaultSlug)
               .eq('status', 'active')
@@ -392,7 +403,13 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
           fixed_address_enabled,
           multiple_locations_enabled,
           area_around_enabled,
-          area_delivery_fee
+          area_delivery_fee,
+          pickup_fixed_enabled,
+          return_fixed_enabled,
+          pickup_multiple_locations_enabled,
+          return_multiple_locations_enabled,
+          pickup_area_enabled,
+          return_area_enabled
         `)
         .eq('slug', slug)
         .eq('status', 'active')

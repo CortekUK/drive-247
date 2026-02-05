@@ -753,6 +753,10 @@ const MultiStepBookingWidget = () => {
           if (customerVerification?.document_number) {
             updates.licenseNumber = customerVerification.document_number;
           }
+          // Set DOB from verification if available and not already set
+          if (customerVerification?.date_of_birth && !updates.driverDOB) {
+            updates.driverDOB = customerVerification.date_of_birth;
+          }
         } else {
           // User is authenticated but NOT verified yet - reset verification state to init
           // This ensures they go through verification process fresh
@@ -827,6 +831,10 @@ const MultiStepBookingWidget = () => {
           if (customerVerification?.document_number) {
             updates.licenseNumber = customerVerification.document_number;
           }
+          // Set DOB from verification if available and not already set
+          if (customerVerification?.date_of_birth && !updates.driverDOB) {
+            updates.driverDOB = customerVerification.date_of_birth;
+          }
         } else {
           // User is authenticated but NOT verified yet - reset verification state
           setVerificationStatus('init');
@@ -859,16 +867,26 @@ const MultiStepBookingWidget = () => {
         if (customerVerification.session_id) {
           setVerificationSessionId(customerVerification.session_id);
         }
+
+        // Build updates object for form data
+        const updates: Partial<typeof formData> = {};
+
         if (customerVerification.document_number && !formData.licenseNumber) {
-          setFormData(prev => ({
-            ...prev,
-            licenseNumber: customerVerification.document_number || '',
-            verificationSessionId: customerVerification.session_id || ''
-          }));
+          updates.licenseNumber = customerVerification.document_number;
+          updates.verificationSessionId = customerVerification.session_id || '';
+        }
+
+        // Set DOB from verification if available and not already set
+        if (customerVerification.date_of_birth && !formData.driverDOB) {
+          updates.driverDOB = customerVerification.date_of_birth;
+        }
+
+        if (Object.keys(updates).length > 0) {
+          setFormData(prev => ({ ...prev, ...updates }));
         }
       }
     }
-  }, [isAuthenticated, isCustomerDataPopulated, verificationLoading, customerVerification, verificationStatus]);
+  }, [isAuthenticated, isCustomerDataPopulated, verificationLoading, customerVerification, verificationStatus, formData.licenseNumber, formData.driverDOB]);
 
   // Check for session expiry when reaching Step 4
   // If user was authenticated but session expired, show auth dialog
@@ -3872,12 +3890,23 @@ const MultiStepBookingWidget = () => {
                   </div>
 
                   <div>
-                    <p className="text-muted-foreground text-xs uppercase tracking-wide mb-1">Location</p>
+                    <p className="text-muted-foreground text-xs uppercase tracking-wide mb-1">Pickup Location</p>
                     <p className="font-medium text-xs">{formData.pickupLocation.split(',').slice(0, 2).join(',') || "—"}</p>
+                    {formData.pickupDeliveryFee > 0 && (
+                      <p className="text-xs text-amber-500">+${formData.pickupDeliveryFee.toFixed(0)} delivery</p>
+                    )}
+                  </div>
+
+                  <div>
+                    <p className="text-muted-foreground text-xs uppercase tracking-wide mb-1">Return Location</p>
+                    <p className="font-medium text-xs">{formData.dropoffLocation.split(',').slice(0, 2).join(',') || "—"}</p>
+                    {formData.returnDeliveryFee > 0 && (
+                      <p className="text-xs text-amber-500">+${formData.returnDeliveryFee.toFixed(0)} collection</p>
+                    )}
                   </div>
                 </div>
 
-                {selectedVehicle && estimatedBooking && <div className="pt-4 border-t border-border/50 space-y-3">
+                {selectedVehicle && estimatedBooking && formData.pickupLocation && <div className="pt-4 border-t border-border/50 space-y-3">
                   {/* Selected Vehicle */}
                   <div className="flex gap-3">
                     <div className="w-16 h-16 rounded-md overflow-hidden bg-muted flex-shrink-0 relative">
@@ -3964,9 +3993,11 @@ const MultiStepBookingWidget = () => {
                   </p>
                 </div>}
 
-                {!selectedVehicle && <div className="pt-4 border-t border-border/50">
+                {(!selectedVehicle || !formData.pickupLocation) && <div className="pt-4 border-t border-border/50">
                   <p className="text-xs text-muted-foreground">
-                    Pricing shown per day; total calculated at checkout.
+                    {!formData.pickupLocation
+                      ? "Select a location to see pricing."
+                      : "Select a vehicle to see total price."}
                   </p>
                 </div>}
 
@@ -4678,101 +4709,101 @@ const MultiStepBookingWidget = () => {
                       </Select>
                     </div>
                   </div>
-
-                  {/* Date of Birth */}
-                  <div className="space-y-2">
-                    <Label className="font-medium">Date of Birth *</Label>
-                    {/* Show read-only display for logged-in users with DOB in profile */}
-                    {isAuthenticated && isCustomerDataPopulated && customerHasDOB ? (
-                      <div className="space-y-2">
-                        <Input
-                          value={formData.driverDOB ? format(new Date(formData.driverDOB), "MMMM d, yyyy") : ""}
-                          readOnly
-                          className="h-12 max-w-md bg-muted/50"
-                        />
-                        <p className="text-xs text-muted-foreground flex items-center gap-1">
-                          <CheckCircle className="w-3 h-3 text-primary" />
-                          From your account profile
-                        </p>
-                        {formData.driverDOB && (
-                          <p className="text-sm text-muted-foreground">Age: <span className="font-medium text-foreground">{calculateAge(new Date(formData.driverDOB))} years old</span></p>
-                        )}
-                      </div>
-                    ) : (
-                      <>
-                        <div className="grid grid-cols-3 gap-2 max-w-md">
-                          {/* Month Select */}
-                          <Select
-                            value={formData.driverDOB ? (new Date(formData.driverDOB).getMonth() + 1).toString().padStart(2, '0') : ""}
-                            onValueChange={(month) => {
-                              const currentDate = formData.driverDOB ? new Date(formData.driverDOB) : new Date(2000, 0, 1);
-                              const newDate = new Date(currentDate.getFullYear(), parseInt(month) - 1, Math.min(currentDate.getDate(), new Date(currentDate.getFullYear(), parseInt(month), 0).getDate()));
-                              const dateStr = format(newDate, "yyyy-MM-dd");
-                              setFormData({ ...formData, driverDOB: dateStr });
-                              validateField('driverDOB', dateStr);
-                            }}
-                          >
-                            <SelectTrigger className={cn("h-12", errors.driverDOB && "border-destructive")}>
-                              <SelectValue placeholder="Month" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'].map((month, i) => (
-                                <SelectItem key={i} value={(i + 1).toString().padStart(2, '0')}>{month}</SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                          {/* Day Select */}
-                          <Select
-                            value={formData.driverDOB ? new Date(formData.driverDOB).getDate().toString() : ""}
-                            onValueChange={(day) => {
-                              const currentDate = formData.driverDOB ? new Date(formData.driverDOB) : new Date(2000, 0, 1);
-                              const newDate = new Date(currentDate.getFullYear(), currentDate.getMonth(), parseInt(day));
-                              const dateStr = format(newDate, "yyyy-MM-dd");
-                              setFormData({ ...formData, driverDOB: dateStr });
-                              validateField('driverDOB', dateStr);
-                            }}
-                          >
-                            <SelectTrigger className={cn("h-12", errors.driverDOB && "border-destructive")}>
-                              <SelectValue placeholder="Day" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {Array.from({ length: 31 }, (_, i) => (
-                                <SelectItem key={i + 1} value={(i + 1).toString()}>{i + 1}</SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                          {/* Year Select */}
-                          <Select
-                            value={formData.driverDOB ? new Date(formData.driverDOB).getFullYear().toString() : ""}
-                            onValueChange={(year) => {
-                              const currentDate = formData.driverDOB ? new Date(formData.driverDOB) : new Date(2000, 0, 1);
-                              const newDate = new Date(parseInt(year), currentDate.getMonth(), Math.min(currentDate.getDate(), new Date(parseInt(year), currentDate.getMonth() + 1, 0).getDate()));
-                              const dateStr = format(newDate, "yyyy-MM-dd");
-                              setFormData({ ...formData, driverDOB: dateStr });
-                              validateField('driverDOB', dateStr);
-                            }}
-                          >
-                            <SelectTrigger className={cn("h-12", errors.driverDOB && "border-destructive")}>
-                              <SelectValue placeholder="Year" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {Array.from({ length: 100 }, (_, i) => new Date().getFullYear() - (tenant?.minimum_rental_age || 18) - i).map((year) => (
-                                <SelectItem key={year} value={year.toString()}>{year}</SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                        </div>
-                        {formData.driverDOB && (
-                          <p className="text-sm text-muted-foreground">Age: <span className={cn("font-medium", errors.driverDOB ? "text-destructive" : "text-foreground")}>{calculateAge(new Date(formData.driverDOB))} years old</span></p>
-                        )}
-                        {errors.driverDOB && <p className="text-sm text-destructive">{errors.driverDOB}</p>}
-                        <p className="text-xs text-muted-foreground">Driver must be at least {tenant?.minimum_rental_age || 21} years old</p>
-                      </>
-                    )}
-                  </div>
                 </div>
               </div>
             )}
+
+            {/* Date of Birth - Always shown */}
+            <div className="space-y-2">
+              <Label className="font-medium">Date of Birth *</Label>
+              {/* Show read-only display when DOB is verified (from account profile or ID document) */}
+              {verificationStatus === 'verified' && formData.driverDOB ? (
+                <div className="space-y-2">
+                  <Input
+                    value={formData.driverDOB ? format(new Date(formData.driverDOB), "MMMM d, yyyy") : ""}
+                    readOnly
+                    className="h-12 max-w-md bg-muted/50"
+                  />
+                  <p className="text-xs text-muted-foreground flex items-center gap-1">
+                    <CheckCircle className="w-3 h-3 text-primary" />
+                    {isAuthenticated && customerHasDOB ? 'From your account profile' : 'From your ID document'}
+                  </p>
+                  {formData.driverDOB && (
+                    <p className="text-sm text-muted-foreground">Age: <span className="font-medium text-foreground">{calculateAge(new Date(formData.driverDOB))} years old</span></p>
+                  )}
+                </div>
+              ) : (
+                <>
+                  <div className="grid grid-cols-3 gap-2 max-w-md">
+                    {/* Month Select */}
+                    <Select
+                      value={formData.driverDOB ? (new Date(formData.driverDOB).getMonth() + 1).toString().padStart(2, '0') : ""}
+                      onValueChange={(month) => {
+                        const currentDate = formData.driverDOB ? new Date(formData.driverDOB) : new Date(2000, 0, 1);
+                        const newDate = new Date(currentDate.getFullYear(), parseInt(month) - 1, Math.min(currentDate.getDate(), new Date(currentDate.getFullYear(), parseInt(month), 0).getDate()));
+                        const dateStr = format(newDate, "yyyy-MM-dd");
+                        setFormData({ ...formData, driverDOB: dateStr });
+                        validateField('driverDOB', dateStr);
+                      }}
+                    >
+                      <SelectTrigger className={cn("h-12", errors.driverDOB && "border-destructive")}>
+                        <SelectValue placeholder="Month" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'].map((month, i) => (
+                          <SelectItem key={i} value={(i + 1).toString().padStart(2, '0')}>{month}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    {/* Day Select */}
+                    <Select
+                      value={formData.driverDOB ? new Date(formData.driverDOB).getDate().toString() : ""}
+                      onValueChange={(day) => {
+                        const currentDate = formData.driverDOB ? new Date(formData.driverDOB) : new Date(2000, 0, 1);
+                        const newDate = new Date(currentDate.getFullYear(), currentDate.getMonth(), parseInt(day));
+                        const dateStr = format(newDate, "yyyy-MM-dd");
+                        setFormData({ ...formData, driverDOB: dateStr });
+                        validateField('driverDOB', dateStr);
+                      }}
+                    >
+                      <SelectTrigger className={cn("h-12", errors.driverDOB && "border-destructive")}>
+                        <SelectValue placeholder="Day" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {Array.from({ length: 31 }, (_, i) => (
+                          <SelectItem key={i + 1} value={(i + 1).toString()}>{i + 1}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    {/* Year Select */}
+                    <Select
+                      value={formData.driverDOB ? new Date(formData.driverDOB).getFullYear().toString() : ""}
+                      onValueChange={(year) => {
+                        const currentDate = formData.driverDOB ? new Date(formData.driverDOB) : new Date(2000, 0, 1);
+                        const newDate = new Date(parseInt(year), currentDate.getMonth(), Math.min(currentDate.getDate(), new Date(parseInt(year), currentDate.getMonth() + 1, 0).getDate()));
+                        const dateStr = format(newDate, "yyyy-MM-dd");
+                        setFormData({ ...formData, driverDOB: dateStr });
+                        validateField('driverDOB', dateStr);
+                      }}
+                    >
+                      <SelectTrigger className={cn("h-12", errors.driverDOB && "border-destructive")}>
+                        <SelectValue placeholder="Year" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {Array.from({ length: 100 }, (_, i) => new Date().getFullYear() - (tenant?.minimum_rental_age || 18) - i).map((year) => (
+                          <SelectItem key={year} value={year.toString()}>{year}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  {formData.driverDOB && (
+                    <p className="text-sm text-muted-foreground">Age: <span className={cn("font-medium", errors.driverDOB ? "text-destructive" : "text-foreground")}>{calculateAge(new Date(formData.driverDOB))} years old</span></p>
+                  )}
+                  {errors.driverDOB && <p className="text-sm text-destructive">{errors.driverDOB}</p>}
+                  <p className="text-xs text-muted-foreground">Driver must be at least {tenant?.minimum_rental_age || 21} years old</p>
+                </>
+              )}
+            </div>
 
             {/* Identity Verification Section */}
             <div className="border-t border-border/50 pt-6 sm:pt-8">

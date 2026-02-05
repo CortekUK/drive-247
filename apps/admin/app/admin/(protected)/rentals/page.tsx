@@ -45,6 +45,7 @@ export default function RentalCompaniesPage() {
   const [showDetailsModal, setShowDetailsModal] = useState(false);
   const [selectedTenantCreds, setSelectedTenantCreds] = useState<TenantCredentials | null>(null);
   const [typeFilter, setTypeFilter] = useState<'all' | 'production' | 'test'>('all');
+  const [formErrors, setFormErrors] = useState<{ slug?: string }>({});
 
   useEffect(() => {
     loadTenants();
@@ -82,12 +83,34 @@ export default function RentalCompaniesPage() {
     return password;
   };
 
+  const validateSlug = (slug: string): string | null => {
+    const cleanSlug = slug.toLowerCase().replace(/[^a-z0-9-]/g, '-');
+    if (cleanSlug.length < 3) {
+      return 'Slug must be at least 3 characters long';
+    }
+    if (cleanSlug.length > 50) {
+      return 'Slug must be 50 characters or less';
+    }
+    if (!/^[a-z][a-z0-9-]*$/.test(cleanSlug)) {
+      return 'Slug must start with a letter and contain only letters, numbers, and hyphens';
+    }
+    return null;
+  };
+
   const handleCreateTenant = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    // Validate slug before submitting
+    const slug = formData.slug.toLowerCase().replace(/[^a-z0-9-]/g, '-');
+    const slugError = validateSlug(slug);
+    if (slugError) {
+      setFormErrors({ slug: slugError });
+      return;
+    }
+    setFormErrors({});
     setCreating(true);
 
     try {
-      const slug = formData.slug.toLowerCase().replace(/[^a-z0-9-]/g, '-');
 
       // Step 1: Create tenant
       const { data: tenant, error: tenantError } = await supabase
@@ -173,7 +196,16 @@ export default function RentalCompaniesPage() {
       loadTenants();
 
     } catch (error: any) {
-      toast.error(`Error creating tenant: ${error.message}`);
+      // Parse database constraint errors into user-friendly messages
+      let errorMessage = error.message;
+      if (error.message?.includes('slug_length')) {
+        errorMessage = 'Slug must be between 3 and 50 characters';
+        setFormErrors({ slug: errorMessage });
+      } else if (error.message?.includes('tenants_slug_key') || error.message?.includes('duplicate key')) {
+        errorMessage = 'This slug is already taken. Please choose a different one.';
+        setFormErrors({ slug: errorMessage });
+      }
+      toast.error(`Error creating tenant: ${errorMessage}`);
     } finally {
       setCreating(false);
     }
@@ -387,14 +419,31 @@ Access URLs:
                 <input
                   type="text"
                   required
+                  minLength={3}
+                  maxLength={50}
                   value={formData.slug}
-                  onChange={(e) => setFormData({ ...formData, slug: e.target.value })}
-                  className="w-full px-3 py-2 bg-dark-bg border border-dark-border rounded-md text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-primary-500"
+                  onChange={(e) => {
+                    setFormData({ ...formData, slug: e.target.value });
+                    // Clear error when user starts typing
+                    if (formErrors.slug) {
+                      const newSlug = e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, '-');
+                      if (newSlug.length >= 3) {
+                        setFormErrors({});
+                      }
+                    }
+                  }}
+                  className={`w-full px-3 py-2 bg-dark-bg border rounded-md text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-primary-500 ${
+                    formErrors.slug ? 'border-red-500' : 'border-dark-border'
+                  }`}
                   placeholder="acme-rentals"
                 />
-                <p className="text-xs text-gray-500 mt-1">
-                  Portal: {formData.slug || 'slug'}.portal.drive-247.com | Booking: {formData.slug || 'slug'}.drive-247.com
-                </p>
+                {formErrors.slug ? (
+                  <p className="text-xs text-red-400 mt-1">{formErrors.slug}</p>
+                ) : (
+                  <p className="text-xs text-gray-500 mt-1">
+                    Min 3 characters. Portal: {formData.slug || 'slug'}.portal.drive-247.com | Booking: {formData.slug || 'slug'}.drive-247.com
+                  </p>
+                )}
               </div>
 
               <div>
@@ -447,7 +496,10 @@ Access URLs:
               <div className="flex space-x-3 mt-6">
                 <button
                   type="button"
-                  onClick={() => setShowCreateModal(false)}
+                  onClick={() => {
+                    setShowCreateModal(false);
+                    setFormErrors({});
+                  }}
                   className="flex-1 px-4 py-2 border border-dark-border rounded-md text-gray-300 hover:bg-dark-hover"
                 >
                   Cancel

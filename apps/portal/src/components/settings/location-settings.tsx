@@ -51,7 +51,7 @@ import { cn } from '@/lib/utils';
 interface LocationFormData {
   name: string;
   address: string;
-  delivery_fee: number;
+  delivery_fee: number | null;
   is_pickup_enabled: boolean;
   is_return_enabled: boolean;
 }
@@ -59,15 +59,15 @@ interface LocationFormData {
 const EMPTY_FORM: LocationFormData = {
   name: '',
   address: '',
-  delivery_fee: 0,
+  delivery_fee: null,
   is_pickup_enabled: true,
   is_return_enabled: true,
 };
 
 const formatCurrency = (amount: number) => {
-  return new Intl.NumberFormat('en-GB', {
+  return new Intl.NumberFormat('en-US', {
     style: 'currency',
-    currency: 'GBP',
+    currency: 'USD',
     minimumFractionDigits: 0,
     maximumFractionDigits: 2,
   }).format(amount);
@@ -105,8 +105,8 @@ export function LocationSettings() {
   const [sameReturnAddress, setSameReturnAddress] = useState(true);
 
   // Area settings
-  const [areaRadius, setAreaRadius] = useState<number>(25);
-  const [areaDeliveryFee, setAreaDeliveryFee] = useState<number>(0);
+  const [areaRadius, setAreaRadius] = useState<number | null>(100);
+  const [areaDeliveryFee, setAreaDeliveryFee] = useState<number | null>(0);
   const [areaCenterAddress, setAreaCenterAddress] = useState('');
   const [areaCenterLat, setAreaCenterLat] = useState<number | null>(null);
   const [areaCenterLon, setAreaCenterLon] = useState<number | null>(null);
@@ -117,23 +117,25 @@ export function LocationSettings() {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingLocation, setEditingLocation] = useState<PickupLocation | null>(null);
   const [formData, setFormData] = useState<LocationFormData>(EMPTY_FORM);
+  const [dialogMode, setDialogMode] = useState<'pickup' | 'return'>('pickup');
 
   // Sync local state with fetched settings
   useEffect(() => {
     if (locationSettings) {
-      setPickupFixedEnabled(locationSettings.fixed_address_enabled ?? true);
-      setPickupMultipleEnabled(locationSettings.multiple_locations_enabled ?? false);
-      setPickupAreaEnabled(locationSettings.area_around_enabled ?? false);
-      setReturnFixedEnabled(locationSettings.fixed_address_enabled ?? true);
-      setReturnMultipleEnabled(locationSettings.multiple_locations_enabled ?? false);
-      setReturnAreaEnabled(locationSettings.area_around_enabled ?? false);
+      // Use the new separate columns
+      setPickupFixedEnabled(locationSettings.pickup_fixed_enabled ?? true);
+      setPickupMultipleEnabled(locationSettings.pickup_multiple_locations_enabled ?? false);
+      setPickupAreaEnabled(locationSettings.pickup_area_enabled ?? false);
+      setReturnFixedEnabled(locationSettings.return_fixed_enabled ?? true);
+      setReturnMultipleEnabled(locationSettings.return_multiple_locations_enabled ?? false);
+      setReturnAreaEnabled(locationSettings.return_area_enabled ?? false);
       setFixedPickupAddress(locationSettings.fixed_pickup_address || '');
       setFixedReturnAddress(locationSettings.fixed_return_address || '');
       setSameReturnAddress(
         !locationSettings.fixed_return_address ||
         locationSettings.fixed_return_address === locationSettings.fixed_pickup_address
       );
-      setAreaRadius(locationSettings.pickup_area_radius_km ?? 25);
+      setAreaRadius(locationSettings.pickup_area_radius_km ?? 100);
       setAreaDeliveryFee(locationSettings.area_delivery_fee ?? 0);
       setAreaCenterLat(locationSettings.area_center_lat);
       setAreaCenterLon(locationSettings.area_center_lon);
@@ -151,6 +153,63 @@ export function LocationSettings() {
 
   const pickupLocations = locations.filter(loc => loc.is_pickup_enabled);
   const returnLocations = locations.filter(loc => loc.is_return_enabled);
+
+  // Handlers to ensure at least one option is always selected
+  const handlePickupFixedChange = (checked: boolean) => {
+    if (!checked && !pickupMultipleEnabled && !pickupAreaEnabled) {
+      // Can't disable - it's the only option enabled, keep it on
+      toast({ title: 'Required', description: 'At least one pickup option must be enabled.', variant: 'destructive' });
+      return;
+    }
+    setPickupFixedEnabled(checked);
+    setHasChanges(true);
+  };
+
+  const handlePickupMultipleChange = (checked: boolean) => {
+    if (!checked && !pickupFixedEnabled && !pickupAreaEnabled) {
+      // Last option being disabled - enable fixed address as default
+      setPickupFixedEnabled(true);
+    }
+    setPickupMultipleEnabled(checked);
+    setHasChanges(true);
+  };
+
+  const handlePickupAreaChange = (checked: boolean) => {
+    if (!checked && !pickupFixedEnabled && !pickupMultipleEnabled) {
+      // Last option being disabled - enable fixed address as default
+      setPickupFixedEnabled(true);
+    }
+    setPickupAreaEnabled(checked);
+    setHasChanges(true);
+  };
+
+  const handleReturnFixedChange = (checked: boolean) => {
+    if (!checked && !returnMultipleEnabled && !returnAreaEnabled) {
+      // Can't disable - it's the only option enabled, keep it on
+      toast({ title: 'Required', description: 'At least one return option must be enabled.', variant: 'destructive' });
+      return;
+    }
+    setReturnFixedEnabled(checked);
+    setHasChanges(true);
+  };
+
+  const handleReturnMultipleChange = (checked: boolean) => {
+    if (!checked && !returnFixedEnabled && !returnAreaEnabled) {
+      // Last option being disabled - enable fixed address as default
+      setReturnFixedEnabled(true);
+    }
+    setReturnMultipleEnabled(checked);
+    setHasChanges(true);
+  };
+
+  const handleReturnAreaChange = (checked: boolean) => {
+    if (!checked && !returnFixedEnabled && !returnMultipleEnabled) {
+      // Last option being disabled - enable fixed address as default
+      setReturnFixedEnabled(true);
+    }
+    setReturnAreaEnabled(checked);
+    setHasChanges(true);
+  };
 
   const handleSaveSettings = async () => {
     if (!pickupFixedEnabled && !pickupMultipleEnabled && !pickupAreaEnabled) {
@@ -177,14 +236,23 @@ export function LocationSettings() {
 
     try {
       await updateSettings({
+        // Legacy combined flags (for backwards compatibility)
         fixed_address_enabled: pickupFixedEnabled || returnFixedEnabled,
         multiple_locations_enabled: pickupMultipleEnabled || returnMultipleEnabled,
         area_around_enabled: pickupAreaEnabled || returnAreaEnabled,
+        // Separate pickup/return settings
+        pickup_fixed_enabled: pickupFixedEnabled,
+        return_fixed_enabled: returnFixedEnabled,
+        pickup_multiple_locations_enabled: pickupMultipleEnabled,
+        return_multiple_locations_enabled: returnMultipleEnabled,
+        pickup_area_enabled: pickupAreaEnabled,
+        return_area_enabled: returnAreaEnabled,
+        // Addresses and area settings
         fixed_pickup_address: pickupFixedEnabled ? fixedPickupAddress : null,
         fixed_return_address: returnFixedEnabled ? (sameReturnAddress ? fixedPickupAddress : fixedReturnAddress) : null,
-        pickup_area_radius_km: areaUsed ? areaRadius : null,
-        return_area_radius_km: areaUsed ? areaRadius : null,
-        area_delivery_fee: areaUsed ? areaDeliveryFee : 0,
+        pickup_area_radius_km: areaUsed ? (areaRadius ?? 100) : null,
+        return_area_radius_km: areaUsed ? (areaRadius ?? 100) : null,
+        area_delivery_fee: areaUsed ? (areaDeliveryFee ?? 0) : 0,
         area_center_lat: areaUsed ? areaCenterLat : null,
         area_center_lon: areaUsed ? areaCenterLon : null,
       });
@@ -201,14 +269,20 @@ export function LocationSettings() {
     setHasChanges(true);
   };
 
-  const handleOpenAddDialog = () => {
+  const handleOpenAddDialog = (mode: 'pickup' | 'return') => {
     setEditingLocation(null);
-    setFormData(EMPTY_FORM);
+    setDialogMode(mode);
+    setFormData({
+      ...EMPTY_FORM,
+      is_pickup_enabled: mode === 'pickup',
+      is_return_enabled: mode === 'return',
+    });
     setIsDialogOpen(true);
   };
 
-  const handleOpenEditDialog = (location: PickupLocation) => {
+  const handleOpenEditDialog = (location: PickupLocation, mode: 'pickup' | 'return') => {
     setEditingLocation(location);
+    setDialogMode(mode);
     setFormData({
       name: location.name,
       address: location.address,
@@ -224,28 +298,23 @@ export function LocationSettings() {
       toast({ title: 'Error', description: 'Enter both name and address.', variant: 'destructive' });
       return;
     }
-    if (!formData.is_pickup_enabled && !formData.is_return_enabled) {
-      toast({ title: 'Error', description: 'Enable at least pickup or return.', variant: 'destructive' });
-      return;
-    }
     try {
+      // Set flags based on dialog mode
+      const locationData = {
+        name: formData.name.trim(),
+        address: formData.address.trim(),
+        delivery_fee: formData.delivery_fee ?? 0,
+        is_pickup_enabled: dialogMode === 'pickup',
+        is_return_enabled: dialogMode === 'return',
+      };
+
       if (editingLocation) {
         await updateLocation({
           id: editingLocation.id,
-          name: formData.name.trim(),
-          address: formData.address.trim(),
-          delivery_fee: formData.delivery_fee,
-          is_pickup_enabled: formData.is_pickup_enabled,
-          is_return_enabled: formData.is_return_enabled,
+          ...locationData,
         });
       } else {
-        await createLocation({
-          name: formData.name.trim(),
-          address: formData.address.trim(),
-          delivery_fee: formData.delivery_fee,
-          is_pickup_enabled: formData.is_pickup_enabled,
-          is_return_enabled: formData.is_return_enabled,
-        });
+        await createLocation(locationData);
       }
       setIsDialogOpen(false);
       setFormData(EMPTY_FORM);
@@ -308,13 +377,21 @@ export function LocationSettings() {
                       <span className="text-[10px] font-medium uppercase tracking-wider px-2 py-0.5 rounded-full bg-muted text-muted-foreground">
                         Free
                       </span>
+                      <span className={cn(
+                        "text-[10px] font-medium uppercase tracking-wider px-1.5 py-0.5 rounded-full",
+                        pickupFixedEnabled
+                          ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400"
+                          : "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400"
+                      )}>
+                        {pickupFixedEnabled ? 'Active' : 'Inactive'}
+                      </span>
                     </div>
                     <p className="text-xs text-muted-foreground">Customer picks up at your address</p>
                   </div>
                 </div>
                 <Switch
                   checked={pickupFixedEnabled}
-                  onCheckedChange={(c) => { setPickupFixedEnabled(c); setHasChanges(true); }}
+                  onCheckedChange={handlePickupFixedChange}
                 />
               </div>
               {pickupFixedEnabled && (
@@ -350,21 +427,29 @@ export function LocationSettings() {
                       <span className="text-[10px] font-medium uppercase tracking-wider px-2 py-0.5 rounded-full bg-muted text-muted-foreground">
                         Paid
                       </span>
+                      <span className={cn(
+                        "text-[10px] font-medium uppercase tracking-wider px-1.5 py-0.5 rounded-full",
+                        pickupMultipleEnabled
+                          ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400"
+                          : "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400"
+                      )}>
+                        {pickupMultipleEnabled ? 'Active' : 'Inactive'}
+                      </span>
                     </div>
                     <p className="text-xs text-muted-foreground">Deliver to predefined spots</p>
                   </div>
                 </div>
                 <Switch
                   checked={pickupMultipleEnabled}
-                  onCheckedChange={(c) => { setPickupMultipleEnabled(c); setHasChanges(true); }}
+                  onCheckedChange={handlePickupMultipleChange}
                 />
               </div>
               {pickupMultipleEnabled && (
                 <div className="mt-4 pl-[52px]">
                   <LocationsGrid
                     locations={pickupLocations}
-                    onAdd={handleOpenAddDialog}
-                    onEdit={handleOpenEditDialog}
+                    onAdd={() => handleOpenAddDialog('pickup')}
+                    onEdit={(loc) => handleOpenEditDialog(loc, 'pickup')}
                     onDelete={handleDeleteLocation}
                     onToggleActive={handleToggleActive}
                     isUpdating={isUpdating}
@@ -394,13 +479,21 @@ export function LocationSettings() {
                       <span className="text-[10px] font-medium uppercase tracking-wider px-2 py-0.5 rounded-full bg-muted text-muted-foreground">
                         Paid
                       </span>
+                      <span className={cn(
+                        "text-[10px] font-medium uppercase tracking-wider px-1.5 py-0.5 rounded-full",
+                        pickupAreaEnabled
+                          ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400"
+                          : "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400"
+                      )}>
+                        {pickupAreaEnabled ? 'Active' : 'Inactive'}
+                      </span>
                     </div>
                     <p className="text-xs text-muted-foreground">Deliver anywhere within radius</p>
                   </div>
                 </div>
                 <Switch
                   checked={pickupAreaEnabled}
-                  onCheckedChange={(c) => { setPickupAreaEnabled(c); setHasChanges(true); }}
+                  onCheckedChange={handlePickupAreaChange}
                 />
               </div>
             </div>
@@ -442,13 +535,21 @@ export function LocationSettings() {
                       <span className="text-[10px] font-medium uppercase tracking-wider px-2 py-0.5 rounded-full bg-muted text-muted-foreground">
                         Free
                       </span>
+                      <span className={cn(
+                        "text-[10px] font-medium uppercase tracking-wider px-1.5 py-0.5 rounded-full",
+                        returnFixedEnabled
+                          ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400"
+                          : "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400"
+                      )}>
+                        {returnFixedEnabled ? 'Active' : 'Inactive'}
+                      </span>
                     </div>
                     <p className="text-xs text-muted-foreground">Customer returns at your address</p>
                   </div>
                 </div>
                 <Switch
                   checked={returnFixedEnabled}
-                  onCheckedChange={(c) => { setReturnFixedEnabled(c); setHasChanges(true); }}
+                  onCheckedChange={handleReturnFixedChange}
                 />
               </div>
               {returnFixedEnabled && (
@@ -493,21 +594,29 @@ export function LocationSettings() {
                       <span className="text-[10px] font-medium uppercase tracking-wider px-2 py-0.5 rounded-full bg-muted text-muted-foreground">
                         Paid
                       </span>
+                      <span className={cn(
+                        "text-[10px] font-medium uppercase tracking-wider px-1.5 py-0.5 rounded-full",
+                        returnMultipleEnabled
+                          ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400"
+                          : "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400"
+                      )}>
+                        {returnMultipleEnabled ? 'Active' : 'Inactive'}
+                      </span>
                     </div>
                     <p className="text-xs text-muted-foreground">Collect from predefined spots</p>
                   </div>
                 </div>
                 <Switch
                   checked={returnMultipleEnabled}
-                  onCheckedChange={(c) => { setReturnMultipleEnabled(c); setHasChanges(true); }}
+                  onCheckedChange={handleReturnMultipleChange}
                 />
               </div>
               {returnMultipleEnabled && (
                 <div className="mt-4 pl-[52px]">
                   <LocationsGrid
                     locations={returnLocations}
-                    onAdd={handleOpenAddDialog}
-                    onEdit={handleOpenEditDialog}
+                    onAdd={() => handleOpenAddDialog('return')}
+                    onEdit={(loc) => handleOpenEditDialog(loc, 'return')}
                     onDelete={handleDeleteLocation}
                     onToggleActive={handleToggleActive}
                     isUpdating={isUpdating}
@@ -537,13 +646,21 @@ export function LocationSettings() {
                       <span className="text-[10px] font-medium uppercase tracking-wider px-2 py-0.5 rounded-full bg-muted text-muted-foreground">
                         Paid
                       </span>
+                      <span className={cn(
+                        "text-[10px] font-medium uppercase tracking-wider px-1.5 py-0.5 rounded-full",
+                        returnAreaEnabled
+                          ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400"
+                          : "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400"
+                      )}>
+                        {returnAreaEnabled ? 'Active' : 'Inactive'}
+                      </span>
                     </div>
                     <p className="text-xs text-muted-foreground">Collect from anywhere within radius</p>
                   </div>
                 </div>
                 <Switch
                   checked={returnAreaEnabled}
-                  onCheckedChange={(c) => { setReturnAreaEnabled(c); setHasChanges(true); }}
+                  onCheckedChange={handleReturnAreaChange}
                 />
               </div>
             </div>
@@ -587,11 +704,16 @@ export function LocationSettings() {
                   <div className="relative">
                     <Input
                       type="number"
-                      value={areaRadius}
-                      onChange={(e) => { setAreaRadius(Math.max(1, parseInt(e.target.value) || 25)); setHasChanges(true); }}
+                      value={areaRadius ?? ''}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setAreaRadius(val === '' ? null : parseInt(val) || null);
+                        setHasChanges(true);
+                      }}
                       className="pr-10"
                       min={1}
                       max={100}
+                      placeholder="100"
                     />
                     <span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">km</span>
                   </div>
@@ -600,14 +722,19 @@ export function LocationSettings() {
                 <div className="space-y-2">
                   <Label className="text-sm font-medium">Fee</Label>
                   <div className="relative">
-                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">£</span>
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">$</span>
                     <Input
                       type="number"
-                      value={areaDeliveryFee}
-                      onChange={(e) => { setAreaDeliveryFee(Math.max(0, parseFloat(e.target.value) || 0)); setHasChanges(true); }}
+                      value={areaDeliveryFee ?? ''}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setAreaDeliveryFee(val === '' ? null : parseFloat(val) || null);
+                        setHasChanges(true);
+                      }}
                       className="pl-7"
                       min={0}
                       step={0.01}
+                      placeholder="0"
                     />
                   </div>
                 </div>
@@ -616,8 +743,8 @@ export function LocationSettings() {
 
             <div className="mt-4 p-3 rounded-lg bg-muted/50 border">
               <p className="text-sm text-muted-foreground">
-                Customers can enter any address within <strong className="text-foreground">{areaRadius}km</strong> of your center point.
-                A fee of <strong className="text-foreground">{formatCurrency(areaDeliveryFee)}</strong> will apply per delivery/collection.
+                Customers can enter any address within <strong className="text-foreground">{areaRadius ?? 100}km</strong> of your center point.
+                A fee of <strong className="text-foreground">{formatCurrency(areaDeliveryFee ?? 0)}</strong> will apply per delivery/collection.
               </p>
             </div>
           </CardContent>
@@ -648,11 +775,17 @@ export function LocationSettings() {
         <DialogContent className="sm:max-w-lg">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              <MapPin className="h-5 w-5 text-primary" />
-              {editingLocation ? 'Edit Location' : 'Add Location'}
+              {dialogMode === 'pickup' ? (
+                <Truck className="h-5 w-5 text-primary" />
+              ) : (
+                <RotateCcw className="h-5 w-5 text-primary" />
+              )}
+              {editingLocation ? 'Edit' : 'Add'} {dialogMode === 'pickup' ? 'Delivery' : 'Collection'} Location
             </DialogTitle>
             <DialogDescription>
-              {editingLocation ? 'Update the location details' : 'Add a new delivery or collection point'}
+              {editingLocation
+                ? `Update the ${dialogMode === 'pickup' ? 'delivery' : 'collection'} location details`
+                : `Add a new ${dialogMode === 'pickup' ? 'delivery point for pickup' : 'collection point for returns'}`}
             </DialogDescription>
           </DialogHeader>
 
@@ -676,43 +809,21 @@ export function LocationSettings() {
             </div>
 
             <div className="space-y-2">
-              <Label className="text-sm font-medium">Delivery/Collection Fee</Label>
+              <Label className="text-sm font-medium">{dialogMode === 'pickup' ? 'Delivery' : 'Collection'} Fee</Label>
               <div className="relative w-32">
-                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">£</span>
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">$</span>
                 <Input
                   type="number"
-                  value={formData.delivery_fee}
-                  onChange={(e) => setFormData(p => ({ ...p, delivery_fee: Math.max(0, parseFloat(e.target.value) || 0) }))}
+                  value={formData.delivery_fee ?? ''}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    setFormData(p => ({ ...p, delivery_fee: val === '' ? null : parseFloat(val) || null }));
+                  }}
                   className="pl-7"
                   min={0}
                   step={0.01}
+                  placeholder="0"
                 />
-              </div>
-            </div>
-
-            <div className="space-y-3 pt-4 border-t">
-              <Label className="text-sm font-medium">Available for</Label>
-              <div className="flex gap-6">
-                <label className="flex items-center gap-2 cursor-pointer">
-                  <Checkbox
-                    checked={formData.is_pickup_enabled}
-                    onCheckedChange={(c) => setFormData(p => ({ ...p, is_pickup_enabled: c as boolean }))}
-                  />
-                  <span className="text-sm flex items-center gap-1.5">
-                    <Truck className="h-3.5 w-3.5" />
-                    Pickup (Delivery)
-                  </span>
-                </label>
-                <label className="flex items-center gap-2 cursor-pointer">
-                  <Checkbox
-                    checked={formData.is_return_enabled}
-                    onCheckedChange={(c) => setFormData(p => ({ ...p, is_return_enabled: c as boolean }))}
-                  />
-                  <span className="text-sm flex items-center gap-1.5">
-                    <RotateCcw className="h-3.5 w-3.5" />
-                    Return (Collection)
-                  </span>
-                </label>
               </div>
             </div>
           </div>

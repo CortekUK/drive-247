@@ -256,11 +256,14 @@ const Settings = () => {
 
   // Fetch Promo Codes (moved up for use in generator)
   const { data: promoCodes, isLoading: isLoadingPromos, refetch: refetchPromos } = useQuery({
-    queryKey: ['promocodes'],
+    queryKey: ['promocodes', tenant?.id],
     queryFn: async () => {
+      if (!tenant?.id) return [];
+
       const { data, error } = await supabase
         .from('promocodes')
         .select('*')
+        .eq('tenant_id', tenant.id)
         .order('created_at', { ascending: false });
 
       if (error) {
@@ -269,6 +272,7 @@ const Settings = () => {
       }
       return data || [];
     },
+    enabled: !!tenant?.id,
   });
 
   // Generate promo code based on new logic: {promo_id}{name_3chars}{value}
@@ -444,6 +448,7 @@ const Settings = () => {
           max_users: parseInt(updatedPromo.max_users) || 1
         })
         .eq('id', updatedPromo.id)
+        .eq('tenant_id', tenant.id)
         .select();
 
       if (error) throw error;
@@ -474,7 +479,8 @@ const Settings = () => {
       const { error } = await supabase
         .from('promocodes')
         .delete()
-        .eq('id', id);
+        .eq('id', id)
+        .eq('tenant_id', tenant.id);
 
       if (error) throw error;
       return id;

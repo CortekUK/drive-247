@@ -53,10 +53,17 @@ export default function LocationPicker({
   // Get the right locations list based on type
   const locations = type === 'pickup' ? pickupLocations : returnLocations;
 
-  // Check which options are enabled
-  const fixedEnabled = tenant?.fixed_address_enabled ?? false;
-  const multipleEnabled = (tenant?.multiple_locations_enabled ?? false) && locations.length > 0;
-  const areaEnabled = tenant?.area_around_enabled ?? false;
+  // Check which options are enabled based on type (pickup vs return)
+  // Use the new separate columns, falling back to legacy combined columns for backwards compatibility
+  const fixedEnabled = type === 'pickup'
+    ? (tenant?.pickup_fixed_enabled ?? tenant?.fixed_address_enabled ?? false)
+    : (tenant?.return_fixed_enabled ?? tenant?.fixed_address_enabled ?? false);
+  const multipleEnabled = type === 'pickup'
+    ? ((tenant?.pickup_multiple_locations_enabled ?? tenant?.multiple_locations_enabled ?? false) && locations.length > 0)
+    : ((tenant?.return_multiple_locations_enabled ?? tenant?.multiple_locations_enabled ?? false) && locations.length > 0);
+  const areaEnabled = type === 'pickup'
+    ? (tenant?.pickup_area_enabled ?? tenant?.area_around_enabled ?? false)
+    : (tenant?.return_area_enabled ?? tenant?.area_around_enabled ?? false);
 
   // Count enabled options
   const enabledOptions = [fixedEnabled, multipleEnabled, areaEnabled].filter(Boolean);
@@ -100,12 +107,15 @@ export default function LocationPicker({
     }
   }, [fixedEnabled, multipleEnabled, areaEnabled]);
 
-  // Auto-set fixed address when method is fixed
+  // Auto-set fixed address when method is fixed OR when it's the only option
   useEffect(() => {
-    if (selectedMethod === 'fixed' && fixedAddress && !value) {
-      onChange(fixedAddress, undefined, undefined, undefined, 0);
+    // When fixed is selected (multi-option) or is the only option (single-option)
+    if (fixedEnabled && fixedAddress) {
+      if (!showRadioOptions || (selectedMethod === 'fixed' && !value)) {
+        onChange(fixedAddress, undefined, undefined, undefined, 0);
+      }
     }
-  }, [selectedMethod, fixedAddress, value, onChange]);
+  }, [selectedMethod, fixedAddress, value, fixedEnabled, showRadioOptions]);
 
   // Handle method change
   const handleMethodChange = (method: DeliveryMethod) => {
@@ -254,11 +264,30 @@ export default function LocationPicker({
                 {locations.length} location{locations.length !== 1 ? 's' : ''} available
               </p>
             </div>
-            {locationFees && (
-              <span className="text-xs font-semibold text-amber-600 bg-amber-500/10 px-2.5 py-1 rounded-full flex-shrink-0">
-                {locationFees.isSame ? `+ ${locationFees.text}` : locationFees.text}
-              </span>
-            )}
+            {/* Only show actual fee after a location is selected */}
+            <div className="flex-shrink-0 self-center">
+              {(() => {
+                const selectedLoc = locationId ? locations.find(l => l.id === locationId) : null;
+                if (selectedLoc) {
+                  // Location selected - show actual fee or FREE
+                  return selectedLoc.delivery_fee > 0 ? (
+                    <span className="text-xs font-semibold text-amber-600 bg-amber-500/10 px-2.5 py-1 rounded-full">
+                      + {formatCurrency(selectedLoc.delivery_fee, tenant?.currency_code)}
+                    </span>
+                  ) : (
+                    <span className="text-xs font-semibold text-green-600 bg-green-500/10 px-2.5 py-1 rounded-full">
+                      FREE
+                    </span>
+                  );
+                }
+                // No location selected - show "Paid" indicator
+                return (
+                  <span className="text-xs font-medium text-muted-foreground bg-muted px-2.5 py-1 rounded-full">
+                    Paid
+                  </span>
+                );
+              })()}
+            </div>
           </div>
 
           {/* Expanded location selector */}
@@ -366,7 +395,7 @@ function OptionCard({
         {selected && <Check className="w-3 h-3 text-primary-foreground" />}
       </div>
 
-      <div className="pr-8">
+      <div className="pr-10">
         {children}
       </div>
     </div>
@@ -406,48 +435,66 @@ function LocationDropdown({
   }
 
   return (
-    <Select
-      value={locationId || ''}
-      onValueChange={(selectedId) => {
-        const location = locations.find((l) => l.id === selectedId);
-        if (location) {
-          onChange(location.address, location.id, undefined, undefined, location.delivery_fee);
-        }
-      }}
-      disabled={disabled}
-    >
-      <SelectTrigger className={cn("bg-background", className)}>
-        <SelectValue placeholder={placeholder || `Select ${type} location`}>
-          {selectedLocation && (
-            <div className="flex items-center justify-between w-full gap-2">
-              <span className="truncate">{selectedLocation.name}</span>
-              {selectedLocation.delivery_fee > 0 && (
-                <span className="text-xs font-medium text-amber-600 flex-shrink-0">
-                  + {formatCurrency(selectedLocation.delivery_fee, tenant?.currency_code)}
-                </span>
-              )}
-            </div>
+    <div className="space-y-1">
+      <label className="text-sm font-medium text-foreground">Location</label>
+      <Select
+        value={locationId || ''}
+        onValueChange={(selectedId) => {
+          const location = locations.find((l) => l.id === selectedId);
+          if (location) {
+            onChange(location.address, location.id, undefined, undefined, location.delivery_fee);
+          }
+        }}
+        disabled={disabled}
+      >
+        <SelectTrigger
+          className={cn(
+            "h-auto min-h-[56px] py-3 px-4",
+            selectedLocation
+              ? "border-primary/30 bg-primary/5"
+              : "bg-background",
+            className
           )}
-        </SelectValue>
-      </SelectTrigger>
-      <SelectContent>
-        {locations.map((location) => (
-          <SelectItem key={location.id} value={location.id} className="py-3">
-            <div className="flex items-center justify-between w-full gap-4">
-              <div className="flex-1 min-w-0">
-                <p className="font-medium">{location.name}</p>
-                <p className="text-xs text-muted-foreground truncate">{location.address}</p>
+        >
+          {selectedLocation ? (
+            <div className="flex flex-col items-start text-left w-full">
+              <div className="flex items-center gap-2 w-full">
+                <span className="font-medium">{selectedLocation.name}</span>
+                {selectedLocation.delivery_fee > 0 ? (
+                  <span className="text-xs font-semibold text-amber-600">
+                    +{formatCurrency(selectedLocation.delivery_fee, tenant?.currency_code)}
+                  </span>
+                ) : (
+                  <span className="text-xs font-semibold text-green-600">FREE</span>
+                )}
               </div>
-              {location.delivery_fee > 0 && (
-                <span className="text-xs font-semibold text-amber-600 bg-amber-500/10 px-2 py-0.5 rounded-full flex-shrink-0">
-                  + {formatCurrency(location.delivery_fee, tenant?.currency_code)}
-                </span>
-              )}
+              <span className="text-xs text-muted-foreground">{selectedLocation.address}</span>
             </div>
-          </SelectItem>
-        ))}
-      </SelectContent>
-    </Select>
+          ) : (
+            <span className="text-muted-foreground">{placeholder || `Select ${type} location`}</span>
+          )}
+        </SelectTrigger>
+        <SelectContent align="start" className="w-[var(--radix-select-trigger-width)]">
+          {locations.map((location) => (
+            <SelectItem key={location.id} value={location.id} className="py-3 cursor-pointer">
+              <div className="flex flex-col items-start">
+                <div className="flex items-center gap-2">
+                  <span className="font-medium">{location.name}</span>
+                  {location.delivery_fee > 0 ? (
+                    <span className="text-xs font-semibold text-amber-600">
+                      +{formatCurrency(location.delivery_fee, tenant?.currency_code)}
+                    </span>
+                  ) : (
+                    <span className="text-xs font-semibold text-green-600">FREE</span>
+                  )}
+                </div>
+                <span className="text-xs text-muted-foreground">{location.address}</span>
+              </div>
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+    </div>
   );
 }
 
