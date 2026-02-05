@@ -33,7 +33,8 @@
       "Bash(npm run lint:*)",
       "Bash(npx next lint)",
       "Bash(xargs:*)",
-      "mcp__ide__getDiagnostics"
+      "mcp__ide__getDiagnostics",
+      "Bash(npx tsc:*)"
     ],
     "deny": [],
     "ask": []

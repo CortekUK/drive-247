@@ -17,29 +17,23 @@ import {
 } from '@/components/ui/sidebar';
 import {
   Car,
-  History,
   Shield,
   Home,
   ChevronLeft,
   FileText,
   MessageSquare,
   CreditCard,
+  FileSignature,
 } from 'lucide-react';
 import { useSiteSettings } from '@/hooks/useSiteSettings';
 import { useCustomerUnreadCount } from '@/hooks/use-customer-unread';
 
 const navItems = [
   {
-    title: 'Current Bookings',
+    title: 'Bookings',
     href: '/portal/bookings',
     icon: Car,
-    description: 'View your active rentals',
-  },
-  {
-    title: 'Past Bookings',
-    href: '/portal/bookings/history',
-    icon: History,
-    description: 'View your booking history',
+    description: 'View and manage your rentals',
   },
   {
     title: 'Payments',
@@ -60,6 +54,12 @@ const navItems = [
     description: 'Manage your insurance',
   },
   {
+    title: 'Agreements',
+    href: '/portal/agreements',
+    icon: FileSignature,
+    description: 'View rental agreements',
+  },
+  {
     title: 'Messages',
     href: '/portal/messages',
     icon: MessageSquare,
@@ -75,28 +75,26 @@ export function CustomerPortalSidebar() {
 
   return (
     <Sidebar collapsible="icon">
-      <SidebarHeader className="border-b">
-        <div className="flex items-center gap-3 px-2 py-3">
-          {state === 'expanded' ? (
-            <Link href="/" className="flex items-center gap-2">
-              {settings.logo_url ? (
-                <img
-                  src={settings.logo_url}
-                  alt={settings.logo_alt || 'Logo'}
-                  className="h-8 w-auto"
-                />
-              ) : (
-                <span className="font-semibold text-lg">
-                  {settings.company_name || 'Drive247'}
-                </span>
-              )}
-            </Link>
-          ) : (
-            <Link href="/" className="mx-auto">
-              <Home className="h-5 w-5" />
-            </Link>
-          )}
-        </div>
+      <SidebarHeader className="border-b h-16 flex items-center justify-center p-0">
+        {state === 'expanded' ? (
+          <Link href="/" className="flex items-center gap-2 px-4">
+            {settings.logo_url ? (
+              <img
+                src={settings.logo_url}
+                alt={settings.logo_alt || 'Logo'}
+                className="h-8 w-auto"
+              />
+            ) : (
+              <span className="font-semibold text-lg">
+                {settings.company_name || 'Drive247'}
+              </span>
+            )}
+          </Link>
+        ) : (
+          <Link href="/" className="flex items-center justify-center">
+            <Home className="h-5 w-5" />
+          </Link>
+        )}
       </SidebarHeader>
 
       <SidebarContent>
@@ -117,23 +115,16 @@ export function CustomerPortalSidebar() {
                       isActive={isActive}
                       tooltip={item.title}
                     >
-                      <Link href={item.href} className="flex items-center justify-between w-full">
-                        <div className="flex items-center gap-2">
-                          <item.icon className="h-4 w-4" />
-                          <span>{item.title}</span>
-                        </div>
-                        {showBadge && state === 'expanded' && (
-                          <span className="inline-flex items-center justify-center px-2 py-0.5 text-xs font-bold leading-none text-white bg-destructive rounded-full">
-                            {unreadCount > 99 ? '99+' : unreadCount}
-                          </span>
-                        )}
-                        {showBadge && state === 'collapsed' && (
-                          <span className="absolute -top-1 -right-1 inline-flex items-center justify-center w-4 h-4 text-[10px] font-bold leading-none text-white bg-destructive rounded-full">
-                            {unreadCount > 9 ? '9+' : unreadCount}
-                          </span>
-                        )}
+                      <Link href={item.href}>
+                        <item.icon className="h-4 w-4" />
+                        <span>{item.title}</span>
                       </Link>
                     </SidebarMenuButton>
+                    {showBadge && (
+                      <span className={`absolute ${state === 'collapsed' ? '-top-1 -right-1 w-4 h-4 text-[10px]' : 'top-1.5 right-2 px-2 py-0.5 text-xs'} inline-flex items-center justify-center font-bold leading-none text-white bg-destructive rounded-full`}>
+                        {state === 'collapsed' ? (unreadCount > 9 ? '9+' : unreadCount) : (unreadCount > 99 ? '99+' : unreadCount)}
+                      </span>
+                    )}
                   </SidebarMenuItem>
                 );
               })}

@@ -414,7 +414,7 @@ export const usePageContent = (slug: string) => {
             query = query.eq("tenant_id", tenantId);
           }
 
-          return query.single();
+          return query.maybeSingle();
         };
 
         let result;
@@ -426,7 +426,7 @@ export const usePageContent = (slug: string) => {
           console.log(`[CMS] Loaded content for ${slug} (tenant: ${tenant.id}):`, result.data ? 'found' : 'not found');
 
           // 2. If not found, try global content (tenant_id IS NULL) - NOT content from other tenants
-          if (result.error?.code === "PGRST116") {
+          if (!result.data) {
             console.log(`[CMS] No tenant-specific content for ${slug}, trying global (tenant_id IS NULL)...`);
             let globalQuery = supabase
               .from("cms_pages")
@@ -448,7 +448,7 @@ export const usePageContent = (slug: string) => {
               globalQuery = globalQuery.eq("status", "published");
             }
 
-            result = await globalQuery.single();
+            result = await globalQuery.maybeSingle();
           }
 
           // Note: We intentionally do NOT fall back to content from other tenants.
@@ -477,16 +477,12 @@ export const usePageContent = (slug: string) => {
             noTenantQuery = noTenantQuery.eq("status", "published");
           }
 
-          result = await noTenantQuery.single();
+          result = await noTenantQuery.maybeSingle();
         }
 
         const { data: page, error } = result;
 
         if (error) {
-          if (error.code === "PGRST116") {
-            console.log(`[CMS] No published content for page: ${slug}`);
-            return null;
-          }
           throw error;
         }
 

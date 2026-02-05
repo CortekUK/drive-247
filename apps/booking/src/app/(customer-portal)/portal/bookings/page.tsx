@@ -5,6 +5,7 @@ import { useCustomerRentals, useCustomerRentalStats } from '@/hooks/use-customer
 import { RentalCard } from '@/components/customer-portal/RentalCard';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Car, DollarSign, History, CalendarCheck, ArrowUpDown } from 'lucide-react';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
@@ -15,6 +16,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+
+type BookingFilter = 'all' | 'current' | 'past';
+type SortOrder = 'newest' | 'oldest';
 
 function StatCard({
   title,
@@ -43,10 +47,12 @@ function StatCard({
   );
 }
 
-export default function CurrentBookingsPage() {
-  const { data: rentals, isLoading } = useCustomerRentals('current');
+export default function BookingsPage() {
+  const [filter, setFilter] = useState<BookingFilter>('all');
+  const [sortOrder, setSortOrder] = useState<SortOrder>('newest');
+
+  const { data: rentals, isLoading } = useCustomerRentals(filter);
   const { data: stats } = useCustomerRentalStats();
-  const [sortOrder, setSortOrder] = useState<'newest' | 'oldest'>('newest');
 
   // Sort rentals based on user selection
   const sortedRentals = useMemo(() => {
@@ -58,6 +64,26 @@ export default function CurrentBookingsPage() {
     });
   }, [rentals, sortOrder]);
 
+  const getEmptyMessage = () => {
+    switch (filter) {
+      case 'current':
+        return {
+          title: 'No active bookings',
+          description: "You don't have any active rentals at the moment.",
+        };
+      case 'past':
+        return {
+          title: 'No past bookings',
+          description: 'Your completed rentals will appear here.',
+        };
+      default:
+        return {
+          title: 'No bookings yet',
+          description: "You haven't made any bookings yet.",
+        };
+    }
+  };
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -65,7 +91,7 @@ export default function CurrentBookingsPage() {
         <div>
           <h1 className="text-2xl font-bold">My Bookings</h1>
           <p className="text-muted-foreground">
-            View and manage your current rentals
+            View and manage your rentals
           </p>
         </div>
         <Link href="/">
@@ -100,29 +126,38 @@ export default function CurrentBookingsPage() {
         />
       </div>
 
-      {/* Current Rentals */}
-      <div>
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="text-lg font-semibold">Current Bookings</h2>
-          {rentals && rentals.length > 1 && (
-            <div className="flex items-center gap-2">
-              <ArrowUpDown className="h-4 w-4 text-muted-foreground" />
-              <Select value={sortOrder} onValueChange={(value: 'newest' | 'oldest') => setSortOrder(value)}>
-                <SelectTrigger className="w-[180px]">
-                  <SelectValue placeholder="Sort by" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="newest">Most Recent First</SelectItem>
-                  <SelectItem value="oldest">Oldest First</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          )}
-        </div>
+      {/* Tabs and Sort */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <Tabs value={filter} onValueChange={(value) => setFilter(value as BookingFilter)}>
+          <TabsList>
+            <TabsTrigger value="all">All</TabsTrigger>
+            <TabsTrigger value="current">Current</TabsTrigger>
+            <TabsTrigger value="past">Past</TabsTrigger>
+          </TabsList>
+        </Tabs>
 
+        {/* Sort */}
+        {rentals && rentals.length > 1 && (
+          <div className="flex items-center gap-2">
+            <ArrowUpDown className="h-4 w-4 text-muted-foreground" />
+            <Select value={sortOrder} onValueChange={(value: SortOrder) => setSortOrder(value)}>
+              <SelectTrigger className="w-[150px]">
+                <SelectValue placeholder="Sort by" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="newest">Newest First</SelectItem>
+                <SelectItem value="oldest">Oldest First</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        )}
+      </div>
+
+      {/* Bookings List */}
+      <div>
         {isLoading ? (
           <div className="space-y-4">
-            {[...Array(2)].map((_, i) => (
+            {[...Array(3)].map((_, i) => (
               <Card key={i} className="overflow-hidden">
                 <div className="flex">
                   <Skeleton className="w-48 h-32" />
@@ -144,9 +179,9 @@ export default function CurrentBookingsPage() {
         ) : (
           <Card className="p-8 text-center">
             <Car className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
-            <h3 className="font-semibold text-lg mb-2">No active bookings</h3>
+            <h3 className="font-semibold text-lg mb-2">{getEmptyMessage().title}</h3>
             <p className="text-muted-foreground mb-4">
-              You don't have any active rentals at the moment.
+              {getEmptyMessage().description}
             </p>
             <Link href="/">
               <Button>Book a Vehicle</Button>
@@ -154,18 +189,6 @@ export default function CurrentBookingsPage() {
           </Card>
         )}
       </div>
-
-      {/* Link to Past Bookings */}
-      {stats && stats.pastRentals > 0 && (
-        <div className="text-center pt-4">
-          <Link href="/portal/bookings/history">
-            <Button variant="outline">
-              <History className="h-4 w-4 mr-2" />
-              View Past Bookings ({stats.pastRentals})
-            </Button>
-          </Link>
-        </div>
-      )}
     </div>
   );
 }

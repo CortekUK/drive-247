@@ -95,6 +95,15 @@ export function useChatMessages(channelId: string | null, customerId: string | n
         (oldData: typeof data) => {
           if (!oldData) return oldData;
 
+          // Check if message already exists in any page to prevent duplicates
+          const messageExists = oldData.pages.some((page) =>
+            page.messages.some((msg) => msg.id === payload.id)
+          );
+
+          if (messageExists) {
+            return oldData;
+          }
+
           const newMessage: ChatMessage = {
             id: payload.id,
             channel_id: payload.channelId,

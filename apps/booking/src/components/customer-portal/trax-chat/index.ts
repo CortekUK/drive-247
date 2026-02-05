@@ -1,0 +1,1 @@
+export { TraxChatWidget } from './TraxChatWidget';

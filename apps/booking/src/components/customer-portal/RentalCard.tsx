@@ -1,13 +1,17 @@
 'use client';
 
+import { useState } from 'react';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
-import { Calendar, Car, MapPin, CreditCard, Clock, AlertCircle } from 'lucide-react';
+import { Calendar, Car, MapPin, CreditCard, Clock, AlertCircle, Pencil, CalendarPlus } from 'lucide-react';
 import { format, differenceInDays, isPast, isToday } from 'date-fns';
 import { CustomerRental } from '@/hooks/use-customer-rentals';
 import { cn } from '@/lib/utils';
 import Link from 'next/link';
+import { EditInsuranceDialog } from './EditInsuranceDialog';
+import { ExtendRentalDialog } from './ExtendRentalDialog';
 
 interface RentalCardProps {
   rental: CustomerRental;
@@ -40,7 +44,15 @@ function getStatusBadgeVariant(
 }
 
 export function RentalCard({ rental }: RentalCardProps) {
+  const [showEditInsurance, setShowEditInsurance] = useState(false);
+  const [showExtendDialog, setShowExtendDialog] = useState(false);
   const vehicle = rental.vehicles;
+
+  // Check if booking can be edited (only Pending status)
+  const canEditInsurance = rental.status === 'Pending';
+  // Check if rental can be extended (Active status and no pending extension)
+  const canExtend = rental.status === 'Active' && !rental.is_extended;
+  const hasExtensionPending = rental.is_extended === true;
   const vehicleName = vehicle
     ? vehicle.make && vehicle.model
       ? `${vehicle.make} ${vehicle.model}`
@@ -141,9 +153,46 @@ export function RentalCard({ rental }: RentalCardProps) {
                   </p>
                 )}
               </div>
-              <Badge variant={getStatusBadgeVariant(rental.status)}>
-                {rental.status}
-              </Badge>
+              <div className="flex items-center gap-1.5 flex-wrap">
+                <Badge variant={getStatusBadgeVariant(rental.status)}>
+                  {rental.status}
+                </Badge>
+                {hasExtensionPending && (
+                  <Badge variant="outline" className="bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-900/20 dark:text-amber-400 dark:border-amber-800">
+                    Extension Pending
+                  </Badge>
+                )}
+                {canEditInsurance && (
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-7 w-7"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      setShowEditInsurance(true);
+                    }}
+                    title="Update Insurance"
+                  >
+                    <Pencil className="h-3.5 w-3.5" />
+                  </Button>
+                )}
+                {canExtend && (
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-7 w-7"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      setShowExtendDialog(true);
+                    }}
+                    title="Extend Rental"
+                  >
+                    <CalendarPlus className="h-3.5 w-3.5" />
+                  </Button>
+                )}
+              </div>
             </div>
           </CardHeader>
 
@@ -157,6 +206,16 @@ export function RentalCard({ rental }: RentalCardProps) {
                   {format(new Date(rental.end_date), 'MMM dd, yyyy')}
                 </span>
               </div>
+
+              {/* Pending Extension Info */}
+              {hasExtensionPending && rental.previous_end_date && (
+                <div className="flex items-center gap-2 text-amber-600 dark:text-amber-400">
+                  <CalendarPlus className="h-4 w-4" />
+                  <span className="text-sm">
+                    Requested: {format(new Date(rental.previous_end_date), 'MMM dd, yyyy')}
+                  </span>
+                </div>
+              )}
 
               {/* Duration */}
               <div className="flex items-center gap-2 text-muted-foreground">
@@ -252,10 +311,25 @@ export function RentalCard({ rental }: RentalCardProps) {
                   </span>
                 </div>
               )}
+
             </div>
           </CardContent>
         </div>
       </div>
+
+      {/* Edit Insurance Dialog */}
+      <EditInsuranceDialog
+        open={showEditInsurance}
+        onOpenChange={setShowEditInsurance}
+        rental={rental}
+      />
+
+      {/* Extend Rental Dialog */}
+      <ExtendRentalDialog
+        open={showExtendDialog}
+        onOpenChange={setShowExtendDialog}
+        rental={rental}
+      />
     </Card>
   );
 }

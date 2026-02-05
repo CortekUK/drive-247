@@ -11,6 +11,7 @@ import {
   type InstallmentPlan,
   type ScheduledInstallment,
 } from '@/hooks/use-customer-installments';
+import { useCustomerInvoices, type CustomerInvoice } from '@/hooks/use-customer-invoices';
 import {
   usePayInstallmentEarly,
   usePayRemainingInstallments,
@@ -23,6 +24,14 @@ import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Progress } from '@/components/ui/progress';
 import { Separator } from '@/components/ui/separator';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+} from '@/components/ui/sheet';
 import {
   Accordion,
   AccordionContent,
@@ -53,8 +62,66 @@ import {
   RefreshCw,
   Loader2,
   Zap,
+  FileText,
+  Eye,
+  ChevronRight,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+
+// Mock data for demo installments
+const mockInstallmentPlans = [
+  {
+    id: 'demo-1',
+    vehicleName: '2024 BMW M4 Competition',
+    planType: 'Weekly',
+    totalAmount: 4500,
+    paidAmount: 1500,
+    remainingAmount: 3000,
+    status: 'active',
+    startDate: '2024-01-15',
+    installments: [
+      { number: 1, amount: 750, dueDate: '2024-01-22', status: 'paid', paidAt: '2024-01-22' },
+      { number: 2, amount: 750, dueDate: '2024-01-29', status: 'paid', paidAt: '2024-01-29' },
+      { number: 3, amount: 750, dueDate: '2024-02-05', status: 'scheduled', paidAt: null },
+      { number: 4, amount: 750, dueDate: '2024-02-12', status: 'scheduled', paidAt: null },
+      { number: 5, amount: 750, dueDate: '2024-02-19', status: 'scheduled', paidAt: null },
+      { number: 6, amount: 750, dueDate: '2024-02-26', status: 'scheduled', paidAt: null },
+    ],
+  },
+  {
+    id: 'demo-2',
+    vehicleName: '2023 Mercedes-AMG GT',
+    planType: 'Bi-Weekly',
+    totalAmount: 6000,
+    paidAmount: 2000,
+    remainingAmount: 4000,
+    status: 'active',
+    startDate: '2024-01-01',
+    installments: [
+      { number: 1, amount: 1000, dueDate: '2024-01-15', status: 'paid', paidAt: '2024-01-15' },
+      { number: 2, amount: 1000, dueDate: '2024-01-29', status: 'paid', paidAt: '2024-01-29' },
+      { number: 3, amount: 1000, dueDate: '2024-02-12', status: 'overdue', paidAt: null },
+      { number: 4, amount: 1000, dueDate: '2024-02-26', status: 'scheduled', paidAt: null },
+      { number: 5, amount: 1000, dueDate: '2024-03-11', status: 'scheduled', paidAt: null },
+      { number: 6, amount: 1000, dueDate: '2024-03-25', status: 'scheduled', paidAt: null },
+    ],
+  },
+  {
+    id: 'demo-3',
+    vehicleName: '2024 Porsche 911 Turbo S',
+    planType: 'Monthly',
+    totalAmount: 12000,
+    paidAmount: 8000,
+    remainingAmount: 4000,
+    status: 'active',
+    startDate: '2023-11-01',
+    installments: [
+      { number: 1, amount: 4000, dueDate: '2023-12-01', status: 'paid', paidAt: '2023-12-01' },
+      { number: 2, amount: 4000, dueDate: '2024-01-01', status: 'paid', paidAt: '2024-01-01' },
+      { number: 3, amount: 4000, dueDate: '2024-02-01', status: 'scheduled', paidAt: null },
+    ],
+  },
+];
 
 function formatCurrency(amount: number): string {
   return new Intl.NumberFormat('en-US', {
@@ -517,6 +584,410 @@ function PaymentHistoryList() {
   );
 }
 
+function InvoiceList({
+  onViewInvoice,
+}: {
+  onViewInvoice: (invoice: CustomerInvoice) => void;
+}) {
+  const { data: invoices, isLoading } = useCustomerInvoices();
+
+  if (isLoading) {
+    return (
+      <div className="space-y-3">
+        {[...Array(3)].map((_, i) => (
+          <div key={i} className="flex items-center justify-between p-4 border rounded-lg">
+            <div className="space-y-2">
+              <Skeleton className="h-4 w-40" />
+              <Skeleton className="h-3 w-32" />
+            </div>
+            <Skeleton className="h-8 w-24" />
+          </div>
+        ))}
+      </div>
+    );
+  }
+
+  if (!invoices || invoices.length === 0) {
+    return (
+      <div className="text-center py-8 text-muted-foreground">
+        <FileText className="h-8 w-8 mx-auto mb-2 opacity-50" />
+        <p>No invoices yet</p>
+      </div>
+    );
+  }
+
+  const getStatusVariant = (status: string | null) => {
+    switch (status?.toLowerCase()) {
+      case 'paid':
+        return 'default';
+      case 'pending':
+        return 'secondary';
+      case 'overdue':
+        return 'destructive';
+      default:
+        return 'outline';
+    }
+  };
+
+  return (
+    <div className="space-y-2">
+      {invoices.map((invoice) => {
+        const vehicle = invoice.vehicles;
+        const vehicleName = vehicle
+          ? `${vehicle.reg} ${vehicle.make || ''} ${vehicle.model || ''}`.trim()
+          : null;
+
+        const dueDate = invoice.due_date ? new Date(invoice.due_date) : null;
+        const isOverdue = dueDate && isPast(dueDate) && invoice.status?.toLowerCase() !== 'paid';
+
+        return (
+          <div
+            key={invoice.id}
+            className={cn(
+              "flex items-center justify-between p-4 border rounded-lg hover:bg-muted/50 transition-colors cursor-pointer",
+              isOverdue && "border-red-300 dark:border-red-800 bg-red-50/50 dark:bg-red-950/20"
+            )}
+            onClick={() => onViewInvoice(invoice)}
+          >
+            <div className="flex items-center gap-3 flex-1 min-w-0">
+              <div className={cn(
+                'p-2 rounded-full shrink-0',
+                invoice.status?.toLowerCase() === 'paid' ? 'bg-green-100 dark:bg-green-900/30' :
+                isOverdue ? 'bg-red-100 dark:bg-red-900/30' :
+                'bg-muted'
+              )}>
+                <FileText className={cn(
+                  'h-4 w-4',
+                  invoice.status?.toLowerCase() === 'paid' ? 'text-green-600' :
+                  isOverdue ? 'text-red-600' :
+                  'text-muted-foreground'
+                )} />
+              </div>
+              <div className="min-w-0">
+                <p className="font-medium text-sm truncate">
+                  {invoice.invoice_number}
+                </p>
+                <p className="text-xs text-muted-foreground truncate">
+                  {vehicleName && <span>{vehicleName} • </span>}
+                  {format(new Date(invoice.invoice_date), 'MMM dd, yyyy')}
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center gap-3">
+              <div className="text-right">
+                <p className="font-semibold">
+                  {formatCurrency(invoice.total_amount)}
+                </p>
+                <Badge variant={getStatusVariant(invoice.status)} className="text-xs capitalize">
+                  {invoice.status || 'Pending'}
+                </Badge>
+              </div>
+              <ChevronRight className="h-4 w-4 text-muted-foreground" />
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function InvoiceDetailSheet({
+  open,
+  onOpenChange,
+  invoice,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  invoice: CustomerInvoice | null;
+}) {
+  if (!invoice) return null;
+
+  const vehicle = invoice.vehicles;
+  const vehicleName = vehicle
+    ? `${vehicle.reg} ${vehicle.make || ''} ${vehicle.model || ''}`.trim()
+    : 'Vehicle';
+
+  const dueDate = invoice.due_date ? new Date(invoice.due_date) : null;
+  const isOverdue = dueDate && isPast(dueDate) && invoice.status?.toLowerCase() !== 'paid';
+
+  const getStatusVariant = (status: string | null) => {
+    switch (status?.toLowerCase()) {
+      case 'paid':
+        return 'default';
+      case 'pending':
+        return 'secondary';
+      case 'overdue':
+        return 'destructive';
+      default:
+        return 'outline';
+    }
+  };
+
+  return (
+    <Sheet open={open} onOpenChange={onOpenChange}>
+      <SheetContent className="w-full sm:max-w-lg overflow-y-auto">
+        <SheetHeader className="text-left">
+          <SheetTitle className="flex items-center gap-2">
+            <FileText className="h-5 w-5" />
+            {invoice.invoice_number}
+          </SheetTitle>
+          <SheetDescription>
+            {vehicleName} • {format(new Date(invoice.invoice_date), 'MMM dd, yyyy')}
+          </SheetDescription>
+        </SheetHeader>
+
+        <div className="mt-6 space-y-6">
+          {/* Status and Due Date */}
+          <div className="flex items-center justify-between">
+            <Badge variant={getStatusVariant(invoice.status)} className="capitalize">
+              {invoice.status || 'Pending'}
+            </Badge>
+            {dueDate && (
+              <p className={cn(
+                "text-sm",
+                isOverdue ? "text-red-600 font-medium" : "text-muted-foreground"
+              )}>
+                {isOverdue ? 'Overdue: ' : 'Due: '}
+                {format(dueDate, 'MMM dd, yyyy')}
+              </p>
+            )}
+          </div>
+
+          {/* Invoice Details */}
+          <div className="bg-muted/50 rounded-lg p-4 space-y-3">
+            {invoice.rental_fee != null && invoice.rental_fee > 0 && (
+              <div className="flex justify-between text-sm">
+                <span className="text-muted-foreground">Rental Fee</span>
+                <span>{formatCurrency(invoice.rental_fee)}</span>
+              </div>
+            )}
+            {invoice.protection_fee != null && invoice.protection_fee > 0 && (
+              <div className="flex justify-between text-sm">
+                <span className="text-muted-foreground">Protection Fee</span>
+                <span>{formatCurrency(invoice.protection_fee)}</span>
+              </div>
+            )}
+            {invoice.service_fee != null && invoice.service_fee > 0 && (
+              <div className="flex justify-between text-sm">
+                <span className="text-muted-foreground">Service Fee</span>
+                <span>{formatCurrency(invoice.service_fee)}</span>
+              </div>
+            )}
+            {invoice.security_deposit != null && invoice.security_deposit > 0 && (
+              <div className="flex justify-between text-sm">
+                <span className="text-muted-foreground">Security Deposit</span>
+                <span>{formatCurrency(invoice.security_deposit)}</span>
+              </div>
+            )}
+            <Separator />
+            <div className="flex justify-between text-sm">
+              <span className="text-muted-foreground">Subtotal</span>
+              <span>{formatCurrency(invoice.subtotal)}</span>
+            </div>
+            {invoice.tax_amount != null && invoice.tax_amount > 0 && (
+              <div className="flex justify-between text-sm">
+                <span className="text-muted-foreground">Tax</span>
+                <span>{formatCurrency(invoice.tax_amount)}</span>
+              </div>
+            )}
+            <Separator />
+            <div className="flex justify-between font-semibold">
+              <span>Total</span>
+              <span className="text-lg">{formatCurrency(invoice.total_amount)}</span>
+            </div>
+          </div>
+
+          {/* Rental Info */}
+          {invoice.rentals && (
+            <div className="space-y-2">
+              <h4 className="text-sm font-medium">Rental Information</h4>
+              <div className="bg-muted/50 rounded-lg p-4 space-y-2">
+                {invoice.rentals.rental_number && (
+                  <div className="flex justify-between text-sm">
+                    <span className="text-muted-foreground">Rental #</span>
+                    <span>{invoice.rentals.rental_number}</span>
+                  </div>
+                )}
+                <div className="flex justify-between text-sm">
+                  <span className="text-muted-foreground">Period</span>
+                  <span>
+                    {format(new Date(invoice.rentals.start_date), 'MMM dd')} - {format(new Date(invoice.rentals.end_date), 'MMM dd, yyyy')}
+                  </span>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Notes */}
+          {invoice.notes && (
+            <div className="space-y-2">
+              <h4 className="text-sm font-medium">Notes</h4>
+              <p className="text-sm text-muted-foreground bg-muted/50 rounded-lg p-4">
+                {invoice.notes}
+              </p>
+            </div>
+          )}
+        </div>
+      </SheetContent>
+    </Sheet>
+  );
+}
+
+type MockInstallmentPlan = typeof mockInstallmentPlans[0];
+
+function DemoInstallmentCard({
+  plan,
+  onClick,
+}: {
+  plan: MockInstallmentPlan;
+  onClick: () => void;
+}) {
+  const progressPercent = (plan.paidAmount / plan.totalAmount) * 100;
+  const paidInstallments = plan.installments.filter(i => i.status === 'paid').length;
+
+  return (
+    <Card
+      className="cursor-pointer hover:border-accent transition-colors"
+      onClick={onClick}
+    >
+      <CardHeader className="pb-3">
+        <div className="flex items-start justify-between">
+          <div className="space-y-1">
+            <div className="flex items-center gap-2">
+              <CardTitle className="text-base">{plan.vehicleName}</CardTitle>
+              <Badge variant="secondary">Demo</Badge>
+            </div>
+            <CardDescription>{plan.planType} Plan</CardDescription>
+          </div>
+          <div className="text-right">
+            <p className="text-sm text-muted-foreground">Total</p>
+            <p className="font-semibold">{formatCurrency(plan.totalAmount)}</p>
+          </div>
+        </div>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <div className="space-y-2">
+          <div className="flex justify-between text-sm">
+            <span className="text-muted-foreground">
+              {paidInstallments} of {plan.installments.length} installments paid
+            </span>
+            <span className="font-medium">{Math.round(progressPercent)}%</span>
+          </div>
+          <Progress value={progressPercent} className="h-2" />
+          <div className="flex justify-between text-sm">
+            <span className="text-green-600">Paid: {formatCurrency(plan.paidAmount)}</span>
+            <span className="text-muted-foreground">Remaining: {formatCurrency(plan.remainingAmount)}</span>
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+function DemoInstallmentTimeline({
+  open,
+  onOpenChange,
+  plan,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  plan: MockInstallmentPlan | null;
+}) {
+  if (!plan) return null;
+
+  return (
+    <Sheet open={open} onOpenChange={onOpenChange}>
+      <SheetContent className="w-full sm:max-w-lg overflow-y-auto">
+        <SheetHeader className="text-left">
+          <SheetTitle className="flex items-center gap-2">
+            <Car className="h-5 w-5" />
+            {plan.vehicleName}
+          </SheetTitle>
+          <SheetDescription>
+            {plan.planType} Installment Plan • Started {format(new Date(plan.startDate), 'MMM dd, yyyy')}
+          </SheetDescription>
+        </SheetHeader>
+
+        <div className="mt-6 space-y-6">
+          {/* Progress Summary */}
+          <div className="bg-muted/50 rounded-lg p-4">
+            <div className="grid grid-cols-3 gap-4 text-center">
+              <div>
+                <p className="text-xl font-bold text-green-600">{formatCurrency(plan.paidAmount)}</p>
+                <p className="text-xs text-muted-foreground">Paid</p>
+              </div>
+              <div>
+                <p className="text-xl font-bold">{formatCurrency(plan.remainingAmount)}</p>
+                <p className="text-xs text-muted-foreground">Remaining</p>
+              </div>
+              <div>
+                <p className="text-xl font-bold">{formatCurrency(plan.totalAmount)}</p>
+                <p className="text-xs text-muted-foreground">Total</p>
+              </div>
+            </div>
+          </div>
+
+          {/* Timeline */}
+          <div className="space-y-0">
+            {plan.installments.map((inst, index) => (
+              <div key={inst.number} className="flex gap-4">
+                {/* Timeline line */}
+                <div className="flex flex-col items-center">
+                  <div className={cn(
+                    "w-3 h-3 rounded-full border-2",
+                    inst.status === 'paid' ? "bg-green-500 border-green-500" :
+                    inst.status === 'overdue' ? "bg-red-500 border-red-500" :
+                    "bg-background border-muted-foreground"
+                  )} />
+                  {index < plan.installments.length - 1 && (
+                    <div className={cn(
+                      "w-0.5 h-12",
+                      inst.status === 'paid' ? "bg-green-500" : "bg-muted"
+                    )} />
+                  )}
+                </div>
+
+                {/* Content */}
+                <div className="flex-1 pb-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="font-medium text-sm">Installment #{inst.number}</p>
+                      <p className="text-xs text-muted-foreground">
+                        Due: {format(new Date(inst.dueDate), 'MMM dd, yyyy')}
+                      </p>
+                    </div>
+                    <div className="text-right">
+                      <p className="font-semibold">{formatCurrency(inst.amount)}</p>
+                      <Badge
+                        variant={
+                          inst.status === 'paid' ? 'default' :
+                          inst.status === 'overdue' ? 'destructive' :
+                          'secondary'
+                        }
+                        className="text-xs"
+                      >
+                        {inst.status === 'paid' ? 'Paid' :
+                         inst.status === 'overdue' ? 'Overdue' :
+                         'Scheduled'}
+                      </Badge>
+                    </div>
+                  </div>
+                  {inst.paidAt && (
+                    <p className="text-xs text-green-600 mt-1">
+                      Paid on {format(new Date(inst.paidAt), 'MMM dd, yyyy')}
+                    </p>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+
+        </div>
+      </SheetContent>
+    </Sheet>
+  );
+}
+
 export default function PaymentsPage() {
   const { data: plans, isLoading: plansLoading } = useCustomerInstallmentPlans();
   const { data: stats, isLoading: statsLoading } = useInstallmentStats();
@@ -537,6 +1008,15 @@ export default function PaymentsPage() {
     open: boolean;
     planId?: string;
   }>({ open: false });
+
+  // Demo installments state
+  const [showDemoInstallments, setShowDemoInstallments] = useState(false);
+  const [selectedDemoPlan, setSelectedDemoPlan] = useState<MockInstallmentPlan | null>(null);
+  const [demoTimelineOpen, setDemoTimelineOpen] = useState(false);
+
+  // Invoice detail state
+  const [selectedInvoice, setSelectedInvoice] = useState<CustomerInvoice | null>(null);
+  const [invoiceDetailOpen, setInvoiceDetailOpen] = useState(false);
 
   const activePlans = (plans || []).filter(
     (p) => p.status === 'active' || p.status === 'overdue'
@@ -657,83 +1137,148 @@ export default function PaymentsPage() {
         </div>
       )}
 
-      {/* Next Payment */}
-      {isLoading ? (
-        <Card>
-          <CardHeader>
-            <Skeleton className="h-6 w-32" />
-          </CardHeader>
-          <CardContent>
-            <Skeleton className="h-24 w-full" />
-          </CardContent>
-        </Card>
-      ) : nextPayment ? (
-        <NextPaymentCard
-          plan={nextPayment.plan}
-          installment={nextPayment.installment}
-          onPayNow={handlePayNow}
-          onRetry={handleRetry}
-          onUpdateCard={(planId) => setUpdateCardDialog({ open: true, planId })}
-          isPaying={isPaying}
-        />
-      ) : activePlans.length === 0 ? (
-        <Card className="border-dashed">
-          <CardContent className="flex flex-col items-center justify-center py-12">
-            <CreditCard className="h-12 w-12 text-muted-foreground mb-4" />
-            <h3 className="font-semibold text-lg mb-2">No Active Installment Plans</h3>
-            <p className="text-muted-foreground text-center max-w-md">
-              You don't have any active installment plans. When you book a vehicle with installments,
-              your payment schedule will appear here.
-            </p>
-          </CardContent>
-        </Card>
-      ) : null}
+      {/* Tabs Section */}
+      <Tabs defaultValue="installments" className="w-full">
+        <TabsList className="grid w-full grid-cols-2">
+          <TabsTrigger value="invoices">Invoices</TabsTrigger>
+          <TabsTrigger value="installments">Installments</TabsTrigger>
+        </TabsList>
 
-      {/* Active Plans */}
-      {activePlans.length > 0 && (
-        <div className="space-y-4">
-          <h2 className="text-lg font-semibold">Active Installment Plans</h2>
-          <div className="grid gap-4 md:grid-cols-2">
-            {activePlans.map((plan) => (
-              <InstallmentPlanCard
-                key={plan.id}
-                plan={plan}
-                onPayNow={handlePayNow}
-                onPayOff={handlePayOff}
-                isPaying={isPaying}
+        <TabsContent value="invoices" className="space-y-4 mt-6">
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-lg">Invoices</CardTitle>
+              <CardDescription>Your rental invoices and billing details</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <InvoiceList
+                onViewInvoice={(invoice) => {
+                  setSelectedInvoice(invoice);
+                  setInvoiceDetailOpen(true);
+                }}
               />
-            ))}
-          </div>
-        </div>
-      )}
+            </CardContent>
+          </Card>
+        </TabsContent>
 
-      {/* Completed Plans */}
-      {completedPlans.length > 0 && (
-        <div className="space-y-4">
-          <h2 className="text-lg font-semibold text-muted-foreground">Completed Plans</h2>
-          <div className="grid gap-4 md:grid-cols-2">
-            {completedPlans.map((plan) => (
-              <InstallmentPlanCard
-                key={plan.id}
-                plan={plan}
-                onPayNow={handlePayNow}
-                onPayOff={handlePayOff}
-                isPaying={isPaying}
-              />
-            ))}
-          </div>
-        </div>
-      )}
+        <TabsContent value="installments" className="space-y-6 mt-6">
+          {/* Demo Installments Section */}
+          <Card className="border-dashed">
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <div>
+                  <CardTitle className="text-lg">Demo Installments</CardTitle>
+                  <CardDescription>See how installment plans work</CardDescription>
+                </div>
+                <Button
+                  variant={showDemoInstallments ? "secondary" : "outline"}
+                  onClick={() => setShowDemoInstallments(!showDemoInstallments)}
+                >
+                  {showDemoInstallments ? 'Hide Demo' : 'Show Demo'}
+                </Button>
+              </div>
+            </CardHeader>
+            {showDemoInstallments && (
+              <CardContent>
+                <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                  {mockInstallmentPlans.map((plan) => (
+                    <DemoInstallmentCard
+                      key={plan.id}
+                      plan={plan}
+                      onClick={() => {
+                        setSelectedDemoPlan(plan);
+                        setDemoTimelineOpen(true);
+                      }}
+                    />
+                  ))}
+                </div>
+              </CardContent>
+            )}
+          </Card>
 
-      {/* Payment History */}
-      <div className="space-y-4">
-        <h2 className="text-lg font-semibold">Recent Payments</h2>
-        <Card>
-          <CardContent className="pt-6">
-            <PaymentHistoryList />
-          </CardContent>
-        </Card>
-      </div>
+          {/* Next Payment */}
+          {isLoading ? (
+            <Card>
+              <CardHeader>
+                <Skeleton className="h-6 w-32" />
+              </CardHeader>
+              <CardContent>
+                <Skeleton className="h-24 w-full" />
+              </CardContent>
+            </Card>
+          ) : nextPayment ? (
+            <NextPaymentCard
+              plan={nextPayment.plan}
+              installment={nextPayment.installment}
+              onPayNow={handlePayNow}
+              onRetry={handleRetry}
+              onUpdateCard={(planId) => setUpdateCardDialog({ open: true, planId })}
+              isPaying={isPaying}
+            />
+          ) : activePlans.length === 0 ? (
+            <Card className="border-dashed">
+              <CardContent className="flex flex-col items-center justify-center py-12">
+                <CreditCard className="h-12 w-12 text-muted-foreground mb-4" />
+                <h3 className="font-semibold text-lg mb-2">No Active Installment Plans</h3>
+                <p className="text-muted-foreground text-center max-w-md">
+                  You don't have any active installment plans. When you book a vehicle with installments,
+                  your payment schedule will appear here.
+                </p>
+              </CardContent>
+            </Card>
+          ) : null}
+
+          {/* Active Plans */}
+          {activePlans.length > 0 && (
+            <div className="space-y-4">
+              <h2 className="text-lg font-semibold">Active Installment Plans</h2>
+              <div className="grid gap-4 md:grid-cols-2">
+                {activePlans.map((plan) => (
+                  <InstallmentPlanCard
+                    key={plan.id}
+                    plan={plan}
+                    onPayNow={handlePayNow}
+                    onPayOff={handlePayOff}
+                    isPaying={isPaying}
+                  />
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Completed Plans */}
+          {completedPlans.length > 0 && (
+            <div className="space-y-4">
+              <h2 className="text-lg font-semibold text-muted-foreground">Completed Plans</h2>
+              <div className="grid gap-4 md:grid-cols-2">
+                {completedPlans.map((plan) => (
+                  <InstallmentPlanCard
+                    key={plan.id}
+                    plan={plan}
+                    onPayNow={handlePayNow}
+                    onPayOff={handlePayOff}
+                    isPaying={isPaying}
+                  />
+                ))}
+              </div>
+            </div>
+          )}
+        </TabsContent>
+      </Tabs>
+
+      {/* Demo Timeline Dialog */}
+      <DemoInstallmentTimeline
+        open={demoTimelineOpen}
+        onOpenChange={setDemoTimelineOpen}
+        plan={selectedDemoPlan}
+      />
+
+      {/* Invoice Detail Sheet */}
+      <InvoiceDetailSheet
+        open={invoiceDetailOpen}
+        onOpenChange={setInvoiceDetailOpen}
+        invoice={selectedInvoice}
+      />
 
       {/* Confirmation Dialog */}
       <AlertDialog open={!!confirmDialog} onOpenChange={() => setConfirmDialog(null)}>

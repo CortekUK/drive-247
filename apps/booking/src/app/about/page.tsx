@@ -115,17 +115,17 @@ const About = () => {
         .eq("tenant_id", tenant.id);
 
       // Get average rating from testimonials for this tenant
+      // The testimonials table uses 'stars' column (not 'rating')
       // @ts-ignore - Supabase type inference issue
       const { data: testimonials } = await supabase
         .from("testimonials")
-        .select("rating")
-        .eq("is_active", true)
+        .select("stars")
         .eq("tenant_id", tenant.id);
 
       // Default to 0 if no testimonials exist
       const avgRating = testimonials && testimonials.length > 0
         // @ts-ignore - Supabase type inference issue
-        ? testimonials.reduce((sum: any, t: any) => sum + (t.rating || 5), 0) / testimonials.length
+        ? testimonials.reduce((sum: any, t: any) => sum + (t.stars || 5), 0) / testimonials.length
         : 0;
 
       setStats({

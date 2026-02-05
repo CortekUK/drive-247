@@ -35,6 +35,8 @@ export interface CustomerRental {
   return_location: string | null;
   created_at: string;
   has_installment_plan: boolean | null;
+  is_extended: boolean | null;
+  previous_end_date: string | null;
   vehicles: {
     id: string;
     reg: string;
@@ -47,11 +49,11 @@ export interface CustomerRental {
   installment_plans: CustomerRentalInstallmentPlan[] | null;
 }
 
-export function useCustomerRentals(status: 'current' | 'past') {
+export function useCustomerRentals(filter: 'all' | 'current' | 'past' = 'all') {
   const { customerUser } = useCustomerAuthStore();
 
   return useQuery({
-    queryKey: ['customer-rentals', customerUser?.customer_id, status],
+    queryKey: ['customer-rentals', customerUser?.customer_id, filter],
     queryFn: async () => {
       if (!customerUser?.customer_id) return [];
 
@@ -72,6 +74,8 @@ export function useCustomerRentals(status: 'current' | 'past') {
           return_location,
           created_at,
           has_installment_plan,
+          is_extended,
+          previous_end_date,
           vehicles (
             id,
             reg,
@@ -103,17 +107,18 @@ export function useCustomerRentals(status: 'current' | 'past') {
         `)
         .eq('customer_id', customerUser.customer_id);
 
-      if (status === 'current') {
+      if (filter === 'current') {
         // Current: end_date >= today AND status is Active/Pending/Reserved
         query = query
           .gte('end_date', today)
           .in('status', ['Active', 'Pending', 'Reserved']);
-      } else {
+      } else if (filter === 'past') {
         // Past: end_date < today OR status is Completed/Cancelled/Ended
         query = query.or(`end_date.lt.${today},status.in.(Completed,Cancelled,Ended)`);
       }
+      // 'all' - no additional filters
 
-      const { data, error } = await query.order('start_date', { ascending: status === 'current' });
+      const { data, error } = await query.order('start_date', { ascending: false });
 
       if (error) {
         console.error('Error fetching customer rentals:', error);

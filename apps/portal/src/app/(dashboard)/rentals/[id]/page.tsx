@@ -11,7 +11,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
-import { FileText, ArrowLeft, DollarSign, Plus, X, Send, Download, Ban, Check, AlertTriangle, Loader2, Shield, CheckCircle, XCircle, ExternalLink, UserCheck, IdCard, Camera, FileSignature, Clock, Mail, RefreshCw, Trash2, Receipt, Percent, Car, Undo2, Truck, MapPin, Key, KeyRound } from "lucide-react";
+import { FileText, ArrowLeft, DollarSign, Plus, X, Send, Download, Ban, Check, AlertTriangle, Loader2, Shield, CheckCircle, XCircle, ExternalLink, UserCheck, IdCard, Camera, FileSignature, Clock, Mail, RefreshCw, Trash2, Receipt, Percent, Car, Undo2, Truck, MapPin, Key, KeyRound, CalendarPlus } from "lucide-react";
 import { AddPaymentDialog } from "@/components/shared/dialogs/add-payment-dialog";
 import { RefundDialog } from "@/components/shared/dialogs/refund-dialog";
 import { useToast } from "@/hooks/use-toast";
@@ -25,6 +25,7 @@ import { KeyHandoverActionBanner } from "@/components/rentals/key-handover-actio
 import { MileageSummaryCard } from "@/components/rentals/mileage-summary-card";
 import { CancelRentalDialog } from "@/components/shared/dialogs/cancel-rental-dialog";
 import RejectionDialog from "@/components/rentals/rejection-dialog";
+import { ExtensionRequestDialog } from "@/components/rentals/ExtensionRequestDialog";
 import InstallmentPlanCard from "@/components/rentals/InstallmentPlanCard";
 import { formatCurrency } from "@/lib/formatters";
 
@@ -55,6 +56,9 @@ interface Rental {
   collection_location_id?: string;
   collection_address?: string;
   collection_fee?: number;
+  // Extension fields
+  is_extended?: boolean;
+  previous_end_date?: string | null;
 }
 
 const RentalDetail = () => {
@@ -84,6 +88,9 @@ const RentalDetail = () => {
   const [refundCategory, setRefundCategory] = useState<string>("");
   const [refundTotalAmount, setRefundTotalAmount] = useState(0);
   const [refundPaidAmount, setRefundPaidAmount] = useState(0);
+
+  // Extension dialog state
+  const [showExtensionDialog, setShowExtensionDialog] = useState(false);
 
   const { data: rental, isLoading, error: rentalError } = useQuery({
     queryKey: ["rental", id, tenant?.id],
@@ -850,6 +857,16 @@ const RentalDetail = () => {
           {/* Active Rental - Show Add Payment, Add Fine, Close, Cancel, Delete buttons */}
           {displayStatus === 'Active' && (
             <>
+              {rental.is_extended && (
+                <Button
+                  variant="default"
+                  className="bg-amber-600 hover:bg-amber-700"
+                  onClick={() => setShowExtensionDialog(true)}
+                >
+                  <CalendarPlus className="h-4 w-4 mr-2" />
+                  Review Extension
+                </Button>
+              )}
               <Button variant="outline" onClick={() => setShowAddPayment(true)}>
                 <Plus className="h-4 w-4 mr-2" />
                 Add Payment
@@ -1259,12 +1276,36 @@ const RentalDetail = () => {
               <div>
                 <p className="text-sm text-muted-foreground">End Date</p>
                 <p className="text-base font-medium">{new Date(rental.end_date).toLocaleDateString()}</p>
+                {/* Show original date if extension was approved */}
+                {!rental.is_extended && rental.previous_end_date && (
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Originally: {new Date(rental.previous_end_date).toLocaleDateString()}
+                  </p>
+                )}
               </div>
               <div>
                 <p className="text-sm text-muted-foreground">Period Type</p>
                 <Badge variant="outline" className="mt-1">{rental.rental_period_type || 'Monthly'}</Badge>
               </div>
             </div>
+
+            {/* Pending Extension Alert */}
+            {rental.is_extended && rental.previous_end_date && (
+              <Alert className="mt-4 border-amber-200 bg-amber-50 dark:bg-amber-950/30">
+                <CalendarPlus className="h-4 w-4 text-amber-600" />
+                <AlertDescription className="text-amber-800 dark:text-amber-200">
+                  <span className="font-medium">Extension Requested:</span> Customer wants to extend until{' '}
+                  <strong>{new Date(rental.previous_end_date).toLocaleDateString()}</strong>
+                  <Button
+                    variant="link"
+                    className="ml-2 h-auto p-0 text-amber-700 dark:text-amber-300"
+                    onClick={() => setShowExtensionDialog(true)}
+                  >
+                    Review Request
+                  </Button>
+                </AlertDescription>
+              </Alert>
+            )}
           </div>
 
           {/* Delivery & Collection Info */}
@@ -2496,6 +2537,21 @@ const RentalDetail = () => {
             end_date: rental.end_date,
           }}
           payment={payment || undefined}
+        />
+      )}
+
+      {/* Extension Request Dialog */}
+      {rental && (
+        <ExtensionRequestDialog
+          open={showExtensionDialog}
+          onOpenChange={setShowExtensionDialog}
+          rental={{
+            id: rental.id,
+            end_date: rental.end_date,
+            previous_end_date: rental.previous_end_date || null,
+            customers: rental.customers,
+            vehicles: rental.vehicles,
+          }}
         />
       )}
 

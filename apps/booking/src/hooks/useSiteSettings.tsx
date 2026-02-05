@@ -147,7 +147,7 @@ export const useSiteSettings = () => {
             .eq("tenant_id", tenant.id)
             .eq("slug", "site-settings")
             .eq("status", "published")
-            .single();
+            .maybeSingle();
 
           if (!cmsError && page) {
             // Extract sections from CMS

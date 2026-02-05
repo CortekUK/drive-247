@@ -26,7 +26,7 @@ import {
   Loader2,
   QrCode,
 } from 'lucide-react';
-import { format } from 'date-fns';
+import { format, differenceInYears } from 'date-fns';
 import {
   Table,
   TableBody,
@@ -367,78 +367,226 @@ export default function VerificationPage() {
                 </div>
               </div>
 
+              {/* Personal Information */}
+              <div className="space-y-3">
+                <h4 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Personal Information</h4>
+                <div className="grid gap-4 md:grid-cols-2">
+                  {currentVerification.full_name && (
+                    <div className="flex items-center gap-3">
+                      <User className="h-4 w-4 text-muted-foreground" />
+                      <div>
+                        <p className="text-sm text-muted-foreground">Full Name</p>
+                        <p className="font-medium">{currentVerification.full_name}</p>
+                      </div>
+                    </div>
+                  )}
+
+                  {(currentVerification.first_name || currentVerification.last_name) && (
+                    <div className="flex items-center gap-3">
+                      <User className="h-4 w-4 text-muted-foreground" />
+                      <div>
+                        <p className="text-sm text-muted-foreground">Name (First / Last)</p>
+                        <p className="font-medium">
+                          {currentVerification.first_name || '-'} / {currentVerification.last_name || '-'}
+                        </p>
+                      </div>
+                    </div>
+                  )}
+
+                  {currentVerification.date_of_birth && (
+                    <div className="flex items-center gap-3">
+                      <Calendar className="h-4 w-4 text-muted-foreground" />
+                      <div>
+                        <p className="text-sm text-muted-foreground">Date of Birth</p>
+                        <p className="font-medium">
+                          {format(new Date(currentVerification.date_of_birth), 'PPP')} ({differenceInYears(new Date(), new Date(currentVerification.date_of_birth))} years old)
+                        </p>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Document Information */}
+              <div className="space-y-3">
+                <h4 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Document Information</h4>
+                <div className="grid gap-4 md:grid-cols-2">
+                  {currentVerification.document_type && (
+                    <div className="flex items-center gap-3">
+                      <FileText className="h-4 w-4 text-muted-foreground" />
+                      <div>
+                        <p className="text-sm text-muted-foreground">Document Type</p>
+                        <p className="font-medium capitalize">
+                          {currentVerification.document_type.replace(/_/g, ' ')}
+                        </p>
+                      </div>
+                    </div>
+                  )}
+
+                  {currentVerification.document_number && (
+                    <div className="flex items-center gap-3">
+                      <FileText className="h-4 w-4 text-muted-foreground" />
+                      <div>
+                        <p className="text-sm text-muted-foreground">Document Number</p>
+                        <p className="font-medium">{currentVerification.document_number}</p>
+                      </div>
+                    </div>
+                  )}
+
+                  {currentVerification.document_country && (
+                    <div className="flex items-center gap-3">
+                      <FileText className="h-4 w-4 text-muted-foreground" />
+                      <div>
+                        <p className="text-sm text-muted-foreground">Issuing Country</p>
+                        <p className="font-medium uppercase">{currentVerification.document_country}</p>
+                      </div>
+                    </div>
+                  )}
+
+                  {currentVerification.document_expiry && (
+                    <div className="flex items-center gap-3">
+                      <Calendar className="h-4 w-4 text-muted-foreground" />
+                      <div>
+                        <p className="text-sm text-muted-foreground">Document Expiry</p>
+                        <p className="font-medium">
+                          {format(new Date(currentVerification.document_expiry), 'PPP')}
+                        </p>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+
               {/* Verification Details */}
-              <div className="grid gap-4 md:grid-cols-2">
-                {currentVerification.full_name && (
-                  <div className="flex items-center gap-3">
-                    <User className="h-4 w-4 text-muted-foreground" />
-                    <div>
-                      <p className="text-sm text-muted-foreground">Name on Document</p>
-                      <p className="font-medium">{currentVerification.full_name}</p>
+              <div className="space-y-3">
+                <h4 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Verification Details</h4>
+                <div className="grid gap-4 md:grid-cols-2">
+                  {currentVerification.verification_provider && (
+                    <div className="flex items-center gap-3">
+                      <Shield className="h-4 w-4 text-muted-foreground" />
+                      <div>
+                        <p className="text-sm text-muted-foreground">Verification Method</p>
+                        <p className="font-medium capitalize">
+                          {currentVerification.verification_provider === 'ai' ? 'AI Verification' : 'Veriff'}
+                        </p>
+                      </div>
                     </div>
-                  </div>
-                )}
+                  )}
 
-                {currentVerification.document_type && (
-                  <div className="flex items-center gap-3">
-                    <FileText className="h-4 w-4 text-muted-foreground" />
-                    <div>
-                      <p className="text-sm text-muted-foreground">Document Type</p>
-                      <p className="font-medium capitalize">
-                        {currentVerification.document_type.replace('_', ' ')}
-                      </p>
+                  {currentVerification.ai_face_match_score != null && (
+                    <div className="flex items-center gap-3">
+                      <CheckCircle className="h-4 w-4 text-muted-foreground" />
+                      <div>
+                        <p className="text-sm text-muted-foreground">Face Match Score</p>
+                        <p className="font-medium">
+                          {Math.round(currentVerification.ai_face_match_score * 100)}%
+                        </p>
+                      </div>
                     </div>
-                  </div>
-                )}
+                  )}
 
-                {currentVerification.document_number && (
-                  <div className="flex items-center gap-3">
-                    <FileText className="h-4 w-4 text-muted-foreground" />
-                    <div>
-                      <p className="text-sm text-muted-foreground">Document Number</p>
-                      <p className="font-medium">
-                        ****{currentVerification.document_number.slice(-4)}
-                      </p>
+                  {currentVerification.session_id && (
+                    <div className="flex items-center gap-3">
+                      <FileText className="h-4 w-4 text-muted-foreground" />
+                      <div>
+                        <p className="text-sm text-muted-foreground">Session Reference</p>
+                        <p className="font-medium font-mono text-xs">
+                          {currentVerification.session_id.slice(0, 8)}...{currentVerification.session_id.slice(-4)}
+                        </p>
+                      </div>
                     </div>
-                  </div>
-                )}
+                  )}
 
-                {currentVerification.document_expiry && (
+                  {currentVerification.review_status && (
+                    <div className="flex items-center gap-3">
+                      <Clock className="h-4 w-4 text-muted-foreground" />
+                      <div>
+                        <p className="text-sm text-muted-foreground">Review Status</p>
+                        <p className="font-medium capitalize">{currentVerification.review_status}</p>
+                      </div>
+                    </div>
+                  )}
+
                   <div className="flex items-center gap-3">
                     <Calendar className="h-4 w-4 text-muted-foreground" />
                     <div>
-                      <p className="text-sm text-muted-foreground">Document Expiry</p>
+                      <p className="text-sm text-muted-foreground">Submitted On</p>
                       <p className="font-medium">
-                        {format(new Date(currentVerification.document_expiry), 'PPP')}
+                        {format(new Date(currentVerification.created_at), 'PPP')}
                       </p>
                     </div>
                   </div>
-                )}
 
-                {currentVerification.verification_provider && (
-                  <div className="flex items-center gap-3">
-                    <Shield className="h-4 w-4 text-muted-foreground" />
-                    <div>
-                      <p className="text-sm text-muted-foreground">Verification Method</p>
-                      <p className="font-medium capitalize">
-                        {currentVerification.verification_provider === 'ai' ? 'AI Verification' : 'Veriff'}
-                      </p>
+                  {currentVerification.updated_at && currentVerification.updated_at !== currentVerification.created_at && (
+                    <div className="flex items-center gap-3">
+                      <RefreshCw className="h-4 w-4 text-muted-foreground" />
+                      <div>
+                        <p className="text-sm text-muted-foreground">Last Updated</p>
+                        <p className="font-medium">
+                          {format(new Date(currentVerification.updated_at), 'PPP')}
+                        </p>
+                      </div>
                     </div>
-                  </div>
-                )}
-
-                {currentVerification.ai_face_match_score && (
-                  <div className="flex items-center gap-3">
-                    <CheckCircle className="h-4 w-4 text-muted-foreground" />
-                    <div>
-                      <p className="text-sm text-muted-foreground">Face Match Score</p>
-                      <p className="font-medium">
-                        {Math.round(currentVerification.ai_face_match_score * 100)}%
-                      </p>
-                    </div>
-                  </div>
-                )}
+                  )}
+                </div>
               </div>
+
+              {/* Document Images */}
+              {(currentVerification.document_front_url || currentVerification.document_back_url || currentVerification.selfie_url || currentVerification.face_url) && (
+                <div className="space-y-3">
+                  <h4 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Submitted Documents</h4>
+                  <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+                    {currentVerification.document_front_url && (
+                      <div className="space-y-2">
+                        <p className="text-sm text-muted-foreground">Document Front</p>
+                        <div className="aspect-[3/2] rounded-lg overflow-hidden border bg-muted">
+                          <img
+                            src={currentVerification.document_front_url}
+                            alt="Document Front"
+                            className="w-full h-full object-cover"
+                          />
+                        </div>
+                      </div>
+                    )}
+                    {currentVerification.document_back_url && (
+                      <div className="space-y-2">
+                        <p className="text-sm text-muted-foreground">Document Back</p>
+                        <div className="aspect-[3/2] rounded-lg overflow-hidden border bg-muted">
+                          <img
+                            src={currentVerification.document_back_url}
+                            alt="Document Back"
+                            className="w-full h-full object-cover"
+                          />
+                        </div>
+                      </div>
+                    )}
+                    {currentVerification.selfie_url && (
+                      <div className="space-y-2">
+                        <p className="text-sm text-muted-foreground">Selfie</p>
+                        <div className="aspect-[3/4] rounded-lg overflow-hidden border bg-muted">
+                          <img
+                            src={currentVerification.selfie_url}
+                            alt="Selfie"
+                            className="w-full h-full object-cover"
+                          />
+                        </div>
+                      </div>
+                    )}
+                    {currentVerification.face_url && (
+                      <div className="space-y-2">
+                        <p className="text-sm text-muted-foreground">Face Crop</p>
+                        <div className="aspect-square rounded-lg overflow-hidden border bg-muted">
+                          <img
+                            src={currentVerification.face_url}
+                            alt="Face"
+                            className="w-full h-full object-cover"
+                          />
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
 
               {/* Update Verification Button */}
               <div className="pt-4 border-t">

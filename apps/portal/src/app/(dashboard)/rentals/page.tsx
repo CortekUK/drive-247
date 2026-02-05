@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
   Card,
@@ -23,9 +23,11 @@ import {
   FileText,
   Plus,
   Download,
+  CalendarPlus,
 } from "lucide-react";
-import { useEnhancedRentals, RentalFilters } from "@/hooks/use-enhanced-rentals";
+import { useEnhancedRentals, RentalFilters, EnhancedRental } from "@/hooks/use-enhanced-rentals";
 import { RentalsFilters } from "@/components/rentals/rentals-filters";
+import { ExtensionRequestDialog } from "@/components/rentals/ExtensionRequestDialog";
 import { formatDuration, formatRentalDuration } from "@/lib/rental-utils";
 import {
   Pagination,
@@ -39,6 +41,8 @@ import {
 const RentalsList = () => {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const [showExtensionDialog, setShowExtensionDialog] = useState(false);
+  const [selectedRental, setSelectedRental] = useState<EnhancedRental | null>(null);
 
   // Parse filters from URL
   const filters: RentalFilters = useMemo(
@@ -255,11 +259,28 @@ const RentalsList = () => {
                     {rentals.map((rental) => (
                       <TableRow
                         key={rental.id}
-                        className="hover:bg-muted/50 cursor-pointer"
+                        className={`hover:bg-muted/50 cursor-pointer ${rental.is_extended ? 'bg-amber-500/10 border-l-4 border-l-amber-500' : ''}`}
                         onClick={() => router.push(`/rentals/${rental.id}`)}
                       >
                         <TableCell className="font-medium">
-                          {rental.rental_number}
+                          {rental.is_extended ? (
+                            <div className="flex flex-col">
+                              <span>{rental.rental_number}</span>
+                              <button
+                                className="text-xs text-amber-600 hover:text-amber-700 font-medium flex items-center gap-1 mt-0.5"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setSelectedRental(rental);
+                                  setShowExtensionDialog(true);
+                                }}
+                              >
+                                <CalendarPlus className="h-3 w-3" />
+                                Extension Requested
+                              </button>
+                            </div>
+                          ) : (
+                            rental.rental_number
+                          )}
                         </TableCell>
                         <TableCell className="text-muted-foreground text-sm">
                           {rental.created_at
@@ -391,6 +412,32 @@ const RentalsList = () => {
           </p>
           <Button onClick={handleClearFilters}>Clear Filters</Button>
         </div>
+      )}
+
+      {/* Extension Request Dialog */}
+      {selectedRental && (
+        <ExtensionRequestDialog
+          open={showExtensionDialog}
+          onOpenChange={(open) => {
+            setShowExtensionDialog(open);
+            if (!open) setSelectedRental(null);
+          }}
+          rental={{
+            id: selectedRental.id,
+            end_date: selectedRental.end_date || '',
+            previous_end_date: selectedRental.previous_end_date || null,
+            customers: {
+              id: selectedRental.customer.id,
+              name: selectedRental.customer.name,
+            },
+            vehicles: {
+              id: selectedRental.vehicle.id,
+              reg: selectedRental.vehicle.reg,
+              make: selectedRental.vehicle.make,
+              model: selectedRental.vehicle.model,
+            },
+          }}
+        />
       )}
     </div>
   );

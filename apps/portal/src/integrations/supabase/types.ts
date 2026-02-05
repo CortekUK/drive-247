@@ -518,6 +518,163 @@ export type Database = {
           },
         ]
       }
+      chat_channel_messages: {
+        Row: {
+          channel_id: string
+          content: string
+          created_at: string | null
+          id: number
+          is_read: boolean
+          metadata: Json | null
+          read_at: string | null
+          sender_id: string
+          sender_type: string
+        }
+        Insert: {
+          channel_id: string
+          content: string
+          created_at?: string | null
+          id?: number
+          is_read?: boolean
+          metadata?: Json | null
+          read_at?: string | null
+          sender_id: string
+          sender_type: string
+        }
+        Update: {
+          channel_id?: string
+          content?: string
+          created_at?: string | null
+          id?: number
+          is_read?: boolean
+          metadata?: Json | null
+          read_at?: string | null
+          sender_id?: string
+          sender_type?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "chat_channel_messages_channel_id_fkey"
+            columns: ["channel_id"]
+            isOneToOne: false
+            referencedRelation: "chat_channels"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      chat_channel_participants: {
+        Row: {
+          channel_id: string
+          created_at: string | null
+          id: string
+          is_muted: boolean
+          is_online: boolean
+          last_read_at: string | null
+          last_seen_at: string | null
+          participant_id: string
+          participant_type: string
+          unread_count: number
+        }
+        Insert: {
+          channel_id: string
+          created_at?: string | null
+          id?: string
+          is_muted?: boolean
+          is_online?: boolean
+          last_read_at?: string | null
+          last_seen_at?: string | null
+          participant_id: string
+          participant_type: string
+          unread_count?: number
+        }
+        Update: {
+          channel_id?: string
+          created_at?: string | null
+          id?: string
+          is_muted?: boolean
+          is_online?: boolean
+          last_read_at?: string | null
+          last_seen_at?: string | null
+          participant_id?: string
+          participant_type?: string
+          unread_count?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "chat_channel_participants_channel_id_fkey"
+            columns: ["channel_id"]
+            isOneToOne: false
+            referencedRelation: "chat_channels"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      chat_channels: {
+        Row: {
+          created_at: string | null
+          customer_id: string
+          id: string
+          last_message_at: string | null
+          status: string
+          tenant_id: string
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          customer_id: string
+          id?: string
+          last_message_at?: string | null
+          status?: string
+          tenant_id: string
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          customer_id?: string
+          id?: string
+          last_message_at?: string | null
+          status?: string
+          tenant_id?: string
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "chat_channels_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "customers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "chat_channels_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "v_customer_credit"
+            referencedColumns: ["customer_id"]
+          },
+          {
+            foreignKeyName: "chat_channels_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "view_aging_receivables"
+            referencedColumns: ["customer_id"]
+          },
+          {
+            foreignKeyName: "chat_channels_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "view_fines_export"
+            referencedColumns: ["customer_id"]
+          },
+          {
+            foreignKeyName: "chat_channels_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       chat_messages: {
         Row: {
           chart_data: Json | null
@@ -1892,6 +2049,7 @@ export type Database = {
       }
       installment_plans: {
         Row: {
+          config: Json | null
           created_at: string | null
           customer_id: string
           id: string
@@ -1914,6 +2072,7 @@ export type Database = {
           upfront_payment_id: string | null
         }
         Insert: {
+          config?: Json | null
           created_at?: string | null
           customer_id: string
           id?: string
@@ -1936,6 +2095,7 @@ export type Database = {
           upfront_payment_id?: string | null
         }
         Update: {
+          config?: Json | null
           created_at?: string | null
           customer_id?: string
           id?: string
@@ -4390,12 +4550,14 @@ export type Database = {
           installment_plan_id: string | null
           insurance_premium: number | null
           insurance_status: string | null
+          is_extended: boolean | null
           monthly_amount: number
           payment_mode: string | null
           payment_status: string | null
           pickup_location: string | null
           pickup_location_id: string | null
           pickup_time: string | null
+          previous_end_date: string | null
           promo_code: string | null
           rental_number: string | null
           rental_period_type: string | null
@@ -4438,12 +4600,14 @@ export type Database = {
           installment_plan_id?: string | null
           insurance_premium?: number | null
           insurance_status?: string | null
+          is_extended?: boolean | null
           monthly_amount: number
           payment_mode?: string | null
           payment_status?: string | null
           pickup_location?: string | null
           pickup_location_id?: string | null
           pickup_time?: string | null
+          previous_end_date?: string | null
           promo_code?: string | null
           rental_number?: string | null
           rental_period_type?: string | null
@@ -4486,12 +4650,14 @@ export type Database = {
           installment_plan_id?: string | null
           insurance_premium?: number | null
           insurance_status?: string | null
+          is_extended?: boolean | null
           monthly_amount?: number
           payment_mode?: string | null
           payment_status?: string | null
           pickup_location?: string | null
           pickup_location_id?: string | null
           pickup_time?: string | null
+          previous_end_date?: string | null
           promo_code?: string | null
           rental_number?: string | null
           rental_period_type?: string | null
@@ -6415,6 +6581,10 @@ export type Database = {
         Args: { customer_id_param: string }
         Returns: number
       }
+      get_customer_rag_context: {
+        Args: { p_customer_id: string; p_tenant_id: string }
+        Returns: Json
+      }
       get_customer_statement: {
         Args: { p_customer_id: string; p_from_date: string; p_to_date: string }
         Returns: {
@@ -6477,6 +6647,25 @@ export type Database = {
           vehicle_make: string
           vehicle_model: string
           vehicle_reg: string
+        }[]
+      }
+      get_installments_for_retry: {
+        Args: { p_process_date?: string }
+        Returns: {
+          amount: number
+          customer_id: string
+          due_date: string
+          failure_count: number
+          id: string
+          installment_number: number
+          installment_plan_id: string
+          last_attempted_at: string
+          max_retry_attempts: number
+          rental_id: string
+          retry_interval_days: number
+          stripe_customer_id: string
+          stripe_payment_method_id: string
+          tenant_id: string
         }[]
       }
       get_payment_remaining: {
@@ -6920,3 +7109,4 @@ export const Constants = {
     },
   },
 } as const
+

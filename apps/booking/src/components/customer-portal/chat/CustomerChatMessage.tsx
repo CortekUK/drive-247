@@ -4,6 +4,8 @@ import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
 import { Check, CheckCheck } from 'lucide-react';
 import type { ChatMessage } from '@/hooks/use-customer-chat';
+import { BookingReferenceCard } from './BookingReferenceCard';
+import type { BookingReference } from './BookingPicker';
 
 interface CustomerChatMessageProps {
   message: ChatMessage;
@@ -14,6 +16,14 @@ interface CustomerChatMessageProps {
 export function CustomerChatMessage({ message, isOwnMessage, tenantName }: CustomerChatMessageProps) {
   const formattedTime = format(new Date(message.created_at), 'h:mm a');
   const formattedDate = format(new Date(message.created_at), 'MMM d, yyyy');
+
+  // Check for booking reference in metadata
+  const metadata = message.metadata as { type?: string; booking?: BookingReference } | undefined;
+  const hasBookingReference = metadata?.type === 'booking_reference' && metadata?.booking;
+
+  // Hide "Shared a booking" placeholder text when booking reference is present
+  const displayContent =
+    hasBookingReference && message.content === 'Shared a booking' ? '' : message.content;
 
   return (
     <div
@@ -38,7 +48,14 @@ export function CustomerChatMessage({ message, isOwnMessage, tenantName }: Custo
         )}
 
         {/* Message content */}
-        <p className="text-sm whitespace-pre-wrap break-words">{message.content}</p>
+        {displayContent && (
+          <p className="text-sm whitespace-pre-wrap break-words">{displayContent}</p>
+        )}
+
+        {/* Booking reference card */}
+        {hasBookingReference && metadata?.booking && (
+          <BookingReferenceCard booking={metadata.booking} isOwnMessage={isOwnMessage} />
+        )}
 
         {/* Timestamp and read status */}
         <div

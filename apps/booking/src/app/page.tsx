@@ -82,10 +82,10 @@ export default function Home() {
   // Load real testimonial data with tenant filtering
   useEffect(() => {
     const loadTestimonialStats = async () => {
+      // The testimonials table uses 'stars' column (not 'rating') and has no 'is_active' column
       let query = supabase
         .from('testimonials')
-        .select('rating')
-        .eq('is_active', true);
+        .select('stars');
 
       // Add tenant filter if tenant context exists
       if (tenant?.id) {
@@ -95,7 +95,7 @@ export default function Home() {
       const { data, error } = await query;
 
       if (!error && data && data.length > 0) {
-        const avgRating = (data.reduce((sum, t) => sum + (t.rating || 5), 0) / data.length).toFixed(1);
+        const avgRating = (data.reduce((sum, t) => sum + (t.stars || 5), 0) / data.length).toFixed(1);
         setTestimonialStats({
           avgRating,
           count: data.length.toString()

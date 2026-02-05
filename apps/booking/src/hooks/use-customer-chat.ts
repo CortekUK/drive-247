@@ -126,11 +126,20 @@ export function useCustomerChat() {
     const unsubMessage = onNewMessage((payload) => {
       if (payload.channelId !== channel.id) return;
 
-      // Add new message to the cache
+      // Add new message to the cache (with deduplication)
       queryClient.setQueryData(
         ['customer-chat-messages', tenantId, channel.id],
         (oldData: typeof data) => {
           if (!oldData) return oldData;
+
+          // Check if message already exists in any page
+          const messageExists = oldData.pages.some((page) =>
+            page.messages.some((msg) => msg.id === payload.id)
+          );
+
+          if (messageExists) {
+            return oldData; // Don't add duplicate
+          }
 
           const newMessage: ChatMessage = {
             id: payload.id,
