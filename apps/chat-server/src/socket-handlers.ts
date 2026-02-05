@@ -251,6 +251,8 @@ export function registerSocketHandlers(io: TypedServer): void {
 
       console.log(`Bulk message to ${customerIds.length} customers from tenant ${tenantId}`);
 
+      const tenantRoomId = getTenantRoomId(tenantId);
+
       for (const customerId of customerIds) {
         const roomId = getRoomId(customerId);
 
@@ -267,17 +269,22 @@ export function registerSocketHandlers(io: TypedServer): void {
             { bulk: true }
           );
 
-          // Broadcast to all clients in the room
-          io.to(roomId).emit('new_message', {
+          const messagePayload = {
             id: message.id,
             channelId: channel.id,
-            senderType: 'tenant',
+            senderType: 'tenant' as const,
             senderId,
             content: message.content,
             isRead: message.is_read,
             createdAt: message.created_at,
             metadata: message.metadata,
-          });
+          };
+
+          // Broadcast to all clients in the customer room
+          io.to(roomId).emit('new_message', messagePayload);
+
+          // Also broadcast to tenant room for badge/channel list updates
+          io.to(tenantRoomId).emit('new_message', messagePayload);
         } catch (error) {
           console.error(`Error sending bulk message to customer ${customerId}:`, error);
         }

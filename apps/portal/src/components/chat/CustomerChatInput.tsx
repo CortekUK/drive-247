@@ -3,7 +3,6 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { Send, X, Car } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Textarea } from '@/components/ui/textarea';
 import { useSocket } from '@/contexts/SocketContext';
 import { cn } from '@/lib/utils';
 import { BookingPicker, BookingReference } from './BookingPicker';
@@ -17,10 +16,20 @@ interface CustomerChatInputProps {
 export function CustomerChatInput({ customerId, disabled, onSend }: CustomerChatInputProps) {
   const [message, setMessage] = useState('');
   const [isSending, setIsSending] = useState(false);
+  const [isFocused, setIsFocused] = useState(false);
   const [selectedBooking, setSelectedBooking] = useState<BookingReference | null>(null);
   const { sendMessage, sendTyping } = useSocket();
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Auto-resize textarea
+  useEffect(() => {
+    const textarea = textareaRef.current;
+    if (textarea) {
+      textarea.style.height = 'auto';
+      textarea.style.height = Math.min(textarea.scrollHeight, 150) + 'px';
+    }
+  }, [message]);
 
   // Handle typing indicator
   const handleTyping = useCallback(() => {
@@ -67,6 +76,11 @@ export function CustomerChatInput({ customerId, disabled, onSend }: CustomerChat
     sendTyping(customerId, false);
     setIsSending(false);
 
+    // Reset textarea height
+    if (textareaRef.current) {
+      textareaRef.current.style.height = 'auto';
+    }
+
     // Focus back on textarea
     textareaRef.current?.focus();
 
@@ -102,14 +116,14 @@ export function CustomerChatInput({ customerId, disabled, onSend }: CustomerChat
     [handleTyping]
   );
 
-  const isDisabled = disabled || (!message.trim() && !selectedBooking) || isSending;
+  const canSend = (message.trim().length > 0 || selectedBooking) && !isSending && !disabled;
 
   const vehicleName = selectedBooking
     ? [selectedBooking.vehicle.make, selectedBooking.vehicle.model].filter(Boolean).join(' ')
     : '';
 
   return (
-    <div className="border-t bg-background">
+    <div className="border-t border-border/50 bg-card/50 backdrop-blur-sm">
       {/* Selected booking preview */}
       {selectedBooking && (
         <div className="px-4 pt-3">
@@ -136,30 +150,52 @@ export function CustomerChatInput({ customerId, disabled, onSend }: CustomerChat
       )}
 
       {/* Input area */}
-      <div className="flex items-end gap-2 p-4">
-        <BookingPicker customerId={customerId} onSelect={handleBookingSelect} disabled={disabled} />
-        <Textarea
-          ref={textareaRef}
-          value={message}
-          onChange={handleChange}
-          onKeyDown={handleKeyDown}
-          placeholder="Type a message..."
-          disabled={disabled}
+      <div className="p-4">
+        <div
           className={cn(
-            'min-h-[44px] max-h-[120px] resize-none',
-            'focus-visible:ring-1 focus-visible:ring-primary'
+            'flex items-end gap-3 rounded-2xl border bg-background p-2 transition-all duration-200',
+            isFocused ? 'border-primary/50 ring-2 ring-primary/10' : 'border-border/50'
           )}
-          rows={1}
-        />
-        <Button
-          size="icon"
-          onClick={handleSend}
-          disabled={isDisabled}
-          className="h-[44px] w-[44px] shrink-0"
         >
-          <Send className="h-4 w-4" />
-          <span className="sr-only">Send message</span>
-        </Button>
+          {/* Booking picker */}
+          <div className="pb-1">
+            <BookingPicker customerId={customerId} onSelect={handleBookingSelect} disabled={disabled} />
+          </div>
+
+          {/* Textarea */}
+          <textarea
+            ref={textareaRef}
+            value={message}
+            onChange={handleChange}
+            onKeyDown={handleKeyDown}
+            onFocus={() => setIsFocused(true)}
+            onBlur={() => setIsFocused(false)}
+            placeholder="Type a message..."
+            disabled={disabled}
+            className={cn(
+              'flex-1 resize-none bg-transparent border-0 outline-none',
+              'min-h-[40px] max-h-[150px] py-2 px-1',
+              'text-sm placeholder:text-muted-foreground',
+              'focus:ring-0 focus:outline-none',
+              disabled && 'opacity-50 cursor-not-allowed'
+            )}
+            rows={1}
+          />
+
+          {/* Send button */}
+          <Button
+            size="icon"
+            onClick={handleSend}
+            disabled={!canSend}
+            className={cn(
+              'h-10 w-10 shrink-0 rounded-xl transition-all',
+              canSend ? 'bg-primary hover:bg-primary/90' : 'bg-muted text-muted-foreground'
+            )}
+          >
+            <Send className="h-4 w-4" />
+            <span className="sr-only">Send message</span>
+          </Button>
+        </div>
       </div>
     </div>
   );

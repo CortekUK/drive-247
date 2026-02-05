@@ -1,20 +1,39 @@
 'use client';
 
 import { cn } from '@/lib/utils';
-import { format } from 'date-fns';
+import { format, isToday, isYesterday } from 'date-fns';
 import { Check, CheckCheck } from 'lucide-react';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import type { ChatMessage } from '@/hooks/use-chat-messages';
 import { BookingReferenceCard } from './BookingReferenceCard';
 import type { BookingReference } from './BookingPicker';
 
 interface ChatMessageBubbleProps {
   message: ChatMessage;
-  isOwnMessage: boolean;  // true if sent by tenant (current user)
+  isOwnMessage: boolean; // true if sent by tenant (current user)
+  isFirstInGroup?: boolean;
+  isLastInGroup?: boolean;
+  customerName?: string;
+  customerAvatar?: string | null;
 }
 
-export function ChatMessageBubble({ message, isOwnMessage }: ChatMessageBubbleProps) {
+export function ChatMessageBubble({
+  message,
+  isOwnMessage,
+  isFirstInGroup = true,
+  isLastInGroup = true,
+  customerName,
+  customerAvatar,
+}: ChatMessageBubbleProps) {
   const formattedTime = format(new Date(message.created_at), 'h:mm a');
-  const formattedDate = format(new Date(message.created_at), 'MMM d, yyyy');
+
+  // Get initials for avatar
+  const initials = customerName
+    ?.split(' ')
+    .map((n) => n[0])
+    .join('')
+    .toUpperCase()
+    .slice(0, 2) || '?';
 
   // Check for booking reference in metadata
   const metadata = message.metadata as { type?: string; booking?: BookingReference } | undefined;
@@ -27,53 +46,89 @@ export function ChatMessageBubble({ message, isOwnMessage }: ChatMessageBubblePr
   return (
     <div
       className={cn(
-        'flex w-full mb-3',
-        isOwnMessage ? 'justify-end' : 'justify-start'
+        'flex w-full group',
+        isOwnMessage ? 'justify-end' : 'justify-start',
+        isFirstInGroup ? 'mt-4' : 'mt-0.5'
       )}
     >
+      {/* Customer avatar - only show for last message in group */}
+      {!isOwnMessage && (
+        <div className="w-8 mr-2 flex-shrink-0">
+          {isLastInGroup && (
+            <Avatar className="h-8 w-8">
+              <AvatarImage src={customerAvatar || undefined} alt={customerName} />
+              <AvatarFallback className="text-xs bg-muted">{initials}</AvatarFallback>
+            </Avatar>
+          )}
+        </div>
+      )}
+
       <div
         className={cn(
-          'max-w-[70%] rounded-2xl px-4 py-2.5 shadow-sm',
-          isOwnMessage
-            ? 'bg-primary text-primary-foreground rounded-br-md'
-            : 'bg-muted rounded-bl-md'
+          'max-w-[65%] relative',
+          isOwnMessage ? 'mr-1' : 'ml-0'
         )}
       >
-        {/* Message content */}
-        {displayContent && (
-          <p className="text-sm whitespace-pre-wrap break-words">{displayContent}</p>
-        )}
-
-        {/* Booking reference card */}
-        {hasBookingReference && metadata?.booking && (
-          <BookingReferenceCard booking={metadata.booking} isOwnMessage={isOwnMessage} />
-        )}
-
-        {/* Timestamp and read status */}
+        {/* Message bubble */}
         <div
           className={cn(
-            'flex items-center gap-1 mt-1',
-            isOwnMessage ? 'justify-end' : 'justify-start'
+            'px-4 py-2.5 shadow-sm transition-all',
+            isOwnMessage
+              ? 'bg-primary text-primary-foreground'
+              : 'bg-card border border-border/50',
+            // Rounded corners based on position
+            isOwnMessage
+              ? cn(
+                  'rounded-2xl',
+                  isFirstInGroup && 'rounded-tr-lg',
+                  isLastInGroup && 'rounded-br-lg',
+                  !isFirstInGroup && !isLastInGroup && 'rounded-r-lg'
+                )
+              : cn(
+                  'rounded-2xl',
+                  isFirstInGroup && 'rounded-tl-lg',
+                  isLastInGroup && 'rounded-bl-lg',
+                  !isFirstInGroup && !isLastInGroup && 'rounded-l-lg'
+                )
           )}
         >
-          <span
-            className={cn(
-              'text-[10px]',
-              isOwnMessage ? 'text-primary-foreground/70' : 'text-muted-foreground'
-            )}
-            title={`${formattedDate} at ${formattedTime}`}
-          >
-            {formattedTime}
-          </span>
-
-          {/* Read status indicator for own messages */}
-          {isOwnMessage && (
-            message.is_read ? (
-              <CheckCheck className="h-3.5 w-3.5 text-primary-foreground/70" />
-            ) : (
-              <Check className="h-3.5 w-3.5 text-primary-foreground/70" />
-            )
+          {/* Message content */}
+          {displayContent && (
+            <p className="text-[15px] leading-relaxed whitespace-pre-wrap break-words">
+              {displayContent}
+            </p>
           )}
+
+          {/* Booking reference card */}
+          {hasBookingReference && metadata?.booking && (
+            <BookingReferenceCard booking={metadata.booking} isOwnMessage={isOwnMessage} />
+          )}
+
+          {/* Timestamp and read status */}
+          <div
+            className={cn(
+              'flex items-center gap-1.5 mt-1',
+              isOwnMessage ? 'justify-end' : 'justify-start'
+            )}
+          >
+            <span
+              className={cn(
+                'text-[11px]',
+                isOwnMessage ? 'text-primary-foreground/70' : 'text-muted-foreground'
+              )}
+            >
+              {formattedTime}
+            </span>
+
+            {/* Read status indicator for own messages */}
+            {isOwnMessage && (
+              message.is_read ? (
+                <CheckCheck className="h-4 w-4 text-primary-foreground/70" />
+              ) : (
+                <Check className="h-4 w-4 text-primary-foreground/50" />
+              )
+            )}
+          </div>
         </div>
       </div>
     </div>
@@ -86,33 +141,25 @@ interface DateSeparatorProps {
 }
 
 export function DateSeparator({ date }: DateSeparatorProps) {
-  const formattedDate = format(new Date(date), 'MMMM d, yyyy');
-  const today = new Date();
   const messageDate = new Date(date);
+  let displayDate: string;
 
-  let displayDate = formattedDate;
-  if (
-    messageDate.getDate() === today.getDate() &&
-    messageDate.getMonth() === today.getMonth() &&
-    messageDate.getFullYear() === today.getFullYear()
-  ) {
+  if (isToday(messageDate)) {
     displayDate = 'Today';
+  } else if (isYesterday(messageDate)) {
+    displayDate = 'Yesterday';
   } else {
-    const yesterday = new Date(today);
-    yesterday.setDate(yesterday.getDate() - 1);
-    if (
-      messageDate.getDate() === yesterday.getDate() &&
-      messageDate.getMonth() === yesterday.getMonth() &&
-      messageDate.getFullYear() === yesterday.getFullYear()
-    ) {
-      displayDate = 'Yesterday';
-    }
+    displayDate = format(messageDate, 'MMMM d, yyyy');
   }
 
   return (
-    <div className="flex items-center justify-center my-4">
-      <div className="bg-muted/60 text-muted-foreground text-xs px-3 py-1 rounded-full">
-        {displayDate}
+    <div className="flex items-center justify-center my-6">
+      <div className="flex items-center gap-4 w-full">
+        <div className="flex-1 h-px bg-border/50" />
+        <span className="text-xs text-muted-foreground font-medium px-2">
+          {displayDate}
+        </span>
+        <div className="flex-1 h-px bg-border/50" />
       </div>
     </div>
   );

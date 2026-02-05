@@ -298,7 +298,7 @@ export function LocationSettings() {
                     "w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0",
                     pickupFixedEnabled
                       ? "bg-primary/10 text-primary"
-                      : "bg-muted text-muted-foreground"
+                      : "bg-muted/50 text-foreground/50"
                   )}>
                     <Building2 className="h-5 w-5" />
                   </div>
@@ -340,7 +340,7 @@ export function LocationSettings() {
                     "w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0",
                     pickupMultipleEnabled
                       ? "bg-primary/10 text-primary"
-                      : "bg-muted text-muted-foreground"
+                      : "bg-muted/50 text-foreground/50"
                   )}>
                     <MapPinned className="h-5 w-5" />
                   </div>
@@ -384,7 +384,7 @@ export function LocationSettings() {
                     "w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0",
                     pickupAreaEnabled
                       ? "bg-primary/10 text-primary"
-                      : "bg-muted text-muted-foreground"
+                      : "bg-muted/50 text-foreground/50"
                   )}>
                     <CircleDot className="h-5 w-5" />
                   </div>
@@ -432,7 +432,7 @@ export function LocationSettings() {
                     "w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0",
                     returnFixedEnabled
                       ? "bg-primary/10 text-primary"
-                      : "bg-muted text-muted-foreground"
+                      : "bg-muted/50 text-foreground/50"
                   )}>
                     <Building2 className="h-5 w-5" />
                   </div>
@@ -483,7 +483,7 @@ export function LocationSettings() {
                     "w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0",
                     returnMultipleEnabled
                       ? "bg-primary/10 text-primary"
-                      : "bg-muted text-muted-foreground"
+                      : "bg-muted/50 text-foreground/50"
                   )}>
                     <MapPinned className="h-5 w-5" />
                   </div>
@@ -527,7 +527,7 @@ export function LocationSettings() {
                     "w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0",
                     returnAreaEnabled
                       ? "bg-primary/10 text-primary"
-                      : "bg-muted text-muted-foreground"
+                      : "bg-muted/50 text-foreground/50"
                   )}>
                     <CircleDot className="h-5 w-5" />
                   </div>
@@ -760,13 +760,13 @@ function LocationsGrid({
                   : "border-border/40 opacity-60"
               )}
             >
-              <div className="w-8 h-8 rounded-lg bg-muted flex items-center justify-center flex-shrink-0">
-                <MapPin className="h-4 w-4 text-muted-foreground" />
+              <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center flex-shrink-0">
+                <MapPin className="h-4 w-4 text-primary" />
               </div>
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2">
                   <span className="font-medium text-sm">{location.name}</span>
-                  <span className="text-xs font-medium text-primary">
+                  <span className="text-xs font-semibold text-amber-500">
                     {formatCurrency(location.delivery_fee)}
                   </span>
                 </div>

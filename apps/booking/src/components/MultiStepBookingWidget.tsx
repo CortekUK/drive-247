@@ -2503,21 +2503,7 @@ const MultiStepBookingWidget = () => {
       }
     }
 
-    // Validate driver date of birth - must be 18+
-    if (!formData.driverDOB || formData.driverDOB.trim() === "") {
-      newErrors.driverDOB = "Date of birth is required.";
-    } else {
-      const dob = parseDateString(formData.driverDOB);
-      if (isNaN(dob.getTime())) {
-        newErrors.driverDOB = "Please enter a valid date of birth.";
-      } else {
-        const age = calculateAge(dob);
-        const minAge = tenant?.minimum_rental_age || 18;
-        if (age < minAge) {
-          newErrors.driverDOB = `You must be at least ${minAge} years old to rent a vehicle.`;
-        }
-      }
-    }
+    // DOB validation moved to Step 4 (Customer Details)
 
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
@@ -2658,11 +2644,7 @@ const MultiStepBookingWidget = () => {
 
   const handleStep1Continue = () => {
     if (validateStep1()) {
-      // Calculate age from DOB for young driver check
-      const driverAge = formData.driverDOB ? calculateAge(parseDateString(formData.driverDOB)) : 0;
-      const isYoungDriver = driverAge < 25;
-
-      // Store in localStorage
+      // Store rental details in booking context (DOB collected in Step 4)
       const bookingContext = {
         pickupLocation: formData.pickupLocation,
         dropoffLocation: formData.dropoffLocation,
@@ -2675,10 +2657,6 @@ const MultiStepBookingWidget = () => {
         dropoffDate: formData.dropoffDate,
         dropoffTime: formData.dropoffTime,
         customerTimezone: formData.customerTimezone,
-        driverDOB: formData.driverDOB,
-        driverAge: driverAge,
-        promoCode: formData.promoCode,
-        young_driver: isYoungDriver
       };
       updateBookingContext(bookingContext as any);
 
@@ -2771,11 +2749,27 @@ const MultiStepBookingWidget = () => {
 
     console.log('✅ Validation passed! Moving to step 5');
 
+    // Calculate age from DOB for young driver check
+    const driverAge = formData.driverDOB ? calculateAge(parseDateString(formData.driverDOB)) : 0;
+    const isYoungDriver = driverAge < 25;
+
+    // Update booking context with customer details and DOB
+    updateBookingContext({
+      customerName: formData.customerName,
+      customerEmail: formData.customerEmail,
+      customerPhone: formData.customerPhone,
+      customerType: formData.customerType,
+      driverDOB: formData.driverDOB,
+      driverAge: driverAge,
+      young_driver: isYoungDriver
+    } as any);
+
     // Analytics tracking
     if ((window as any).gtag) {
       (window as any).gtag('event', 'booking_step4_submitted', {
         customer_type: formData.customerType,
-        verification_status: verificationStatus
+        verification_status: verificationStatus,
+        driver_age: driverAge
       });
     }
     setCurrentStep(5);
@@ -2787,7 +2781,7 @@ const MultiStepBookingWidget = () => {
   };
 
   const validateStep4 = () => {
-    // Validation for customer details (moved from old validateStep3)
+    // Validation for customer details
     const newErrors: { [key: string]: string } = {};
 
     if (!formData.customerName || formData.customerName.trim() === '') {
@@ -2802,7 +2796,21 @@ const MultiStepBookingWidget = () => {
     if (!formData.customerType) {
       newErrors.customerType = 'Please select customer type';
     }
-    // License number validation removed - field not in UI
+    // DOB validation
+    if (!formData.driverDOB || formData.driverDOB.trim() === '') {
+      newErrors.driverDOB = 'Date of birth is required';
+    } else {
+      const dob = parseDateString(formData.driverDOB);
+      if (isNaN(dob.getTime())) {
+        newErrors.driverDOB = 'Please enter a valid date of birth';
+      } else {
+        const minAge = tenant?.minimum_rental_age || 21;
+        const age = calculateAge(dob);
+        if (age < minAge) {
+          newErrors.driverDOB = `You must be at least ${minAge} years old to rent a vehicle`;
+        }
+      }
+    }
 
     // Check verification status (with dev bypass)
     const devBypassVerification = typeof window !== 'undefined' && localStorage.getItem('dev_bypass_verification') === 'true';
@@ -2908,13 +2916,71 @@ const MultiStepBookingWidget = () => {
             </h3>
           </div>
 
-          {/* Form Fields */}
-          <div className="space-y-8">
-            {/* Row 1: Pickup & Return Location */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
+          {/* Timezone Info Bar - Compact & Highlighted */}
+          <div className="flex flex-wrap items-center gap-3 text-sm py-2.5 px-4 rounded-lg bg-primary/5 border border-primary/20">
+            <div className="flex items-center gap-2">
+              <div className="flex items-center justify-center w-6 h-6 rounded-full bg-primary/10">
+                <Globe className="h-3.5 w-3.5 text-primary" />
+              </div>
+              <span className="text-muted-foreground">You:</span>
+              {isAuthenticated && isCustomerDataPopulated && customerHasTimezone ? (
+                <span className="font-semibold text-foreground">
+                  {findTimezone(formData.customerTimezone)?.label || formData.customerTimezone}
+                </span>
+              ) : (
+                <Select
+                  value={formData.customerTimezone}
+                  onValueChange={(value) => setFormData({ ...formData, customerTimezone: value })}
+                >
+                  <SelectTrigger className="h-7 w-auto min-w-[180px] text-sm border-0 bg-transparent p-0 font-semibold text-foreground focus:ring-0">
+                    <SelectValue placeholder="Select timezone">
+                      {findTimezone(formData.customerTimezone)?.label || 'Select timezone'}
+                    </SelectValue>
+                  </SelectTrigger>
+                  <SelectContent className="max-h-[300px]">
+                    {getTimezonesByRegion().map((group) => (
+                      <div key={group.region}>
+                        <div className="px-2 py-1.5 text-sm font-semibold text-muted-foreground bg-muted/50">
+                          {group.label}
+                        </div>
+                        {group.timezones.map((tz) => (
+                          <SelectItem key={tz.value} value={tz.value}>
+                            {tz.label}
+                          </SelectItem>
+                        ))}
+                      </div>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
+            </div>
+            <div className="h-4 w-px bg-primary/20 hidden sm:block" />
+            <div className="flex items-center gap-2">
+              <div className="flex items-center justify-center w-6 h-6 rounded-full bg-primary/10">
+                <Clock className="h-3.5 w-3.5 text-primary" />
+              </div>
+              <span className="text-muted-foreground">Business:</span>
+              <span className="font-semibold text-foreground">
+                {findTimezone(workingHours.timezone)?.label || workingHours.timezone}
+              </span>
+              <span className="text-xs text-muted-foreground bg-muted/50 px-2 py-0.5 rounded-full">
+                {workingHours.isAlwaysOpen ? '24/7' : `${workingHours.formattedOpenTime} - ${workingHours.formattedCloseTime}`}
+              </span>
+            </div>
+          </div>
+
+          {/* Pickup & Return Sections */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {/* PICKUP SECTION */}
+            <div className="space-y-4">
+              <div className="flex items-center gap-2 pb-2 border-b border-border">
+                <div className="w-2 h-2 rounded-full bg-green-500" />
+                <h4 className="font-medium text-sm uppercase tracking-wide text-muted-foreground">Pickup</h4>
+              </div>
+
               {/* Pickup Location */}
               <div className="space-y-2">
-                <Label htmlFor="pickupLocation" className="font-medium">Pickup *</Label>
+                <Label htmlFor="pickupLocation" className="text-xs text-muted-foreground">Location</Label>
                 <LocationPicker
                   type="pickup"
                   value={formData.pickupLocation}
@@ -2931,122 +2997,21 @@ const MultiStepBookingWidget = () => {
                       pickupLat: lat || null,
                       pickupLon: lon || null
                     });
-                    // Instant validation
                     validateField('pickupLocation', address);
                   }}
                   placeholder="Enter pickup address"
-                  className="h-12 focus-visible:ring-primary"
+                  className="h-11"
                 />
                 {errors.pickupLocation && <p className="text-sm text-destructive">{errors.pickupLocation}</p>}
               </div>
 
-              {/* Return Location */}
+              {/* Pickup Date & Time */}
               <div className="space-y-2">
-                <Label htmlFor="dropoffLocation" className="font-medium">Return *</Label>
-                <LocationPicker
-                  type="return"
-                  value={formData.dropoffLocation}
-                  locationId={formData.returnLocationId}
-                  onChange={(address, locId, lat, lon, deliveryFee) => {
-                    setFormData({
-                      ...formData,
-                      dropoffLocation: address,
-                      returnLocationId: locId || "",
-                      returnDeliveryFee: deliveryFee ?? 0,
-                    });
-                    setLocationCoords({
-                      ...locationCoords,
-                      dropoffLat: lat || null,
-                      dropoffLon: lon || null
-                    });
-                    // Instant validation
-                    validateField('dropoffLocation', address);
-                  }}
-                  placeholder="Enter return address"
-                  className="h-12 focus-visible:ring-primary"
-                />
-                {errors.dropoffLocation && <p className="text-sm text-destructive">{errors.dropoffLocation}</p>}
-              </div>
-            </div>
-
-            {/* Timezone Selection & Business Hours Info */}
-            <div className="rounded-lg border bg-card p-4 space-y-4">
-              <div className="flex items-center gap-2">
-                <Globe className="h-4 w-4 text-muted-foreground" />
-                <span className="text-sm font-medium">Timezone Settings</span>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {/* Customer Timezone */}
-                <div className="space-y-2">
-                  <Label className="text-xs text-muted-foreground uppercase tracking-wide">Your Timezone</Label>
-                  {isAuthenticated && isCustomerDataPopulated && customerHasTimezone ? (
-                    <div className="flex items-center gap-2 p-3 rounded-md bg-muted/50 border">
-                      <div className="flex-1">
-                        <p className="font-medium text-sm">
-                          {findTimezone(formData.customerTimezone)?.label || formData.customerTimezone}
-                        </p>
-                        <p className="text-xs text-muted-foreground flex items-center gap-1 mt-0.5">
-                          <CheckCircle className="w-3 h-3 text-green-500" />
-                          From account settings
-                        </p>
-                      </div>
-                    </div>
-                  ) : (
-                    <Select
-                      value={formData.customerTimezone}
-                      onValueChange={(value) => setFormData({ ...formData, customerTimezone: value })}
-                    >
-                      <SelectTrigger className="h-auto py-3">
-                        <SelectValue placeholder="Select your timezone">
-                          {findTimezone(formData.customerTimezone)?.label || formData.customerTimezone || 'Select timezone'}
-                        </SelectValue>
-                      </SelectTrigger>
-                      <SelectContent className="max-h-[300px]">
-                        {getTimezonesByRegion().map((group) => (
-                          <div key={group.region}>
-                            <div className="px-2 py-1.5 text-sm font-semibold text-muted-foreground bg-muted/50">
-                              {group.label}
-                            </div>
-                            {group.timezones.map((tz) => (
-                              <SelectItem key={tz.value} value={tz.value}>
-                                {tz.label}
-                              </SelectItem>
-                            ))}
-                          </div>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  )}
-                </div>
-
-                {/* Business Hours */}
-                <div className="space-y-2">
-                  <Label className="text-xs text-muted-foreground uppercase tracking-wide">Business Hours</Label>
-                  <div className="flex items-center gap-2 p-3 rounded-md bg-muted/50 border">
-                    <Clock className="h-4 w-4 text-muted-foreground flex-shrink-0" />
-                    <div className="flex-1">
-                      <p className="font-medium text-sm">
-                        {findTimezone(workingHours.timezone)?.label || workingHours.timezone}
-                      </p>
-                      <p className="text-xs text-muted-foreground mt-0.5">
-                        {workingHours.isAlwaysOpen ? 'Open 24/7' : `${workingHours.formattedOpenTime} - ${workingHours.formattedCloseTime}`}
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Row 2: Pickup & Return Datetime */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
-              {/* Pickup Datetime */}
-              <div className="space-y-2">
-                <Label className="font-medium">Pickup *</Label>
+                <Label className="text-xs text-muted-foreground">Date & Time</Label>
                 <div className="grid grid-cols-2 gap-2">
                   <Popover>
                     <PopoverTrigger asChild>
-                      <Button variant="outline" className={cn("w-full justify-start text-left font-normal h-12", !formData.pickupDate && "text-muted-foreground")}>
+                      <Button variant="outline" className={cn("w-full justify-start text-left font-normal h-11", !formData.pickupDate && "text-muted-foreground")}>
                         <CalendarIcon className="mr-2 h-4 w-4" />
                         {formData.pickupDate ? format(parseDateString(formData.pickupDate), "MMM dd") : <span>Date</span>}
                       </Button>
@@ -3075,7 +3040,6 @@ const MultiStepBookingWidget = () => {
                         const today = new Date(new Date().setHours(0, 0, 0, 0));
                         const oneYearFromNow = new Date(today);
                         oneYearFromNow.setFullYear(oneYearFromNow.getFullYear() + 1);
-                        // Check if the day is closed based on working hours
                         const dayWorkingHours = getWorkingHoursForDate(date, tenant);
                         const isClosedDay = !dayWorkingHours.enabled;
                         return date < today || date > oneYearFromNow || blockedDates.includes(dateStr) || isClosedDay;
@@ -3097,7 +3061,7 @@ const MultiStepBookingWidget = () => {
                         });
                       }
                     }}
-                    className="h-12 focus-visible:ring-primary"
+                    className="h-11"
                     businessHoursOpen={!pickupDateWorkingHours.isAlwaysOpen && pickupDateWorkingHours.enabled ? pickupDateWorkingHours.open : undefined}
                     businessHoursClose={!pickupDateWorkingHours.isAlwaysOpen && pickupDateWorkingHours.enabled ? pickupDateWorkingHours.close : undefined}
                     customerTimezone={formData.customerTimezone}
@@ -3107,14 +3071,49 @@ const MultiStepBookingWidget = () => {
                 {errors.pickupDate && <p className="text-sm text-destructive">{errors.pickupDate}</p>}
                 {errors.pickupTime && !errors.pickupDate && <p className="text-sm text-destructive">{errors.pickupTime}</p>}
               </div>
+            </div>
 
-              {/* Return Datetime */}
+            {/* RETURN SECTION */}
+            <div className="space-y-4">
+              <div className="flex items-center gap-2 pb-2 border-b border-border">
+                <div className="w-2 h-2 rounded-full bg-orange-500" />
+                <h4 className="font-medium text-sm uppercase tracking-wide text-muted-foreground">Return</h4>
+              </div>
+
+              {/* Return Location */}
               <div className="space-y-2">
-                <Label className="font-medium">Return *</Label>
+                <Label htmlFor="dropoffLocation" className="text-xs text-muted-foreground">Location</Label>
+                <LocationPicker
+                  type="return"
+                  value={formData.dropoffLocation}
+                  locationId={formData.returnLocationId}
+                  onChange={(address, locId, lat, lon, deliveryFee) => {
+                    setFormData({
+                      ...formData,
+                      dropoffLocation: address,
+                      returnLocationId: locId || "",
+                      returnDeliveryFee: deliveryFee ?? 0,
+                    });
+                    setLocationCoords({
+                      ...locationCoords,
+                      dropoffLat: lat || null,
+                      dropoffLon: lon || null
+                    });
+                    validateField('dropoffLocation', address);
+                  }}
+                  placeholder="Enter return address"
+                  className="h-11"
+                />
+                {errors.dropoffLocation && <p className="text-sm text-destructive">{errors.dropoffLocation}</p>}
+              </div>
+
+              {/* Return Date & Time */}
+              <div className="space-y-2">
+                <Label className="text-xs text-muted-foreground">Date & Time</Label>
                 <div className="grid grid-cols-2 gap-2">
                   <Popover>
                     <PopoverTrigger asChild>
-                      <Button variant="outline" className={cn("w-full justify-start text-left font-normal h-12", !formData.dropoffDate && "text-muted-foreground")}>
+                      <Button variant="outline" className={cn("w-full justify-start text-left font-normal h-11", !formData.dropoffDate && "text-muted-foreground")}>
                         <CalendarIcon className="mr-2 h-4 w-4" />
                         {formData.dropoffDate ? format(parseDateString(formData.dropoffDate), "MMM dd") : <span>Date</span>}
                       </Button>
@@ -3139,7 +3138,6 @@ const MultiStepBookingWidget = () => {
                         const oneYearFromPickup = new Date(pickupDate);
                         oneYearFromPickup.setFullYear(oneYearFromPickup.getFullYear() + 1);
                         const dateStr = format(date, "yyyy-MM-dd");
-                        // Check if the day is closed based on working hours
                         const dayWorkingHours = getWorkingHoursForDate(date, tenant);
                         const isClosedDay = !dayWorkingHours.enabled;
                         return date <= pickupDate || date > oneYearFromPickup || blockedDates.includes(dateStr) || isClosedDay;
@@ -3161,7 +3159,7 @@ const MultiStepBookingWidget = () => {
                         });
                       }
                     }}
-                    className="h-12 focus-visible:ring-primary"
+                    className="h-11"
                     businessHoursOpen={!dropoffDateWorkingHours.isAlwaysOpen && dropoffDateWorkingHours.enabled ? dropoffDateWorkingHours.open : undefined}
                     businessHoursClose={!dropoffDateWorkingHours.isAlwaysOpen && dropoffDateWorkingHours.enabled ? dropoffDateWorkingHours.close : undefined}
                     customerTimezone={formData.customerTimezone}
@@ -3172,135 +3170,6 @@ const MultiStepBookingWidget = () => {
                 {errors.dropoffTime && !errors.dropoffDate && <p className="text-sm text-destructive">{errors.dropoffTime}</p>}
               </div>
             </div>
-
-            {/* Row 3: Driver DOB */}
-            <div className="space-y-2">
-              <Label className="font-medium">Date of Birth *</Label>
-              {/* Show read-only display for logged-in users with DOB in profile */}
-              {isAuthenticated && isCustomerDataPopulated && customerHasDOB ? (
-                <div className="space-y-2">
-                  <Input
-                    value={formData.driverDOB ? format(new Date(formData.driverDOB), "MMMM d, yyyy") : ""}
-                    readOnly
-                    className="h-12 max-w-md bg-muted/50"
-                  />
-                  <p className="text-xs text-muted-foreground flex items-center gap-1">
-                    <CheckCircle className="w-3 h-3 text-primary" />
-                    From your account profile
-                  </p>
-                  {formData.driverDOB && (
-                    <p className="text-sm text-muted-foreground">Age: <span className="font-medium text-foreground">{calculateAge(new Date(formData.driverDOB))} years old</span></p>
-                  )}
-                </div>
-              ) : (
-                <>
-                  <div className="grid grid-cols-3 gap-2 max-w-md">
-                    {/* Month Select */}
-                    <Select
-                      value={formData.driverDOB ? (new Date(formData.driverDOB).getMonth() + 1).toString().padStart(2, '0') : ""}
-                      onValueChange={(month) => {
-                        const currentDate = formData.driverDOB ? new Date(formData.driverDOB) : new Date(2000, 0, 1);
-                        const newDate = new Date(currentDate.getFullYear(), parseInt(month) - 1, Math.min(currentDate.getDate(), new Date(currentDate.getFullYear(), parseInt(month), 0).getDate()));
-                        const dateStr = format(newDate, "yyyy-MM-dd");
-                        setFormData({ ...formData, driverDOB: dateStr });
-                        validateField('driverDOB', dateStr);
-                      }}
-                    >
-                      <SelectTrigger className={cn("h-12", errors.driverDOB && "border-destructive")}>
-                        <SelectValue placeholder="Month" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'].map((month, i) => (
-                          <SelectItem key={i} value={(i + 1).toString().padStart(2, '0')}>{month}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    {/* Day Select */}
-                    <Select
-                      value={formData.driverDOB ? new Date(formData.driverDOB).getDate().toString() : ""}
-                      onValueChange={(day) => {
-                        const currentDate = formData.driverDOB ? new Date(formData.driverDOB) : new Date(2000, 0, 1);
-                        const newDate = new Date(currentDate.getFullYear(), currentDate.getMonth(), parseInt(day));
-                        const dateStr = format(newDate, "yyyy-MM-dd");
-                        setFormData({ ...formData, driverDOB: dateStr });
-                        validateField('driverDOB', dateStr);
-                      }}
-                    >
-                      <SelectTrigger className={cn("h-12", errors.driverDOB && "border-destructive")}>
-                        <SelectValue placeholder="Day" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {Array.from({ length: 31 }, (_, i) => (
-                          <SelectItem key={i + 1} value={(i + 1).toString()}>{i + 1}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    {/* Year Select */}
-                    <Select
-                      value={formData.driverDOB ? new Date(formData.driverDOB).getFullYear().toString() : ""}
-                      onValueChange={(year) => {
-                        const currentDate = formData.driverDOB ? new Date(formData.driverDOB) : new Date(2000, 0, 1);
-                        const newDate = new Date(parseInt(year), currentDate.getMonth(), Math.min(currentDate.getDate(), new Date(parseInt(year), currentDate.getMonth() + 1, 0).getDate()));
-                        const dateStr = format(newDate, "yyyy-MM-dd");
-                        setFormData({ ...formData, driverDOB: dateStr });
-                        validateField('driverDOB', dateStr);
-                      }}
-                    >
-                      <SelectTrigger className={cn("h-12", errors.driverDOB && "border-destructive")}>
-                        <SelectValue placeholder="Year" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {Array.from({ length: 100 }, (_, i) => new Date().getFullYear() - (tenant?.minimum_rental_age || 18) - i).map((year) => (
-                          <SelectItem key={year} value={year.toString()}>{year}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  {formData.driverDOB && (
-                    <p className="text-sm text-muted-foreground">Age: <span className={cn("font-medium", errors.driverDOB ? "text-destructive" : "text-foreground")}>{calculateAge(new Date(formData.driverDOB))} years old</span></p>
-                  )}
-                  {errors.driverDOB && <p className="text-sm text-destructive">{errors.driverDOB}</p>}
-                </>
-              )}
-            </div>
-
-              {/* Promo Code */}
-              <div className="space-y-2">
-                <Label htmlFor="promoCode" className="font-medium">Promo Code (Optional)</Label>
-                <div className="flex gap-2">
-                  <Input
-                    id="promoCode"
-                    placeholder="Enter code"
-                    value={formData.promoCode}
-                    onChange={(e) => {
-                      setFormData({ ...formData, promoCode: e.target.value });
-                      setPromoError(null);
-                      if (!e.target.value) {
-                        setPromoDetails(null);
-                        localStorage.removeItem('appliedPromoCode');
-                        localStorage.removeItem('appliedPromoDetails');
-                      }
-                    }}
-                    className={cn("h-12", promoError ? "border-destructive" : promoDetails ? "border-green-500" : "")}
-                  />
-                  <Button
-                    type="button"
-                    variant="outline"
-                    className="h-12 px-4"
-                    onClick={() => validatePromoCode(formData.promoCode)}
-                    disabled={loading || !formData.promoCode}
-                  >
-                    Apply
-                  </Button>
-                </div>
-                {promoError && <p className="text-sm text-destructive">{promoError}</p>}
-                {promoDetails && (
-                  <p className="text-sm text-green-600 font-medium flex items-center gap-1">
-                    <Check className="w-4 h-4" />
-                    Code applied: {promoDetails.type === 'percentage' ? `${promoDetails.value}% off` : `$${promoDetails.value} off`}
-                  </p>
-                )}
-              </div>
           </div>
 
           <Button
@@ -4811,19 +4680,95 @@ const MultiStepBookingWidget = () => {
                   </div>
 
                   {/* Date of Birth */}
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="driverDOB" className="font-medium">Date of Birth *</Label>
-                      <Input
-                        id="driverDOB"
-                        type="date"
-                        value={formData.driverDOB}
-                        onChange={e => setFormData({ ...formData, driverDOB: e.target.value })}
-                        className="h-12 focus-visible:ring-primary"
-                        max={new Date(new Date().setFullYear(new Date().getFullYear() - 21)).toISOString().split('T')[0]}
-                      />
-                      <p className="text-xs text-muted-foreground">Driver must be at least 21 years old</p>
-                    </div>
+                  <div className="space-y-2">
+                    <Label className="font-medium">Date of Birth *</Label>
+                    {/* Show read-only display for logged-in users with DOB in profile */}
+                    {isAuthenticated && isCustomerDataPopulated && customerHasDOB ? (
+                      <div className="space-y-2">
+                        <Input
+                          value={formData.driverDOB ? format(new Date(formData.driverDOB), "MMMM d, yyyy") : ""}
+                          readOnly
+                          className="h-12 max-w-md bg-muted/50"
+                        />
+                        <p className="text-xs text-muted-foreground flex items-center gap-1">
+                          <CheckCircle className="w-3 h-3 text-primary" />
+                          From your account profile
+                        </p>
+                        {formData.driverDOB && (
+                          <p className="text-sm text-muted-foreground">Age: <span className="font-medium text-foreground">{calculateAge(new Date(formData.driverDOB))} years old</span></p>
+                        )}
+                      </div>
+                    ) : (
+                      <>
+                        <div className="grid grid-cols-3 gap-2 max-w-md">
+                          {/* Month Select */}
+                          <Select
+                            value={formData.driverDOB ? (new Date(formData.driverDOB).getMonth() + 1).toString().padStart(2, '0') : ""}
+                            onValueChange={(month) => {
+                              const currentDate = formData.driverDOB ? new Date(formData.driverDOB) : new Date(2000, 0, 1);
+                              const newDate = new Date(currentDate.getFullYear(), parseInt(month) - 1, Math.min(currentDate.getDate(), new Date(currentDate.getFullYear(), parseInt(month), 0).getDate()));
+                              const dateStr = format(newDate, "yyyy-MM-dd");
+                              setFormData({ ...formData, driverDOB: dateStr });
+                              validateField('driverDOB', dateStr);
+                            }}
+                          >
+                            <SelectTrigger className={cn("h-12", errors.driverDOB && "border-destructive")}>
+                              <SelectValue placeholder="Month" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'].map((month, i) => (
+                                <SelectItem key={i} value={(i + 1).toString().padStart(2, '0')}>{month}</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                          {/* Day Select */}
+                          <Select
+                            value={formData.driverDOB ? new Date(formData.driverDOB).getDate().toString() : ""}
+                            onValueChange={(day) => {
+                              const currentDate = formData.driverDOB ? new Date(formData.driverDOB) : new Date(2000, 0, 1);
+                              const newDate = new Date(currentDate.getFullYear(), currentDate.getMonth(), parseInt(day));
+                              const dateStr = format(newDate, "yyyy-MM-dd");
+                              setFormData({ ...formData, driverDOB: dateStr });
+                              validateField('driverDOB', dateStr);
+                            }}
+                          >
+                            <SelectTrigger className={cn("h-12", errors.driverDOB && "border-destructive")}>
+                              <SelectValue placeholder="Day" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {Array.from({ length: 31 }, (_, i) => (
+                                <SelectItem key={i + 1} value={(i + 1).toString()}>{i + 1}</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                          {/* Year Select */}
+                          <Select
+                            value={formData.driverDOB ? new Date(formData.driverDOB).getFullYear().toString() : ""}
+                            onValueChange={(year) => {
+                              const currentDate = formData.driverDOB ? new Date(formData.driverDOB) : new Date(2000, 0, 1);
+                              const newDate = new Date(parseInt(year), currentDate.getMonth(), Math.min(currentDate.getDate(), new Date(parseInt(year), currentDate.getMonth() + 1, 0).getDate()));
+                              const dateStr = format(newDate, "yyyy-MM-dd");
+                              setFormData({ ...formData, driverDOB: dateStr });
+                              validateField('driverDOB', dateStr);
+                            }}
+                          >
+                            <SelectTrigger className={cn("h-12", errors.driverDOB && "border-destructive")}>
+                              <SelectValue placeholder="Year" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {Array.from({ length: 100 }, (_, i) => new Date().getFullYear() - (tenant?.minimum_rental_age || 18) - i).map((year) => (
+                                <SelectItem key={year} value={year.toString()}>{year}</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        {formData.driverDOB && (
+                          <p className="text-sm text-muted-foreground">Age: <span className={cn("font-medium", errors.driverDOB ? "text-destructive" : "text-foreground")}>{calculateAge(new Date(formData.driverDOB))} years old</span></p>
+                        )}
+                        {errors.driverDOB && <p className="text-sm text-destructive">{errors.driverDOB}</p>}
+                        <p className="text-xs text-muted-foreground">Driver must be at least {tenant?.minimum_rental_age || 21} years old</p>
+                      </>
+                    )}
                   </div>
                 </div>
               </div>
@@ -5180,7 +5125,47 @@ const MultiStepBookingWidget = () => {
         </div>}
 
         {/* Step 5: Review & Payment */}
-        {currentStep === 5 && <div className="animate-fade-in">
+        {currentStep === 5 && <div className="animate-fade-in space-y-6">
+          {/* Promo Code Section */}
+          <div className="bg-card border border-border rounded-lg p-4 sm:p-6">
+            <div className="space-y-3">
+              <Label htmlFor="promoCode" className="font-medium text-base">Promo Code (Optional)</Label>
+              <div className="flex gap-2">
+                <Input
+                  id="promoCode"
+                  placeholder="Enter code"
+                  value={formData.promoCode}
+                  onChange={(e) => {
+                    setFormData({ ...formData, promoCode: e.target.value });
+                    setPromoError(null);
+                    if (!e.target.value) {
+                      setPromoDetails(null);
+                      localStorage.removeItem('appliedPromoCode');
+                      localStorage.removeItem('appliedPromoDetails');
+                    }
+                  }}
+                  className={cn("h-12", promoError ? "border-destructive" : promoDetails ? "border-green-500" : "")}
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="h-12 px-6"
+                  onClick={() => validatePromoCode(formData.promoCode)}
+                  disabled={loading || !formData.promoCode}
+                >
+                  Apply
+                </Button>
+              </div>
+              {promoError && <p className="text-sm text-destructive">{promoError}</p>}
+              {promoDetails && (
+                <p className="text-sm text-green-600 font-medium flex items-center gap-1">
+                  <Check className="w-4 h-4" />
+                  Code applied: {promoDetails.type === 'percentage' ? `${promoDetails.value}% off` : `$${promoDetails.value} off`}
+                </p>
+              )}
+            </div>
+          </div>
+
           <BookingCheckoutStep
             formData={formData}
             selectedVehicle={selectedVehicle}

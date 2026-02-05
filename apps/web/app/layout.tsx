@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import NextTopLoader from "nextjs-toploader";
 import "./globals.css";
 import DevPanel from "@/components/DevPanel";
 
@@ -15,6 +16,7 @@ export default function RootLayout({
   return (
     <html lang="en" className="dark">
       <body>
+        <NextTopLoader color="#3b82f6" height={2} showSpinner={false} />
         {children}
         <DevPanel />
       </body>

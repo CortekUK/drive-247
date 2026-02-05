@@ -20,6 +20,7 @@
     "embla-carousel-react": "^8.6.0",
     "framer-motion": "^12.23.26",
     "next": "^16.0.10",
+    "nextjs-toploader": "^3.9.17",
     "postcss": "^8.5.6",
     "react": "^19.2.3",
     "react-dom": "^19.2.3",

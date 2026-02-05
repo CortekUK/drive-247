@@ -16,8 +16,11 @@ export function UnreadBadge({ count, className, size = 'md' }: UnreadBadgeProps)
   return (
     <span
       className={cn(
-        'inline-flex items-center justify-center rounded-full bg-red-500 text-white font-semibold',
-        size === 'sm' ? 'min-w-[18px] h-[18px] text-[10px] px-1' : 'min-w-[22px] h-[22px] text-xs px-1.5',
+        'inline-flex items-center justify-center rounded-full font-semibold',
+        'bg-primary text-primary-foreground shadow-sm',
+        size === 'sm'
+          ? 'min-w-[18px] h-[18px] text-[10px] px-1.5'
+          : 'min-w-[22px] h-[22px] text-xs px-2',
         className
       )}
     >

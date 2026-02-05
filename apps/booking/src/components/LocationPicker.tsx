@@ -213,7 +213,7 @@ export default function LocationPicker({
           <div className="flex items-center gap-3 w-full">
             <div className={cn(
               "w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0 transition-colors",
-              selectedMethod === 'fixed' ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"
+              selectedMethod === 'fixed' ? "bg-primary/20 text-primary" : "bg-muted text-muted-foreground"
             )}>
               <Building2 className="w-4 h-4" />
             </div>
@@ -242,7 +242,7 @@ export default function LocationPicker({
           <div className="flex items-center gap-3 w-full">
             <div className={cn(
               "w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0 transition-colors",
-              selectedMethod === 'location' ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"
+              selectedMethod === 'location' ? "bg-primary/20 text-primary" : "bg-muted text-muted-foreground"
             )}>
               <MapPin className="w-4 h-4" />
             </div>
@@ -288,7 +288,7 @@ export default function LocationPicker({
           <div className="flex items-center gap-3 w-full">
             <div className={cn(
               "w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0 transition-colors",
-              selectedMethod === 'area' ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"
+              selectedMethod === 'area' ? "bg-primary/20 text-primary" : "bg-muted text-muted-foreground"
             )}>
               <Navigation className="w-4 h-4" />
             </div>
@@ -349,10 +349,10 @@ function OptionCard({
     <div
       onClick={disabled ? undefined : onClick}
       className={cn(
-        "relative p-3 rounded-xl border-2 transition-all cursor-pointer",
+        "relative p-3 rounded-xl border transition-all cursor-pointer",
         selected
-          ? "border-primary bg-primary/5 shadow-sm"
-          : "border-border/50 bg-card hover:border-border hover:bg-muted/30",
+          ? "border-primary/40 bg-primary/[0.03]"
+          : "border-border bg-card hover:border-muted-foreground/30 hover:bg-muted/20",
         disabled && "opacity-50 cursor-not-allowed"
       )}
     >
@@ -360,8 +360,8 @@ function OptionCard({
       <div className={cn(
         "absolute top-3 right-3 w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all",
         selected
-          ? "border-primary bg-primary"
-          : "border-muted-foreground/30 bg-transparent"
+          ? "border-primary/60 bg-primary/80"
+          : "border-muted-foreground/20 bg-transparent"
       )}>
         {selected && <Check className="w-3 h-3 text-primary-foreground" />}
       </div>

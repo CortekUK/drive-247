@@ -2,6 +2,7 @@
 
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { ThemeProvider } from "next-themes";
+import NextTopLoader from "nextjs-toploader";
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -83,6 +84,7 @@ export default function RootLayout({
         <script dangerouslySetInnerHTML={{ __html: brandingScript }} />
       </head>
       <body suppressHydrationWarning>
+        <NextTopLoader color="hsl(var(--primary))" height={2} showSpinner={false} />
         <QueryClientProvider client={queryClient}>
           <TenantProvider>
             <SocketProvider>
