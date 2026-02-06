@@ -1,7 +1,7 @@
 import { useQuery, useQueryClient, useInfiniteQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useTenant } from '@/contexts/TenantContext';
-import { useSocket } from '@/contexts/SocketContext';
+import { useSocket } from '@/contexts/RealtimeChatContext';
 import { useEffect, useCallback, useRef } from 'react';
 
 export interface ChatMessage {

@@ -1,7 +1,7 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useTenant } from '@/contexts/TenantContext';
-import { useCustomerSocket } from '@/contexts/CustomerSocketContext';
+import { useCustomerSocket } from '@/contexts/CustomerRealtimeChatContext';
 import { useCustomerAuthStore } from '@/stores/customer-auth-store';
 import { useEffect } from 'react';
 

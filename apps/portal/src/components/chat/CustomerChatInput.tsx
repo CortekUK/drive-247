@@ -3,7 +3,7 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { Send, X, Car } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { useSocket } from '@/contexts/SocketContext';
+import { useSocket } from '@/contexts/RealtimeChatContext';
 import { cn } from '@/lib/utils';
 import { BookingPicker, BookingReference } from './BookingPicker';
 

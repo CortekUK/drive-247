@@ -5,7 +5,7 @@ import { Loader2, MessageSquare, Circle } from 'lucide-react';
 import { useCustomerChat, type ChatMessage } from '@/hooks/use-customer-chat';
 import { CustomerChatMessage, DateSeparator, TypingIndicator } from './CustomerChatMessage';
 import { CustomerChatInput } from './CustomerChatInput';
-import { useCustomerSocket } from '@/contexts/CustomerSocketContext';
+import { useCustomerSocket } from '@/contexts/CustomerRealtimeChatContext';
 import { useTenant } from '@/contexts/TenantContext';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Button } from '@/components/ui/button';

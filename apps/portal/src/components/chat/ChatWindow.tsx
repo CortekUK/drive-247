@@ -6,7 +6,7 @@ import { useChatMessages, type ChatMessage } from '@/hooks/use-chat-messages';
 import { ChatMessageBubble, DateSeparator } from './ChatMessageBubble';
 import { CustomerChatInput } from './CustomerChatInput';
 import { TypingIndicator } from './TypingIndicator';
-import { useSocket } from '@/contexts/SocketContext';
+import { useSocket } from '@/contexts/RealtimeChatContext';
 import { useAuthStore } from '@/stores/auth-store';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Button } from '@/components/ui/button';

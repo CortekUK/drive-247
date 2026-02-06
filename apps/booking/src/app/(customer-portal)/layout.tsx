@@ -11,7 +11,7 @@ import {
   SidebarInset,
 } from '@/components/ui/sidebar';
 import { Skeleton } from '@/components/ui/skeleton';
-import { CustomerSocketProvider } from '@/contexts/CustomerSocketContext';
+import { CustomerRealtimeChatProvider } from '@/contexts/CustomerRealtimeChatContext';
 
 function LoadingSkeleton() {
   return (
@@ -68,7 +68,7 @@ export default function CustomerPortalLayout({
   }
 
   return (
-    <CustomerSocketProvider>
+    <CustomerRealtimeChatProvider>
       <SidebarProvider>
         <CustomerPortalSidebar />
         <SidebarInset className="overflow-x-hidden">
@@ -79,6 +79,6 @@ export default function CustomerPortalLayout({
         </SidebarInset>
       </SidebarProvider>
       <TraxChatWidget />
-    </CustomerSocketProvider>
+    </CustomerRealtimeChatProvider>
   );
 }

@@ -9,7 +9,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { useEffect, useState } from "react";
 import { useAuthStore } from "@/stores/auth-store";
 import { TenantProvider } from "@/contexts/TenantContext";
-import { SocketProvider } from "@/contexts/SocketContext";
+import { RealtimeChatProvider } from "@/contexts/RealtimeChatContext";
 import DevPanel from "@/components/shared/DevPanel";
 import "@/global.css";
 
@@ -87,7 +87,7 @@ export default function RootLayout({
         <NextTopLoader color="hsl(var(--primary))" height={2} showSpinner={false} />
         <QueryClientProvider client={queryClient}>
           <TenantProvider>
-            <SocketProvider>
+            <RealtimeChatProvider>
             <AuthInitializer>
               <ThemeProvider
                 attribute="class"
@@ -105,7 +105,7 @@ export default function RootLayout({
                 </TooltipProvider>
               </ThemeProvider>
             </AuthInitializer>
-            </SocketProvider>
+            </RealtimeChatProvider>
           </TenantProvider>
         </QueryClientProvider>
       </body>

@@ -4,7 +4,7 @@ import { useState, useCallback, useRef, useEffect } from 'react';
 import { Send, X, Car } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
-import { useCustomerSocket } from '@/contexts/CustomerSocketContext';
+import { useCustomerSocket } from '@/contexts/CustomerRealtimeChatContext';
 import { cn } from '@/lib/utils';
 import { BookingPicker, BookingReference } from './BookingPicker';
 

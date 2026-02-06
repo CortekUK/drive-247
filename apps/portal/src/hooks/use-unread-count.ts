@@ -1,7 +1,7 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useTenant } from '@/contexts/TenantContext';
-import { useSocket } from '@/contexts/SocketContext';
+import { useSocket } from '@/contexts/RealtimeChatContext';
 import { useEffect } from 'react';
 
 /**

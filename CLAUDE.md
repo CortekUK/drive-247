@@ -13,7 +13,6 @@ npm run dev:booking    # port 3000
 npm run dev:portal     # port 3001
 npm run dev:web        # port 3002
 npm run dev:admin      # port 3003
-npm run dev:chat       # chat server (Socket.io)
 
 # Build & Lint
 npm run build
@@ -43,7 +42,6 @@ This is a **Turborepo monorepo** for Drive247, a car rental platform with multi-
 - **portal**: Multi-tenant admin portal for rental operators (Next.js 16, React 18)
 - **admin**: Super-admin dashboard (Next.js 16, React 19)
 - **web**: Marketing/landing page (Next.js 16, React 19)
-- **chat-server**: Socket.io server for real-time tenant-customer chat
 
 ## Tech Stack
 
