@@ -75,8 +75,30 @@ const Settings = () => {
   } = useRentalSettings();
 
   // Rental settings form state
-  const [rentalForm, setRentalForm] = useState({
-    minimum_rental_age: 18,
+  const [rentalForm, setRentalForm] = useState<{
+    minimum_rental_age: number | '';
+    tax_enabled: boolean;
+    tax_percentage: number;
+    service_fee_enabled: boolean;
+    service_fee_amount: number;
+    service_fee_type: 'percentage' | 'fixed_amount';
+    service_fee_value: number;
+    deposit_mode: 'global' | 'per_vehicle';
+    global_deposit_amount: number;
+    installments_enabled: boolean;
+    installment_config: {
+      min_days_for_weekly: number;
+      min_days_for_monthly: number;
+      max_installments_weekly: number;
+      max_installments_monthly: number;
+      charge_first_upfront: boolean;
+      what_gets_split: 'rental_only' | 'rental_tax' | 'rental_tax_extras';
+      grace_period_days: number;
+      max_retry_attempts: number;
+      retry_interval_days: number;
+    };
+  }>({
+    minimum_rental_age: '',
     tax_enabled: false,
     tax_percentage: 0,
     service_fee_enabled: false,
@@ -115,7 +137,7 @@ const Settings = () => {
   useEffect(() => {
     if (rentalSettings) {
       setRentalForm({
-        minimum_rental_age: rentalSettings.minimum_rental_age ?? 18,
+        minimum_rental_age: rentalSettings.minimum_rental_age || '',
         tax_enabled: rentalSettings.tax_enabled ?? false,
         tax_percentage: rentalSettings.tax_percentage ?? 0,
         service_fee_enabled: rentalSettings.service_fee_enabled ?? false,
@@ -1550,15 +1572,10 @@ const Settings = () => {
                       const rawValue = e.target.value.replace(/[^0-9]/g, '');
                       setRentalForm(prev => ({
                         ...prev,
-                        minimum_rental_age: rawValue === '' ? '' : Math.max(16, Math.min(100, parseInt(rawValue)))
+                        minimum_rental_age: rawValue === '' ? '' : parseInt(rawValue)
                       }));
                     }}
-                    onBlur={(e) => {
-                      const value = parseInt(e.target.value);
-                      if (!value || value < 16) {
-                        setRentalForm(prev => ({ ...prev, minimum_rental_age: 21 }));
-                      }
-                    }}
+                    placeholder="e.g. 21"
                     className="w-32"
                   />
                   <span className="text-sm text-muted-foreground">years old</span>
@@ -1572,7 +1589,7 @@ const Settings = () => {
                 onClick={async () => {
                   try {
                     await updateRentalSettings({
-                      minimum_rental_age: rentalForm.minimum_rental_age,
+                      minimum_rental_age: rentalForm.minimum_rental_age || null,
                     });
                   } catch (error) {
                     console.error('Failed to update rental settings:', error);

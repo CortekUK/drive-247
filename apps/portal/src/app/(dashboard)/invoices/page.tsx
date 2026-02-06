@@ -109,6 +109,8 @@ const InvoicesList = () => {
   const { data: invoices, isLoading } = useQuery({
     queryKey: ["invoices-list", tenant?.id],
     queryFn: async () => {
+      if (!tenant?.id) return [];
+
       const { data, error } = await supabase
         .from("invoices" as any)
         .select(`
@@ -121,6 +123,7 @@ const InvoicesList = () => {
             monthly_amount
           )
         `)
+        .eq('tenant_id', tenant.id)
         .order("created_at", { ascending: false });
 
       if (error) throw error;

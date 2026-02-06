@@ -942,296 +942,250 @@ const RentalDetail = () => {
 
       {/* Payment Breakdown Cards */}
       {invoiceBreakdown && (
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-          {/* Tax Card */}
-          <Card className="relative overflow-hidden flex flex-col">
-            <div className="absolute top-0 left-0 w-1 h-full bg-blue-500" />
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium flex items-center gap-2">
-                <Percent className="h-4 w-4 text-blue-500" />
-                Tax
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-3 flex-1 flex flex-col">
-              <div>
-                <p className="text-2xl font-bold">${invoiceBreakdown.taxAmount.toFixed(2)}</p>
-                <p className="text-xs text-muted-foreground">Tax charged on rental</p>
+        <Card>
+          <CardHeader className="pb-4">
+            <CardTitle className="text-base font-medium">Payment Breakdown</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              {/* Rental */}
+              <div className="flex items-center justify-between p-3 rounded-lg bg-muted/40 border">
+                <div className="flex items-center gap-3">
+                  <div className="h-8 w-8 rounded-full bg-green-500/10 flex items-center justify-center">
+                    <Car className="h-4 w-4 text-green-500" />
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium">Rental</p>
+                    <p className="text-xs text-muted-foreground">
+                      {(refundBreakdown?.["Rental"] ?? 0) > 0
+                        ? `Refunded: $${(refundBreakdown?.["Rental"] ?? 0).toFixed(2)}`
+                        : rental.rental_period_type || 'Monthly'}
+                    </p>
+                  </div>
+                </div>
+                <div className="text-right">
+                  <p className={`text-sm font-semibold ${(refundBreakdown?.["Rental"] ?? 0) > 0 ? 'text-green-600' : ''}`}>
+                    ${(invoiceBreakdown.rentalFee - (refundBreakdown?.["Rental"] ?? 0)).toFixed(2)}
+                  </p>
+                  {(refundBreakdown?.["Rental"] ?? 0) >= invoiceBreakdown.rentalFee && invoiceBreakdown.rentalFee > 0 ? (
+                    <span className="text-[10px] text-green-600">Fully Refunded</span>
+                  ) : invoiceBreakdown.rentalFee > 0 && totalPayments > 0 && rental.status !== 'Cancelled' && rental.status !== 'Closed' && (refundBreakdown?.["Rental"] ?? 0) < invoiceBreakdown.rentalFee ? (
+                    <button
+                      className="text-[10px] text-primary hover:underline"
+                      onClick={() => {
+                        setRefundCategory("Rental");
+                        setRefundTotalAmount(invoiceBreakdown.rentalFee);
+                        const alreadyRefunded = refundBreakdown?.["Rental"] ?? 0;
+                        setRefundPaidAmount(Math.max(0, invoiceBreakdown.rentalFee - alreadyRefunded));
+                        setShowRefundDialog(true);
+                      }}
+                    >
+                      {(refundBreakdown?.["Rental"] ?? 0) > 0 ? 'Refund More' : 'Refund'}
+                    </button>
+                  ) : null}
+                </div>
               </div>
-              {invoiceBreakdown.taxAmount > 0 && invoiceBreakdown.rentalFee > 0 && (
-                <div className="text-xs text-muted-foreground bg-muted/50 rounded p-2">
-                  <span className="font-medium">Rate:</span> {((invoiceBreakdown.taxAmount / invoiceBreakdown.rentalFee) * 100).toFixed(1)}%
-                  <br />
-                  <span className="font-medium">Pre-tax:</span> ${invoiceBreakdown.rentalFee.toFixed(2)}
-                  <br />
-                  <span className="font-medium">After tax:</span> ${(invoiceBreakdown.rentalFee + invoiceBreakdown.taxAmount).toFixed(2)}
-                </div>
-              )}
-            </CardContent>
-          </Card>
 
-          {/* Service Fee Card */}
-          <Card className="relative overflow-hidden flex flex-col">
-            <div className="absolute top-0 left-0 w-1 h-full bg-purple-500" />
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium flex items-center justify-between">
-                <span className="flex items-center gap-2">
-                  <Receipt className="h-4 w-4 text-purple-500" />
-                  Service Fee
-                </span>
-                {(refundBreakdown?.["Service Fee"] ?? 0) >= invoiceBreakdown.serviceFee && invoiceBreakdown.serviceFee > 0 ? (
-                  <span className="text-xs bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 px-2 py-0.5 rounded-full">
-                    Fully Refunded
-                  </span>
-                ) : (refundBreakdown?.["Service Fee"] ?? 0) > 0 ? (
-                  <span className="text-xs bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-400 px-2 py-0.5 rounded-full">
-                    Partial Refund
-                  </span>
-                ) : null}
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="flex-1 flex flex-col">
-              <div className="space-y-3 flex-1">
-                <div>
-                  {(refundBreakdown?.["Service Fee"] ?? 0) > 0 ? (
-                    <>
-                      <p className="text-2xl font-bold text-green-600">
-                        ${(invoiceBreakdown.serviceFee - (refundBreakdown?.["Service Fee"] ?? 0)).toFixed(2)}
-                      </p>
-                      <p className="text-xs text-muted-foreground">
-                        Net Amount (Original: ${invoiceBreakdown.serviceFee.toFixed(2)})
-                      </p>
-                    </>
-                  ) : (
-                    <>
-                      <p className="text-2xl font-bold">${invoiceBreakdown.serviceFee.toFixed(2)}</p>
-                      <p className="text-xs text-muted-foreground">Platform service fee</p>
-                    </>
-                  )}
+              {/* Tax */}
+              <div className="flex items-center justify-between p-3 rounded-lg bg-muted/40 border">
+                <div className="flex items-center gap-3">
+                  <div className="h-8 w-8 rounded-full bg-blue-500/10 flex items-center justify-center">
+                    <Percent className="h-4 w-4 text-blue-500" />
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium">Tax</p>
+                    <p className="text-xs text-muted-foreground">
+                      {(refundBreakdown?.["Tax"] ?? 0) > 0
+                        ? `Refunded: $${(refundBreakdown?.["Tax"] ?? 0).toFixed(2)}`
+                        : invoiceBreakdown.taxAmount > 0 && invoiceBreakdown.rentalFee > 0
+                          ? `${((invoiceBreakdown.taxAmount / invoiceBreakdown.rentalFee) * 100).toFixed(1)}% rate`
+                          : 'Tax on rental'}
+                    </p>
+                  </div>
                 </div>
-                {(refundBreakdown?.["Service Fee"] ?? 0) > 0 && (
-                  <div className="text-xs bg-green-50 dark:bg-green-950/30 border border-green-200 dark:border-green-800 rounded p-2 space-y-1">
-                    <div className="flex justify-between">
-                      <span className="text-green-700 dark:text-green-400">Original:</span>
-                      <span className="font-medium">${invoiceBreakdown.serviceFee.toFixed(2)}</span>
+                <div className="text-right">
+                  <p className={`text-sm font-semibold ${(refundBreakdown?.["Tax"] ?? 0) > 0 ? 'text-green-600' : ''}`}>
+                    ${(invoiceBreakdown.taxAmount - (refundBreakdown?.["Tax"] ?? 0)).toFixed(2)}
+                  </p>
+                  {(refundBreakdown?.["Tax"] ?? 0) >= invoiceBreakdown.taxAmount && invoiceBreakdown.taxAmount > 0 ? (
+                    <span className="text-[10px] text-green-600">Fully Refunded</span>
+                  ) : invoiceBreakdown.taxAmount > 0 && totalPayments > 0 && rental.status !== 'Cancelled' && rental.status !== 'Closed' && (refundBreakdown?.["Tax"] ?? 0) < invoiceBreakdown.taxAmount ? (
+                    <button
+                      className="text-[10px] text-primary hover:underline"
+                      onClick={() => {
+                        setRefundCategory("Tax");
+                        setRefundTotalAmount(invoiceBreakdown.taxAmount);
+                        const alreadyRefunded = refundBreakdown?.["Tax"] ?? 0;
+                        setRefundPaidAmount(Math.max(0, invoiceBreakdown.taxAmount - alreadyRefunded));
+                        setShowRefundDialog(true);
+                      }}
+                    >
+                      {(refundBreakdown?.["Tax"] ?? 0) > 0 ? 'Refund More' : 'Refund'}
+                    </button>
+                  ) : null}
+                </div>
+              </div>
+
+              {/* Service Fee */}
+              <div className="flex items-center justify-between p-3 rounded-lg bg-muted/40 border">
+                <div className="flex items-center gap-3">
+                  <div className="h-8 w-8 rounded-full bg-purple-500/10 flex items-center justify-center">
+                    <Receipt className="h-4 w-4 text-purple-500" />
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium">Service Fee</p>
+                    <p className="text-xs text-muted-foreground">
+                      {(refundBreakdown?.["Service Fee"] ?? 0) > 0
+                        ? `Refunded: $${(refundBreakdown?.["Service Fee"] ?? 0).toFixed(2)}`
+                        : 'Platform fee'}
+                    </p>
+                  </div>
+                </div>
+                <div className="text-right">
+                  <p className={`text-sm font-semibold ${(refundBreakdown?.["Service Fee"] ?? 0) > 0 ? 'text-green-600' : ''}`}>
+                    ${(invoiceBreakdown.serviceFee - (refundBreakdown?.["Service Fee"] ?? 0)).toFixed(2)}
+                  </p>
+                  {(refundBreakdown?.["Service Fee"] ?? 0) >= invoiceBreakdown.serviceFee && invoiceBreakdown.serviceFee > 0 ? (
+                    <span className="text-[10px] text-green-600">Fully Refunded</span>
+                  ) : invoiceBreakdown.serviceFee > 0 && totalPayments > 0 && rental.status !== 'Cancelled' && rental.status !== 'Closed' && (refundBreakdown?.["Service Fee"] ?? 0) < invoiceBreakdown.serviceFee ? (
+                    <button
+                      className="text-[10px] text-primary hover:underline"
+                      onClick={() => {
+                        setRefundCategory("Service Fee");
+                        setRefundTotalAmount(invoiceBreakdown.serviceFee);
+                        const alreadyRefunded = refundBreakdown?.["Service Fee"] ?? 0;
+                        setRefundPaidAmount(Math.max(0, invoiceBreakdown.serviceFee - alreadyRefunded));
+                        setShowRefundDialog(true);
+                      }}
+                    >
+                      {(refundBreakdown?.["Service Fee"] ?? 0) > 0 ? 'Refund More' : 'Refund'}
+                    </button>
+                  ) : null}
+                </div>
+              </div>
+
+              {/* Security Deposit */}
+              <div className="flex items-center justify-between p-3 rounded-lg bg-muted/40 border">
+                <div className="flex items-center gap-3">
+                  <div className="h-8 w-8 rounded-full bg-amber-500/10 flex items-center justify-center">
+                    <Shield className="h-4 w-4 text-amber-500" />
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium">Security Deposit</p>
+                    <p className="text-xs text-muted-foreground">
+                      {(refundBreakdown?.["Security Deposit"] ?? 0) > 0
+                        ? `Refunded: $${(refundBreakdown?.["Security Deposit"] ?? 0).toFixed(2)}`
+                        : invoiceBreakdown.securityDeposit > 0
+                          ? rental.status === 'Closed' ? 'Eligible for refund' : 'Held'
+                          : 'No deposit'}
+                    </p>
+                  </div>
+                </div>
+                <div className="text-right">
+                  <p className={`text-sm font-semibold ${(refundBreakdown?.["Security Deposit"] ?? 0) > 0 ? 'text-green-600' : ''}`}>
+                    ${(invoiceBreakdown.securityDeposit - (refundBreakdown?.["Security Deposit"] ?? 0)).toFixed(2)}
+                  </p>
+                  {(refundBreakdown?.["Security Deposit"] ?? 0) >= invoiceBreakdown.securityDeposit && invoiceBreakdown.securityDeposit > 0 ? (
+                    <span className="text-[10px] text-green-600">Fully Refunded</span>
+                  ) : invoiceBreakdown.securityDeposit > 0 && totalPayments > 0 && rental.status !== 'Cancelled' && rental.status !== 'Closed' && (refundBreakdown?.["Security Deposit"] ?? 0) < invoiceBreakdown.securityDeposit ? (
+                    <button
+                      className="text-[10px] text-primary hover:underline"
+                      onClick={() => {
+                        setRefundCategory("Security Deposit");
+                        setRefundTotalAmount(invoiceBreakdown.securityDeposit);
+                        const alreadyRefunded = refundBreakdown?.["Security Deposit"] ?? 0;
+                        setRefundPaidAmount(Math.max(0, invoiceBreakdown.securityDeposit - alreadyRefunded));
+                        setShowRefundDialog(true);
+                      }}
+                    >
+                      {(refundBreakdown?.["Security Deposit"] ?? 0) > 0 ? 'Refund More' : 'Refund'}
+                    </button>
+                  ) : null}
+                </div>
+              </div>
+
+              {/* Delivery Fee - Only show if > 0 */}
+              {(rental.delivery_fee ?? 0) > 0 && (
+                <div className="flex items-center justify-between p-3 rounded-lg bg-muted/40 border">
+                  <div className="flex items-center gap-3">
+                    <div className="h-8 w-8 rounded-full bg-cyan-500/10 flex items-center justify-center">
+                      <Truck className="h-4 w-4 text-cyan-500" />
                     </div>
-                    <div className="flex justify-between">
-                      <span className="text-green-700 dark:text-green-400">Refunded:</span>
-                      <span className="font-semibold text-green-600 dark:text-green-300">
-                        -${(refundBreakdown?.["Service Fee"] ?? 0).toFixed(2)}
-                      </span>
+                    <div>
+                      <p className="text-sm font-medium">Delivery Fee</p>
+                      <p className="text-xs text-muted-foreground">
+                        {(refundBreakdown?.["Delivery Fee"] ?? 0) > 0
+                          ? `Refunded: $${(refundBreakdown?.["Delivery Fee"] ?? 0).toFixed(2)}`
+                          : 'Vehicle delivery'}
+                      </p>
                     </div>
                   </div>
-                )}
-              </div>
-              {/* Only show refund button if there's actual paid amount and rental is not cancelled or closed */}
-              {invoiceBreakdown.serviceFee > 0 &&
-               totalPayments > 0 &&
-               rental.status !== 'Cancelled' &&
-               rental.status !== 'Closed' &&
-               (refundBreakdown?.["Service Fee"] ?? 0) < invoiceBreakdown.serviceFee && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="w-full text-xs mt-3"
-                  onClick={() => {
-                    setRefundCategory("Service Fee");
-                    setRefundTotalAmount(invoiceBreakdown.serviceFee);
-                    // Use invoice amount minus already refunded as the max refundable
-                    const alreadyRefunded = refundBreakdown?.["Service Fee"] ?? 0;
-                    setRefundPaidAmount(Math.max(0, invoiceBreakdown.serviceFee - alreadyRefunded));
-                    setShowRefundDialog(true);
-                  }}
-                >
-                  <Undo2 className="h-3 w-3 mr-1" />
-                  {(refundBreakdown?.["Service Fee"] ?? 0) > 0 ? "Refund More" : "Refund"}
-                </Button>
-              )}
-            </CardContent>
-          </Card>
-
-          {/* Security Deposit Card */}
-          <Card className="relative overflow-hidden flex flex-col">
-            <div className="absolute top-0 left-0 w-1 h-full bg-amber-500" />
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium flex items-center justify-between">
-                <span className="flex items-center gap-2">
-                  <Shield className="h-4 w-4 text-amber-500" />
-                  Security Deposit
-                </span>
-                {(refundBreakdown?.["Security Deposit"] ?? 0) >= invoiceBreakdown.securityDeposit && invoiceBreakdown.securityDeposit > 0 ? (
-                  <span className="text-xs bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 px-2 py-0.5 rounded-full">
-                    Fully Refunded
-                  </span>
-                ) : (refundBreakdown?.["Security Deposit"] ?? 0) > 0 ? (
-                  <span className="text-xs bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-400 px-2 py-0.5 rounded-full">
-                    Partial Refund
-                  </span>
-                ) : null}
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="flex-1 flex flex-col">
-              <div className="space-y-3 flex-1">
-                <div>
-                  {(refundBreakdown?.["Security Deposit"] ?? 0) > 0 ? (
-                    <>
-                      <p className="text-2xl font-bold text-green-600">
-                        ${(invoiceBreakdown.securityDeposit - (refundBreakdown?.["Security Deposit"] ?? 0)).toFixed(2)}
-                      </p>
-                      <p className="text-xs text-muted-foreground">
-                        Remaining (Original: ${invoiceBreakdown.securityDeposit.toFixed(2)})
-                      </p>
-                    </>
-                  ) : (
-                    <>
-                      <p className="text-2xl font-bold">${invoiceBreakdown.securityDeposit.toFixed(2)}</p>
-                      <p className="text-xs text-muted-foreground">Refundable deposit</p>
-                    </>
-                  )}
+                  <div className="text-right">
+                    <p className={`text-sm font-semibold ${(refundBreakdown?.["Delivery Fee"] ?? 0) > 0 ? 'text-green-600' : ''}`}>
+                      ${((rental.delivery_fee ?? 0) - (refundBreakdown?.["Delivery Fee"] ?? 0)).toFixed(2)}
+                    </p>
+                    {(refundBreakdown?.["Delivery Fee"] ?? 0) >= (rental.delivery_fee ?? 0) && (rental.delivery_fee ?? 0) > 0 ? (
+                      <span className="text-[10px] text-green-600">Fully Refunded</span>
+                    ) : totalPayments > 0 && rental.status !== 'Cancelled' && rental.status !== 'Closed' && (refundBreakdown?.["Delivery Fee"] ?? 0) < (rental.delivery_fee ?? 0) ? (
+                      <button
+                        className="text-[10px] text-primary hover:underline"
+                        onClick={() => {
+                          setRefundCategory("Delivery Fee");
+                          setRefundTotalAmount(rental.delivery_fee ?? 0);
+                          const alreadyRefunded = refundBreakdown?.["Delivery Fee"] ?? 0;
+                          setRefundPaidAmount(Math.max(0, (rental.delivery_fee ?? 0) - alreadyRefunded));
+                          setShowRefundDialog(true);
+                        }}
+                      >
+                        {(refundBreakdown?.["Delivery Fee"] ?? 0) > 0 ? 'Refund More' : 'Refund'}
+                      </button>
+                    ) : null}
+                  </div>
                 </div>
-                {(refundBreakdown?.["Security Deposit"] ?? 0) > 0 ? (
-                  <div className="text-xs bg-green-50 dark:bg-green-950/30 border border-green-200 dark:border-green-800 rounded p-2 space-y-1">
-                    <div className="flex justify-between">
-                      <span className="text-green-700 dark:text-green-400">Original Amount:</span>
-                      <span className="font-medium">${invoiceBreakdown.securityDeposit.toFixed(2)}</span>
+              )}
+
+              {/* Collection Fee - Only show if > 0 */}
+              {(rental.collection_fee ?? 0) > 0 && (
+                <div className="flex items-center justify-between p-3 rounded-lg bg-muted/40 border">
+                  <div className="flex items-center gap-3">
+                    <div className="h-8 w-8 rounded-full bg-rose-500/10 flex items-center justify-center">
+                      <MapPin className="h-4 w-4 text-rose-500" />
                     </div>
-                    <div className="flex justify-between">
-                      <span className="text-green-700 dark:text-green-400">Refunded:</span>
-                      <span className="font-semibold text-green-600 dark:text-green-300">
-                        -${(refundBreakdown?.["Security Deposit"] ?? 0).toFixed(2)}
-                      </span>
-                    </div>
-                    <div className="flex justify-between border-t border-green-200 dark:border-green-700 pt-1 mt-1">
-                      <span className="font-medium text-green-700 dark:text-green-400">Net Held:</span>
-                      <span className="font-bold">
-                        ${(invoiceBreakdown.securityDeposit - (refundBreakdown?.["Security Deposit"] ?? 0)).toFixed(2)}
-                      </span>
+                    <div>
+                      <p className="text-sm font-medium">Collection Fee</p>
+                      <p className="text-xs text-muted-foreground">
+                        {(refundBreakdown?.["Collection Fee"] ?? 0) > 0
+                          ? `Refunded: $${(refundBreakdown?.["Collection Fee"] ?? 0).toFixed(2)}`
+                          : 'Vehicle collection'}
+                      </p>
                     </div>
                   </div>
-                ) : invoiceBreakdown.securityDeposit > 0 ? (
-                  <div className="text-xs bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded p-2">
-                    <span className="font-medium text-amber-700 dark:text-amber-400">Status:</span>{" "}
-                    <span className="text-amber-600 dark:text-amber-300">
-                      {rental.status === 'Closed' ? 'Eligible for refund' : 'Held until rental ends'}
-                    </span>
+                  <div className="text-right">
+                    <p className={`text-sm font-semibold ${(refundBreakdown?.["Collection Fee"] ?? 0) > 0 ? 'text-green-600' : ''}`}>
+                      ${((rental.collection_fee ?? 0) - (refundBreakdown?.["Collection Fee"] ?? 0)).toFixed(2)}
+                    </p>
+                    {(refundBreakdown?.["Collection Fee"] ?? 0) >= (rental.collection_fee ?? 0) && (rental.collection_fee ?? 0) > 0 ? (
+                      <span className="text-[10px] text-green-600">Fully Refunded</span>
+                    ) : totalPayments > 0 && rental.status !== 'Cancelled' && rental.status !== 'Closed' && (refundBreakdown?.["Collection Fee"] ?? 0) < (rental.collection_fee ?? 0) ? (
+                      <button
+                        className="text-[10px] text-primary hover:underline"
+                        onClick={() => {
+                          setRefundCategory("Collection Fee");
+                          setRefundTotalAmount(rental.collection_fee ?? 0);
+                          const alreadyRefunded = refundBreakdown?.["Collection Fee"] ?? 0;
+                          setRefundPaidAmount(Math.max(0, (rental.collection_fee ?? 0) - alreadyRefunded));
+                          setShowRefundDialog(true);
+                        }}
+                      >
+                        {(refundBreakdown?.["Collection Fee"] ?? 0) > 0 ? 'Refund More' : 'Refund'}
+                      </button>
+                    ) : null}
                   </div>
-                ) : null}
-              </div>
-              {/* Only show refund button if there's actual paid amount and rental is not cancelled or closed */}
-              {invoiceBreakdown.securityDeposit > 0 &&
-               totalPayments > 0 &&
-               rental.status !== 'Cancelled' &&
-               rental.status !== 'Closed' &&
-               (refundBreakdown?.["Security Deposit"] ?? 0) < invoiceBreakdown.securityDeposit && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="w-full text-xs mt-3"
-                  onClick={() => {
-                    setRefundCategory("Security Deposit");
-                    setRefundTotalAmount(invoiceBreakdown.securityDeposit);
-                    // Use invoice amount minus already refunded as the max refundable
-                    const alreadyRefunded = refundBreakdown?.["Security Deposit"] ?? 0;
-                    setRefundPaidAmount(Math.max(0, invoiceBreakdown.securityDeposit - alreadyRefunded));
-                    setShowRefundDialog(true);
-                  }}
-                >
-                  <Undo2 className="h-3 w-3 mr-1" />
-                  {(refundBreakdown?.["Security Deposit"] ?? 0) > 0 ? "Refund More" : "Refund Deposit"}
-                </Button>
-              )}
-            </CardContent>
-          </Card>
-
-          {/* Rental Amount Card */}
-          <Card className="relative overflow-hidden flex flex-col">
-            <div className="absolute top-0 left-0 w-1 h-full bg-green-500" />
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium flex items-center justify-between">
-                <span className="flex items-center gap-2">
-                  <Car className="h-4 w-4 text-green-500" />
-                  Rental
-                </span>
-                {(refundBreakdown?.["Rental"] ?? 0) >= invoiceBreakdown.rentalFee && invoiceBreakdown.rentalFee > 0 ? (
-                  <span className="text-xs bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 px-2 py-0.5 rounded-full">
-                    Fully Refunded
-                  </span>
-                ) : (refundBreakdown?.["Rental"] ?? 0) > 0 ? (
-                  <span className="text-xs bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-400 px-2 py-0.5 rounded-full">
-                    Partial Refund
-                  </span>
-                ) : null}
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="flex-1 flex flex-col">
-              <div className="space-y-3 flex-1">
-                <div>
-                  {(refundBreakdown?.["Rental"] ?? 0) > 0 ? (
-                    <>
-                      <p className="text-2xl font-bold text-green-600">
-                        ${(invoiceBreakdown.rentalFee - (refundBreakdown?.["Rental"] ?? 0)).toFixed(2)}
-                      </p>
-                      <p className="text-xs text-muted-foreground">
-                        Net Amount (Original: ${invoiceBreakdown.rentalFee.toFixed(2)})
-                      </p>
-                    </>
-                  ) : (
-                    <>
-                      <p className="text-2xl font-bold">${invoiceBreakdown.rentalFee.toFixed(2)}</p>
-                      <p className="text-xs text-muted-foreground">
-                        {rental.rental_period_type || 'Monthly'} rental charge
-                      </p>
-                    </>
-                  )}
                 </div>
-                {invoiceBreakdown.rentalFee > 0 && (
-                  <>
-                    {(refundBreakdown?.["Rental"] ?? 0) > 0 && (
-                      <div className="text-xs bg-green-50 dark:bg-green-950/30 border border-green-200 dark:border-green-800 rounded p-2 space-y-1">
-                        <div className="flex justify-between">
-                          <span className="text-green-700 dark:text-green-400">Original:</span>
-                          <span className="font-medium">${invoiceBreakdown.rentalFee.toFixed(2)}</span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span className="text-green-700 dark:text-green-400">Refunded:</span>
-                          <span className="font-semibold text-green-600 dark:text-green-300">
-                            -${(refundBreakdown?.["Rental"] ?? 0).toFixed(2)}
-                          </span>
-                        </div>
-                      </div>
-                    )}
-                    <div className="text-xs text-muted-foreground bg-muted/50 rounded p-2">
-                      <span className="font-medium">Period:</span>{" "}
-                      {new Date(rental.start_date).toLocaleDateString()} - {new Date(rental.end_date).toLocaleDateString()}
-                    </div>
-                  </>
-                )}
-              </div>
-              {/* Only show refund button if there's actual paid amount and rental is not cancelled or closed */}
-              {invoiceBreakdown.rentalFee > 0 &&
-               totalPayments > 0 &&
-               rental.status !== 'Cancelled' &&
-               rental.status !== 'Closed' &&
-               (refundBreakdown?.["Rental"] ?? 0) < invoiceBreakdown.rentalFee && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="w-full text-xs mt-3"
-                  onClick={() => {
-                    setRefundCategory("Rental");
-                    setRefundTotalAmount(invoiceBreakdown.rentalFee);
-                    // Use invoice amount minus already refunded as the max refundable
-                    const alreadyRefunded = refundBreakdown?.["Rental"] ?? 0;
-                    setRefundPaidAmount(Math.max(0, invoiceBreakdown.rentalFee - alreadyRefunded));
-                    setShowRefundDialog(true);
-                  }}
-                >
-                  <Undo2 className="h-3 w-3 mr-1" />
-                  {(refundBreakdown?.["Rental"] ?? 0) > 0 ? "Refund More" : "Refund"}
-                </Button>
               )}
-            </CardContent>
-          </Card>
-        </div>
+            </div>
+          </CardContent>
+        </Card>
       )}
 
       {/* Rental Details */}
