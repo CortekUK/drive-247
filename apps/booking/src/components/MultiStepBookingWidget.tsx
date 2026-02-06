@@ -109,6 +109,12 @@ const MultiStepBookingWidget = () => {
   const customerHasDOB = !!customerUser?.customer?.date_of_birth;
   // Check if customer already has timezone in their profile
   const customerHasTimezone = !!customerUser?.customer?.timezone;
+  // Check if customer already has phone in their profile
+  const customerHasPhone = !!customerUser?.customer?.phone;
+  // Check if customer's ID document has expired
+  const isDocumentExpired = customerVerification?.document_expiry_date
+    ? new Date(customerVerification.document_expiry_date) < new Date()
+    : false;
 
   const [currentStep, setCurrentStep] = useState(1);
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
@@ -749,6 +755,13 @@ const MultiStepBookingWidget = () => {
             setVerificationSessionId(customerVerification.session_id);
             updates.verificationSessionId = customerVerification.session_id;
           }
+          // Use name from ID verification document (more accurate than account name)
+          if (customerVerification?.first_name || customerVerification?.last_name) {
+            const verifiedName = `${customerVerification.first_name || ''} ${customerVerification.last_name || ''}`.trim();
+            if (verifiedName) {
+              updates.customerName = verifiedName;
+            }
+          }
           // Set license number from verification if available
           if (customerVerification?.document_number) {
             updates.licenseNumber = customerVerification.document_number;
@@ -827,6 +840,13 @@ const MultiStepBookingWidget = () => {
           if (customerVerification?.session_id) {
             setVerificationSessionId(customerVerification.session_id);
             updates.verificationSessionId = customerVerification.session_id;
+          }
+          // Use name from ID verification document (more accurate than account name)
+          if (customerVerification?.first_name || customerVerification?.last_name) {
+            const verifiedName = `${customerVerification.first_name || ''} ${customerVerification.last_name || ''}`.trim();
+            if (verifiedName) {
+              updates.customerName = verifiedName;
+            }
           }
           if (customerVerification?.document_number) {
             updates.licenseNumber = customerVerification.document_number;
@@ -907,20 +927,6 @@ const MultiStepBookingWidget = () => {
       }
     }
   }, [currentStep, authInitialized, authLoading, isAuthenticated]);
-
-  // Warn user about unsaved data when leaving page
-  useEffect(() => {
-    const hasUnsavedData = formData.customerName || formData.customerEmail || formData.vehicleId;
-    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
-      if (hasUnsavedData && !showConfirmation) {
-        e.preventDefault();
-        e.returnValue = 'You have unsaved booking data. Are you sure you want to leave?';
-      }
-    };
-
-    window.addEventListener('beforeunload', handleBeforeUnload);
-    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
-  }, [formData.customerName, formData.customerEmail, formData.vehicleId, showConfirmation]);
 
   // Separate function to load blocked dates - used by both initial load and real-time updates
   const loadBlockedDates = async () => {
@@ -3797,7 +3803,6 @@ const MultiStepBookingWidget = () => {
 
                           {/* Spec Bar */}
                           <div className="flex items-center gap-4 text-xs text-muted-foreground pb-3 border-b border-border/50">
-                            <span title="Registration">{vehicle.reg}</span>
                             <span className="flex items-center gap-1" title="Mileage Allowance">
                               <Gauge className="h-3 w-3" />
                               {vehicle.allowed_mileage
@@ -4484,28 +4489,38 @@ const MultiStepBookingWidget = () => {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
               <div className="space-y-2">
                 <Label htmlFor="customerPhone" className="font-medium">Phone Number *</Label>
-                <PhoneInput
-                  id="customerPhone"
-                  value={formData.customerPhone}
-                  defaultCountry="US"
-                  onChange={value => {
-                    // Allow phone changes even for authenticated users (they might want to use different phone)
-                    setFormData({
-                      ...formData,
-                      customerPhone: value
-                    });
-                    // Instant validation
-                    validateField('customerPhone', value);
-                  }}
-                  error={!!errors.customerPhone}
-                  className="h-12"
-                />
-                {isAuthenticated && isCustomerDataPopulated && formData.customerPhone && (
-                  <p className="text-xs text-muted-foreground flex items-center gap-1">
-                    <UserCheck className="w-3 h-3" /> From your account (editable)
-                  </p>
+                {/* Show read-only display when phone is from account profile */}
+                {isAuthenticated && isCustomerDataPopulated && customerHasPhone && formData.customerPhone ? (
+                  <div className="space-y-2">
+                    <Input
+                      value={formData.customerPhone}
+                      readOnly
+                      className="h-12 bg-muted/50"
+                    />
+                    <p className="text-xs text-muted-foreground flex items-center gap-1">
+                      <CheckCircle className="w-3 h-3 text-primary" /> From your account profile
+                    </p>
+                  </div>
+                ) : (
+                  <>
+                    <PhoneInput
+                      id="customerPhone"
+                      value={formData.customerPhone}
+                      defaultCountry="US"
+                      onChange={value => {
+                        setFormData({
+                          ...formData,
+                          customerPhone: value
+                        });
+                        // Instant validation
+                        validateField('customerPhone', value);
+                      }}
+                      error={!!errors.customerPhone}
+                      className="h-12"
+                    />
+                    {errors.customerPhone && <p className="text-sm text-destructive">{errors.customerPhone}</p>}
+                  </>
                 )}
-                {errors.customerPhone && <p className="text-sm text-destructive">{errors.customerPhone}</p>}
               </div>
 
               <div className="space-y-2">
@@ -4713,95 +4728,122 @@ const MultiStepBookingWidget = () => {
               </div>
             )}
 
-            {/* Date of Birth - Always shown */}
-            <div className="space-y-2">
-              <Label className="font-medium">Date of Birth *</Label>
-              {/* Show read-only display when DOB is verified (from account profile or ID document) */}
-              {verificationStatus === 'verified' && formData.driverDOB ? (
-                <div className="space-y-2">
-                  <Input
-                    value={formData.driverDOB ? format(new Date(formData.driverDOB), "MMMM d, yyyy") : ""}
-                    readOnly
-                    className="h-12 max-w-md bg-muted/50"
-                  />
-                  <p className="text-xs text-muted-foreground flex items-center gap-1">
-                    <CheckCircle className="w-3 h-3 text-primary" />
-                    {isAuthenticated && customerHasDOB ? 'From your account profile' : 'From your ID document'}
-                  </p>
-                  {formData.driverDOB && (
-                    <p className="text-sm text-muted-foreground">Age: <span className="font-medium text-foreground">{calculateAge(new Date(formData.driverDOB))} years old</span></p>
-                  )}
-                </div>
-              ) : (
-                <>
-                  <div className="grid grid-cols-3 gap-2 max-w-md">
-                    {/* Month Select */}
-                    <Select
-                      value={formData.driverDOB ? (new Date(formData.driverDOB).getMonth() + 1).toString().padStart(2, '0') : ""}
-                      onValueChange={(month) => {
-                        const currentDate = formData.driverDOB ? new Date(formData.driverDOB) : new Date(2000, 0, 1);
-                        const newDate = new Date(currentDate.getFullYear(), parseInt(month) - 1, Math.min(currentDate.getDate(), new Date(currentDate.getFullYear(), parseInt(month), 0).getDate()));
-                        const dateStr = format(newDate, "yyyy-MM-dd");
-                        setFormData({ ...formData, driverDOB: dateStr });
-                        validateField('driverDOB', dateStr);
-                      }}
-                    >
-                      <SelectTrigger className={cn("h-12", errors.driverDOB && "border-destructive")}>
-                        <SelectValue placeholder="Month" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'].map((month, i) => (
-                          <SelectItem key={i} value={(i + 1).toString().padStart(2, '0')}>{month}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    {/* Day Select */}
-                    <Select
-                      value={formData.driverDOB ? new Date(formData.driverDOB).getDate().toString() : ""}
-                      onValueChange={(day) => {
-                        const currentDate = formData.driverDOB ? new Date(formData.driverDOB) : new Date(2000, 0, 1);
-                        const newDate = new Date(currentDate.getFullYear(), currentDate.getMonth(), parseInt(day));
-                        const dateStr = format(newDate, "yyyy-MM-dd");
-                        setFormData({ ...formData, driverDOB: dateStr });
-                        validateField('driverDOB', dateStr);
-                      }}
-                    >
-                      <SelectTrigger className={cn("h-12", errors.driverDOB && "border-destructive")}>
-                        <SelectValue placeholder="Day" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {Array.from({ length: 31 }, (_, i) => (
-                          <SelectItem key={i + 1} value={(i + 1).toString()}>{i + 1}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    {/* Year Select */}
-                    <Select
-                      value={formData.driverDOB ? new Date(formData.driverDOB).getFullYear().toString() : ""}
-                      onValueChange={(year) => {
-                        const currentDate = formData.driverDOB ? new Date(formData.driverDOB) : new Date(2000, 0, 1);
-                        const newDate = new Date(parseInt(year), currentDate.getMonth(), Math.min(currentDate.getDate(), new Date(parseInt(year), currentDate.getMonth() + 1, 0).getDate()));
-                        const dateStr = format(newDate, "yyyy-MM-dd");
-                        setFormData({ ...formData, driverDOB: dateStr });
-                        validateField('driverDOB', dateStr);
-                      }}
-                    >
-                      <SelectTrigger className={cn("h-12", errors.driverDOB && "border-destructive")}>
-                        <SelectValue placeholder="Year" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {Array.from({ length: 100 }, (_, i) => new Date().getFullYear() - (tenant?.minimum_rental_age || 18) - i).map((year) => (
-                          <SelectItem key={year} value={year.toString()}>{year}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+            {/* Date of Birth & ID Expiry Row */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
+              {/* Date of Birth - Always shown */}
+              <div className="space-y-2">
+                <Label className="font-medium">Date of Birth *</Label>
+                {/* Show read-only display when DOB is verified (from account profile or ID document) */}
+                {verificationStatus === 'verified' && formData.driverDOB ? (
+                  <div className="space-y-2">
+                    <Input
+                      value={formData.driverDOB ? format(new Date(formData.driverDOB), "MMMM d, yyyy") : ""}
+                      readOnly
+                      className="h-12 bg-muted/50"
+                    />
+                    <p className="text-xs text-muted-foreground flex items-center gap-1">
+                      <CheckCircle className="w-3 h-3 text-primary" />
+                      {isAuthenticated && customerHasDOB ? 'From your account profile' : 'From your ID document'}
+                    </p>
+                    {formData.driverDOB && (
+                      <p className="text-sm text-muted-foreground">Age: <span className="font-medium text-foreground">{calculateAge(new Date(formData.driverDOB))} years old</span></p>
+                    )}
                   </div>
-                  {formData.driverDOB && (
-                    <p className="text-sm text-muted-foreground">Age: <span className={cn("font-medium", errors.driverDOB ? "text-destructive" : "text-foreground")}>{calculateAge(new Date(formData.driverDOB))} years old</span></p>
-                  )}
-                  {errors.driverDOB && <p className="text-sm text-destructive">{errors.driverDOB}</p>}
-                  <p className="text-xs text-muted-foreground">Driver must be at least {tenant?.minimum_rental_age || 21} years old</p>
-                </>
+                ) : (
+                  <>
+                    <div className="grid grid-cols-3 gap-2">
+                      {/* Month Select */}
+                      <Select
+                        value={formData.driverDOB ? (new Date(formData.driverDOB).getMonth() + 1).toString().padStart(2, '0') : ""}
+                        onValueChange={(month) => {
+                          const currentDate = formData.driverDOB ? new Date(formData.driverDOB) : new Date(2000, 0, 1);
+                          const newDate = new Date(currentDate.getFullYear(), parseInt(month) - 1, Math.min(currentDate.getDate(), new Date(currentDate.getFullYear(), parseInt(month), 0).getDate()));
+                          const dateStr = format(newDate, "yyyy-MM-dd");
+                          setFormData({ ...formData, driverDOB: dateStr });
+                          validateField('driverDOB', dateStr);
+                        }}
+                      >
+                        <SelectTrigger className={cn("h-12", errors.driverDOB && "border-destructive")}>
+                          <SelectValue placeholder="Month" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'].map((month, i) => (
+                            <SelectItem key={i} value={(i + 1).toString().padStart(2, '0')}>{month}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      {/* Day Select */}
+                      <Select
+                        value={formData.driverDOB ? new Date(formData.driverDOB).getDate().toString() : ""}
+                        onValueChange={(day) => {
+                          const currentDate = formData.driverDOB ? new Date(formData.driverDOB) : new Date(2000, 0, 1);
+                          const newDate = new Date(currentDate.getFullYear(), currentDate.getMonth(), parseInt(day));
+                          const dateStr = format(newDate, "yyyy-MM-dd");
+                          setFormData({ ...formData, driverDOB: dateStr });
+                          validateField('driverDOB', dateStr);
+                        }}
+                      >
+                        <SelectTrigger className={cn("h-12", errors.driverDOB && "border-destructive")}>
+                          <SelectValue placeholder="Day" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {Array.from({ length: 31 }, (_, i) => (
+                            <SelectItem key={i + 1} value={(i + 1).toString()}>{i + 1}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      {/* Year Select */}
+                      <Select
+                        value={formData.driverDOB ? new Date(formData.driverDOB).getFullYear().toString() : ""}
+                        onValueChange={(year) => {
+                          const currentDate = formData.driverDOB ? new Date(formData.driverDOB) : new Date(2000, 0, 1);
+                          const newDate = new Date(parseInt(year), currentDate.getMonth(), Math.min(currentDate.getDate(), new Date(parseInt(year), currentDate.getMonth() + 1, 0).getDate()));
+                          const dateStr = format(newDate, "yyyy-MM-dd");
+                          setFormData({ ...formData, driverDOB: dateStr });
+                          validateField('driverDOB', dateStr);
+                        }}
+                      >
+                        <SelectTrigger className={cn("h-12", errors.driverDOB && "border-destructive")}>
+                          <SelectValue placeholder="Year" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {Array.from({ length: 100 }, (_, i) => new Date().getFullYear() - (tenant?.minimum_rental_age || 18) - i).map((year) => (
+                            <SelectItem key={year} value={year.toString()}>{year}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    {formData.driverDOB && (
+                      <p className="text-sm text-muted-foreground">Age: <span className={cn("font-medium", errors.driverDOB ? "text-destructive" : "text-foreground")}>{calculateAge(new Date(formData.driverDOB))} years old</span></p>
+                    )}
+                    {errors.driverDOB && <p className="text-sm text-destructive">{errors.driverDOB}</p>}
+                    <p className="text-xs text-muted-foreground">Driver must be at least {tenant?.minimum_rental_age || 21} years old</p>
+                  </>
+                )}
+              </div>
+
+              {/* ID Document Expiry Date - Show when verified */}
+              {(verificationStatus === 'verified' || (isAuthenticated && isCustomerAlreadyVerified)) && customerVerification?.document_expiry_date && (
+                <div className="space-y-2">
+                  <Label className="font-medium">ID Document Expiry</Label>
+                  <div className="flex items-center gap-2">
+                    <Input
+                      value={format(new Date(customerVerification.document_expiry_date), "MMMM d, yyyy")}
+                      readOnly
+                      className="h-12 bg-muted/50 flex-1"
+                    />
+                    {new Date(customerVerification.document_expiry_date) < new Date() ? (
+                      <span className="text-xs text-destructive font-medium px-2 py-1 bg-destructive/10 rounded">Expired</span>
+                    ) : new Date(customerVerification.document_expiry_date) < new Date(Date.now() + 30 * 24 * 60 * 60 * 1000) ? (
+                      <span className="text-xs text-amber-600 font-medium px-2 py-1 bg-amber-500/10 rounded">Expires Soon</span>
+                    ) : (
+                      <span className="text-xs text-green-600 font-medium px-2 py-1 bg-green-500/10 rounded">Valid</span>
+                    )}
+                  </div>
+                  <p className="text-xs text-muted-foreground flex items-center gap-1">
+                    <CheckCircle className="w-3 h-3 text-primary" /> From your verified ID document
+                  </p>
+                </div>
               )}
             </div>
 
@@ -5139,7 +5181,7 @@ const MultiStepBookingWidget = () => {
             </Button>
             <Button
               onClick={handleStep4Continue}
-              disabled={verificationStatus !== 'verified'}
+              disabled={verificationStatus !== 'verified' || isDocumentExpired}
               className="w-full sm:flex-1 h-11 sm:h-12 bg-primary hover:bg-primary/90 text-primary-foreground font-semibold text-sm sm:text-base shadow-md hover:shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed"
               size="lg"
             >
@@ -5148,9 +5190,14 @@ const MultiStepBookingWidget = () => {
               <ChevronRight className="ml-2 w-4 h-4 sm:w-5 sm:h-5" />
             </Button>
           </div>
-          {verificationStatus !== 'verified' && (
+          {verificationStatus !== 'verified' && !isDocumentExpired && (
             <p className="text-xs sm:text-sm text-destructive text-center mt-2">
               Please complete identity verification to continue
+            </p>
+          )}
+          {isDocumentExpired && (
+            <p className="text-xs sm:text-sm text-destructive text-center mt-2">
+              Your ID document has expired. Please update your verification to continue.
             </p>
           )}
         </div>}

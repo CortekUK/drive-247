@@ -1,4 +1,8 @@
 import { z } from "zod";
+import { startOfDay } from "date-fns";
+
+// Helper to get today at midnight for date comparisons
+const getToday = () => startOfDay(new Date());
 
 export const editVehicleSchema = z.object({
   reg: z.string().min(1, "Registration number is required"),
@@ -11,9 +15,13 @@ export const editVehicleSchema = z.object({
   daily_rent: z.number({ required_error: "Daily rent is required", invalid_type_error: "Daily rent must be a number" }).min(0, "Daily rent must be positive"),
   weekly_rent: z.number({ required_error: "Weekly rent is required", invalid_type_error: "Weekly rent must be a number" }).min(0, "Weekly rent must be positive"),
   monthly_rent: z.number({ required_error: "Monthly rent is required", invalid_type_error: "Monthly rent must be a number" }).min(0, "Monthly rent must be positive"),
-  acquisition_date: z.date(),
+  // Acquisition date: cannot be in the future
+  acquisition_date: z.date().refine(
+    (date) => startOfDay(date) <= getToday(),
+    "Acquisition date cannot be in the future"
+  ),
   acquisition_type: z.enum(['Purchase', 'Finance']),
-  // MOT & TAX fields
+  // MOT & TAX fields - Allow past dates for editing (legacy/overdue vehicles)
   mot_due_date: z.date().optional(),
   tax_due_date: z.date().optional(),
   // Warranty fields
@@ -32,21 +40,42 @@ export const editVehicleSchema = z.object({
   security_notes: z.string().optional(),
   // Description
   description: z.string().optional(),
-}).refine(
-  (data) => {
-    if (data.acquisition_type === 'Finance' && !data.contract_total) {
-      return false;
-    }
-    if (data.acquisition_type === 'Purchase' && !data.purchase_price) {
-      return false;
-    }
-    return true;
-  },
-  {
-    message: "Contract total is required for financed vehicles",
-    path: ["contract_total"],
+}).superRefine((data, ctx) => {
+  if (data.acquisition_type === 'Finance' && !data.contract_total) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "Contract total is required for financed vehicles",
+      path: ["contract_total"],
+    });
   }
-).refine((data) => {
+  if (data.acquisition_type === 'Purchase' && !data.purchase_price) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "Purchase price is required for purchased vehicles",
+      path: ["purchase_price"],
+    });
+  }
+
+  // Warranty end date requires warranty start date
+  if (data.warranty_end_date && !data.warranty_start_date) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "Warranty start date is required when end date is set",
+      path: ["warranty_start_date"],
+    });
+  }
+
+  // Warranty end date must be after warranty start date
+  if (data.warranty_start_date && data.warranty_end_date) {
+    if (data.warranty_end_date <= data.warranty_start_date) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Warranty end date must be after start date",
+        path: ["warranty_end_date"],
+      });
+    }
+  }
+}).refine((data) => {
   if (data.has_spare_key) {
     return data.spare_key_holder !== undefined;
   }

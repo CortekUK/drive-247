@@ -93,6 +93,7 @@ export function AuthPromptDialog({
   const signupForm = useForm<SignupFormData>({
     resolver: zodResolver(signupSchema),
     defaultValues: {
+      name: customerName || '',
       email: prefillEmail,
       password: '',
       confirmPassword: '',
@@ -113,7 +114,7 @@ export function AuthPromptDialog({
       const { error, data: signupData } = await signUp(data.email, data.password, {
         customerId,
         tenantId: tenant?.id,
-        customerName,
+        customerName: data.name,
         customerPhone,
       });
 
@@ -284,6 +285,22 @@ export function AuthPromptDialog({
       </DialogHeader>
 
       <form onSubmit={signupForm.handleSubmit(handleSignup)} className="space-y-4 py-4">
+        <div className="space-y-2">
+          <Label htmlFor="signup-name">Full Name</Label>
+          <Input
+            id="signup-name"
+            type="text"
+            {...signupForm.register('name')}
+            placeholder="Enter your full name"
+            autoComplete="name"
+          />
+          {signupForm.formState.errors.name && (
+            <p className="text-xs text-destructive">
+              {signupForm.formState.errors.name.message}
+            </p>
+          )}
+        </div>
+
         <div className="space-y-2">
           <Label htmlFor="signup-email">Email</Label>
           <Input

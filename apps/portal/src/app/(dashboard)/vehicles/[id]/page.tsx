@@ -599,14 +599,14 @@ export default function VehicleDetail() {
                     </div>
                   </MetricCard>
 
-                  <MetricCard title="Net Profit" icon={TrendingUp}>
+                  <MetricCard title={netProfit >= 0 ? "Net Profit" : "Net Loss"} icon={TrendingUp}>
                     <div className="space-y-2">
                       <div className={`text-3xl font-bold ${netProfit >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
                         ${Math.abs(netProfit).toLocaleString()}
                       </div>
-                      <p className="text-xs text-muted-foreground">
-                        {netProfit >= 0 ? 'Total profit' : 'Total loss'}
-                      </p>
+                      {netProfit >= 0 && (
+                        <p className="text-xs text-muted-foreground">Total profit</p>
+                      )}
                     </div>
                   </MetricCard>
                 </div>

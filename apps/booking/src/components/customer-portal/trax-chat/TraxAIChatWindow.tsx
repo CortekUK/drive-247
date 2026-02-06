@@ -7,10 +7,13 @@ import { useTraxChat } from '@/hooks/use-trax-chat';
 import { TraxAIChatMessage } from './TraxAIChatMessage';
 import { TraxAIChatInput } from './TraxAIChatInput';
 import { TypingIndicator } from '../chat/CustomerChatMessage';
+import { useCustomerAuth } from '@/stores/customer-auth-store';
 
 export function TraxAIChatWindow() {
   const { messages, isLoading, error, sendMessage, clearChat } = useTraxChat();
+  const { customerUser } = useCustomerAuth();
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const customerProfilePhoto = customerUser?.customer?.profile_photo_url;
 
   // Auto-scroll to bottom on new messages
   useEffect(() => {
@@ -22,7 +25,7 @@ export function TraxAIChatWindow() {
   return (
     <div className="flex flex-col h-full">
       {/* Messages area */}
-      <ScrollArea className="flex-1 px-4">
+      <ScrollArea className="flex-1 px-4 pt-4">
         {/* Welcome message when no messages */}
         {messages.length === 0 && !isLoading && (
           <div className="flex flex-col items-center justify-center py-8 text-center px-4">
@@ -47,6 +50,7 @@ export function TraxAIChatWindow() {
           <TraxAIChatMessage
             key={message.id}
             message={message}
+            customerProfilePhoto={customerProfilePhoto}
           />
         ))}
 

@@ -208,9 +208,10 @@ export function DocumentUploadDialog({
 
       toast.success(`Insurance document${files.length > 1 ? 's' : ''} uploaded successfully`);
 
-      // Invalidate queries to refresh the list
+      // Invalidate queries to refresh the list and update onboarding status
       queryClient.invalidateQueries({ queryKey: ['customer-documents'] });
       queryClient.invalidateQueries({ queryKey: ['customer-document-stats'] });
+      queryClient.invalidateQueries({ queryKey: ['customer-onboarding'] });
 
       // Reset form and close dialog
       resetForm();

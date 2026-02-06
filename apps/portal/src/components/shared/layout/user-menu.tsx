@@ -218,17 +218,21 @@ export const UserMenu = () => {
             </Badge>
           </DropdownMenuLabel>
           <DropdownMenuSeparator />
-          <DropdownMenuItem onClick={() => setShowPasswordDialog(true)} className="cursor-pointer">
-            <Key className="mr-2 h-4 w-4" />
-            <span>Change Password</span>
-            {appUser.must_change_password && (
-              <Badge variant="destructive" className="ml-auto text-xs">Required</Badge>
-            )}
-          </DropdownMenuItem>
-          <DropdownMenuItem onClick={handleOpenNameDialog} className="cursor-pointer">
-            <Pencil className="mr-2 h-4 w-4" />
-            <span>Change Name</span>
-          </DropdownMenuItem>
+          {!appUser.is_super_admin && (
+            <DropdownMenuItem onClick={() => setShowPasswordDialog(true)} className="cursor-pointer">
+              <Key className="mr-2 h-4 w-4" />
+              <span>Change Password</span>
+              {appUser.must_change_password && (
+                <Badge variant="destructive" className="ml-auto text-xs">Required</Badge>
+              )}
+            </DropdownMenuItem>
+          )}
+          {!appUser.is_super_admin && (
+            <DropdownMenuItem onClick={handleOpenNameDialog} className="cursor-pointer">
+              <Pencil className="mr-2 h-4 w-4" />
+              <span>Change Name</span>
+            </DropdownMenuItem>
+          )}
           <DropdownMenuItem asChild>
             <a href="/settings" className="cursor-pointer">
               <Settings className="mr-2 h-4 w-4" />

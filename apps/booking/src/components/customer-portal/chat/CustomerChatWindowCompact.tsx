@@ -10,12 +10,15 @@ import { useTenant } from '@/contexts/TenantContext';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Button } from '@/components/ui/button';
 import { formatDistanceToNow } from 'date-fns';
+import { useCustomerAuth } from '@/stores/customer-auth-store';
 
 // Compact version of CustomerChatWindow for use in popups (no outer border/header)
 export function CustomerChatWindowCompact() {
   const { channel, messages, isLoading, loadMore, hasMore, isLoadingMore } = useCustomerChat();
   const { onTyping, onPresenceUpdate } = useCustomerSocket();
   const { tenant } = useTenant();
+  const { customerUser } = useCustomerAuth();
+  const customerProfilePhoto = customerUser?.customer?.profile_photo_url;
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const [isTyping, setIsTyping] = useState(false);
   const [isTenantOnline, setIsTenantOnline] = useState(false);
@@ -132,6 +135,7 @@ export function CustomerChatWindowCompact() {
                 message={message}
                 isOwnMessage={message.sender_type === 'customer'}
                 tenantName={tenantName}
+                customerProfilePhoto={customerProfilePhoto}
               />
             ))}
           </div>

@@ -6,6 +6,7 @@ import {
   useCustomerAgreementStats,
   useDownloadAgreement,
   useViewAgreement,
+  useSignAgreement,
   getAgreementStatusInfo,
   CustomerAgreement,
 } from '@/hooks/use-customer-agreements';
@@ -30,8 +31,10 @@ import {
   Eye,
   Loader2,
   RefreshCw,
+  PenLine,
 } from 'lucide-react';
 import { format } from 'date-fns';
+import { toast } from 'sonner';
 
 function StatCard({
   title,
@@ -64,19 +67,26 @@ function AgreementCard({
   agreement,
   onDownload,
   onView,
+  onSign,
   isDownloading,
   isViewing,
+  isSigning,
 }: {
   agreement: CustomerAgreement;
   onDownload: () => void;
   onView: () => void;
+  onSign: () => void;
   isDownloading: boolean;
   isViewing: boolean;
+  isSigning: boolean;
 }) {
   const statusInfo = getAgreementStatusInfo(agreement.document_status);
   const hasSignedDocument = !!agreement.signed_document?.file_url;
   const hasEnvelope = !!agreement.docusign_envelope_id;
   const canViewDocument = hasSignedDocument || hasEnvelope;
+  const needsSignature = hasEnvelope && !hasSignedDocument &&
+    agreement.document_status !== 'completed' &&
+    agreement.document_status !== 'signed';
   const vehicleInfo = agreement.vehicles
     ? `${agreement.vehicles.make || ''} ${agreement.vehicles.model || ''} - ${agreement.vehicles.reg}`.trim()
     : 'Vehicle';
@@ -146,36 +156,55 @@ function AgreementCard({
                 )}
               </div>
 
-              {canViewDocument && (
-                <div className="flex items-center gap-1">
+              <div className="flex items-center gap-1">
+                {needsSignature && (
                   <Button
-                    variant="ghost"
+                    variant="default"
                     size="sm"
-                    onClick={onView}
-                    disabled={isViewing}
-                    title="View agreement"
+                    onClick={onSign}
+                    disabled={isSigning}
+                    title="Sign agreement"
+                    className="gap-1"
                   >
-                    {isViewing ? (
+                    {isSigning ? (
                       <Loader2 className="h-4 w-4 animate-spin" />
                     ) : (
-                      <Eye className="h-4 w-4" />
+                      <PenLine className="h-4 w-4" />
                     )}
+                    Sign
                   </Button>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={onDownload}
-                    disabled={isDownloading}
-                    title="Download agreement"
-                  >
-                    {isDownloading ? (
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                    ) : (
-                      <Download className="h-4 w-4" />
-                    )}
-                  </Button>
-                </div>
-              )}
+                )}
+                {canViewDocument && (
+                  <>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={onView}
+                      disabled={isViewing}
+                      title="View agreement"
+                    >
+                      {isViewing ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <Eye className="h-4 w-4" />
+                      )}
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={onDownload}
+                      disabled={isDownloading}
+                      title="Download agreement"
+                    >
+                      {isDownloading ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <Download className="h-4 w-4" />
+                      )}
+                    </Button>
+                  </>
+                )}
+              </div>
             </div>
           </div>
         </div>
@@ -270,6 +299,7 @@ export default function AgreementsPage() {
   const { data: stats, refetch: refetchStats } = useCustomerAgreementStats();
   const downloadAgreement = useDownloadAgreement();
   const viewAgreement = useViewAgreement();
+  const signAgreement = useSignAgreement();
   const [viewingAgreement, setViewingAgreement] = useState<CustomerAgreement | null>(null);
   const [documentUrl, setDocumentUrl] = useState<string | null>(null);
   const [viewDialogOpen, setViewDialogOpen] = useState(false);
@@ -286,6 +316,20 @@ export default function AgreementsPage() {
     viewAgreement.mutate(agreement, {
       onSuccess: (url) => {
         setDocumentUrl(url);
+      },
+    });
+  };
+
+  const handleSign = (agreement: CustomerAgreement) => {
+    signAgreement.mutate(agreement, {
+      onSuccess: (result) => {
+        if (result.emailSent) {
+          toast.info('Check your email for the signing link from DocuSign');
+        }
+        // If signingUrl is returned, the hook will redirect automatically
+      },
+      onError: (error) => {
+        toast.error(error.message || 'Failed to get signing link');
       },
     });
   };
@@ -374,8 +418,10 @@ export default function AgreementsPage() {
                 agreement={agreement}
                 onDownload={() => handleDownload(agreement)}
                 onView={() => handleView(agreement)}
+                onSign={() => handleSign(agreement)}
                 isDownloading={downloadAgreement.isPending && downloadAgreement.variables?.id === agreement.id}
                 isViewing={viewAgreement.isPending && viewAgreement.variables?.id === agreement.id}
+                isSigning={signAgreement.isPending && signAgreement.variables?.id === agreement.id}
               />
             ))}
           </div>

@@ -372,6 +372,9 @@ export default function SettingsPage() {
                 onChange={(e) => setPhone(e.target.value)}
                 placeholder="Enter your phone number"
               />
+              <p className="text-xs text-muted-foreground">
+                Your phone number will be used to auto-fill booking forms
+              </p>
             </div>
           </div>
 

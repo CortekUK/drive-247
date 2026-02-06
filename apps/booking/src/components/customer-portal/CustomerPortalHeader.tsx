@@ -3,7 +3,7 @@
 import { SidebarTrigger } from '@/components/ui/sidebar';
 import { ThemeToggle } from '@/components/ThemeToggle';
 import { Button } from '@/components/ui/button';
-import { Bell, Settings, LogOut, ChevronDown } from 'lucide-react';
+import { Bell, LogOut, ChevronDown } from 'lucide-react';
 import { useCustomerNotifications } from '@/hooks/use-customer-notifications';
 import { useCustomerAuthStore } from '@/stores/customer-auth-store';
 import {
@@ -170,13 +170,6 @@ export function CustomerPortalHeader() {
                 </p>
               </div>
             </DropdownMenuLabel>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem asChild>
-              <Link href="/portal/settings" className="flex items-center cursor-pointer">
-                <Settings className="mr-2 h-4 w-4" />
-                <span>Settings</span>
-              </Link>
-            </DropdownMenuItem>
             <DropdownMenuSeparator />
             <DropdownMenuItem
               onClick={handleSignOut}

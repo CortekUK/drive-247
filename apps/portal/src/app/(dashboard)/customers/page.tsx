@@ -51,6 +51,7 @@ interface Customer {
   rejected_at?: string;
   rejected_by?: string;
   created_at?: string;
+  user_type?: "Authenticated" | "Guest";
 }
 
 type SortField = 'name' | 'status' | 'type' | 'balance';
@@ -65,9 +66,8 @@ const CustomersList = () => {
 
   // State from URL params
   const [searchTerm, setSearchTerm] = useState(searchParams.get('search') || '');
-  const [typeFilter, setTypeFilter] = useState(searchParams.get('type') || 'all');
   const [statusFilter, setStatusFilter] = useState(searchParams.get('status') || 'all');
-  const [highSwitcherFilter, setHighSwitcherFilter] = useState(searchParams.get('highSwitcher') || 'all');
+  const [userTypeFilter, setUserTypeFilter] = useState(searchParams.get('userType') || 'all');
   const [sortField, setSortField] = useState<SortField | null>((searchParams.get('sortBy') as SortField) || null);
   const [sortOrder, setSortOrder] = useState<SortOrder>((searchParams.get('sortOrder') as SortOrder) || 'asc');
   const [currentPage, setCurrentPage] = useState(parseInt(searchParams.get('page') || '1'));
@@ -97,16 +97,15 @@ const CustomersList = () => {
   useEffect(() => {
     const params = new URLSearchParams();
     if (debouncedSearchTerm) params.set('search', debouncedSearchTerm);
-    if (typeFilter !== 'all') params.set('type', typeFilter);
     if (statusFilter !== 'all') params.set('status', statusFilter);
-    if (highSwitcherFilter !== 'all') params.set('highSwitcher', highSwitcherFilter);
+    if (userTypeFilter !== 'all') params.set('userType', userTypeFilter);
     if (sortField) params.set('sortBy', sortField);
     if (sortOrder !== 'asc') params.set('sortOrder', sortOrder);
     if (currentPage !== 1) params.set('page', currentPage.toString());
     if (pageSize !== 25) params.set('pageSize', pageSize.toString());
 
     router.push(`?${params.toString()}`);
-  }, [debouncedSearchTerm, typeFilter, statusFilter, highSwitcherFilter, sortField, sortOrder, currentPage, pageSize, router]);
+  }, [debouncedSearchTerm, statusFilter, userTypeFilter, sortField, sortOrder, currentPage, pageSize, router]);
 
   // Fetch customers
   const { data: customers, isLoading, refetch: refetchCustomers } = useQuery({
@@ -127,7 +126,28 @@ const CustomersList = () => {
         console.error("Customers fetch error:", error);
         throw error;
       }
-      return data as Customer[];
+
+      // Fetch customer_users to determine authenticated vs guest
+      const customerIds = data?.map(c => c.id) || [];
+      if (customerIds.length > 0) {
+        const { data: customerUsers } = await supabase
+          .from("customer_users")
+          .select("customer_id")
+          .in("customer_id", customerIds);
+
+        const authenticatedCustomerIds = new Set(customerUsers?.map(cu => cu.customer_id) || []);
+
+        // Add user_type to each customer
+        return data?.map(customer => ({
+          ...customer,
+          user_type: authenticatedCustomerIds.has(customer.id) ? "Authenticated" : "Guest"
+        })) as Customer[];
+      }
+
+      return data?.map(customer => ({
+        ...customer,
+        user_type: "Guest" as const
+      })) as Customer[];
     },
     enabled: !!tenant,
   });
@@ -233,21 +253,14 @@ const CustomersList = () => {
         if (!matchesSearch) return false;
       }
 
-      // Type filter
-      if (typeFilter !== "all") {
-        if (customer.customer_type !== typeFilter) return false;
-      }
-
       // Status filter
       if (statusFilter !== "all") {
         if (customer.status !== statusFilter) return false;
       }
 
-      // High switcher filter
-      if (highSwitcherFilter !== "all") {
-        const isHighSwitcher = customer.high_switcher === true;
-        if (highSwitcherFilter === "yes" && !isHighSwitcher) return false;
-        if (highSwitcherFilter === "no" && isHighSwitcher) return false;
+      // User type filter (Guest/Authenticated)
+      if (userTypeFilter !== "all") {
+        if (customer.user_type !== userTypeFilter) return false;
       }
 
       return true;
@@ -268,8 +281,8 @@ const CustomersList = () => {
             bValue = b.status;
             break;
           case 'type':
-            aValue = a.customer_type || 'Individual';
-            bValue = b.customer_type || 'Individual';
+            aValue = a.user_type || 'Guest';
+            bValue = b.user_type || 'Guest';
             break;
           case 'balance':
             aValue = customerBalances[a.id]?.balance || 0;
@@ -289,7 +302,7 @@ const CustomersList = () => {
     }
 
     return filtered;
-  }, [customers, debouncedSearchTerm, typeFilter, statusFilter, highSwitcherFilter, sortField, sortOrder, customerBalances]);
+  }, [customers, debouncedSearchTerm, statusFilter, userTypeFilter, sortField, sortOrder, customerBalances]);
 
   // Pagination
   const totalCustomers = filteredAndSortedCustomers.length;
@@ -301,7 +314,7 @@ const CustomersList = () => {
   // Reset page when filters change
   useEffect(() => {
     setCurrentPage(1);
-  }, [debouncedSearchTerm, typeFilter, statusFilter, highSwitcherFilter]);
+  }, [debouncedSearchTerm, statusFilter, userTypeFilter]);
 
   // Keyboard shortcuts
   useEffect(() => {
@@ -459,16 +472,15 @@ const CustomersList = () => {
 
   const clearFilters = () => {
     setSearchTerm('');
-    setTypeFilter('all');
     setStatusFilter('all');
-    setHighSwitcherFilter('all');
+    setUserTypeFilter('all');
     setSortField(null);
     setSortOrder('asc');
     setCurrentPage(1);
     toast.success('Filters cleared');
   };
 
-  const hasActiveFilters = debouncedSearchTerm || typeFilter !== 'all' || statusFilter !== 'all' || highSwitcherFilter !== 'all';
+  const hasActiveFilters = debouncedSearchTerm || statusFilter !== 'all' || userTypeFilter !== 'all';
 
   const SortIcon = ({ field }: { field: SortField }) => {
     if (sortField !== field) return <ArrowUpDown className="h-4 w-4 text-muted-foreground" />;
@@ -529,7 +541,7 @@ const CustomersList = () => {
 
       {/* Search and Filters */}
       <div className="space-y-4">
-        <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <div className="relative md:col-span-1">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
             <Input
@@ -540,48 +552,26 @@ const CustomersList = () => {
             />
           </div>
 
-          <Select value={typeFilter} onValueChange={setTypeFilter}>
-            <SelectTrigger>
-              <SelectValue placeholder="All Types" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Types</SelectItem>
-              <SelectItem value="Individual">Individual</SelectItem>
-              <SelectItem value="Company">Company</SelectItem>
-            </SelectContent>
-          </Select>
-
           <Select value={statusFilter} onValueChange={setStatusFilter}>
             <SelectTrigger>
-              <SelectValue placeholder="All Customers" />
+              <SelectValue placeholder="All Statuses" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">All Customers</SelectItem>
+              <SelectItem value="all">All Statuses</SelectItem>
               <SelectItem value="Active">Active</SelectItem>
               <SelectItem value="Inactive">Inactive</SelectItem>
               <SelectItem value="Rejected">Rejected</SelectItem>
             </SelectContent>
           </Select>
 
-          <Select value={highSwitcherFilter} onValueChange={setHighSwitcherFilter}>
+          <Select value={userTypeFilter} onValueChange={setUserTypeFilter}>
             <SelectTrigger>
-              <SelectValue placeholder="All Customers" />
+              <SelectValue placeholder="All Users" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">All Customers</SelectItem>
-              <SelectItem value="no">Regular Customers</SelectItem>
-              <SelectItem value="yes">High Switchers</SelectItem>
-            </SelectContent>
-          </Select>
-
-          <Select value={pageSize.toString()} onValueChange={(value) => setPageSize(parseInt(value))}>
-            <SelectTrigger>
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="25">25</SelectItem>
-              <SelectItem value="50">50</SelectItem>
-              <SelectItem value="100">100</SelectItem>
+              <SelectItem value="all">All Users</SelectItem>
+              <SelectItem value="Authenticated">Authenticated</SelectItem>
+              <SelectItem value="Guest">Guest</SelectItem>
             </SelectContent>
           </Select>
         </div>
@@ -668,14 +658,14 @@ const CustomersList = () => {
                         </TableCell>
                         <TableCell>
                           <Badge
-                            variant="secondary"
+                            variant="outline"
                             className={
-                              customer.customer_type === 'Company'
-                                ? 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200'
-                                : 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200'
+                              customer.user_type === 'Authenticated'
+                                ? 'bg-green-50 text-green-700 border-green-200 dark:bg-green-900/20 dark:text-green-400 dark:border-green-800'
+                                : 'bg-gray-50 text-gray-600 border-gray-200 dark:bg-gray-800 dark:text-gray-400 dark:border-gray-700'
                             }
                           >
-                            {customer.customer_type || 'Individual'}
+                            {customer.user_type || 'Guest'}
                           </Badge>
                         </TableCell>
                         <TableCell>

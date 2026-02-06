@@ -8,9 +8,10 @@ import { TraxChatChart } from './TraxChatChart';
 
 interface TraxAIChatMessageProps {
   message: TraxMessage;
+  customerProfilePhoto?: string | null;
 }
 
-export function TraxAIChatMessage({ message }: TraxAIChatMessageProps) {
+export function TraxAIChatMessage({ message, customerProfilePhoto }: TraxAIChatMessageProps) {
   const isUser = message.role === 'user';
   const formattedTime = format(message.createdAt, 'h:mm a');
 
@@ -72,9 +73,17 @@ export function TraxAIChatMessage({ message }: TraxAIChatMessageProps) {
 
       {/* Avatar for user */}
       {isUser && (
-        <div className="flex-shrink-0 h-7 w-7 rounded-full bg-primary flex items-center justify-center">
-          <User className="h-4 w-4 text-primary-foreground" />
-        </div>
+        customerProfilePhoto ? (
+          <img
+            src={customerProfilePhoto}
+            alt="You"
+            className="flex-shrink-0 h-7 w-7 rounded-full object-cover"
+          />
+        ) : (
+          <div className="flex-shrink-0 h-7 w-7 rounded-full bg-primary flex items-center justify-center">
+            <User className="h-4 w-4 text-primary-foreground" />
+          </div>
+        )
       )}
     </div>
   );
