@@ -9,7 +9,8 @@ import EnhancedTestimonials from '@/components/EnhancedTestimonials';
 import Footer from '@/components/Footer';
 import SEO from '@/components/SEO';
 import MobileActions from '@/components/MobileActions';
-import ScrollToTop from '@/components/ScrollToTop';
+import { TraxChatWidget } from '@/components/customer-portal/trax-chat';
+import { CustomerSocketProvider } from '@/contexts/CustomerSocketContext';
 import ContactCard from '@/components/ContactCard';
 import MultiStepBookingWidget from '@/components/MultiStepBookingWidget';
 import HeroCarousel from '@/components/HeroCarousel';
@@ -234,7 +235,9 @@ export default function Home() {
       <ContactCard />
       <Footer />
       <MobileActions />
-      <ScrollToTop />
+      <CustomerSocketProvider>
+        <TraxChatWidget />
+      </CustomerSocketProvider>
     </div>
   );
 }

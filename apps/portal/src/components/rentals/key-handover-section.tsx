@@ -52,6 +52,7 @@ export const KeyHandoverSection = ({ rentalId, rentalStatus, needsAction = false
 
   const [confirmHandover, setConfirmHandover] = useState<HandoverType | null>(null);
   const [confirmUndo, setConfirmUndo] = useState<HandoverType | null>(null);
+  const [mileageWarning, setMileageWarning] = useState<HandoverType | null>(null);
   const [givingNotes, setGivingNotes] = useState<string>("");
   const [receivingNotes, setReceivingNotes] = useState<string>("");
   const [givingMileage, setGivingMileage] = useState<string>("");
@@ -81,6 +82,15 @@ export const KeyHandoverSection = ({ rentalId, rentalStatus, needsAction = false
 
   const handleUpload = (type: HandoverType) => (file: File) => {
     uploadPhoto.mutate({ type, file });
+  };
+
+  const handleRequestHandover = (type: HandoverType) => {
+    const mileage = type === "giving" ? givingMileage : receivingMileage;
+    if (!mileage || !mileage.trim()) {
+      setMileageWarning(type);
+    } else {
+      setConfirmHandover(type);
+    }
   };
 
   const handleConfirmHandover = () => {
@@ -172,7 +182,8 @@ export const KeyHandoverSection = ({ rentalId, rentalStatus, needsAction = false
                 onChange={(e) => setGivingMileage(e.target.value)}
                 onBlur={() => {
                   const mileageValue = givingMileage ? parseInt(givingMileage, 10) : null;
-                  if (mileageValue !== givingHandover?.mileage) {
+                  const serverValue = givingHandover?.mileage ?? null;
+                  if (mileageValue !== serverValue) {
                     updateMileage.mutate({ type: "giving", mileage: mileageValue });
                   }
                 }}
@@ -211,7 +222,7 @@ export const KeyHandoverSection = ({ rentalId, rentalStatus, needsAction = false
             {/* Key Handed Toggle Button */}
             {!isClosed && (
               <Button
-                onClick={() => givingCompleted ? setConfirmUndo("giving") : setConfirmHandover("giving")}
+                onClick={() => givingCompleted ? setConfirmUndo("giving") : handleRequestHandover("giving")}
                 disabled={isMarkingHanded || isUnmarkingHanded}
                 variant={givingCompleted ? "outline" : "default"}
                 className="w-full"
@@ -280,7 +291,8 @@ export const KeyHandoverSection = ({ rentalId, rentalStatus, needsAction = false
                   onChange={(e) => setReceivingMileage(e.target.value)}
                   onBlur={() => {
                     const mileageValue = receivingMileage ? parseInt(receivingMileage, 10) : null;
-                    if (mileageValue !== receivingHandover?.mileage) {
+                    const serverValue = receivingHandover?.mileage ?? null;
+                    if (mileageValue !== serverValue) {
                       updateMileage.mutate({ type: "receiving", mileage: mileageValue });
                     }
                   }}
@@ -322,7 +334,7 @@ export const KeyHandoverSection = ({ rentalId, rentalStatus, needsAction = false
             {/* Key Received Toggle Button */}
             {givingCompleted && !isClosed && (
               <Button
-                onClick={() => receivingCompleted ? setConfirmUndo("receiving") : setConfirmHandover("receiving")}
+                onClick={() => receivingCompleted ? setConfirmUndo("receiving") : handleRequestHandover("receiving")}
                 disabled={isMarkingHanded || isUnmarkingHanded}
                 variant={receivingCompleted ? "outline" : "default"}
                 className="w-full"
@@ -377,6 +389,37 @@ export const KeyHandoverSection = ({ rentalId, rentalStatus, needsAction = false
               <AlertDialogCancel>Cancel</AlertDialogCancel>
               <AlertDialogAction onClick={handleConfirmHandover}>
                 Confirm
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+
+        {/* Missing Odometer Warning Dialog */}
+        <AlertDialog open={!!mileageWarning} onOpenChange={() => setMileageWarning(null)}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle className="flex items-center gap-2">
+                <AlertTriangle className="h-5 w-5 text-amber-500" />
+                No Odometer Reading
+              </AlertDialogTitle>
+              <AlertDialogDescription>
+                You haven&apos;t entered an odometer reading for the vehicle {mileageWarning === "giving" ? "collection" : "return"}.
+                Recording mileage helps track vehicle usage and resolve disputes.
+                <br /><br />
+                Are you sure you want to continue without adding the odometer reading?
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Go Back & Add Reading</AlertDialogCancel>
+              <AlertDialogAction
+                onClick={() => {
+                  const type = mileageWarning;
+                  setMileageWarning(null);
+                  if (type) setConfirmHandover(type);
+                }}
+                className="bg-amber-600 hover:bg-amber-700"
+              >
+                Continue Without Reading
               </AlertDialogAction>
             </AlertDialogFooter>
           </AlertDialogContent>

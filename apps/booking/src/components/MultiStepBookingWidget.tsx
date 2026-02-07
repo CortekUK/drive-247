@@ -282,6 +282,28 @@ const MultiStepBookingWidget = () => {
     }
   }, [tenant?.timezone, isAuthenticated, customerUser?.customer?.timezone]);
 
+  // Auto-populate fixed addresses when tenant loads
+  // This ensures form data is set even if LocationPicker's useEffect has timing issues
+  useEffect(() => {
+    if (!tenant) return;
+    const pickupFixedEnabled = tenant.pickup_fixed_enabled ?? tenant.fixed_address_enabled ?? false;
+    const returnFixedEnabled = tenant.return_fixed_enabled ?? tenant.fixed_address_enabled ?? false;
+
+    setFormData(prev => {
+      const updates: Partial<typeof prev> = {};
+      if (!prev.pickupLocation && pickupFixedEnabled && tenant.fixed_pickup_address) {
+        updates.pickupLocation = tenant.fixed_pickup_address;
+        updates.pickupDeliveryFee = 0;
+      }
+      if (!prev.dropoffLocation && returnFixedEnabled && tenant.fixed_return_address) {
+        updates.dropoffLocation = tenant.fixed_return_address;
+        updates.returnDeliveryFee = 0;
+      }
+      if (Object.keys(updates).length === 0) return prev;
+      return { ...prev, ...updates };
+    });
+  }, [tenant?.id, tenant?.fixed_pickup_address, tenant?.fixed_return_address]);
+
   useEffect(() => {
     loadData();
 
@@ -2455,17 +2477,33 @@ const MultiStepBookingWidget = () => {
       [key: string]: string;
     } = {};
 
+    // Auto-populate fixed addresses if the useEffect in LocationPicker hasn't fired yet
+    // This handles race conditions where the auto-set effect runs after validation
+    const pickupFixedEnabled = tenant?.pickup_fixed_enabled ?? tenant?.fixed_address_enabled ?? false;
+    const returnFixedEnabled = tenant?.return_fixed_enabled ?? tenant?.fixed_address_enabled ?? false;
+    let pickupLocation = formData.pickupLocation;
+    let dropoffLocation = formData.dropoffLocation;
+
+    if (!pickupLocation && pickupFixedEnabled && tenant?.fixed_pickup_address) {
+      pickupLocation = tenant.fixed_pickup_address;
+      setFormData(prev => ({ ...prev, pickupLocation: tenant.fixed_pickup_address!, pickupDeliveryFee: 0 }));
+    }
+    if (!dropoffLocation && returnFixedEnabled && tenant?.fixed_return_address) {
+      dropoffLocation = tenant.fixed_return_address;
+      setFormData(prev => ({ ...prev, dropoffLocation: tenant.fixed_return_address!, returnDeliveryFee: 0 }));
+    }
+
     // Security check: Detect potentially malicious input patterns
-    if (!isInputSafe(formData.pickupLocation) || !isInputSafe(formData.dropoffLocation)) {
+    if (!isInputSafe(pickupLocation) || !isInputSafe(dropoffLocation)) {
       toast.error("Invalid input detected. Please enter valid addresses.");
       return false;
     }
 
     // Validate pickup location
-    if (!formData.pickupLocation.trim()) {
+    if (!pickupLocation.trim()) {
       newErrors.pickupLocation = "Pickup location is required";
     } else {
-      const pickupText = formData.pickupLocation.trim();
+      const pickupText = pickupLocation.trim();
       // Check for meaningful location data (at least 5 characters and contains letters)
       if (pickupText.length < 5) {
         newErrors.pickupLocation = "Please enter a valid pickup address (minimum 5 characters)";
@@ -2483,10 +2521,10 @@ const MultiStepBookingWidget = () => {
     }
 
     // Validate drop-off location
-    if (!formData.dropoffLocation.trim()) {
+    if (!dropoffLocation.trim()) {
       newErrors.dropoffLocation = "Drop-off location is required";
     } else {
-      const dropoffText = formData.dropoffLocation.trim();
+      const dropoffText = dropoffLocation.trim();
       // Check for meaningful location data (at least 5 characters and contains letters)
       if (dropoffText.length < 5) {
         newErrors.dropoffLocation = "Please enter a valid drop-off address (minimum 5 characters)";
@@ -2668,10 +2706,16 @@ const MultiStepBookingWidget = () => {
 
   const handleStep1Continue = () => {
     if (validateStep1()) {
+      // Resolve pickup/return locations - use form data, falling back to fixed addresses
+      const pickupFixedEnabled = tenant?.pickup_fixed_enabled ?? tenant?.fixed_address_enabled ?? false;
+      const returnFixedEnabled = tenant?.return_fixed_enabled ?? tenant?.fixed_address_enabled ?? false;
+      const resolvedPickupLocation = formData.pickupLocation || (pickupFixedEnabled && tenant?.fixed_pickup_address) || "";
+      const resolvedDropoffLocation = formData.dropoffLocation || (returnFixedEnabled && tenant?.fixed_return_address) || "";
+
       // Store rental details in booking context (DOB collected in Step 4)
       const bookingContext = {
-        pickupLocation: formData.pickupLocation,
-        dropoffLocation: formData.dropoffLocation,
+        pickupLocation: resolvedPickupLocation,
+        dropoffLocation: resolvedDropoffLocation,
         pickupLocationId: formData.pickupLocationId,
         returnLocationId: formData.returnLocationId,
         pickupDeliveryFee: formData.pickupDeliveryFee,
@@ -3010,17 +3054,17 @@ const MultiStepBookingWidget = () => {
                   value={formData.pickupLocation}
                   locationId={formData.pickupLocationId}
                   onChange={(address, locId, lat, lon, deliveryFee) => {
-                    setFormData({
-                      ...formData,
+                    setFormData(prev => ({
+                      ...prev,
                       pickupLocation: address,
                       pickupLocationId: locId || "",
                       pickupDeliveryFee: deliveryFee ?? 0,
-                    });
-                    setLocationCoords({
-                      ...locationCoords,
+                    }));
+                    setLocationCoords(prev => ({
+                      ...prev,
                       pickupLat: lat || null,
                       pickupLon: lon || null
-                    });
+                    }));
                     validateField('pickupLocation', address);
                   }}
                   placeholder="Enter pickup address"
@@ -3112,17 +3156,17 @@ const MultiStepBookingWidget = () => {
                   value={formData.dropoffLocation}
                   locationId={formData.returnLocationId}
                   onChange={(address, locId, lat, lon, deliveryFee) => {
-                    setFormData({
-                      ...formData,
+                    setFormData(prev => ({
+                      ...prev,
                       dropoffLocation: address,
                       returnLocationId: locId || "",
                       returnDeliveryFee: deliveryFee ?? 0,
-                    });
-                    setLocationCoords({
-                      ...locationCoords,
+                    }));
+                    setLocationCoords(prev => ({
+                      ...prev,
                       dropoffLat: lat || null,
                       dropoffLon: lon || null
-                    });
+                    }));
                     validateField('dropoffLocation', address);
                   }}
                   placeholder="Enter return address"
@@ -4006,7 +4050,7 @@ const MultiStepBookingWidget = () => {
                   </p>
                 </div>}
 
-                <Button onClick={handleStep2Continue} disabled={!formData.vehicleId} className="w-full h-11 bg-primary hover:bg-primary/90 text-primary-foreground font-semibold shadow-md hover:shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed" size="lg">
+                <Button onClick={handleStep2Continue} disabled={!selectedVehicle} className="w-full h-11 bg-primary hover:bg-primary/90 text-primary-foreground font-semibold shadow-md hover:shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed" size="lg">
                   Review & Pay <ChevronRight className="ml-2 w-5 h-5" />
                 </Button>
               </Card>
@@ -4019,7 +4063,7 @@ const MultiStepBookingWidget = () => {
             <Button onClick={() => setCurrentStep(1)} variant="outline" className="w-full sm:flex-1" size="lg">
               <ChevronLeft className="mr-2 w-5 h-5" /> Back
             </Button>
-            <Button onClick={handleStep2Continue} disabled={!formData.vehicleId} className="w-full sm:flex-1 bg-primary hover:bg-primary/90 text-primary-foreground font-semibold shadow-md hover:shadow-lg transition-all disabled:opacity-50" size="lg">
+            <Button onClick={handleStep2Continue} disabled={!selectedVehicle} className="w-full sm:flex-1 bg-primary hover:bg-primary/90 text-primary-foreground font-semibold shadow-md hover:shadow-lg transition-all disabled:opacity-50" size="lg">
               Review & Pay <ChevronRight className="ml-2 w-5 h-5" />
             </Button>
           </div>
