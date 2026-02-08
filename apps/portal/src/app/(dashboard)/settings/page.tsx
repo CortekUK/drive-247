@@ -35,6 +35,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { OGImageUpload } from '@/components/settings/og-image-upload';
 import { StripeConnectSettings } from '@/components/settings/stripe-connect-settings';
 import { LocationSettings } from '@/components/settings/location-settings';
+import { ExtrasSettings } from '@/components/settings/extras-settings';
 
 const Settings = () => {
   const queryClient = useQueryClient();
@@ -746,7 +747,7 @@ const Settings = () => {
 
       {/* Settings Tabs */}
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-        <TabsList className="grid w-full grid-cols-10">
+        <TabsList className="grid w-full grid-cols-11">
           <TabsTrigger value="branding" className="flex items-center gap-2">
             <Palette className="h-4 w-4" />
             <span className="hidden sm:inline">Branding</span>
@@ -770,6 +771,9 @@ const Settings = () => {
           <TabsTrigger value="rental" className="flex items-center gap-2">
             <Car className="h-4 w-4" />
             <span className="hidden sm:inline">Bookings</span>
+          </TabsTrigger>
+          <TabsTrigger value="extras">
+            <span>Extras</span>
           </TabsTrigger>
           <TabsTrigger value="agreement" className="flex items-center gap-2">
             <FileText className="h-4 w-4" />
@@ -2640,6 +2644,11 @@ const Settings = () => {
               </AlertDialogFooter>
             </AlertDialogContent>
           </AlertDialog>
+        </TabsContent>
+
+        {/* Extras Tab */}
+        <TabsContent value="extras" className="space-y-6">
+          <ExtrasSettings />
         </TabsContent>
 
         {/* Agreement Tab */}

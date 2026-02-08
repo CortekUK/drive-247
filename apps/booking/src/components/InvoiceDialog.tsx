@@ -46,6 +46,8 @@ interface InvoiceDialogProps {
     type: "percentage" | "fixed_amount";
     value: number;
   } | null;
+  // Selected extras for invoice line items
+  selectedExtras?: { name: string; quantity: number; price: number }[];
 }
 
 const formatCurrency = (amount: number) => {
@@ -56,7 +58,7 @@ const formatCurrency = (amount: number) => {
 };
 
 // Separate printable component
-const PrintableInvoice = ({ invoice, customer, vehicle, rental, promoDetails }: Omit<InvoiceDialogProps, "open" | "onOpenChange">) => {
+const PrintableInvoice = ({ invoice, customer, vehicle, rental, promoDetails, selectedExtras }: Omit<InvoiceDialogProps, "open" | "onOpenChange">) => {
   const vehicleName = vehicle.make && vehicle.model ? `${vehicle.make} ${vehicle.model}` : vehicle.reg;
   // If there's a discount, subtotal is the discounted amount, so we need to calculate original
   const discountAmount = invoice.discount_amount || 0;
@@ -163,6 +165,15 @@ const PrintableInvoice = ({ invoice, customer, vehicle, rental, promoDetails }: 
                 <td className="p-3 text-sm text-right font-medium">{formatCurrency(rentalFee)}</td>
               </tr>
             )}
+            {/* Extras */}
+            {selectedExtras && selectedExtras.map((extra, i) => (
+              <tr key={i} className="border-b border-gray-300">
+                <td className="p-3 text-sm">
+                  {extra.name}{extra.quantity > 1 ? ` x${extra.quantity}` : ''}
+                </td>
+                <td className="p-3 text-sm text-right">{formatCurrency(extra.price * extra.quantity)}</td>
+              </tr>
+            ))}
             {invoice.tax_amount > 0 && (
               <tr className="border-b border-gray-300">
                 <td className="p-3 text-sm">Tax</td>
@@ -219,6 +230,7 @@ export const InvoiceDialog = ({
   isEnquiry = false,
   payableAmount,
   promoDetails,
+  selectedExtras,
 }: InvoiceDialogProps) => {
   const printRef = useRef<HTMLDivElement>(null);
   const vehicleName = vehicle.make && vehicle.model ? `${vehicle.make} ${vehicle.model}` : vehicle.reg;
@@ -257,6 +269,7 @@ export const InvoiceDialog = ({
             vehicle={vehicle}
             rental={rental}
             promoDetails={promoDetails}
+            selectedExtras={selectedExtras}
           />
         </div>
       </div>
@@ -388,6 +401,15 @@ export const InvoiceDialog = ({
                       <td className="p-3 text-sm text-right font-medium">{formatCurrency(rentalFee)}</td>
                     </tr>
                   )}
+                  {/* Extras */}
+                  {selectedExtras && selectedExtras.map((extra, i) => (
+                    <tr key={i} className="border-b">
+                      <td className="p-3 text-sm">
+                        {extra.name}{extra.quantity > 1 ? ` x${extra.quantity}` : ''}
+                      </td>
+                      <td className="p-3 text-sm text-right">{formatCurrency(extra.price * extra.quantity)}</td>
+                    </tr>
+                  ))}
                   {/* Hide tax and service fee for enquiry tenants */}
                   {!isEnquiry && invoice.tax_amount > 0 && (
                     <tr className="border-b">

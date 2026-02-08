@@ -15,7 +15,7 @@ import { Badge } from "@/components/ui/badge";
 import { supabase } from "@/integrations/supabase/client";
 import { useTenant } from "@/contexts/TenantContext";
 import { toast } from "sonner";
-import { ChevronRight, ChevronLeft, Check, Baby, Coffee, MapPin, UserCheck, Car, Crown, TrendingUp, Users as GroupIcon, Calculator, Shield, CheckCircle, CalendarIcon, Clock, Search, Grid3x3, List, SlidersHorizontal, X, AlertCircle, FileCheck, RefreshCw, Upload, Gauge, User, Loader2, Globe } from "lucide-react";
+import { ChevronRight, ChevronLeft, Check, Baby, Coffee, MapPin, UserCheck, Car, Crown, TrendingUp, Users as GroupIcon, Calculator, Shield, CheckCircle, CalendarIcon, Clock, Search, Grid3x3, List, SlidersHorizontal, X, AlertCircle, FileCheck, RefreshCw, Upload, Gauge, User, Loader2, Globe, Plus, Minus, ImageIcon, Package } from "lucide-react";
 import { format, differenceInHours } from "date-fns";
 import { cn } from "@/lib/utils";
 import BookingConfirmation from "./BookingConfirmation";
@@ -39,6 +39,15 @@ import { useCustomerVerification } from "@/hooks/use-customer-verification";
 import { AuthPromptDialog } from "@/components/booking/AuthPromptDialog";
 import { getTimezonesByRegion, findTimezone, getDetectedTimezone } from "@/lib/timezones";
 import { useCustomerDocuments, getDocumentStatus } from "@/hooks/use-customer-documents";
+import { useRentalExtras, type RentalExtra } from "@/hooks/use-rental-extras";
+import {
+  Carousel,
+  CarouselContent,
+  CarouselItem,
+  CarouselPrevious,
+  CarouselNext,
+} from "@/components/ui/carousel";
+import Autoplay from "embla-carousel-autoplay";
 interface VehiclePhoto {
   photo_url: string;
 }
@@ -63,12 +72,6 @@ interface Vehicle {
   vehicle_photos?: VehiclePhoto[];
   description?: string | null;
   allowed_mileage?: number | null;
-}
-interface PricingExtra {
-  id: string;
-  extra_name: string;
-  price: number;
-  description: string | null;
 }
 interface BlockedDate {
   id: string;
@@ -112,8 +115,8 @@ const MultiStepBookingWidget = () => {
 
   const [currentStep, setCurrentStep] = useState(1);
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
-  const [extras, setExtras] = useState<PricingExtra[]>([]);
-  const [selectedExtras, setSelectedExtras] = useState<string[]>([]);
+  const { extras: rentalExtras } = useRentalExtras();
+  const [selectedExtras, setSelectedExtras] = useState<Record<string, number>>({});
   const [loading, setLoading] = useState(false);
   const [showConfirmation, setShowConfirmation] = useState(false);
   const [bookingReference, setBookingReference] = useState("");
@@ -176,6 +179,32 @@ const MultiStepBookingWidget = () => {
     verificationSessionId: "",
     customerTimezone: "", // Will be set from tenant timezone or detected browser timezone
   });
+
+  // Auto-populate fixed addresses from tenant config when tenant loads.
+  // This ensures formData has the correct value regardless of LocationPicker's internal timing.
+  useEffect(() => {
+    if (!tenant) return;
+
+    const pickupFixedEnabled = tenant.pickup_fixed_enabled ?? tenant.fixed_address_enabled ?? false;
+    const returnFixedEnabled = tenant.return_fixed_enabled ?? tenant.fixed_address_enabled ?? false;
+
+    setFormData(prev => {
+      const updates: Record<string, unknown> = {};
+
+      if (pickupFixedEnabled && tenant.fixed_pickup_address && !prev.pickupLocation) {
+        updates.pickupLocation = tenant.fixed_pickup_address;
+        updates.pickupDeliveryFee = 0;
+      }
+      if (returnFixedEnabled && tenant.fixed_return_address && !prev.dropoffLocation) {
+        updates.dropoffLocation = tenant.fixed_return_address;
+        updates.returnDeliveryFee = 0;
+      }
+
+      return Object.keys(updates).length > 0 ? { ...prev, ...updates } : prev;
+    });
+  }, [tenant?.id, tenant?.fixed_pickup_address, tenant?.fixed_return_address,
+      tenant?.pickup_fixed_enabled, tenant?.return_fixed_enabled,
+      tenant?.fixed_address_enabled]);
 
   // Calculate working hours for the selected pickup date (per-day hours)
   const pickupDateWorkingHours = useMemo(() => {
@@ -682,7 +711,7 @@ const MultiStepBookingWidget = () => {
 
   // Persist selected extras
   useEffect(() => {
-    if (selectedExtras.length > 0) {
+    if (Object.keys(selectedExtras).length > 0) {
       sessionStorage.setItem('booking_selected_extras', JSON.stringify(selectedExtras));
     }
   }, [selectedExtras]);
@@ -1511,9 +1540,9 @@ const MultiStepBookingWidget = () => {
         rentalPrice = (rentalDays / 30) * monthlyRent;
       }
     }
-    const extrasTotal = selectedExtras.reduce((sum, extraId) => {
-      const extra = extras.find(e => e.id === extraId);
-      return sum + (extra?.price || 0);
+    const extrasTotal = Object.entries(selectedExtras).reduce((sum, [extraId, qty]) => {
+      const extra = rentalExtras.find(e => e.id === extraId);
+      return sum + (extra ? extra.price * qty : 0);
     }, 0);
 
     // Calculate delivery fees
@@ -1843,7 +1872,7 @@ const MultiStepBookingWidget = () => {
     // Clear promo localStorage after successful booking
     localStorage.removeItem('appliedPromoCode');
     localStorage.removeItem('appliedPromoDetails');
-    setSelectedExtras([]);
+    setSelectedExtras({});
     setCalculatedDistance(null);
     setDistanceOverride(false);
 
@@ -2083,12 +2112,20 @@ const MultiStepBookingWidget = () => {
 
     // Add delivery fees
     const deliveryFees = (formData.pickupDeliveryFee || 0) + (formData.returnDeliveryFee || 0);
-    const total = vehicleTotal + deliveryFees;
+
+    // Add extras total
+    const extrasTotal = Object.entries(selectedExtras).reduce((sum, [extraId, qty]) => {
+      const extra = rentalExtras.find(e => e.id === extraId);
+      return sum + (extra ? extra.price * qty : 0);
+    }, 0);
+
+    const total = vehicleTotal + deliveryFees + extrasTotal;
 
     return {
       total,
       vehicleTotal,
       deliveryFees,
+      extrasTotal,
       days
     };
   };
@@ -2449,18 +2486,38 @@ const MultiStepBookingWidget = () => {
       [key: string]: string;
     } = {};
 
+    // Auto-fill fixed addresses if form state hasn't caught up yet
+    const pickupFixedEnabled = tenant?.pickup_fixed_enabled ?? tenant?.fixed_address_enabled ?? false;
+    const returnFixedEnabled = tenant?.return_fixed_enabled ?? tenant?.fixed_address_enabled ?? false;
+    let pickupVal = formData.pickupLocation;
+    let dropoffVal = formData.dropoffLocation;
+
+    if (!pickupVal && pickupFixedEnabled && tenant?.fixed_pickup_address) {
+      pickupVal = tenant.fixed_pickup_address;
+      setFormData(prev => ({ ...prev, pickupLocation: pickupVal, pickupDeliveryFee: 0 }));
+    }
+    if (!dropoffVal && returnFixedEnabled && tenant?.fixed_return_address) {
+      dropoffVal = tenant.fixed_return_address;
+      setFormData(prev => ({ ...prev, dropoffLocation: dropoffVal, returnDeliveryFee: 0 }));
+    }
+
     // Security check: Detect potentially malicious input patterns
-    if (!isInputSafe(formData.pickupLocation) || !isInputSafe(formData.dropoffLocation)) {
+    if (!isInputSafe(pickupVal) || !isInputSafe(dropoffVal)) {
       toast.error("Invalid input detected. Please enter valid addresses.");
       return false;
     }
 
+    // Skip strict format checks for system-provided addresses (fixed location or predefined location)
+    const isPickupFromSystem = !!formData.pickupLocationId ||
+      (tenant?.fixed_pickup_address && pickupVal.trim() === tenant.fixed_pickup_address.trim());
+    const isDropoffFromSystem = !!formData.returnLocationId ||
+      (tenant?.fixed_return_address && dropoffVal.trim() === tenant.fixed_return_address.trim());
+
     // Validate pickup location
-    if (!formData.pickupLocation.trim()) {
+    if (!pickupVal.trim()) {
       newErrors.pickupLocation = "Pickup location is required";
-    } else {
-      const pickupText = formData.pickupLocation.trim();
-      // Check for meaningful location data (at least 5 characters and contains letters)
+    } else if (!isPickupFromSystem) {
+      const pickupText = pickupVal.trim();
       if (pickupText.length < 5) {
         newErrors.pickupLocation = "Please enter a valid pickup address (minimum 5 characters)";
       } else if (!/[a-zA-Z]{3,}/.test(pickupText)) {
@@ -2468,20 +2525,17 @@ const MultiStepBookingWidget = () => {
       } else if (/^[@#$%^&*()_+=\-\[\]{};:'",.<>?\/\\|`~!]{3,}/.test(pickupText)) {
         newErrors.pickupLocation = "Please enter a valid pickup address, not symbols";
       } else if (/^[a-zA-Z]+$/.test(pickupText) && pickupText.length < 15) {
-        // If it's only letters and short, it's likely gibberish like "mmmmmmm"
         newErrors.pickupLocation = "Please enter a complete address (e.g., street name, city, postcode)";
       } else if (!/[\d]/.test(pickupText) && !/[,]/.test(pickupText) && pickupText.split(' ').length < 2) {
-        // Valid addresses usually have numbers or commas or multiple words
         newErrors.pickupLocation = "Please enter a complete address with street name or postcode";
       }
     }
 
     // Validate drop-off location
-    if (!formData.dropoffLocation.trim()) {
+    if (!dropoffVal.trim()) {
       newErrors.dropoffLocation = "Drop-off location is required";
-    } else {
-      const dropoffText = formData.dropoffLocation.trim();
-      // Check for meaningful location data (at least 5 characters and contains letters)
+    } else if (!isDropoffFromSystem) {
+      const dropoffText = dropoffVal.trim();
       if (dropoffText.length < 5) {
         newErrors.dropoffLocation = "Please enter a valid drop-off address (minimum 5 characters)";
       } else if (!/[a-zA-Z]{3,}/.test(dropoffText)) {
@@ -2489,10 +2543,8 @@ const MultiStepBookingWidget = () => {
       } else if (/^[@#$%^&*()_+=\-\[\]{};:'",.<>?\/\\|`~!]{3,}/.test(dropoffText)) {
         newErrors.dropoffLocation = "Please enter a valid drop-off address, not symbols";
       } else if (/^[a-zA-Z]+$/.test(dropoffText) && dropoffText.length < 15) {
-        // If it's only letters and short, it's likely gibberish like "mmmmmmm"
         newErrors.dropoffLocation = "Please enter a complete address (e.g., street name, city, postcode)";
       } else if (!/[\d]/.test(dropoffText) && !/[,]/.test(dropoffText) && dropoffText.split(' ').length < 2) {
-        // Valid addresses usually have numbers or commas or multiple words
         newErrors.dropoffLocation = "Please enter a complete address with street name or postcode";
       }
     }
@@ -2542,11 +2594,17 @@ const MultiStepBookingWidget = () => {
   const validateField = (fieldName: string, value: string) => {
     const newErrors: { [key: string]: string } = {};
 
+    // Skip strict format checks for system-provided addresses (fixed location or predefined location)
+    const isPickupFromSystem = !!formData.pickupLocationId ||
+      (tenant?.fixed_pickup_address && value.trim() === tenant.fixed_pickup_address.trim());
+    const isDropoffFromSystem = !!formData.returnLocationId ||
+      (tenant?.fixed_return_address && value.trim() === tenant.fixed_return_address.trim());
+
     switch (fieldName) {
       case 'pickupLocation':
         if (!value.trim()) {
           newErrors.pickupLocation = "Pickup location is required";
-        } else {
+        } else if (!isPickupFromSystem) {
           const pickupText = value.trim();
           if (pickupText.length < 5) {
             newErrors.pickupLocation = "Please enter a valid pickup address (minimum 5 characters)";
@@ -2565,7 +2623,7 @@ const MultiStepBookingWidget = () => {
       case 'dropoffLocation':
         if (!value.trim()) {
           newErrors.dropoffLocation = "Drop-off location is required";
-        } else {
+        } else if (!isDropoffFromSystem) {
           const dropoffText = value.trim();
           if (dropoffText.length < 5) {
             newErrors.dropoffLocation = "Please enter a valid drop-off address (minimum 5 characters)";
@@ -3004,17 +3062,17 @@ const MultiStepBookingWidget = () => {
                   value={formData.pickupLocation}
                   locationId={formData.pickupLocationId}
                   onChange={(address, locId, lat, lon, deliveryFee) => {
-                    setFormData({
-                      ...formData,
+                    setFormData(prev => ({
+                      ...prev,
                       pickupLocation: address,
                       pickupLocationId: locId || "",
                       pickupDeliveryFee: deliveryFee ?? 0,
-                    });
-                    setLocationCoords({
-                      ...locationCoords,
+                    }));
+                    setLocationCoords(prev => ({
+                      ...prev,
                       pickupLat: lat || null,
                       pickupLon: lon || null
-                    });
+                    }));
                     validateField('pickupLocation', address);
                   }}
                   placeholder="Enter pickup address"
@@ -3106,17 +3164,17 @@ const MultiStepBookingWidget = () => {
                   value={formData.dropoffLocation}
                   locationId={formData.returnLocationId}
                   onChange={(address, locId, lat, lon, deliveryFee) => {
-                    setFormData({
-                      ...formData,
+                    setFormData(prev => ({
+                      ...prev,
                       dropoffLocation: address,
                       returnLocationId: locId || "",
                       returnDeliveryFee: deliveryFee ?? 0,
-                    });
-                    setLocationCoords({
-                      ...locationCoords,
+                    }));
+                    setLocationCoords(prev => ({
+                      ...prev,
                       dropoffLat: lat || null,
                       dropoffLon: lon || null
-                    });
+                    }));
                     validateField('dropoffLocation', address);
                   }}
                   placeholder="Enter return address"
@@ -3966,8 +4024,8 @@ const MultiStepBookingWidget = () => {
                     </div>
                   </div>
 
-                  {/* Delivery fees breakdown */}
-                  {estimatedBooking.deliveryFees > 0 && (
+                  {/* Price breakdown when there are extras or delivery fees */}
+                  {(estimatedBooking.deliveryFees > 0 || (estimatedBooking.extrasTotal ?? 0) > 0) && (
                     <div className="text-xs space-y-1 pt-2 border-t border-border/30">
                       <div className="flex justify-between text-muted-foreground">
                         <span>Vehicle rental</span>
@@ -3985,6 +4043,16 @@ const MultiStepBookingWidget = () => {
                           <span>+${formData.returnDeliveryFee.toFixed(0)}</span>
                         </div>
                       )}
+                      {Object.entries(selectedExtras).map(([extraId, qty]) => {
+                        const extra = rentalExtras.find(e => e.id === extraId);
+                        if (!extra) return null;
+                        return (
+                          <div key={extraId} className="flex justify-between text-muted-foreground">
+                            <span>{extra.name}{qty > 1 ? ` x${qty}` : ''}</span>
+                            <span>+${(extra.price * qty).toFixed(0)}</span>
+                          </div>
+                        );
+                      })}
                     </div>
                   )}
 
@@ -5156,51 +5224,203 @@ const MultiStepBookingWidget = () => {
         </div>}
 
         {/* Step 5: Review & Payment */}
-        {currentStep === 5 && <div className="animate-fade-in space-y-6">
-          {/* Promo Code Section */}
-          <div className="bg-card border border-border rounded-lg p-4 sm:p-6">
-            <div className="space-y-3">
-              <Label htmlFor="promoCode" className="font-medium text-base">Promo Code (Optional)</Label>
-              <div className="flex gap-2">
-                <Input
-                  id="promoCode"
-                  placeholder="Enter code"
-                  value={formData.promoCode}
-                  onChange={(e) => {
-                    setFormData({ ...formData, promoCode: e.target.value });
-                    setPromoError(null);
-                    if (!e.target.value) {
-                      setPromoDetails(null);
-                      localStorage.removeItem('appliedPromoCode');
-                      localStorage.removeItem('appliedPromoDetails');
-                    }
-                  }}
-                  className={cn("h-12", promoError ? "border-destructive" : promoDetails ? "border-green-500" : "")}
-                />
-                <Button
-                  type="button"
-                  variant="outline"
-                  className="h-12 px-6"
-                  onClick={() => validatePromoCode(formData.promoCode)}
-                  disabled={loading || !formData.promoCode}
-                >
-                  Apply
-                </Button>
+        {currentStep === 5 && <div className="animate-fade-in space-y-8">
+
+          {/* ── Section 1: Optional Extras ── */}
+          <div>
+            <div className="flex items-center gap-3 mb-4">
+              <div className="flex items-center justify-center w-8 h-8 rounded-full bg-primary text-primary-foreground text-sm font-bold">1</div>
+              <h3 className="text-xl font-display font-semibold">Optional Extras</h3>
+            </div>
+            {rentalExtras.length > 0 ? (
+              <div className="space-y-2">
+                {rentalExtras.map(extra => {
+                  const isSelected = !!selectedExtras[extra.id];
+                  const isToggle = extra.max_quantity === null;
+                  const qty = selectedExtras[extra.id] || 0;
+
+                  return (
+                    <div
+                      key={extra.id}
+                      className={cn(
+                        "flex items-center gap-3 p-3 rounded-lg border transition-all",
+                        isSelected
+                          ? "border-primary bg-primary/5"
+                          : "border-border hover:border-primary/40",
+                        isToggle && "cursor-pointer"
+                      )}
+                      onClick={() => {
+                        if (isToggle) {
+                          setSelectedExtras(prev => {
+                            const next = { ...prev };
+                            if (next[extra.id]) {
+                              delete next[extra.id];
+                            } else {
+                              next[extra.id] = 1;
+                            }
+                            return next;
+                          });
+                        }
+                      }}
+                    >
+                      {/* Thumbnail */}
+                      <div className="h-14 w-14 rounded-md overflow-hidden flex-shrink-0 bg-muted/50">
+                        {extra.image_urls.length > 1 ? (
+                          <Carousel className="w-full h-full" opts={{ loop: true }} plugins={[Autoplay({ delay: 3000, stopOnInteraction: false })]}>
+                            <CarouselContent className="h-14">
+                              {extra.image_urls.map((url, i) => (
+                                <CarouselItem key={i} className="h-14 p-0">
+                                  <img
+                                    src={url}
+                                    alt={`${extra.name} ${i + 1}`}
+                                    className="h-14 w-14 object-cover"
+                                  />
+                                </CarouselItem>
+                              ))}
+                            </CarouselContent>
+                          </Carousel>
+                        ) : extra.image_urls.length === 1 ? (
+                          <img
+                            src={extra.image_urls[0]}
+                            alt={extra.name}
+                            className="h-full w-full object-cover"
+                          />
+                        ) : (
+                          <div className="h-full w-full flex items-center justify-center">
+                            <Package className="h-5 w-5 text-muted-foreground/40" />
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Name & Description */}
+                      <div className="flex-1 min-w-0">
+                        <h4 className="text-sm font-medium leading-tight">{extra.name}</h4>
+                        {extra.description && (
+                          <p className="text-xs text-muted-foreground mt-0.5 line-clamp-1">
+                            {extra.description}
+                          </p>
+                        )}
+                      </div>
+
+                      {/* Price */}
+                      <span className="text-sm font-semibold text-primary whitespace-nowrap">
+                        ${extra.price.toFixed(2)}
+                      </span>
+
+                      {/* Controls */}
+                      {isToggle ? (
+                        <div className="flex-shrink-0 w-7 h-7 rounded-full border flex items-center justify-center transition-colors"
+                          style={isSelected ? { backgroundColor: 'hsl(var(--primary))', borderColor: 'hsl(var(--primary))' } : {}}>
+                          {isSelected && <Check className="h-3.5 w-3.5 text-primary-foreground" />}
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-1.5 flex-shrink-0" onClick={(e) => e.stopPropagation()}>
+                          <Button
+                            variant="outline"
+                            size="icon"
+                            className="h-7 w-7"
+                            onClick={() => {
+                              setSelectedExtras(prev => {
+                                const current = prev[extra.id] || 0;
+                                const next = current - 1;
+                                if (next <= 0) {
+                                  const updated = { ...prev };
+                                  delete updated[extra.id];
+                                  return updated;
+                                }
+                                return { ...prev, [extra.id]: next };
+                              });
+                            }}
+                            disabled={qty === 0}
+                          >
+                            <Minus className="h-3 w-3" />
+                          </Button>
+                          <span className="w-6 text-center text-sm font-medium">{qty}</span>
+                          <Button
+                            variant="outline"
+                            size="icon"
+                            className="h-7 w-7"
+                            onClick={() => {
+                              setSelectedExtras(prev => {
+                                const current = prev[extra.id] || 0;
+                                const max = extra.remaining_stock ?? extra.max_quantity ?? 99;
+                                return { ...prev, [extra.id]: Math.min(current + 1, max) };
+                              });
+                            }}
+                            disabled={qty >= (extra.remaining_stock ?? extra.max_quantity ?? 99)}
+                          >
+                            <Plus className="h-3 w-3" />
+                          </Button>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
-              {promoError && <p className="text-sm text-destructive">{promoError}</p>}
-              {promoDetails && (
-                <p className="text-sm text-green-600 font-medium flex items-center gap-1">
-                  <Check className="w-4 h-4" />
-                  Code applied: {promoDetails.type === 'percentage' ? `${promoDetails.value}% off` : `$${promoDetails.value} off`}
-                </p>
-              )}
+            ) : (
+              <p className="text-sm text-muted-foreground">No extras available for this rental.</p>
+            )}
+          </div>
+
+          {/* ── Section 2: Promo Code ── */}
+          <div>
+            <div className="flex items-center gap-3 mb-4">
+              <div className="flex items-center justify-center w-8 h-8 rounded-full bg-primary text-primary-foreground text-sm font-bold">2</div>
+              <h3 className="text-xl font-display font-semibold">Promo Code</h3>
+            </div>
+            <div className="bg-card border border-border rounded-lg p-4 sm:p-6">
+              <div className="space-y-3">
+                <Label htmlFor="promoCode" className="font-medium text-base">Have a promo code?</Label>
+                <div className="flex gap-2">
+                  <Input
+                    id="promoCode"
+                    placeholder="Enter code"
+                    value={formData.promoCode}
+                    onChange={(e) => {
+                      setFormData({ ...formData, promoCode: e.target.value });
+                      setPromoError(null);
+                      if (!e.target.value) {
+                        setPromoDetails(null);
+                        localStorage.removeItem('appliedPromoCode');
+                        localStorage.removeItem('appliedPromoDetails');
+                      }
+                    }}
+                    className={cn("h-12", promoError ? "border-destructive" : promoDetails ? "border-green-500" : "")}
+                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="h-12 px-6"
+                    onClick={() => validatePromoCode(formData.promoCode)}
+                    disabled={loading || !formData.promoCode}
+                  >
+                    Apply
+                  </Button>
+                </div>
+                {promoError && <p className="text-sm text-destructive">{promoError}</p>}
+                {promoDetails && (
+                  <p className="text-sm text-green-600 font-medium flex items-center gap-1">
+                    <Check className="w-4 h-4" />
+                    Code applied: {promoDetails.type === 'percentage' ? `${promoDetails.value}% off` : `$${promoDetails.value} off`}
+                  </p>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* ── Section 3: Review & Confirm ── */}
+          <div>
+            <div className="flex items-center gap-3 mb-4">
+              <div className="flex items-center justify-center w-8 h-8 rounded-full bg-primary text-primary-foreground text-sm font-bold">3</div>
+              <h3 className="text-xl font-display font-semibold">Review & Confirm</h3>
             </div>
           </div>
 
           <BookingCheckoutStep
             formData={formData}
             selectedVehicle={selectedVehicle}
-            extras={extras}
+            extras={rentalExtras}
+            selectedExtras={selectedExtras}
             rentalDuration={calculateRentalDuration() || {
               days: 1,
               formatted: '1 day'

@@ -321,4 +321,37 @@ All colors MUST be HSL.
     background: hsl(var(--muted-foreground) / 0.7);
     background-clip: padding-box;
   }
+
+  /* Trax AI branding animations */
+  @keyframes trax-glow {
+    0%, 100% {
+      filter: drop-shadow(0 0 3px hsl(var(--accent) / 0.7))
+              drop-shadow(0 0 8px hsl(var(--accent) / 0.4));
+    }
+    50% {
+      filter: drop-shadow(0 0 6px hsl(var(--accent) / 1))
+              drop-shadow(0 0 14px hsl(var(--accent) / 0.6))
+              drop-shadow(0 0 24px hsl(var(--accent) / 0.25));
+    }
+  }
+
+  @keyframes trax-ring {
+    0%, 100% {
+      box-shadow: 0 0 6px -1px hsl(var(--accent) / 0.35),
+                  inset 0 0 4px -1px hsl(var(--accent) / 0.15);
+    }
+    50% {
+      box-shadow: 0 0 12px -1px hsl(var(--accent) / 0.5),
+                  0 0 22px -4px hsl(var(--accent) / 0.25),
+                  inset 0 0 8px -1px hsl(var(--accent) / 0.2);
+    }
+  }
+
+  .trax-icon {
+    animation: trax-glow 2.5s ease-in-out infinite;
+  }
+
+  .trax-ring {
+    animation: trax-ring 2.5s ease-in-out infinite;
+  }
 }

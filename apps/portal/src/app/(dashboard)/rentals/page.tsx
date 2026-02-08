@@ -24,10 +24,13 @@ import {
   Plus,
   Download,
   CalendarPlus,
+  List,
+  CalendarDays,
 } from "lucide-react";
 import { useEnhancedRentals, RentalFilters, EnhancedRental } from "@/hooks/use-enhanced-rentals";
 import { RentalsFilters } from "@/components/rentals/rentals-filters";
 import { ExtensionRequestDialog } from "@/components/rentals/ExtensionRequestDialog";
+import { CalendarView } from "@/components/rentals/calendar/calendar-view";
 import { formatDuration, formatRentalDuration } from "@/lib/rental-utils";
 import {
   Pagination,
@@ -43,6 +46,8 @@ const RentalsList = () => {
   const searchParams = useSearchParams();
   const [showExtensionDialog, setShowExtensionDialog] = useState(false);
   const [selectedRental, setSelectedRental] = useState<EnhancedRental | null>(null);
+
+  const currentView = searchParams.get("view") || "list";
 
   // Parse filters from URL
   const filters: RentalFilters = useMemo(
@@ -89,7 +94,19 @@ const RentalsList = () => {
   };
 
   const handleClearFilters = () => {
-    router.push("?");
+    const params = new URLSearchParams();
+    if (currentView !== "list") params.set("view", currentView);
+    router.push(params.toString() ? `?${params.toString()}` : "?");
+  };
+
+  const handleViewChange = (view: string) => {
+    const params = new URLSearchParams(searchParams.toString());
+    if (view === "list") {
+      params.delete("view");
+    } else {
+      params.set("view", view);
+    }
+    router.push(`?${params.toString()}`);
   };
 
   const handlePageChange = (page: number) => {
@@ -158,7 +175,7 @@ const RentalsList = () => {
   };
 
   return (
-    <div className="container mx-auto p-4 md:p-6 space-y-6">
+    <div className={currentView === "calendar" ? "p-4 md:p-6 space-y-6" : "container mx-auto p-4 md:p-6 space-y-6"}>
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
@@ -167,7 +184,26 @@ const RentalsList = () => {
             Manage rental agreements and contracts
           </p>
         </div>
-        <div className="flex gap-2 flex-wrap">
+        <div className="flex gap-2 flex-wrap items-center">
+          {/* View Toggle */}
+          <div className="flex rounded-md border overflow-hidden">
+            <Button
+              variant={currentView === "list" ? "default" : "ghost"}
+              size="sm"
+              className="rounded-none h-8 px-2.5"
+              onClick={() => handleViewChange("list")}
+            >
+              <List className="h-4 w-4" />
+            </Button>
+            <Button
+              variant={currentView === "calendar" ? "default" : "ghost"}
+              size="sm"
+              className="rounded-none h-8 px-2.5 border-l"
+              onClick={() => handleViewChange("calendar")}
+            >
+              <CalendarDays className="h-4 w-4" />
+            </Button>
+          </div>
           <Button
             variant="outline"
             onClick={handleExportCSV}
@@ -189,8 +225,8 @@ const RentalsList = () => {
         </div>
       </div>
 
-      {/* Quick Stats */}
-      {stats && (
+      {/* Quick Stats — list view only */}
+      {currentView !== "calendar" && stats && (
         <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
           <Card className="bg-card hover:bg-accent/50 border transition-all duration-200 cursor-pointer hover:shadow-md">
             <CardContent className="p-4">
@@ -231,15 +267,20 @@ const RentalsList = () => {
         </div>
       )}
 
-      {/* Filters */}
-      <RentalsFilters
-        filters={filters}
-        onFiltersChange={handleFiltersChange}
-        onClearFilters={handleClearFilters}
-      />
+      {/* Filters — list view only */}
+      {currentView !== "calendar" && (
+        <RentalsFilters
+          filters={filters}
+          onFiltersChange={handleFiltersChange}
+          onClearFilters={handleClearFilters}
+        />
+      )}
 
-      {/* Rentals Table */}
-      {rentals.length > 0 ? (
+      {/* Calendar View */}
+      {currentView === "calendar" ? (
+        <CalendarView filters={filters} />
+      ) : /* Rentals Table */
+      rentals.length > 0 ? (
         <>
           <Card>
             <CardContent className="p-0">

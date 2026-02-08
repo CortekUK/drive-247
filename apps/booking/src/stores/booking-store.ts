@@ -66,7 +66,7 @@ export interface BookingContext {
   selectedVehicleId: string | null;
 
   // Step 3: Extras & Insurance
-  selectedExtras: string[];
+  selectedExtras: Record<string, number>;
   insuranceOption: string | null;
 }
 
@@ -118,7 +118,7 @@ const initialContext: BookingContext = {
   collectionLocation: null,
   promoCode: null,
   selectedVehicleId: null,
-  selectedExtras: [],
+  selectedExtras: {},
   insuranceOption: null,
 };
 

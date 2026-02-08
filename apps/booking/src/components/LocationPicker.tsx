@@ -107,13 +107,11 @@ export default function LocationPicker({
     }
   }, [fixedEnabled, multipleEnabled, areaEnabled]);
 
-  // Auto-set fixed address when method is fixed OR when it's the only option
+  // Auto-set fixed address in multi-option mode when switching to fixed method.
+  // Single-option mode is handled by the parent (MultiStepBookingWidget) via its own useEffect.
   useEffect(() => {
-    // When fixed is selected (multi-option) or is the only option (single-option)
-    if (fixedEnabled && fixedAddress) {
-      if (!showRadioOptions || (selectedMethod === 'fixed' && !value)) {
-        onChange(fixedAddress, undefined, undefined, undefined, 0);
-      }
+    if (fixedEnabled && fixedAddress && showRadioOptions && selectedMethod === 'fixed' && !value) {
+      onChange(fixedAddress, undefined, undefined, undefined, 0);
     }
   }, [selectedMethod, fixedAddress, value, fixedEnabled, showRadioOptions]);
 

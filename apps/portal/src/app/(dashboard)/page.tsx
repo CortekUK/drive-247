@@ -1,5 +1,6 @@
 "use client";
 
+import { useMemo } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import {
@@ -15,6 +16,9 @@ import { RecentActivity } from "@/components/dashboard/recent-activity";
 import { FleetOverview } from "@/components/dashboard/fleet-overview";
 import { ComplianceOverviewCard } from "@/components/dashboard/compliance-overview-card";
 import { ActionItems } from "@/components/dashboard/action-items";
+import { CalendarWidget } from "@/components/dashboard/calendar-widget";
+import { AIInsightsPanel } from "@/components/rentals/calendar/ai-insights-panel";
+import { useCalendarRentals } from "@/hooks/use-calendar-rentals";
 import { useDashboardKPIs } from "@/hooks/use-dashboard-kpis";
 import { useAuth } from "@/stores/auth-store";
 import { useTenant } from "@/contexts/TenantContext";
@@ -24,8 +28,11 @@ import {
   endOfMonth,
   startOfYear,
   endOfYear,
+  startOfDay,
+  endOfDay,
   subMonths,
 } from "date-fns";
+
 
 interface DateRange {
   from: string;
@@ -98,6 +105,11 @@ export default function DashboardPage() {
     return names[0];
   };
 
+  // Today's range for AI insights
+  const todayStart = useMemo(() => startOfDay(new Date()), []);
+  const todayEnd = useMemo(() => endOfDay(new Date()), []);
+  const { data: todayCalendar } = useCalendarRentals(todayStart, todayEnd);
+
   const handleDateRangeChange = (value: string) => {
     const range = dateRanges.find((r) => r.label === value);
     if (range) {
@@ -129,8 +141,14 @@ export default function DashboardPage() {
         </div>
       </div>
 
+      {/* AI Insights Marquee */}
+      <AIInsightsPanel grouped={todayCalendar?.grouped || []} />
+
       {/* Action Items */}
       <ActionItems />
+
+      {/* Calendar Widget */}
+      <CalendarWidget />
 
       {/* Fleet Overview */}
       <FleetOverview />

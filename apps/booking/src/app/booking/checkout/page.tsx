@@ -18,7 +18,6 @@ import BookingConfirmation from "@/components/BookingConfirmation";
 import { useTenant } from "@/contexts/TenantContext";
 import InstallmentSelector, { InstallmentOption, InstallmentConfig } from "@/components/InstallmentSelector";
 import { useBookingStore } from "@/stores/booking-store";
-
 const checkoutSchema = z.object({
   customerName: z.string().min(2, "Name must be at least 2 characters"),
   customerEmail: z.string().email("Invalid email address"),
@@ -26,13 +25,6 @@ const checkoutSchema = z.object({
   licenseNumber: z.string().min(5, "License number is required"),
   agreeTerms: z.boolean().refine(val => val === true, "You must agree to terms")
 });
-
-interface PricingExtra {
-  id: string;
-  extra_name: string;
-  price: number;
-  description: string | null;
-}
 
 interface DeliveryLocation {
   id: string;
@@ -63,8 +55,6 @@ const BookingCheckoutContent = () => {
   const { tenant } = useTenant();
   const { context: bookingContext, pendingInsuranceFiles, clearPendingInsuranceFiles } = useBookingStore();
   const [loading, setLoading] = useState(false);
-  const [extras, setExtras] = useState<PricingExtra[]>([]);
-  const [selectedExtras, setSelectedExtras] = useState<string[]>([]);
   const [vehicleDetails, setVehicleDetails] = useState<any>(null);
   const [errors, setErrors] = useState<{[key: string]: string}>({});
   const [showConfirmation, setShowConfirmation] = useState(false);
@@ -193,21 +183,14 @@ const BookingCheckoutContent = () => {
     return days * (vehicleDetails.daily_rent || 50); // Fallback to $50/day
   };
 
-  const calculateExtrasTotal = () => {
-    return selectedExtras.reduce((sum, extraId) => {
-      const extra = extras.find(e => e.id === extraId);
-      return sum + (extra?.price || 0);
-    }, 0);
-  };
-
   const calculateTotal = () => {
-    return calculateVehiclePrice() + calculateExtrasTotal();
+    return calculateVehiclePrice();
   };
 
   // Complete total calculation including all fees
   const calculateCompleteTotal = () => {
     const vehiclePrice = calculateVehiclePrice();
-    const extrasTotal = calculateExtrasTotal();
+    const extrasTotal = 0;
 
     // Delivery fee from new flow (same for delivery and collection)
     // Use the stored deliveryFee, or calculate from location/area if needed
@@ -294,14 +277,6 @@ const BookingCheckoutContent = () => {
       style: 'currency',
       currency: tenant?.currency_code || 'GBP',
     }).format(amount);
-  };
-
-  const handleExtraToggle = (extraId: string) => {
-    setSelectedExtras(prev =>
-      prev.includes(extraId)
-        ? prev.filter(id => id !== extraId)
-        : [...prev, extraId]
-    );
   };
 
   const validateForm = () => {
@@ -717,34 +692,6 @@ const BookingCheckoutContent = () => {
           <div className="grid lg:grid-cols-3 gap-8">
             {/* Left Column - Form */}
             <div className="lg:col-span-2 space-y-6">
-              {/* Extras */}
-              <Card className="p-6">
-                <h2 className="text-xl font-semibold mb-4">Optional Extras</h2>
-                {extras.length === 0 ? (
-                  <p className="text-sm text-muted-foreground">No extras available</p>
-                ) : (
-                  <div className="space-y-3">
-                    {extras.map(extra => (
-                      <div key={extra.id} className="flex items-start gap-3 p-3 rounded border border-border hover:bg-muted/50 transition-colors">
-                        <Checkbox
-                          checked={selectedExtras.includes(extra.id)}
-                          onCheckedChange={() => handleExtraToggle(extra.id)}
-                        />
-                        <div className="flex-1">
-                          <div className="flex items-center justify-between">
-                            <Label className="font-medium cursor-pointer">{extra.extra_name}</Label>
-                            <span className="text-sm font-semibold">${extra.price}</span>
-                          </div>
-                          {extra.description && (
-                            <p className="text-xs text-muted-foreground mt-1">{extra.description}</p>
-                          )}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </Card>
-
               {/* Customer Details */}
               <Card className="p-6">
                 <h2 className="text-xl font-semibold mb-4">Your Details</h2>
@@ -855,21 +802,6 @@ const BookingCheckoutContent = () => {
                       <span className="text-muted-foreground">Vehicle Cost</span>
                       <span className="font-medium">{formatCurrency(totals.vehiclePrice)}</span>
                     </div>
-                  </div>
-                )}
-
-                {selectedExtras.length > 0 && (
-                  <div className="space-y-2 py-4 border-b border-border">
-                    <p className="text-sm font-medium">Extras</p>
-                    {selectedExtras.map(extraId => {
-                      const extra = extras.find(e => e.id === extraId);
-                      return extra ? (
-                        <div key={extraId} className="flex justify-between text-sm">
-                          <span className="text-muted-foreground">{extra.extra_name}</span>
-                          <span className="font-medium">{formatCurrency(extra.price)}</span>
-                        </div>
-                      ) : null;
-                    })}
                   </div>
                 )}
 

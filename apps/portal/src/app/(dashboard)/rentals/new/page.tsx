@@ -14,7 +14,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage, FormDescription } from "@/components/ui/form";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
-import { ArrowLeft, FileText, Save, AlertTriangle, MapPin, Clock, Shield, Upload, CheckCircle2, XCircle, Loader2, RefreshCw, QrCode, Smartphone, Copy, Check } from "lucide-react";
+import { ArrowLeft, FileText, Save, AlertTriangle, MapPin, Clock, Shield, Upload, CheckCircle2, XCircle, Loader2, RefreshCw, QrCode, Smartphone, Copy, Check, Plus, Minus, Receipt, ImageIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Input } from "@/components/ui/input";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
@@ -43,6 +43,7 @@ import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Textarea } from "@/components/ui/textarea";
 import { toast as sonnerToast } from "sonner";
+import { useRentalExtras, type RentalExtra } from "@/hooks/use-rental-extras";
 
 const rentalSchema = z.object({
   customer_id: z.string().min(1, "Customer is required"),
@@ -98,6 +99,10 @@ const CreateRental = () => {
   const [createdRentalData, setCreatedRentalData] = useState<any>(null);
   const [generatedInvoice, setGeneratedInvoice] = useState<Invoice | null>(null);
   const [sendingDocuSign, setSendingDocuSign] = useState(false);
+
+  // Extras state
+  const { activeExtras } = useRentalExtras();
+  const [selectedExtras, setSelectedExtras] = useState<Record<string, number>>({});
 
   // Promo code state
   const [promoLoading, setPromoLoading] = useState(false);
@@ -542,6 +547,25 @@ const CreateRental = () => {
             break;
         }
 
+        // If auto-calculated end date would span a blocked period, find the next valid end date
+        if (selectedVehicleId) {
+          const blockCheck = checkBlockedDatesOverlap(startDate, newEndDate, selectedVehicleId);
+          if (blockCheck.blocked) {
+            // Find the first blocked date after start and set end date to day before it
+            const allBlocked = [...globalBlockedDatesArray, ...(selectedVehicleId ? getVehicleBlockedDates(selectedVehicleId) : [])];
+            const blockedAfterStart = allBlocked
+              .filter(d => d > startDate)
+              .sort((a, b) => a.getTime() - b.getTime());
+            if (blockedAfterStart.length > 0) {
+              const dayBeforeBlock = new Date(blockedAfterStart[0]);
+              dayBeforeBlock.setDate(dayBeforeBlock.getDate() - 1);
+              if (dayBeforeBlock > startDate) {
+                newEndDate = dayBeforeBlock;
+              }
+            }
+          }
+        }
+
         prevStartDateRef.current = startDate;
         prevPeriodTypeRef.current = periodType;
         form.setValue("end_date", newEndDate);
@@ -753,6 +777,26 @@ const CreateRental = () => {
         .single();
 
       if (rentalError) throw rentalError;
+
+      // Save selected extras
+      if (Object.keys(selectedExtras).length > 0) {
+        const extrasInserts = Object.entries(selectedExtras).map(([extraId, qty]) => {
+          const extra = activeExtras.find(e => e.id === extraId);
+          return {
+            rental_id: rental.id,
+            extra_id: extraId,
+            quantity: qty,
+            price_at_booking: extra ? Number(extra.price) : 0,
+          };
+        });
+        const { error: extrasError } = await supabase
+          .from("rental_extras_selections")
+          .insert(extrasInserts);
+        if (extrasError) {
+          console.error("Error saving rental extras:", extrasError);
+          // Don't throw - rental is already created
+        }
+      }
 
       // Update vehicle status to Rented immediately (even for pending rentals)
       const { error: vehicleError } = await supabase
@@ -1327,6 +1371,11 @@ const CreateRental = () => {
                                       blockedDate => blockedDate.toDateString() === date.toDateString()
                                     )) return true;
                                   }
+                                  // Disable end dates that would span across a blocked period
+                                  if (watchedStartDate && selectedVehicleId) {
+                                    const blockCheck = checkBlockedDatesOverlap(watchedStartDate, date, selectedVehicleId);
+                                    if (blockCheck.blocked) return true;
+                                  }
                                   return false;
                                 }}
                                 error={!!form.formState.errors.end_date}
@@ -1342,6 +1391,23 @@ const CreateRental = () => {
                       }}
                     />
                   </div>
+
+                  {/* Blocked period warning - check full date range overlap */}
+                  {watchedStartDate && watchedEndDate && selectedVehicleId && (() => {
+                    const blockCheck = checkBlockedDatesOverlap(watchedStartDate, watchedEndDate, selectedVehicleId);
+                    if (!blockCheck.blocked) return null;
+                    return (
+                      <Alert variant="destructive" className="border-red-500/50 bg-red-500/10">
+                        <AlertTriangle className="h-4 w-4" />
+                        <AlertDescription>
+                          <span className="font-medium">
+                            {blockCheck.isGlobal ? 'Global blocked period' : 'Vehicle blocked'}:
+                          </span>{' '}
+                          {blockCheck.reason}. Please choose different dates.
+                        </AlertDescription>
+                      </Alert>
+                    );
+                  })()}
 
                   {/* Financial Details */}
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -1367,7 +1433,7 @@ const CreateRental = () => {
                                 min={1}
                                 step={1}
                                 error={!!form.formState.errors.monthly_amount}
-                                disabled={!!selectedVehicleId}
+                                disabled={false}
                               />
                             </FormControl>
                             <FormMessage />
@@ -1531,6 +1597,132 @@ const CreateRental = () => {
                         </div>
                       </div>
                       <p className="text-sm text-muted-foreground">Upload customer's insurance certificate for verification</p>
+                    </div>
+                  )}
+
+                  {/* Rental Extras */}
+                  {activeExtras.length > 0 && (
+                    <div className="space-y-4 pt-4 border-t">
+                      <div className="flex items-center gap-2">
+                        <Receipt className="h-4 w-4 text-muted-foreground" />
+                        <h3 className="font-medium">Optional Extras</h3>
+                      </div>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                        {activeExtras.map((extra) => {
+                          const isSelected = !!selectedExtras[extra.id];
+                          const isToggle = extra.max_quantity === null;
+                          const qty = selectedExtras[extra.id] || 0;
+
+                          return (
+                            <div
+                              key={extra.id}
+                              className={cn(
+                                "rounded-lg border p-3 transition-all",
+                                isSelected
+                                  ? "border-primary bg-primary/5 ring-1 ring-primary/20"
+                                  : "border-border hover:border-primary/40 cursor-pointer"
+                              )}
+                              onClick={() => {
+                                if (isToggle) {
+                                  setSelectedExtras(prev => {
+                                    const next = { ...prev };
+                                    if (next[extra.id]) delete next[extra.id];
+                                    else next[extra.id] = 1;
+                                    return next;
+                                  });
+                                }
+                              }}
+                            >
+                              <div className="flex items-start gap-3">
+                                {extra.image_urls && extra.image_urls.length > 0 ? (
+                                  <img
+                                    src={extra.image_urls[0]}
+                                    alt={extra.name}
+                                    className="w-12 h-12 rounded object-cover flex-shrink-0"
+                                  />
+                                ) : (
+                                  <div className="w-12 h-12 rounded bg-muted flex items-center justify-center flex-shrink-0">
+                                    <ImageIcon className="h-5 w-5 text-muted-foreground/50" />
+                                  </div>
+                                )}
+                                <div className="flex-1 min-w-0">
+                                  <div className="flex items-center justify-between gap-1">
+                                    <span className="font-medium text-sm truncate">{extra.name}</span>
+                                    <span className="text-sm font-semibold text-primary whitespace-nowrap">
+                                      ${Number(extra.price).toFixed(2)}
+                                    </span>
+                                  </div>
+                                  {extra.description && (
+                                    <p className="text-xs text-muted-foreground mt-0.5 line-clamp-1">{extra.description}</p>
+                                  )}
+                                  {isToggle ? (
+                                    <div className="mt-2">
+                                      {isSelected ? (
+                                        <Badge variant="default" className="text-xs"><Check className="h-3 w-3 mr-1" /> Selected</Badge>
+                                      ) : (
+                                        <span className="text-xs text-muted-foreground">Click to add</span>
+                                      )}
+                                    </div>
+                                  ) : (
+                                    <div className="mt-2 flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
+                                      <Button
+                                        type="button"
+                                        variant="outline"
+                                        size="icon"
+                                        className="h-6 w-6"
+                                        onClick={() => {
+                                          setSelectedExtras(prev => {
+                                            const curr = prev[extra.id] || 0;
+                                            if (curr <= 1) {
+                                              const next = { ...prev };
+                                              delete next[extra.id];
+                                              return next;
+                                            }
+                                            return { ...prev, [extra.id]: curr - 1 };
+                                          });
+                                        }}
+                                        disabled={qty === 0}
+                                      >
+                                        <Minus className="h-3 w-3" />
+                                      </Button>
+                                      <span className="w-6 text-center text-sm font-medium">{qty}</span>
+                                      <Button
+                                        type="button"
+                                        variant="outline"
+                                        size="icon"
+                                        className="h-6 w-6"
+                                        onClick={() => {
+                                          setSelectedExtras(prev => {
+                                            const curr = prev[extra.id] || 0;
+                                            const max = extra.remaining_stock ?? extra.max_quantity ?? 99;
+                                            return { ...prev, [extra.id]: Math.min(curr + 1, max) };
+                                          });
+                                        }}
+                                        disabled={qty >= (extra.remaining_stock ?? extra.max_quantity ?? 99)}
+                                      >
+                                        <Plus className="h-3 w-3" />
+                                      </Button>
+                                      {qty > 0 && (
+                                        <span className="text-xs text-muted-foreground ml-1">
+                                          = ${(Number(extra.price) * qty).toFixed(2)}
+                                        </span>
+                                      )}
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                      {Object.keys(selectedExtras).length > 0 && (
+                        <div className="text-sm text-right font-medium">
+                          Extras Total: ${Object.entries(selectedExtras).reduce((sum, [id, qty]) => {
+                            const extra = activeExtras.find(e => e.id === id);
+                            return sum + (extra ? Number(extra.price) * qty : 0);
+                          }, 0).toFixed(2)}
+                        </div>
+                      )}
                     </div>
                   )}
 
@@ -1700,6 +1892,10 @@ const CreateRental = () => {
             end_date: createdRentalData.formData.end_date.toISOString(),
             monthly_amount: createdRentalData.formData.monthly_amount,
           }}
+          selectedExtras={Object.entries(selectedExtras).map(([extraId, qty]) => {
+            const extra = activeExtras.find(e => e.id === extraId);
+            return { name: extra?.name || 'Extra', quantity: qty, price: extra?.price || 0 };
+          }).filter(e => e.quantity > 0)}
         />
       )}
 
