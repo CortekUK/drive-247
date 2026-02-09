@@ -15,7 +15,7 @@ import { Badge } from "@/components/ui/badge";
 import { supabase } from "@/integrations/supabase/client";
 import { useTenant } from "@/contexts/TenantContext";
 import { toast } from "sonner";
-import { ChevronRight, ChevronLeft, Check, Baby, Coffee, MapPin, UserCheck, Car, Crown, TrendingUp, Users as GroupIcon, Calculator, Shield, CheckCircle, CalendarIcon, Clock, Search, Grid3x3, List, SlidersHorizontal, X, AlertCircle, FileCheck, RefreshCw, Upload, Gauge, User, Loader2, Globe, Plus, Minus, ImageIcon, Package } from "lucide-react";
+import { ChevronRight, ChevronLeft, Check, Baby, Coffee, MapPin, UserCheck, Car, Crown, TrendingUp, Users as GroupIcon, Calculator, Shield, CheckCircle, CalendarIcon, Clock, Search, Grid3x3, List, SlidersHorizontal, X, AlertCircle, FileCheck, RefreshCw, Upload, Gauge, User, Loader2, Globe } from "lucide-react";
 import { format, differenceInHours } from "date-fns";
 import { cn } from "@/lib/utils";
 import BookingConfirmation from "./BookingConfirmation";
@@ -29,7 +29,7 @@ import AIVerificationQR from "./AIVerificationQR";
 import { stripePromise } from "@/config/stripe";
 import { usePageContent, defaultHomeContent, mergeWithDefaults } from "@/hooks/usePageContent";
 import { useWorkingHours, getWorkingHoursForDate } from "@/hooks/useWorkingHours";
-// Insurance gating now uses tenant.integration_bonzah flag
+import { isInsuranceExemptTenant } from "@/config/tenant-config";
 import { canCustomerBook } from "@/lib/tenantQueries";
 import { sanitizeName, sanitizeEmail, sanitizePhone, sanitizeLocation, sanitizeTextArea, isInputSafe } from "@/lib/sanitize";
 import { createVeriffFrame, MESSAGES } from "@veriff/incontext-sdk";
@@ -39,15 +39,6 @@ import { useCustomerVerification } from "@/hooks/use-customer-verification";
 import { AuthPromptDialog } from "@/components/booking/AuthPromptDialog";
 import { getTimezonesByRegion, findTimezone, getDetectedTimezone } from "@/lib/timezones";
 import { useCustomerDocuments, getDocumentStatus } from "@/hooks/use-customer-documents";
-import { useRentalExtras, type RentalExtra } from "@/hooks/use-rental-extras";
-import {
-  Carousel,
-  CarouselContent,
-  CarouselItem,
-  CarouselPrevious,
-  CarouselNext,
-} from "@/components/ui/carousel";
-import Autoplay from "embla-carousel-autoplay";
 interface VehiclePhoto {
   photo_url: string;
 }
@@ -73,6 +64,12 @@ interface Vehicle {
   description?: string | null;
   allowed_mileage?: number | null;
 }
+interface PricingExtra {
+  id: string;
+  extra_name: string;
+  price: number;
+  description: string | null;
+}
 interface BlockedDate {
   id: string;
   start_date: string;
@@ -91,7 +88,7 @@ const MultiStepBookingWidget = () => {
 
   const { tenant } = useTenant();
   const workingHours = useWorkingHours();
-  const skipInsurance = !tenant?.integration_bonzah;
+  const skipInsurance = isInsuranceExemptTenant(tenant?.id);
   const { updateContext: updateBookingContext } = useBookingStore();
 
   // Customer authentication state
@@ -112,11 +109,17 @@ const MultiStepBookingWidget = () => {
   const customerHasDOB = !!customerUser?.customer?.date_of_birth;
   // Check if customer already has timezone in their profile
   const customerHasTimezone = !!customerUser?.customer?.timezone;
+  // Check if customer already has phone in their profile
+  const customerHasPhone = !!customerUser?.customer?.phone;
+  // Check if customer's ID document has expired
+  const isDocumentExpired = customerVerification?.document_expiry_date
+    ? new Date(customerVerification.document_expiry_date) < new Date()
+    : false;
 
   const [currentStep, setCurrentStep] = useState(1);
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
-  const { extras: rentalExtras } = useRentalExtras();
-  const [selectedExtras, setSelectedExtras] = useState<Record<string, number>>({});
+  const [extras, setExtras] = useState<PricingExtra[]>([]);
+  const [selectedExtras, setSelectedExtras] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
   const [showConfirmation, setShowConfirmation] = useState(false);
   const [bookingReference, setBookingReference] = useState("");
@@ -179,32 +182,6 @@ const MultiStepBookingWidget = () => {
     verificationSessionId: "",
     customerTimezone: "", // Will be set from tenant timezone or detected browser timezone
   });
-
-  // Auto-populate fixed addresses from tenant config when tenant loads.
-  // This ensures formData has the correct value regardless of LocationPicker's internal timing.
-  useEffect(() => {
-    if (!tenant) return;
-
-    const pickupFixedEnabled = tenant.pickup_fixed_enabled ?? tenant.fixed_address_enabled ?? false;
-    const returnFixedEnabled = tenant.return_fixed_enabled ?? tenant.fixed_address_enabled ?? false;
-
-    setFormData(prev => {
-      const updates: Record<string, unknown> = {};
-
-      if (pickupFixedEnabled && tenant.fixed_pickup_address && !prev.pickupLocation) {
-        updates.pickupLocation = tenant.fixed_pickup_address;
-        updates.pickupDeliveryFee = 0;
-      }
-      if (returnFixedEnabled && tenant.fixed_return_address && !prev.dropoffLocation) {
-        updates.dropoffLocation = tenant.fixed_return_address;
-        updates.returnDeliveryFee = 0;
-      }
-
-      return Object.keys(updates).length > 0 ? { ...prev, ...updates } : prev;
-    });
-  }, [tenant?.id, tenant?.fixed_pickup_address, tenant?.fixed_return_address,
-      tenant?.pickup_fixed_enabled, tenant?.return_fixed_enabled,
-      tenant?.fixed_address_enabled]);
 
   // Calculate working hours for the selected pickup date (per-day hours)
   const pickupDateWorkingHours = useMemo(() => {
@@ -304,6 +281,28 @@ const MultiStepBookingWidget = () => {
       setFormData(prev => ({ ...prev, customerTimezone: tenant.timezone || '' }));
     }
   }, [tenant?.timezone, isAuthenticated, customerUser?.customer?.timezone]);
+
+  // Auto-populate fixed addresses when tenant loads
+  // This ensures form data is set even if LocationPicker's useEffect has timing issues
+  useEffect(() => {
+    if (!tenant) return;
+    const pickupFixedEnabled = tenant.pickup_fixed_enabled ?? tenant.fixed_address_enabled ?? false;
+    const returnFixedEnabled = tenant.return_fixed_enabled ?? tenant.fixed_address_enabled ?? false;
+
+    setFormData(prev => {
+      const updates: Partial<typeof prev> = {};
+      if (!prev.pickupLocation && pickupFixedEnabled && tenant.fixed_pickup_address) {
+        updates.pickupLocation = tenant.fixed_pickup_address;
+        updates.pickupDeliveryFee = 0;
+      }
+      if (!prev.dropoffLocation && returnFixedEnabled && tenant.fixed_return_address) {
+        updates.dropoffLocation = tenant.fixed_return_address;
+        updates.returnDeliveryFee = 0;
+      }
+      if (Object.keys(updates).length === 0) return prev;
+      return { ...prev, ...updates };
+    });
+  }, [tenant?.id, tenant?.fixed_pickup_address, tenant?.fixed_return_address]);
 
   useEffect(() => {
     loadData();
@@ -711,7 +710,7 @@ const MultiStepBookingWidget = () => {
 
   // Persist selected extras
   useEffect(() => {
-    if (Object.keys(selectedExtras).length > 0) {
+    if (selectedExtras.length > 0) {
       sessionStorage.setItem('booking_selected_extras', JSON.stringify(selectedExtras));
     }
   }, [selectedExtras]);
@@ -777,6 +776,13 @@ const MultiStepBookingWidget = () => {
           if (customerVerification?.session_id) {
             setVerificationSessionId(customerVerification.session_id);
             updates.verificationSessionId = customerVerification.session_id;
+          }
+          // Use name from ID verification document (more accurate than account name)
+          if (customerVerification?.first_name || customerVerification?.last_name) {
+            const verifiedName = `${customerVerification.first_name || ''} ${customerVerification.last_name || ''}`.trim();
+            if (verifiedName) {
+              updates.customerName = verifiedName;
+            }
           }
           // Set license number from verification if available
           if (customerVerification?.document_number) {
@@ -857,6 +863,13 @@ const MultiStepBookingWidget = () => {
             setVerificationSessionId(customerVerification.session_id);
             updates.verificationSessionId = customerVerification.session_id;
           }
+          // Use name from ID verification document (more accurate than account name)
+          if (customerVerification?.first_name || customerVerification?.last_name) {
+            const verifiedName = `${customerVerification.first_name || ''} ${customerVerification.last_name || ''}`.trim();
+            if (verifiedName) {
+              updates.customerName = verifiedName;
+            }
+          }
           if (customerVerification?.document_number) {
             updates.licenseNumber = customerVerification.document_number;
           }
@@ -936,20 +949,6 @@ const MultiStepBookingWidget = () => {
       }
     }
   }, [currentStep, authInitialized, authLoading, isAuthenticated]);
-
-  // Warn user about unsaved data when leaving page
-  useEffect(() => {
-    const hasUnsavedData = formData.customerName || formData.customerEmail || formData.vehicleId;
-    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
-      if (hasUnsavedData && !showConfirmation) {
-        e.preventDefault();
-        e.returnValue = 'You have unsaved booking data. Are you sure you want to leave?';
-      }
-    };
-
-    window.addEventListener('beforeunload', handleBeforeUnload);
-    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
-  }, [formData.customerName, formData.customerEmail, formData.vehicleId, showConfirmation]);
 
   // Separate function to load blocked dates - used by both initial load and real-time updates
   const loadBlockedDates = async () => {
@@ -1540,9 +1539,9 @@ const MultiStepBookingWidget = () => {
         rentalPrice = (rentalDays / 30) * monthlyRent;
       }
     }
-    const extrasTotal = Object.entries(selectedExtras).reduce((sum, [extraId, qty]) => {
-      const extra = rentalExtras.find(e => e.id === extraId);
-      return sum + (extra ? extra.price * qty : 0);
+    const extrasTotal = selectedExtras.reduce((sum, extraId) => {
+      const extra = extras.find(e => e.id === extraId);
+      return sum + (extra?.price || 0);
     }, 0);
 
     // Calculate delivery fees
@@ -1872,7 +1871,7 @@ const MultiStepBookingWidget = () => {
     // Clear promo localStorage after successful booking
     localStorage.removeItem('appliedPromoCode');
     localStorage.removeItem('appliedPromoDetails');
-    setSelectedExtras({});
+    setSelectedExtras([]);
     setCalculatedDistance(null);
     setDistanceOverride(false);
 
@@ -2112,20 +2111,12 @@ const MultiStepBookingWidget = () => {
 
     // Add delivery fees
     const deliveryFees = (formData.pickupDeliveryFee || 0) + (formData.returnDeliveryFee || 0);
-
-    // Add extras total
-    const extrasTotal = Object.entries(selectedExtras).reduce((sum, [extraId, qty]) => {
-      const extra = rentalExtras.find(e => e.id === extraId);
-      return sum + (extra ? extra.price * qty : 0);
-    }, 0);
-
-    const total = vehicleTotal + deliveryFees + extrasTotal;
+    const total = vehicleTotal + deliveryFees;
 
     return {
       total,
       vehicleTotal,
       deliveryFees,
-      extrasTotal,
       days
     };
   };
@@ -2486,38 +2477,34 @@ const MultiStepBookingWidget = () => {
       [key: string]: string;
     } = {};
 
-    // Auto-fill fixed addresses if form state hasn't caught up yet
+    // Auto-populate fixed addresses if the useEffect in LocationPicker hasn't fired yet
+    // This handles race conditions where the auto-set effect runs after validation
     const pickupFixedEnabled = tenant?.pickup_fixed_enabled ?? tenant?.fixed_address_enabled ?? false;
     const returnFixedEnabled = tenant?.return_fixed_enabled ?? tenant?.fixed_address_enabled ?? false;
-    let pickupVal = formData.pickupLocation;
-    let dropoffVal = formData.dropoffLocation;
+    let pickupLocation = formData.pickupLocation;
+    let dropoffLocation = formData.dropoffLocation;
 
-    if (!pickupVal && pickupFixedEnabled && tenant?.fixed_pickup_address) {
-      pickupVal = tenant.fixed_pickup_address;
-      setFormData(prev => ({ ...prev, pickupLocation: pickupVal, pickupDeliveryFee: 0 }));
+    if (!pickupLocation && pickupFixedEnabled && tenant?.fixed_pickup_address) {
+      pickupLocation = tenant.fixed_pickup_address;
+      setFormData(prev => ({ ...prev, pickupLocation: tenant.fixed_pickup_address!, pickupDeliveryFee: 0 }));
     }
-    if (!dropoffVal && returnFixedEnabled && tenant?.fixed_return_address) {
-      dropoffVal = tenant.fixed_return_address;
-      setFormData(prev => ({ ...prev, dropoffLocation: dropoffVal, returnDeliveryFee: 0 }));
+    if (!dropoffLocation && returnFixedEnabled && tenant?.fixed_return_address) {
+      dropoffLocation = tenant.fixed_return_address;
+      setFormData(prev => ({ ...prev, dropoffLocation: tenant.fixed_return_address!, returnDeliveryFee: 0 }));
     }
 
     // Security check: Detect potentially malicious input patterns
-    if (!isInputSafe(pickupVal) || !isInputSafe(dropoffVal)) {
+    if (!isInputSafe(pickupLocation) || !isInputSafe(dropoffLocation)) {
       toast.error("Invalid input detected. Please enter valid addresses.");
       return false;
     }
 
-    // Skip strict format checks for system-provided addresses (fixed location or predefined location)
-    const isPickupFromSystem = !!formData.pickupLocationId ||
-      (tenant?.fixed_pickup_address && pickupVal.trim() === tenant.fixed_pickup_address.trim());
-    const isDropoffFromSystem = !!formData.returnLocationId ||
-      (tenant?.fixed_return_address && dropoffVal.trim() === tenant.fixed_return_address.trim());
-
     // Validate pickup location
-    if (!pickupVal.trim()) {
+    if (!pickupLocation.trim()) {
       newErrors.pickupLocation = "Pickup location is required";
-    } else if (!isPickupFromSystem) {
-      const pickupText = pickupVal.trim();
+    } else {
+      const pickupText = pickupLocation.trim();
+      // Check for meaningful location data (at least 5 characters and contains letters)
       if (pickupText.length < 5) {
         newErrors.pickupLocation = "Please enter a valid pickup address (minimum 5 characters)";
       } else if (!/[a-zA-Z]{3,}/.test(pickupText)) {
@@ -2525,17 +2512,20 @@ const MultiStepBookingWidget = () => {
       } else if (/^[@#$%^&*()_+=\-\[\]{};:'",.<>?\/\\|`~!]{3,}/.test(pickupText)) {
         newErrors.pickupLocation = "Please enter a valid pickup address, not symbols";
       } else if (/^[a-zA-Z]+$/.test(pickupText) && pickupText.length < 15) {
+        // If it's only letters and short, it's likely gibberish like "mmmmmmm"
         newErrors.pickupLocation = "Please enter a complete address (e.g., street name, city, postcode)";
       } else if (!/[\d]/.test(pickupText) && !/[,]/.test(pickupText) && pickupText.split(' ').length < 2) {
+        // Valid addresses usually have numbers or commas or multiple words
         newErrors.pickupLocation = "Please enter a complete address with street name or postcode";
       }
     }
 
     // Validate drop-off location
-    if (!dropoffVal.trim()) {
+    if (!dropoffLocation.trim()) {
       newErrors.dropoffLocation = "Drop-off location is required";
-    } else if (!isDropoffFromSystem) {
-      const dropoffText = dropoffVal.trim();
+    } else {
+      const dropoffText = dropoffLocation.trim();
+      // Check for meaningful location data (at least 5 characters and contains letters)
       if (dropoffText.length < 5) {
         newErrors.dropoffLocation = "Please enter a valid drop-off address (minimum 5 characters)";
       } else if (!/[a-zA-Z]{3,}/.test(dropoffText)) {
@@ -2543,8 +2533,10 @@ const MultiStepBookingWidget = () => {
       } else if (/^[@#$%^&*()_+=\-\[\]{};:'",.<>?\/\\|`~!]{3,}/.test(dropoffText)) {
         newErrors.dropoffLocation = "Please enter a valid drop-off address, not symbols";
       } else if (/^[a-zA-Z]+$/.test(dropoffText) && dropoffText.length < 15) {
+        // If it's only letters and short, it's likely gibberish like "mmmmmmm"
         newErrors.dropoffLocation = "Please enter a complete address (e.g., street name, city, postcode)";
       } else if (!/[\d]/.test(dropoffText) && !/[,]/.test(dropoffText) && dropoffText.split(' ').length < 2) {
+        // Valid addresses usually have numbers or commas or multiple words
         newErrors.dropoffLocation = "Please enter a complete address with street name or postcode";
       }
     }
@@ -2594,17 +2586,11 @@ const MultiStepBookingWidget = () => {
   const validateField = (fieldName: string, value: string) => {
     const newErrors: { [key: string]: string } = {};
 
-    // Skip strict format checks for system-provided addresses (fixed location or predefined location)
-    const isPickupFromSystem = !!formData.pickupLocationId ||
-      (tenant?.fixed_pickup_address && value.trim() === tenant.fixed_pickup_address.trim());
-    const isDropoffFromSystem = !!formData.returnLocationId ||
-      (tenant?.fixed_return_address && value.trim() === tenant.fixed_return_address.trim());
-
     switch (fieldName) {
       case 'pickupLocation':
         if (!value.trim()) {
           newErrors.pickupLocation = "Pickup location is required";
-        } else if (!isPickupFromSystem) {
+        } else {
           const pickupText = value.trim();
           if (pickupText.length < 5) {
             newErrors.pickupLocation = "Please enter a valid pickup address (minimum 5 characters)";
@@ -2623,7 +2609,7 @@ const MultiStepBookingWidget = () => {
       case 'dropoffLocation':
         if (!value.trim()) {
           newErrors.dropoffLocation = "Drop-off location is required";
-        } else if (!isDropoffFromSystem) {
+        } else {
           const dropoffText = value.trim();
           if (dropoffText.length < 5) {
             newErrors.dropoffLocation = "Please enter a valid drop-off address (minimum 5 characters)";
@@ -2720,10 +2706,16 @@ const MultiStepBookingWidget = () => {
 
   const handleStep1Continue = () => {
     if (validateStep1()) {
+      // Resolve pickup/return locations - use form data, falling back to fixed addresses
+      const pickupFixedEnabled = tenant?.pickup_fixed_enabled ?? tenant?.fixed_address_enabled ?? false;
+      const returnFixedEnabled = tenant?.return_fixed_enabled ?? tenant?.fixed_address_enabled ?? false;
+      const resolvedPickupLocation = formData.pickupLocation || (pickupFixedEnabled && tenant?.fixed_pickup_address) || "";
+      const resolvedDropoffLocation = formData.dropoffLocation || (returnFixedEnabled && tenant?.fixed_return_address) || "";
+
       // Store rental details in booking context (DOB collected in Step 4)
       const bookingContext = {
-        pickupLocation: formData.pickupLocation,
-        dropoffLocation: formData.dropoffLocation,
+        pickupLocation: resolvedPickupLocation,
+        dropoffLocation: resolvedDropoffLocation,
         pickupLocationId: formData.pickupLocationId,
         returnLocationId: formData.returnLocationId,
         pickupDeliveryFee: formData.pickupDeliveryFee,
@@ -3855,7 +3847,6 @@ const MultiStepBookingWidget = () => {
 
                           {/* Spec Bar */}
                           <div className="flex items-center gap-4 text-xs text-muted-foreground pb-3 border-b border-border/50">
-                            <span title="Registration">{vehicle.reg}</span>
                             <span className="flex items-center gap-1" title="Mileage Allowance">
                               <Gauge className="h-3 w-3" />
                               {vehicle.allowed_mileage
@@ -4024,8 +4015,8 @@ const MultiStepBookingWidget = () => {
                     </div>
                   </div>
 
-                  {/* Price breakdown when there are extras or delivery fees */}
-                  {(estimatedBooking.deliveryFees > 0 || (estimatedBooking.extrasTotal ?? 0) > 0) && (
+                  {/* Delivery fees breakdown */}
+                  {estimatedBooking.deliveryFees > 0 && (
                     <div className="text-xs space-y-1 pt-2 border-t border-border/30">
                       <div className="flex justify-between text-muted-foreground">
                         <span>Vehicle rental</span>
@@ -4043,16 +4034,6 @@ const MultiStepBookingWidget = () => {
                           <span>+${formData.returnDeliveryFee.toFixed(0)}</span>
                         </div>
                       )}
-                      {Object.entries(selectedExtras).map(([extraId, qty]) => {
-                        const extra = rentalExtras.find(e => e.id === extraId);
-                        if (!extra) return null;
-                        return (
-                          <div key={extraId} className="flex justify-between text-muted-foreground">
-                            <span>{extra.name}{qty > 1 ? ` x${qty}` : ''}</span>
-                            <span>+${(extra.price * qty).toFixed(0)}</span>
-                          </div>
-                        );
-                      })}
                     </div>
                   )}
 
@@ -4069,7 +4050,7 @@ const MultiStepBookingWidget = () => {
                   </p>
                 </div>}
 
-                <Button onClick={handleStep2Continue} disabled={!formData.vehicleId} className="w-full h-11 bg-primary hover:bg-primary/90 text-primary-foreground font-semibold shadow-md hover:shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed" size="lg">
+                <Button onClick={handleStep2Continue} disabled={!selectedVehicle} className="w-full h-11 bg-primary hover:bg-primary/90 text-primary-foreground font-semibold shadow-md hover:shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed" size="lg">
                   Review & Pay <ChevronRight className="ml-2 w-5 h-5" />
                 </Button>
               </Card>
@@ -4082,7 +4063,7 @@ const MultiStepBookingWidget = () => {
             <Button onClick={() => setCurrentStep(1)} variant="outline" className="w-full sm:flex-1" size="lg">
               <ChevronLeft className="mr-2 w-5 h-5" /> Back
             </Button>
-            <Button onClick={handleStep2Continue} disabled={!formData.vehicleId} className="w-full sm:flex-1 bg-primary hover:bg-primary/90 text-primary-foreground font-semibold shadow-md hover:shadow-lg transition-all disabled:opacity-50" size="lg">
+            <Button onClick={handleStep2Continue} disabled={!selectedVehicle} className="w-full sm:flex-1 bg-primary hover:bg-primary/90 text-primary-foreground font-semibold shadow-md hover:shadow-lg transition-all disabled:opacity-50" size="lg">
               Review & Pay <ChevronRight className="ml-2 w-5 h-5" />
             </Button>
           </div>
@@ -4552,28 +4533,38 @@ const MultiStepBookingWidget = () => {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
               <div className="space-y-2">
                 <Label htmlFor="customerPhone" className="font-medium">Phone Number *</Label>
-                <PhoneInput
-                  id="customerPhone"
-                  value={formData.customerPhone}
-                  defaultCountry="US"
-                  onChange={value => {
-                    // Allow phone changes even for authenticated users (they might want to use different phone)
-                    setFormData({
-                      ...formData,
-                      customerPhone: value
-                    });
-                    // Instant validation
-                    validateField('customerPhone', value);
-                  }}
-                  error={!!errors.customerPhone}
-                  className="h-12"
-                />
-                {isAuthenticated && isCustomerDataPopulated && formData.customerPhone && (
-                  <p className="text-xs text-muted-foreground flex items-center gap-1">
-                    <UserCheck className="w-3 h-3" /> From your account (editable)
-                  </p>
+                {/* Show read-only display when phone is from account profile */}
+                {isAuthenticated && isCustomerDataPopulated && customerHasPhone && formData.customerPhone ? (
+                  <div className="space-y-2">
+                    <Input
+                      value={formData.customerPhone}
+                      readOnly
+                      className="h-12 bg-muted/50"
+                    />
+                    <p className="text-xs text-muted-foreground flex items-center gap-1">
+                      <CheckCircle className="w-3 h-3 text-primary" /> From your account profile
+                    </p>
+                  </div>
+                ) : (
+                  <>
+                    <PhoneInput
+                      id="customerPhone"
+                      value={formData.customerPhone}
+                      defaultCountry="US"
+                      onChange={value => {
+                        setFormData({
+                          ...formData,
+                          customerPhone: value
+                        });
+                        // Instant validation
+                        validateField('customerPhone', value);
+                      }}
+                      error={!!errors.customerPhone}
+                      className="h-12"
+                    />
+                    {errors.customerPhone && <p className="text-sm text-destructive">{errors.customerPhone}</p>}
+                  </>
                 )}
-                {errors.customerPhone && <p className="text-sm text-destructive">{errors.customerPhone}</p>}
               </div>
 
               <div className="space-y-2">
@@ -4781,95 +4772,122 @@ const MultiStepBookingWidget = () => {
               </div>
             )}
 
-            {/* Date of Birth - Always shown */}
-            <div className="space-y-2">
-              <Label className="font-medium">Date of Birth *</Label>
-              {/* Show read-only display when DOB is verified (from account profile or ID document) */}
-              {verificationStatus === 'verified' && formData.driverDOB ? (
-                <div className="space-y-2">
-                  <Input
-                    value={formData.driverDOB ? format(new Date(formData.driverDOB), "MMMM d, yyyy") : ""}
-                    readOnly
-                    className="h-12 max-w-md bg-muted/50"
-                  />
-                  <p className="text-xs text-muted-foreground flex items-center gap-1">
-                    <CheckCircle className="w-3 h-3 text-primary" />
-                    {isAuthenticated && customerHasDOB ? 'From your account profile' : 'From your ID document'}
-                  </p>
-                  {formData.driverDOB && (
-                    <p className="text-sm text-muted-foreground">Age: <span className="font-medium text-foreground">{calculateAge(new Date(formData.driverDOB))} years old</span></p>
-                  )}
-                </div>
-              ) : (
-                <>
-                  <div className="grid grid-cols-3 gap-2 max-w-md">
-                    {/* Month Select */}
-                    <Select
-                      value={formData.driverDOB ? (new Date(formData.driverDOB).getMonth() + 1).toString().padStart(2, '0') : ""}
-                      onValueChange={(month) => {
-                        const currentDate = formData.driverDOB ? new Date(formData.driverDOB) : new Date(2000, 0, 1);
-                        const newDate = new Date(currentDate.getFullYear(), parseInt(month) - 1, Math.min(currentDate.getDate(), new Date(currentDate.getFullYear(), parseInt(month), 0).getDate()));
-                        const dateStr = format(newDate, "yyyy-MM-dd");
-                        setFormData({ ...formData, driverDOB: dateStr });
-                        validateField('driverDOB', dateStr);
-                      }}
-                    >
-                      <SelectTrigger className={cn("h-12", errors.driverDOB && "border-destructive")}>
-                        <SelectValue placeholder="Month" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'].map((month, i) => (
-                          <SelectItem key={i} value={(i + 1).toString().padStart(2, '0')}>{month}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    {/* Day Select */}
-                    <Select
-                      value={formData.driverDOB ? new Date(formData.driverDOB).getDate().toString() : ""}
-                      onValueChange={(day) => {
-                        const currentDate = formData.driverDOB ? new Date(formData.driverDOB) : new Date(2000, 0, 1);
-                        const newDate = new Date(currentDate.getFullYear(), currentDate.getMonth(), parseInt(day));
-                        const dateStr = format(newDate, "yyyy-MM-dd");
-                        setFormData({ ...formData, driverDOB: dateStr });
-                        validateField('driverDOB', dateStr);
-                      }}
-                    >
-                      <SelectTrigger className={cn("h-12", errors.driverDOB && "border-destructive")}>
-                        <SelectValue placeholder="Day" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {Array.from({ length: 31 }, (_, i) => (
-                          <SelectItem key={i + 1} value={(i + 1).toString()}>{i + 1}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    {/* Year Select */}
-                    <Select
-                      value={formData.driverDOB ? new Date(formData.driverDOB).getFullYear().toString() : ""}
-                      onValueChange={(year) => {
-                        const currentDate = formData.driverDOB ? new Date(formData.driverDOB) : new Date(2000, 0, 1);
-                        const newDate = new Date(parseInt(year), currentDate.getMonth(), Math.min(currentDate.getDate(), new Date(parseInt(year), currentDate.getMonth() + 1, 0).getDate()));
-                        const dateStr = format(newDate, "yyyy-MM-dd");
-                        setFormData({ ...formData, driverDOB: dateStr });
-                        validateField('driverDOB', dateStr);
-                      }}
-                    >
-                      <SelectTrigger className={cn("h-12", errors.driverDOB && "border-destructive")}>
-                        <SelectValue placeholder="Year" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {Array.from({ length: 100 }, (_, i) => new Date().getFullYear() - (tenant?.minimum_rental_age || 18) - i).map((year) => (
-                          <SelectItem key={year} value={year.toString()}>{year}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+            {/* Date of Birth & ID Expiry Row */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
+              {/* Date of Birth - Always shown */}
+              <div className="space-y-2">
+                <Label className="font-medium">Date of Birth *</Label>
+                {/* Show read-only display when DOB is verified (from account profile or ID document) */}
+                {verificationStatus === 'verified' && formData.driverDOB ? (
+                  <div className="space-y-2">
+                    <Input
+                      value={formData.driverDOB ? format(new Date(formData.driverDOB), "MMMM d, yyyy") : ""}
+                      readOnly
+                      className="h-12 bg-muted/50"
+                    />
+                    <p className="text-xs text-muted-foreground flex items-center gap-1">
+                      <CheckCircle className="w-3 h-3 text-primary" />
+                      {isAuthenticated && customerHasDOB ? 'From your account profile' : 'From your ID document'}
+                    </p>
+                    {formData.driverDOB && (
+                      <p className="text-sm text-muted-foreground">Age: <span className="font-medium text-foreground">{calculateAge(new Date(formData.driverDOB))} years old</span></p>
+                    )}
                   </div>
-                  {formData.driverDOB && (
-                    <p className="text-sm text-muted-foreground">Age: <span className={cn("font-medium", errors.driverDOB ? "text-destructive" : "text-foreground")}>{calculateAge(new Date(formData.driverDOB))} years old</span></p>
-                  )}
-                  {errors.driverDOB && <p className="text-sm text-destructive">{errors.driverDOB}</p>}
-                  <p className="text-xs text-muted-foreground">Driver must be at least {tenant?.minimum_rental_age || 21} years old</p>
-                </>
+                ) : (
+                  <>
+                    <div className="grid grid-cols-3 gap-2">
+                      {/* Month Select */}
+                      <Select
+                        value={formData.driverDOB ? (new Date(formData.driverDOB).getMonth() + 1).toString().padStart(2, '0') : ""}
+                        onValueChange={(month) => {
+                          const currentDate = formData.driverDOB ? new Date(formData.driverDOB) : new Date(2000, 0, 1);
+                          const newDate = new Date(currentDate.getFullYear(), parseInt(month) - 1, Math.min(currentDate.getDate(), new Date(currentDate.getFullYear(), parseInt(month), 0).getDate()));
+                          const dateStr = format(newDate, "yyyy-MM-dd");
+                          setFormData({ ...formData, driverDOB: dateStr });
+                          validateField('driverDOB', dateStr);
+                        }}
+                      >
+                        <SelectTrigger className={cn("h-12", errors.driverDOB && "border-destructive")}>
+                          <SelectValue placeholder="Month" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'].map((month, i) => (
+                            <SelectItem key={i} value={(i + 1).toString().padStart(2, '0')}>{month}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      {/* Day Select */}
+                      <Select
+                        value={formData.driverDOB ? new Date(formData.driverDOB).getDate().toString() : ""}
+                        onValueChange={(day) => {
+                          const currentDate = formData.driverDOB ? new Date(formData.driverDOB) : new Date(2000, 0, 1);
+                          const newDate = new Date(currentDate.getFullYear(), currentDate.getMonth(), parseInt(day));
+                          const dateStr = format(newDate, "yyyy-MM-dd");
+                          setFormData({ ...formData, driverDOB: dateStr });
+                          validateField('driverDOB', dateStr);
+                        }}
+                      >
+                        <SelectTrigger className={cn("h-12", errors.driverDOB && "border-destructive")}>
+                          <SelectValue placeholder="Day" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {Array.from({ length: 31 }, (_, i) => (
+                            <SelectItem key={i + 1} value={(i + 1).toString()}>{i + 1}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      {/* Year Select */}
+                      <Select
+                        value={formData.driverDOB ? new Date(formData.driverDOB).getFullYear().toString() : ""}
+                        onValueChange={(year) => {
+                          const currentDate = formData.driverDOB ? new Date(formData.driverDOB) : new Date(2000, 0, 1);
+                          const newDate = new Date(parseInt(year), currentDate.getMonth(), Math.min(currentDate.getDate(), new Date(parseInt(year), currentDate.getMonth() + 1, 0).getDate()));
+                          const dateStr = format(newDate, "yyyy-MM-dd");
+                          setFormData({ ...formData, driverDOB: dateStr });
+                          validateField('driverDOB', dateStr);
+                        }}
+                      >
+                        <SelectTrigger className={cn("h-12", errors.driverDOB && "border-destructive")}>
+                          <SelectValue placeholder="Year" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {Array.from({ length: 100 }, (_, i) => new Date().getFullYear() - (tenant?.minimum_rental_age || 18) - i).map((year) => (
+                            <SelectItem key={year} value={year.toString()}>{year}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    {formData.driverDOB && (
+                      <p className="text-sm text-muted-foreground">Age: <span className={cn("font-medium", errors.driverDOB ? "text-destructive" : "text-foreground")}>{calculateAge(new Date(formData.driverDOB))} years old</span></p>
+                    )}
+                    {errors.driverDOB && <p className="text-sm text-destructive">{errors.driverDOB}</p>}
+                    <p className="text-xs text-muted-foreground">Driver must be at least {tenant?.minimum_rental_age || 21} years old</p>
+                  </>
+                )}
+              </div>
+
+              {/* ID Document Expiry Date - Show when verified */}
+              {(verificationStatus === 'verified' || (isAuthenticated && isCustomerAlreadyVerified)) && customerVerification?.document_expiry_date && (
+                <div className="space-y-2">
+                  <Label className="font-medium">ID Document Expiry</Label>
+                  <div className="flex items-center gap-2">
+                    <Input
+                      value={format(new Date(customerVerification.document_expiry_date), "MMMM d, yyyy")}
+                      readOnly
+                      className="h-12 bg-muted/50 flex-1"
+                    />
+                    {new Date(customerVerification.document_expiry_date) < new Date() ? (
+                      <span className="text-xs text-destructive font-medium px-2 py-1 bg-destructive/10 rounded">Expired</span>
+                    ) : new Date(customerVerification.document_expiry_date) < new Date(Date.now() + 30 * 24 * 60 * 60 * 1000) ? (
+                      <span className="text-xs text-amber-600 font-medium px-2 py-1 bg-amber-500/10 rounded">Expires Soon</span>
+                    ) : (
+                      <span className="text-xs text-green-600 font-medium px-2 py-1 bg-green-500/10 rounded">Valid</span>
+                    )}
+                  </div>
+                  <p className="text-xs text-muted-foreground flex items-center gap-1">
+                    <CheckCircle className="w-3 h-3 text-primary" /> From your verified ID document
+                  </p>
+                </div>
               )}
             </div>
 
@@ -5207,7 +5225,7 @@ const MultiStepBookingWidget = () => {
             </Button>
             <Button
               onClick={handleStep4Continue}
-              disabled={verificationStatus !== 'verified'}
+              disabled={verificationStatus !== 'verified' || isDocumentExpired}
               className="w-full sm:flex-1 h-11 sm:h-12 bg-primary hover:bg-primary/90 text-primary-foreground font-semibold text-sm sm:text-base shadow-md hover:shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed"
               size="lg"
             >
@@ -5216,211 +5234,64 @@ const MultiStepBookingWidget = () => {
               <ChevronRight className="ml-2 w-4 h-4 sm:w-5 sm:h-5" />
             </Button>
           </div>
-          {verificationStatus !== 'verified' && (
+          {verificationStatus !== 'verified' && !isDocumentExpired && (
             <p className="text-xs sm:text-sm text-destructive text-center mt-2">
               Please complete identity verification to continue
+            </p>
+          )}
+          {isDocumentExpired && (
+            <p className="text-xs sm:text-sm text-destructive text-center mt-2">
+              Your ID document has expired. Please update your verification to continue.
             </p>
           )}
         </div>}
 
         {/* Step 5: Review & Payment */}
-        {currentStep === 5 && <div className="animate-fade-in space-y-8">
-
-          {/* ── Section 1: Optional Extras ── */}
-          <div>
-            <div className="flex items-center gap-3 mb-4">
-              <div className="flex items-center justify-center w-8 h-8 rounded-full bg-primary text-primary-foreground text-sm font-bold">1</div>
-              <h3 className="text-xl font-display font-semibold">Optional Extras</h3>
-            </div>
-            {rentalExtras.length > 0 ? (
-              <div className="space-y-2">
-                {rentalExtras.map(extra => {
-                  const isSelected = !!selectedExtras[extra.id];
-                  const isToggle = extra.max_quantity === null;
-                  const qty = selectedExtras[extra.id] || 0;
-
-                  return (
-                    <div
-                      key={extra.id}
-                      className={cn(
-                        "flex items-center gap-3 p-3 rounded-lg border transition-all",
-                        isSelected
-                          ? "border-primary bg-primary/5"
-                          : "border-border hover:border-primary/40",
-                        isToggle && "cursor-pointer"
-                      )}
-                      onClick={() => {
-                        if (isToggle) {
-                          setSelectedExtras(prev => {
-                            const next = { ...prev };
-                            if (next[extra.id]) {
-                              delete next[extra.id];
-                            } else {
-                              next[extra.id] = 1;
-                            }
-                            return next;
-                          });
-                        }
-                      }}
-                    >
-                      {/* Thumbnail */}
-                      <div className="h-14 w-14 rounded-md overflow-hidden flex-shrink-0 bg-muted/50">
-                        {extra.image_urls.length > 1 ? (
-                          <Carousel className="w-full h-full" opts={{ loop: true }} plugins={[Autoplay({ delay: 3000, stopOnInteraction: false })]}>
-                            <CarouselContent className="h-14">
-                              {extra.image_urls.map((url, i) => (
-                                <CarouselItem key={i} className="h-14 p-0">
-                                  <img
-                                    src={url}
-                                    alt={`${extra.name} ${i + 1}`}
-                                    className="h-14 w-14 object-cover"
-                                  />
-                                </CarouselItem>
-                              ))}
-                            </CarouselContent>
-                          </Carousel>
-                        ) : extra.image_urls.length === 1 ? (
-                          <img
-                            src={extra.image_urls[0]}
-                            alt={extra.name}
-                            className="h-full w-full object-cover"
-                          />
-                        ) : (
-                          <div className="h-full w-full flex items-center justify-center">
-                            <Package className="h-5 w-5 text-muted-foreground/40" />
-                          </div>
-                        )}
-                      </div>
-
-                      {/* Name & Description */}
-                      <div className="flex-1 min-w-0">
-                        <h4 className="text-sm font-medium leading-tight">{extra.name}</h4>
-                        {extra.description && (
-                          <p className="text-xs text-muted-foreground mt-0.5 line-clamp-1">
-                            {extra.description}
-                          </p>
-                        )}
-                      </div>
-
-                      {/* Price */}
-                      <span className="text-sm font-semibold text-primary whitespace-nowrap">
-                        ${extra.price.toFixed(2)}
-                      </span>
-
-                      {/* Controls */}
-                      {isToggle ? (
-                        <div className="flex-shrink-0 w-7 h-7 rounded-full border flex items-center justify-center transition-colors"
-                          style={isSelected ? { backgroundColor: 'hsl(var(--primary))', borderColor: 'hsl(var(--primary))' } : {}}>
-                          {isSelected && <Check className="h-3.5 w-3.5 text-primary-foreground" />}
-                        </div>
-                      ) : (
-                        <div className="flex items-center gap-1.5 flex-shrink-0" onClick={(e) => e.stopPropagation()}>
-                          <Button
-                            variant="outline"
-                            size="icon"
-                            className="h-7 w-7"
-                            onClick={() => {
-                              setSelectedExtras(prev => {
-                                const current = prev[extra.id] || 0;
-                                const next = current - 1;
-                                if (next <= 0) {
-                                  const updated = { ...prev };
-                                  delete updated[extra.id];
-                                  return updated;
-                                }
-                                return { ...prev, [extra.id]: next };
-                              });
-                            }}
-                            disabled={qty === 0}
-                          >
-                            <Minus className="h-3 w-3" />
-                          </Button>
-                          <span className="w-6 text-center text-sm font-medium">{qty}</span>
-                          <Button
-                            variant="outline"
-                            size="icon"
-                            className="h-7 w-7"
-                            onClick={() => {
-                              setSelectedExtras(prev => {
-                                const current = prev[extra.id] || 0;
-                                const max = extra.remaining_stock ?? extra.max_quantity ?? 99;
-                                return { ...prev, [extra.id]: Math.min(current + 1, max) };
-                              });
-                            }}
-                            disabled={qty >= (extra.remaining_stock ?? extra.max_quantity ?? 99)}
-                          >
-                            <Plus className="h-3 w-3" />
-                          </Button>
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
+        {currentStep === 5 && <div className="animate-fade-in space-y-6">
+          {/* Promo Code Section */}
+          <div className="bg-card border border-border rounded-lg p-4 sm:p-6">
+            <div className="space-y-3">
+              <Label htmlFor="promoCode" className="font-medium text-base">Promo Code (Optional)</Label>
+              <div className="flex gap-2">
+                <Input
+                  id="promoCode"
+                  placeholder="Enter code"
+                  value={formData.promoCode}
+                  onChange={(e) => {
+                    setFormData({ ...formData, promoCode: e.target.value });
+                    setPromoError(null);
+                    if (!e.target.value) {
+                      setPromoDetails(null);
+                      localStorage.removeItem('appliedPromoCode');
+                      localStorage.removeItem('appliedPromoDetails');
+                    }
+                  }}
+                  className={cn("h-12", promoError ? "border-destructive" : promoDetails ? "border-green-500" : "")}
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="h-12 px-6"
+                  onClick={() => validatePromoCode(formData.promoCode)}
+                  disabled={loading || !formData.promoCode}
+                >
+                  Apply
+                </Button>
               </div>
-            ) : (
-              <p className="text-sm text-muted-foreground">No extras available for this rental.</p>
-            )}
-          </div>
-
-          {/* ── Section 2: Promo Code ── */}
-          <div>
-            <div className="flex items-center gap-3 mb-4">
-              <div className="flex items-center justify-center w-8 h-8 rounded-full bg-primary text-primary-foreground text-sm font-bold">2</div>
-              <h3 className="text-xl font-display font-semibold">Promo Code</h3>
-            </div>
-            <div className="bg-card border border-border rounded-lg p-4 sm:p-6">
-              <div className="space-y-3">
-                <Label htmlFor="promoCode" className="font-medium text-base">Have a promo code?</Label>
-                <div className="flex gap-2">
-                  <Input
-                    id="promoCode"
-                    placeholder="Enter code"
-                    value={formData.promoCode}
-                    onChange={(e) => {
-                      setFormData({ ...formData, promoCode: e.target.value });
-                      setPromoError(null);
-                      if (!e.target.value) {
-                        setPromoDetails(null);
-                        localStorage.removeItem('appliedPromoCode');
-                        localStorage.removeItem('appliedPromoDetails');
-                      }
-                    }}
-                    className={cn("h-12", promoError ? "border-destructive" : promoDetails ? "border-green-500" : "")}
-                  />
-                  <Button
-                    type="button"
-                    variant="outline"
-                    className="h-12 px-6"
-                    onClick={() => validatePromoCode(formData.promoCode)}
-                    disabled={loading || !formData.promoCode}
-                  >
-                    Apply
-                  </Button>
-                </div>
-                {promoError && <p className="text-sm text-destructive">{promoError}</p>}
-                {promoDetails && (
-                  <p className="text-sm text-green-600 font-medium flex items-center gap-1">
-                    <Check className="w-4 h-4" />
-                    Code applied: {promoDetails.type === 'percentage' ? `${promoDetails.value}% off` : `$${promoDetails.value} off`}
-                  </p>
-                )}
-              </div>
-            </div>
-          </div>
-
-          {/* ── Section 3: Review & Confirm ── */}
-          <div>
-            <div className="flex items-center gap-3 mb-4">
-              <div className="flex items-center justify-center w-8 h-8 rounded-full bg-primary text-primary-foreground text-sm font-bold">3</div>
-              <h3 className="text-xl font-display font-semibold">Review & Confirm</h3>
+              {promoError && <p className="text-sm text-destructive">{promoError}</p>}
+              {promoDetails && (
+                <p className="text-sm text-green-600 font-medium flex items-center gap-1">
+                  <Check className="w-4 h-4" />
+                  Code applied: {promoDetails.type === 'percentage' ? `${promoDetails.value}% off` : `$${promoDetails.value} off`}
+                </p>
+              )}
             </div>
           </div>
 
           <BookingCheckoutStep
             formData={formData}
             selectedVehicle={selectedVehicle}
-            extras={rentalExtras}
-            selectedExtras={selectedExtras}
+            extras={extras}
             rentalDuration={calculateRentalDuration() || {
               days: 1,
               formatted: '1 day'

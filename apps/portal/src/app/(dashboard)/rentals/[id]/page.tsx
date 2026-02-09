@@ -685,6 +685,56 @@ const RentalDetail = () => {
     },
   });
 
+  // Mutation for requesting insurance re-upload from customer
+  const notifyInsuranceReuploadMutation = useMutation({
+    mutationFn: async () => {
+      if (!rental?.customer_id || !tenant?.id) throw new Error("Missing rental or tenant context");
+
+      // Look up customer_user_id from customer_users table
+      const { data: customerUser, error: lookupError } = await supabase
+        .from("customer_users")
+        .select("id")
+        .eq("customer_id", rental.customer_id)
+        .eq("tenant_id", tenant.id)
+        .maybeSingle();
+
+      if (lookupError) throw lookupError;
+      if (!customerUser) throw new Error("Customer user account not found. The customer may not have registered on the portal yet.");
+
+      const vehicleName = rental.vehicles
+        ? `${rental.vehicles.make} ${rental.vehicles.model}`
+        : rental.vehicles?.reg || "your vehicle";
+
+      const { error: insertError } = await supabase
+        .from("customer_notifications")
+        .insert({
+          customer_user_id: customerUser.id,
+          tenant_id: tenant.id,
+          title: "Insurance Re-upload Required",
+          message: `Your insurance document for booking ${vehicleName} has been flagged as invalid. Please re-upload a valid insurance document.`,
+          type: "insurance_reupload",
+          link: "/portal/bookings",
+          metadata: { rental_id: id, vehicle_reg: rental.vehicles?.reg },
+        });
+
+      if (insertError) throw insertError;
+    },
+    onSuccess: () => {
+      toast({
+        title: "Notification Sent",
+        description: "The customer has been notified to re-upload their insurance document.",
+      });
+    },
+    onError: (error: any) => {
+      console.error("Insurance re-upload notification error:", error);
+      toast({
+        title: "Error",
+        description: error.message || "Failed to send re-upload notification.",
+        variant: "destructive",
+      });
+    },
+  });
+
   if (isLoading) {
     return <div>Loading rental details...</div>;
   }
@@ -692,6 +742,14 @@ const RentalDetail = () => {
   if (!rental) {
     return <div>Rental not found</div>;
   }
+
+  // Check if any insurance document has been rejected or has low validation score
+  const hasInvalidInsuranceDoc = insuranceDocuments?.some((doc: any) => {
+    const verificationDecision = doc.verification_decision || doc.ai_extracted_data?.verificationDecision;
+    const isRejected = verificationDecision === 'auto_rejected' || verificationDecision === 'manually_rejected';
+    const isLowScore = doc.ai_validation_score !== null && doc.ai_validation_score < 0.6;
+    return isRejected || isLowScore;
+  }) || false;
 
   // Use the new totals from allocation-based calculations
   const totalCharges = rentalTotals?.totalCharges || 0;
@@ -1917,6 +1975,23 @@ const RentalDetail = () => {
         <CardContent className="space-y-4">
           <div className="flex items-center justify-between">
             <p className="text-sm text-muted-foreground">Upload customer's insurance documents for verification</p>
+            <div className="flex gap-2">
+              {hasInvalidInsuranceDoc && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="text-amber-600 hover:text-amber-700 hover:bg-amber-50 border-amber-300 dark:text-amber-400 dark:hover:bg-amber-900/20 dark:border-amber-700"
+                  onClick={() => notifyInsuranceReuploadMutation.mutate()}
+                  disabled={notifyInsuranceReuploadMutation.isPending}
+                >
+                  {notifyInsuranceReuploadMutation.isPending ? (
+                    <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+                  ) : (
+                    <Send className="h-4 w-4 mr-1" />
+                  )}
+                  Request Re-upload
+                </Button>
+              )}
             <Button
                   variant="outline"
                   size="sm"
@@ -1977,6 +2052,7 @@ const RentalDetail = () => {
                   <Plus className="h-4 w-4 mr-1" />
                   Upload Document
                 </Button>
+            </div>
           </div>
 
           {/* Document List */}

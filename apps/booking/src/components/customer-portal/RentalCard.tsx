@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
-import { Calendar, Car, MapPin, CreditCard, Clock, AlertCircle, Pencil, CalendarPlus, XCircle, RefreshCw } from 'lucide-react';
+import { Calendar, Car, MapPin, CreditCard, Clock, AlertCircle, AlertTriangle, Pencil, CalendarPlus, XCircle, RefreshCw } from 'lucide-react';
 import { format, differenceInDays, isPast, isToday } from 'date-fns';
 import { CustomerRental } from '@/hooks/use-customer-rentals';
 import { cn } from '@/lib/utils';
@@ -17,6 +17,7 @@ import { RenewRentalDialog } from './RenewRentalDialog';
 
 interface RentalCardProps {
   rental: CustomerRental;
+  insuranceReuploadRequired?: boolean;
 }
 
 function formatCurrency(amount: number): string {
@@ -45,7 +46,7 @@ function getStatusBadgeVariant(
   }
 }
 
-export function RentalCard({ rental }: RentalCardProps) {
+export function RentalCard({ rental, insuranceReuploadRequired }: RentalCardProps) {
   const [showEditInsurance, setShowEditInsurance] = useState(false);
   const [showExtendDialog, setShowExtendDialog] = useState(false);
   const [showCancelDialog, setShowCancelDialog] = useState(false);
@@ -126,7 +127,8 @@ export function RentalCard({ rental }: RentalCardProps) {
   return (
     <Card className={cn(
       'overflow-hidden hover:shadow-md transition-shadow',
-      (isOverdue || isFailed) && 'border-red-300 dark:border-red-800'
+      (isOverdue || isFailed) && 'border-red-300 dark:border-red-800',
+      insuranceReuploadRequired && !isOverdue && !isFailed && 'border-amber-300 dark:border-amber-800'
     )}>
       <div className="flex flex-col sm:flex-row">
         {/* Vehicle Image */}
@@ -166,6 +168,12 @@ export function RentalCard({ rental }: RentalCardProps) {
                 <Badge variant={getStatusBadgeVariant(rental.status)}>
                   {rental.status}
                 </Badge>
+                {insuranceReuploadRequired && (
+                  <Badge variant="outline" className="bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-900/20 dark:text-amber-400 dark:border-amber-800">
+                    <AlertTriangle className="h-3 w-3 mr-1" />
+                    Insurance Required
+                  </Badge>
+                )}
                 {hasExtensionPending && (
                   <Badge variant="outline" className="bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-900/20 dark:text-amber-400 dark:border-amber-800">
                     Extension Pending
@@ -272,6 +280,21 @@ export function RentalCard({ rental }: RentalCardProps) {
                 <div className="flex items-center gap-2 text-muted-foreground">
                   <MapPin className="h-4 w-4" />
                   <span className="truncate">{rental.pickup_location}</span>
+                </div>
+              )}
+
+              {/* Insurance Re-upload Alert */}
+              {insuranceReuploadRequired && (
+                <div
+                  className="flex items-center gap-2 p-2 rounded-lg bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-400 cursor-pointer hover:bg-amber-100 dark:hover:bg-amber-900/30 transition-colors"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    setShowEditInsurance(true);
+                  }}
+                >
+                  <AlertTriangle className="h-4 w-4 shrink-0" />
+                  <span className="text-sm">Please re-upload your insurance document</span>
                 </div>
               )}
 

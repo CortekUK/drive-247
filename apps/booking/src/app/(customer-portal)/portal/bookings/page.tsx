@@ -2,6 +2,7 @@
 
 import { useState, useMemo } from 'react';
 import { useCustomerRentals, useCustomerRentalStats } from '@/hooks/use-customer-rentals';
+import { useCustomerNotifications } from '@/hooks/use-customer-notifications';
 import { RentalCard } from '@/components/customer-portal/RentalCard';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -53,6 +54,19 @@ export default function BookingsPage() {
 
   const { data: rentals, isLoading } = useCustomerRentals(filter);
   const { data: stats } = useCustomerRentalStats();
+  const { notifications } = useCustomerNotifications();
+
+  // Extract rental IDs that have unread insurance_reupload notifications
+  const insuranceReuploadRentalIds = useMemo(() => {
+    const ids = new Set<string>();
+    notifications
+      .filter((n) => n.type === 'insurance_reupload' && !n.is_read)
+      .forEach((n) => {
+        const rentalId = (n.metadata as Record<string, unknown>)?.rental_id;
+        if (typeof rentalId === 'string') ids.add(rentalId);
+      });
+    return ids;
+  }, [notifications]);
 
   // Sort rentals based on user selection
   const sortedRentals = useMemo(() => {
@@ -173,7 +187,7 @@ export default function BookingsPage() {
         ) : sortedRentals && sortedRentals.length > 0 ? (
           <div className="space-y-4">
             {sortedRentals.map((rental) => (
-              <RentalCard key={rental.id} rental={rental} />
+              <RentalCard key={rental.id} rental={rental} insuranceReuploadRequired={insuranceReuploadRentalIds.has(rental.id)} />
             ))}
           </div>
         ) : (

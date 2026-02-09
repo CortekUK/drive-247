@@ -24,9 +24,12 @@ import {
   MessageSquare,
   CreditCard,
   FileSignature,
+  AlertCircle,
+  Settings,
 } from 'lucide-react';
 import { useSiteSettings } from '@/hooks/useSiteSettings';
 import { useCustomerUnreadCount } from '@/hooks/use-customer-unread';
+import { useCustomerOnboarding } from '@/hooks/use-customer-onboarding';
 
 const navItems = [
   {
@@ -65,6 +68,12 @@ const navItems = [
     icon: MessageSquare,
     description: 'Chat with support',
   },
+  {
+    title: 'Settings',
+    href: '/portal/settings',
+    icon: Settings,
+    description: 'Account settings',
+  },
 ];
 
 export function CustomerPortalSidebar() {
@@ -72,6 +81,7 @@ export function CustomerPortalSidebar() {
   const { settings } = useSiteSettings();
   const { state } = useSidebar();
   const { unreadCount } = useCustomerUnreadCount();
+  const { data: onboarding } = useCustomerOnboarding();
 
   return (
     <Sidebar collapsible="icon">
@@ -106,7 +116,15 @@ export function CustomerPortalSidebar() {
                 const isActive = pathname === item.href ||
                   (item.href !== '/portal/bookings' && pathname.startsWith(item.href));
                 const isMessages = item.href === '/portal/messages';
-                const showBadge = isMessages && unreadCount > 0;
+                const isVerification = item.href === '/portal/verification';
+                const isInsurance = item.href === '/portal/documents';
+
+                // Show message unread badge
+                const showMessageBadge = isMessages && unreadCount > 0;
+
+                // Show onboarding warning badges
+                const showVerificationWarning = isVerification && onboarding && !onboarding.isVerified;
+                const showInsuranceWarning = isInsurance && onboarding && !onboarding.hasInsurance;
 
                 return (
                   <SidebarMenuItem key={item.href}>
@@ -120,9 +138,28 @@ export function CustomerPortalSidebar() {
                         <span>{item.title}</span>
                       </Link>
                     </SidebarMenuButton>
-                    {showBadge && (
+                    {/* Message unread count badge */}
+                    {showMessageBadge && (
                       <span className={`absolute ${state === 'collapsed' ? '-top-1 -right-1 w-4 h-4 text-[10px]' : 'top-1.5 right-2 px-2 py-0.5 text-xs'} inline-flex items-center justify-center font-bold leading-none text-white bg-destructive rounded-full`}>
                         {state === 'collapsed' ? (unreadCount > 9 ? '9+' : unreadCount) : (unreadCount > 99 ? '99+' : unreadCount)}
+                      </span>
+                    )}
+                    {/* Verification warning badge */}
+                    {showVerificationWarning && (
+                      <span
+                        className={`absolute ${state === 'collapsed' ? '-top-1 -right-1' : 'top-1.5 right-2'} text-amber-500`}
+                        title="ID verification required"
+                      >
+                        <AlertCircle className="h-4 w-4" />
+                      </span>
+                    )}
+                    {/* Insurance warning badge */}
+                    {showInsuranceWarning && (
+                      <span
+                        className={`absolute ${state === 'collapsed' ? '-top-1 -right-1' : 'top-1.5 right-2'} text-amber-500`}
+                        title="Insurance document required"
+                      >
+                        <AlertCircle className="h-4 w-4" />
                       </span>
                     )}
                   </SidebarMenuItem>

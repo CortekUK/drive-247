@@ -288,6 +288,45 @@ export function useViewAgreement() {
   });
 }
 
+export function useSignAgreement() {
+  return useMutation({
+    mutationFn: async (agreement: CustomerAgreement): Promise<{ signingUrl?: string; emailSent?: boolean; error?: string }> => {
+      if (!agreement.docusign_envelope_id) {
+        throw new Error('No DocuSign envelope for this agreement');
+      }
+
+      // Check if already signed
+      if (agreement.document_status === 'completed' || agreement.document_status === 'signed') {
+        throw new Error('Document already signed');
+      }
+
+      const response = await fetch('/api/docusign/sign', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ rentalId: agreement.id }),
+      });
+
+      const result = await response.json();
+
+      if (result.signingUrl) {
+        // Open DocuSign signing page in a new tab
+        window.open(result.signingUrl, '_blank');
+        return { signingUrl: result.signingUrl };
+      }
+
+      if (result.emailSent) {
+        return { emailSent: true, error: result.error };
+      }
+
+      throw new Error(result.error || 'Failed to get signing URL');
+    },
+    onError: (error) => {
+      console.error('Error getting signing URL:', error);
+      // Don't show toast here - let the component handle it
+    },
+  });
+}
+
 export function getAgreementStatusInfo(status: string | null): {
   label: string;
   variant: 'default' | 'secondary' | 'destructive' | 'outline';

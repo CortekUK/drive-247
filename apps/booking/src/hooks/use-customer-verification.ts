@@ -15,15 +15,15 @@ export interface IdentityVerification {
   document_type: string | null;
   document_number: string | null;
   document_country: string | null;
-  document_expiry: string | null;
+  document_expiry_date: string | null;
   first_name: string | null;
   last_name: string | null;
   full_name: string | null;
   date_of_birth: string | null;
-  selfie_url: string | null;
+  selfie_image_url: string | null;
   document_front_url: string | null;
   document_back_url: string | null;
-  face_url: string | null;
+  face_image_url: string | null;
   created_at: string;
   updated_at: string;
 }

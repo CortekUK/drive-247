@@ -19,10 +19,8 @@ import {
   XCircle,
   Bell,
   Calendar,
-  Filter,
   Download,
   Play,
-  Pause,
   MoreHorizontal
 } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
@@ -44,19 +42,9 @@ const SEVERITY_ICONS = {
   info: Bell
 };
 
-const STATUS_COLORS = {
-  pending: 'default',
-  sent: 'secondary',
-  snoozed: 'outline',
-  done: 'default',
-  dismissed: 'outline',
-  expired: 'outline'
-} as const;
-
 export default function RemindersPageEnhanced() {
   const [filters, setFilters] = useState<ReminderFilters>({});
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
-  const [showFilters, setShowFilters] = useState(false);
 
   const { data: reminders = [], isLoading, error } = useReminders(filters);
   const { data: stats } = useReminderStats();
@@ -94,7 +82,7 @@ export default function RemindersPageEnhanced() {
 
   const exportReminders = () => {
     const csv = [
-      'ID,Rule Code,Object Type,Object ID,Title,Message,Due On,Remind On,Status,Severity,Snooze Until,Last Sent At,Created At,Updated At',
+      'ID,Rule Code,Object Type,Object ID,Title,Message,Due On,Remind On,Severity,Created At,Updated At',
       ...reminders.map(r => [
         r.id,
         r.rule_code,
@@ -104,10 +92,7 @@ export default function RemindersPageEnhanced() {
         `"${r.message}"`,
         r.due_on,
         r.remind_on,
-        r.status,
         r.severity,
-        r.snooze_until || '',
-        r.last_sent_at || '',
         r.created_at,
         r.updated_at
       ].join(','))
@@ -178,16 +163,6 @@ export default function RemindersPageEnhanced() {
           <Button
             variant="outline"
             size="sm"
-            onClick={() => setShowFilters(!showFilters)}
-            className="flex-1 sm:flex-none"
-          >
-            <Filter className="h-4 w-4 mr-2" />
-            Filters
-          </Button>
-
-          <Button
-            variant="outline"
-            size="sm"
             onClick={exportReminders}
             disabled={reminders.length === 0}
             className="flex-1 sm:flex-none"
@@ -240,100 +215,67 @@ export default function RemindersPageEnhanced() {
             <p className="text-xs text-muted-foreground">Urgent action needed</p>
           </CardContent>
         </Card>
-
-        <Card className="bg-card hover:bg-accent/50 border transition-all duration-200 cursor-pointer hover:shadow-md">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium">Snoozed</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-muted-foreground">{stats?.snoozed || 0}</div>
-            <p className="text-xs text-muted-foreground">Deferred reminders</p>
-          </CardContent>
-        </Card>
       </div>
 
       {/* Filters Panel */}
-      {showFilters && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-sm">Filter Reminders</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-              <div className="space-y-2">
-                <Label>Status</Label>
-                <Select
-                  value={filters.status?.[0] || ''}
-                  onValueChange={(value) =>
-                    setFilters(prev => ({ ...prev, status: value ? [value] : undefined }))
-                  }
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="All statuses" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="pending">Pending</SelectItem>
-                    <SelectItem value="sent">Sent</SelectItem>
-                    <SelectItem value="snoozed">Snoozed</SelectItem>
-                    <SelectItem value="done">Done</SelectItem>
-                    <SelectItem value="dismissed">Dismissed</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="space-y-2">
-                <Label>Severity</Label>
-                <Select
-                  value={filters.severity?.[0] || ''}
-                  onValueChange={(value) =>
-                    setFilters(prev => ({ ...prev, severity: value ? [value] : undefined }))
-                  }
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="All severities" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="critical">Critical</SelectItem>
-                    <SelectItem value="warning">Warning</SelectItem>
-                    <SelectItem value="info">Info</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="space-y-2">
-                <Label>Object Type</Label>
-                <Select
-                  value={filters.object_type?.[0] || ''}
-                  onValueChange={(value) =>
-                    setFilters(prev => ({ ...prev, object_type: value ? [value] : undefined }))
-                  }
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="All types" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="Vehicle">Vehicle</SelectItem>
-                    <SelectItem value="Rental">Rental</SelectItem>
-                    <SelectItem value="Customer">Customer</SelectItem>
-                    <SelectItem value="Fine">Fine</SelectItem>
-                    <SelectItem value="Document">Document</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="flex items-end">
-                <Button
-                  variant="outline"
-                  onClick={() => setFilters({})}
-                  className="w-full"
-                >
-                  Clear Filters
-                </Button>
-              </div>
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-sm">Filter Reminders</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="space-y-2">
+              <Label>Severity</Label>
+              <Select
+                value={filters.severity?.[0] || ''}
+                onValueChange={(value) =>
+                  setFilters(prev => ({ ...prev, severity: value ? [value] : undefined }))
+                }
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="All severities" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="critical">Critical</SelectItem>
+                  <SelectItem value="warning">Warning</SelectItem>
+                  <SelectItem value="info">Info</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
-          </CardContent>
-        </Card>
-      )}
+
+            <div className="space-y-2">
+              <Label>Object Type</Label>
+              <Select
+                value={filters.object_type?.[0] || ''}
+                onValueChange={(value) =>
+                  setFilters(prev => ({ ...prev, object_type: value ? [value] : undefined }))
+                }
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="All types" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="Vehicle">Vehicle</SelectItem>
+                  <SelectItem value="Rental">Rental</SelectItem>
+                  <SelectItem value="Customer">Customer</SelectItem>
+                  <SelectItem value="Fine">Fine</SelectItem>
+                  <SelectItem value="Document">Document</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="flex items-end">
+              <Button
+                variant="outline"
+                onClick={() => setFilters({})}
+                className="w-full"
+              >
+                Clear Filters
+              </Button>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
 
       {/* Bulk Actions */}
       {selectedIds.length > 0 && (
@@ -363,38 +305,6 @@ export default function RemindersPageEnhanced() {
                   <XCircle className="h-4 w-4 mr-2" />
                   Dismiss
                 </Button>
-
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button size="sm" variant="outline">
-                      <Pause className="h-4 w-4 mr-2" />
-                      Snooze
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent>
-                    <DropdownMenuItem onClick={() => {
-                      const snoozeUntil = new Date();
-                      snoozeUntil.setDate(snoozeUntil.getDate() + 1);
-                      handleBulkAction('snoozed', snoozeUntil.toISOString().split('T')[0]);
-                    }}>
-                      1 day
-                    </DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => {
-                      const snoozeUntil = new Date();
-                      snoozeUntil.setDate(snoozeUntil.getDate() + 7);
-                      handleBulkAction('snoozed', snoozeUntil.toISOString().split('T')[0]);
-                    }}>
-                      1 week
-                    </DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => {
-                      const snoozeUntil = new Date();
-                      snoozeUntil.setDate(snoozeUntil.getDate() + 14);
-                      handleBulkAction('snoozed', snoozeUntil.toISOString().split('T')[0]);
-                    }}>
-                      2 weeks
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
               </div>
             </div>
           </CardContent>
@@ -444,8 +354,6 @@ export default function RemindersPageEnhanced() {
                     <TableHead>Object</TableHead>
                     <TableHead>Due On</TableHead>
                     <TableHead>Remind On</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead>Snooze Until</TableHead>
                     <TableHead className="w-[100px]">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -492,18 +400,6 @@ export default function RemindersPageEnhanced() {
                         </div>
                       </TableCell>
                       <TableCell>
-                        <Badge variant={STATUS_COLORS[reminder.status as keyof typeof STATUS_COLORS]}>
-                          {capitalize(reminder.status)}
-                        </Badge>
-                      </TableCell>
-                      <TableCell>
-                        {reminder.snooze_until && (
-                          <div className="text-sm">
-                            {format(parseISO(reminder.snooze_until), 'MMM dd, yyyy')}
-                          </div>
-                        )}
-                      </TableCell>
-                      <TableCell>
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>
                             <Button variant="ghost" size="sm">
@@ -511,40 +407,13 @@ export default function RemindersPageEnhanced() {
                             </Button>
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end">
-                            <DropdownMenuItem
-                              onClick={() => markDone(reminder.id)}
-                              disabled={['done', 'dismissed', 'expired'].includes(reminder.status)}
-                            >
+                            <DropdownMenuItem onClick={() => markDone(reminder.id)}>
                               <CheckCircle className="h-4 w-4 mr-2" />
                               Mark Done
                             </DropdownMenuItem>
-                            <DropdownMenuItem
-                              onClick={() => dismiss(reminder.id)}
-                              disabled={['done', 'dismissed', 'expired'].includes(reminder.status)}
-                            >
+                            <DropdownMenuItem onClick={() => dismiss(reminder.id)}>
                               <XCircle className="h-4 w-4 mr-2" />
                               Dismiss
-                            </DropdownMenuItem>
-                            <DropdownMenuItem
-                              onClick={() => snooze(reminder.id, 1)}
-                              disabled={['done', 'dismissed', 'expired'].includes(reminder.status)}
-                            >
-                              <Pause className="h-4 w-4 mr-2" />
-                              Snooze 1 day
-                            </DropdownMenuItem>
-                            <DropdownMenuItem
-                              onClick={() => snooze(reminder.id, 7)}
-                              disabled={['done', 'dismissed', 'expired'].includes(reminder.status)}
-                            >
-                              <Pause className="h-4 w-4 mr-2" />
-                              Snooze 1 week
-                            </DropdownMenuItem>
-                            <DropdownMenuItem
-                              onClick={() => snooze(reminder.id, 14)}
-                              disabled={['done', 'dismissed', 'expired'].includes(reminder.status)}
-                            >
-                              <Pause className="h-4 w-4 mr-2" />
-                              Snooze 2 weeks
                             </DropdownMenuItem>
                           </DropdownMenuContent>
                         </DropdownMenu>

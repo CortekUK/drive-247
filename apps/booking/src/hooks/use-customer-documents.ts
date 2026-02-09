@@ -95,6 +95,7 @@ export function useDeleteCustomerDocument() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['customer-documents'] });
+      queryClient.invalidateQueries({ queryKey: ['customer-onboarding'] });
       toast.success('Document deleted successfully');
     },
     onError: (error) => {

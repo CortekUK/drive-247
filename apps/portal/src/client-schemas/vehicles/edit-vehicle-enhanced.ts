@@ -1,4 +1,8 @@
 import { z } from "zod";
+import { startOfDay } from "date-fns";
+
+// Helper to get today at midnight for date comparisons
+const getToday = () => startOfDay(new Date());
 
 export const editVehicleEnhancedSchema = z.object({
   reg: z.string().min(1, "Registration number is required"),
@@ -8,7 +12,11 @@ export const editVehicleEnhancedSchema = z.object({
   fuel_type: z.enum(['Petrol', 'Diesel', 'Hybrid', 'Electric']),
   purchase_price: z.union([z.number().min(0, "Price must be positive"), z.undefined(), z.null()]).optional(),
   contract_total: z.union([z.number().min(0, "Contract total must be positive"), z.undefined(), z.null()]).optional(),
-  acquisition_date: z.date(),
+  // Acquisition date: cannot be in the future
+  acquisition_date: z.date().refine(
+    (date) => startOfDay(date) <= getToday(),
+    "Acquisition date cannot be in the future"
+  ),
   acquisition_type: z.enum(['Purchase', 'Finance']),
   // Rent fields
   daily_rent: z.number({ required_error: "Daily rent is required", invalid_type_error: "Daily rent must be a number" }).min(0, "Daily rent must be positive"),
@@ -18,7 +26,7 @@ export const editVehicleEnhancedSchema = z.object({
   security_deposit: z.union([z.number().min(0, "Security deposit must be positive"), z.undefined(), z.null()]).optional(),
   // Allowed mileage per month (miles)
   allowed_mileage: z.union([z.number().int().min(1, "Mileage must be at least 1 mile"), z.undefined(), z.null()]).optional(),
-  // MOT & TAX fields
+  // MOT & TAX fields - For edit, allow past dates (legacy data / overdue vehicles)
   mot_due_date: z.date().optional(),
   tax_due_date: z.date().optional(),
   // Warranty fields
@@ -54,6 +62,26 @@ export const editVehicleEnhancedSchema = z.object({
       message: "Contract total is required for financed vehicles",
       path: ["contract_total"],
     });
+  }
+
+  // Warranty end date requires warranty start date
+  if (data.warranty_end_date && !data.warranty_start_date) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "Warranty start date is required when end date is set",
+      path: ["warranty_start_date"],
+    });
+  }
+
+  // Warranty end date must be after warranty start date
+  if (data.warranty_start_date && data.warranty_end_date) {
+    if (data.warranty_end_date <= data.warranty_start_date) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Warranty end date must be after start date",
+        path: ["warranty_end_date"],
+      });
+    }
   }
 }).refine((data) => {
   if (data.has_spare_key) {

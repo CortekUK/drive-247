@@ -172,30 +172,13 @@ export const RefundDialog = ({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[450px]">
+      <DialogContent className="sm:max-w-[520px]">
         <DialogHeader>
           <DialogTitle>Refund {category}</DialogTitle>
           <DialogDescription>
             Process a refund for the {category.toLowerCase()} charge.
           </DialogDescription>
         </DialogHeader>
-
-        <div className="bg-muted/50 rounded-lg p-4 mb-4">
-          <div className="grid grid-cols-2 gap-4 text-sm">
-            <div>
-              <p className="text-muted-foreground">Total Charged</p>
-              <p className="font-semibold">${totalAmount.toFixed(2)}</p>
-            </div>
-            <div>
-              <p className="text-muted-foreground">Amount Paid</p>
-              <p className="font-semibold text-green-600">${paidAmount.toFixed(2)}</p>
-            </div>
-          </div>
-          <div className="mt-3 pt-3 border-t">
-            <p className="text-muted-foreground text-sm">Maximum Refundable</p>
-            <p className="font-bold text-lg">${maxRefundAmount.toFixed(2)}</p>
-          </div>
-        </div>
 
         {maxRefundAmount <= 0 && (
           <Alert variant="destructive">
@@ -208,45 +191,32 @@ export const RefundDialog = ({
 
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-            <FormField
-              control={form.control}
-              name="refundType"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Refund Type</FormLabel>
-                  <FormControl>
-                    <RadioGroup
-                      onValueChange={field.onChange}
-                      defaultValue={field.value}
-                      className="flex gap-4"
-                    >
-                      <div className="flex items-center space-x-2">
-                        <RadioGroupItem value="full" id="full" />
-                        <Label htmlFor="full" className="cursor-pointer">
-                          Full Refund (${maxRefundAmount.toFixed(2)})
-                        </Label>
-                      </div>
-                      <div className="flex items-center space-x-2">
-                        <RadioGroupItem value="partial" id="partial" />
-                        <Label htmlFor="partial" className="cursor-pointer">
-                          Partial Refund
-                        </Label>
-                      </div>
-                    </RadioGroup>
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+            <div className="grid grid-cols-2 gap-4">
+              {/* Left column - Summary & Type */}
+              <div className="space-y-4">
+                <div className="bg-muted/50 rounded-lg p-3">
+                  <div className="grid grid-cols-2 gap-3 text-sm">
+                    <div>
+                      <p className="text-muted-foreground text-xs">Total Charged</p>
+                      <p className="font-semibold">${totalAmount.toFixed(2)}</p>
+                    </div>
+                    <div>
+                      <p className="text-muted-foreground text-xs">Amount Paid</p>
+                      <p className="font-semibold text-green-600">${paidAmount.toFixed(2)}</p>
+                    </div>
+                  </div>
+                  <div className="mt-2 pt-2 border-t">
+                    <p className="text-muted-foreground text-xs">Maximum Refundable</p>
+                    <p className="font-bold text-lg">${maxRefundAmount.toFixed(2)}</p>
+                  </div>
+                </div>
 
-            {refundType === "partial" && (
-              <>
                 <FormField
                   control={form.control}
-                  name="amountType"
+                  name="refundType"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Specify Amount By</FormLabel>
+                      <FormLabel>Refund Type</FormLabel>
                       <FormControl>
                         <RadioGroup
                           onValueChange={field.onChange}
@@ -254,17 +224,15 @@ export const RefundDialog = ({
                           className="flex gap-4"
                         >
                           <div className="flex items-center space-x-2">
-                            <RadioGroupItem value="fixed" id="fixed" />
-                            <Label htmlFor="fixed" className="cursor-pointer flex items-center gap-1">
-                              <DollarSign className="h-4 w-4" />
-                              Fixed Amount
+                            <RadioGroupItem value="full" id="full" />
+                            <Label htmlFor="full" className="cursor-pointer text-sm">
+                              Full (${maxRefundAmount.toFixed(2)})
                             </Label>
                           </div>
                           <div className="flex items-center space-x-2">
-                            <RadioGroupItem value="percentage" id="percentage" />
-                            <Label htmlFor="percentage" className="cursor-pointer flex items-center gap-1">
-                              <Percent className="h-4 w-4" />
-                              Percentage
+                            <RadioGroupItem value="partial" id="partial" />
+                            <Label htmlFor="partial" className="cursor-pointer text-sm">
+                              Partial
                             </Label>
                           </div>
                         </RadioGroup>
@@ -274,100 +242,140 @@ export const RefundDialog = ({
                   )}
                 />
 
-                {amountType === "fixed" && (
-                  <FormField
-                    control={form.control}
-                    name="refundAmount"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Refund Amount ($)</FormLabel>
-                        <FormControl>
-                          <div className="relative">
-                            <DollarSign className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                            <Input
-                              type="number"
-                              step="0.01"
-                              max={maxRefundAmount}
-                              placeholder="Enter amount"
-                              className="pl-9"
-                              {...field}
-                              value={field.value ?? ''}
-                              onChange={(e) => field.onChange(e.target.value === '' ? undefined : parseFloat(e.target.value))}
-                            />
-                          </div>
-                        </FormControl>
-                        <FormDescription>
-                          Max: ${maxRefundAmount.toFixed(2)}
-                        </FormDescription>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                )}
-
-                {amountType === "percentage" && (
-                  <FormField
-                    control={form.control}
-                    name="refundPercentage"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Refund Percentage (%)</FormLabel>
-                        <FormControl>
-                          <div className="relative">
-                            <Input
-                              type="number"
-                              step="any"
-                              min="0.01"
-                              max="100"
-                              placeholder="Enter percentage"
-                              className="pr-9"
-                              {...field}
-                              value={field.value ?? ''}
-                              onChange={(e) => field.onChange(e.target.value === '' ? undefined : parseFloat(e.target.value))}
-                            />
-                            <Percent className="absolute right-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                          </div>
-                        </FormControl>
-                        {field.value && (
-                          <FormDescription>
-                            Refund Amount: ${((maxRefundAmount * field.value) / 100).toFixed(2)}
-                          </FormDescription>
-                        )}
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                )}
-              </>
-            )}
-
-            {calculatedRefundAmount > 0 && (
-              <div className="bg-primary/10 rounded-lg p-3 border border-primary/20">
-                <p className="text-sm text-muted-foreground">Refund Amount</p>
-                <p className="text-xl font-bold text-primary">${calculatedRefundAmount.toFixed(2)}</p>
-              </div>
-            )}
-
-            <FormField
-              control={form.control}
-              name="reason"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Reason for Refund <span className="text-red-500">*</span></FormLabel>
-                  <FormControl>
-                    <Textarea
-                      placeholder="Enter the reason for this refund..."
-                      className="resize-none"
-                      rows={3}
-                      {...field}
+                {refundType === "partial" && (
+                  <>
+                    <FormField
+                      control={form.control}
+                      name="amountType"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Specify Amount By</FormLabel>
+                          <FormControl>
+                            <RadioGroup
+                              onValueChange={field.onChange}
+                              defaultValue={field.value}
+                              className="flex gap-4"
+                            >
+                              <div className="flex items-center space-x-2">
+                                <RadioGroupItem value="fixed" id="fixed" />
+                                <Label htmlFor="fixed" className="cursor-pointer flex items-center gap-1 text-sm">
+                                  <DollarSign className="h-3.5 w-3.5" />
+                                  Fixed
+                                </Label>
+                              </div>
+                              <div className="flex items-center space-x-2">
+                                <RadioGroupItem value="percentage" id="percentage" />
+                                <Label htmlFor="percentage" className="cursor-pointer flex items-center gap-1 text-sm">
+                                  <Percent className="h-3.5 w-3.5" />
+                                  Percentage
+                                </Label>
+                              </div>
+                            </RadioGroup>
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
                     />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
 
-            <div className="flex justify-end gap-2 pt-4">
+                    {amountType === "fixed" && (
+                      <FormField
+                        control={form.control}
+                        name="refundAmount"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Refund Amount ($)</FormLabel>
+                            <FormControl>
+                              <div className="relative">
+                                <DollarSign className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                                <Input
+                                  type="number"
+                                  step="0.01"
+                                  max={maxRefundAmount}
+                                  placeholder="Enter amount"
+                                  className="pl-9"
+                                  {...field}
+                                  value={field.value ?? ''}
+                                  onChange={(e) => field.onChange(e.target.value === '' ? undefined : parseFloat(e.target.value))}
+                                />
+                              </div>
+                            </FormControl>
+                            <FormDescription>
+                              Max: ${maxRefundAmount.toFixed(2)}
+                            </FormDescription>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                    )}
+
+                    {amountType === "percentage" && (
+                      <FormField
+                        control={form.control}
+                        name="refundPercentage"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Refund Percentage (%)</FormLabel>
+                            <FormControl>
+                              <div className="relative">
+                                <Input
+                                  type="number"
+                                  step="any"
+                                  min="0.01"
+                                  max="100"
+                                  placeholder="Enter percentage"
+                                  className="pr-9"
+                                  {...field}
+                                  value={field.value ?? ''}
+                                  onChange={(e) => field.onChange(e.target.value === '' ? undefined : parseFloat(e.target.value))}
+                                />
+                                <Percent className="absolute right-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                              </div>
+                            </FormControl>
+                            {field.value && (
+                              <FormDescription>
+                                Refund Amount: ${((maxRefundAmount * field.value) / 100).toFixed(2)}
+                              </FormDescription>
+                            )}
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                    )}
+                  </>
+                )}
+              </div>
+
+              {/* Right column - Reason & Summary */}
+              <div className="space-y-4">
+                <FormField
+                  control={form.control}
+                  name="reason"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Reason for Refund <span className="text-red-500">*</span></FormLabel>
+                      <FormControl>
+                        <Textarea
+                          placeholder="Enter the reason for this refund..."
+                          className="resize-none"
+                          rows={refundType === "partial" ? 5 : 4}
+                          {...field}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                {calculatedRefundAmount > 0 && (
+                  <div className="bg-primary/10 rounded-lg p-3 border border-primary/20">
+                    <p className="text-sm text-muted-foreground">Refund Amount</p>
+                    <p className="text-xl font-bold text-primary">${calculatedRefundAmount.toFixed(2)}</p>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-2 pt-2 border-t">
               <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
                 Cancel
               </Button>

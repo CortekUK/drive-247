@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useTenant } from '@/contexts/TenantContext';
 import { useDeliveryLocations, DeliveryLocation } from '@/hooks/useDeliveryLocations';
 import LocationAutocomplete from '@/components/LocationAutocomplete';
@@ -107,11 +107,26 @@ export default function LocationPicker({
     }
   }, [fixedEnabled, multipleEnabled, areaEnabled]);
 
-  // Auto-set fixed address in multi-option mode when switching to fixed method.
-  // Single-option mode is handled by the parent (MultiStepBookingWidget) via its own useEffect.
+  // Keep a ref to the latest onChange to avoid stale closure issues
+  const onChangeRef = useRef(onChange);
   useEffect(() => {
-    if (fixedEnabled && fixedAddress && showRadioOptions && selectedMethod === 'fixed' && !value) {
-      onChange(fixedAddress, undefined, undefined, undefined, 0);
+    onChangeRef.current = onChange;
+  }, [onChange]);
+
+  // Auto-set fixed address when method is fixed OR when it's the only option
+  useEffect(() => {
+    // When fixed is selected (multi-option) or is the only option (single-option)
+    if (fixedEnabled && fixedAddress) {
+      const isSingleFixedOption = !showRadioOptions;
+      const isMultiOptionFixedSelected = selectedMethod === 'fixed';
+
+      // For single-option mode, always ensure the address is set when tenant loads
+      // For multi-option mode, set when fixed is selected and value doesn't match
+      if (isSingleFixedOption && value !== fixedAddress) {
+        onChangeRef.current(fixedAddress, undefined, undefined, undefined, 0);
+      } else if (isMultiOptionFixedSelected && !value) {
+        onChangeRef.current(fixedAddress, undefined, undefined, undefined, 0);
+      }
     }
   }, [selectedMethod, fixedAddress, value, fixedEnabled, showRadioOptions]);
 

@@ -124,7 +124,7 @@ function parseChartData(content: string): { cleanContent: string; chart?: ChartD
 // ============================================================================
 // System Prompt Builder
 // ============================================================================
-function getSystemPrompt(customerName: string, context: Record<string, unknown>): string {
+function getSystemPrompt(customerName: string, context: Record<string, unknown>, tenantName: string): string {
   const customer = context.customer as Record<string, unknown> || {};
   const rentals = context.rentals as Array<Record<string, unknown>> || [];
   const payments = context.payments as Array<Record<string, unknown>> || [];
@@ -185,7 +185,11 @@ Identity Verification:
 - Type: ${verification.verification_type || 'N/A'}
 - Verified: ${verification.verified_at ? 'Yes' : 'No'}` : '';
 
-  return `You are Trax, a friendly and helpful AI assistant for the Drive247 car rental customer portal. You help customers understand their bookings, payments, agreements, and answer questions about their rentals.
+  return `You are Trax, a friendly and helpful AI assistant for ${tenantName} car rentals. You help customers understand their bookings, payments, agreements, and answer questions about their rentals.
+
+Company name: ${tenantName}
+
+When introducing yourself or asked "who are you", naturally mention that you're Trax, the AI assistant for ${tenantName}. Use the company name conversationally - for example: "Hi! I'm Trax, your AI assistant here at ${tenantName}. How can I help you today?"
 
 ${customerName ? `You're speaking with ${customerName}. Be friendly, warm, and personalized.` : ''}
 
@@ -293,6 +297,15 @@ serve(async (req) => {
       return errorResponse('No tenant context found for customer', 403);
     }
 
+    // Get tenant name for personalized branding
+    const { data: tenantData } = await supabase
+      .from('tenants')
+      .select('company_name')
+      .eq('id', tenantId)
+      .single();
+
+    const tenantName = tenantData?.company_name || 'Drive247';
+
     // Parse request body
     let body: CustomerChatRequest;
     try {
@@ -375,7 +388,7 @@ serve(async (req) => {
 
     // Build messages array for chat completion
     const messages: ChatMessage[] = [
-      { role: 'system', content: getSystemPrompt(customerName, context || {}) },
+      { role: 'system', content: getSystemPrompt(customerName, context || {}, tenantName) },
       { role: 'user', content: message },
     ];
 

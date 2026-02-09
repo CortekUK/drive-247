@@ -2,7 +2,7 @@
 
 import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
-import { Check, CheckCheck } from 'lucide-react';
+import { Check, CheckCheck, User } from 'lucide-react';
 import type { ChatMessage } from '@/hooks/use-customer-chat';
 import { BookingReferenceCard } from './BookingReferenceCard';
 import type { BookingReference } from './BookingPicker';
@@ -11,9 +11,10 @@ interface CustomerChatMessageProps {
   message: ChatMessage;
   isOwnMessage: boolean;  // true if sent by customer (current user)
   tenantName?: string;
+  customerProfilePhoto?: string | null;
 }
 
-export function CustomerChatMessage({ message, isOwnMessage, tenantName }: CustomerChatMessageProps) {
+export function CustomerChatMessage({ message, isOwnMessage, tenantName, customerProfilePhoto }: CustomerChatMessageProps) {
   const formattedTime = format(new Date(message.created_at), 'h:mm a');
   const formattedDate = format(new Date(message.created_at), 'MMM d, yyyy');
 
@@ -28,7 +29,7 @@ export function CustomerChatMessage({ message, isOwnMessage, tenantName }: Custo
   return (
     <div
       className={cn(
-        'flex w-full mb-3',
+        'flex w-full mb-3 gap-2',
         isOwnMessage ? 'justify-end' : 'justify-start'
       )}
     >
@@ -84,6 +85,21 @@ export function CustomerChatMessage({ message, isOwnMessage, tenantName }: Custo
           )}
         </div>
       </div>
+
+      {/* Avatar for customer (own messages) */}
+      {isOwnMessage && (
+        customerProfilePhoto ? (
+          <img
+            src={customerProfilePhoto}
+            alt="You"
+            className="flex-shrink-0 h-7 w-7 rounded-full object-cover"
+          />
+        ) : (
+          <div className="flex-shrink-0 h-7 w-7 rounded-full bg-primary flex items-center justify-center">
+            <User className="h-4 w-4 text-primary-foreground" />
+          </div>
+        )
+      )}
     </div>
   );
 }

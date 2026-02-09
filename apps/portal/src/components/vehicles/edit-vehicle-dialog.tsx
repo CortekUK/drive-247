@@ -13,7 +13,7 @@ import { Edit, Car, CalendarIcon, ShieldCheck, KeyRound, Cog } from "lucide-reac
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { useQueryClient } from "@tanstack/react-query";
-import { format } from "date-fns";
+import { format, startOfDay } from "date-fns";
 import { cn } from "@/lib/utils";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
@@ -113,14 +113,14 @@ export const EditVehicleDialog = ({ vehicle, open, onOpenChange }: EditVehicleDi
         year: data.year,
         colour: data.colour,
         acquisition_type: data.acquisition_type,
-        acquisition_date: data.acquisition_date.toISOString().split('T')[0],
+        acquisition_date: format(data.acquisition_date, 'yyyy-MM-dd'),
         daily_rent: data.daily_rent,
         weekly_rent: data.weekly_rent,
         monthly_rent: data.monthly_rent,
-        mot_due_date: data.mot_due_date?.toISOString().split('T')[0],
-        tax_due_date: data.tax_due_date?.toISOString().split('T')[0],
-        warranty_start_date: data.warranty_start_date?.toISOString().split('T')[0],
-        warranty_end_date: data.warranty_end_date?.toISOString().split('T')[0],
+        mot_due_date: data.mot_due_date ? format(data.mot_due_date, 'yyyy-MM-dd') : undefined,
+        tax_due_date: data.tax_due_date ? format(data.tax_due_date, 'yyyy-MM-dd') : undefined,
+        warranty_start_date: data.warranty_start_date ? format(data.warranty_start_date, 'yyyy-MM-dd') : undefined,
+        warranty_end_date: data.warranty_end_date ? format(data.warranty_end_date, 'yyyy-MM-dd') : undefined,
         has_logbook: data.has_logbook,
         has_service_plan: data.has_service_plan,
         has_spare_key: data.has_spare_key,
@@ -252,7 +252,7 @@ export const EditVehicleDialog = ({ vehicle, open, onOpenChange }: EditVehicleDi
                               selected={field.value}
                               onSelect={field.onChange}
                               disabled={(date) =>
-                                date > new Date() || date < new Date("1900-01-01")
+                                startOfDay(date) > startOfDay(new Date()) || date < new Date("1900-01-01")
                               }
                               initialFocus
                             />
@@ -502,7 +502,7 @@ export const EditVehicleDialog = ({ vehicle, open, onOpenChange }: EditVehicleDi
                               mode="single"
                               selected={field.value}
                               onSelect={field.onChange}
-                              disabled={(date) => date < new Date("1900-01-01")}
+                              disabled={(date) => startOfDay(date) < startOfDay(new Date())}
                               initialFocus
                             />
                           </PopoverContent>
@@ -542,7 +542,7 @@ export const EditVehicleDialog = ({ vehicle, open, onOpenChange }: EditVehicleDi
                               mode="single"
                               selected={field.value}
                               onSelect={field.onChange}
-                              disabled={(date) => date < new Date("1900-01-01")}
+                              disabled={(date) => startOfDay(date) < startOfDay(new Date())}
                               initialFocus
                             />
                           </PopoverContent>
@@ -557,81 +557,99 @@ export const EditVehicleDialog = ({ vehicle, open, onOpenChange }: EditVehicleDi
                   <FormField
                     control={form.control}
                     name="warranty_start_date"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Warranty Start Date</FormLabel>
-                        <Popover modal={true}>
-                          <PopoverTrigger asChild>
-                            <FormControl>
-                              <Button
-                                variant={"outline"}
-                                className={cn(
-                                  "w-full pl-3 text-left font-normal",
-                                  !field.value && "text-muted-foreground"
-                                )}
-                              >
-                                {field.value ? (
-                                  format(field.value, "PPP")
-                                ) : (
-                                  <span>Pick warranty start date</span>
-                                )}
-                                <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
-                              </Button>
-                            </FormControl>
-                          </PopoverTrigger>
-                          <PopoverContent className="w-auto p-0" align="start">
-                            <Calendar
-                              mode="single"
-                              selected={field.value}
-                              onSelect={field.onChange}
-                              disabled={(date) => date < new Date("1900-01-01")}
-                              initialFocus
-                            />
-                          </PopoverContent>
-                        </Popover>
-                        <FormMessage />
-                      </FormItem>
-                    )}
+                    render={({ field }) => {
+                      const warrantyEndDate = form.watch("warranty_end_date");
+                      return (
+                        <FormItem>
+                          <FormLabel>Warranty Start Date</FormLabel>
+                          <Popover modal={true}>
+                            <PopoverTrigger asChild>
+                              <FormControl>
+                                <Button
+                                  variant={"outline"}
+                                  className={cn(
+                                    "w-full pl-3 text-left font-normal",
+                                    !field.value && "text-muted-foreground"
+                                  )}
+                                >
+                                  {field.value ? (
+                                    format(field.value, "PPP")
+                                  ) : (
+                                    <span>Pick warranty start date</span>
+                                  )}
+                                  <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
+                                </Button>
+                              </FormControl>
+                            </PopoverTrigger>
+                            <PopoverContent className="w-auto p-0" align="start">
+                              <Calendar
+                                mode="single"
+                                selected={field.value}
+                                onSelect={(date) => {
+                                  field.onChange(date);
+                                  // Clear end date if the new start date is on or after it
+                                  if (date && warrantyEndDate && startOfDay(date) >= startOfDay(warrantyEndDate)) {
+                                    form.setValue("warranty_end_date", undefined);
+                                  }
+                                }}
+                                disabled={(date) => date < new Date("1900-01-01")}
+                                initialFocus
+                              />
+                            </PopoverContent>
+                          </Popover>
+                          <FormMessage />
+                        </FormItem>
+                      );
+                    }}
                   />
 
                   <FormField
                     control={form.control}
                     name="warranty_end_date"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Warranty End Date</FormLabel>
-                        <Popover modal={true}>
-                          <PopoverTrigger asChild>
-                            <FormControl>
-                              <Button
-                                variant={"outline"}
-                                className={cn(
-                                  "w-full pl-3 text-left font-normal",
-                                  !field.value && "text-muted-foreground"
-                                )}
-                              >
-                                {field.value ? (
-                                  format(field.value, "PPP")
-                                ) : (
-                                  <span>Pick warranty end date</span>
-                                )}
-                                <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
-                              </Button>
-                            </FormControl>
-                          </PopoverTrigger>
-                          <PopoverContent className="w-auto p-0" align="start">
-                            <Calendar
-                              mode="single"
-                              selected={field.value}
-                              onSelect={field.onChange}
-                              disabled={(date) => date < new Date("1900-01-01")}
-                              initialFocus
-                            />
-                          </PopoverContent>
-                        </Popover>
-                        <FormMessage />
-                      </FormItem>
-                    )}
+                    render={({ field }) => {
+                      const warrantyStartDate = form.watch("warranty_start_date");
+                      return (
+                        <FormItem>
+                          <FormLabel>Warranty End Date</FormLabel>
+                          <Popover modal={true}>
+                            <PopoverTrigger asChild>
+                              <FormControl>
+                                <Button
+                                  variant={"outline"}
+                                  className={cn(
+                                    "w-full pl-3 text-left font-normal",
+                                    !field.value && "text-muted-foreground"
+                                  )}
+                                >
+                                  {field.value ? (
+                                    format(field.value, "PPP")
+                                  ) : (
+                                    <span>Pick warranty end date</span>
+                                  )}
+                                  <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
+                                </Button>
+                              </FormControl>
+                            </PopoverTrigger>
+                            <PopoverContent className="w-auto p-0" align="start">
+                              <Calendar
+                                mode="single"
+                                selected={field.value}
+                                onSelect={field.onChange}
+                                disabled={(date) => {
+                                  // Must be after warranty start date if set
+                                  if (warrantyStartDate && startOfDay(date) <= startOfDay(warrantyStartDate)) {
+                                    return true;
+                                  }
+                                  return date < new Date("1900-01-01");
+                                }}
+                                initialFocus
+                              />
+                            </PopoverContent>
+                          </Popover>
+                          <FormMessage />
+                        </FormItem>
+                      );
+                    }}
                   />
                 </div>
 

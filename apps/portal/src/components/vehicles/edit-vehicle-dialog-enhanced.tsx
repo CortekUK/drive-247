@@ -16,7 +16,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { useQueryClient } from "@tanstack/react-query";
 import { useAuditLog } from "@/hooks/use-audit-log";
-import { format } from "date-fns";
+import { format, startOfDay } from "date-fns";
 import { cn } from "@/lib/utils";
 import { getContractTotal } from "@/lib/vehicle-utils";
 import { editVehicleEnhancedSchema, type EditVehicleEnhancedFormValues } from "@/client-schemas/vehicles/edit-vehicle-enhanced";
@@ -139,14 +139,14 @@ export const EditVehicleDialogEnhanced = ({ vehicle, open, onOpenChange }: EditV
         colour: data.colour,
         fuel_type: data.fuel_type,
         acquisition_type: data.acquisition_type,
-        acquisition_date: data.acquisition_date.toISOString().split('T')[0],
+        acquisition_date: format(data.acquisition_date, 'yyyy-MM-dd'),
         daily_rent: data.daily_rent || null,
         weekly_rent: data.weekly_rent || null,
         monthly_rent: data.monthly_rent || null,
-        mot_due_date: data.mot_due_date?.toISOString().split('T')[0],
-        tax_due_date: data.tax_due_date?.toISOString().split('T')[0],
-        warranty_start_date: data.warranty_start_date?.toISOString().split('T')[0],
-        warranty_end_date: data.warranty_end_date?.toISOString().split('T')[0],
+        mot_due_date: data.mot_due_date ? format(data.mot_due_date, 'yyyy-MM-dd') : undefined,
+        tax_due_date: data.tax_due_date ? format(data.tax_due_date, 'yyyy-MM-dd') : undefined,
+        warranty_start_date: data.warranty_start_date ? format(data.warranty_start_date, 'yyyy-MM-dd') : undefined,
+        warranty_end_date: data.warranty_end_date ? format(data.warranty_end_date, 'yyyy-MM-dd') : undefined,
         has_logbook: data.has_logbook,
         has_service_plan: data.has_service_plan,
         has_spare_key: data.has_spare_key,
@@ -308,14 +308,39 @@ export const EditVehicleDialogEnhanced = ({ vehicle, open, onOpenChange }: EditV
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Acquisition Date</FormLabel>
-                    <FormControl>
-                      <Input 
-                        type="date" 
-                        {...field}
-                        value={field.value ? field.value.toISOString().split('T')[0] : ''}
-                        onChange={(e) => field.onChange(new Date(e.target.value))}
-                      />
-                    </FormControl>
+                    <Popover modal={true}>
+                      <PopoverTrigger asChild>
+                        <FormControl>
+                          <Button
+                            type="button"
+                            variant={"outline"}
+                            className={cn(
+                              "w-full pl-3 text-left font-normal",
+                              !field.value && "text-muted-foreground"
+                            )}
+                          >
+                            {field.value ? (
+                              format(field.value, "PPP")
+                            ) : (
+                              <span>Pick acquisition date</span>
+                            )}
+                            <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
+                          </Button>
+                        </FormControl>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-auto p-0 z-[200]" align="start">
+                        <Calendar
+                          mode="single"
+                          selected={field.value}
+                          onSelect={field.onChange}
+                          disabled={(date) =>
+                            startOfDay(date) > startOfDay(new Date()) || date < new Date("1900-01-01")
+                          }
+                          initialFocus
+                          className="pointer-events-auto"
+                        />
+                      </PopoverContent>
+                    </Popover>
                     <FormMessage />
                   </FormItem>
                 )}
@@ -705,6 +730,7 @@ export const EditVehicleDialogEnhanced = ({ vehicle, open, onOpenChange }: EditV
                           mode="single"
                           selected={field.value}
                           onSelect={field.onChange}
+                          disabled={(date) => startOfDay(date) < startOfDay(new Date())}
                           initialFocus
                           className="pointer-events-auto"
                         />
@@ -746,6 +772,7 @@ export const EditVehicleDialogEnhanced = ({ vehicle, open, onOpenChange }: EditV
                           mode="single"
                           selected={field.value}
                           onSelect={field.onChange}
+                          disabled={(date) => startOfDay(date) < startOfDay(new Date())}
                           initialFocus
                           className="pointer-events-auto"
                         />

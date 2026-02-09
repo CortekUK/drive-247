@@ -11,7 +11,7 @@ import {
   type InstallmentPlan,
   type ScheduledInstallment,
 } from '@/hooks/use-customer-installments';
-import { useCustomerInvoices, type CustomerInvoice } from '@/hooks/use-customer-invoices';
+import { useCustomerInvoices, useInvoiceStats, type CustomerInvoice } from '@/hooks/use-customer-invoices';
 import {
   usePayInstallmentEarly,
   usePayRemainingInstallments,
@@ -616,16 +616,33 @@ function InvoiceList({
     );
   }
 
-  const getStatusVariant = (status: string | null) => {
-    switch (status?.toLowerCase()) {
+  const getStatusVariant = (status: string) => {
+    switch (status) {
       case 'paid':
         return 'default';
-      case 'pending':
+      case 'partial':
         return 'secondary';
+      case 'pending':
+        return 'outline';
       case 'overdue':
         return 'destructive';
       default:
         return 'outline';
+    }
+  };
+
+  const getStatusLabel = (status: string) => {
+    switch (status) {
+      case 'paid':
+        return 'Paid';
+      case 'partial':
+        return 'Partial';
+      case 'pending':
+        return 'Pending';
+      case 'overdue':
+        return 'Overdue';
+      default:
+        return status;
     }
   };
 
@@ -637,8 +654,8 @@ function InvoiceList({
           ? `${vehicle.reg} ${vehicle.make || ''} ${vehicle.model || ''}`.trim()
           : null;
 
-        const dueDate = invoice.due_date ? new Date(invoice.due_date) : null;
-        const isOverdue = dueDate && isPast(dueDate) && invoice.status?.toLowerCase() !== 'paid';
+        const isPaid = invoice.computed_status === 'paid';
+        const isOverdue = invoice.computed_status === 'overdue';
 
         return (
           <div
@@ -652,13 +669,13 @@ function InvoiceList({
             <div className="flex items-center gap-3 flex-1 min-w-0">
               <div className={cn(
                 'p-2 rounded-full shrink-0',
-                invoice.status?.toLowerCase() === 'paid' ? 'bg-green-100 dark:bg-green-900/30' :
+                isPaid ? 'bg-green-100 dark:bg-green-900/30' :
                 isOverdue ? 'bg-red-100 dark:bg-red-900/30' :
                 'bg-muted'
               )}>
                 <FileText className={cn(
                   'h-4 w-4',
-                  invoice.status?.toLowerCase() === 'paid' ? 'text-green-600' :
+                  isPaid ? 'text-green-600' :
                   isOverdue ? 'text-red-600' :
                   'text-muted-foreground'
                 )} />
@@ -678,8 +695,8 @@ function InvoiceList({
                 <p className="font-semibold">
                   {formatCurrency(invoice.total_amount)}
                 </p>
-                <Badge variant={getStatusVariant(invoice.status)} className="text-xs capitalize">
-                  {invoice.status || 'Pending'}
+                <Badge variant={getStatusVariant(invoice.computed_status)} className="text-xs">
+                  {getStatusLabel(invoice.computed_status)}
                 </Badge>
               </div>
               <ChevronRight className="h-4 w-4 text-muted-foreground" />
@@ -708,18 +725,36 @@ function InvoiceDetailSheet({
     : 'Vehicle';
 
   const dueDate = invoice.due_date ? new Date(invoice.due_date) : null;
-  const isOverdue = dueDate && isPast(dueDate) && invoice.status?.toLowerCase() !== 'paid';
+  const isPaid = invoice.computed_status === 'paid';
+  const isOverdue = invoice.computed_status === 'overdue';
 
-  const getStatusVariant = (status: string | null) => {
-    switch (status?.toLowerCase()) {
+  const getStatusVariant = (status: string) => {
+    switch (status) {
       case 'paid':
         return 'default';
-      case 'pending':
+      case 'partial':
         return 'secondary';
+      case 'pending':
+        return 'outline';
       case 'overdue':
         return 'destructive';
       default:
         return 'outline';
+    }
+  };
+
+  const getStatusLabel = (status: string) => {
+    switch (status) {
+      case 'paid':
+        return 'Paid';
+      case 'partial':
+        return 'Partial';
+      case 'pending':
+        return 'Pending';
+      case 'overdue':
+        return 'Overdue';
+      default:
+        return status;
     }
   };
 
@@ -739,10 +774,10 @@ function InvoiceDetailSheet({
         <div className="mt-6 space-y-6">
           {/* Status and Due Date */}
           <div className="flex items-center justify-between">
-            <Badge variant={getStatusVariant(invoice.status)} className="capitalize">
-              {invoice.status || 'Pending'}
+            <Badge variant={getStatusVariant(invoice.computed_status)}>
+              {getStatusLabel(invoice.computed_status)}
             </Badge>
-            {dueDate && (
+            {dueDate && !isPaid && (
               <p className={cn(
                 "text-sm",
                 isOverdue ? "text-red-600 font-medium" : "text-muted-foreground"
@@ -990,7 +1025,8 @@ function DemoInstallmentTimeline({
 
 export default function PaymentsPage() {
   const { data: plans, isLoading: plansLoading } = useCustomerInstallmentPlans();
-  const { data: stats, isLoading: statsLoading } = useInstallmentStats();
+  const { data: installmentStats, isLoading: installmentStatsLoading } = useInstallmentStats();
+  const { data: invoiceStats, isLoading: invoiceStatsLoading } = useInvoiceStats();
   const { data: nextPayment, isLoading: nextLoading } = useNextInstallmentPayment();
 
   const payEarly = usePayInstallmentEarly();
@@ -1023,7 +1059,17 @@ export default function PaymentsPage() {
   );
   const completedPlans = (plans || []).filter((p) => p.status === 'completed');
 
-  const isLoading = plansLoading || statsLoading || nextLoading;
+  const isLoading = plansLoading || installmentStatsLoading || invoiceStatsLoading || nextLoading;
+
+  // Combined stats: use invoice stats as primary, installment stats as secondary
+  const stats = {
+    activePlans: installmentStats?.activePlans || 0,
+    totalPaid: (invoiceStats?.totalPaid || 0) + (installmentStats?.totalPaid || 0),
+    totalRemaining: (invoiceStats?.totalDue || 0) + (installmentStats?.totalRemaining || 0),
+    overdueCount: (invoiceStats?.overdueCount || 0) + (installmentStats?.overdueCount || 0),
+    paidInvoices: invoiceStats?.paidCount || 0,
+    pendingInvoices: invoiceStats?.pendingCount || 0,
+  };
   const isPaying = payEarly.isPending || payOff.isPending || retryPayment.isPending;
 
   const handlePayNow = (installmentId: string) => {
@@ -1111,28 +1157,28 @@ export default function PaymentsPage() {
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
           <StatCard
             title="Active Plans"
-            value={stats?.activePlans || 0}
+            value={stats.activePlans}
             icon={CreditCard}
-            description={stats?.completedPlans ? `${stats.completedPlans} completed` : undefined}
+            description={stats.paidInvoices ? `${stats.paidInvoices} invoices paid` : undefined}
           />
           <StatCard
             title="Total Paid"
-            value={formatCurrency(stats?.totalPaid || 0)}
+            value={formatCurrency(stats.totalPaid)}
             icon={CheckCircle2}
             variant="success"
           />
           <StatCard
             title="Remaining"
-            value={formatCurrency(stats?.totalRemaining || 0)}
+            value={formatCurrency(stats.totalRemaining)}
             icon={DollarSign}
-            description={stats?.upcomingCount ? `${stats.upcomingCount} payments left` : undefined}
+            description={stats.pendingInvoices ? `${stats.pendingInvoices} pending` : undefined}
           />
           <StatCard
             title="Overdue"
-            value={stats?.overdueCount || 0}
+            value={stats.overdueCount}
             icon={AlertTriangle}
-            variant={stats?.overdueCount ? 'danger' : 'default'}
-            description={stats?.overdueCount ? 'Action required' : 'All caught up'}
+            variant={stats.overdueCount ? 'danger' : 'default'}
+            description={stats.overdueCount ? 'Action required' : 'All caught up'}
           />
         </div>
       )}
