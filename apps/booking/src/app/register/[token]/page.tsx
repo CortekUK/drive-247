@@ -205,8 +205,9 @@ export default function RegisterPage() {
         },
       });
 
-      if (error) throw error;
-      if (!result?.ok) throw new Error(result?.error || 'Registration failed');
+      if (error || !result?.ok) {
+        throw new Error(result?.error || error?.message || 'Registration failed');
+      }
 
       setPageStep('success');
     } catch (err: any) {
