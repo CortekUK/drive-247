@@ -237,7 +237,7 @@ Required variables (see `.env.example`):
 
 Migrations in `supabase/migrations/` (naming: `YYYYMMDDHHMMSS_description.sql`). Full schema reference in `docs/DATABASE_SCHEMA.md` including RLS policies. Stripe Connect details in `docs/STRIPE_CONNECT_PRODUCTION.md` and `docs/STRIPE_CONNECT_TESTING.md`.
 
-Key RLS helper functions: `get_user_tenant_id()`, `is_super_admin()`, `is_primary_super_admin()`. Super admins must have `tenant_id = NULL` in `app_users`.
+Key RLS helper functions: `get_user_tenant_id()`, `is_super_admin()`, `is_primary_super_admin()`, `is_global_master_admin()`. Super admins must have `tenant_id = NULL` in `app_users`.
 
 ## Reserved Subdomains
 

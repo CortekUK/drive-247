@@ -4302,14 +4302,6 @@ const MultiStepBookingWidget = () => {
                       </div>
                     </div>
 
-                    {/* Continue Button */}
-                    <Button
-                      onClick={handleStep3Continue}
-                      size="lg"
-                      className="w-full sm:w-auto bg-primary hover:bg-primary/90 text-primary-foreground font-semibold shadow-md hover:shadow-lg transition-all px-8"
-                    >
-                      Continue to Details <ChevronRight className="ml-2 w-5 h-5" />
-                    </Button>
                   </div>
                 </Card>
               ) : (

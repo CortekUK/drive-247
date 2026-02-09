@@ -1058,6 +1058,7 @@ export default function BookingCheckoutStep({
               const { data, error } = await supabase
                 .from('customer_documents')
                 .update({
+                  rental_id: rental.id,
                   file_url: fileInfo.file_path,
                   file_size: fileInfo.file_size,
                   mime_type: fileInfo.mime_type,
@@ -1074,6 +1075,7 @@ export default function BookingCheckoutStep({
               // Insert new document record
               const docInsertData: any = {
                 customer_id: customer.id,
+                rental_id: rental.id,
                 document_type: 'Insurance Certificate',
                 document_name: fileInfo.file_name,
                 file_url: fileInfo.file_path,

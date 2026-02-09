@@ -4737,6 +4737,7 @@ export type Database = {
           envelope_completed_at: string | null
           envelope_created_at: string | null
           envelope_sent_at: string | null
+          extension_checkout_url: string | null
           has_installment_plan: boolean | null
           id: string
           installment_plan_id: string | null
@@ -4789,6 +4790,7 @@ export type Database = {
           envelope_completed_at?: string | null
           envelope_created_at?: string | null
           envelope_sent_at?: string | null
+          extension_checkout_url?: string | null
           has_installment_plan?: boolean | null
           id?: string
           installment_plan_id?: string | null
@@ -4841,6 +4843,7 @@ export type Database = {
           envelope_completed_at?: string | null
           envelope_created_at?: string | null
           envelope_sent_at?: string | null
+          extension_checkout_url?: string | null
           has_installment_plan?: boolean | null
           id?: string
           installment_plan_id?: string | null

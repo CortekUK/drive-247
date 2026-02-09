@@ -122,7 +122,7 @@ export function AdminExtendRentalDialog({
             tenant_id: tenant.id,
             type: 'Charge',
             category: 'Extension',
-            description: `Rental extension: ${extensionDays} day${extensionDays !== 1 ? 's' : ''} (${format(currentEndDate, 'MMM dd')} → ${format(new Date(newEndDate), 'MMM dd, yyyy')})`,
+            reference: `Rental extension: ${extensionDays} day${extensionDays !== 1 ? 's' : ''} (${format(currentEndDate, 'MMM dd')} → ${format(new Date(newEndDate), 'MMM dd, yyyy')})`,
             amount: extensionCost,
             remaining_amount: extensionCost,
             entry_date: new Date().toISOString().split('T')[0],
@@ -162,6 +162,14 @@ export function AdminExtendRentalDialog({
             const result = await res.json();
             checkoutUrl = result.checkoutUrl;
             console.log('Extension checkout created:', result.sessionId);
+
+            // Save checkout URL to rental for customer portal visibility
+            if (checkoutUrl) {
+              await supabase
+                .from('rentals')
+                .update({ extension_checkout_url: checkoutUrl })
+                .eq('id', rental.id);
+            }
           } else {
             console.error('Failed to create extension checkout:', await res.text());
           }

@@ -40,6 +40,7 @@ export interface CustomerRental {
   cancellation_requested: boolean | null;
   cancellation_reason: string | null;
   renewed_from_rental_id: string | null;
+  extension_checkout_url: string | null;
   vehicles: {
     id: string;
     reg: string;
@@ -82,6 +83,7 @@ export function useCustomerRentals(filter: 'all' | 'current' | 'past' = 'all') {
           cancellation_requested,
           cancellation_reason,
           renewed_from_rental_id,
+          extension_checkout_url,
           vehicles (
             id,
             reg,

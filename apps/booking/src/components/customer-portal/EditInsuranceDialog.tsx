@@ -180,11 +180,28 @@ export function EditInsuranceDialog({ open, onOpenChange, rental }: EditInsuranc
         }
       }
 
+      // Mark any insurance_reupload notifications for this rental as read
+      const { data: reuploadNotifications } = await supabase
+        .from('customer_notifications')
+        .select('id')
+        .eq('customer_user_id', customerUser.id)
+        .eq('type', 'insurance_reupload')
+        .eq('is_read', false);
+
+      if (reuploadNotifications && reuploadNotifications.length > 0) {
+        const notifIds = reuploadNotifications.map(n => n.id);
+        await supabase
+          .from('customer_notifications')
+          .update({ is_read: true })
+          .in('id', notifIds);
+      }
+
       toast.success('Insurance document uploaded successfully');
 
       // Invalidate queries to refresh data
       queryClient.invalidateQueries({ queryKey: ['customer-rentals'] });
       queryClient.invalidateQueries({ queryKey: ['customer-documents'] });
+      queryClient.invalidateQueries({ queryKey: ['customer-notifications'] });
 
       setFiles([]);
       onOpenChange(false);

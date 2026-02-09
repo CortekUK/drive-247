@@ -119,42 +119,47 @@ serve(async (req) => {
     const residenceStateFull = getStateName(body.renter.address.state)
     const licenseStateFull = getStateName(body.renter.license.state)
 
+    // Format phone number for Bonzah (must be digits, with country code 1)
+    const phoneDigits = body.renter.phone.replace(/\D/g, '')
+    const formattedPhone = (() => {
+      if (phoneDigits.startsWith('1') && phoneDigits.length === 11) return phoneDigits
+      if (phoneDigits.length === 10) return `1${phoneDigits}`
+      return phoneDigits
+    })()
+
     // Use the correct /Bonzah/quote endpoint with finalize=1
-    // This creates a complete quote and returns payment_id in one call
+    // Field names verified against Bonzah API docs (03 Quote Save_Finalize.md)
     const createQuoteRequest: Record<string, unknown> = {
       product_id: PRODUCT_ID,
       finalize: 1,  // Important: finalize=1 generates payment_id
-      // Trip details
-      policy_start_date: formatDateForBonzah(body.trip_dates.start),
-      policy_end_date: formatDateForBonzah(body.trip_dates.end),
+      source: 'API',
+      policy_booking_time_zone: 'America/Los_Angeles',
+      // Trip details (format: MM/DD/YYYY HH:mm:ss)
+      trip_start_date: `${formatDateForBonzah(body.trip_dates.start)} 10:00:00`,
+      trip_end_date: `${formatDateForBonzah(body.trip_dates.end)} 10:00:00`,
       pickup_state: pickupStateFull,
       pickup_country: 'United States',
-      pickup_time: '10:00',
-      dropoff_time: '10:00',
-      dropoff_option: 'Same',
-      // Coverage selections
-      cdw_cover: body.coverage.cdw ? 'Yes' : 'No',
-      rcli_cover: body.coverage.rcli ? 'Yes' : 'No',
-      sli_cover: body.coverage.sli ? 'Yes' : 'No',
-      pai_cover: body.coverage.pai ? 'Yes' : 'No',
+      drop_off_time: 'Same',
+      // Coverage selections (must be boolean, not string)
+      cdw_cover: body.coverage.cdw,
+      rcli_cover: body.coverage.rcli,
+      sli_cover: body.coverage.sli,
+      pai_cover: body.coverage.pai,
       // Renter details
       first_name: body.renter.first_name,
       last_name: body.renter.last_name,
-      date_of_birth: formatDateForBonzah(body.renter.dob),
-      email: body.renter.email,
-      phone_no: `1${body.renter.phone.replace(/\D/g, '')}`,  // Add country code
+      dob: formatDateForBonzah(body.renter.dob),
+      pri_email_address: body.renter.email,
+      phone_no: formattedPhone,
       // Address
       address_line_1: body.renter.address.street,
-      city: body.renter.address.city,
-      state: residenceStateFull,
       zip_code: body.renter.address.zip,
-      country: 'United States',
       // Residence
       residence_country: 'United States',
       residence_state: residenceStateFull,
       // License
       license_no: body.renter.license.number,
-      license_state: licenseStateFull,
+      drivers_license_state: licenseStateFull,
     }
 
     // CDW requires inspection_done field
@@ -163,11 +168,21 @@ serve(async (req) => {
     }
 
     console.log('[Bonzah Quote] Creating finalized quote via /Bonzah/quote')
+    console.log('[Bonzah Quote] Request payload:', JSON.stringify(createQuoteRequest, null, 2))
 
     // Get per-tenant Bonzah credentials
     const credentials = await getTenantBonzahCredentials(supabase, body.tenant_id)
 
-    const createResponse = await bonzahFetchWithCredentials<BonzahQuoteApiResponse>('/Bonzah/quote', createQuoteRequest, credentials)
+    let createResponse: BonzahQuoteApiResponse
+    try {
+      createResponse = await bonzahFetchWithCredentials<BonzahQuoteApiResponse>('/Bonzah/quote', createQuoteRequest, credentials)
+    } catch (apiError) {
+      console.error('[Bonzah Quote] API call failed:', apiError)
+      return errorResponse(
+        `Bonzah API error: ${apiError instanceof Error ? apiError.message : 'Unknown API error'}`,
+        500
+      )
+    }
 
     if (createResponse.status !== 0 || !createResponse.data?.quote_id) {
       console.error('[Bonzah Quote] Failed to create quote:', createResponse)

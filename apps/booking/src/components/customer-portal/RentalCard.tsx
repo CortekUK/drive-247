@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
-import { Calendar, Car, MapPin, CreditCard, Clock, AlertCircle, AlertTriangle, Pencil, CalendarPlus, XCircle, RefreshCw } from 'lucide-react';
+import { Calendar, Car, MapPin, CreditCard, Clock, AlertCircle, AlertTriangle, Pencil, CalendarPlus, XCircle, RefreshCw, ExternalLink } from 'lucide-react';
 import { format, differenceInDays, isPast, isToday } from 'date-fns';
 import { CustomerRental } from '@/hooks/use-customer-rentals';
 import { cn } from '@/lib/utils';
@@ -295,6 +295,34 @@ export function RentalCard({ rental, insuranceReuploadRequired }: RentalCardProp
                 >
                   <AlertTriangle className="h-4 w-4 shrink-0" />
                   <span className="text-sm">Please re-upload your insurance document</span>
+                </div>
+              )}
+
+              {/* Extension Info - shown when rental was extended and has a previous end date */}
+              {rental.previous_end_date && !rental.is_extended && rental.status === 'Active' && (
+                <div className="p-2.5 rounded-lg bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 space-y-2">
+                  <div className="flex items-center gap-2">
+                    <CalendarPlus className="h-4 w-4 text-blue-600 dark:text-blue-400 shrink-0" />
+                    <span className="text-sm font-medium text-blue-700 dark:text-blue-300">
+                      Rental Extended
+                    </span>
+                  </div>
+                  <p className="text-xs text-blue-600 dark:text-blue-400">
+                    Extended from {format(new Date(rental.previous_end_date), 'MMM dd')} to {format(new Date(rental.end_date), 'MMM dd, yyyy')}
+                  </p>
+                  {rental.extension_checkout_url && (
+                    <a
+                      href={rental.extension_checkout_url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex items-center justify-center gap-2 w-full px-3 py-2 rounded-md bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium transition-colors"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <CreditCard className="h-4 w-4" />
+                      Pay Extension Fee
+                      <ExternalLink className="h-3 w-3" />
+                    </a>
+                  )}
                 </div>
               )}
 

@@ -19,7 +19,7 @@ import { AddPaymentDialog } from "@/components/shared/dialogs/add-payment-dialog
 import { RefundDialog } from "@/components/shared/dialogs/refund-dialog";
 import { useToast } from "@/hooks/use-toast";
 import { useTenant } from "@/contexts/TenantContext";
-// skipInsurance now derived from tenant?.integration_bonzah
+// integration_bonzah controls Bonzah-specific features only; insurance document upload is always available
 import { useRentalTotals } from "@/hooks/use-rental-ledger-data";
 import { useRentalInvoice, useRentalPaymentBreakdown, useRentalRefundBreakdown } from "@/hooks/use-rental-invoice";
 import { RentalLedger } from "@/components/rentals/rental-ledger";
@@ -79,7 +79,7 @@ const RentalDetail = () => {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const { tenant } = useTenant();
-  const skipInsurance = !tenant?.integration_bonzah;
+  // skipInsurance removed — insurance doc upload is always visible; only Bonzah selector is gated on integration_bonzah
   const [downloadingPdf, setDownloadingPdf] = useState<string | null>(null);
   const [refreshingPolicy, setRefreshingPolicy] = useState(false);
   const [showAddPayment, setShowAddPayment] = useState(false);
@@ -343,43 +343,42 @@ const RentalDetail = () => {
   const { data: insuranceDocuments } = useQuery({
     queryKey: ["rental-insurance-docs", id, rental?.customers?.id, tenant?.id],
     queryFn: async () => {
-      // Collect all potential document IDs to avoid showing duplicates
-      const seenDocIds = new Set<string>();
       const allDocs: any[] = [];
+      const seenDocIds = new Set<string>();
 
-      // First try to find by rental_id (direct link) - highest priority
-      // Include documents with matching tenant_id OR null tenant_id
-      if (tenant?.id) {
-        const { data: rentalDocs } = await supabase
-          .from("customer_documents")
-          .select("*")
-          .eq("rental_id", id)
-          .eq("document_type", "Insurance Certificate")
-          .or(`tenant_id.eq.${tenant.id},tenant_id.is.null`)
-          .order("uploaded_at", { ascending: false });
+      // Query 1: Find by rental_id (direct link) - highest priority
+      const { data: rentalDocs, error: rentalDocsError } = await supabase
+        .from("customer_documents")
+        .select("*")
+        .eq("rental_id", id as string)
+        .eq("document_type", "Insurance Certificate")
+        .order("uploaded_at", { ascending: false });
 
-        if (rentalDocs && rentalDocs.length > 0) {
-          rentalDocs.forEach(doc => {
-            if (!seenDocIds.has(doc.id)) {
-              seenDocIds.add(doc.id);
-              allDocs.push(doc);
-            }
-          });
-        }
+      if (rentalDocsError) {
+        console.error("[RENTAL-DOCS] Error fetching by rental_id:", rentalDocsError);
+      }
+      if (rentalDocs && rentalDocs.length > 0) {
+        rentalDocs.forEach(doc => {
+          if (!seenDocIds.has(doc.id)) {
+            seenDocIds.add(doc.id);
+            allDocs.push(doc);
+          }
+        });
       }
 
-      // Then try by customer_id (exclude documents already linked to OTHER rentals)
-      // Include documents with matching tenant_id OR null tenant_id
-      if (rental?.customers?.id && tenant?.id) {
-        const { data: customerDocs } = await supabase
+      // Query 2: Find by customer_id (docs not yet linked to any rental)
+      if (rental?.customers?.id) {
+        const { data: customerDocs, error: customerDocsError } = await supabase
           .from("customer_documents")
           .select("*")
           .eq("customer_id", rental.customers.id)
           .eq("document_type", "Insurance Certificate")
-          .or(`tenant_id.eq.${tenant.id},tenant_id.is.null`)
-          .is("rental_id", null) // Only show if not linked to a rental yet
+          .is("rental_id", null)
           .order("uploaded_at", { ascending: false });
 
+        if (customerDocsError) {
+          console.error("[RENTAL-DOCS] Error fetching by customer_id:", customerDocsError);
+        }
         if (customerDocs && customerDocs.length > 0) {
           customerDocs.forEach(doc => {
             if (!seenDocIds.has(doc.id)) {
@@ -390,34 +389,9 @@ const RentalDetail = () => {
         }
       }
 
-      // Fallback: Show unlinked insurance documents for this tenant ONLY if no docs found yet
-      // Include documents with matching tenant_id OR null tenant_id
-      if (allDocs.length === 0 && tenant?.id) {
-        const { data: unlinkedDocs } = await supabase
-          .from("customer_documents")
-          .select("*, customers!customer_documents_customer_id_fkey(email)")
-          .eq("document_type", "Insurance Certificate")
-          .or(`tenant_id.eq.${tenant.id},tenant_id.is.null`)
-          .is("rental_id", null)
-          .is("customer_id", null)
-          .order("uploaded_at", { ascending: false })
-          .limit(10);
-
-        // Mark these as unlinked so UI can show appropriate message
-        if (unlinkedDocs && unlinkedDocs.length > 0) {
-          unlinkedDocs.forEach(doc => {
-            if (!seenDocIds.has(doc.id)) {
-              seenDocIds.add(doc.id);
-              allDocs.push({ ...doc, isUnlinked: true });
-            }
-          });
-        }
-      }
-
-      console.log(`[RENTAL-DOCS] Found ${allDocs.length} unique insurance documents for rental ${id}, customer: ${rental?.customers?.id}`);
+      console.log(`[RENTAL-DOCS] Found ${allDocs.length} insurance documents for rental ${id}`);
       return allDocs;
     },
-    // Wait for rental data to load so we have customer_id for the query
     enabled: !!id && !!tenant?.id && !!rental?.customers?.id,
   });
 
@@ -1050,6 +1024,26 @@ const RentalDetail = () => {
         </div>
       </div>
 
+      {/* Cancellation Requested Alert */}
+      {rental.cancellation_requested && (
+        <Alert className="border-red-200 bg-red-50 dark:bg-red-950/30">
+          <XCircle className="h-4 w-4 text-red-600" />
+          <AlertDescription className="text-red-800 dark:text-red-200">
+            <span className="font-medium">Cancellation Requested:</span> Customer has requested to cancel this booking.
+            {rental.cancellation_reason && (
+              <> Reason: <strong>{rental.cancellation_reason}</strong></>
+            )}
+            <Button
+              variant="link"
+              className="ml-2 h-auto p-0 text-red-700 dark:text-red-300"
+              onClick={() => setShowRejectionDialog(true)}
+            >
+              Process Cancellation
+            </Button>
+          </AlertDescription>
+        </Alert>
+      )}
+
       {/* Rental Summary */}
       <div className="grid gap-6 md:grid-cols-2">
         <Card>
@@ -1446,25 +1440,6 @@ const RentalDetail = () => {
               </Alert>
             )}
 
-            {/* Cancellation Requested Alert */}
-            {rental.cancellation_requested && (
-              <Alert className="mt-4 border-red-200 bg-red-50 dark:bg-red-950/30">
-                <XCircle className="h-4 w-4 text-red-600" />
-                <AlertDescription className="text-red-800 dark:text-red-200">
-                  <span className="font-medium">Cancellation Requested:</span> Customer has requested to cancel this booking.
-                  {rental.cancellation_reason && (
-                    <> Reason: <strong>{rental.cancellation_reason}</strong></>
-                  )}
-                  <Button
-                    variant="link"
-                    className="ml-2 h-auto p-0 text-red-700 dark:text-red-300"
-                    onClick={() => setShowRejectionDialog(true)}
-                  >
-                    Process Cancellation
-                  </Button>
-                </AlertDescription>
-              </Alert>
-            )}
           </div>
 
           {/* Delivery & Collection Info */}
@@ -1963,9 +1938,8 @@ const RentalDetail = () => {
         </Card>
       )}
 
-      {/* Insurance Verification Card - Hidden for insurance-exempt tenants like Kedic Services */}
-      {!skipInsurance && (
-        <Card>
+      {/* Insurance Verification Card - Always shown for customer-uploaded documents */}
+      <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Shield className="h-5 w-5" />
@@ -2425,7 +2399,6 @@ const RentalDetail = () => {
           )}
         </CardContent>
         </Card>
-      )}
 
       {/* Identity Verification Section - Always show */}
       <Card>
