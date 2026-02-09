@@ -20,6 +20,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useTenant } from "@/contexts/TenantContext";
 import { useCustomerVehicleRental } from "@/hooks/use-customer-vehicle-rental";
 import { useCustomerBalanceWithStatus } from "@/hooks/use-customer-balance";
+import { createInvoice } from "@/lib/invoice-utils";
 import { cn } from "@/lib/utils";
 
 const paymentSchema = z.object({
@@ -189,7 +190,7 @@ export const AddPaymentDialog = ({
 
       const { data, error } = await supabase
         .from("rentals")
-        .select("id, monthly_amount, customer_id, customers!rentals_customer_id_fkey(name, email)")
+        .select("id, monthly_amount, customer_id, vehicle_id, delivery_fee, insurance_premium, customers!rentals_customer_id_fkey(name, email)")
         .eq("id", rentalId)
         .single();
 
@@ -397,6 +398,7 @@ export const AddPaymentDialog = ({
         return;
       }
 
+      const portalOrigin = window.location.origin;
       const { data, error } = await supabase.functions.invoke('create-checkout-session', {
         body: {
           rentalId: rentalId || undefined,
@@ -404,6 +406,12 @@ export const AddPaymentDialog = ({
           customerName: customerName,
           totalAmount: amount,
           tenantId: tenant?.id,
+          successUrl: rentalId
+            ? `${portalOrigin}/rentals/${rentalId}?payment=success`
+            : portalOrigin,
+          cancelUrl: rentalId
+            ? `${portalOrigin}/rentals/${rentalId}?payment=cancelled`
+            : portalOrigin,
         },
       });
 
@@ -434,12 +442,8 @@ export const AddPaymentDialog = ({
     }
   };
 
-  // Email invoice handler
+  // Email invoice handler - auto-generates invoice if none exists
   const handleSendInvoiceEmail = async () => {
-    if (!latestInvoice?.id) {
-      toast({ title: "Error", description: "No invoice found for this rental.", variant: "destructive" });
-      return;
-    }
     if (!customerEmail) {
       toast({ title: "Error", description: "Customer does not have an email address.", variant: "destructive" });
       return;
@@ -451,11 +455,50 @@ export const AddPaymentDialog = ({
       return;
     }
 
+    if (!rentalId || !rentalDetails) {
+      toast({ title: "Error", description: "No rental found to generate an invoice for.", variant: "destructive" });
+      return;
+    }
+
     setEmailLoading(true);
     try {
+      // Auto-generate invoice if none exists
+      let invoiceToSend = latestInvoice;
+      if (!invoiceToSend) {
+        // Fetch extras total for the rental
+        const { data: extras } = await supabase
+          .from('rental_extras_selections')
+          .select('quantity, price_at_booking')
+          .eq('rental_id', rentalId);
+
+        const extrasTotal = extras?.reduce((sum: number, e: any) => sum + ((e.quantity || 1) * (e.price_at_booking || 0)), 0) || 0;
+        const deliveryFee = (rentalDetails as any).delivery_fee || 0;
+        const insurancePremium = (rentalDetails as any).insurance_premium || 0;
+        const totalAmount = rentalDetails.monthly_amount || 0;
+        const subtotal = Math.max(totalAmount - deliveryFee - insurancePremium - extrasTotal, 0);
+
+        const invoice = await createInvoice({
+          rental_id: rentalId,
+          customer_id: finalCustomerId,
+          vehicle_id: (rentalDetails as any).vehicle_id,
+          invoice_date: new Date(),
+          subtotal,
+          delivery_fee: deliveryFee,
+          insurance_premium: insurancePremium,
+          extras_total: extrasTotal,
+          total_amount: totalAmount,
+          tenant_id: tenant?.id,
+        });
+
+        invoiceToSend = { id: invoice.id, invoice_number: invoice.invoice_number, total_amount: invoice.total_amount };
+
+        // Refresh invoice cache
+        await queryClient.invalidateQueries({ queryKey: ["latest-invoice-for-payment", rentalId, tenant?.id] });
+      }
+
       const { data, error } = await supabase.functions.invoke('send-invoice-email', {
         body: {
-          invoiceId: latestInvoice.id,
+          invoiceId: invoiceToSend.id,
           tenantId: tenant?.id,
           recipientEmail: customerEmail,
         },
@@ -465,7 +508,7 @@ export const AddPaymentDialog = ({
       if (data && !data.success) throw new Error(data.error || 'Failed to send invoice email');
 
       // Record payment as fulfilled
-      const amount = latestInvoice.total_amount || outstandingBalance || 0;
+      const amount = invoiceToSend.total_amount || outstandingBalance || 0;
       if (amount > 0) {
         await createAndApplyPayment(amount, 'Other', finalCustomerId, selectedVehicleId || vehicle_id);
         await invalidateAllPaymentQueries(finalCustomerId);
@@ -812,8 +855,13 @@ export const AddPaymentDialog = ({
                 {selectedCustomerId && !latestInvoice && !rentalId && (
                   <p className="text-xs text-amber-600">No invoice found. Select a vehicle to locate the rental invoice.</p>
                 )}
-                {rentalId && !latestInvoice && (
-                  <p className="text-xs text-amber-600">No invoice found for this rental.</p>
+                {rentalId && !latestInvoice && rentalDetails && (
+                  <p className="text-xs text-muted-foreground">
+                    An invoice for <span className="font-medium">${(rentalDetails.monthly_amount || 0).toLocaleString('en-US', { minimumFractionDigits: 2 })}</span> will be auto-generated and sent.
+                  </p>
+                )}
+                {rentalId && !latestInvoice && !rentalDetails && (
+                  <p className="text-xs text-amber-600">Loading rental details...</p>
                 )}
                 {latestInvoice && (
                   <p className="text-xs text-muted-foreground">
@@ -827,7 +875,7 @@ export const AddPaymentDialog = ({
                   </Button>
                   <Button
                     onClick={handleSendInvoiceEmail}
-                    disabled={isAnyLoading || !selectedCustomerId || !customerEmail || !latestInvoice}
+                    disabled={isAnyLoading || !selectedCustomerId || !customerEmail || (!latestInvoice && !rentalDetails)}
                   >
                     {emailLoading ? (
                       <><Loader2 className="w-4 h-4 animate-spin mr-1.5" /> Sending...</>

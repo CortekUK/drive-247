@@ -339,7 +339,7 @@ export function LocationSettings() {
   }
 
   return (
-    <div className="space-y-6 max-w-5xl">
+    <div className="space-y-6">
       {/* Two Column Layout for Pickup & Return */}
       <div className="grid lg:grid-cols-2 gap-6">
         {/* PICKUP OPTIONS CARD */}
@@ -670,7 +670,7 @@ export function LocationSettings() {
 
       {/* AREA SETTINGS */}
       {(pickupAreaEnabled || returnAreaEnabled) && (
-        <Card className="overflow-hidden">
+        <Card>
           <div className="bg-muted/30 border-b px-6 py-4">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-xl bg-muted flex items-center justify-center">

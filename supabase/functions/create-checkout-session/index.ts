@@ -16,7 +16,7 @@ serve(async (req) => {
   }
 
   try {
-    const { bookingId, rentalId, customerEmail, customerName, totalAmount, tenantSlug, tenantId: bodyTenantId, bonzahPolicyId } = await req.json()
+    const { bookingId, rentalId, customerEmail, customerName, totalAmount, tenantSlug, tenantId: bodyTenantId, bonzahPolicyId, successUrl, cancelUrl } = await req.json()
 
     // Get tenant slug from header or body
     const slug = tenantSlug || req.headers.get('x-tenant-slug')
@@ -126,12 +126,12 @@ serve(async (req) => {
       mode: 'payment',
       customer_email: customerEmail,
       client_reference_id: referenceId,
-      success_url: rentalId
+      success_url: successUrl || (rentalId
         ? `${origin}/booking-success?session_id={CHECKOUT_SESSION_ID}&rental_id=${rentalId}`
-        : `${origin}/booking-success?session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: rentalId
+        : `${origin}/booking-success?session_id={CHECKOUT_SESSION_ID}`),
+      cancel_url: cancelUrl || (rentalId
         ? `${origin}/booking-cancelled?rental_id=${rentalId}`
-        : `${origin}/booking-cancelled`,
+        : `${origin}/booking-cancelled`),
       metadata: {
         booking_id: bookingId,
         rental_id: rentalId,
