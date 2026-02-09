@@ -17,6 +17,9 @@ interface InvoiceDialogProps {
     tax_amount: number;
     service_fee?: number;
     security_deposit?: number;
+    insurance_premium?: number;
+    delivery_fee?: number;
+    extras_total?: number;
     total_amount: number;
     notes?: string;
     discount_amount?: number;
@@ -174,6 +177,29 @@ const PrintableInvoice = ({ invoice, customer, vehicle, rental, promoDetails, se
                 <td className="p-3 text-sm text-right">{formatCurrency(extra.price * extra.quantity)}</td>
               </tr>
             ))}
+            {!selectedExtras && (invoice.extras_total ?? 0) > 0 && (
+              <tr className="border-b border-gray-300">
+                <td className="p-3 text-sm">Rental Extras</td>
+                <td className="p-3 text-sm text-right">{formatCurrency(invoice.extras_total ?? 0)}</td>
+              </tr>
+            )}
+            {(invoice.delivery_fee ?? 0) > 0 && (
+              <tr className="border-b border-gray-300">
+                <td className="p-3 text-sm">Delivery Fee</td>
+                <td className="p-3 text-sm text-right">{formatCurrency(invoice.delivery_fee ?? 0)}</td>
+              </tr>
+            )}
+            {(invoice.insurance_premium ?? 0) > 0 && (
+              <tr className="border-b border-gray-300">
+                <td className="p-3 text-sm">
+                  <div className="flex items-start gap-2">
+                    <span style={{ color: '#C5A572' }}>🛡</span>
+                    <p className="font-medium">Bonzah Insurance</p>
+                  </div>
+                </td>
+                <td className="p-3 text-sm text-right font-medium">{formatCurrency(invoice.insurance_premium ?? 0)}</td>
+              </tr>
+            )}
             {invoice.tax_amount > 0 && (
               <tr className="border-b border-gray-300">
                 <td className="p-3 text-sm">Tax</td>
@@ -410,6 +436,29 @@ export const InvoiceDialog = ({
                       <td className="p-3 text-sm text-right">{formatCurrency(extra.price * extra.quantity)}</td>
                     </tr>
                   ))}
+                  {!selectedExtras && (invoice.extras_total ?? 0) > 0 && (
+                    <tr className="border-b">
+                      <td className="p-3 text-sm">Rental Extras</td>
+                      <td className="p-3 text-sm text-right">{formatCurrency(invoice.extras_total ?? 0)}</td>
+                    </tr>
+                  )}
+                  {(invoice.delivery_fee ?? 0) > 0 && (
+                    <tr className="border-b">
+                      <td className="p-3 text-sm">Delivery Fee</td>
+                      <td className="p-3 text-sm text-right">{formatCurrency(invoice.delivery_fee ?? 0)}</td>
+                    </tr>
+                  )}
+                  {(invoice.insurance_premium ?? 0) > 0 && (
+                    <tr className="border-b">
+                      <td className="p-3 text-sm">
+                        <div className="flex items-start gap-2">
+                          <Shield className="w-4 h-4 text-[#C5A572] mt-0.5" />
+                          <p className="font-medium">Bonzah Insurance</p>
+                        </div>
+                      </td>
+                      <td className="p-3 text-sm text-right font-medium">{formatCurrency(invoice.insurance_premium ?? 0)}</td>
+                    </tr>
+                  )}
                   {/* Hide tax and service fee for enquiry tenants */}
                   {!isEnquiry && invoice.tax_amount > 0 && (
                     <tr className="border-b">

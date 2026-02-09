@@ -12,6 +12,8 @@ export interface InvoiceData {
   service_fee?: number;
   security_deposit?: number;
   insurance_premium?: number;
+  delivery_fee?: number;
+  extras_total?: number;
   total_amount: number;
   notes?: string;
   tenant_id?: string;
@@ -30,6 +32,8 @@ export interface Invoice {
   service_fee?: number;
   security_deposit?: number;
   insurance_premium?: number;
+  delivery_fee?: number;
+  extras_total?: number;
   total_amount: number;
   status: string;
   notes?: string;
@@ -86,6 +90,8 @@ export const createInvoice = async (data: InvoiceData): Promise<Invoice> => {
       service_fee: data.service_fee || 0,
       security_deposit: data.security_deposit || 0,
       insurance_premium: data.insurance_premium || 0,
+      delivery_fee: data.delivery_fee || 0,
+      extras_total: data.extras_total || 0,
       total_amount: data.total_amount,
       status: 'pending',
       notes: data.notes,
