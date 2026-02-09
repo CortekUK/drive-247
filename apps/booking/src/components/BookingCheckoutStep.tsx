@@ -1292,7 +1292,7 @@ export default function BookingCheckoutStep({
                 className="mt-1"
               />
               <Label className="text-sm leading-relaxed cursor-pointer">
-                By confirming, you agree to Drive 917's{" "}
+                By confirming, you agree to {tenant?.app_name || tenant?.company_name || "our"}'s{" "}
                 <a href="/terms" target="_blank" className="text-accent underline">Terms of Service</a> and{" "}
                 <a href="/privacy" target="_blank" className="text-accent underline">Privacy Policy</a>.
               </Label>

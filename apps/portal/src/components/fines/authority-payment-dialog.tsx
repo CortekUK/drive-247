@@ -35,6 +35,7 @@ import { CalendarIcon } from "lucide-react";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
+import { useAuditLog } from "@/hooks/use-audit-log";
 import { authorityPaymentSchema, type AuthorityPaymentFormValues } from "@/client-schemas/fines/authority-payment";
 
 interface AuthorityPaymentDialogProps {
@@ -54,6 +55,7 @@ export function AuthorityPaymentDialog({
 }: AuthorityPaymentDialogProps) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const { logAction } = useAuditLog();
 
   const form = useForm<AuthorityPaymentFormValues>({
     resolver: zodResolver(authorityPaymentSchema),
@@ -86,13 +88,20 @@ export function AuthorityPaymentDialog({
         title: "Authority Payment Recorded",
         description: `Payment of $${form.getValues('amount')} recorded successfully`,
       });
-      
+
       // Invalidate relevant queries
       queryClient.invalidateQueries({ queryKey: ["fine", fineId] });
       queryClient.invalidateQueries({ queryKey: ["authority-payments", fineId] });
       queryClient.invalidateQueries({ queryKey: ["pl-summary"] });
       queryClient.invalidateQueries({ queryKey: ["vehicle-pl"] });
-      
+
+      logAction({
+        action: "fine_authority_payment",
+        entityType: "fine",
+        entityId: fineId,
+        details: { amount: form.getValues('amount'), paymentMethod: form.getValues('paymentMethod'), fineReference },
+      });
+
       onOpenChange(false);
       form.reset();
     },

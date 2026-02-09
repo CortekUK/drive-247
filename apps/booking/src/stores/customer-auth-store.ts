@@ -32,12 +32,14 @@ interface CustomerAuthState {
   customerUser: CustomerUser | null;
   loading: boolean;
   initialized: boolean;
+  tenantId: string | null;
 
   // Actions
   setUser: (user: User | null) => void;
   setSession: (session: Session | null) => void;
   setCustomerUser: (customerUser: CustomerUser | null) => void;
   setLoading: (loading: boolean) => void;
+  setTenantId: (id: string | null) => void;
 
   signUp: (
     email: string,
@@ -50,7 +52,7 @@ interface CustomerAuthState {
     }
   ) => Promise<{ error: any; data?: any }>;
 
-  signIn: (email: string, password: string) => Promise<{ error: any }>;
+  signIn: (email: string, password: string, tenantId?: string) => Promise<{ error: any }>;
   signOut: () => Promise<void>;
   resetPassword: (email: string) => Promise<{ error: any }>;
   initialize: () => Promise<void>;
@@ -84,14 +86,14 @@ const fetchCustomerUser = async (authUser: User, tenantId?: string): Promise<Cus
       query = query.eq('tenant_id', tenantId);
     }
 
-    const { data, error } = await query.single();
+    const { data, error } = await query.maybeSingle();
 
     if (error) {
       console.error('Error fetching customer user:', error);
       return null;
     }
 
-    return data as CustomerUser;
+    return data as CustomerUser | null;
   } catch (error) {
     console.error('Error in fetchCustomerUser:', error);
     return null;
@@ -104,21 +106,42 @@ export const useCustomerAuthStore = create<CustomerAuthState>()((set, get) => ({
   customerUser: null,
   loading: true,
   initialized: false,
+  tenantId: null,
 
   setUser: (user) => set({ user }),
   setSession: (session) => set({ session }),
   setCustomerUser: (customerUser) => set({ customerUser }),
   setLoading: (loading) => set({ loading }),
+  setTenantId: (tenantId) => {
+    const prev = get().tenantId;
+    set({ tenantId });
+    // If tenant changed and we have a session, re-validate customerUser against new tenant
+    if (tenantId && tenantId !== prev) {
+      const { user } = get();
+      if (user) {
+        fetchCustomerUser(user, tenantId).then(customerUser => {
+          set({ customerUser }); // null if user doesn't belong to this tenant
+        });
+      }
+    }
+  },
 
   signUp: async (email, password, options = {}) => {
     try {
       set({ loading: true });
 
-      // Create the auth user
+      // Create the auth user with tenant metadata so the custom auth email hook
+      // can look up tenant branding and build the correct redirect URL
       const { data: authData, error: authError } = await supabase.auth.signUp({
         email,
         password,
         options: {
+          data: {
+            tenant_id: options.tenantId || undefined,
+            tenant_slug: (typeof window !== 'undefined'
+              ? window.location.hostname.split('.')[0]
+              : undefined),
+          },
           emailRedirectTo: typeof window !== 'undefined'
             ? `${window.location.origin}/auth/callback`
             : undefined,
@@ -223,9 +246,11 @@ export const useCustomerAuthStore = create<CustomerAuthState>()((set, get) => ({
     }
   },
 
-  signIn: async (email, password) => {
+  signIn: async (email, password, tenantId?) => {
     try {
       set({ loading: true });
+
+      const effectiveTenantId = tenantId || get().tenantId || undefined;
 
       const { data, error } = await supabase.auth.signInWithPassword({
         email,
@@ -238,16 +263,21 @@ export const useCustomerAuthStore = create<CustomerAuthState>()((set, get) => ({
       }
 
       if (data.user) {
-        let customerUser = await fetchCustomerUser(data.user);
+        let customerUser = await fetchCustomerUser(data.user, effectiveTenantId);
 
         if (!customerUser) {
-          // User exists in auth but no customer_users link
-          // Check if there's a customer record with their email that we can link
-          const { data: existingCustomer } = await supabase
+          // User exists in auth but no customer_users link for this tenant
+          // Check if there's a customer record with their email for this tenant that we can link
+          let customerQuery = supabase
             .from('customers')
             .select('id, tenant_id')
-            .eq('email', email)
-            .maybeSingle();
+            .eq('email', email);
+
+          if (effectiveTenantId) {
+            customerQuery = customerQuery.eq('tenant_id', effectiveTenantId);
+          }
+
+          const { data: existingCustomer } = await customerQuery.maybeSingle();
 
           if (existingCustomer) {
             // Create the missing customer_users link
@@ -261,15 +291,17 @@ export const useCustomerAuthStore = create<CustomerAuthState>()((set, get) => ({
 
             if (!linkError) {
               // Fetch the newly created customer user
-              customerUser = await fetchCustomerUser(data.user);
+              customerUser = await fetchCustomerUser(data.user, effectiveTenantId);
             } else {
               console.error('Error auto-linking customer user:', linkError);
             }
           }
 
           if (!customerUser) {
-            // Still no customer user - this could be an admin user trying to use customer login
-            return { error: { message: 'No customer account found for this email' } };
+            // No customer account for this tenant - sign out the Supabase session
+            // to prevent a dangling authenticated session on the wrong tenant
+            await supabase.auth.signOut();
+            return { error: { message: 'No customer account found for this site. Please register first.' } };
           }
         }
 
@@ -314,9 +346,9 @@ export const useCustomerAuthStore = create<CustomerAuthState>()((set, get) => ({
   },
 
   refetchCustomerUser: async () => {
-    const { user } = get();
+    const { user, tenantId } = get();
     if (user) {
-      const customerUser = await fetchCustomerUser(user);
+      const customerUser = await fetchCustomerUser(user, tenantId || undefined);
       set({ customerUser });
     }
   },
@@ -337,7 +369,7 @@ export const useCustomerAuthStore = create<CustomerAuthState>()((set, get) => ({
         // Use setTimeout to avoid potential Supabase deadlock
         setTimeout(async () => {
           try {
-            const customerUser = await fetchCustomerUser(session.user);
+            const customerUser = await fetchCustomerUser(session.user, get().tenantId || undefined);
             set({ customerUser, loading: false });
           } catch (error) {
             console.error('Error fetching customer user in auth state change:', error);
@@ -358,7 +390,7 @@ export const useCustomerAuthStore = create<CustomerAuthState>()((set, get) => ({
 
     if (session?.user) {
       try {
-        const customerUser = await fetchCustomerUser(session.user);
+        const customerUser = await fetchCustomerUser(session.user, get().tenantId || undefined);
         set({ customerUser, loading: false, initialized: true });
       } catch (error) {
         console.error('Error fetching customer user in initial session:', error);
@@ -387,6 +419,7 @@ export const useCustomerAuth = () => {
     signOut: store.signOut,
     resetPassword: store.resetPassword,
     refetchCustomerUser: store.refetchCustomerUser,
+    setTenantId: store.setTenantId,
     isAuthenticated: !!store.customerUser && !!store.session,
   };
 };

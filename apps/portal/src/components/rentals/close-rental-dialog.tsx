@@ -11,6 +11,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Calendar } from "@/components/ui/calendar";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { useToast } from "@/hooks/use-toast";
+import { useAuditLog } from "@/hooks/use-audit-log";
 import { cn } from "@/lib/utils";
 import { formatInTimeZone } from "date-fns-tz";
 import { closeRentalSchema, type CloseRentalFormValues } from "@/client-schemas/rentals/close-rental";
@@ -46,6 +47,7 @@ export const CloseRentalDialog = ({ open, onOpenChange, rental }: CloseRentalDia
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const { tenant } = useTenant();
+  const { logAction } = useAuditLog();
   
   const form = useForm<CloseRentalFormData>({
     resolver: zodResolver(closeRentalSchema),
@@ -95,13 +97,22 @@ export const CloseRentalDialog = ({ open, onOpenChange, rental }: CloseRentalDia
         title: "Rental Closed",
         description: `Rental ${rental?.rental_number} has been successfully closed and vehicle is now available.`,
       });
-      
+
       // Invalidate queries to refresh data
       queryClient.invalidateQueries({ queryKey: ['rentals'] });
       queryClient.invalidateQueries({ queryKey: ['enhanced-rentals'] });
       queryClient.invalidateQueries({ queryKey: ['customer-rentals'] });
       queryClient.invalidateQueries({ queryKey: ['vehicles'] });
-      
+
+      if (rental) {
+        logAction({
+          action: "rental_closed",
+          entityType: "rental",
+          entityId: rental.id,
+          details: { rental_number: rental.rental_number, customer: rental.customer.name, vehicle_reg: rental.vehicle.reg },
+        });
+      }
+
       handleClose();
     },
     onError: (error) => {

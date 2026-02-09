@@ -2,12 +2,14 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { useTenant } from "@/contexts/TenantContext";
+import { useAuditLog } from "@/hooks/use-audit-log";
 import type { CMSPageSection } from "@/types/cms";
 
 export const useCMSPageSections = (pageSlug: string) => {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const { tenant } = useTenant();
+  const { logAction } = useAuditLog();
 
   // Helper to get page by slug with tenant filtering
   const getPageBySlug = async () => {
@@ -62,11 +64,17 @@ export const useCMSPageSections = (pageSlug: string) => {
         .update({ updated_at: new Date().toISOString(), status: "draft" })
         .eq("id", page.id);
     },
-    onSuccess: () => {
+    onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({ queryKey: ["cms-page", pageSlug] });
       toast({
         title: "Section Saved",
         description: "Your changes have been saved as a draft.",
+      });
+      logAction({
+        action: "cms_section_updated",
+        entityType: "cms_section",
+        entityId: pageSlug,
+        details: { sectionKey: variables.sectionKey },
       });
     },
     onError: (error: any) => {
@@ -112,11 +120,17 @@ export const useCMSPageSections = (pageSlug: string) => {
         .update({ updated_at: new Date().toISOString(), status: "draft" })
         .eq("id", page.id);
     },
-    onSuccess: () => {
+    onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({ queryKey: ["cms-page", pageSlug] });
       toast({
         title: "All Sections Saved",
         description: "Your changes have been saved as a draft.",
+      });
+      logAction({
+        action: "cms_section_updated",
+        entityType: "cms_section",
+        entityId: pageSlug,
+        details: { sectionKeys: variables.map(s => s.sectionKey), count: variables.length },
       });
     },
     onError: (error: any) => {
@@ -150,8 +164,14 @@ export const useCMSPageSections = (pageSlug: string) => {
 
       if (error) throw error;
     },
-    onSuccess: () => {
+    onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({ queryKey: ["cms-page", pageSlug] });
+      logAction({
+        action: "cms_section_visibility_toggled",
+        entityType: "cms_section",
+        entityId: variables.sectionId,
+        details: { isVisible: variables.isVisible },
+      });
     },
     onError: (error: any) => {
       toast({

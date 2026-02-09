@@ -196,96 +196,10 @@ serve(async (req) => {
       );
     }
 
-    // Per-tenant master password login (legacy support)
-    if (!tenantId) {
-      return new Response(
-        JSON.stringify({ error: 'tenantId required for non-global admin login' }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 }
-      );
-    }
-
-    // Fetch tenant from database
-    const { data: tenant, error: tenantError } = await supabaseClient
-      .from('tenants')
-      .select('id, company_name, slug, master_password_hash, admin_user_id')
-      .eq('id', tenantId)
-      .single();
-
-    if (tenantError || !tenant) {
-      return new Response(
-        JSON.stringify({ error: 'Tenant not found' }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 404 }
-      );
-    }
-
-    // Verify master password using bcrypt via database
-    const { data: isValid, error: verifyError } = await supabaseClient
-      .rpc('verify_tenant_master_password', {
-        p_tenant_id: tenantId,
-        p_password: password
-      });
-
-    // Fallback to SHA-256 for backward compatibility if bcrypt function doesn't exist
-    if (verifyError) {
-      const encoder = new TextEncoder();
-      const data = encoder.encode(password);
-      const hashBuffer = await crypto.subtle.digest('SHA-256', data);
-      const hashArray = Array.from(new Uint8Array(hashBuffer));
-      const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
-
-      if (hashHex !== tenant.master_password_hash) {
-        return new Response(
-          JSON.stringify({ error: 'Invalid master password' }),
-          { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 401 }
-        );
-      }
-    } else if (!isValid) {
-      return new Response(
-        JSON.stringify({ error: 'Invalid master password' }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 401 }
-      );
-    }
-
-    // Fetch the admin user for this tenant
-    const { data: user, error: userError } = await supabaseClient.auth.admin.getUserById(
-      tenant.admin_user_id
-    );
-
-    if (userError || !user) {
-      return new Response(
-        JSON.stringify({ error: 'Admin user not found' }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 404 }
-      );
-    }
-
-    // Generate a session for the admin user with impersonation flag
-    const { data: sessionData, error: sessionError } = await supabaseClient.auth.admin.generateLink({
-      type: 'magiclink',
-      email: user.user.email!,
-      options: {
-        redirectTo: `${Deno.env.get('PORTAL_URL')}?impersonated=true&tenant_id=${tenantId}`
-      }
-    });
-
-    if (sessionError || !sessionData) {
-      return new Response(
-        JSON.stringify({ error: 'Failed to generate session' }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
-      );
-    }
-
+    // Per-tenant master password login is no longer supported
     return new Response(
-      JSON.stringify({
-        success: true,
-        tenant: {
-          id: tenant.id,
-          name: tenant.company_name,
-          slug: tenant.slug
-        },
-        magicLink: sessionData.properties.action_link,
-        impersonated: true
-      }),
-      { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 }
+      JSON.stringify({ error: 'Per-tenant master password login is no longer supported. Use global admin login instead.' }),
+      { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 }
     );
 
   } catch (error) {

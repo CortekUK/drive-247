@@ -14,3 +14,6 @@ verify_jwt = false
 
 [functions.submit-customer-registration]
 verify_jwt = false
+
+[functions.custom-auth-email]
+verify_jwt = false

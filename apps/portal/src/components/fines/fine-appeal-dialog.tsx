@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { useToast } from "@/hooks/use-toast";
+import { useAuditLog } from "@/hooks/use-audit-log";
 import { fineAppealSchema, type FineAppealFormValues } from "@/client-schemas/fines/fine-appeal";
 
 type AppealFormData = FineAppealFormValues;
@@ -31,6 +32,7 @@ export const FineAppealDialog = ({
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const { tenant } = useTenant();
+  const { logAction } = useAuditLog();
   
   const form = useForm<AppealFormData>({
     resolver: zodResolver(fineAppealSchema),
@@ -189,11 +191,23 @@ export const FineAppealDialog = ({
           title: "Appeal Successful",
           description: "Fine has been successfully appealed. Unpaid remainder voided and customer credited for paid amount.",
         });
+        logAction({
+          action: "fine_appeal_successful",
+          entityType: "fine",
+          entityId: fineId,
+          details: { fineAmount },
+        });
       } else {
         await handleWaive();
         toast({
           title: "Fine Waived",
           description: "Fine has been waived and unpaid remainder cleared.",
+        });
+        logAction({
+          action: "fine_waived",
+          entityType: "fine",
+          entityId: fineId,
+          details: { fineAmount },
         });
       }
 

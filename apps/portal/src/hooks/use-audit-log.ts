@@ -14,7 +14,10 @@ export type AuditAction =
   | "rental_updated"
   | "rental_cancelled"
   | "rental_closed"
+  | "rental_deleted"
   | "rental_extended"
+  | "rental_extension_approved"
+  | "rental_extension_rejected"
   // Customer actions
   | "customer_created"
   | "customer_updated"
@@ -35,6 +38,8 @@ export type AuditAction =
   | "fine_charged"
   | "fine_waived"
   | "fine_paid"
+  | "fine_appeal_successful"
+  | "fine_authority_payment"
   // Invoice actions
   | "invoice_created"
   | "invoice_updated"
@@ -57,6 +62,27 @@ export type AuditAction =
   | "user_created"
   | "user_updated"
   | "user_deleted"
+  // Blocked dates / Working hours
+  | "blocked_date_created"
+  | "blocked_date_deleted"
+  | "working_hours_updated"
+  // Reminder actions
+  | "reminder_updated"
+  | "reminder_bulk_updated"
+  | "reminder_rule_updated"
+  | "reminder_rules_bulk_updated"
+  | "reminder_rules_reset"
+  // CMS actions
+  | "cms_page_created"
+  | "cms_page_published"
+  | "cms_page_unpublished"
+  | "cms_section_updated"
+  | "cms_section_visibility_toggled"
+  | "cms_media_uploaded"
+  | "cms_media_deleted"
+  | "cms_media_updated"
+  // Message actions
+  | "message_sent"
   // Settings actions
   | "settings_updated"
   // Other
@@ -74,6 +100,14 @@ export type EntityType =
   | "identity"
   | "user"
   | "settings"
+  | "blocked_date"
+  | "working_hours"
+  | "reminder"
+  | "reminder_rule"
+  | "cms_page"
+  | "cms_section"
+  | "cms_media"
+  | "message"
   | string;
 
 export interface AuditLogParams {

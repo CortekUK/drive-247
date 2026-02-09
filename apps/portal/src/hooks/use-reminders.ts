@@ -2,6 +2,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "./use-toast";
 import { useTenant } from "@/contexts/TenantContext";
+import { useAuditLog } from "@/hooks/use-audit-log";
 
 export interface Reminder {
   id: string;
@@ -214,6 +215,7 @@ export function useReminderActions() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const { tenant } = useTenant();
+  const { logAction } = useAuditLog();
 
   const updateReminderStatus = useMutation({
     mutationFn: async ({ 
@@ -284,6 +286,12 @@ export function useReminderActions() {
       toast({
         title: "Success",
         description: "Reminder updated successfully",
+      });
+      logAction({
+        action: "reminder_updated",
+        entityType: "reminder",
+        entityId: data.id,
+        details: { status: data.status },
       });
     },
     onError: (error) => {
@@ -388,6 +396,12 @@ export function useReminderActions() {
       toast({
         title: "Success",
         description: `Updated ${data.ids.length} reminders`,
+      });
+      logAction({
+        action: "reminder_bulk_updated",
+        entityType: "reminder",
+        entityId: data.ids[0],
+        details: { action: data.action, count: data.ids.length, ids: data.ids },
       });
     },
     onError: (error) => {

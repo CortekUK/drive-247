@@ -17,6 +17,7 @@ import { Calendar } from "@/components/ui/calendar";
 import { Card } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
+import { useAuditLog } from "@/hooks/use-audit-log";
 import { useTenant } from "@/contexts/TenantContext";
 import { useCustomerVehicleRental } from "@/hooks/use-customer-vehicle-rental";
 import { useCustomerBalanceWithStatus } from "@/hooks/use-customer-balance";
@@ -55,6 +56,7 @@ export const AddPaymentDialog = ({
   const [emailLoading, setEmailLoading] = useState(false);
   const { toast } = useToast();
   const { tenant } = useTenant();
+  const { logAction } = useAuditLog();
   const queryClient = useQueryClient();
 
   const form = useForm<PaymentFormData>({
@@ -364,6 +366,13 @@ export const AddPaymentDialog = ({
         description: `Payment of $${data.amount} has been recorded and applied.`,
       });
 
+      logAction({
+        action: "payment_created",
+        entityType: "payment",
+        entityId: payment.id,
+        details: { amount: data.amount, method: data.method || "manual", customer_id: finalCustomerId },
+      });
+
       await invalidateAllPaymentQueries(finalCustomerId);
 
       // Reset form and close dialog AFTER invalidations
@@ -421,6 +430,13 @@ export const AddPaymentDialog = ({
         description: "Stripe checkout opened in a new tab. Payment has been marked as fulfilled.",
       });
 
+      logAction({
+        action: "payment_created",
+        entityType: "payment",
+        entityId: finalCustomerId,
+        details: { amount, method: "Card (Stripe)", customer_id: finalCustomerId },
+      });
+
       onOpenChange(false);
     } catch (error: any) {
       console.error("Error creating Stripe checkout:", error);
@@ -474,6 +490,13 @@ export const AddPaymentDialog = ({
       toast({
         title: "Invoice Sent",
         description: `Invoice emailed to ${customerEmail}. Payment has been marked as fulfilled.`,
+      });
+
+      logAction({
+        action: "payment_created",
+        entityType: "payment",
+        entityId: finalCustomerId,
+        details: { amount, method: "Invoice Email", customer_id: finalCustomerId, invoiceId: latestInvoice.id },
       });
 
       onOpenChange(false);

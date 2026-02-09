@@ -4,6 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { format } from "date-fns";
 import { useTenant } from "@/contexts/TenantContext";
+import { useAuditLog } from "@/hooks/use-audit-log";
 
 export interface BlockedDate {
   id: string;
@@ -31,6 +32,7 @@ export const useBlockedDates = (vehicle_id?: string) => {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const { tenant } = useTenant();
+  const { logAction } = useAuditLog();
 
   // Fetch blocked dates
   const { data: blockedDates = [], isLoading } = useQuery({
@@ -64,22 +66,29 @@ export const useBlockedDates = (vehicle_id?: string) => {
     mutationFn: async (data: AddBlockedDateData) => {
       if (!tenant) throw new Error("No tenant context available");
 
-      const { error } = await supabase.from("blocked_dates").insert({
+      const { data: inserted, error } = await supabase.from("blocked_dates").insert({
         start_date: format(data.start_date, 'yyyy-MM-dd'),
         end_date: format(data.end_date, 'yyyy-MM-dd'),
         reason: data.reason,
         vehicle_id: data.vehicle_id || null,
         tenant_id: tenant.id,
-      });
+      }).select().single();
 
       if (error) throw error;
+      return inserted;
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
       // Invalidate all blocked-dates queries (general and vehicle-specific)
       queryClient.invalidateQueries({ queryKey: ["blocked-dates"] });
       toast({
         title: "Date Range Blocked",
         description: "The date range has been successfully blocked.",
+      });
+      logAction({
+        action: "blocked_date_created",
+        entityType: "blocked_date",
+        entityId: data.id,
+        details: { start_date: data.start_date, end_date: data.end_date, reason: data.reason },
       });
     },
     onError: (error: any) => {
@@ -107,11 +116,16 @@ export const useBlockedDates = (vehicle_id?: string) => {
 
       if (error) throw error;
     },
-    onSuccess: () => {
+    onSuccess: (_data, id) => {
       queryClient.invalidateQueries({ queryKey: ["blocked-dates"] });
       toast({
         title: "Date Range Unblocked",
         description: "The date range has been successfully unblocked.",
+      });
+      logAction({
+        action: "blocked_date_deleted",
+        entityType: "blocked_date",
+        entityId: id,
       });
     },
     onError: (error: any) => {

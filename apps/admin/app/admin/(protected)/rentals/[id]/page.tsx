@@ -3,9 +3,8 @@
 import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
-import { generateMasterPassword, hashMasterPassword } from '@/lib/masterPassword';
 import { toast } from '@/components/ui/sonner';
-import { ArrowLeft, Eye, EyeOff, Pencil, Trash2 } from 'lucide-react';
+import { ArrowLeft, Pencil, Trash2 } from 'lucide-react';
 
 interface Tenant {
   id: string;
@@ -15,7 +14,6 @@ interface Tenant {
   status: string;
   contact_email: string;
   created_at: string;
-  master_password_hash: string | null;
   tenant_type: 'production' | 'test' | null;
   integration_canopy: boolean;
   integration_veriff: boolean;
@@ -27,11 +25,6 @@ export default function TenantDetailsPage() {
   const router = useRouter();
   const [tenant, setTenant] = useState<Tenant | null>(null);
   const [loading, setLoading] = useState(true);
-
-  // Master password state
-  const [generatedPassword, setGeneratedPassword] = useState<string>('');
-  const [showPassword, setShowPassword] = useState(false);
-  const [generatingPassword, setGeneratingPassword] = useState(false);
 
   // Edit state
   const [isEditing, setIsEditing] = useState(false);
@@ -81,32 +74,6 @@ export default function TenantDetailsPage() {
   const copyToClipboard = (text: string, label: string) => {
     navigator.clipboard.writeText(text);
     toast.success(`${label} copied to clipboard!`);
-  };
-
-  const handleGenerateMasterPassword = async () => {
-    if (!tenant) return;
-    setGeneratingPassword(true);
-
-    try {
-      const password = generateMasterPassword();
-      const hash = await hashMasterPassword(password);
-
-      const { error } = await supabase
-        .from('tenants')
-        .update({ master_password_hash: hash })
-        .eq('id', tenant.id);
-
-      if (error) throw error;
-
-      setGeneratedPassword(password);
-      setShowPassword(true);
-      setTenant({ ...tenant, master_password_hash: hash });
-      toast.success('Master password generated successfully!');
-    } catch (error: any) {
-      toast.error(`Error generating master password: ${error.message}`);
-    } finally {
-      setGeneratingPassword(false);
-    }
   };
 
   const handleUpdateStatus = async (newStatus: string) => {
@@ -559,63 +526,6 @@ export default function TenantDetailsPage() {
               </button>
             </div>
           </div>
-        </div>
-
-        {/* Master Password */}
-        <div className="bg-indigo-900/20 rounded-lg p-6 border border-indigo-800/50">
-          <h2 className="text-xl font-semibold text-white mb-2">Master Password</h2>
-          <p className="text-sm text-gray-400 mb-4">
-            Use this to access the tenant's portal as super admin
-          </p>
-
-          {generatedPassword ? (
-            <div className="space-y-3">
-              <div className="flex items-center space-x-2">
-                <code className="flex-1 bg-indigo-900/30 px-3 py-2 rounded border border-indigo-700 text-sm font-mono text-indigo-300">
-                  {showPassword ? generatedPassword : '••••••••••••••••'}
-                </code>
-                <button
-                  onClick={() => setShowPassword(!showPassword)}
-                  className="px-3 py-2 bg-indigo-600/50 text-white rounded hover:bg-indigo-600 text-sm"
-                >
-                  {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                </button>
-                <button
-                  onClick={() => copyToClipboard(generatedPassword, 'Master password')}
-                  className="px-3 py-2 bg-indigo-600 text-white rounded hover:bg-indigo-700 text-sm whitespace-nowrap"
-                >
-                  Copy
-                </button>
-              </div>
-              <div className="bg-yellow-900/20 border border-yellow-700 rounded p-3">
-                <p className="text-xs text-yellow-400">
-                  Save this password securely. Once you leave this page, it cannot be retrieved.
-                </p>
-              </div>
-              <button
-                onClick={handleGenerateMasterPassword}
-                disabled={generatingPassword}
-                className="text-sm text-indigo-400 hover:text-indigo-300"
-              >
-                {generatingPassword ? 'Generating...' : 'Generate New Password'}
-              </button>
-            </div>
-          ) : (
-            <div>
-              <p className="text-sm text-gray-400 mb-3">
-                {tenant.master_password_hash
-                  ? 'A master password has been set. Generate a new one to view it.'
-                  : 'No master password configured yet.'}
-              </p>
-              <button
-                onClick={handleGenerateMasterPassword}
-                disabled={generatingPassword}
-                className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 text-sm font-medium disabled:opacity-50"
-              >
-                {generatingPassword ? 'Generating...' : (tenant.master_password_hash ? 'Regenerate Password' : 'Generate Password')}
-              </button>
-            </div>
-          )}
         </div>
 
         {/* Quick Actions */}

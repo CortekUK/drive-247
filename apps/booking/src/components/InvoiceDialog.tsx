@@ -4,6 +4,7 @@ import { FileText, Download, Shield, ArrowRight } from "lucide-react";
 import { format } from "date-fns";
 import { useRef } from "react";
 import { useReactToPrint } from "react-to-print";
+import { useTenant } from "@/contexts/TenantContext";
 
 interface InvoiceDialogProps {
   open: boolean;
@@ -58,7 +59,7 @@ const formatCurrency = (amount: number) => {
 };
 
 // Separate printable component
-const PrintableInvoice = ({ invoice, customer, vehicle, rental, promoDetails, selectedExtras }: Omit<InvoiceDialogProps, "open" | "onOpenChange">) => {
+const PrintableInvoice = ({ invoice, customer, vehicle, rental, promoDetails, selectedExtras, companyName, logoUrl, accentColor }: Omit<InvoiceDialogProps, "open" | "onOpenChange"> & { companyName: string; logoUrl?: string | null; accentColor: string }) => {
   const vehicleName = vehicle.make && vehicle.model ? `${vehicle.make} ${vehicle.model}` : vehicle.reg;
   // If there's a discount, subtotal is the discounted amount, so we need to calculate original
   const discountAmount = invoice.discount_amount || 0;
@@ -69,8 +70,11 @@ const PrintableInvoice = ({ invoice, customer, vehicle, rental, promoDetails, se
     <div className="p-8 bg-white text-black">
       {/* Company Header */}
       <div className="border-b border-gray-300 pb-6 mb-6">
-        <h1 className="text-3xl font-bold" style={{ color: '#06b6d4' }}>DRIVE 917</h1>
-        <p className="text-sm text-gray-600 mt-2">Luxury Vehicle Rental Services</p>
+        {logoUrl ? (
+          <img src={logoUrl} alt={companyName} style={{ height: '48px', objectFit: 'contain' }} />
+        ) : (
+          <h1 className="text-3xl font-bold" style={{ color: accentColor }}>{companyName}</h1>
+        )}
       </div>
 
       {/* Invoice Details */}
@@ -194,7 +198,7 @@ const PrintableInvoice = ({ invoice, customer, vehicle, rental, promoDetails, se
             )}
             <tr className="bg-gray-100">
               <td className="p-3 text-sm font-bold">Total</td>
-              <td className="p-3 text-lg font-bold text-right" style={{ color: discountAmount > 0 ? '#16a34a' : '#06b6d4' }}>
+              <td className="p-3 text-lg font-bold text-right" style={{ color: discountAmount > 0 ? '#16a34a' : accentColor }}>
                 {formatCurrency(invoice.total_amount)}
               </td>
             </tr>
@@ -232,6 +236,10 @@ export const InvoiceDialog = ({
   promoDetails,
   selectedExtras,
 }: InvoiceDialogProps) => {
+  const { tenant } = useTenant();
+  const companyName = tenant?.app_name || tenant?.company_name || 'Invoice';
+  const logoUrl = tenant?.logo_url;
+  const accentColor = tenant?.accent_color || '#06b6d4';
   const printRef = useRef<HTMLDivElement>(null);
   const vehicleName = vehicle.make && vehicle.model ? `${vehicle.make} ${vehicle.model}` : vehicle.reg;
   // If there's a discount, subtotal is the discounted amount, so we need to calculate original
@@ -270,6 +278,9 @@ export const InvoiceDialog = ({
             rental={rental}
             promoDetails={promoDetails}
             selectedExtras={selectedExtras}
+            companyName={companyName}
+            logoUrl={logoUrl}
+            accentColor={accentColor}
           />
         </div>
       </div>
@@ -288,8 +299,11 @@ export const InvoiceDialog = ({
           <div className="space-y-6">
             {/* Company Header */}
             <div className="border-b pb-6">
-              <h1 className="text-3xl font-bold text-accent">DRIVE 917</h1>
-              <p className="text-sm text-muted-foreground mt-2">Luxury Vehicle Rental Services</p>
+              {logoUrl ? (
+                <img src={logoUrl} alt={companyName} className="h-12 object-contain" />
+              ) : (
+                <h1 className="text-3xl font-bold text-accent">{companyName}</h1>
+              )}
             </div>
 
             {/* Invoice Details */}

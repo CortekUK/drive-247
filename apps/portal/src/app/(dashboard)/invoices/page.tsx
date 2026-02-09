@@ -22,10 +22,9 @@ import {
 } from "@/components/ui/select";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar as CalendarComponent } from "@/components/ui/calendar";
-import { FileText, Eye, MoreVertical, Trash2, Mail, Search, Calendar, X, Download } from "lucide-react";
+import { FileText, MoreVertical, Trash2, Mail, Search, Calendar, X, Download } from "lucide-react";
 import { format } from "date-fns";
 import { formatCurrency } from "@/lib/invoice-utils";
-import { InvoiceDialog } from "@/components/shared/dialogs/invoice-dialog";
 import { EmptyState } from "@/components/shared/data-display/empty-state";
 import { DeleteInvoiceDialog } from "@/components/invoices/delete-invoice-dialog";
 import { SendInvoiceEmailDialog } from "@/components/invoices/send-invoice-email-dialog";
@@ -73,8 +72,6 @@ interface InvoiceFilters {
 
 const InvoicesList = () => {
   const { tenant } = useTenant();
-  const [selectedInvoice, setSelectedInvoice] = useState<Invoice | null>(null);
-  const [showInvoiceDialog, setShowInvoiceDialog] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [sendEmailDialogOpen, setSendEmailDialogOpen] = useState(false);
   const [selectedInvoiceForAction, setSelectedInvoiceForAction] = useState<Invoice | null>(null);
@@ -199,11 +196,6 @@ const InvoicesList = () => {
   };
 
   const hasActiveFilters = filters.search || filters.status !== "all" || filters.dateFrom || filters.dateTo;
-
-  const handleViewInvoice = (invoice: Invoice) => {
-    setSelectedInvoice(invoice);
-    setShowInvoiceDialog(true);
-  };
 
   const handleExportCSV = () => {
     if (!filteredInvoices.length) return;
@@ -393,13 +385,6 @@ const InvoicesList = () => {
                       </TableCell>
                       <TableCell>
                         <div className="flex items-center gap-1">
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => handleViewInvoice(invoice)}
-                          >
-                            <Eye className="h-4 w-4" />
-                          </Button>
                           <DropdownMenu>
                             <DropdownMenuTrigger asChild>
                               <Button variant="ghost" size="sm">
@@ -465,38 +450,6 @@ const InvoicesList = () => {
             </div>
           </div>
         </>
-      )}
-
-      {/* Invoice Dialog */}
-      {selectedInvoice && (
-        <InvoiceDialog
-          open={showInvoiceDialog}
-          onOpenChange={setShowInvoiceDialog}
-          invoice={{
-            invoice_number: selectedInvoice.invoice_number,
-            invoice_date: selectedInvoice.invoice_date,
-            due_date: selectedInvoice.due_date,
-            subtotal: selectedInvoice.subtotal,
-            tax_amount: selectedInvoice.tax_amount,
-            total_amount: selectedInvoice.total_amount,
-            notes: selectedInvoice.notes,
-          }}
-          customer={{
-            name: selectedInvoice.customers?.name || "",
-            email: selectedInvoice.customers?.email,
-            phone: selectedInvoice.customers?.phone,
-          }}
-          vehicle={{
-            reg: selectedInvoice.vehicles?.reg || "",
-            make: selectedInvoice.vehicles?.make || "",
-            model: selectedInvoice.vehicles?.model || "",
-          }}
-          rental={{
-            start_date: selectedInvoice.rentals?.start_date || "",
-            end_date: selectedInvoice.rentals?.end_date || "",
-            monthly_amount: selectedInvoice.rentals?.monthly_amount || 0,
-          }}
-        />
       )}
 
       {/* Delete Invoice Dialog */}

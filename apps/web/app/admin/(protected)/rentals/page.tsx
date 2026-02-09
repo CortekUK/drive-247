@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
-import { generateMasterPassword, hashMasterPassword } from '@/lib/masterPassword';
 
 interface Tenant {
   id: string;
@@ -11,7 +10,6 @@ interface Tenant {
   status: string;
   contact_email: string;
   created_at: string;
-  master_password_hash: string | null;
 }
 
 export default function RentalCompaniesPage() {
@@ -24,9 +22,6 @@ export default function RentalCompaniesPage() {
     contactEmail: '',
   });
   const [creating, setCreating] = useState(false);
-  const [showMasterPassword, setShowMasterPassword] = useState<string | null>(null);
-  const [generatedPassword, setGeneratedPassword] = useState<string>('');
-
   useEffect(() => {
     loadTenants();
   }, []);
@@ -89,31 +84,6 @@ export default function RentalCompaniesPage() {
     }
   };
 
-  const handleGenerateMasterPassword = async (tenantId: string) => {
-    try {
-      const password = generateMasterPassword();
-      const hash = await hashMasterPassword(password);
-
-      const { error } = await supabase
-        .from('tenants')
-        .update({ master_password_hash: hash })
-        .eq('id', tenantId);
-
-      if (error) throw error;
-
-      setGeneratedPassword(password);
-      setShowMasterPassword(tenantId);
-      loadTenants();
-    } catch (error: any) {
-      alert(`Error generating master password: ${error.message}`);
-    }
-  };
-
-  const copyToClipboard = (text: string) => {
-    navigator.clipboard.writeText(text);
-    alert('Master password copied to clipboard!');
-  };
-
   if (loading) {
     return (
       <div className="flex items-center justify-center h-full">
@@ -154,9 +124,6 @@ export default function RentalCompaniesPage() {
                 Status
               </th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Master Password
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                 Created
               </th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -185,28 +152,6 @@ export default function RentalCompaniesPage() {
                   }`}>
                     {tenant.status}
                   </span>
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap">
-                  {tenant.master_password_hash ? (
-                    <div className="flex items-center space-x-2">
-                      <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-blue-100 text-blue-800">
-                        Configured
-                      </span>
-                      <button
-                        onClick={() => handleGenerateMasterPassword(tenant.id)}
-                        className="text-xs text-indigo-600 hover:text-indigo-900"
-                      >
-                        Regenerate
-                      </button>
-                    </div>
-                  ) : (
-                    <button
-                      onClick={() => handleGenerateMasterPassword(tenant.id)}
-                      className="text-xs text-indigo-600 hover:text-indigo-900 font-medium"
-                    >
-                      Generate
-                    </button>
-                  )}
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                   {new Date(tenant.created_at).toLocaleDateString('en-US')}
@@ -316,52 +261,6 @@ export default function RentalCompaniesPage() {
         </div>
       )}
 
-      {/* Master Password Modal */}
-      {showMasterPassword && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-8 max-w-md w-full">
-            <h2 className="text-2xl font-bold text-gray-900 mb-4">Master Password Generated</h2>
-
-            <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-4">
-              <p className="text-sm text-yellow-800 mb-2">
-                ⚠️ <strong>Important:</strong> Save this password securely. It will only be shown once.
-              </p>
-            </div>
-
-            <div className="bg-gray-100 rounded-lg p-4 mb-4">
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Master Password
-              </label>
-              <div className="flex items-center space-x-2">
-                <code className="flex-1 bg-white px-3 py-2 rounded border border-gray-300 text-sm font-mono break-all">
-                  {generatedPassword}
-                </code>
-                <button
-                  onClick={() => copyToClipboard(generatedPassword)}
-                  className="px-3 py-2 bg-indigo-600 text-white rounded hover:bg-indigo-700 text-sm whitespace-nowrap"
-                >
-                  Copy
-                </button>
-              </div>
-            </div>
-
-            <p className="text-sm text-gray-600 mb-6">
-              Use this password to log into the tenant's portal without knowing their actual password.
-              Access the portal at: <strong>{tenants.find(t => t.id === showMasterPassword)?.slug}.yourdomain.com</strong>
-            </p>
-
-            <button
-              onClick={() => {
-                setShowMasterPassword(null);
-                setGeneratedPassword('');
-              }}
-              className="w-full px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-700"
-            >
-              Close
-            </button>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
