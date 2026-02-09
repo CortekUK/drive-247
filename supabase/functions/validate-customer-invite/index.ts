@@ -61,7 +61,7 @@ Deno.serve(async (req) => {
     // Get tenant branding
     const { data: tenant, error: tenantError } = await supabase
       .from('tenants')
-      .select('id, slug, name, logo_url, primary_color')
+      .select('id, slug, company_name, logo_url, primary_color')
       .eq('id', invite.tenant_id)
       .single();
 
@@ -73,7 +73,7 @@ Deno.serve(async (req) => {
       ok: true,
       tenantId: tenant.id,
       tenantSlug: tenant.slug,
-      tenantName: tenant.name,
+      tenantName: tenant.company_name,
       tenantLogo: tenant.logo_url,
       tenantPrimaryColor: tenant.primary_color,
       expiresAt: invite.expires_at,
