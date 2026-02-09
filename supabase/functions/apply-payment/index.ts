@@ -217,9 +217,10 @@ async function applyPayment(supabase: any, paymentId: string): Promise<PaymentPr
       let remainingAmount = payment.amount;
       let totalAllocated = 0;
 
-      // Universal FIFO allocation order: Initial Fees → Rentals → Fines → Other
+      // Universal FIFO allocation order: Initial Fees → Extension → Rentals → Fines → Other
       const allocationOrder = [
         { category: 'Initial Fees', description: 'initial fees' },
+        { category: 'Extension', description: 'extension charges' },
         { category: 'Rental', description: 'rental charges' },
         { category: 'Fines', description: 'fine charges' },
         { category: 'Other', description: 'other charges' }

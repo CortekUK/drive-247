@@ -24,6 +24,7 @@ import {
   Plus,
   Download,
   CalendarPlus,
+  XCircle,
   List,
   CalendarDays,
 } from "lucide-react";
@@ -300,7 +301,7 @@ const RentalsList = () => {
                     {rentals.map((rental) => (
                       <TableRow
                         key={rental.id}
-                        className={`hover:bg-muted/50 cursor-pointer ${rental.is_extended ? 'bg-amber-500/10 border-l-4 border-l-amber-500' : ''}`}
+                        className={`hover:bg-muted/50 cursor-pointer ${rental.is_extended ? 'bg-amber-500/10 border-l-4 border-l-amber-500' : rental.cancellation_requested ? 'bg-red-500/10 border-l-4 border-l-red-500' : ''}`}
                         onClick={() => router.push(`/rentals/${rental.id}`)}
                       >
                         <TableCell className="font-medium">
@@ -318,6 +319,14 @@ const RentalsList = () => {
                                 <CalendarPlus className="h-3 w-3" />
                                 Extension Requested
                               </button>
+                            </div>
+                          ) : rental.cancellation_requested ? (
+                            <div className="flex flex-col">
+                              <span>{rental.rental_number}</span>
+                              <span className="text-xs text-red-600 font-medium flex items-center gap-1 mt-0.5">
+                                <XCircle className="h-3 w-3" />
+                                Cancellation Requested
+                              </span>
                             </div>
                           ) : (
                             rental.rental_number

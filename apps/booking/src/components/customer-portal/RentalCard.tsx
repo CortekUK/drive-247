@@ -5,13 +5,15 @@ import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
-import { Calendar, Car, MapPin, CreditCard, Clock, AlertCircle, Pencil, CalendarPlus } from 'lucide-react';
+import { Calendar, Car, MapPin, CreditCard, Clock, AlertCircle, Pencil, CalendarPlus, XCircle, RefreshCw } from 'lucide-react';
 import { format, differenceInDays, isPast, isToday } from 'date-fns';
 import { CustomerRental } from '@/hooks/use-customer-rentals';
 import { cn } from '@/lib/utils';
 import Link from 'next/link';
 import { EditInsuranceDialog } from './EditInsuranceDialog';
 import { ExtendRentalDialog } from './ExtendRentalDialog';
+import { CancelBookingDialog } from './CancelBookingDialog';
+import { RenewRentalDialog } from './RenewRentalDialog';
 
 interface RentalCardProps {
   rental: CustomerRental;
@@ -46,6 +48,8 @@ function getStatusBadgeVariant(
 export function RentalCard({ rental }: RentalCardProps) {
   const [showEditInsurance, setShowEditInsurance] = useState(false);
   const [showExtendDialog, setShowExtendDialog] = useState(false);
+  const [showCancelDialog, setShowCancelDialog] = useState(false);
+  const [showRenewDialog, setShowRenewDialog] = useState(false);
   const vehicle = rental.vehicles;
 
   // Check if booking can be edited (only Pending status)
@@ -53,6 +57,11 @@ export function RentalCard({ rental }: RentalCardProps) {
   // Check if rental can be extended (Active status and no pending extension)
   const canExtend = rental.status === 'Active' && !rental.is_extended;
   const hasExtensionPending = rental.is_extended === true;
+  // Check if booking can be cancelled (Pending status and no pending cancellation)
+  const canCancel = rental.status === 'Pending' && !rental.cancellation_requested;
+  const hasCancellationPending = rental.cancellation_requested === true;
+  // Check if rental can be renewed (Closed/completed status)
+  const canRenew = rental.status === 'Closed' || (rental.status === 'Active' && isPast(new Date(rental.end_date)) && !isToday(new Date(rental.end_date)));
   const vehicleName = vehicle
     ? vehicle.make && vehicle.model
       ? `${vehicle.make} ${vehicle.model}`
@@ -162,6 +171,11 @@ export function RentalCard({ rental }: RentalCardProps) {
                     Extension Pending
                   </Badge>
                 )}
+                {hasCancellationPending && (
+                  <Badge variant="outline" className="bg-red-50 text-red-700 border-red-200 dark:bg-red-900/20 dark:text-red-400 dark:border-red-800">
+                    Cancellation Requested
+                  </Badge>
+                )}
                 {canEditInsurance && (
                   <Button
                     variant="ghost"
@@ -177,6 +191,21 @@ export function RentalCard({ rental }: RentalCardProps) {
                     <Pencil className="h-3.5 w-3.5" />
                   </Button>
                 )}
+                {canCancel && (
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-7 w-7 text-red-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      setShowCancelDialog(true);
+                    }}
+                    title="Cancel Booking"
+                  >
+                    <XCircle className="h-3.5 w-3.5" />
+                  </Button>
+                )}
                 {canExtend && (
                   <Button
                     variant="ghost"
@@ -190,6 +219,21 @@ export function RentalCard({ rental }: RentalCardProps) {
                     title="Extend Rental"
                   >
                     <CalendarPlus className="h-3.5 w-3.5" />
+                  </Button>
+                )}
+                {canRenew && (
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-7 w-7"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      setShowRenewDialog(true);
+                    }}
+                    title="Renew Rental"
+                  >
+                    <RefreshCw className="h-3.5 w-3.5" />
                   </Button>
                 )}
               </div>
@@ -328,6 +372,20 @@ export function RentalCard({ rental }: RentalCardProps) {
       <ExtendRentalDialog
         open={showExtendDialog}
         onOpenChange={setShowExtendDialog}
+        rental={rental}
+      />
+
+      {/* Cancel Booking Dialog */}
+      <CancelBookingDialog
+        open={showCancelDialog}
+        onOpenChange={setShowCancelDialog}
+        rental={rental}
+      />
+
+      {/* Renew Rental Dialog */}
+      <RenewRentalDialog
+        open={showRenewDialog}
+        onOpenChange={setShowRenewDialog}
         rental={rental}
       />
     </Card>

@@ -17,6 +17,7 @@ interface InvoiceDialogProps {
     tax_amount: number;
     service_fee?: number;
     security_deposit?: number;
+    insurance_premium?: number;
     total_amount: number;
     notes?: string;
     discount_amount?: number;

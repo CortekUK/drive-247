@@ -127,26 +127,37 @@ serve(async (req) => {
               }
             }
 
-            // Mark the first installment as paid (it was included in the upfront payment)
-            const { data: firstInstallment } = await supabase
-              .from("scheduled_installments")
-              .select("id, amount")
-              .eq("installment_plan_id", installmentPlan.id)
-              .eq("installment_number", 1)
-              .single();
+            // Check if first installment was charged upfront (from plan config or metadata)
+            const chargeFirstUpfront = session.metadata?.charge_first_upfront !== 'false';
+            let paidInstallments = 0;
+            let totalPaidAmount = 0;
 
-            if (firstInstallment) {
-              await supabase
+            if (chargeFirstUpfront) {
+              // Mark the first installment as paid (it was included in the upfront payment)
+              const { data: firstInstallment } = await supabase
                 .from("scheduled_installments")
-                .update({
-                  status: "paid",
-                  paid_at: new Date().toISOString(),
-                  payment_id: existingPaymentRecord?.id,
-                  stripe_payment_intent_id: session.payment_intent as string,
-                  updated_at: new Date().toISOString(),
-                })
-                .eq("id", firstInstallment.id);
-              console.log("First installment marked as paid:", firstInstallment.id);
+                .select("id, amount")
+                .eq("installment_plan_id", installmentPlan.id)
+                .eq("installment_number", 1)
+                .single();
+
+              if (firstInstallment) {
+                await supabase
+                  .from("scheduled_installments")
+                  .update({
+                    status: "paid",
+                    paid_at: new Date().toISOString(),
+                    payment_id: existingPaymentRecord?.id,
+                    stripe_payment_intent_id: session.payment_intent as string,
+                    updated_at: new Date().toISOString(),
+                  })
+                  .eq("id", firstInstallment.id);
+                console.log("First installment marked as paid:", firstInstallment.id);
+                paidInstallments = 1;
+                totalPaidAmount = firstInstallment.amount;
+              }
+            } else {
+              console.log("chargeFirstUpfront is false - first installment will be collected later");
             }
 
             // Activate the plan and update counters
@@ -157,13 +168,13 @@ serve(async (req) => {
                 upfront_paid: true,
                 upfront_payment_id: existingPaymentRecord?.id,
                 stripe_payment_method_id: paymentMethodId,
-                paid_installments: 1, // First installment paid at checkout
-                total_paid: firstInstallment?.amount || 0,
+                paid_installments: paidInstallments,
+                total_paid: totalPaidAmount,
                 updated_at: new Date().toISOString(),
               })
               .eq("id", installmentPlan.id);
 
-            console.log("Installment plan activated:", installmentPlan.id, "Payment method:", paymentMethodId, "1st installment paid");
+            console.log("Installment plan activated:", installmentPlan.id, "Payment method:", paymentMethodId, "Paid installments:", paidInstallments);
 
             // Update rental status
             await supabase
@@ -543,42 +554,58 @@ serve(async (req) => {
           console.log("Processing installment payment success:", installmentId);
 
           if (installmentId) {
-            // Get installment details
+            // Get installment details (include status to avoid double-processing)
             const { data: installment } = await supabase
               .from("scheduled_installments")
-              .select("id, amount, customer_id, rental_id, tenant_id, installment_number, installment_plan_id")
+              .select("id, amount, status, customer_id, rental_id, tenant_id, installment_number, installment_plan_id")
               .eq("id", installmentId)
               .single();
 
             if (installment && installment.status !== 'paid') {
-              // Create payment record
-              const { data: payment } = await supabase
+              // Check if payment record already exists (process-installment-payment may have created it)
+              const { data: existingPayment } = await supabase
                 .from("payments")
-                .insert({
-                  customer_id: installment.customer_id,
-                  rental_id: installment.rental_id,
-                  amount: installment.amount,
-                  payment_date: new Date().toISOString().split("T")[0],
-                  method: "Card",
-                  payment_type: "Payment",
-                  status: "Applied",
-                  verification_status: "auto_approved",
-                  stripe_payment_intent_id: paymentIntent.id,
-                  capture_status: "captured",
-                  tenant_id: installment.tenant_id,
-                })
-                .select()
-                .single();
+                .select("id")
+                .eq("stripe_payment_intent_id", paymentIntent.id)
+                .maybeSingle();
 
-              // Mark installment as paid
+              let paymentId = existingPayment?.id;
+
+              if (!existingPayment) {
+                // Create payment record only if not already created
+                const { data: payment } = await supabase
+                  .from("payments")
+                  .insert({
+                    customer_id: installment.customer_id,
+                    rental_id: installment.rental_id,
+                    amount: installment.amount,
+                    payment_date: new Date().toISOString().split("T")[0],
+                    method: "Card",
+                    payment_type: "Payment",
+                    status: "Applied",
+                    verification_status: "auto_approved",
+                    stripe_payment_intent_id: paymentIntent.id,
+                    capture_status: "captured",
+                    tenant_id: installment.tenant_id,
+                  })
+                  .select()
+                  .single();
+                paymentId = payment?.id;
+              } else {
+                console.log("Payment record already exists for this PaymentIntent, skipping creation:", existingPayment.id);
+              }
+
+              // Mark installment as paid (idempotent - mark_installment_paid checks status)
               await supabase.rpc("mark_installment_paid", {
                 p_installment_id: installmentId,
-                p_payment_id: payment?.id,
+                p_payment_id: paymentId,
                 p_stripe_payment_intent_id: paymentIntent.id,
                 p_stripe_charge_id: paymentIntent.latest_charge as string,
               });
 
-              console.log("Installment marked as paid:", installmentId, "Payment:", payment?.id);
+              console.log("Installment marked as paid:", installmentId, "Payment:", paymentId);
+            } else if (installment?.status === 'paid') {
+              console.log("Installment already paid, skipping:", installmentId);
             }
           }
           break;

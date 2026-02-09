@@ -708,6 +708,77 @@ export const DEFAULT_EMAIL_TEMPLATES: DefaultEmailTemplate[] = [
 <p>Kind regards,<br>
 <strong>The {{company_name}} Team</strong></p>`,
   },
+  {
+    key: 'rental_extended',
+    name: 'Rental Extended',
+    subject: 'Rental Extended - {{rental_number}} | {{company_name}}',
+    content: `<h1>Your Rental Has Been Extended</h1>
+
+<p>Dear {{customer_name}},</p>
+
+<p>Your rental with <strong>{{company_name}}</strong> has been extended. Below are the updated details:</p>
+
+<hr>
+
+<h2>Extension Details</h2>
+
+<table>
+  <tr>
+    <td><strong>Rental Reference:</strong></td>
+    <td>{{rental_number}}</td>
+  </tr>
+  <tr>
+    <td><strong>Vehicle:</strong></td>
+    <td>{{vehicle_make}} {{vehicle_model}} ({{vehicle_reg}})</td>
+  </tr>
+  <tr>
+    <td><strong>Previous End Date:</strong></td>
+    <td>{{previous_end_date}}</td>
+  </tr>
+  <tr>
+    <td><strong>New End Date:</strong></td>
+    <td>{{new_end_date}}</td>
+  </tr>
+  <tr>
+    <td><strong>Extension:</strong></td>
+    <td>{{extension_days}} day(s)</td>
+  </tr>
+  <tr>
+    <td><strong>Extension Cost:</strong></td>
+    <td>{{extension_amount}}</td>
+  </tr>
+</table>
+
+<hr>
+
+<h2>Payment</h2>
+
+<p>Please complete the extension payment at your earliest convenience. If a payment link has been provided, you can pay securely online.</p>
+
+<hr>
+
+<h2>Important Reminders</h2>
+
+<ul>
+  <li>Your insurance coverage may need to be reviewed for the extended period</li>
+  <li>Please ensure your driving licence remains valid for the extended duration</li>
+  <li>The vehicle must be returned by the new end date to avoid late fees</li>
+</ul>
+
+<hr>
+
+<h2>Contact Us</h2>
+
+<ul>
+  <li><strong>Email:</strong> {{company_email}}</li>
+  <li><strong>Phone:</strong> {{company_phone}}</li>
+</ul>
+
+<p>Thank you for continuing to rent with {{company_name}}.</p>
+
+<p>Kind regards,<br>
+<strong>The {{company_name}} Team</strong></p>`,
+  },
 ];
 
 // Get default template by key

@@ -3,16 +3,13 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Progress } from "@/components/ui/progress";
-import { Shield, CheckCircle2, AlertCircle, XCircle, Clock, ExternalLink, RefreshCw, QrCode, Smartphone, Loader2, Camera, Copy, Check } from "lucide-react";
+import { Shield, CheckCircle2, AlertCircle, XCircle, Clock, ExternalLink, RefreshCw, QrCode } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import { EmptyState } from "@/components/shared/data-display/empty-state";
 import { useTenant } from "@/contexts/TenantContext";
-// QRCodeCanvas from qrcode.react wasn't scanning properly on some phones
-// Using quickchart.io API which is more reliable for phone scanners
+import { VerificationQRModal } from "./verification-qr-modal";
 
 interface IdentityVerification {
   id: string;
@@ -51,9 +48,6 @@ export function IdentityVerificationTab({ customerId }: IdentityVerificationTabP
   const [creating, setCreating] = useState(false);
   const [showQRModal, setShowQRModal] = useState(false);
   const [aiSessionData, setAiSessionData] = useState<AISessionData | null>(null);
-  const [timeRemaining, setTimeRemaining] = useState(0);
-  const [isPolling, setIsPolling] = useState(false);
-  const pollIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const { tenant } = useTenant();
 
   const fetchVerifications = async () => {
@@ -107,7 +101,6 @@ export function IdentityVerificationTab({ customerId }: IdentityVerificationTabP
           expiresAt: new Date(data.expiresAt)
         });
         setShowQRModal(true);
-        setIsPolling(true);
         await fetchVerifications();
       } else {
         // Veriff flow (existing)
@@ -137,85 +130,6 @@ export function IdentityVerificationTab({ customerId }: IdentityVerificationTabP
     } finally {
       setCreating(false);
     }
-  };
-
-  // Timer for QR expiry countdown
-  useEffect(() => {
-    if (!showQRModal || !aiSessionData) return;
-
-    const updateTime = () => {
-      const now = new Date();
-      const remaining = Math.max(0, Math.floor((aiSessionData.expiresAt.getTime() - now.getTime()) / 1000));
-      setTimeRemaining(remaining);
-
-      if (remaining === 0) {
-        setShowQRModal(false);
-        setIsPolling(false);
-        setAiSessionData(null);
-        toast.error('QR code expired. Please try again.');
-      }
-    };
-
-    updateTime();
-    const timer = setInterval(updateTime, 1000);
-    return () => clearInterval(timer);
-  }, [showQRModal, aiSessionData]);
-
-  // Poll for AI verification completion
-  const checkAIVerificationStatus = useCallback(async () => {
-    if (!isPolling || !aiSessionData) return;
-
-    try {
-      const { data, error } = await supabase
-        .from('identity_verifications')
-        .select('status, review_status, review_result')
-        .eq('id', aiSessionData.sessionId)
-        .single();
-
-      if (error) {
-        console.error('Status check error:', error);
-        return;
-      }
-
-      if (data.status === 'completed') {
-        setIsPolling(false);
-        setShowQRModal(false);
-        setAiSessionData(null);
-        await fetchVerifications();
-
-        if (data.review_result === 'GREEN') {
-          toast.success('Identity verified successfully!');
-        } else if (data.review_result === 'RED') {
-          toast.error('Identity verification failed');
-        } else {
-          toast.info('Verification needs manual review');
-        }
-      }
-    } catch (err) {
-      console.error('Status check error:', err);
-    }
-  }, [aiSessionData, isPolling]);
-
-  // Set up polling
-  useEffect(() => {
-    if (isPolling && aiSessionData) {
-      const initialTimeout = setTimeout(checkAIVerificationStatus, 5000);
-      pollIntervalRef.current = setInterval(checkAIVerificationStatus, 3000);
-
-      return () => {
-        clearTimeout(initialTimeout);
-        if (pollIntervalRef.current) {
-          clearInterval(pollIntervalRef.current);
-        }
-      };
-    }
-  }, [isPolling, aiSessionData, checkAIVerificationStatus]);
-
-  // Format time remaining
-  const formatTime = (seconds: number): string => {
-    const mins = Math.floor(seconds / 60);
-    const secs = seconds % 60;
-    return `${mins}:${secs.toString().padStart(2, '0')}`;
   };
 
   // Get provider badge
@@ -425,110 +339,15 @@ export function IdentityVerificationTab({ customerId }: IdentityVerificationTabP
       </CardContent>
 
       {/* AI Verification QR Modal */}
-      <Dialog open={showQRModal} onOpenChange={(open) => {
-        if (!open) {
-          setShowQRModal(false);
-          setIsPolling(false);
-          setAiSessionData(null);
-        }
-      }}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <Smartphone className="h-5 w-5 text-primary" />
-              Identity Verification
-            </DialogTitle>
-            <DialogDescription>
-              Have the customer scan this QR code with their phone camera.
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className="flex flex-col items-center space-y-6 py-6">
-            {/* QR Code Display - Using quickchart.io API for reliable phone scanning */}
-            {aiSessionData && (
-              <div
-                className="rounded-xl shadow-lg border-2 border-gray-200"
-                style={{
-                  backgroundColor: '#FFFFFF',
-                  padding: '16px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center'
-                }}
-              >
-                <img
-                  src={`https://quickchart.io/qr?text=${encodeURIComponent(aiSessionData.qrUrl)}&size=300&margin=3&dark=000000&light=ffffff&ecLevel=M&format=png`}
-                  alt="Scan QR code to verify identity"
-                  width={300}
-                  height={300}
-                  style={{ display: 'block', imageRendering: 'pixelated' }}
-                />
-              </div>
-            )}
-
-            {/* Timer with progress bar */}
-            <div className="w-full space-y-2">
-              <div className="flex items-center justify-between text-sm">
-                <span className="text-muted-foreground flex items-center gap-1">
-                  <Clock className="h-4 w-4" />
-                  Time remaining
-                </span>
-                <span className={`font-mono font-medium ${timeRemaining < 60 ? 'text-destructive' : 'text-foreground'}`}>
-                  {formatTime(timeRemaining)}
-                </span>
-              </div>
-              <Progress value={(timeRemaining / 900) * 100} className="h-2" />
-            </div>
-
-            {/* Status indicator */}
-            <div className="flex items-center gap-2 px-4 py-2 bg-blue-50 text-blue-700 rounded-full text-sm">
-              <Loader2 className="h-4 w-4 animate-spin" />
-              <span>Waiting for customer to complete verification...</span>
-            </div>
-
-            {/* Manual URL with copy button */}
-            {aiSessionData && (
-              <div className="w-full space-y-2">
-                <p className="text-xs text-center text-muted-foreground">
-                  Can't scan? Share this link with the customer:
-                </p>
-                <div className="flex items-center gap-2 p-2 bg-muted rounded-lg">
-                  <input
-                    type="text"
-                    readOnly
-                    value={aiSessionData.qrUrl}
-                    className="flex-1 bg-transparent text-xs truncate border-none focus:outline-none"
-                  />
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="shrink-0"
-                    onClick={() => {
-                      navigator.clipboard.writeText(aiSessionData.qrUrl);
-                      toast.success('Link copied to clipboard');
-                    }}
-                  >
-                    <Copy className="h-4 w-4" />
-                  </Button>
-                </div>
-              </div>
-            )}
-          </div>
-
-          <div className="flex justify-end gap-2">
-            <Button
-              variant="outline"
-              onClick={() => {
-                setShowQRModal(false);
-                setIsPolling(false);
-                setAiSessionData(null);
-              }}
-            >
-              Cancel
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
+      <VerificationQRModal
+        open={showQRModal}
+        onOpenChange={(open) => {
+          setShowQRModal(open);
+          if (!open) setAiSessionData(null);
+        }}
+        sessionData={aiSessionData}
+        onComplete={() => fetchVerifications()}
+      />
     </Card>
   );
 }

@@ -7,7 +7,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { CreditCard, Plus } from "lucide-react";
 import { formatInTimeZone } from "date-fns-tz";
 import { useState } from "react";
-import { AddPaymentDialog } from "./add-payment-dialog";
+import { AddPaymentDialog } from "@/components/shared/dialogs/add-payment-dialog";
 
 interface PaymentEntry {
   id: string;

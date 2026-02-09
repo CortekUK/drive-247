@@ -40,6 +40,7 @@ export interface EnhancedRental {
   created_at?: string;
   is_extended?: boolean;
   previous_end_date?: string | null;
+  cancellation_requested?: boolean;
   customer: {
     id: string;
     name: string;
@@ -124,6 +125,7 @@ export const useEnhancedRentals = (filters: RentalFilters = {}) => {
           created_at,
           is_extended,
           previous_end_date,
+          cancellation_requested,
           customers!rentals_customer_id_fkey(id, name, customer_type),
           vehicles!rentals_vehicle_id_fkey(id, reg, make, model)
         `, { count: 'exact' })
@@ -201,6 +203,7 @@ export const useEnhancedRentals = (filters: RentalFilters = {}) => {
             payment_mode: rental.payment_mode,
             is_extended: rental.is_extended,
             previous_end_date: rental.previous_end_date,
+            cancellation_requested: rental.cancellation_requested,
             customer: rental.customers as any,
             vehicle: rental.vehicles as any,
           };

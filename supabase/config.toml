@@ -8,3 +8,9 @@ verify_jwt = false
 
 [functions.customer-chat]
 verify_jwt = false
+
+[functions.validate-customer-invite]
+verify_jwt = false
+
+[functions.submit-customer-registration]
+verify_jwt = false

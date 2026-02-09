@@ -367,6 +367,7 @@ export default function RejectionDialog({
         status: 'Cancelled',
         approval_status: 'rejected',
         cancellation_reason: rejectionReason || 'rejected_by_admin',
+        cancellation_requested: false,
         updated_at: new Date().toISOString(),
       };
 

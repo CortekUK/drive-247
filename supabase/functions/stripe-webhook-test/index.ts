@@ -96,9 +96,62 @@ serve(async (req) => {
 
         const rentalId = session.client_reference_id || session.metadata?.rental_id;
         const isPreAuth = session.metadata?.preauth_mode === "true";
+        const isExtension = session.metadata?.type === "extension";
 
         if (!rentalId) {
           console.log("No rental ID in session, skipping");
+          break;
+        }
+
+        // Handle extension payment completion
+        if (isExtension) {
+          console.log("Extension checkout completed for rental:", rentalId);
+
+          // Find payment by stripe_checkout_session_id and update status
+          const { data: extensionPayment, error: extPaymentError } = await supabase
+            .from("payments")
+            .select("id")
+            .eq("stripe_checkout_session_id", session.id)
+            .single();
+
+          if (extensionPayment) {
+            await supabase
+              .from("payments")
+              .update({
+                status: "Completed",
+                capture_status: "captured",
+                stripe_payment_intent_id: session.payment_intent as string,
+                updated_at: new Date().toISOString(),
+              })
+              .eq("id", extensionPayment.id);
+
+            console.log("Updated extension payment to Completed:", extensionPayment.id);
+
+            // Trigger FIFO allocation via apply-payment
+            try {
+              const applyResponse = await fetch(
+                `${Deno.env.get("SUPABASE_URL")}/functions/v1/apply-payment`,
+                {
+                  method: "POST",
+                  headers: {
+                    "Content-Type": "application/json",
+                    Authorization: `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`,
+                  },
+                  body: JSON.stringify({ paymentId: extensionPayment.id }),
+                }
+              );
+              if (applyResponse.ok) {
+                console.log("Extension payment FIFO allocation completed");
+              } else {
+                console.error("FIFO allocation failed:", await applyResponse.text());
+              }
+            } catch (applyError) {
+              console.error("Error applying extension payment:", applyError);
+            }
+          } else {
+            console.error("No extension payment found for session:", session.id, extPaymentError?.message);
+          }
+
           break;
         }
 

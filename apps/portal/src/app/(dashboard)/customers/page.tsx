@@ -16,8 +16,9 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { Users, Plus, Mail, Phone, Eye, Edit, Search, Shield, ArrowUpDown, ArrowUp, ArrowDown, X, MoreHorizontal, Ban, Trash2, XCircle, UserCheck } from "lucide-react";
+import { Users, Plus, Mail, Phone, Eye, Edit, Search, Shield, ArrowUpDown, ArrowUp, ArrowDown, X, MoreHorizontal, Ban, Trash2, XCircle, UserCheck, Link2 } from "lucide-react";
 import { CustomerFormModal } from "@/components/customers/customer-form-modal";
+import { GenerateInviteDialog } from "@/components/customers/generate-invite-dialog";
 import { CustomerBalanceChip } from "@/components/customers/customer-balance-chip";
 import { CustomerSummaryCards } from "@/components/customers/customer-summary-cards";
 import { RejectCustomerDialog } from "@/components/customers/reject-customer-dialog";
@@ -89,6 +90,7 @@ const CustomersList = () => {
   // Reject/Approve dialog state
   const [rejectDialogOpen, setRejectDialogOpen] = useState(false);
   const [rejectedDetailsDialogOpen, setRejectedDetailsDialogOpen] = useState(false);
+  const [inviteDialogOpen, setInviteDialogOpen] = useState(false);
 
   // Debounce search term
   const debouncedSearchTerm = useDebounce(searchTerm, 300);
@@ -518,10 +520,16 @@ const CustomersList = () => {
           <h1 className="text-3xl font-bold">Customers</h1>
           <p className="text-muted-foreground">View and manage all customers with contact information and account balances</p>
         </div>
-        <Button className="bg-gradient-primary w-full sm:w-auto" onClick={handleAddCustomer}>
-          <Plus className="h-4 w-4 mr-2" />
-          Add Customer
-        </Button>
+        <div className="flex gap-2 w-full sm:w-auto">
+          <Button variant="outline" className="w-full sm:w-auto" onClick={() => setInviteDialogOpen(true)}>
+            <Link2 className="h-4 w-4 mr-2" />
+            Invite Link
+          </Button>
+          <Button className="bg-gradient-primary w-full sm:w-auto" onClick={handleAddCustomer}>
+            <Plus className="h-4 w-4 mr-2" />
+            Add Customer
+          </Button>
+        </div>
       </div>
 
       {/* Summary Cards */}
@@ -957,6 +965,12 @@ const CustomersList = () => {
         customer={selectedCustomer}
         onApprove={handleApproveCustomer}
         isLoading={statusActionLoading}
+      />
+
+      {/* Generate Invite Link Dialog */}
+      <GenerateInviteDialog
+        open={inviteDialogOpen}
+        onOpenChange={setInviteDialogOpen}
       />
     </div>
   );

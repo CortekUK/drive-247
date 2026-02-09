@@ -84,6 +84,18 @@ serve(async (req) => {
       throw new Error('Invalid number of installments (must be 2-12)')
     }
 
+    // Check for existing active/pending installment plan for this rental
+    const { data: existingPlan } = await supabase
+      .from('installment_plans')
+      .select('id, status')
+      .eq('rental_id', body.rentalId)
+      .in('status', ['active', 'pending'])
+      .maybeSingle()
+
+    if (existingPlan) {
+      throw new Error(`An installment plan already exists for this rental (status: ${existingPlan.status})`)
+    }
+
     // Get tenant_id from rental if not provided
     let tenantId = body.tenantId
     let stripeMode: StripeMode = 'test'
@@ -158,6 +170,7 @@ serve(async (req) => {
       first_installment_amount: String(body.firstInstallmentAmount),
       installable_amount: String(body.installableAmount),
       installment_amount: String(installmentAmount),
+      charge_first_upfront: String(chargeFirstUpfront),
       first_installment_date: 'today', // First installment is paid at checkout
     }
 

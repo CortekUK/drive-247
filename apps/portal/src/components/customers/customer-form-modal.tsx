@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage, FormDescription } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -11,13 +11,14 @@ import { Switch } from "@/components/ui/switch";
 import { Button } from "@/components/ui/button";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Users, Mail, Phone, ChevronDown, ChevronUp, CreditCard, AlertTriangle } from "lucide-react";
+import { Users, Mail, Phone, ChevronDown, ChevronUp, CreditCard, AlertTriangle, Shield, Loader2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { useQueryClient } from "@tanstack/react-query";
 import { useTenant } from "@/contexts/TenantContext";
 import { useAuditLog } from "@/hooks/use-audit-log";
 import { customerFormModalSchema, type CustomerFormModalFormValues } from "@/client-schemas/customers/customer-form-modal";
+import { VerificationQRModal } from "./verification-qr-modal";
 
 type CustomerFormData = CustomerFormModalFormValues;
 
@@ -51,6 +52,12 @@ export const CustomerFormModal = ({ open, onOpenChange, customer }: CustomerForm
   const [loading, setLoading] = useState(false);
   const [showNextOfKin, setShowNextOfKin] = useState(false);
   const [blockWarning, setBlockWarning] = useState<{ isBlocked: boolean; reason?: string; type?: string } | null>(null);
+  const [showVerificationPrompt, setShowVerificationPrompt] = useState(false);
+  const [newCustomerId, setNewCustomerId] = useState<string | null>(null);
+  const [newCustomerName, setNewCustomerName] = useState<string>('');
+  const [startingVerification, setStartingVerification] = useState(false);
+  const [showQRModal, setShowQRModal] = useState(false);
+  const [aiSessionData, setAiSessionData] = useState<{ sessionId: string; qrUrl: string; expiresAt: Date } | null>(null);
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const { logAction } = useAuditLog();
@@ -411,18 +418,30 @@ export const CustomerFormModal = ({ open, onOpenChange, customer }: CustomerForm
           title: "Customer Added",
           description: `${data.name} has been added to your customer database.`,
         });
+
+        // Refresh the customers list
+        queryClient.invalidateQueries({ queryKey: ["customers-list"] });
+        queryClient.invalidateQueries({ queryKey: ["customer-balances-list"] });
+        queryClient.invalidateQueries({ queryKey: ["customer-balances-enhanced"] });
+
+        // Show verification prompt for new customers
+        if (newCustomer?.id) {
+          setNewCustomerId(newCustomer.id);
+          setNewCustomerName(data.name);
+          setShowVerificationPrompt(true);
+          form.reset();
+          return; // Don't close modal yet
+        }
       }
 
-      // Refresh the customers list
+      // Refresh the customers list (for edit flow)
       queryClient.invalidateQueries({ queryKey: ["customers-list"] });
       queryClient.invalidateQueries({ queryKey: ["customer-balances-list"] });
       queryClient.invalidateQueries({ queryKey: ["customer-balances-enhanced"] });
-      // Also refresh the specific customer detail page if editing
       if (isEditing && customer?.id) {
         queryClient.invalidateQueries({ queryKey: ["customer", customer.id] });
       }
 
-      // Close modal and reset form
       onOpenChange(false);
       if (!isEditing) {
         form.reset();
@@ -446,9 +465,119 @@ export const CustomerFormModal = ({ open, onOpenChange, customer }: CustomerForm
     }
   };
 
+  const handleStartVerification = async () => {
+    if (!newCustomerId || !tenant?.id || !tenant?.slug) return;
+
+    setStartingVerification(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('create-ai-verification-session', {
+        body: {
+          customerId: newCustomerId,
+          tenantId: tenant.id,
+          tenantSlug: tenant.slug,
+        },
+      });
+
+      if (error) throw error;
+      if (!data?.ok) throw new Error(data?.error || 'Failed to create verification session');
+
+      setAiSessionData({
+        sessionId: data.sessionId,
+        qrUrl: data.qrUrl,
+        expiresAt: new Date(data.expiresAt),
+      });
+      setShowVerificationPrompt(false);
+      setShowQRModal(true);
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to start verification.",
+        variant: "destructive",
+      });
+    } finally {
+      setStartingVerification(false);
+    }
+  };
+
+  const handleSkipVerification = () => {
+    setShowVerificationPrompt(false);
+    setNewCustomerId(null);
+    setNewCustomerName('');
+    onOpenChange(false);
+  };
+
+  const handleDialogChange = (open: boolean) => {
+    if (!open) {
+      setShowVerificationPrompt(false);
+      setNewCustomerId(null);
+      setNewCustomerName('');
+      setShowQRModal(false);
+      setAiSessionData(null);
+    }
+    onOpenChange(open);
+  };
+
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={handleDialogChange}>
       <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto" onKeyDown={handleKeyDown}>
+        {showVerificationPrompt ? (
+          <>
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <Shield className="h-5 w-5 text-primary" />
+                Start ID Verification?
+              </DialogTitle>
+              <DialogDescription>
+                {newCustomerName} has been added successfully. Would you like to start ID verification now?
+              </DialogDescription>
+            </DialogHeader>
+            <div className="flex flex-col gap-3 py-4">
+              <p className="text-sm text-muted-foreground">
+                This will generate a QR code the customer can scan to verify their identity using their phone camera.
+              </p>
+              <div className="flex justify-end gap-2 pt-2">
+                <Button variant="outline" onClick={handleSkipVerification}>
+                  Skip
+                </Button>
+                <Button
+                  onClick={handleStartVerification}
+                  disabled={startingVerification}
+                  className="bg-gradient-primary"
+                >
+                  {startingVerification ? (
+                    <>
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      Starting...
+                    </>
+                  ) : (
+                    <>
+                      <Shield className="h-4 w-4 mr-2" />
+                      Start ID Verification
+                    </>
+                  )}
+                </Button>
+              </div>
+            </div>
+
+            <VerificationQRModal
+              open={showQRModal}
+              onOpenChange={(open) => {
+                setShowQRModal(open);
+                if (!open) {
+                  setAiSessionData(null);
+                  setNewCustomerId(null);
+                  setNewCustomerName('');
+                  onOpenChange(false);
+                }
+              }}
+              sessionData={aiSessionData}
+              onComplete={() => {
+                queryClient.invalidateQueries({ queryKey: ["customers-list"] });
+              }}
+            />
+          </>
+        ) : (
+        <>
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Users className="h-5 w-5 text-primary" />
@@ -813,6 +942,8 @@ export const CustomerFormModal = ({ open, onOpenChange, customer }: CustomerForm
             </div>
           </form>
         </Form>
+        </>
+        )}
       </DialogContent>
     </Dialog>
   );

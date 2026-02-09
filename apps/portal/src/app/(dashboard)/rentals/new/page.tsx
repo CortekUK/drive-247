@@ -1,12 +1,12 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
-import { addMonths, addDays, addWeeks, isAfter, isBefore, subYears, startOfDay, format } from "date-fns";
+import { addMonths, addDays, addWeeks, isAfter, isBefore, subYears, startOfDay, format, differenceInDays, parseISO } from "date-fns";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -22,13 +22,15 @@ import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { useQueryClient } from "@tanstack/react-query";
 import { useTenant } from "@/contexts/TenantContext";
-import { isInsuranceExemptTenant } from "@/config/tenant-config";
+import BonzahInsuranceSelector from "@/components/rentals/bonzah-insurance-selector";
+import type { CoverageOptions } from "@/hooks/use-bonzah-premium";
 import { useCustomerActiveRentals } from "@/hooks/use-customer-active-rentals";
 import { PAYMENT_TYPES } from "@/constants";
 import { ContractSummary } from "@/components/rentals/contract-summary";
 import { DatePickerInput } from "@/components/shared/forms/date-picker-input";
 import { CurrencyInput } from "@/components/shared/forms/currency-input";
 import { InvoiceDialog } from "@/components/shared/dialogs/invoice-dialog";
+import { AddPaymentDialog } from "@/components/shared/dialogs/add-payment-dialog";
 import { createInvoice, Invoice } from "@/lib/invoice-utils";
 import { sendBookingNotification, sendPaymentVerificationNotification } from "@/lib/notifications";
 import { useOrgSettings } from "@/hooks/use-org-settings";
@@ -88,14 +90,23 @@ type RentalFormData = z.infer<typeof rentalSchema>;
 
 const CreateRental = () => {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const renewFromId = searchParams?.get("renew_from");
   const { toast } = useToast();
   const { tenant } = useTenant();
-  const skipInsurance = isInsuranceExemptTenant(tenant?.id);
+  const skipInsurance = !tenant?.integration_bonzah;
   const queryClient = useQueryClient();
   const [loading, setLoading] = useState(false);
+
+  // Bonzah insurance state
+  const [bonzahCoverage, setBonzahCoverage] = useState<CoverageOptions>({
+    cdw: false, rcli: false, sli: false, pai: false,
+  });
+  const [bonzahPremium, setBonzahPremium] = useState<number>(0);
   const [submitError, setSubmitError] = useState<string>("");
   const [showDocuSignDialog, setShowDocuSignDialog] = useState(false);
   const [showInvoiceDialog, setShowInvoiceDialog] = useState(false);
+  const [showPaymentDialog, setShowPaymentDialog] = useState(false);
   const [createdRentalData, setCreatedRentalData] = useState<any>(null);
   const [generatedInvoice, setGeneratedInvoice] = useState<Invoice | null>(null);
   const [sendingDocuSign, setSendingDocuSign] = useState(false);
@@ -359,6 +370,65 @@ const CreateRental = () => {
   const watchedPromoCode = form.watch("promo_code");
   const watchedInsuranceStatus = form.watch("insurance_status");
   const watchedDriverAgeRange = form.watch("driver_age_range");
+
+  // Fetch source rental for renewal
+  const { data: renewalSource } = useQuery({
+    queryKey: ["renewal-source", renewFromId, tenant?.id],
+    queryFn: async () => {
+      if (!renewFromId || !tenant?.id) return null;
+      const { data, error } = await supabase
+        .from("rentals")
+        .select(`
+          id, customer_id, vehicle_id, start_date, end_date,
+          rental_period_type, monthly_amount,
+          pickup_location, return_location, pickup_time, return_time,
+          customers!rentals_customer_id_fkey(id, name),
+          vehicles!rentals_vehicle_id_fkey(id, reg, make, model, status)
+        `)
+        .eq("id", renewFromId)
+        .eq("tenant_id", tenant.id)
+        .maybeSingle();
+      if (error || !data) return null;
+      return data as any;
+    },
+    enabled: !!renewFromId && !!tenant?.id,
+  });
+
+  // Pre-fill form when renewal source loads
+  const renewalAppliedRef = useRef(false);
+  useEffect(() => {
+    if (!renewalSource || renewalAppliedRef.current) return;
+    renewalAppliedRef.current = true;
+
+    const sourceDuration = differenceInDays(
+      parseISO(renewalSource.end_date),
+      parseISO(renewalSource.start_date)
+    );
+    const sourceEndDate = parseISO(renewalSource.end_date);
+    const newStart = sourceEndDate > today ? addDays(sourceEndDate, 1) : today;
+    const newEnd = addDays(newStart, sourceDuration);
+
+    form.setValue("customer_id", renewalSource.customer_id || "");
+    // Only pre-fill vehicle if still available
+    if (renewalSource.vehicles?.status === "Available") {
+      form.setValue("vehicle_id", renewalSource.vehicle_id || "");
+    }
+    form.setValue("start_date", newStart);
+    form.setValue("end_date", newEnd);
+    form.setValue("rental_period_type", renewalSource.rental_period_type || "Monthly");
+    form.setValue("monthly_amount", renewalSource.monthly_amount);
+    form.setValue("pickup_location", renewalSource.pickup_location || "");
+    form.setValue("return_location", renewalSource.return_location || "");
+    form.setValue("pickup_time", renewalSource.pickup_time || "");
+    form.setValue("return_time", renewalSource.return_time || "");
+    form.setValue("insurance_status", "pending");
+
+    // If source had different pickup/return, uncheck sameAsPickup
+    if (renewalSource.pickup_location && renewalSource.return_location &&
+        renewalSource.pickup_location !== renewalSource.return_location) {
+      setSameAsPickup(false);
+    }
+  }, [renewalSource]);
 
   // Get customers and available vehicles
   const { data: customers } = useQuery({
@@ -771,12 +841,63 @@ const CreateRental = () => {
           driver_age_range: data.driver_age_range || null,
           promo_code: promoDetails?.code || null,
           discount_applied: discountAmount > 0 ? discountAmount : null,
-          insurance_status: data.insurance_status || "pending",
+          insurance_status: bonzahPremium > 0 ? "bonzah" : (data.insurance_status || "pending"),
+          insurance_premium: bonzahPremium > 0 ? bonzahPremium : null,
+          renewed_from_rental_id: renewFromId || null,
         })
         .select()
         .single();
 
       if (rentalError) throw rentalError;
+
+      // Create Bonzah insurance quote if coverage was selected
+      const hasBonzahCoverage = bonzahCoverage.cdw || bonzahCoverage.rcli || bonzahCoverage.sli || bonzahCoverage.pai;
+      if (hasBonzahCoverage && bonzahPremium > 0 && tenant?.id) {
+        try {
+          // Get customer details for the quote
+          const customer = customerDetails;
+          const nameParts = (customer?.name || 'N/A').split(' ');
+          const firstName = nameParts[0] || 'N/A';
+          const lastName = nameParts.slice(1).join(' ') || 'N/A';
+          const { error: quoteError } = await supabase.functions.invoke('bonzah-create-quote', {
+            body: {
+              rental_id: rental.id,
+              customer_id: data.customer_id,
+              tenant_id: tenant.id,
+              trip_dates: {
+                start: data.start_date.toISOString().split('T')[0],
+                end: data.end_date.toISOString().split('T')[0],
+              },
+              pickup_state: 'FL',
+              coverage: bonzahCoverage,
+              renter: {
+                first_name: firstName,
+                last_name: lastName,
+                dob: customer?.date_of_birth || '1990-01-01',
+                email: customer?.email || '',
+                phone: customer?.phone || '',
+                address: {
+                  street: '123 Main St',
+                  city: 'Miami',
+                  state: 'FL',
+                  zip: '33101',
+                },
+                license: {
+                  number: 'N/A',
+                  state: 'FL',
+                },
+              },
+            },
+          });
+          if (quoteError) {
+            console.error('[Bonzah] Quote creation failed:', quoteError);
+            // Non-fatal - rental is already created
+          }
+        } catch (bonzahError) {
+          console.error('[Bonzah] Error creating quote:', bonzahError);
+          // Non-fatal
+        }
+      }
 
       // Save selected extras
       if (Object.keys(selectedExtras).length > 0) {
@@ -885,7 +1006,8 @@ const CreateRental = () => {
         const taxAmount = calculateTaxAmount(discountedAmount);
         const serviceFee = calculateServiceFee();
         const securityDeposit = calculateSecurityDeposit(data.vehicle_id);
-        const totalAmount = discountedAmount + taxAmount + serviceFee + securityDeposit;
+        const insurancePremium = bonzahPremium > 0 ? bonzahPremium : 0;
+        const totalAmount = discountedAmount + taxAmount + serviceFee + securityDeposit + insurancePremium;
 
         const invoice = await createInvoice({
           rental_id: rental.id,
@@ -897,6 +1019,7 @@ const CreateRental = () => {
           tax_amount: taxAmount,
           service_fee: serviceFee,
           security_deposit: securityDeposit,
+          insurance_premium: insurancePremium,
           total_amount: totalAmount,
           notes: invoiceNotes,
           tenant_id: tenant?.id,
@@ -1002,13 +1125,8 @@ const CreateRental = () => {
         docuSignSuccess,
       });
 
-      // Show invoice dialog if invoice was generated
-      if (invoiceCreated) {
-        setShowInvoiceDialog(true);
-      } else {
-        // Navigate directly to rental detail page
-        router.push(`/rentals/${rental.id}`);
-      }
+      // Show payment options dialog after rental creation
+      setShowPaymentDialog(true);
     } catch (error: any) {
       console.error("Error creating rental:", error);
 
@@ -1056,10 +1174,24 @@ const CreateRental = () => {
           Back to Rentals
         </Button>
         <div>
-          <h1 className="text-2xl sm:text-3xl font-bold">Create New Rental</h1>
-          <p className="text-sm sm:text-base text-muted-foreground">Set up a new rental agreement</p>
+          <h1 className="text-2xl sm:text-3xl font-bold">
+            {renewalSource ? "Renew Rental" : "Create New Rental"}
+          </h1>
+          <p className="text-sm sm:text-base text-muted-foreground">
+            {renewalSource ? "Create a new rental from a completed one" : "Set up a new rental agreement"}
+          </p>
         </div>
       </div>
+
+      {/* Renewal Banner */}
+      {renewalSource && (
+        <Alert className="border-blue-200 bg-blue-50 dark:border-blue-800 dark:bg-blue-950/30">
+          <RefreshCw className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+          <AlertDescription className="text-blue-700 dark:text-blue-400">
+            Renewing from rental for <strong>{renewalSource.customers?.name}</strong> — {renewalSource.vehicles?.make} {renewalSource.vehicles?.model} ({renewalSource.vehicles?.reg})
+          </AlertDescription>
+        </Alert>
+      )}
 
       {/* Two-column layout: Form + Contract Summary */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -1600,6 +1732,26 @@ const CreateRental = () => {
                     </div>
                   )}
 
+                  {/* Bonzah Insurance Selection */}
+                  {!skipInsurance && watchedStartDate && watchedEndDate && (
+                    <div className="space-y-4 pt-4 border-t">
+                      <BonzahInsuranceSelector
+                        tripStartDate={watchedStartDate ? watchedStartDate.toISOString().split('T')[0] : null}
+                        tripEndDate={watchedEndDate ? watchedEndDate.toISOString().split('T')[0] : null}
+                        pickupState="FL"
+                        onCoverageChange={(coverage, premium) => {
+                          setBonzahCoverage(coverage);
+                          setBonzahPremium(premium);
+                        }}
+                        onSkipInsurance={() => {
+                          setBonzahCoverage({ cdw: false, rcli: false, sli: false, pai: false });
+                          setBonzahPremium(0);
+                        }}
+                        initialCoverage={bonzahCoverage}
+                      />
+                    </div>
+                  )}
+
                   {/* Rental Extras */}
                   {activeExtras.length > 0 && (
                     <div className="space-y-4 pt-4 border-t">
@@ -1862,6 +2014,27 @@ const CreateRental = () => {
         </div>
       </div>
 
+      {/* Post-Creation Payment Dialog */}
+      {createdRentalData && (
+        <AddPaymentDialog
+          open={showPaymentDialog}
+          onOpenChange={(open) => {
+            if (!open) {
+              setShowPaymentDialog(false);
+              // After payment dialog closes, show invoice dialog if available, otherwise navigate
+              if (generatedInvoice) {
+                setShowInvoiceDialog(true);
+              } else if (createdRentalData?.rental?.id) {
+                router.push(`/rentals/${createdRentalData.rental.id}`);
+              }
+            }
+          }}
+          customer_id={createdRentalData.rental?.customer_id || createdRentalData.formData?.customer_id}
+          vehicle_id={createdRentalData.rental?.vehicle_id || createdRentalData.formData?.vehicle_id}
+          rental_id={createdRentalData.rental?.id}
+        />
+      )}
+
       {/* Invoice Dialog */}
       {generatedInvoice && createdRentalData && (
         <InvoiceDialog
@@ -1870,7 +2043,6 @@ const CreateRental = () => {
             setShowInvoiceDialog(open);
             if (!open) {
               // Navigate to rental detail page after viewing invoice
-              // DocuSign is already sent automatically
               if (createdRentalData?.rental?.id) {
                 router.push(`/rentals/${createdRentalData.rental.id}`);
               }
@@ -1892,6 +2064,16 @@ const CreateRental = () => {
             end_date: createdRentalData.formData.end_date.toISOString(),
             monthly_amount: createdRentalData.formData.monthly_amount,
           }}
+          protectionPlan={bonzahPremium > 0 ? {
+            name: [
+              bonzahCoverage.cdw ? 'CDW' : '',
+              bonzahCoverage.rcli ? 'RCLI' : '',
+              bonzahCoverage.sli ? 'SLI' : '',
+              bonzahCoverage.pai ? 'PAI' : '',
+            ].filter(Boolean).join(' + ') + ' Coverage',
+            cost: bonzahPremium,
+            rentalFee: createdRentalData.formData.monthly_amount - (generatedInvoice?.discount_amount || 0),
+          } : undefined}
           selectedExtras={Object.entries(selectedExtras).map(([extraId, qty]) => {
             const extra = activeExtras.find(e => e.id === extraId);
             return { name: extra?.name || 'Extra', quantity: qty, price: extra?.price || 0 };

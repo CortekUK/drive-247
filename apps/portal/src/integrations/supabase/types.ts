@@ -1215,6 +1215,88 @@ export type Database = {
           },
         ]
       }
+      customer_registration_invites: {
+        Row: {
+          completed_at: string | null
+          created_at: string
+          created_by: string
+          customer_id: string | null
+          expires_at: string
+          id: string
+          status: string
+          tenant_id: string
+          token: string
+          updated_at: string
+        }
+        Insert: {
+          completed_at?: string | null
+          created_at?: string
+          created_by: string
+          customer_id?: string | null
+          expires_at: string
+          id?: string
+          status?: string
+          tenant_id: string
+          token?: string
+          updated_at?: string
+        }
+        Update: {
+          completed_at?: string | null
+          created_at?: string
+          created_by?: string
+          customer_id?: string | null
+          expires_at?: string
+          id?: string
+          status?: string
+          tenant_id?: string
+          token?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "customer_registration_invites_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "app_users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "customer_registration_invites_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "customers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "customer_registration_invites_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "v_customer_credit"
+            referencedColumns: ["customer_id"]
+          },
+          {
+            foreignKeyName: "customer_registration_invites_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "view_aging_receivables"
+            referencedColumns: ["customer_id"]
+          },
+          {
+            foreignKeyName: "customer_registration_invites_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "view_fines_export"
+            referencedColumns: ["customer_id"]
+          },
+          {
+            foreignKeyName: "customer_registration_invites_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       customer_users: {
         Row: {
           auth_user_id: string
@@ -2360,6 +2442,7 @@ export type Database = {
           customer_id: string | null
           due_date: string | null
           id: string
+          insurance_premium: number | null
           invoice_date: string
           invoice_number: string
           notes: string | null
@@ -2381,6 +2464,7 @@ export type Database = {
           customer_id?: string | null
           due_date?: string | null
           id?: string
+          insurance_premium?: number | null
           invoice_date: string
           invoice_number: string
           notes?: string | null
@@ -2402,6 +2486,7 @@ export type Database = {
           customer_id?: string | null
           due_date?: string | null
           id?: string
+          insurance_premium?: number | null
           invoice_date?: string
           invoice_number?: string
           notes?: string | null
@@ -4634,6 +4719,7 @@ export type Database = {
           approval_status: string | null
           bonzah_policy_id: string | null
           cancellation_reason: string | null
+          cancellation_requested: boolean | null
           collection_address: string | null
           collection_fee: number | null
           collection_location_id: string | null
@@ -4665,6 +4751,7 @@ export type Database = {
           pickup_time: string | null
           previous_end_date: string | null
           promo_code: string | null
+          renewed_from_rental_id: string | null
           rental_number: string | null
           rental_period_type: string | null
           return_location: string | null
@@ -4684,6 +4771,7 @@ export type Database = {
           approval_status?: string | null
           bonzah_policy_id?: string | null
           cancellation_reason?: string | null
+          cancellation_requested?: boolean | null
           collection_address?: string | null
           collection_fee?: number | null
           collection_location_id?: string | null
@@ -4715,6 +4803,7 @@ export type Database = {
           pickup_time?: string | null
           previous_end_date?: string | null
           promo_code?: string | null
+          renewed_from_rental_id?: string | null
           rental_number?: string | null
           rental_period_type?: string | null
           return_location?: string | null
@@ -4734,6 +4823,7 @@ export type Database = {
           approval_status?: string | null
           bonzah_policy_id?: string | null
           cancellation_reason?: string | null
+          cancellation_requested?: boolean | null
           collection_address?: string | null
           collection_fee?: number | null
           collection_location_id?: string | null
@@ -4765,6 +4855,7 @@ export type Database = {
           pickup_time?: string | null
           previous_end_date?: string | null
           promo_code?: string | null
+          renewed_from_rental_id?: string | null
           rental_number?: string | null
           rental_period_type?: string | null
           return_location?: string | null
@@ -4843,6 +4934,27 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "pickup_locations"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "rentals_renewed_from_rental_id_fkey"
+            columns: ["renewed_from_rental_id"]
+            isOneToOne: false
+            referencedRelation: "rentals"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "rentals_renewed_from_rental_id_fkey"
+            columns: ["renewed_from_rental_id"]
+            isOneToOne: false
+            referencedRelation: "v_rental_credit"
+            referencedColumns: ["rental_id"]
+          },
+          {
+            foreignKeyName: "rentals_renewed_from_rental_id_fkey"
+            columns: ["renewed_from_rental_id"]
+            isOneToOne: false
+            referencedRelation: "view_rentals_export"
+            referencedColumns: ["rental_id"]
           },
           {
             foreignKeyName: "rentals_return_location_id_fkey"
@@ -6637,21 +6749,36 @@ export type Database = {
           overlapping_start_date: string
         }[]
       }
-      create_installment_plan: {
-        Args: {
-          p_customer_id: string
-          p_number_of_installments: number
-          p_plan_type: string
-          p_rental_id: string
-          p_start_date: string
-          p_stripe_customer_id?: string
-          p_stripe_payment_method_id?: string
-          p_tenant_id: string
-          p_total_installable_amount: number
-          p_upfront_amount: number
-        }
-        Returns: string
-      }
+      create_installment_plan:
+        | {
+            Args: {
+              p_customer_id: string
+              p_number_of_installments: number
+              p_plan_type: string
+              p_rental_id: string
+              p_start_date?: string
+              p_stripe_customer_id?: string
+              p_tenant_id: string
+              p_total_installable_amount: number
+              p_upfront_amount?: number
+            }
+            Returns: string
+          }
+        | {
+            Args: {
+              p_customer_id: string
+              p_number_of_installments: number
+              p_plan_type: string
+              p_rental_id: string
+              p_start_date: string
+              p_stripe_customer_id?: string
+              p_stripe_payment_method_id?: string
+              p_tenant_id: string
+              p_total_installable_amount: number
+              p_upfront_amount: number
+            }
+            Returns: string
+          }
       delete_rental_cascade: {
         Args: { rental_uuid: string }
         Returns: undefined
@@ -6714,10 +6841,12 @@ export type Database = {
         Args: { customer_id_param: string }
         Returns: number
       }
-      get_customer_rag_context: {
-        Args: { p_customer_id: string; p_tenant_id: string }
-        Returns: Json
-      }
+      get_customer_rag_context:
+        | { Args: { p_customer_id: string }; Returns: Json }
+        | {
+            Args: { p_customer_id: string; p_tenant_id: string }
+            Returns: Json
+          }
       get_customer_statement: {
         Args: { p_customer_id: string; p_from_date: string; p_to_date: string }
         Returns: {
@@ -6899,7 +7028,7 @@ export type Database = {
         Args: {
           p_installment_id: string
           p_ledger_entry_id?: string
-          p_payment_id: string
+          p_payment_id?: string
           p_stripe_charge_id?: string
           p_stripe_payment_intent_id?: string
         }

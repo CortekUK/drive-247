@@ -29,6 +29,7 @@ import { MileageSummaryCard } from "@/components/rentals/mileage-summary-card";
 import { CancelRentalDialog } from "@/components/shared/dialogs/cancel-rental-dialog";
 import RejectionDialog from "@/components/rentals/rejection-dialog";
 import { ExtensionRequestDialog } from "@/components/rentals/ExtensionRequestDialog";
+import { AdminExtendRentalDialog } from "@/components/rentals/AdminExtendRentalDialog";
 import InstallmentPlanCard from "@/components/rentals/InstallmentPlanCard";
 import { useInstallmentPlan } from "@/hooks/use-installment-plan";
 import { formatCurrency } from "@/lib/formatters";
@@ -49,6 +50,7 @@ interface Rental {
   approval_status?: string;
   payment_status?: string;
   cancellation_reason?: string;
+  cancellation_requested?: boolean;
   customer_id?: string;
   customers: { id: string; name: string; email?: string; phone?: string | null };
   vehicles: { id: string; reg: string; make: string; model: string; status?: string };
@@ -63,6 +65,11 @@ interface Rental {
   // Extension fields
   is_extended?: boolean;
   previous_end_date?: string | null;
+  // Renewal fields
+  renewed_from_rental_id?: string | null;
+  // Installment & Insurance fields
+  has_installment_plan?: boolean;
+  bonzah_policy_id?: string | null;
 }
 
 const RentalDetail = () => {
@@ -97,6 +104,7 @@ const RentalDetail = () => {
 
   // Extension dialog state
   const [showExtensionDialog, setShowExtensionDialog] = useState(false);
+  const [showAdminExtendDialog, setShowAdminExtendDialog] = useState(false);
 
   // Installment sheet state
   const [showInstallmentSheet, setShowInstallmentSheet] = useState(false);
@@ -147,6 +155,23 @@ const RentalDetail = () => {
   });
   const extrasTotal = (extrasDetails || []).reduce((sum: number, s: any) => sum + (s.quantity * s.price_at_booking), 0);
   const [showExtrasDialog, setShowExtrasDialog] = useState(false);
+
+  // Fetch renewal chain info: any rental that was renewed from this one
+  const { data: renewedAsRental } = useQuery({
+    queryKey: ["renewed-as-rental", id, tenant?.id],
+    queryFn: async () => {
+      if (!id || !tenant?.id) return null;
+      const { data, error } = await supabase
+        .from("rentals")
+        .select("id, status, start_date")
+        .eq("renewed_from_rental_id", id)
+        .eq("tenant_id", tenant.id)
+        .maybeSingle();
+      if (error) return null;
+      return data;
+    },
+    enabled: !!id && !!tenant?.id,
+  });
 
   // Scroll to ledger section if hash is present (wait for data to load)
   useEffect(() => {
@@ -268,8 +293,18 @@ const RentalDetail = () => {
         if (error) {
           console.error('Failed to sync status:', error);
         } else {
+          // Auto-close the source rental if this is a renewal
+          if (rental.renewed_from_rental_id) {
+            await supabase
+              .from('rentals')
+              .update({ status: 'Closed', updated_at: new Date().toISOString() })
+              .eq('id', rental.renewed_from_rental_id)
+              .eq('tenant_id', tenant.id);
+          }
+
           // Invalidate queries to refresh the data
           queryClient.invalidateQueries({ queryKey: ['rental', rental.id] });
+          queryClient.invalidateQueries({ queryKey: ['rental', rental.renewed_from_rental_id] });
           queryClient.invalidateQueries({ queryKey: ['rentals-list'] });
           queryClient.invalidateQueries({ queryKey: ['enhanced-rentals'] });
         }
@@ -894,6 +929,10 @@ const RentalDetail = () => {
                   Review Extension
                 </Button>
               )}
+              <Button variant="outline" onClick={() => setShowAdminExtendDialog(true)}>
+                <CalendarPlus className="h-4 w-4 mr-2" />
+                Extend Rental
+              </Button>
               <Button variant="outline" onClick={() => setShowAddPayment(true)}>
                 <Plus className="h-4 w-4 mr-2" />
                 Add Payment
@@ -926,6 +965,17 @@ const RentalDetail = () => {
                 Delete
               </Button>
             </>
+          )}
+
+          {/* Completed Rental - Show Renew and Delete buttons */}
+          {displayStatus === 'Completed' && (
+            <Button
+              variant="default"
+              onClick={() => router.push(`/rentals/new?renew_from=${rental.id}`)}
+            >
+              <RefreshCw className="h-4 w-4 mr-2" />
+              Renew
+            </Button>
           )}
 
           {/* Completed/Cancelled/Rejected Rental - Show Delete button */}
@@ -1272,6 +1322,30 @@ const RentalDetail = () => {
             </div>
           </div>
 
+          {/* Renewal Chain Links */}
+          {(rental.renewed_from_rental_id || renewedAsRental) && (
+            <div className="flex flex-wrap gap-3">
+              {rental.renewed_from_rental_id && (
+                <button
+                  onClick={() => router.push(`/rentals/${rental.renewed_from_rental_id}`)}
+                  className="inline-flex items-center gap-2 px-3 py-1.5 rounded-md bg-blue-50 dark:bg-blue-950/30 text-blue-700 dark:text-blue-400 border border-blue-200 dark:border-blue-800 text-sm hover:bg-blue-100 dark:hover:bg-blue-950/50 transition-colors"
+                >
+                  <RefreshCw className="h-3.5 w-3.5" />
+                  Renewed from previous rental
+                </button>
+              )}
+              {renewedAsRental && (
+                <button
+                  onClick={() => router.push(`/rentals/${renewedAsRental.id}`)}
+                  className="inline-flex items-center gap-2 px-3 py-1.5 rounded-md bg-green-50 dark:bg-green-950/30 text-green-700 dark:text-green-400 border border-green-200 dark:border-green-800 text-sm hover:bg-green-100 dark:hover:bg-green-950/50 transition-colors"
+                >
+                  <RefreshCw className="h-3.5 w-3.5" />
+                  Renewed as rental ({renewedAsRental.status})
+                </button>
+              )}
+            </div>
+          )}
+
           {/* Rental Period */}
           <div className="border rounded-lg p-4">
             <p className="text-xs uppercase tracking-wider text-muted-foreground mb-3">Rental Period</p>
@@ -1309,6 +1383,26 @@ const RentalDetail = () => {
                     onClick={() => setShowExtensionDialog(true)}
                   >
                     Review Request
+                  </Button>
+                </AlertDescription>
+              </Alert>
+            )}
+
+            {/* Cancellation Requested Alert */}
+            {rental.cancellation_requested && (
+              <Alert className="mt-4 border-red-200 bg-red-50 dark:bg-red-950/30">
+                <XCircle className="h-4 w-4 text-red-600" />
+                <AlertDescription className="text-red-800 dark:text-red-200">
+                  <span className="font-medium">Cancellation Requested:</span> Customer has requested to cancel this booking.
+                  {rental.cancellation_reason && (
+                    <> Reason: <strong>{rental.cancellation_reason}</strong></>
+                  )}
+                  <Button
+                    variant="link"
+                    className="ml-2 h-auto p-0 text-red-700 dark:text-red-300"
+                    onClick={() => setShowRejectionDialog(true)}
+                  >
+                    Process Cancellation
                   </Button>
                 </AlertDescription>
               </Alert>
@@ -2695,6 +2789,28 @@ const RentalDetail = () => {
             id: rental.id,
             end_date: rental.end_date,
             previous_end_date: rental.previous_end_date || null,
+            has_installment_plan: rental.has_installment_plan,
+            bonzah_policy_id: rental.bonzah_policy_id,
+            customer_id: rental.customer_id,
+            vehicle_id: rental.vehicles?.id,
+            customers: rental.customers,
+            vehicles: rental.vehicles,
+          }}
+        />
+      )}
+
+      {/* Admin Extend Rental Dialog */}
+      {rental && (
+        <AdminExtendRentalDialog
+          open={showAdminExtendDialog}
+          onOpenChange={setShowAdminExtendDialog}
+          rental={{
+            id: rental.id,
+            end_date: rental.end_date,
+            has_installment_plan: rental.has_installment_plan,
+            bonzah_policy_id: rental.bonzah_policy_id,
+            customer_id: rental.customer_id,
+            vehicle_id: rental.vehicles?.id,
             customers: rental.customers,
             vehicles: rental.vehicles,
           }}

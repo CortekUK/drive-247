@@ -37,7 +37,7 @@ cp apps/portal/src/integrations/supabase/types.ts apps/booking/src/integrations/
 
 ## Architecture Overview
 
-This is a **Turborepo monorepo** for Drive247, a car rental platform with multi-tenant support. No shared `packages/` directory — each app has its own dependencies and UI components.
+This is a **Turborepo monorepo** for Drive247, a car rental platform with multi-tenant support. The `packages/*` workspace is declared but unused — each app has its own dependencies and UI components.
 
 ### Apps
 
@@ -150,11 +150,12 @@ Uses Supabase Realtime channels (replaced Socket.io):
 - **Stripe Connect**: `create-connected-account`, `get-connect-onboarding-link`, `sync-stripe-account`
 - **Notifications**: `aws-ses-email`, `aws-sns-sms`, `send-booking-email`, 15+ `notify-*` functions
 - **Verification**: `create-veriff-session`, `create-ai-verification-session`, `ai-document-ocr`, `ai-face-match`
+- **Insurance**: `bonzah-calculate-premium`, `bonzah-create-quote`, `bonzah-confirm-payment`, `bonzah-download-pdf`, `bonzah-verify-credentials`, `bonzah-view-policy`
 - **Admin**: `admin-create-user`, `admin-update-role`, `admin-deactivate-user`, `emergency-bootstrap`
 - **RAG chatbot**: `chat`, `rag-init`, `rag-sync`
 - **Shared utilities** in `supabase/functions/_shared/`: `cors.ts`, `stripe-client.ts`, `aws-config.ts`, `email-template-service.ts`, `openai.ts`, `bonzah-client.ts`, `resend-service.ts`, `document-loaders.ts`
 
-Only 3 functions have `verify_jwt = false` in `supabase/config.toml`: `docusign-webhook`, `veriff-webhook`, `customer-chat`. Stripe webhook functions handle their own signature verification. All other functions require JWT auth by default.
+5 functions have `verify_jwt = false` in `supabase/config.toml`: `docusign-webhook`, `veriff-webhook`, `customer-chat`, `validate-customer-invite`, `submit-customer-registration`. Stripe webhook functions handle their own signature verification. All other functions require JWT auth by default.
 
 Edge function pattern:
 ```typescript
@@ -199,8 +200,10 @@ Tests use Vitest + jsdom + Testing Library. Only portal currently has test files
 `scripts/` contains operational utilities:
 - `deploy-functions.sh` — deploy edge functions
 - `seed-vehicles.mjs` / `seed-vehicles.ts` — seed vehicle data
+- `add-vehicle-photos.mjs` / `update-vehicle-images.mjs` — vehicle image management
 - `wipe-all-data.mjs` — wipe tenant data (destructive)
 - `bulk-update-branding.js` / `update-cms-content.js` — bulk content updates
+- `deploy-stripe-connect.sh` / `setup-stripe-secrets.sh` / `test-stripe-mode.sh` — Stripe setup helpers
 - `cleanup-temp-customers.sql` — database cleanup
 
 ## Environment Variables
@@ -226,7 +229,7 @@ Required variables (see `.env.example`):
 - **Auth store deadlock workaround**: Both auth stores use `setTimeout(..., 0)` in Supabase auth state change listeners to avoid a Supabase client deadlock. Do not remove this.
 - **TypeScript strictness varies**: Admin has `strict: true`; booking has `strictNullChecks: true` only; portal has `strictNullChecks: false`. Be aware when moving code between apps.
 - **Portal branding anti-flash**: Portal's root layout injects an inline `<script>` that reads cached branding CSS from `localStorage` before React hydration to prevent theme flash.
-- **Admin/Web have no `src/` directory**: Code lives at project root (`app/`, `components/`, `lib/`, `store/`). The `@` alias maps to `./` not `./src`.
+- **Admin/Web have no `src/` directory** (except `src/integrations/` for Supabase client/types): Code lives at project root (`app/`, `components/`, `lib/`, `store/`). The `@` alias maps to `./` not `./src`.
 - **Booking TenantContext is the source of truth** for all tenant settings (135+ fields, real-time subscriptions). Portal's TenantContext only loads ~7 fields for admin purposes.
 - **Customer auth vs portal auth are completely separate**: Customers use `customer_users` → `customers` tables. Portal staff use `app_users` table. Different stores, different auth flows.
 

@@ -37,6 +37,9 @@ export interface CustomerRental {
   has_installment_plan: boolean | null;
   is_extended: boolean | null;
   previous_end_date: string | null;
+  cancellation_requested: boolean | null;
+  cancellation_reason: string | null;
+  renewed_from_rental_id: string | null;
   vehicles: {
     id: string;
     reg: string;
@@ -76,6 +79,9 @@ export function useCustomerRentals(filter: 'all' | 'current' | 'past' = 'all') {
           has_installment_plan,
           is_extended,
           previous_end_date,
+          cancellation_requested,
+          cancellation_reason,
+          renewed_from_rental_id,
           vehicles (
             id,
             reg,
