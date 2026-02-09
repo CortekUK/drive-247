@@ -17,6 +17,7 @@ import { isEnquiryBasedTenant } from "@/config/tenant-config";
 import { InvoiceDialog } from "@/components/InvoiceDialog";
 import { AuthPromptDialog } from "@/components/booking/AuthPromptDialog";
 import { createInvoiceWithFallback, Invoice } from "@/lib/invoiceUtils";
+import InstallmentSelector, { InstallmentOption, InstallmentConfig } from "@/components/InstallmentSelector";
 
 interface PromoDetails {
   code: string;
@@ -82,6 +83,22 @@ export default function BookingCheckoutStep({
 
   // Bonzah policy ID - created dynamically during checkout
   const [bonzahPolicyId, setBonzahPolicyId] = useState<string | null>(null);
+
+  // Installment state
+  const [selectedInstallmentPlan, setSelectedInstallmentPlan] = useState<InstallmentOption | null>(null);
+  const installmentsEnabled = tenant?.installments_enabled ?? false;
+  const installmentConfig: InstallmentConfig = {
+    min_days_for_weekly: 7,
+    min_days_for_monthly: 30,
+    max_installments_weekly: 4,
+    max_installments_monthly: 6,
+    charge_first_upfront: true,
+    what_gets_split: 'rental_tax',
+    grace_period_days: 3,
+    max_retry_attempts: 3,
+    retry_interval_days: 1,
+    ...(tenant?.installment_config || {}),
+  };
 
   // Calculate rental period type based on duration
   // Pricing tiers: > 30 days = monthly, 7-30 days = weekly, < 7 days = daily
@@ -202,6 +219,40 @@ export default function BookingCheckoutStep({
       return calculateSecurityDeposit(); // Only security deposit for enquiry tenants
     }
     return calculateGrandTotal();
+  };
+
+  // Calculate installment breakdown based on what_gets_split setting
+  const whatGetsSplit = installmentConfig.what_gets_split || 'rental_tax';
+  const { installUpfrontAmount, installableAmount } = (() => {
+    let upfront = calculateSecurityDeposit() + calculateServiceFee();
+    let installable = 0;
+    const discountedVehicle = calculateDiscountedVehicleTotal();
+    const extrasTotal = calculateExtrasTotal();
+    const taxAmount = calculateTaxAmount();
+    const deliveryFees = calculateDeliveryFees();
+
+    switch (whatGetsSplit) {
+      case 'rental_only':
+        installable = discountedVehicle + extrasTotal;
+        upfront += taxAmount + deliveryFees;
+        break;
+      case 'rental_tax_extras':
+        installable = discountedVehicle + extrasTotal + taxAmount + deliveryFees;
+        break;
+      case 'rental_tax':
+      default:
+        installable = discountedVehicle + extrasTotal + taxAmount;
+        upfront += deliveryFees;
+        break;
+    }
+    return { installUpfrontAmount: upfront, installableAmount: installable };
+  })();
+
+  const formatCurrency = (amount: number) => {
+    return new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: tenant?.currency_code || 'USD',
+    }).format(amount);
   };
 
   // Function to get booking payment mode
@@ -403,6 +454,54 @@ export default function BookingCheckoutStep({
     }
   };
 
+  // Function to redirect to installment checkout (Stripe with card saving)
+  const redirectToInstallmentCheckout = async () => {
+    if (!createdRentalData || !selectedInstallmentPlan) {
+      toast.error("Missing rental or installment data");
+      return;
+    }
+
+    try {
+      setIsProcessing(true);
+
+      const { data, error: functionError } = await supabase.functions.invoke('create-installment-checkout', {
+        body: {
+          rentalId: createdRentalData.rental.id,
+          customerId: createdRentalData.customer.id,
+          customerEmail: formData.customerEmail,
+          customerName: formData.customerName,
+          tenantId: tenant?.id,
+          tenantSlug: tenant?.slug,
+          upfrontAmount: selectedInstallmentPlan.upfrontTotal,
+          firstInstallmentAmount: selectedInstallmentPlan.firstInstallmentAmount,
+          baseUpfrontAmount: installUpfrontAmount,
+          installmentAmount: selectedInstallmentPlan.installmentAmount,
+          totalInstallments: selectedInstallmentPlan.numberOfInstallments,
+          scheduledInstallments: selectedInstallmentPlan.scheduledInstallments,
+          planType: selectedInstallmentPlan.type,
+          totalInstallableAmount: installableAmount,
+          chargeFirstUpfront: installmentConfig.charge_first_upfront ?? true,
+          whatGetsSplit: installmentConfig.what_gets_split ?? 'rental_tax',
+          gracePeriodDays: installmentConfig.grace_period_days ?? 3,
+          maxRetryAttempts: installmentConfig.max_retry_attempts ?? 3,
+          retryIntervalDays: installmentConfig.retry_interval_days ?? 1,
+        },
+      });
+
+      if (functionError) throw functionError;
+
+      if (data?.url) {
+        window.location.href = data.url;
+      } else {
+        throw new Error('Failed to create installment checkout session');
+      }
+    } catch (error: any) {
+      console.error("Installment checkout error:", error);
+      toast.error(error.message || "Failed to create installment checkout");
+      setIsProcessing(false);
+    }
+  };
+
   const handleSendDocuSign = async () => {
     if (!createdRentalData) {
       console.error('❌ No rental data available');
@@ -473,6 +572,13 @@ export default function BookingCheckoutStep({
           return;
         }
 
+        // Route to installment checkout if an installment plan is selected
+        if (selectedInstallmentPlan && selectedInstallmentPlan.type !== 'full' && installmentsEnabled) {
+          console.log('💳 Proceeding to installment checkout');
+          redirectToInstallmentCheckout();
+          return;
+        }
+
         // Proceed to payment (either full amount or deposit only)
         const bookingMode = await getBookingMode();
         console.log('💳 Proceeding to payment, mode:', bookingMode, 'amount:', payableAmount);
@@ -495,6 +601,12 @@ export default function BookingCheckoutStep({
         if (isEnquiry && payableAmount === 0) {
           console.log('📋 Enquiry booking with no deposit - redirecting to enquiry submitted page');
           window.location.href = `/booking-enquiry-submitted?rental_id=${createdRentalData.rental.id}`;
+          return;
+        }
+
+        // Route to installment checkout if an installment plan is selected
+        if (selectedInstallmentPlan && selectedInstallmentPlan.type !== 'full' && installmentsEnabled) {
+          redirectToInstallmentCheckout();
           return;
         }
 
@@ -1179,6 +1291,20 @@ export default function BookingCheckoutStep({
               </Label>
             </div>
           </Card>
+
+          {/* Installment Payment Options */}
+          {rentalDuration.days >= 7 && (
+            <InstallmentSelector
+              rentalDays={rentalDuration.days}
+              installableAmount={installableAmount}
+              upfrontAmount={installUpfrontAmount}
+              config={installmentConfig}
+              enabled={installmentsEnabled}
+              onSelectPlan={setSelectedInstallmentPlan}
+              selectedPlan={selectedInstallmentPlan}
+              formatCurrency={formatCurrency}
+            />
+          )}
         </div>
 
         {/* Right Column - Price Summary (Sticky) */}
@@ -1374,6 +1500,11 @@ export default function BookingCheckoutStep({
                   <>
                     <CreditCard className="w-4 h-4 mr-2" />
                     Pay Deposit ${getPayableAmount().toFixed(2)}
+                  </>
+                ) : selectedInstallmentPlan && selectedInstallmentPlan.type !== 'full' && installmentsEnabled ? (
+                  <>
+                    <CreditCard className="w-4 h-4 mr-2" />
+                    Pay {formatCurrency(selectedInstallmentPlan.upfrontTotal)} & Setup Installments
                   </>
                 ) : (
                   <>

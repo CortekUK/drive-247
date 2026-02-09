@@ -109,11 +109,11 @@ export function CalendarView({ filters }: CalendarViewProps) {
         <div className="flex items-center gap-2">
           <span className="text-[11px] text-muted-foreground font-medium mr-1">Status:</span>
           {[
-            { label: "Active", bg: "bg-emerald-500/20", border: "border-emerald-500/40", text: "text-emerald-400", activeBg: "bg-emerald-500/30" },
-            { label: "Upcoming", bg: "bg-cyan-500/15", border: "border-cyan-500/30", text: "text-cyan-400", activeBg: "bg-cyan-500/25" },
-            { label: "Pending", bg: "bg-amber-400/15", border: "border-amber-400/30", text: "text-amber-300", activeBg: "bg-amber-400/25" },
-            { label: "Completed", bg: "bg-violet-500/15", border: "border-violet-500/30", text: "text-violet-400", activeBg: "bg-violet-500/25" },
-            { label: "Cancelled", bg: "bg-rose-500/15", border: "border-rose-500/30", text: "text-rose-400", activeBg: "bg-rose-500/25" },
+            { label: "Active", bg: "bg-emerald-500", border: "border-emerald-300 dark:border-emerald-500/40", text: "text-emerald-700 dark:text-emerald-400", activeBg: "bg-emerald-100 dark:bg-emerald-500/30" },
+            { label: "Upcoming", bg: "bg-cyan-500", border: "border-cyan-300 dark:border-cyan-500/30", text: "text-cyan-700 dark:text-cyan-400", activeBg: "bg-cyan-100 dark:bg-cyan-500/25" },
+            { label: "Pending", bg: "bg-amber-400", border: "border-amber-300 dark:border-amber-400/30", text: "text-amber-700 dark:text-amber-300", activeBg: "bg-amber-100 dark:bg-amber-400/25" },
+            { label: "Completed", bg: "bg-violet-500", border: "border-violet-300 dark:border-violet-500/30", text: "text-violet-700 dark:text-violet-400", activeBg: "bg-violet-100 dark:bg-violet-500/25" },
+            { label: "Cancelled", bg: "bg-rose-500", border: "border-rose-300 dark:border-rose-500/30", text: "text-rose-700 dark:text-rose-400", activeBg: "bg-rose-100 dark:bg-rose-500/25" },
           ].map((s) => {
             const isActive = activeStatuses.has(s.label);
             return (

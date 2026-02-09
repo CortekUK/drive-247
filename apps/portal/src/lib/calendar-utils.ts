@@ -117,40 +117,40 @@ export function getStatusColor(status: string): {
   switch (status) {
     case "Active":
       return {
-        bg: "bg-emerald-500/20",
-        border: "border-emerald-500/40",
-        text: "text-emerald-400",
+        bg: "bg-emerald-100 dark:bg-emerald-500/20",
+        border: "border-emerald-300 dark:border-emerald-500/40",
+        text: "text-emerald-700 dark:text-emerald-400",
       };
     case "Upcoming":
       return {
-        bg: "bg-cyan-500/15",
-        border: "border-cyan-500/30",
-        text: "text-cyan-400",
+        bg: "bg-cyan-100 dark:bg-cyan-500/15",
+        border: "border-cyan-300 dark:border-cyan-500/30",
+        text: "text-cyan-700 dark:text-cyan-400",
       };
     case "Pending":
       return {
-        bg: "bg-amber-400/15",
-        border: "border-amber-400/30",
-        text: "text-amber-300",
+        bg: "bg-amber-100 dark:bg-amber-400/15",
+        border: "border-amber-300 dark:border-amber-400/30",
+        text: "text-amber-700 dark:text-amber-300",
       };
     case "Completed":
       return {
-        bg: "bg-violet-500/15",
-        border: "border-violet-500/30",
-        text: "text-violet-400",
+        bg: "bg-violet-100 dark:bg-violet-500/15",
+        border: "border-violet-300 dark:border-violet-500/30",
+        text: "text-violet-700 dark:text-violet-400",
       };
     case "Cancelled":
     case "Rejected":
       return {
-        bg: "bg-rose-500/15",
-        border: "border-rose-500/30",
-        text: "text-rose-400",
+        bg: "bg-rose-100 dark:bg-rose-500/15",
+        border: "border-rose-300 dark:border-rose-500/30",
+        text: "text-rose-700 dark:text-rose-400",
       };
     default:
       return {
-        bg: "bg-slate-500/15",
-        border: "border-slate-500/30",
-        text: "text-slate-400",
+        bg: "bg-slate-100 dark:bg-slate-500/15",
+        border: "border-slate-300 dark:border-slate-500/30",
+        text: "text-slate-700 dark:text-slate-400",
       };
   }
 }

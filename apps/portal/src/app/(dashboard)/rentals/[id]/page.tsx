@@ -12,12 +12,14 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { FileText, ArrowLeft, DollarSign, Plus, X, Send, Download, Ban, Check, AlertTriangle, Loader2, Shield, CheckCircle, XCircle, ExternalLink, UserCheck, IdCard, Camera, FileSignature, Clock, Mail, RefreshCw, Trash2, Receipt, Percent, Car, Undo2, Truck, MapPin, Key, KeyRound, CalendarPlus, Package } from "lucide-react";
+import { FileText, ArrowLeft, DollarSign, Plus, X, Send, Download, Ban, Check, AlertTriangle, Loader2, Shield, CheckCircle, XCircle, ExternalLink, UserCheck, IdCard, Camera, FileSignature, Clock, Mail, RefreshCw, Trash2, Receipt, Percent, Car, Undo2, Truck, MapPin, Key, KeyRound, CalendarPlus, Package, Banknote, CreditCard, Calendar } from "lucide-react";
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import { Progress } from "@/components/ui/progress";
 import { AddPaymentDialog } from "@/components/shared/dialogs/add-payment-dialog";
 import { RefundDialog } from "@/components/shared/dialogs/refund-dialog";
 import { useToast } from "@/hooks/use-toast";
 import { useTenant } from "@/contexts/TenantContext";
-import { isInsuranceExemptTenant } from "@/config/tenant-config";
+// skipInsurance now derived from tenant?.integration_bonzah
 import { useRentalTotals } from "@/hooks/use-rental-ledger-data";
 import { useRentalInvoice, useRentalPaymentBreakdown, useRentalRefundBreakdown } from "@/hooks/use-rental-invoice";
 import { RentalLedger } from "@/components/rentals/rental-ledger";
@@ -28,6 +30,7 @@ import { CancelRentalDialog } from "@/components/shared/dialogs/cancel-rental-di
 import RejectionDialog from "@/components/rentals/rejection-dialog";
 import { ExtensionRequestDialog } from "@/components/rentals/ExtensionRequestDialog";
 import InstallmentPlanCard from "@/components/rentals/InstallmentPlanCard";
+import { useInstallmentPlan } from "@/hooks/use-installment-plan";
 import { formatCurrency } from "@/lib/formatters";
 
 interface Rental {
@@ -69,7 +72,9 @@ const RentalDetail = () => {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const { tenant } = useTenant();
-  const skipInsurance = isInsuranceExemptTenant(tenant?.id);
+  const skipInsurance = !tenant?.integration_bonzah;
+  const [downloadingPdf, setDownloadingPdf] = useState<string | null>(null);
+  const [refreshingPolicy, setRefreshingPolicy] = useState(false);
   const [showAddPayment, setShowAddPayment] = useState(false);
   const [sendingDocuSign, setSendingDocuSign] = useState(false);
   const [checkingDocuSignStatus, setCheckingDocuSignStatus] = useState(false);
@@ -92,6 +97,10 @@ const RentalDetail = () => {
 
   // Extension dialog state
   const [showExtensionDialog, setShowExtensionDialog] = useState(false);
+
+  // Installment sheet state
+  const [showInstallmentSheet, setShowInstallmentSheet] = useState(false);
+  const { plan: installmentPlan, hasInstallmentPlan, retryPayment, isRetrying, markPaid, isMarkingPaid } = useInstallmentPlan(id);
 
   const { data: rental, isLoading, error: rentalError } = useQuery({
     queryKey: ["rental", id, tenant?.id],
@@ -971,6 +980,21 @@ const RentalDetail = () => {
           { label: 'Extras', category: 'Extras', amount: extrasTotal, detail: (extrasDetails?.length || 0) > 0 ? `${extrasDetails!.length} item${extrasDetails!.length > 1 ? 's' : ''}` : 'Add-ons', icon: Package, color: 'text-indigo-500', bg: 'bg-indigo-500/10', nonRefundable: true, onClick: extrasTotal > 0 ? () => setShowExtrasDialog(true) : undefined },
         ];
 
+        // Add installment plan row if one exists
+        if (hasInstallmentPlan && installmentPlan) {
+          rows.push({
+            label: 'Installment Plan',
+            category: 'Installment Plan',
+            amount: installmentPlan.total_installable_amount,
+            detail: `${installmentPlan.plan_type === 'weekly' ? 'Weekly' : 'Monthly'} · ${installmentPlan.paid_installments}/${installmentPlan.number_of_installments} paid`,
+            icon: Banknote,
+            color: 'text-violet-500',
+            bg: 'bg-violet-500/10',
+            nonRefundable: true,
+            onClick: () => setShowInstallmentSheet(true),
+          });
+        }
+
         return (
           <Card>
             <CardHeader className="pb-4">
@@ -1067,6 +1091,155 @@ const RentalDetail = () => {
           </Card>
         );
       })()}
+
+      {/* Installment Plan Timeline Sheet */}
+      {installmentPlan && (
+        <Sheet open={showInstallmentSheet} onOpenChange={setShowInstallmentSheet}>
+          <SheetContent className="overflow-y-auto sm:max-w-lg">
+            <SheetHeader>
+              <SheetTitle className="flex items-center gap-2">
+                <Banknote className="h-5 w-5 text-violet-500" />
+                Installment Plan
+                <Badge variant={installmentPlan.status === 'active' ? 'default' : installmentPlan.status === 'completed' ? 'secondary' : 'destructive'} className={installmentPlan.status === 'active' ? 'bg-green-500' : installmentPlan.status === 'completed' ? 'bg-blue-500' : ''}>
+                  {installmentPlan.status}
+                </Badge>
+              </SheetTitle>
+            </SheetHeader>
+
+            <div className="mt-6 space-y-6">
+              {/* Progress Summary */}
+              <div className="space-y-2">
+                <div className="flex justify-between text-sm">
+                  <span className="text-muted-foreground">Progress</span>
+                  <span className="font-medium">{installmentPlan.paid_installments} of {installmentPlan.number_of_installments} paid</span>
+                </div>
+                <Progress value={(installmentPlan.paid_installments / installmentPlan.number_of_installments) * 100} className="h-2" />
+              </div>
+
+              {/* Summary Cards */}
+              <div className="grid grid-cols-3 gap-3">
+                <div className="text-center p-3 bg-green-500/10 rounded-lg">
+                  <p className="text-xs text-muted-foreground">Paid</p>
+                  <p className="text-lg font-bold text-green-600">{formatCurrency(installmentPlan.total_paid)}</p>
+                </div>
+                <div className="text-center p-3 bg-orange-500/10 rounded-lg">
+                  <p className="text-xs text-muted-foreground">Remaining</p>
+                  <p className="text-lg font-bold text-orange-600">{formatCurrency(installmentPlan.total_installable_amount - installmentPlan.total_paid)}</p>
+                </div>
+                <div className="text-center p-3 bg-muted/50 rounded-lg">
+                  <p className="text-xs text-muted-foreground">Total</p>
+                  <p className="text-lg font-bold">{formatCurrency(installmentPlan.total_installable_amount)}</p>
+                </div>
+              </div>
+
+              {/* Upfront Payment */}
+              <div className="flex items-center gap-2 p-3 border rounded-lg bg-muted/30">
+                <CreditCard className="h-4 w-4 text-muted-foreground" />
+                <div className="flex-1">
+                  <p className="text-sm font-medium">Upfront Payment (Deposit + Fees)</p>
+                </div>
+                <div className="text-right">
+                  <p className="text-sm font-semibold">{formatCurrency(installmentPlan.upfront_amount)}</p>
+                  {installmentPlan.upfront_paid ? (
+                    <Badge variant="outline" className="text-green-500 border-green-500/30 text-[10px]">Paid</Badge>
+                  ) : (
+                    <Badge variant="outline" className="text-orange-500 border-orange-500/30 text-[10px]">Pending</Badge>
+                  )}
+                </div>
+              </div>
+
+              {/* Timeline */}
+              <div>
+                <h4 className="text-sm font-medium mb-4">Payment Schedule</h4>
+                <div className="space-y-0">
+                  {installmentPlan.scheduled_installments.map((inst, index) => {
+                    const isPaid = inst.status === 'paid';
+                    const isFailed = inst.status === 'failed' || inst.status === 'overdue';
+                    const isScheduled = inst.status === 'scheduled';
+                    const isProcessing = inst.status === 'processing';
+                    const isLast = index === installmentPlan.scheduled_installments.length - 1;
+
+                    return (
+                      <div key={inst.id} className="flex gap-4">
+                        {/* Timeline dot and line */}
+                        <div className="flex flex-col items-center">
+                          <div className={`w-3 h-3 rounded-full border-2 flex-shrink-0 ${
+                            isPaid ? 'bg-green-500 border-green-500' :
+                            isFailed ? 'bg-red-500 border-red-500' :
+                            isProcessing ? 'bg-yellow-500 border-yellow-500' :
+                            'bg-background border-muted-foreground/30'
+                          }`} />
+                          {!isLast && (
+                            <div className={`w-0.5 h-12 ${isPaid ? 'bg-green-500' : 'bg-muted-foreground/20'}`} />
+                          )}
+                        </div>
+
+                        {/* Content */}
+                        <div className="flex-1 pb-4 -mt-0.5">
+                          <div className="flex items-center justify-between">
+                            <div>
+                              <p className="text-sm font-medium">
+                                {installmentPlan.plan_type === 'weekly' ? `Week ${inst.installment_number}` : `Month ${inst.installment_number}`}
+                              </p>
+                              <p className="text-xs text-muted-foreground">
+                                {inst.paid_at ? (
+                                  <span className="text-green-600">Paid on {new Date(inst.paid_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</span>
+                                ) : (
+                                  <>Due {new Date(inst.due_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</>
+                                )}
+                              </p>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <span className={`text-sm font-semibold ${isPaid ? 'text-green-600' : isFailed ? 'text-red-600' : ''}`}>
+                                {formatCurrency(inst.amount)}
+                              </span>
+                              {isPaid && <CheckCircle className="h-4 w-4 text-green-500" />}
+                              {isFailed && <XCircle className="h-4 w-4 text-red-500" />}
+                              {isProcessing && <RefreshCw className="h-4 w-4 text-yellow-500 animate-spin" />}
+                              {isScheduled && <Clock className="h-4 w-4 text-muted-foreground/40" />}
+                            </div>
+                          </div>
+                          {isFailed && inst.last_failure_reason && (
+                            <p className="text-xs text-red-500 mt-1">{inst.last_failure_reason}</p>
+                          )}
+                          {isFailed && (
+                            <div className="flex gap-1 mt-1">
+                              <Button size="sm" variant="outline" className="h-6 text-xs" onClick={() => retryPayment(inst.id)} disabled={isRetrying}>
+                                <RefreshCw className="h-3 w-3 mr-1" />Retry
+                              </Button>
+                              <Button size="sm" variant="outline" className="h-6 text-xs" onClick={() => markPaid({ installmentId: inst.id })} disabled={isMarkingPaid}>
+                                <CheckCircle className="h-3 w-3 mr-1" />Mark Paid
+                              </Button>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Card on file */}
+              {installmentPlan.stripe_payment_method_id && (
+                <div className="flex items-center gap-2 text-sm text-muted-foreground p-3 border rounded-lg">
+                  <CreditCard className="h-4 w-4" />
+                  <span>Card on file for automatic payments</span>
+                </div>
+              )}
+
+              {/* Next due date */}
+              {installmentPlan.next_due_date && installmentPlan.status === 'active' && (
+                <div className="flex items-center gap-2 p-3 border rounded-lg bg-blue-50 dark:bg-blue-950">
+                  <Calendar className="h-4 w-4 text-blue-600" />
+                  <span className="text-sm">
+                    Next payment: <strong>{new Date(installmentPlan.next_due_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</strong>
+                  </span>
+                </div>
+              )}
+            </div>
+          </SheetContent>
+        </Sheet>
+      )}
 
       {/* Rental Details */}
       <Card>
@@ -1518,6 +1691,66 @@ const RentalDetail = () => {
               </div>
             </div>
 
+            {/* PDF Downloads */}
+            {bonzahPolicy.status === 'active' && (bonzahPolicy.coverage_types as any)?.pdf_ids && (
+              <div>
+                <p className="text-sm text-muted-foreground mb-2">Policy Documents</p>
+                <div className="flex flex-wrap gap-2">
+                  {Object.entries((bonzahPolicy.coverage_types as any).pdf_ids as Record<string, string>).map(([type, pdfId]) => {
+                    const labels: Record<string, string> = {
+                      cdw: 'CDW Certificate',
+                      rcli: 'RCLI Certificate',
+                      sli: 'SLI Certificate',
+                      pai: 'PAI Certificate',
+                    };
+                    return (
+                      <Button
+                        key={type}
+                        variant="outline"
+                        size="sm"
+                        disabled={downloadingPdf === type}
+                        onClick={async () => {
+                          setDownloadingPdf(type);
+                          const newWindow = window.open('', '_blank');
+                          try {
+                            const { data, error } = await supabase.functions.invoke('bonzah-download-pdf', {
+                              body: { tenant_id: tenant?.id, pdf_id: pdfId },
+                            });
+                            if (error || !data?.documentBase64) {
+                              if (newWindow) newWindow.close();
+                              toast({ title: "Error", description: "Failed to download PDF", variant: "destructive" });
+                              return;
+                            }
+                            const byteCharacters = atob(data.documentBase64);
+                            const byteNumbers = new Array(byteCharacters.length);
+                            for (let i = 0; i < byteCharacters.length; i++) {
+                              byteNumbers[i] = byteCharacters.charCodeAt(i);
+                            }
+                            const byteArray = new Uint8Array(byteNumbers);
+                            const blob = new Blob([byteArray], { type: 'application/pdf' });
+                            const url = URL.createObjectURL(blob);
+                            if (newWindow) newWindow.location.href = url;
+                          } catch (err) {
+                            if (newWindow) newWindow.close();
+                            toast({ title: "Error", description: "Failed to download PDF", variant: "destructive" });
+                          } finally {
+                            setDownloadingPdf(null);
+                          }
+                        }}
+                      >
+                        {downloadingPdf === type ? (
+                          <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+                        ) : (
+                          <Download className="h-4 w-4 mr-1" />
+                        )}
+                        {labels[type] || type.toUpperCase()}
+                      </Button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
             {/* Renter Details */}
             {bonzahPolicy.renter_details && (
               <div>
@@ -1533,8 +1766,37 @@ const RentalDetail = () => {
               </div>
             )}
 
-            {/* Bonzah Portal Link */}
-            <div className="pt-2 border-t">
+            {/* Actions */}
+            <div className="pt-2 border-t flex items-center gap-3 flex-wrap">
+              {bonzahPolicy.policy_id && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={refreshingPolicy}
+                  onClick={async () => {
+                    setRefreshingPolicy(true);
+                    try {
+                      const { data, error } = await supabase.functions.invoke('bonzah-view-policy', {
+                        body: { tenant_id: tenant?.id, policy_id: bonzahPolicy.policy_id },
+                      });
+                      if (error) throw error;
+                      queryClient.invalidateQueries({ queryKey: ['rental'] });
+                      toast({ title: "Policy Refreshed", description: "Latest policy data has been fetched from Bonzah." });
+                    } catch (err) {
+                      toast({ title: "Error", description: "Failed to refresh policy data", variant: "destructive" });
+                    } finally {
+                      setRefreshingPolicy(false);
+                    }
+                  }}
+                >
+                  {refreshingPolicy ? (
+                    <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+                  ) : (
+                    <RefreshCw className="h-4 w-4 mr-1" />
+                  )}
+                  Refresh Policy
+                </Button>
+              )}
               <a
                 href="https://bonzah.sb.insillion.com/bb1/"
                 target="_blank"

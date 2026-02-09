@@ -73,6 +73,7 @@ export interface Tenant {
 
   // Integration settings
   integration_veriff: boolean | null;
+  integration_bonzah: boolean | null;
 
   // Tax settings
   tax_enabled: boolean | null;
@@ -132,6 +133,10 @@ export interface Tenant {
   return_multiple_locations_enabled: boolean | null;
   pickup_area_enabled: boolean | null;
   return_area_enabled: boolean | null;
+
+  // Installment settings
+  installments_enabled: boolean | null;
+  installment_config: Record<string, any> | null;
 }
 
 interface TenantContextType {
@@ -266,7 +271,7 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
                 require_identity_verification, require_insurance_upload, payment_mode,
                 pickup_location_mode, return_location_mode, fixed_pickup_address, fixed_return_address,
                 pickup_area_radius_km, return_area_radius_km, area_center_lat, area_center_lon,
-                integration_veriff,
+                integration_veriff, integration_bonzah,
                 tax_enabled, tax_percentage,
                 service_fee_enabled, service_fee_amount,
                 deposit_mode, global_deposit_amount,
@@ -282,7 +287,8 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
                 fixed_address_enabled, multiple_locations_enabled, area_around_enabled, area_delivery_fee,
                 pickup_fixed_enabled, return_fixed_enabled,
                 pickup_multiple_locations_enabled, return_multiple_locations_enabled,
-                pickup_area_enabled, return_area_enabled
+                pickup_area_enabled, return_area_enabled,
+                installments_enabled, installment_config
               `)
               .eq('slug', defaultSlug)
               .eq('status', 'active')
@@ -367,6 +373,7 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
           area_center_lat,
           area_center_lon,
           integration_veriff,
+          integration_bonzah,
           tax_enabled,
           tax_percentage,
           service_fee_enabled,
@@ -409,7 +416,9 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
           pickup_multiple_locations_enabled,
           return_multiple_locations_enabled,
           pickup_area_enabled,
-          return_area_enabled
+          return_area_enabled,
+          installments_enabled,
+          installment_config
         `)
         .eq('slug', slug)
         .eq('status', 'active')

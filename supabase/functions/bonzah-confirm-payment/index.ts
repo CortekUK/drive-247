@@ -1,6 +1,6 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.57.4'
-import { bonzahFetch } from '../_shared/bonzah-client.ts'
+import { bonzahFetchWithCredentials, getTenantBonzahCredentials } from '../_shared/bonzah-client.ts'
 import { corsHeaders, handleCors, jsonResponse, errorResponse } from '../_shared/cors.ts'
 
 interface ConfirmPaymentRequest {
@@ -85,13 +85,17 @@ serve(async (req) => {
     }
 
     try {
+      // Get per-tenant Bonzah credentials
+      const credentials = await getTenantBonzahCredentials(supabase, policyRecord.tenant_id)
+
       // Call the /Bonzah/payment endpoint to complete payment and issue policy
-      const paymentResponse = await bonzahFetch<BonzahPaymentResponse>(
+      const paymentResponse = await bonzahFetchWithCredentials<BonzahPaymentResponse>(
         '/Bonzah/payment',
         {
           payment_id: policyRecord.payment_id,
           amount: policyRecord.premium_amount,
-        }
+        },
+        credentials
       )
 
       console.log('[Bonzah Payment] Payment response status:', paymentResponse.status)

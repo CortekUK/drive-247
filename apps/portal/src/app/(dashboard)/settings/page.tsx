@@ -36,6 +36,7 @@ import { OGImageUpload } from '@/components/settings/og-image-upload';
 import { StripeConnectSettings } from '@/components/settings/stripe-connect-settings';
 import { LocationSettings } from '@/components/settings/location-settings';
 import { ExtrasSettings } from '@/components/settings/extras-settings';
+import { BonzahSettings } from '@/components/settings/bonzah-settings';
 
 const Settings = () => {
   const queryClient = useQueryClient();
@@ -747,7 +748,7 @@ const Settings = () => {
 
       {/* Settings Tabs */}
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-        <TabsList className="grid w-full grid-cols-11">
+        <TabsList className="grid w-full grid-cols-12">
           <TabsTrigger value="branding" className="flex items-center gap-2">
             <Palette className="h-4 w-4" />
             <span className="hidden sm:inline">Branding</span>
@@ -782,6 +783,10 @@ const Settings = () => {
           <TabsTrigger value="emails" className="flex items-center gap-2">
             <Mail className="h-4 w-4" />
             <span className="hidden sm:inline">Emails</span>
+          </TabsTrigger>
+          <TabsTrigger value="bonzah" className="flex items-center gap-2">
+            <Shield className="h-4 w-4" />
+            <span className="hidden sm:inline">Bonzah</span>
           </TabsTrigger>
           <TabsTrigger value="blacklist" className="flex items-center gap-2">
             <ShieldX className="h-4 w-4" />
@@ -2707,6 +2712,11 @@ const Settings = () => {
               </Button>
             </CardContent>
           </Card>
+        </TabsContent>
+
+        {/* Bonzah Insurance Tab */}
+        <TabsContent value="bonzah" className="space-y-6">
+          <BonzahSettings />
         </TabsContent>
 
         {/* Global Blacklist Tab */}

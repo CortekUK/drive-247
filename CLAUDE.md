@@ -53,7 +53,7 @@ All apps use Next.js **App Router**. The `@` path alias maps to `./src` in booki
 - **Framework**: Next.js 15-16, React 18-19, TypeScript
 - **Database**: Supabase (PostgreSQL with RLS)
 - **State**: Zustand (client state), React Query (server state)
-- **Forms**: React Hook Form + Zod validation
+- **Forms**: React Hook Form + Zod validation (v3 in booking/portal, v4 in admin/web)
 - **Styling**: Tailwind CSS 3 + Radix UI primitives + `class-variance-authority`
 - **Payments**: Stripe (dual test/live mode per tenant, Connect)
 - **Auth**: Supabase Auth with RBAC (head_admin, admin, ops, viewer)
@@ -152,7 +152,7 @@ Uses Supabase Realtime channels (replaced Socket.io):
 - **Verification**: `create-veriff-session`, `create-ai-verification-session`, `ai-document-ocr`, `ai-face-match`
 - **Admin**: `admin-create-user`, `admin-update-role`, `admin-deactivate-user`, `emergency-bootstrap`
 - **RAG chatbot**: `chat`, `rag-init`, `rag-sync`
-- **Shared utilities** in `supabase/functions/_shared/`: `cors.ts`, `stripe-client.ts`, `aws-config.ts`, `email-template-service.ts`, `openai.ts`
+- **Shared utilities** in `supabase/functions/_shared/`: `cors.ts`, `stripe-client.ts`, `aws-config.ts`, `email-template-service.ts`, `openai.ts`, `bonzah-client.ts`, `resend-service.ts`, `document-loaders.ts`
 
 Only 3 functions have `verify_jwt = false` in `supabase/config.toml`: `docusign-webhook`, `veriff-webhook`, `customer-chat`. Stripe webhook functions handle their own signature verification. All other functions require JWT auth by default.
 
@@ -216,6 +216,7 @@ Required variables (see `.env.example`):
 ## Build Notes
 
 - Booking and portal have `ignoreBuildErrors: true` for TypeScript; admin and web do not
+- Booking uses `output: 'standalone'` for Vercel deployment with `outputFileTracingRoot` set to monorepo root
 - Booking loads env from monorepo root via `dotenv({ path: '../../.env' })` in `next.config.ts`
 - Portal transpiles TipTap and recharts packages (`transpilePackages` in `next.config.js`)
 - Booking has webpack alias for Supabase ESM module compatibility (`extensionAlias`)

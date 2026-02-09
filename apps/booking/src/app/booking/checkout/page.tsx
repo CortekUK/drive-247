@@ -72,21 +72,21 @@ const BookingCheckoutContent = () => {
     collectionLocation: null,
   });
 
-  // Installment state
+  // Installment state - read from tenant context
   const [selectedInstallmentPlan, setSelectedInstallmentPlan] = useState<InstallmentOption | null>(null);
-  const [installmentConfig, setInstallmentConfig] = useState<InstallmentConfig>({
+  const installmentsEnabled = tenant?.installments_enabled ?? false;
+  const installmentConfig: InstallmentConfig = {
     min_days_for_weekly: 7,
     min_days_for_monthly: 30,
     max_installments_weekly: 4,
     max_installments_monthly: 6,
-    // Phase 3 additions
     charge_first_upfront: true,
     what_gets_split: 'rental_tax',
     grace_period_days: 3,
     max_retry_attempts: 3,
     retry_interval_days: 1,
-  });
-  const [installmentsEnabled, setInstallmentsEnabled] = useState(false);
+    ...(tenant?.installment_config || {}),
+  };
 
   const [formData, setFormData] = useState({
     customerName: "",
@@ -113,6 +113,7 @@ const BookingCheckoutContent = () => {
     }
     loadData();
   }, []);
+
 
   const loadData = async () => {
     try {
@@ -147,21 +148,6 @@ const BookingCheckoutContent = () => {
         collectionLocation: bookingContext.collectionLocation || null,
       });
 
-      // Load installment configuration from tenant
-      if (tenant?.id) {
-        const { data: tenantData } = await supabase
-          .from("tenants")
-          .select("installments_enabled, installment_config")
-          .eq("id", tenant.id)
-          .single();
-
-        if (tenantData) {
-          setInstallmentsEnabled(tenantData.installments_enabled || false);
-          if (tenantData.installment_config) {
-            setInstallmentConfig(tenantData.installment_config as InstallmentConfig);
-          }
-        }
-      }
     } catch (error: any) {
       toast.error("Failed to load booking details");
       console.error(error);

@@ -5187,6 +5187,9 @@ export type Database = {
           area_center_lat: number | null
           area_center_lon: number | null
           area_delivery_fee: number | null
+          bonzah_mode: string
+          bonzah_password: string | null
+          bonzah_username: string | null
           booking_lead_time_hours: number | null
           business_hours: string | null
           collection_enabled: boolean | null
@@ -5303,6 +5306,9 @@ export type Database = {
           area_center_lat?: number | null
           area_center_lon?: number | null
           area_delivery_fee?: number | null
+          bonzah_mode?: string
+          bonzah_password?: string | null
+          bonzah_username?: string | null
           booking_lead_time_hours?: number | null
           business_hours?: string | null
           collection_enabled?: boolean | null
@@ -5419,6 +5425,9 @@ export type Database = {
           area_center_lat?: number | null
           area_center_lon?: number | null
           area_delivery_fee?: number | null
+          bonzah_mode?: string
+          bonzah_password?: string | null
+          bonzah_username?: string | null
           booking_lead_time_hours?: number | null
           business_hours?: string | null
           collection_enabled?: boolean | null

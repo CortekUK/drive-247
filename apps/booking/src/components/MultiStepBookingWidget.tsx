@@ -29,7 +29,7 @@ import AIVerificationQR from "./AIVerificationQR";
 import { stripePromise } from "@/config/stripe";
 import { usePageContent, defaultHomeContent, mergeWithDefaults } from "@/hooks/usePageContent";
 import { useWorkingHours, getWorkingHoursForDate } from "@/hooks/useWorkingHours";
-import { isInsuranceExemptTenant } from "@/config/tenant-config";
+// Insurance gating now uses tenant.integration_bonzah flag
 import { canCustomerBook } from "@/lib/tenantQueries";
 import { sanitizeName, sanitizeEmail, sanitizePhone, sanitizeLocation, sanitizeTextArea, isInputSafe } from "@/lib/sanitize";
 import { createVeriffFrame, MESSAGES } from "@veriff/incontext-sdk";
@@ -91,7 +91,7 @@ const MultiStepBookingWidget = () => {
 
   const { tenant } = useTenant();
   const workingHours = useWorkingHours();
-  const skipInsurance = isInsuranceExemptTenant(tenant?.id);
+  const skipInsurance = !tenant?.integration_bonzah;
   const { updateContext: updateBookingContext } = useBookingStore();
 
   // Customer authentication state

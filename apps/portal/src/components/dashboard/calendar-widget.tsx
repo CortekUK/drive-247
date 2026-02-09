@@ -81,22 +81,22 @@ export function CalendarWidget() {
       <CardContent className="space-y-4">
         {/* Stats row */}
         <div className="grid grid-cols-3 gap-3">
-          <div className="flex items-center gap-2 p-2 rounded-md bg-cyan-500/10">
-            <ArrowUpFromDot className="h-4 w-4 text-cyan-400" />
+          <div className="flex items-center gap-2 p-2 rounded-md bg-cyan-100 dark:bg-cyan-500/10">
+            <ArrowUpFromDot className="h-4 w-4 text-cyan-600 dark:text-cyan-400" />
             <div>
               <div className="text-lg font-bold">{todayData?.pickupsToday ?? 0}</div>
               <div className="text-[10px] text-muted-foreground">Pickups</div>
             </div>
           </div>
-          <div className="flex items-center gap-2 p-2 rounded-md bg-amber-500/10">
-            <ArrowDownToDot className="h-4 w-4 text-amber-400" />
+          <div className="flex items-center gap-2 p-2 rounded-md bg-amber-100 dark:bg-amber-500/10">
+            <ArrowDownToDot className="h-4 w-4 text-amber-600 dark:text-amber-400" />
             <div>
               <div className="text-lg font-bold">{todayData?.returnsToday ?? 0}</div>
               <div className="text-[10px] text-muted-foreground">Returns</div>
             </div>
           </div>
-          <div className="flex items-center gap-2 p-2 rounded-md bg-emerald-500/10">
-            <Car className="h-4 w-4 text-emerald-400" />
+          <div className="flex items-center gap-2 p-2 rounded-md bg-emerald-100 dark:bg-emerald-500/10">
+            <Car className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
             <div>
               <div className="text-lg font-bold">{todayData?.activeCount ?? 0}</div>
               <div className="text-[10px] text-muted-foreground">Active</div>

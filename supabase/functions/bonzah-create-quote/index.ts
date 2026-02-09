@@ -1,7 +1,8 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.57.4'
 import {
-  bonzahFetch,
+  bonzahFetchWithCredentials,
+  getTenantBonzahCredentials,
   formatDateForBonzah,
   type CoverageTypes,
   type RenterDetails,
@@ -163,7 +164,10 @@ serve(async (req) => {
 
     console.log('[Bonzah Quote] Creating finalized quote via /Bonzah/quote')
 
-    const createResponse = await bonzahFetch<BonzahQuoteApiResponse>('/Bonzah/quote', createQuoteRequest)
+    // Get per-tenant Bonzah credentials
+    const credentials = await getTenantBonzahCredentials(supabase, body.tenant_id)
+
+    const createResponse = await bonzahFetchWithCredentials<BonzahQuoteApiResponse>('/Bonzah/quote', createQuoteRequest, credentials)
 
     if (createResponse.status !== 0 || !createResponse.data?.quote_id) {
       console.error('[Bonzah Quote] Failed to create quote:', createResponse)

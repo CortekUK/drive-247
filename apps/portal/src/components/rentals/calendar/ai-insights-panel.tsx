@@ -36,7 +36,7 @@ const insightIcons: Record<string, (className?: string) => React.ReactNode> = {
   recommendation: (cls) => <Lightbulb className={cn("h-3.5 w-3.5", cls)} />,
 };
 
-// Neon severity colors: green = good, yellow = attention, red = critical
+// Severity colors: light mode uses solid readable colors, dark mode uses neon glow
 const severityNeon: Record<string, {
   border: string;
   bg: string;
@@ -47,31 +47,31 @@ const severityNeon: Record<string, {
   text: string;
 }> = {
   success: {
-    border: "border-[#39ff14]/30",
-    bg: "bg-[#39ff14]/8",
-    hover: "hover:bg-[#39ff14]/15",
-    glow: "shadow-[0_0_12px_-3px_rgba(57,255,20,0.4)]",
-    icon: "text-[#39ff14] drop-shadow-[0_0_5px_rgba(57,255,20,0.6)]",
-    badge: "bg-[#39ff14]/15 text-[#39ff14]",
-    text: "text-[#39ff14]",
+    border: "border-emerald-200 dark:border-[rgba(57,255,20,0.3)]",
+    bg: "bg-emerald-50 dark:bg-[rgba(57,255,20,0.08)]",
+    hover: "hover:bg-emerald-100 dark:hover:bg-[rgba(57,255,20,0.15)]",
+    glow: "dark:shadow-[0_0_12px_-3px_rgba(57,255,20,0.4)]",
+    icon: "text-emerald-600 dark:text-[#39ff14] dark:drop-shadow-[0_0_5px_rgba(57,255,20,0.6)]",
+    badge: "bg-emerald-100 text-emerald-700 dark:bg-[rgba(57,255,20,0.15)] dark:text-[#39ff14]",
+    text: "text-emerald-600 dark:text-[#39ff14]",
   },
   warning: {
-    border: "border-[#ffe600]/30",
-    bg: "bg-[#ffe600]/8",
-    hover: "hover:bg-[#ffe600]/15",
-    glow: "shadow-[0_0_12px_-3px_rgba(255,230,0,0.4)]",
-    icon: "text-[#ffe600] drop-shadow-[0_0_5px_rgba(255,230,0,0.6)]",
-    badge: "bg-[#ffe600]/15 text-[#ffe600]",
-    text: "text-[#ffe600]",
+    border: "border-amber-200 dark:border-[rgba(255,230,0,0.3)]",
+    bg: "bg-amber-50 dark:bg-[rgba(255,230,0,0.08)]",
+    hover: "hover:bg-amber-100 dark:hover:bg-[rgba(255,230,0,0.15)]",
+    glow: "dark:shadow-[0_0_12px_-3px_rgba(255,230,0,0.4)]",
+    icon: "text-amber-600 dark:text-[#ffe600] dark:drop-shadow-[0_0_5px_rgba(255,230,0,0.6)]",
+    badge: "bg-amber-100 text-amber-700 dark:bg-[rgba(255,230,0,0.15)] dark:text-[#ffe600]",
+    text: "text-amber-600 dark:text-[#ffe600]",
   },
   info: {
-    border: "border-[#ff3131]/30",
-    bg: "bg-[#ff3131]/8",
-    hover: "hover:bg-[#ff3131]/15",
-    glow: "shadow-[0_0_12px_-3px_rgba(255,49,49,0.4)]",
-    icon: "text-[#ff3131] drop-shadow-[0_0_5px_rgba(255,49,49,0.6)]",
-    badge: "bg-[#ff3131]/15 text-[#ff3131]",
-    text: "text-[#ff3131]",
+    border: "border-red-200 dark:border-[rgba(255,49,49,0.3)]",
+    bg: "bg-red-50 dark:bg-[rgba(255,49,49,0.08)]",
+    hover: "hover:bg-red-100 dark:hover:bg-[rgba(255,49,49,0.15)]",
+    glow: "dark:shadow-[0_0_12px_-3px_rgba(255,49,49,0.4)]",
+    icon: "text-red-600 dark:text-[#ff3131] dark:drop-shadow-[0_0_5px_rgba(255,49,49,0.6)]",
+    badge: "bg-red-100 text-red-700 dark:bg-[rgba(255,49,49,0.15)] dark:text-[#ff3131]",
+    text: "text-red-600 dark:text-[#ff3131]",
   },
 };
 
@@ -212,9 +212,9 @@ export function AIInsightsPanel({ grouped }: AIInsightsPanelProps) {
 
   return (
     <>
-      <div className="flex items-center gap-2.5 py-1.5 px-2.5 rounded-md border border-accent/15 bg-gradient-to-r from-accent/[0.04] via-transparent to-transparent">
+      <div className="flex items-center gap-2.5 py-1.5 px-2.5 rounded-md border border-accent/30 dark:border-accent/15 bg-gradient-to-r from-accent/10 dark:from-accent/[0.04] via-transparent to-transparent">
         {/* Trax branding */}
-        <div className="flex items-center gap-1.5 shrink-0 pr-2.5 border-r border-accent/25">
+        <div className="flex items-center gap-1.5 shrink-0 pr-2.5 border-r border-accent/40 dark:border-accent/25">
           <div className="relative flex items-center justify-center h-6 w-6">
             <div className="absolute inset-0 rounded-full border border-accent/40 bg-accent/10 trax-ring" />
             <Zap className="h-3 w-3 text-accent trax-icon relative z-10" style={{ filter: 'drop-shadow(0 0 5px hsl(var(--accent) / 0.8))' }} />
