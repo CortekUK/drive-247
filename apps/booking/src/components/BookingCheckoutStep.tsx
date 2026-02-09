@@ -374,6 +374,7 @@ export default function BookingCheckoutStep({
           totalAmount: getPayableAmount(), // Use payable amount (deposit only for enquiry tenants)
           tenantSlug: tenant?.slug, // Pass tenant slug for Stripe Connect routing
           tenantId: tenant?.id,
+          bonzahPolicyId: createdRentalData.bonzahPolicyId || null, // For Bonzah insurance confirmation after payment
         },
       });
 

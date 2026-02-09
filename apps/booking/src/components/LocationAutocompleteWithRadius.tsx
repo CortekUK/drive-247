@@ -1,6 +1,8 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { Input } from "@/components/ui/input";
 import { MapPin, Loader2, LocateFixed } from "lucide-react";
+import { useGoogleMapsLoader } from "@/hooks/useGoogleMapsLoader";
+import { PlacesSessionManager } from "@/lib/google-places-session";
 
 interface LocationAutocompleteWithRadiusProps {
   id: string;
@@ -14,12 +16,13 @@ interface LocationAutocompleteWithRadiusProps {
   centerLon?: number | null;
 }
 
-interface PhotonResult {
-  place_id: number;
-  display_name: string;
-  name: string;
-  lat: string;
-  lon: string;
+interface Suggestion {
+  placeId: string;
+  mainText: string;
+  secondaryText: string;
+  fullText: string;
+  lat?: number;
+  lng?: number;
   distance?: number;
 }
 
@@ -54,13 +57,14 @@ const LocationAutocompleteWithRadius = ({
   centerLat,
   centerLon,
 }: LocationAutocompleteWithRadiusProps) => {
-  const [suggestions, setSuggestions] = useState<PhotonResult[]>([]);
+  const { isLoaded } = useGoogleMapsLoader();
+  const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [loading, setLoading] = useState(false);
   const wrapperRef = useRef<HTMLDivElement>(null);
   const debounceTimer = useRef<NodeJS.Timeout>();
+  const sessionManager = useRef(new PlacesSessionManager());
 
-  // Get configured center coordinates
   const getCenterCoords = useCallback(() => {
     if (centerLat && centerLon) {
       return { lat: centerLat, lon: centerLon };
@@ -68,7 +72,6 @@ const LocationAutocompleteWithRadius = ({
     return null;
   }, [centerLat, centerLon]);
 
-  // Close suggestions when clicking outside
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (wrapperRef.current && !wrapperRef.current.contains(event.target as Node)) {
@@ -81,7 +84,7 @@ const LocationAutocompleteWithRadius = ({
   }, []);
 
   const fetchSuggestions = async (inputValue: string) => {
-    if (!inputValue || inputValue.length < 3) {
+    if (!inputValue || inputValue.length < 3 || !isLoaded) {
       setSuggestions([]);
       setShowSuggestions(false);
       return;
@@ -91,62 +94,79 @@ const LocationAutocompleteWithRadius = ({
 
     setLoading(true);
     try {
-      // Build API URL - with or without location bias
-      let apiUrl = `https://photon.komoot.io/api/?q=${encodeURIComponent(inputValue)}&limit=20&lang=en`;
+      const request: google.maps.places.AutocompleteRequest = {
+        input: inputValue,
+        sessionToken: sessionManager.current.getToken(),
+        includedRegionCodes: ["us"],
+      };
 
-      // Add location bias if we have coordinates
+      // Add location bias if we have center coordinates
       if (center) {
-        apiUrl += `&lat=${center.lat}&lon=${center.lon}`;
+        request.locationBias = new google.maps.Circle({
+          center: { lat: center.lat, lng: center.lon },
+          radius: radiusKm * 1000,
+        });
       }
 
-      const response = await fetch(apiUrl);
+      const { suggestions: autocompleteSuggestions } =
+        await google.maps.places.AutocompleteSuggestion.fetchAutocompleteSuggestions(request);
 
-      if (response.ok) {
-        const data = await response.json();
-        // Convert Photon format to our format
-        let results: PhotonResult[] = data.features.map((feature: any) => {
-          const lat = feature.geometry.coordinates[1];
-          const lon = feature.geometry.coordinates[0];
-          const distance = center
-            ? haversineDistance(center.lat, center.lon, lat, lon)
-            : undefined;
+      // We need coordinates for filtering, so refresh session and fetch details
+      sessionManager.current.refreshToken();
 
-          return {
-            place_id: feature.properties.osm_id,
-            display_name: [
-              feature.properties.name,
-              feature.properties.street,
-              feature.properties.city || feature.properties.county,
-              feature.properties.postcode,
-              feature.properties.country,
-            ]
-              .filter(Boolean)
-              .join(", "),
-            name: feature.properties.name || "",
-            lat: lat.toString(),
-            lon: lon.toString(),
-            distance,
-          };
-        });
+      const detailsPromises = autocompleteSuggestions.slice(0, 10).map(async (s) => {
+        const prediction = s.placePrediction!;
+        const suggestion: Suggestion = {
+          placeId: prediction.placeId,
+          mainText: prediction.mainText!.text,
+          secondaryText: prediction.secondaryText?.text || "",
+          fullText: prediction.text.text,
+        };
 
-        // Filter by radius if we have a center point configured
-        if (center) {
-          results = results
-            .filter((result: PhotonResult) => result.distance! <= radiusKm)
-            .sort((a: PhotonResult, b: PhotonResult) => a.distance! - b.distance!);
+        try {
+          const place = new google.maps.places.Place({ id: prediction.placeId });
+          await place.fetchFields({ fields: ["location", "formattedAddress"] });
+
+          if (place.location) {
+            suggestion.lat = place.location.lat();
+            suggestion.lng = place.location.lng();
+            suggestion.fullText = place.formattedAddress || suggestion.fullText;
+
+            if (center) {
+              suggestion.distance = haversineDistance(
+                center.lat,
+                center.lon,
+                suggestion.lat,
+                suggestion.lng
+              );
+            }
+          }
+        } catch {
+          // Skip places we can't get details for
         }
 
-        // Limit to 5 results
-        results = results.slice(0, 5);
+        return suggestion;
+      });
 
-        setSuggestions(results);
-        setShowSuggestions(results.length > 0);
-      } else {
-        setSuggestions([]);
-        setShowSuggestions(false);
+      let results = await Promise.all(detailsPromises);
+
+      // Filter by radius if we have a center point
+      if (center) {
+        results = results
+          .filter((s) => s.distance !== undefined && s.distance <= radiusKm)
+          .sort((a, b) => a.distance! - b.distance!);
       }
+
+      // Limit to 5 results
+      results = results.slice(0, 5);
+
+      setSuggestions(results);
+      setShowSuggestions(true);
     } catch (error) {
-      console.error("[LocationAutocompleteWithRadius] Error fetching suggestions:", error);
+      console.error(
+        "[LocationAutocompleteWithRadius] Error fetching suggestions:",
+        error
+      );
       setSuggestions([]);
       setShowSuggestions(false);
     } finally {
@@ -155,11 +175,9 @@ const LocationAutocompleteWithRadius = ({
   };
 
   const handleInputChange = (inputValue: string) => {
-    // Sanitize input
     const sanitized = inputValue.replace(/[^a-zA-Z0-9\s,.\-']/g, "");
     onChange(sanitized);
 
-    // Debounce API calls
     if (debounceTimer.current) {
       clearTimeout(debounceTimer.current);
     }
@@ -177,8 +195,9 @@ const LocationAutocompleteWithRadius = ({
     }
   };
 
-  const handleSelectSuggestion = (suggestion: PhotonResult) => {
-    onChange(suggestion.display_name, parseFloat(suggestion.lat), parseFloat(suggestion.lon));
+  const handleSelectSuggestion = (suggestion: Suggestion) => {
+    // Coordinates were already fetched during prediction filtering
+    onChange(suggestion.fullText, suggestion.lat, suggestion.lng);
     setSuggestions([]);
     setShowSuggestions(false);
   };
@@ -224,38 +243,33 @@ const LocationAutocompleteWithRadius = ({
 
       {showSuggestions && suggestions.length > 0 && !disabled && (
         <div className="absolute z-50 w-full mt-1 bg-card border border-border rounded-lg shadow-lg max-h-60 overflow-auto left-0 top-full">
-          {suggestions.map((suggestion) => {
-            const mainText = suggestion.display_name.split(", ")[0] || suggestion.name;
-            const secondaryText = suggestion.display_name.split(", ").slice(1).join(", ");
-
-            return (
-              <button
-                key={suggestion.place_id}
-                type="button"
-                className="w-full px-4 py-3 text-left hover:bg-accent/10 flex items-start gap-3 transition-colors border-b border-border/50 last:border-0"
-                onClick={() => handleSelectSuggestion(suggestion)}
-              >
-                <MapPin className="w-4 h-4 mt-1 text-accent flex-shrink-0" />
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="text-sm font-medium text-foreground truncate">
-                      {mainText}
+          {suggestions.map((suggestion) => (
+            <button
+              key={suggestion.placeId}
+              type="button"
+              className="w-full px-4 py-3 text-left hover:bg-accent/10 flex items-start gap-3 transition-colors border-b border-border/50 last:border-0"
+              onClick={() => handleSelectSuggestion(suggestion)}
+            >
+              <MapPin className="w-4 h-4 mt-1 text-accent flex-shrink-0" />
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-sm font-medium text-foreground truncate">
+                    {suggestion.mainText}
+                  </span>
+                  {suggestion.distance !== undefined && (
+                    <span className="text-xs text-accent font-medium whitespace-nowrap">
+                      {formatDistance(suggestion.distance)}
                     </span>
-                    {suggestion.distance !== undefined && (
-                      <span className="text-xs text-accent font-medium whitespace-nowrap">
-                        {formatDistance(suggestion.distance)}
-                      </span>
-                    )}
-                  </div>
-                  {secondaryText && (
-                    <div className="text-xs text-muted-foreground truncate">
-                      {secondaryText}
-                    </div>
                   )}
                 </div>
-              </button>
-            );
-          })}
+                {suggestion.secondaryText && (
+                  <div className="text-xs text-muted-foreground truncate">
+                    {suggestion.secondaryText}
+                  </div>
+                )}
+              </div>
+            </button>
+          ))}
         </div>
       )}
 

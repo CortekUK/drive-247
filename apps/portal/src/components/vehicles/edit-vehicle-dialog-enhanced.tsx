@@ -280,6 +280,14 @@ export const EditVehicleDialogEnhanced = ({ vehicle, open, onOpenChange }: EditV
                 if (hasErrors) return;
 
                 onSubmit(data);
+              }, (errors) => {
+                const firstError = Object.values(errors)[0];
+                const message = firstError?.message || (firstError as any)?.root?.message || "Please check all required fields.";
+                toast({
+                  title: "Validation Error",
+                  description: String(message),
+                  variant: "destructive",
+                });
               })(e);
             }}
             className="space-y-4 px-1"

@@ -64,25 +64,6 @@ export const editVehicleEnhancedSchema = z.object({
     });
   }
 
-  // Warranty end date requires warranty start date
-  if (data.warranty_end_date && !data.warranty_start_date) {
-    ctx.addIssue({
-      code: z.ZodIssueCode.custom,
-      message: "Warranty start date is required when end date is set",
-      path: ["warranty_start_date"],
-    });
-  }
-
-  // Warranty end date must be after warranty start date
-  if (data.warranty_start_date && data.warranty_end_date) {
-    if (data.warranty_end_date <= data.warranty_start_date) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: "Warranty end date must be after start date",
-        path: ["warranty_end_date"],
-      });
-    }
-  }
 }).refine((data) => {
   if (data.has_spare_key) {
     return data.spare_key_holder !== undefined;

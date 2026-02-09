@@ -16,7 +16,7 @@ serve(async (req) => {
   }
 
   try {
-    const { bookingId, rentalId, customerEmail, customerName, totalAmount, tenantSlug, tenantId: bodyTenantId } = await req.json()
+    const { bookingId, rentalId, customerEmail, customerName, totalAmount, tenantSlug, tenantId: bodyTenantId, bonzahPolicyId } = await req.json()
 
     // Get tenant slug from header or body
     const slug = tenantSlug || req.headers.get('x-tenant-slug')
@@ -139,6 +139,7 @@ serve(async (req) => {
         tenant_id: tenantId,
         tenant_slug: slug,
         stripe_mode: stripeMode, // Track which mode was used
+        ...(bonzahPolicyId ? { bonzah_policy_id: bonzahPolicyId } : {}),
       },
     }
 

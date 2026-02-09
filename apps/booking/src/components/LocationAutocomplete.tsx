@@ -1,6 +1,8 @@
 import { useState, useEffect, useRef } from "react";
 import { Input } from "@/components/ui/input";
 import { MapPin, Loader2 } from "lucide-react";
+import { useGoogleMapsLoader } from "@/hooks/useGoogleMapsLoader";
+import { PlacesSessionManager } from "@/lib/google-places-session";
 
 interface LocationAutocompleteProps {
   id: string;
@@ -11,18 +13,11 @@ interface LocationAutocompleteProps {
   disabled?: boolean;
 }
 
-interface NominatimResult {
-  place_id: number;
-  display_name: string;
-  name: string;
-  lat: string;
-  lon: string;
-  address?: {
-    road?: string;
-    city?: string;
-    county?: string;
-    postcode?: string;
-  };
+interface Suggestion {
+  placeId: string;
+  mainText: string;
+  secondaryText: string;
+  fullText: string;
 }
 
 const LocationAutocomplete = ({
@@ -33,14 +28,15 @@ const LocationAutocomplete = ({
   className,
   disabled = false
 }: LocationAutocompleteProps) => {
-  const [suggestions, setSuggestions] = useState<NominatimResult[]>([]);
+  const { isLoaded } = useGoogleMapsLoader();
+  const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [loading, setLoading] = useState(false);
   const wrapperRef = useRef<HTMLDivElement>(null);
   const debounceTimer = useRef<NodeJS.Timeout>();
+  const sessionManager = useRef(new PlacesSessionManager());
 
   useEffect(() => {
-    // Close suggestions when clicking outside
     const handleClickOutside = (event: MouseEvent) => {
       if (wrapperRef.current && !wrapperRef.current.contains(event.target as Node)) {
         setShowSuggestions(false);
@@ -52,7 +48,7 @@ const LocationAutocomplete = ({
   }, []);
 
   const fetchSuggestions = async (inputValue: string) => {
-    if (!inputValue || inputValue.length < 3) {
+    if (!inputValue || inputValue.length < 3 || !isLoaded) {
       setSuggestions([]);
       setShowSuggestions(false);
       return;
@@ -60,52 +56,22 @@ const LocationAutocomplete = ({
 
     setLoading(true);
     try {
-      // Using Photon API (powered by Komoot) - Free, no API key, better CORS support
-      // Biasing results to Los Angeles (lat: 34.05, lon: -118.24)
-      const response = await fetch(
-        `https://photon.komoot.io/api/?` +
-        `q=${encodeURIComponent(inputValue)}&` +
-        `limit=10&` +
-        `lang=en&` +
-        `lat=34.05&` +
-        `lon=-118.24`
-      );
-
-      if (response.ok) {
-        const data = await response.json();
-        // Convert Photon format to our format
-        const results = data.features.map((feature: any) => ({
-          place_id: feature.properties.osm_id,
-          display_name: [
-            feature.properties.name,
-            feature.properties.street,
-            feature.properties.city || feature.properties.county,
-            feature.properties.postcode,
-            feature.properties.country
-          ].filter(Boolean).join(', '),
-          name: feature.properties.name || '',
-          lat: feature.geometry.coordinates[1].toString(),
-          lon: feature.geometry.coordinates[0].toString(),
-          country: feature.properties.country,
-        }));
-
-        // Sort results to prioritize US/California addresses
-        const sortedResults = results.sort((a: any, b: any) => {
-          const aIsCA = a.country === 'United States' || a.country === 'USA';
-          const bIsCA = b.country === 'United States' || b.country === 'USA';
-
-          if (aIsCA && !bIsCA) return -1;
-          if (!aIsCA && bIsCA) return 1;
-          return 0;
+      const { suggestions: autocompleteSuggestions } =
+        await google.maps.places.AutocompleteSuggestion.fetchAutocompleteSuggestions({
+          input: inputValue,
+          sessionToken: sessionManager.current.getToken(),
+          includedRegionCodes: ["us"],
         });
 
-        // Limit to 5 results after sorting
-        setSuggestions(sortedResults.slice(0, 5));
-        setShowSuggestions(sortedResults.length > 0);
-      } else {
-        setSuggestions([]);
-        setShowSuggestions(false);
-      }
+      const results: Suggestion[] = autocompleteSuggestions.slice(0, 5).map((s) => ({
+        placeId: s.placePrediction!.placeId,
+        mainText: s.placePrediction!.mainText!.text,
+        secondaryText: s.placePrediction!.secondaryText?.text || "",
+        fullText: s.placePrediction!.text.text,
+      }));
+
+      setSuggestions(results);
+      setShowSuggestions(results.length > 0);
     } catch (error) {
       console.error("Error fetching location suggestions:", error);
       setSuggestions([]);
@@ -116,11 +82,9 @@ const LocationAutocomplete = ({
   };
 
   const handleInputChange = (inputValue: string) => {
-    // Sanitize input: allow letters, numbers, spaces, commas, hyphens, apostrophes, and periods
     const sanitized = inputValue.replace(/[^a-zA-Z0-9\s,.\-']/g, '');
     onChange(sanitized);
 
-    // Debounce API calls
     if (debounceTimer.current) {
       clearTimeout(debounceTimer.current);
     }
@@ -131,27 +95,36 @@ const LocationAutocomplete = ({
   };
 
   const handleFocus = () => {
-    // Show existing suggestions when focusing if there are any and input has text
     if (value.length >= 3 && suggestions.length > 0) {
       setShowSuggestions(true);
     } else if (value.length >= 3) {
-      // Fetch suggestions if we have enough text but no suggestions
       fetchSuggestions(value);
     }
   };
 
-  const handleSelectSuggestion = (suggestion: NominatimResult) => {
-    onChange(suggestion.display_name, parseFloat(suggestion.lat), parseFloat(suggestion.lon));
+  const handleSelectSuggestion = async (suggestion: Suggestion) => {
+    try {
+      const place = new google.maps.places.Place({ id: suggestion.placeId });
+      await place.fetchFields({
+        fields: ["formattedAddress", "location"],
+      });
+
+      sessionManager.current.refreshToken();
+
+      if (place.location) {
+        const address = place.formattedAddress || suggestion.fullText;
+        const lat = place.location.lat();
+        const lng = place.location.lng();
+        onChange(address, lat, lng);
+      } else {
+        onChange(suggestion.fullText);
+      }
+    } catch {
+      onChange(suggestion.fullText);
+    }
+
     setSuggestions([]);
     setShowSuggestions(false);
-  };
-
-  const formatSuggestion = (result: NominatimResult) => {
-    const parts = result.display_name.split(', ');
-    const mainText = parts[0] || result.name;
-    const secondaryText = parts.slice(1).join(', ');
-
-    return { mainText, secondaryText };
   };
 
   return (
@@ -176,29 +149,26 @@ const LocationAutocomplete = ({
 
       {showSuggestions && suggestions.length > 0 && !disabled && (
         <div className="absolute z-50 w-full mt-1 bg-card border border-border rounded-lg shadow-lg max-h-60 overflow-auto left-0 top-full">
-          {suggestions.map((suggestion) => {
-            const { mainText, secondaryText } = formatSuggestion(suggestion);
-            return (
-              <button
-                key={suggestion.place_id}
-                type="button"
-                className="w-full px-4 py-3 text-left hover:bg-accent/10 flex items-start gap-3 transition-colors border-b border-border/50 last:border-0"
-                onClick={() => handleSelectSuggestion(suggestion)}
-              >
-                <MapPin className="w-4 h-4 mt-1 text-accent flex-shrink-0" />
-                <div className="flex-1 min-w-0">
-                  <div className="text-sm font-medium text-foreground">
-                    {mainText}
-                  </div>
-                  {secondaryText && (
-                    <div className="text-xs text-muted-foreground truncate">
-                      {secondaryText}
-                    </div>
-                  )}
+          {suggestions.map((suggestion) => (
+            <button
+              key={suggestion.placeId}
+              type="button"
+              className="w-full px-4 py-3 text-left hover:bg-accent/10 flex items-start gap-3 transition-colors border-b border-border/50 last:border-0"
+              onClick={() => handleSelectSuggestion(suggestion)}
+            >
+              <MapPin className="w-4 h-4 mt-1 text-accent flex-shrink-0" />
+              <div className="flex-1 min-w-0">
+                <div className="text-sm font-medium text-foreground">
+                  {suggestion.mainText}
                 </div>
-              </button>
-            );
-          })}
+                {suggestion.secondaryText && (
+                  <div className="text-xs text-muted-foreground truncate">
+                    {suggestion.secondaryText}
+                  </div>
+                )}
+              </div>
+            </button>
+          ))}
         </div>
       )}
     </div>
