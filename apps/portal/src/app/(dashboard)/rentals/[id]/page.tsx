@@ -1819,7 +1819,7 @@ const RentalDetail = () => {
             </div>
 
             {/* PDF Downloads */}
-            {bonzahPolicy.status === 'active' && (bonzahPolicy.coverage_types as any)?.pdf_ids && (
+            {(bonzahPolicy.coverage_types as any)?.pdf_ids && (
               <div>
                 <p className="text-sm text-muted-foreground mb-2">Policy Documents</p>
                 <div className="flex flex-wrap gap-2">

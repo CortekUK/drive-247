@@ -197,6 +197,23 @@ serve(async (req) => {
     console.log('[Bonzah Quote] Payment ID:', paymentId)
     console.log('[Bonzah Quote] API Premium:', apiPremium)
 
+    // Capture PDF IDs from the quote response (if returned)
+    const pdfIds: Record<string, string> = {}
+    if (createResponse.data.cdw_pdf_id) pdfIds.cdw = createResponse.data.cdw_pdf_id
+    if (createResponse.data.rcli_pdf_id) pdfIds.rcli = createResponse.data.rcli_pdf_id
+    if (createResponse.data.sli_pdf_id) pdfIds.sli = createResponse.data.sli_pdf_id
+    if (createResponse.data.pai_pdf_id) pdfIds.pai = createResponse.data.pai_pdf_id
+
+    if (Object.keys(pdfIds).length > 0) {
+      console.log('[Bonzah Quote] PDF IDs from quote:', pdfIds)
+    }
+
+    // Build coverage_types with pdf_ids included
+    const coverageTypesWithPdfs = {
+      ...body.coverage,
+      ...(Object.keys(pdfIds).length > 0 ? { pdf_ids: pdfIds } : {}),
+    }
+
     // Use API premium if available, otherwise calculate locally
     let roundedPremium: number
     if (apiPremium && apiPremium > 0) {
@@ -224,7 +241,7 @@ serve(async (req) => {
         quote_no: null,
         payment_id: paymentId,  // Store the payment_id from Bonzah
         policy_id: null,  // Will be set after payment
-        coverage_types: body.coverage,
+        coverage_types: coverageTypesWithPdfs,
         trip_start_date: body.trip_dates.start,
         trip_end_date: body.trip_dates.end,
         pickup_state: body.pickup_state,
