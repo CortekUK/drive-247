@@ -19,18 +19,9 @@ function errorResponse(message: string, status = 400) {
 
 interface RegistrationData {
   token: string;
-  customer_type: 'Individual' | 'Company';
   name: string;
   email: string;
   phone: string;
-  license_number?: string;
-  id_number?: string;
-  whatsapp_opt_in?: boolean;
-  nok_full_name?: string;
-  nok_relationship?: string;
-  nok_phone?: string;
-  nok_email?: string;
-  nok_address?: string;
   verificationSessionId?: string;
 }
 
@@ -41,7 +32,7 @@ Deno.serve(async (req) => {
 
   try {
     const body: RegistrationData = await req.json();
-    const { token, customer_type, name, email, phone, license_number, id_number, whatsapp_opt_in, nok_full_name, nok_relationship, nok_phone, nok_email, nok_address, verificationSessionId } = body;
+    const { token, name, email, phone, verificationSessionId } = body;
 
     // Validate required fields
     if (!token) return errorResponse('token is required');
@@ -71,76 +62,11 @@ Deno.serve(async (req) => {
 
     const tenantId = invite.tenant_id;
 
-    // Check blocked identities
-    const identifiersToCheck = [license_number, id_number].filter(Boolean);
-    if (identifiersToCheck.length > 0) {
-      const { data: blockCheck } = await supabase
-        .from('blocked_identities')
-        .select('identity_type, reason, identity_number')
-        .in('identity_number', identifiersToCheck)
-        .eq('is_active', true)
-        .in('identity_type', ['license', 'id_card', 'passport'])
-        .limit(1)
-        .single();
-
-      if (blockCheck) {
-        // Revert the invite back to pending since registration failed
-        await supabase
-          .from('customer_registration_invites')
-          .update({ status: 'pending', completed_at: null })
-          .eq('id', invite.id);
-        return errorResponse(`This ${blockCheck.identity_type} number is blocked: ${blockCheck.reason}`);
-      }
-
-      // Also check blocked customers by license/ID
-      const orConditions: string[] = [];
-      if (license_number) orConditions.push(`license_number.eq.${license_number}`);
-      if (id_number) orConditions.push(`id_number.eq.${id_number}`);
-
-      if (orConditions.length > 0) {
-        const { data: blockedCustomer } = await supabase
-          .from('customers')
-          .select('name, blocked_reason')
-          .eq('is_blocked', true)
-          .or(orConditions.join(','))
-          .limit(1)
-          .single();
-
-        if (blockedCustomer) {
-          await supabase
-            .from('customer_registration_invites')
-            .update({ status: 'pending', completed_at: null })
-            .eq('id', invite.id);
-          return errorResponse(`This identity belongs to a blocked customer: ${blockedCustomer.blocked_reason || 'Blocked'}`);
-        }
-      }
-    }
-
-    // Check duplicate license number within this tenant
-    if (license_number) {
-      const { data: dupLicense } = await supabase
-        .from('customers')
-        .select('id, name')
-        .eq('tenant_id', tenantId)
-        .eq('license_number', license_number.trim())
-        .limit(1)
-        .single();
-
-      if (dupLicense) {
-        await supabase
-          .from('customer_registration_invites')
-          .update({ status: 'pending', completed_at: null })
-          .eq('id', invite.id);
-        return errorResponse(`A customer with this license number already exists: ${dupLicense.name}`);
-      }
-    }
-
-    // Check duplicate email within this tenant
+    // Check duplicate email (global unique constraint on customers.email)
     if (email) {
       const { data: dupEmail } = await supabase
         .from('customers')
         .select('id, name')
-        .eq('tenant_id', tenantId)
         .eq('email', email.trim().toLowerCase())
         .limit(1)
         .single();
@@ -150,7 +76,7 @@ Deno.serve(async (req) => {
           .from('customer_registration_invites')
           .update({ status: 'pending', completed_at: null })
           .eq('id', invite.id);
-        return errorResponse(`A customer with this email already exists: ${dupEmail.name}`);
+        return errorResponse('A customer with this email already exists');
       }
     }
 
@@ -159,20 +85,12 @@ Deno.serve(async (req) => {
       .from('customers')
       .insert({
         tenant_id: tenantId,
-        customer_type: customer_type || 'Individual',
-        type: customer_type || 'Individual',
+        customer_type: 'Individual',
+        type: 'Individual',
         name: name.trim(),
         email: email.trim().toLowerCase(),
         phone: phone.trim(),
-        license_number: license_number?.trim() || null,
-        id_number: id_number?.trim() || null,
-        whatsapp_opt_in: whatsapp_opt_in || false,
         status: 'Active',
-        nok_full_name: nok_full_name || null,
-        nok_relationship: nok_relationship || null,
-        nok_phone: nok_phone || null,
-        nok_email: nok_email || null,
-        nok_address: nok_address || null,
       })
       .select('id')
       .single();
@@ -184,7 +102,9 @@ Deno.serve(async (req) => {
         .from('customer_registration_invites')
         .update({ status: 'pending', completed_at: null })
         .eq('id', invite.id);
-      return errorResponse('Failed to create customer: ' + customerError.message, 500);
+      const isDuplicate = customerError.message?.includes('unique constraint') || customerError.code === '23505';
+      const msg = isDuplicate ? 'A customer with this email already exists' : 'Failed to create customer. Please try again.';
+      return errorResponse(msg, isDuplicate ? 400 : 500);
     }
 
     // Link the invite to the customer
