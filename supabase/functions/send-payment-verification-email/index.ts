@@ -8,6 +8,7 @@ import {
   TenantBranding,
   wrapWithBrandedTemplate
 } from "../_shared/resend-service.ts";
+import { formatCurrency } from "../_shared/format-utils.ts";
 
 interface PaymentVerificationRequest {
   paymentId: string;
@@ -20,7 +21,7 @@ interface PaymentVerificationRequest {
 
 // sendEmail is now imported from resend-service.ts
 
-function generateVerificationEmailContent(data: PaymentVerificationRequest, branding: TenantBranding): string {
+function generateVerificationEmailContent(data: PaymentVerificationRequest, branding: TenantBranding, currencyCode: string = 'GBP'): string {
   return `
                     <tr>
                         <td style="padding: 30px 30px 0; text-align: center;">
@@ -66,7 +67,7 @@ function generateVerificationEmailContent(data: PaymentVerificationRequest, bran
                                 <tr>
                                     <td style="padding: 20px; text-align: center;">
                                         <p style="margin: 0 0 5px; color: rgba(255,255,255,0.9); font-size: 14px;">Payment Amount</p>
-                                        <p style="margin: 0; color: white; font-size: 32px; font-weight: bold;">$${data.amount.toFixed(2)}</p>
+                                        <p style="margin: 0; color: white; font-size: 32px; font-weight: bold;">${formatCurrency(data.amount, currencyCode)}</p>
                                     </td>
                                 </tr>
                             </table>
@@ -105,10 +106,22 @@ serve(async (req) => {
       tenantId = payment?.tenant_id;
     }
 
-    // Get tenant branding
+    // Get tenant branding and currency
     const branding = tenantId
       ? await getTenantBranding(tenantId, supabase)
       : { companyName: 'Drive 247', logoUrl: null, primaryColor: '#1a1a1a', accentColor: '#C5A572', contactEmail: 'support@drive-247.com', contactPhone: null, slug: 'drive247' };
+
+    let currencyCode = 'GBP';
+    if (tenantId) {
+      const { data: tenant } = await supabase
+        .from('tenants')
+        .select('currency_code')
+        .eq('id', tenantId)
+        .single();
+      if (tenant?.currency_code) {
+        currencyCode = tenant.currency_code;
+      }
+    }
 
     // Get tenant-specific admin email, fall back to env variable
     let adminEmail: string | null = null;
@@ -122,11 +135,11 @@ serve(async (req) => {
     }
 
     // Build branded admin email HTML
-    const emailContent = generateVerificationEmailContent(data, branding);
+    const emailContent = generateVerificationEmailContent(data, branding, currencyCode);
     const html = wrapWithBrandedTemplate(emailContent, branding);
 
     // Send verification email to admin
-    const subject = `Payment Verification Required - $${data.amount.toFixed(2)} from ${data.customerName}`;
+    const subject = `Payment Verification Required - ${formatCurrency(data.amount, currencyCode)} from ${data.customerName}`;
 
     let emailResult;
     if (adminEmail) {

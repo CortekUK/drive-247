@@ -4,6 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { TrendingDown, TrendingUp, Users, Car, DollarSign, AlertTriangle, Shield } from "lucide-react";
 import { format, addDays, isAfter, isBefore, isToday } from "date-fns";
 import { useTenant } from "@/contexts/TenantContext";
+import { formatCurrency } from "@/lib/format-utils";
 
 interface StatCardProps {
   title: string;
@@ -53,6 +54,7 @@ const StatCard = ({ title, value, change, trend, icon: Icon, variant = "default"
 
 export const DashboardStats = () => {
   const { tenant } = useTenant();
+  const currencyCode = tenant?.currency_code || 'GBP';
 
   const { data: vehicleCount } = useQuery({
     queryKey: ["vehicle-count", tenant?.id],
@@ -295,7 +297,7 @@ export const DashboardStats = () => {
       />
       <StatCard
         title="Monthly Revenue"
-        value={`$${monthlyRevenue?.toLocaleString() || "0"}`}
+        value={formatCurrency(monthlyRevenue || 0, currencyCode, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
         icon={DollarSign}
         variant="success"
       />

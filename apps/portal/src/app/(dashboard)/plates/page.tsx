@@ -27,6 +27,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
 import { useDebounce } from "@/hooks/use-debounce";
 import { useTenant } from "@/contexts/TenantContext";
+import { formatCurrency } from "@/lib/format-utils";
 import { PlateStatusBadge } from "@/components/plates/plate-status-badge";
 import { PlateHistoryDrawer } from "@/components/plates/plate-history-drawer";
 import { EnhancedAddPlateDialog } from "@/components/plates/enhanced-add-plate-dialog";
@@ -542,7 +543,7 @@ export default function PlatesListEnhanced() {
                       {plate.order_date ? format(new Date(plate.order_date), "MM/dd/yyyy") : "-"}
                     </TableCell>
                     <TableCell className="text-left">
-                      {plate.cost ? `$${Number(plate.cost).toFixed(2)}` : "-"}
+                      {plate.cost ? formatCurrency(Number(plate.cost), tenant?.currency_code || 'USD') : "-"}
                     </TableCell>
                     <TableCell>
                       <PlateStatusBadge status={plate.status} showTooltip />

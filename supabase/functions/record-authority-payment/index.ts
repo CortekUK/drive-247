@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { formatCurrency } from '../_shared/format-utils.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -49,7 +50,7 @@ serve(async (req) => {
       );
     }
 
-    console.log(`Recording authority payment for fine ${fineId}: £${amount} on ${paymentDate}`);
+    console.log(`Recording authority payment for fine ${fineId}: amount=${amount} on ${paymentDate}`);
 
     // Validate fine exists
     const { data: fine, error: fineError } = await supabase
@@ -70,6 +71,17 @@ serve(async (req) => {
           headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
         }
       );
+    }
+
+    // Get tenant currency code
+    let currencyCode = 'GBP';
+    if (fine.tenant_id) {
+      const { data: tenant } = await supabase
+        .from('tenants')
+        .select('currency_code')
+        .eq('id', fine.tenant_id)
+        .single();
+      if (tenant?.currency_code) currencyCode = tenant.currency_code;
     }
 
     // Insert authority payment record
@@ -151,7 +163,7 @@ serve(async (req) => {
         success: true,
         authorityPaymentId: authorityPayment.id,
         pnlEntryId: pnlEntry?.id,
-        message: `Authority payment of $${amount} recorded for fine ${fineId}`
+        message: `Authority payment of ${formatCurrency(amount, currencyCode)} recorded for fine ${fineId}`
       }),
       { 
         status: 201, 

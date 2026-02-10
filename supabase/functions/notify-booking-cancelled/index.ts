@@ -8,6 +8,7 @@ import {
 } from "../_shared/aws-config.ts";
 import { sendEmail } from "../_shared/resend-service.ts";
 import { renderEmail, EmailTemplateData } from "../_shared/email-template-service.ts";
+import { formatCurrency } from "../_shared/format-utils.ts";
 
 interface NotifyRequest {
   customerName: string;
@@ -26,15 +27,15 @@ interface NotifyRequest {
   tenantId?: string;
 }
 
-const getCancellationEmailHtml = (data: NotifyRequest) => {
+const getCancellationEmailHtml = (data: NotifyRequest, currencyCode: string = 'USD') => {
   const refundMessage = data.refundType === "full"
     ? `<p style="margin: 0; color: #047857; font-size: 14px; line-height: 1.6;">
-        A <strong>full refund</strong> of <strong>$${data.refundAmount?.toLocaleString() || 0}</strong> has been initiated.
+        A <strong>full refund</strong> of <strong>${formatCurrency(data.refundAmount || 0, currencyCode)}</strong> has been initiated.
         Please allow 5-10 business days for the refund to appear on your statement.
       </p>`
     : data.refundType === "partial"
     ? `<p style="margin: 0; color: #047857; font-size: 14px; line-height: 1.6;">
-        A <strong>partial refund</strong> of <strong>$${data.refundAmount?.toLocaleString() || 0}</strong> has been initiated.
+        A <strong>partial refund</strong> of <strong>${formatCurrency(data.refundAmount || 0, currencyCode)}</strong> has been initiated.
         Please allow 5-10 business days for the refund to appear on your statement.
       </p>`
     : `<p style="margin: 0; color: #6b7280; font-size: 14px; line-height: 1.6;">
@@ -183,15 +184,36 @@ serve(async (req) => {
       customerSMS: null as any,
     };
 
+    // Fetch tenant currency code
+    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+    const supabase = createClient(supabaseUrl, supabaseServiceKey);
+
+    let currencyCode = 'USD';
+    if (data.tenantId) {
+      try {
+        const { data: tenantData, error: tenantError } = await supabase
+          .from('tenants')
+          .select('currency_code')
+          .eq('id', data.tenantId)
+          .single();
+
+        if (tenantError) {
+          console.warn('Error fetching tenant currency:', tenantError);
+        } else if (tenantData?.currency_code) {
+          currencyCode = tenantData.currency_code;
+        }
+      } catch (error) {
+        console.warn('Error fetching tenant currency:', error);
+      }
+    }
+
     // Build customer email using template service if tenantId is provided
     let customerSubject = `Booking Cancelled - Reference: ${data.bookingRef} | DRIVE 247`;
-    let customerHtml = getCancellationEmailHtml(data);
+    let customerHtml = getCancellationEmailHtml(data, currencyCode);
 
     if (data.tenantId) {
       try {
-        const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
-        const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-        const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
         const templateData: EmailTemplateData = {
           customer_name: data.customerName,
@@ -225,9 +247,9 @@ serve(async (req) => {
     // Send customer SMS
     if (data.customerPhone) {
       const refundText = data.refundType === "full"
-        ? `Full refund of $${data.refundAmount} initiated.`
+        ? `Full refund of ${formatCurrency(data.refundAmount || 0, currencyCode)} initiated.`
         : data.refundType === "partial"
-        ? `Partial refund of $${data.refundAmount} initiated.`
+        ? `Partial refund of ${formatCurrency(data.refundAmount || 0, currencyCode)} initiated.`
         : "";
 
       results.customerSMS = await sendSMS(

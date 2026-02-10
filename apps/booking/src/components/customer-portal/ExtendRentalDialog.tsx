@@ -17,6 +17,7 @@ import { Loader2, Calendar, AlertCircle, AlertTriangle, CreditCard } from 'lucid
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { useTenant } from '@/contexts/TenantContext';
+import { formatCurrency } from '@/lib/format-utils';
 import { format, addDays, parseISO, differenceInDays } from 'date-fns';
 import type { CustomerRental } from '@/hooks/use-customer-rentals';
 
@@ -50,7 +51,7 @@ export function ExtendRentalDialog({ open, onOpenChange, rental }: ExtendRentalD
     return Math.round(dailyRate * extensionDays * 100) / 100;
   }, [dailyRate, extensionDays]);
 
-  const currencySymbol = tenant?.currency_code === 'GBP' ? '£' : tenant?.currency_code === 'EUR' ? '€' : '$';
+  const currencyCode = tenant?.currency_code || 'GBP';
 
   // Fetch vehicle daily rate when dialog opens
   useEffect(() => {
@@ -112,7 +113,7 @@ export function ExtendRentalDialog({ open, onOpenChange, rental }: ExtendRentalD
           tenant_id: tenant.id,
           type: 'booking',
           title: 'Rental Extension Request',
-          message: `Extension requested for ${rental.vehicles?.make || ''} ${rental.vehicles?.model || ''} (${rental.vehicles?.reg || 'N/A'}) - New end date: ${format(selectedDate, 'MMM dd, yyyy')}${extensionCost > 0 ? ` (Est. cost: ${currencySymbol}${extensionCost.toFixed(2)})` : ''}`,
+          message: `Extension requested for ${rental.vehicles?.make || ''} ${rental.vehicles?.model || ''} (${rental.vehicles?.reg || 'N/A'}) - New end date: ${format(selectedDate, 'MMM dd, yyyy')}${extensionCost > 0 ? ` (Est. cost: ${formatCurrency(extensionCost, currencyCode)})` : ''}`,
           link: `/rentals/${rental.id}`,
         });
 
@@ -199,10 +200,10 @@ export function ExtendRentalDialog({ open, onOpenChange, rental }: ExtendRentalD
                   ) : dailyRate ? (
                     <div>
                       <p className="text-lg font-bold text-blue-700 dark:text-blue-300">
-                        {currencySymbol}{extensionCost.toFixed(2)}
+                        {formatCurrency(extensionCost, currencyCode)}
                       </p>
                       <p className="text-xs text-blue-600 dark:text-blue-400">
-                        {extensionDays} day{extensionDays !== 1 ? 's' : ''} x {currencySymbol}{dailyRate.toFixed(2)}/day
+                        {extensionDays} day{extensionDays !== 1 ? 's' : ''} x {formatCurrency(dailyRate, currencyCode)}/day
                       </p>
                     </div>
                   ) : (
@@ -275,14 +276,14 @@ export function ExtendRentalDialog({ open, onOpenChange, rental }: ExtendRentalD
                 {extensionCost > 0 && (
                   <div className="border-t pt-3 flex justify-between items-center">
                     <span className="text-sm font-medium">Estimated Cost</span>
-                    <span className="font-bold text-lg">{currencySymbol}{extensionCost.toFixed(2)}</span>
+                    <span className="font-bold text-lg">{formatCurrency(extensionCost, currencyCode)}</span>
                   </div>
                 )}
               </div>
 
               {/* Confirmation Text */}
               <p className="text-sm text-muted-foreground text-center">
-                By confirming, you are requesting to extend your rental by <strong>{extensionDays} days</strong>.{extensionCost > 0 ? ` The estimated cost is ${currencySymbol}${extensionCost.toFixed(2)}.` : ''} The admin will review and approve your request.
+                By confirming, you are requesting to extend your rental by <strong>{extensionDays} days</strong>.{extensionCost > 0 ? ` The estimated cost is ${formatCurrency(extensionCost, currencyCode)}.` : ''} The admin will review and approve your request.
               </p>
 
               {/* Action Buttons */}

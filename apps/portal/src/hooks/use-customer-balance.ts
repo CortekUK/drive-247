@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useTenant } from "@/contexts/TenantContext";
+import { formatCurrency } from "@/lib/format-utils";
 
 // Single source of truth: Customer balance calculation from ledger_entries
 // Uses remaining_amount on charges which is already maintained by the payment system
@@ -191,13 +192,19 @@ export const useRentalChargesAndPayments = (rentalId: string | undefined) => {
 };
 
 // Helper function to determine balance status with consistent ledger-based logic
-export const getBalanceStatus = (balance: number | undefined, status?: 'In Credit' | 'Settled' | 'In Debt') => {
+export const getBalanceStatus = (
+  balance: number | undefined,
+  status?: 'In Credit' | 'Settled' | 'In Debt',
+  currencyCode?: string
+) => {
+  const currency = currencyCode || 'GBP'; // Default to GBP if not provided
+
   if (balance === undefined) return { text: 'Unknown', type: 'secondary' };
   if (balance === 0 || status === 'Settled') return { text: 'Settled', type: 'secondary' };
-  if (status === 'In Debt') return { text: `In Debt $${balance.toFixed(2)}`, type: 'destructive' };
-  if (status === 'In Credit') return { text: `In Credit $${balance.toFixed(2)}`, type: 'success' };
+  if (status === 'In Debt') return { text: `In Debt ${formatCurrency(balance, currency)}`, type: 'destructive' };
+  if (status === 'In Credit') return { text: `In Credit ${formatCurrency(balance, currency)}`, type: 'success' };
 
   // Fallback to old logic if status not provided
-  if (balance > 0) return { text: `In Debt $${balance.toFixed(2)}`, type: 'destructive' };
-  return { text: `In Credit $${Math.abs(balance).toFixed(2)}`, type: 'success' };
+  if (balance > 0) return { text: `In Debt ${formatCurrency(balance, currency)}`, type: 'destructive' };
+  return { text: `In Credit ${formatCurrency(Math.abs(balance), currency)}`, type: 'success' };
 };

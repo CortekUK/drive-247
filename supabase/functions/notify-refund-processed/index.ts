@@ -8,6 +8,7 @@ import {
 } from "../_shared/aws-config.ts";
 import { sendEmail } from "../_shared/resend-service.ts";
 import { renderEmail, EmailTemplateData } from "../_shared/email-template-service.ts";
+import { formatCurrency } from "../_shared/format-utils.ts";
 
 interface NotifyRequest {
   customerName: string;
@@ -23,7 +24,7 @@ interface NotifyRequest {
   tenantId?: string;
 }
 
-const getEmailHtml = (data: NotifyRequest) => {
+const getEmailHtml = (data: NotifyRequest, currencyCode: string) => {
   const expectedDays = data.expectedDays || 5;
 
   return `
@@ -61,7 +62,7 @@ const getEmailHtml = (data: NotifyRequest) => {
                                 <tr>
                                     <td style="padding: 25px; text-align: center;">
                                         <p style="margin: 0 0 5px; color: #047857; font-size: 14px;">Refund Amount</p>
-                                        <p style="margin: 0; color: #10b981; font-size: 36px; font-weight: 700;">$${data.refundAmount.toLocaleString()}</p>
+                                        <p style="margin: 0; color: #10b981; font-size: 36px; font-weight: 700;">${formatCurrency(data.refundAmount, currencyCode)}</p>
                                         ${data.last4 ? `<p style="margin: 10px 0 0; color: #047857; font-size: 14px;">To card ending in ${data.last4}</p>` : ''}
                                     </td>
                                 </tr>
@@ -81,7 +82,7 @@ const getEmailHtml = (data: NotifyRequest) => {
                                             ${data.originalAmount ? `
                                             <tr>
                                                 <td style="padding: 8px 0; color: #666; font-size: 14px;">Original Amount:</td>
-                                                <td style="padding: 8px 0; color: #1a1a1a; font-weight: 600; font-size: 14px; text-align: right;">$${data.originalAmount.toLocaleString()}</td>
+                                                <td style="padding: 8px 0; color: #1a1a1a; font-weight: 600; font-size: 14px; text-align: right;">${formatCurrency(data.originalAmount, currencyCode)}</td>
                                             </tr>
                                             ` : ''}
                                         </table>
@@ -189,14 +190,29 @@ serve(async (req) => {
     const data: NotifyRequest = await req.json();
     console.log('Sending refund notification for:', data.bookingRef);
 
+    // Fetch tenant currency code
+    let currencyCode = 'GBP';
+    if (data.tenantId) {
+      const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+      const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+      const supabase = createClient(supabaseUrl, supabaseServiceKey);
+
+      const { data: tenantInfo } = await supabase
+        .from('tenants')
+        .select('currency_code')
+        .eq('id', data.tenantId)
+        .single();
+      currencyCode = tenantInfo?.currency_code || 'GBP';
+    }
+
     const results = {
       customerEmail: null as any,
       customerSMS: null as any,
     };
 
     // Build customer email using template service if tenantId is provided
-    let customerSubject = `Refund Processed - $${data.refundAmount.toLocaleString()} | DRIVE 247`;
-    let customerHtml = getEmailHtml(data);
+    let customerSubject = `Refund Processed - ${formatCurrency(data.refundAmount, currencyCode)} | DRIVE 247`;
+    let customerHtml = getEmailHtml(data, currencyCode);
 
     if (data.tenantId) {
       try {
@@ -209,7 +225,7 @@ serve(async (req) => {
           customer_email: data.customerEmail,
           customer_phone: data.customerPhone || '',
           rental_number: data.bookingRef,
-          refund_amount: `$${data.refundAmount.toLocaleString()}`,
+          refund_amount: formatCurrency(data.refundAmount, currencyCode),
         };
 
         const rendered = await renderEmail(supabase, data.tenantId, 'refund_processed', templateData);
@@ -233,7 +249,7 @@ serve(async (req) => {
     if (data.customerPhone) {
       results.customerSMS = await sendSMS(
         data.customerPhone,
-        `DRIVE 247: Your refund of $${data.refundAmount} for booking ${data.bookingRef} has been processed. Please allow 5-10 business days.`
+        `DRIVE 247: Your refund of ${formatCurrency(data.refundAmount, currencyCode)} for booking ${data.bookingRef} has been processed. Please allow 5-10 business days.`
       );
       console.log('Customer SMS result:', results.customerSMS);
     }

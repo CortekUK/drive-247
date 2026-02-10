@@ -14,6 +14,7 @@ import { useCustomerAuthStore } from "@/stores/customer-auth-store";
 import { useBookingStore } from "@/stores/booking-store";
 import { format } from "date-fns";
 import { isEnquiryBasedTenant } from "@/config/tenant-config";
+import { formatCurrency } from "@/lib/format-utils";
 import { InvoiceDialog } from "@/components/InvoiceDialog";
 import { AuthPromptDialog } from "@/components/booking/AuthPromptDialog";
 import { createInvoiceWithFallback, Invoice } from "@/lib/invoiceUtils";
@@ -248,12 +249,8 @@ export default function BookingCheckoutStep({
     return { installUpfrontAmount: upfront, installableAmount: installable };
   })();
 
-  const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency: tenant?.currency_code || 'USD',
-    }).format(amount);
-  };
+  const currencyCode = tenant?.currency_code || 'GBP';
+  const fmt = (amount: number) => formatCurrency(amount, currencyCode);
 
   // Function to get booking payment mode
   const getBookingMode = async (): Promise<'manual' | 'auto'> => {
@@ -1251,7 +1248,7 @@ export default function BookingCheckoutStep({
                       <span className="text-muted-foreground">
                         {extra.name}{qty > 1 ? ` x${qty}` : ''}
                       </span>
-                      <span className="font-medium">${(extra.price * qty).toFixed(2)}</span>
+                      <span className="font-medium">{fmt(extra.price * qty)}</span>
                     </div>
                   );
                 })}
@@ -1315,7 +1312,7 @@ export default function BookingCheckoutStep({
               enabled={installmentsEnabled}
               onSelectPlan={setSelectedInstallmentPlan}
               selectedPlan={selectedInstallmentPlan}
-              formatCurrency={formatCurrency}
+              formatCurrency={fmt}
             />
           )}
         </div>
@@ -1345,7 +1342,7 @@ export default function BookingCheckoutStep({
                   {calculateSecurityDeposit() > 0 && (
                     <div className="flex justify-between text-sm">
                       <span className="text-muted-foreground">Security Deposit</span>
-                      <span className="font-medium">${calculateSecurityDeposit().toFixed(2)}</span>
+                      <span className="font-medium">{fmt(calculateSecurityDeposit())}</span>
                     </div>
                   )}
 
@@ -1354,7 +1351,7 @@ export default function BookingCheckoutStep({
                     <div className="flex justify-between items-center">
                       <span className="text-lg font-semibold">Total Due Now</span>
                       <span className="text-2xl font-bold text-accent">
-                        ${getPayableAmount().toFixed(2)}
+                        {fmt(getPayableAmount())}
                       </span>
                     </div>
                   </div>
@@ -1372,7 +1369,7 @@ export default function BookingCheckoutStep({
                   <div className="flex justify-between text-sm">
                     <span className="text-muted-foreground">Rental ({rentalDuration.formatted})</span>
                     <span className={`font-medium ${promoDetails ? 'line-through text-muted-foreground' : ''}`}>
-                      ${vehicleTotal.toFixed(2)}
+                      {fmt(vehicleTotal)}
                     </span>
                   </div>
 
@@ -1382,10 +1379,10 @@ export default function BookingCheckoutStep({
                       <span>
                         Promo ({promoDetails.code})
                         <span className="text-xs ml-1">
-                          ({promoDetails.type === 'percentage' ? `${promoDetails.value}%` : `$${promoDetails.value}`} off)
+                          ({promoDetails.type === 'percentage' ? `${promoDetails.value}%` : fmt(promoDetails.value)} off)
                         </span>
                       </span>
-                      <span className="font-medium">-${calculatePromoDiscount().toFixed(2)}</span>
+                      <span className="font-medium">-{fmt(calculatePromoDiscount())}</span>
                     </div>
                   )}
 
@@ -1393,7 +1390,7 @@ export default function BookingCheckoutStep({
                   {promoDetails && calculatePromoDiscount() > 0 && (
                     <div className="flex justify-between text-sm">
                       <span className="text-muted-foreground">Subtotal</span>
-                      <span className="font-medium text-green-600">${calculateDiscountedVehicleTotal().toFixed(2)}</span>
+                      <span className="font-medium text-green-600">{fmt(calculateDiscountedVehicleTotal())}</span>
                     </div>
                   )}
 
@@ -1401,13 +1398,13 @@ export default function BookingCheckoutStep({
                   {pickupDeliveryFee > 0 && (
                     <div className="flex justify-between text-sm">
                       <span className="text-muted-foreground">Pickup Delivery</span>
-                      <span className="font-medium">${pickupDeliveryFee.toFixed(2)}</span>
+                      <span className="font-medium">{fmt(pickupDeliveryFee)}</span>
                     </div>
                   )}
                   {returnDeliveryFee > 0 && (
                     <div className="flex justify-between text-sm">
                       <span className="text-muted-foreground">Return Collection</span>
-                      <span className="font-medium">${returnDeliveryFee.toFixed(2)}</span>
+                      <span className="font-medium">{fmt(returnDeliveryFee)}</span>
                     </div>
                   )}
 
@@ -1420,7 +1417,7 @@ export default function BookingCheckoutStep({
                         <span className="text-muted-foreground">
                           {extra.name}{qty > 1 ? ` x${qty}` : ''}
                         </span>
-                        <span className="font-medium">${(extra.price * qty).toFixed(2)}</span>
+                        <span className="font-medium">{fmt(extra.price * qty)}</span>
                       </div>
                     );
                   })}
@@ -1432,7 +1429,7 @@ export default function BookingCheckoutStep({
                   {tenant?.tax_enabled && (tenant?.tax_percentage ?? 0) > 0 && (
                     <div className="flex justify-between text-sm">
                       <span className="text-muted-foreground">Tax ({tenant.tax_percentage}%)</span>
-                      <span className="font-medium">${calculateTaxAmount().toFixed(2)}</span>
+                      <span className="font-medium">{fmt(calculateTaxAmount())}</span>
                     </div>
                   )}
 
@@ -1445,7 +1442,7 @@ export default function BookingCheckoutStep({
                           <span className="text-xs ml-1">({(tenant as any)?.service_fee_value || 0}%)</span>
                         )}
                       </span>
-                      <span className="font-medium">${calculateServiceFee().toFixed(2)}</span>
+                      <span className="font-medium">{fmt(calculateServiceFee())}</span>
                     </div>
                   )}
 
@@ -1453,7 +1450,7 @@ export default function BookingCheckoutStep({
                   {calculateSecurityDeposit() > 0 && (
                     <div className="flex justify-between text-sm">
                       <span className="text-muted-foreground">Security Deposit</span>
-                      <span className="font-medium">${calculateSecurityDeposit().toFixed(2)}</span>
+                      <span className="font-medium">{fmt(calculateSecurityDeposit())}</span>
                     </div>
                   )}
 
@@ -1464,7 +1461,7 @@ export default function BookingCheckoutStep({
                         <Shield className="w-3 h-3" />
                         Bonzah Insurance
                       </span>
-                      <span className="font-medium">${bonzahPremium.toFixed(2)}</span>
+                      <span className="font-medium">{fmt(bonzahPremium)}</span>
                     </div>
                   )}
 
@@ -1476,7 +1473,7 @@ export default function BookingCheckoutStep({
                         <span className="text-lg font-semibold">Grand Total</span>
                       </div>
                       <span className="text-3xl font-bold text-accent">
-                        ${calculateGrandTotal().toFixed(2)}
+                        {fmt(calculateGrandTotal())}
                       </span>
                     </div>
                   </div>
@@ -1512,17 +1509,17 @@ export default function BookingCheckoutStep({
                 ) : isEnquiry ? (
                   <>
                     <CreditCard className="w-4 h-4 mr-2" />
-                    Pay Deposit ${getPayableAmount().toFixed(2)}
+                    Pay Deposit {fmt(getPayableAmount())}
                   </>
                 ) : selectedInstallmentPlan && selectedInstallmentPlan.type !== 'full' && installmentsEnabled ? (
                   <>
                     <CreditCard className="w-4 h-4 mr-2" />
-                    Pay {formatCurrency(selectedInstallmentPlan.upfrontTotal)} & Setup Installments
+                    Pay {fmt(selectedInstallmentPlan.upfrontTotal)} & Setup Installments
                   </>
                 ) : (
                   <>
                     <CreditCard className="w-4 h-4 mr-2" />
-                    Confirm & Pay ${calculateGrandTotal().toFixed(2)}
+                    Confirm & Pay {fmt(calculateGrandTotal())}
                   </>
                 )}
               </Button>

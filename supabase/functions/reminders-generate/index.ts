@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.57.4';
+import { formatCurrency } from "../_shared/format-utils.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -26,6 +27,7 @@ interface ReminderContext {
   days_overdue?: number;
   acquisition_date?: string;
   days_since_acquisition?: number;
+  currency_code?: string;
 }
 
 function getTitleTemplate(ruleCode: string, context: ReminderContext): string {
@@ -98,12 +100,7 @@ function getTitleTemplate(ruleCode: string, context: ReminderContext): string {
 }
 
 function getMessageTemplate(ruleCode: string, context: ReminderContext): string {
-  const formatCurrency = (amount: number) => new Intl.NumberFormat('en-GB', {
-    style: 'currency',
-    currency: 'GBP',
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 0,
-  }).format(amount);
+  const fmtCurrency = (amount: number) => formatCurrency(amount, context.currency_code || 'GBP', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
 
   const templates: Record<string, (ctx: ReminderContext) => string> = {
     // Inspection reminders (MOT)
@@ -131,14 +128,14 @@ function getMessageTemplate(ruleCode: string, context: ReminderContext): string 
     DOC_0D: (ctx) => `Document for ${ctx.customer_name} expires today (${ctx.due_date}). Immediate action required!`,
     
     // Fine reminders
-    FINE_14D: (ctx) => `Fine ${ctx.reference} for ${ctx.reg} (${formatCurrency(ctx.amount || 0)}) due on ${ctx.due_date}. Prepare payment or appeal.`,
-    FINE_7D: (ctx) => `Fine ${ctx.reference} for ${ctx.reg} (${formatCurrency(ctx.amount || 0)}) due on ${ctx.due_date}. Urgent action required!`,
-    FINE_0D: (ctx) => `Fine ${ctx.reference} for ${ctx.reg} (${formatCurrency(ctx.amount || 0)}) due today (${ctx.due_date}). Immediate payment required!`,
-    
+    FINE_14D: (ctx) => `Fine ${ctx.reference} for ${ctx.reg} (${fmtCurrency(ctx.amount || 0)}) due on ${ctx.due_date}. Prepare payment or appeal.`,
+    FINE_7D: (ctx) => `Fine ${ctx.reference} for ${ctx.reg} (${fmtCurrency(ctx.amount || 0)}) due on ${ctx.due_date}. Urgent action required!`,
+    FINE_0D: (ctx) => `Fine ${ctx.reference} for ${ctx.reg} (${fmtCurrency(ctx.amount || 0)}) due today (${ctx.due_date}). Immediate payment required!`,
+
     // Rental reminders
-    RENT_1D: (ctx) => `${formatCurrency(ctx.overdue_total || 0)} overdue since ${ctx.oldest_due_date}. Review ledger & contact customer.`,
-    RENT_7D: (ctx) => `${formatCurrency(ctx.overdue_total || 0)} overdue since ${ctx.oldest_due_date}. Review ledger & contact customer.`,
-    RENT_14D: (ctx) => `${formatCurrency(ctx.overdue_total || 0)} overdue since ${ctx.oldest_due_date}. Review ledger & contact customer.`,
+    RENT_1D: (ctx) => `${fmtCurrency(ctx.overdue_total || 0)} overdue since ${ctx.oldest_due_date}. Review ledger & contact customer.`,
+    RENT_7D: (ctx) => `${fmtCurrency(ctx.overdue_total || 0)} overdue since ${ctx.oldest_due_date}. Review ledger & contact customer.`,
+    RENT_14D: (ctx) => `${fmtCurrency(ctx.overdue_total || 0)} overdue since ${ctx.oldest_due_date}. Review ledger & contact customer.`,
     
     // Immobiliser reminders
     IMM_FIT_30D: (ctx) => `Vehicle ${ctx.reg} (${ctx.make} ${ctx.model}) acquired on ${ctx.due_date} needs an immobiliser fitted. Please schedule installation.`,
@@ -163,10 +160,10 @@ function getMessageTemplate(ruleCode: string, context: ReminderContext): string 
     DOC_EXP_14D: (ctx) => `Document for ${ctx.customer_name} expires on ${ctx.due_date}. Request renewal immediately.`,
     DOC_EXP_7D: (ctx) => `Document for ${ctx.customer_name} expires on ${ctx.due_date}. Urgent renewal required!`,
     DOC_EXP_0D: (ctx) => `Document for ${ctx.customer_name} expires today (${ctx.due_date}). Immediate action required!`,
-    RENT_OVERDUE: (ctx) => `${formatCurrency(ctx.overdue_total || 0)} overdue since ${ctx.oldest_due_date}. Review ledger & contact customer.`,
-    FINE_DUE_14D: (ctx) => `Fine ${ctx.reference} for ${ctx.reg} (${formatCurrency(ctx.amount || 0)}) due on ${ctx.due_date}. Prepare payment or appeal.`,
-    FINE_DUE_7D: (ctx) => `Fine ${ctx.reference} for ${ctx.reg} (${formatCurrency(ctx.amount || 0)}) due on ${ctx.due_date}. Urgent action required!`,
-    FINE_DUE_0D: (ctx) => `Fine ${ctx.reference} for ${ctx.reg} (${formatCurrency(ctx.amount || 0)}) due today (${ctx.due_date}). Immediate payment required!`,
+    RENT_OVERDUE: (ctx) => `${fmtCurrency(ctx.overdue_total || 0)} overdue since ${ctx.oldest_due_date}. Review ledger & contact customer.`,
+    FINE_DUE_14D: (ctx) => `Fine ${ctx.reference} for ${ctx.reg} (${fmtCurrency(ctx.amount || 0)}) due on ${ctx.due_date}. Prepare payment or appeal.`,
+    FINE_DUE_7D: (ctx) => `Fine ${ctx.reference} for ${ctx.reg} (${fmtCurrency(ctx.amount || 0)}) due on ${ctx.due_date}. Urgent action required!`,
+    FINE_DUE_0D: (ctx) => `Fine ${ctx.reference} for ${ctx.reg} (${fmtCurrency(ctx.amount || 0)}) due today (${ctx.due_date}). Immediate payment required!`,
   };
   
   const template = templates[ruleCode];
@@ -275,6 +272,15 @@ serve(async (req) => {
       return acc;
     }, {} as Record<string, any[]>);
 
+    // Fetch tenant currency codes for formatting
+    const tenantCurrencyMap = new Map<string, string>();
+    const { data: tenantCurrencies } = await supabase
+      .from('tenants')
+      .select('id, currency_code');
+    for (const t of tenantCurrencies || []) {
+      tenantCurrencyMap.set(t.id, t.currency_code || 'GBP');
+    }
+
     // 3. Generate Vehicle MOT/TAX/Immobiliser reminders
     const { data: vehicles, error: vehiclesError } = await supabase
       .from('vehicles')
@@ -314,7 +320,8 @@ serve(async (req) => {
           make: vehicle.make,
           model: vehicle.model,
           due_date: vehicle.mot_due_date,
-          days_until: Math.max(0, daysUntilDue)
+          days_until: Math.max(0, daysUntilDue),
+          currency_code: tenantCurrencyMap.get(vehicle.tenant_id) || 'GBP',
         };
 
         // Check if reminder already exists and is snoozed - if so, don't overwrite
@@ -388,7 +395,8 @@ serve(async (req) => {
           make: vehicle.make,
           model: vehicle.model,
           due_date: vehicle.tax_due_date,
-          days_until: Math.max(0, daysUntilDue)
+          days_until: Math.max(0, daysUntilDue),
+          currency_code: tenantCurrencyMap.get(vehicle.tenant_id) || 'GBP',
         };
 
         // Check if reminder already exists and is snoozed - if so, don't overwrite
@@ -471,7 +479,8 @@ serve(async (req) => {
               reg: vehicle.reg,
               make: vehicle.make,
               model: vehicle.model,
-              due_date: vehicle.warranty_end_date
+              due_date: vehicle.warranty_end_date,
+              currency_code: tenantCurrencyMap.get(vehicle.tenant_id) || 'GBP',
             };
 
             const { error: reminderError } = await supabase
@@ -518,7 +527,8 @@ serve(async (req) => {
               make: vehicle.make,
               model: vehicle.model,
               due_date: vehicle.acquisition_date,
-              days_until: daysSinceAcquisition
+              days_until: daysSinceAcquisition,
+              currency_code: tenantCurrencyMap.get(vehicle.tenant_id) || 'GBP',
             };
 
             // Check if reminder already exists and is snoozed - if so, don't overwrite
@@ -584,7 +594,8 @@ serve(async (req) => {
             customer_name: rental.customers.name,
             vehicle_id: rental.vehicle_id,
             reg: rental.vehicles.reg,
-            rental_id: rental.id
+            rental_id: rental.id,
+            currency_code: tenantCurrencyMap.get(rental.tenant_id) || 'GBP',
           };
 
           // Calculate next verification date (30 days from rental start, then monthly intervals)
@@ -697,7 +708,8 @@ serve(async (req) => {
             reg: oldestCharge.vehicles?.reg,
             overdue_total: totalOverdue,
             oldest_due_date: oldestCharge.due_date,
-            days_overdue: daysSinceOldest
+            days_overdue: daysSinceOldest,
+            currency_code: tenantCurrencyMap.get(oldestCharge.tenant_id) || 'GBP',
           };
 
           // Check if reminder already exists and is snoozed - if so, don't overwrite

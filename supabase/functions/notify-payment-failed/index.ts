@@ -8,6 +8,7 @@ import {
 } from "../_shared/aws-config.ts";
 import { sendEmail, getTenantAdminEmail } from "../_shared/resend-service.ts";
 import { renderEmail, EmailTemplateData } from "../_shared/email-template-service.ts";
+import { formatCurrency } from "../_shared/format-utils.ts";
 
 interface NotifyRequest {
   customerName: string;
@@ -23,9 +24,10 @@ interface NotifyRequest {
   last4?: string;
   retryUrl?: string;
   tenantId?: string;
+  currencyCode?: string;
 }
 
-const getCustomerEmailHtml = (data: NotifyRequest) => {
+const getCustomerEmailHtml = (data: NotifyRequest, currencyCode: string = 'GBP') => {
   return `
 <!DOCTYPE html>
 <html>
@@ -70,7 +72,7 @@ const getCustomerEmailHtml = (data: NotifyRequest) => {
                                             </tr>
                                             <tr>
                                                 <td style="padding: 8px 0; color: #666; font-size: 14px;">Amount:</td>
-                                                <td style="padding: 8px 0; color: #dc2626; font-weight: 600; font-size: 14px; text-align: right;">$${data.amount.toLocaleString()}</td>
+                                                <td style="padding: 8px 0; color: #dc2626; font-weight: 600; font-size: 14px; text-align: right;">${formatCurrency(data.amount, currencyCode)}</td>
                                             </tr>
                                             ${data.last4 ? `
                                             <tr>
@@ -137,7 +139,7 @@ const getCustomerEmailHtml = (data: NotifyRequest) => {
 `;
 };
 
-const getAdminEmailHtml = (data: NotifyRequest) => {
+const getAdminEmailHtml = (data: NotifyRequest, currencyCode: string = 'GBP') => {
   return `
 <!DOCTYPE html>
 <html>
@@ -164,7 +166,7 @@ const getAdminEmailHtml = (data: NotifyRequest) => {
                     <tr><td style="padding: 12px; border-bottom: 1px solid #e5e7eb; color: #666;">Email:</td><td style="padding: 12px; border-bottom: 1px solid #e5e7eb;">${data.customerEmail}</td></tr>
                     ${data.customerPhone ? `<tr><td style="padding: 12px; border-bottom: 1px solid #e5e7eb; color: #666;">Phone:</td><td style="padding: 12px; border-bottom: 1px solid #e5e7eb;">${data.customerPhone}</td></tr>` : ''}
                     <tr><td style="padding: 12px; border-bottom: 1px solid #e5e7eb; color: #666;">Vehicle:</td><td style="padding: 12px; border-bottom: 1px solid #e5e7eb;">${data.vehicleName}${data.vehicleReg ? ` (${data.vehicleReg})` : ''}</td></tr>
-                    <tr><td style="padding: 12px; border-bottom: 1px solid #e5e7eb; color: #666;">Amount:</td><td style="padding: 12px; border-bottom: 1px solid #e5e7eb; color: #dc2626; font-weight: 600;">$${data.amount.toLocaleString()}</td></tr>
+                    <tr><td style="padding: 12px; border-bottom: 1px solid #e5e7eb; color: #666;">Amount:</td><td style="padding: 12px; border-bottom: 1px solid #e5e7eb; color: #dc2626; font-weight: 600;">${formatCurrency(data.amount, currencyCode)}</td></tr>
                     ${data.last4 ? `<tr><td style="padding: 12px; border-bottom: 1px solid #e5e7eb; color: #666;">Card:</td><td style="padding: 12px; border-bottom: 1px solid #e5e7eb;">**** ${data.last4}</td></tr>` : ''}
                     ${data.failureReason ? `<tr><td style="padding: 12px; color: #666;">Failure Reason:</td><td style="padding: 12px; color: #dc2626;">${data.failureReason}</td></tr>` : ''}
                 </table>
@@ -239,9 +241,22 @@ serve(async (req) => {
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
+    // Get currency code from tenant if available
+    let currencyCode = data.currencyCode || 'GBP';
+    if (data.tenantId && !data.currencyCode) {
+      const { data: tenant } = await supabase
+        .from('tenants')
+        .select('currency_code')
+        .eq('id', data.tenantId)
+        .single();
+      if (tenant?.currency_code) {
+        currencyCode = tenant.currency_code;
+      }
+    }
+
     // Build customer email using template service if tenantId is provided
     let customerSubject = `Payment Issue - Action Required | DRIVE 247`;
-    let customerHtml = getCustomerEmailHtml(data);
+    let customerHtml = getCustomerEmailHtml(data, currencyCode);
 
     if (data.tenantId) {
       try {
@@ -253,7 +268,7 @@ serve(async (req) => {
           vehicle_model: data.vehicleModel || data.vehicleName.split(' ').slice(1).join(' ') || '',
           vehicle_reg: data.vehicleReg || '',
           rental_number: data.bookingRef,
-          payment_amount: `$${data.amount.toLocaleString()}`,
+          payment_amount: formatCurrency(data.amount, currencyCode),
         };
 
         const rendered = await renderEmail(supabase, data.tenantId, 'payment_failed', templateData);
@@ -299,8 +314,8 @@ serve(async (req) => {
     if (adminEmail) {
       results.adminEmail = await sendEmail(
         adminEmail,
-        `Payment Failed - ${data.bookingRef} - $${data.amount}`,
-        getAdminEmailHtml(data),
+        `Payment Failed - ${data.bookingRef} - ${formatCurrency(data.amount, currencyCode)}`,
+        getAdminEmailHtml(data, currencyCode),
         supabase,
         data.tenantId
       );

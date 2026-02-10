@@ -1,6 +1,6 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Car, CheckCircle, KeyRound, DollarSign, TrendingUp } from "lucide-react";
-import { formatCurrency } from "@/lib/vehicle-utils";
+import { formatCurrency } from "@/lib/format-utils";
 
 interface Vehicle {
   id: string;
@@ -14,9 +14,10 @@ interface Vehicle {
 
 interface FleetSummaryCardsProps {
   vehicles: Vehicle[];
+  currencyCode?: string;
 }
 
-export const FleetSummaryCards = ({ vehicles }: FleetSummaryCardsProps) => {
+export const FleetSummaryCards = ({ vehicles, currencyCode = 'GBP' }: FleetSummaryCardsProps) => {
   // Filter out disposed vehicles (is_disposed = true means sold/disposed)
   const activeVehicles = vehicles.filter(v => !v.is_disposed);
 
@@ -71,7 +72,7 @@ export const FleetSummaryCards = ({ vehicles }: FleetSummaryCardsProps) => {
     },
     {
       title: "Fleet Value",
-      value: formatCurrency(fleetValue),
+      value: formatCurrency(fleetValue, currencyCode, { minimumFractionDigits: 0, maximumFractionDigits: 0 }),
       icon: DollarSign,
       description: "Total purchase value",
       className: "bg-gradient-to-br from-yellow-600/10 to-yellow-700/5 border-yellow-600/20 hover:border-yellow-600/40 hover:shadow-lg",

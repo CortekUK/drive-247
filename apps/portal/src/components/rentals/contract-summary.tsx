@@ -2,6 +2,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { CalendarDays, DollarSign, FileText, Clock } from "lucide-react";
 import { differenceInMonths, format } from "date-fns";
+import { useTenant } from "@/contexts/TenantContext";
+import { formatCurrency } from "@/lib/format-utils";
 
 interface Customer {
   id: string;
@@ -34,6 +36,7 @@ export const ContractSummary = ({
   rentalPeriodType = "Monthly",
   monthlyAmount,
 }: ContractSummaryProps) => {
+  const { tenant } = useTenant();
   const termMonths = startDate && endDate ? differenceInMonths(endDate, startDate) : 0;
   const totalRentalCharges = termMonths * (monthlyAmount || 0);
 
@@ -119,7 +122,7 @@ export const ContractSummary = ({
             <div className="flex justify-between items-center">
               <span className="text-sm">{rentalPeriodType} Amount:</span>
               <span className="font-medium">
-                {monthlyAmount ? `$${monthlyAmount.toFixed(2)}` : '$0.00'}
+                {monthlyAmount ? formatCurrency(monthlyAmount, tenant?.currency_code || 'USD') : formatCurrency(0, tenant?.currency_code || 'USD')}
               </span>
             </div>
 
@@ -127,7 +130,7 @@ export const ContractSummary = ({
               <div className="flex justify-between items-center pt-2 border-t">
                 <span className="text-sm font-medium">Total Rental Charges:</span>
                 <span className="font-semibold text-primary">
-                  ${totalRentalCharges.toFixed(2)}
+                  {formatCurrency(totalRentalCharges, tenant?.currency_code || 'USD')}
                 </span>
               </div>
             )}

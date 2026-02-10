@@ -7,6 +7,8 @@ import {
   TenantBranding,
   wrapWithBrandedTemplate,
 } from "../_shared/resend-service.ts";
+import { getStripeClient, getConnectAccountId, type StripeMode } from "../_shared/stripe-client.ts";
+import { formatCurrency } from "../_shared/format-utils.ts";
 
 interface SendInvoiceEmailRequest {
   invoiceId: string;
@@ -23,6 +25,7 @@ interface InvoiceData {
   tax_amount: number;
   total_amount: number;
   notes: string | null;
+  rental_id: string | null;
   customers: {
     name: string;
     email: string | null;
@@ -40,13 +43,6 @@ interface InvoiceData {
   } | null;
 }
 
-function formatCurrency(amount: number): string {
-  return new Intl.NumberFormat("en-US", {
-    style: "currency",
-    currency: "USD",
-  }).format(amount);
-}
-
 function formatDate(dateString: string): string {
   return new Date(dateString).toLocaleDateString("en-US", {
     year: "numeric",
@@ -55,7 +51,7 @@ function formatDate(dateString: string): string {
   });
 }
 
-function generateInvoicePDF(invoice: InvoiceData, branding: TenantBranding): string {
+function generateInvoicePDF(invoice: InvoiceData, branding: TenantBranding, currencyCode: string): string {
   const doc = new jsPDF();
   const pageWidth = doc.internal.pageSize.getWidth();
   let yPos = 20;
@@ -142,13 +138,13 @@ function generateInvoicePDF(invoice: InvoiceData, branding: TenantBranding): str
   // Rental Fee Row
   doc.setTextColor(60, 60, 60);
   doc.text("Rental Fee", 25, yPos);
-  doc.text(formatCurrency(invoice.subtotal), pageWidth - 25, yPos, { align: "right" });
+  doc.text(formatCurrency(invoice.subtotal, currencyCode), pageWidth - 25, yPos, { align: "right" });
   yPos += 8;
 
   // Tax Row (if applicable)
   if (invoice.tax_amount > 0) {
     doc.text("Taxes & Fees", 25, yPos);
-    doc.text(formatCurrency(invoice.tax_amount), pageWidth - 25, yPos, { align: "right" });
+    doc.text(formatCurrency(invoice.tax_amount, currencyCode), pageWidth - 25, yPos, { align: "right" });
     yPos += 8;
   }
 
@@ -162,7 +158,7 @@ function generateInvoicePDF(invoice: InvoiceData, branding: TenantBranding): str
   doc.setTextColor(0, 0, 0);
   doc.text("Total", 25, yPos);
   doc.setTextColor(parseInt(branding.accentColor.slice(1, 3), 16), parseInt(branding.accentColor.slice(3, 5), 16), parseInt(branding.accentColor.slice(5, 7), 16));
-  doc.text(formatCurrency(invoice.total_amount), pageWidth - 25, yPos, { align: "right" });
+  doc.text(formatCurrency(invoice.total_amount, currencyCode), pageWidth - 25, yPos, { align: "right" });
 
   // Notes (if any)
   if (invoice.notes) {
@@ -190,7 +186,18 @@ function generateInvoicePDF(invoice: InvoiceData, branding: TenantBranding): str
   return doc.output("datauristring").split(",")[1];
 }
 
-function generateEmailContent(invoice: InvoiceData, branding: TenantBranding): string {
+function generateEmailContent(invoice: InvoiceData, branding: TenantBranding, currencyCode: string, paymentUrl?: string): string {
+  const payNowButton = paymentUrl ? `
+        <table role="presentation" style="width: 100%; border-collapse: collapse; margin-bottom: 25px;">
+          <tr>
+            <td style="text-align: center;">
+              <a href="${paymentUrl}" style="display: inline-block; background: ${branding.accentColor}; color: #ffffff; padding: 14px 40px; border-radius: 8px; font-weight: 600; font-size: 16px; text-decoration: none;">
+                Pay Now - ${formatCurrency(invoice.total_amount, currencyCode)}
+              </a>
+            </td>
+          </tr>
+        </table>` : "";
+
   return `
     <tr>
       <td style="padding: 30px 30px 0; text-align: center;">
@@ -238,10 +245,11 @@ function generateEmailContent(invoice: InvoiceData, branding: TenantBranding): s
           <tr>
             <td style="padding: 20px; text-align: center;">
               <p style="margin: 0 0 5px; color: rgba(255,255,255,0.9); font-size: 14px;">Total Amount</p>
-              <p style="margin: 0; color: white; font-size: 32px; font-weight: bold;">${formatCurrency(invoice.total_amount)}</p>
+              <p style="margin: 0; color: white; font-size: 32px; font-weight: bold;">${formatCurrency(invoice.total_amount, currencyCode)}</p>
             </td>
           </tr>
         </table>
+        ${payNowButton}
         <p style="margin: 0 0 15px; color: #444; line-height: 1.6; font-size: 16px;">
           The invoice PDF is attached to this email for your records.
         </p>
@@ -300,13 +308,65 @@ serve(async (req) => {
       throw new Error("No recipient email available. Please add an email address for this customer.");
     }
 
+    // Fetch tenant data for Stripe and currency
+    const { data: tenant } = await supabase
+      .from("tenants")
+      .select("slug, stripe_mode, stripe_account_id, stripe_onboarding_complete, currency_code")
+      .eq("id", tenantId)
+      .single();
+
+    const tenantCurrencyCode = tenant?.currency_code || "GBP";
+
+    // Create Stripe checkout session for payment link
+    let paymentUrl: string | undefined;
+    try {
+      if (tenant) {
+        const stripeMode = (tenant.stripe_mode as StripeMode) || "test";
+        const stripe = getStripeClient(stripeMode);
+        const connectAccountId = getConnectAccountId(tenant);
+        const stripeOptions = connectAccountId ? { stripeAccount: connectAccountId } : undefined;
+        const currencyCode = tenantCurrencyCode.toLowerCase();
+        const tenantSlug = tenant.slug || branding.slug;
+        const bookingDomain = `https://${tenantSlug}.drive-247.com`;
+
+        const session = await stripe.checkout.sessions.create({
+          payment_method_types: ["card"],
+          line_items: [{
+            price_data: {
+              currency: currencyCode,
+              product_data: {
+                name: `Invoice ${invoice.invoice_number}`,
+                description: `Payment for invoice ${invoice.invoice_number} - ${branding.companyName}`,
+              },
+              unit_amount: Math.round(invoice.total_amount * 100),
+            },
+            quantity: 1,
+          }],
+          mode: "payment",
+          customer_email: toEmail,
+          success_url: `${bookingDomain}/portal/payments?payment=success`,
+          cancel_url: `${bookingDomain}/portal/payments?payment=cancelled`,
+          metadata: {
+            invoice_id: invoiceId,
+            tenant_id: tenantId,
+            rental_id: invoice.rental_id || "",
+          },
+        }, stripeOptions);
+
+        paymentUrl = session.url || undefined;
+        console.log("Stripe checkout session created:", session.id);
+      }
+    } catch (stripeError) {
+      console.error("Failed to create Stripe checkout session (continuing without payment link):", stripeError);
+    }
+
     // Generate PDF
     console.log("Generating invoice PDF...");
-    const pdfBase64 = generateInvoicePDF(invoice as InvoiceData, branding);
+    const pdfBase64 = generateInvoicePDF(invoice as InvoiceData, branding, tenantCurrencyCode);
     console.log("PDF generated successfully");
 
     // Generate email HTML
-    const emailContent = generateEmailContent(invoice as InvoiceData, branding);
+    const emailContent = generateEmailContent(invoice as InvoiceData, branding, tenantCurrencyCode, paymentUrl);
     const emailHtml = wrapWithBrandedTemplate(emailContent, branding);
 
     // Send via Resend with attachment

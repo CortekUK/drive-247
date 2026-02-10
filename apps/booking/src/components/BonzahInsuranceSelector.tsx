@@ -8,6 +8,8 @@ import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { Check, Shield, ShieldCheck, Car, Users, AlertCircle, Loader2, Info, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { formatCurrency, getCurrencySymbol } from '@/lib/format-utils';
+import { useTenant } from '@/contexts/TenantContext';
 import {
   useBonzahPremium,
   COVERAGE_INFO,
@@ -66,6 +68,8 @@ export default function BonzahInsuranceSelector({
   onSkipInsurance,
   initialCoverage = DEFAULT_COVERAGE,
 }: BonzahInsuranceSelectorProps) {
+  const { tenant } = useTenant();
+  const currencyCode = tenant?.currency_code || 'GBP';
   const [coverage, setCoverage] = useState<CoverageOptions>(initialCoverage);
   const [showInsurance, setShowInsurance] = useState(true);
 
@@ -241,7 +245,7 @@ export default function BonzahInsuranceSelector({
                     />
                     {isSelected && price > 0 && (
                       <span className="text-sm font-semibold" style={{ color }}>
-                        ${price.toFixed(2)}
+                        {formatCurrency(price, currencyCode)}
                       </span>
                     )}
                   </div>
@@ -292,7 +296,7 @@ export default function BonzahInsuranceSelector({
               ) : (
                 <>
                   <div className="text-2xl sm:text-3xl font-bold text-primary">
-                    ${totalPremium.toFixed(2)}
+                    {formatCurrency(totalPremium, currencyCode)}
                   </div>
                   {hasCoverage && (
                     <div className="text-xs text-muted-foreground">
@@ -312,25 +316,25 @@ export default function BonzahInsuranceSelector({
               {coverage.cdw && breakdown.cdw > 0 && (
                 <div className="flex justify-between sm:block">
                   <span className="text-muted-foreground">CDW:</span>
-                  <span className="font-medium sm:ml-1">${breakdown.cdw.toFixed(2)}</span>
+                  <span className="font-medium sm:ml-1">{formatCurrency(breakdown.cdw, currencyCode)}</span>
                 </div>
               )}
               {coverage.rcli && breakdown.rcli > 0 && (
                 <div className="flex justify-between sm:block">
                   <span className="text-muted-foreground">RCLI:</span>
-                  <span className="font-medium sm:ml-1">${breakdown.rcli.toFixed(2)}</span>
+                  <span className="font-medium sm:ml-1">{formatCurrency(breakdown.rcli, currencyCode)}</span>
                 </div>
               )}
               {coverage.sli && breakdown.sli > 0 && (
                 <div className="flex justify-between sm:block">
                   <span className="text-muted-foreground">SLI:</span>
-                  <span className="font-medium sm:ml-1">${breakdown.sli.toFixed(2)}</span>
+                  <span className="font-medium sm:ml-1">{formatCurrency(breakdown.sli, currencyCode)}</span>
                 </div>
               )}
               {coverage.pai && breakdown.pai > 0 && (
                 <div className="flex justify-between sm:block">
                   <span className="text-muted-foreground">PAI:</span>
-                  <span className="font-medium sm:ml-1">${breakdown.pai.toFixed(2)}</span>
+                  <span className="font-medium sm:ml-1">{formatCurrency(breakdown.pai, currencyCode)}</span>
                 </div>
               )}
             </div>

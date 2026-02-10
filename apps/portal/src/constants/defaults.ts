@@ -227,7 +227,7 @@ export const LOCALE_DEFAULTS = {
   LOCALE: "en-US",
 
   /** Default currency code */
-  CURRENCY: "USD",
+  CURRENCY: "GBP",
 
   /** Default timezone */
   TIMEZONE: "America/Chicago",

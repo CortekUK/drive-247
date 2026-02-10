@@ -155,10 +155,5 @@ export const createInvoiceWithFallback = async (data: InvoiceData): Promise<Invo
   }
 };
 
-// Format currency - Always USD
-export const formatCurrency = (amount: number): string => {
-  return new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currency: 'USD',
-  }).format(amount);
-};
+// Re-export formatCurrency from shared utility (accepts currencyCode parameter)
+export { formatCurrency } from '@/lib/format-utils';

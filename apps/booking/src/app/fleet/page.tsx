@@ -16,6 +16,7 @@ import SEO from "@/components/SEO";
 import { usePageContent, defaultFleetContent, mergeWithDefaults, defaultFleetCarouselImages } from "@/hooks/usePageContent";
 import { useBrandingSettings } from "@/hooks/useBrandingSettings";
 import { createCompanyNameReplacer } from "@/utils/tenantName";
+import { formatCurrency } from "@/lib/format-utils";
 import {
   Car,
   CarFront,
@@ -152,7 +153,7 @@ const Pricing = () => {
   const pricingExtras: PricingExtra[] = [
     { id: '1', extra_name: 'Child Safety Seat', price: 15, description: 'Per day', is_active: true },
     { id: '2', extra_name: 'Mobile WiFi Hotspot', price: 10, description: 'Per day', is_active: true },
-    { id: '3', extra_name: 'Delivery & Collection', price: 50, description: 'Within 25 miles', is_active: true },
+    { id: '3', extra_name: 'Delivery & Collection', price: 50, description: 'Within 25 mi', is_active: true },
     { id: '4', extra_name: 'Extended Insurance', price: 25, description: 'Per day', is_active: true },
   ];
 
@@ -473,17 +474,17 @@ const Pricing = () => {
                         <div className="flex flex-col items-end gap-2">
                           <div className="flex items-center gap-3 text-right">
                             <div>
-                              <div className="text-lg font-bold text-gradient-metal">${vehicle.daily_rent}</div>
+                              <div className="text-lg font-bold text-gradient-metal">{formatCurrency(vehicle.daily_rent, tenant?.currency_code || 'GBP')}</div>
                               <div className="text-[10px] text-muted-foreground">/day</div>
                             </div>
                             <div className="h-6 w-px bg-accent/20" />
                             <div>
-                              <div className="text-sm font-semibold text-accent">${vehicle.weekly_rent}</div>
+                              <div className="text-sm font-semibold text-accent">{formatCurrency(vehicle.weekly_rent, tenant?.currency_code || 'GBP')}</div>
                               <div className="text-[10px] text-muted-foreground">/week</div>
                             </div>
                             <div className="h-6 w-px bg-accent/20" />
                             <div>
-                              <div className="text-sm font-semibold text-accent/80">${vehicle.monthly_rent}</div>
+                              <div className="text-sm font-semibold text-accent/80">{formatCurrency(vehicle.monthly_rent, tenant?.currency_code || 'GBP')}</div>
                               <div className="text-[10px] text-muted-foreground">/month</div>
                             </div>
                           </div>
@@ -601,7 +602,7 @@ const Pricing = () => {
                           )}
                         </div>
                       </div>
-                      <span className="text-accent font-semibold whitespace-nowrap text-sm">${extra.price}</span>
+                      <span className="text-accent font-semibold whitespace-nowrap text-sm">{formatCurrency(extra.price, tenant?.currency_code || 'GBP')}</span>
                     </li>
                   ))}
                 </ul>

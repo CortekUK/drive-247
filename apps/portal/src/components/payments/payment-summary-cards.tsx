@@ -3,9 +3,11 @@ import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { CreditCard, TrendingUp, Calendar, Hash } from "lucide-react";
 import { useTenant } from "@/contexts/TenantContext";
+import { formatCurrency } from "@/lib/format-utils";
 
 export const PaymentSummaryCards = () => {
   const { tenant } = useTenant();
+  const currencyCode = tenant?.currency_code || 'GBP';
 
   const { data: summaryData } = useQuery({
     queryKey: ["payment-summary", tenant?.id],
@@ -54,7 +56,7 @@ export const PaymentSummaryCards = () => {
           <CreditCard className="h-4 w-4 text-success" />
         </CardHeader>
         <CardContent>
-          <div className="text-2xl font-bold">${summaryData?.todaysTotal?.toLocaleString('en-US', { minimumFractionDigits: 2 }) || '0.00'}</div>
+          <div className="text-2xl font-bold">{formatCurrency(summaryData?.todaysTotal || 0, currencyCode)}</div>
         </CardContent>
       </Card>
 
@@ -64,7 +66,7 @@ export const PaymentSummaryCards = () => {
           <TrendingUp className="h-4 w-4 text-success" />
         </CardHeader>
         <CardContent>
-          <div className="text-2xl font-bold">${summaryData?.monthsTotal?.toLocaleString('en-US', { minimumFractionDigits: 2 }) || '0.00'}</div>
+          <div className="text-2xl font-bold">{formatCurrency(summaryData?.monthsTotal || 0, currencyCode)}</div>
         </CardContent>
       </Card>
 

@@ -12,6 +12,8 @@ import { useToast } from "@/hooks/use-toast";
 import { FineStatusBadge } from "@/components/shared/status/fine-status-badge";
 import { KPICard } from "@/components/ui/kpi-card";
 import { InfoGrid } from "@/components/ui/info-grid";
+import { formatCurrency } from "@/lib/format-utils";
+import { useTenant } from "@/contexts/TenantContext";
 
 interface Fine {
   id: string;
@@ -41,6 +43,7 @@ const FineDetail = () => {
   const router = useRouter();
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const { tenant } = useTenant();
 
   // Action mutations
   const chargeFineAction = useMutation({
@@ -243,7 +246,7 @@ const FineDetail = () => {
         <div className="grid gap-4 md:grid-cols-3">
           <KPICard
             title="Fine Amount"
-            value={`$${Number(fine.amount).toLocaleString()}`}
+            value={formatCurrency(Number(fine.amount), tenant?.currency_code || 'GBP')}
             valueClassName="text-destructive dark:text-destructive"
             icon={<DollarSign className="h-4 w-4" />}
             className="bg-destructive/10 border-destructive/20"

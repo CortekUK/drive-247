@@ -35,7 +35,7 @@ serve(async (req) => {
     // Fetch tenant details for customization
     let tenantId: string | null = bodyTenantId || null
     let companyName = 'Drive 917'
-    let currencyCode = 'usd'
+    let currencyCode = 'gbp'
     let stripeMode: StripeMode = 'test' // Default to test mode for safety
     let tenantData: any = null
 

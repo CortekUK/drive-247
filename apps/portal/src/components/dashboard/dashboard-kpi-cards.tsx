@@ -16,14 +16,14 @@ import {
   Car
 } from "lucide-react";
 import { DashboardKPIs } from "@/hooks/use-dashboard-kpis";
+import { useTenant } from "@/contexts/TenantContext";
+import { formatCurrency } from "@/lib/format-utils";
 
 interface DashboardKPICardsProps {
   data?: DashboardKPIs;
   isLoading: boolean;
   error?: Error | null;
 }
-
-const formatCurrency = (amount: number) => `$${amount.toLocaleString()}`;
 
 const KPICard = ({ 
   title, 
@@ -126,6 +126,8 @@ const LoadingSkeleton = () => (
 
 export const DashboardKPICards = ({ data, isLoading, error }: DashboardKPICardsProps) => {
   const router = useRouter();
+  const { tenant } = useTenant();
+  const currencyCode = tenant?.currency_code || 'GBP';
 
   if (isLoading) {
     return (
@@ -162,7 +164,7 @@ export const DashboardKPICards = ({ data, isLoading, error }: DashboardKPICardsP
         value={data.overdue.count + data.dueToday.count}
         subtitle={
           data.overdue.count + data.dueToday.count > 0
-            ? `${formatCurrency((data.overdue.amount || 0) + (data.dueToday.amount || 0))} • ${data.overdue.count} overdue, ${data.dueToday.count} due today`
+            ? `${formatCurrency((data.overdue.amount || 0) + (data.dueToday.amount || 0), currencyCode)} • ${data.overdue.count} overdue, ${data.dueToday.count} due today`
             : undefined
         }
         icon={AlertTriangle}
@@ -204,7 +206,7 @@ export const DashboardKPICards = ({ data, isLoading, error }: DashboardKPICardsP
       <KPICard
         title="Open Fines"
         value={data.finesOpen.count}
-        subtitle={data.finesOpen.count > 0 ? formatCurrency(data.finesOpen.amount) : undefined}
+        subtitle={data.finesOpen.count > 0 ? formatCurrency(data.finesOpen.amount, currencyCode) : undefined}
         icon={AlertTriangle}
         variant={data.finesOpen.count > 0 ? "warning" : "default"}
         badge={data.finesOpen.dueSoonCount > 0 ? `${data.finesOpen.dueSoonCount} due soon` : undefined}
@@ -216,7 +218,7 @@ export const DashboardKPICards = ({ data, isLoading, error }: DashboardKPICardsP
       {/* Monthly Revenue */}
       <KPICard
         title="Monthly Revenue"
-        value={formatCurrency(data.monthlyRevenue?.amount || 0)}
+        value={formatCurrency(data.monthlyRevenue?.amount || 0, currencyCode)}
         subtitle="Selected period"
         icon={DollarSign}
         variant="success"

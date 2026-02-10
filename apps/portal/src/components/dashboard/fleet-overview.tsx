@@ -4,6 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/integrations/supabase/client";
 import { useTenant } from "@/contexts/TenantContext";
+import { formatCurrency } from "@/lib/format-utils";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -52,6 +53,7 @@ const StatusBadge = ({ status }: { status: string }) => {
 export const FleetOverview = () => {
   const { tenant } = useTenant();
   const router = useRouter();
+  const currencyCode = tenant?.currency_code || 'GBP';
 
   const { data: vehicles, isLoading } = useQuery({
     queryKey: ["vehicles", tenant?.id],
@@ -193,13 +195,13 @@ export const FleetOverview = () => {
                         <StatusBadge status={vehicle.status} />
                       </TableCell>
                       <TableCell className="text-right">
-                        ${(vehicle.purchase_price || 0).toLocaleString()}
+                        {formatCurrency(vehicle.purchase_price || 0, currencyCode)}
                       </TableCell>
                       <TableCell className="text-right text-emerald-600">
-                        ${(pl?.total_revenue || 0).toLocaleString()}
+                        {formatCurrency(pl?.total_revenue || 0, currencyCode)}
                       </TableCell>
                       <TableCell className="text-right text-orange-600">
-                        ${opCosts.toLocaleString()}
+                        {formatCurrency(opCosts, currencyCode)}
                       </TableCell>
                       <TableCell className="text-right">
                         <div className="flex items-center justify-end gap-1">
@@ -209,7 +211,7 @@ export const FleetOverview = () => {
                             <TrendingDown className="h-3 w-3 text-red-600" />
                           )}
                           <span className={opProfit >= 0 ? 'text-emerald-600' : 'text-red-600'}>
-                            ${Math.abs(opProfit).toLocaleString()}
+                            {formatCurrency(Math.abs(opProfit), currencyCode)}
                           </span>
                         </div>
                       </TableCell>
@@ -221,7 +223,7 @@ export const FleetOverview = () => {
                             <TrendingDown className="h-4 w-4 text-red-600" />
                           )}
                           <span className={totalPL >= 0 ? 'text-emerald-600' : 'text-red-600'}>
-                            ${Math.abs(totalPL).toLocaleString()}
+                            {formatCurrency(Math.abs(totalPL), currencyCode)}
                           </span>
                         </div>
                       </TableCell>

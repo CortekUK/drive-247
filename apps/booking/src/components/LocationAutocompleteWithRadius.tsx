@@ -3,6 +3,8 @@ import { Input } from "@/components/ui/input";
 import { MapPin, Loader2, LocateFixed } from "lucide-react";
 import { useGoogleMapsLoader } from "@/hooks/useGoogleMapsLoader";
 import { PlacesSessionManager } from "@/lib/google-places-session";
+import { kmToDisplayUnit, getDistanceUnitShort } from "@/lib/format-utils";
+import type { DistanceUnit } from "@/lib/format-utils";
 
 interface LocationAutocompleteWithRadiusProps {
   id: string;
@@ -14,6 +16,7 @@ interface LocationAutocompleteWithRadiusProps {
   radiusKm: number;
   centerLat?: number | null;
   centerLon?: number | null;
+  distanceUnit?: DistanceUnit;
 }
 
 interface Suggestion {
@@ -56,6 +59,7 @@ const LocationAutocompleteWithRadius = ({
   radiusKm,
   centerLat,
   centerLon,
+  distanceUnit = 'miles',
 }: LocationAutocompleteWithRadiusProps) => {
   const { isLoaded } = useGoogleMapsLoader();
   const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
@@ -203,10 +207,15 @@ const LocationAutocompleteWithRadius = ({
   };
 
   const formatDistance = (km: number): string => {
-    if (km < 1) {
+    const displayValue = kmToDisplayUnit(km, distanceUnit);
+    const unitLabel = getDistanceUnitShort(distanceUnit);
+    if (distanceUnit === 'km' && km < 1) {
       return `${Math.round(km * 1000)}m`;
     }
-    return `${km.toFixed(1)}km`;
+    if (distanceUnit === 'miles' && km < 0.1) {
+      return `${Math.round(km * 1000)}m`;
+    }
+    return `${displayValue.toFixed(1)}${unitLabel}`;
   };
 
   const center = getCenterCoords();
@@ -218,7 +227,7 @@ const LocationAutocompleteWithRadius = ({
         <div className="flex items-center gap-2 mb-2 text-xs">
           <span className="flex items-center gap-1 text-muted-foreground">
             <LocateFixed className="w-3 h-3 text-accent" />
-            Searching within {radiusKm}km of service area
+            Searching within {kmToDisplayUnit(radiusKm, distanceUnit)}{getDistanceUnitShort(distanceUnit)} of service area
           </span>
         </div>
       )}
@@ -277,7 +286,7 @@ const LocationAutocompleteWithRadius = ({
       {showSuggestions && suggestions.length === 0 && !loading && value.length >= 3 && center && (
         <div className="absolute z-50 w-full mt-1 bg-card border border-border rounded-lg shadow-lg p-4 left-0 top-full">
           <p className="text-sm text-muted-foreground text-center">
-            No locations found within {radiusKm}km of your location.
+            No locations found within {kmToDisplayUnit(radiusKm, distanceUnit)}{getDistanceUnitShort(distanceUnit)} of your location.
           </p>
         </div>
       )}

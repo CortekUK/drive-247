@@ -2,6 +2,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { LucideIcon, TrendingUp, TrendingDown } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { getCurrencySymbol } from "@/lib/format-utils";
+import { useTenant } from "@/contexts/TenantContext";
 
 interface MetricCardProps {
   title: string;
@@ -47,6 +49,9 @@ export function MetricCard({ title, icon: Icon, children, className, badge }: Me
 }
 
 export function MetricItem({ label, value, trend, isAmount, className }: MetricItemProps) {
+  const { tenant } = useTenant();
+  const currencySymbol = getCurrencySymbol(tenant?.currency_code || 'GBP');
+
   const getValueColor = () => {
     if (!trend || trend === "neutral") return "";
     return trend === "up" ? "text-success" : "text-destructive";
@@ -54,7 +59,7 @@ export function MetricItem({ label, value, trend, isAmount, className }: MetricI
 
   const formatValue = (val: string | number) => {
     if (isAmount && typeof val === "number") {
-      return `$${Math.abs(val).toLocaleString()}`;
+      return `${currencySymbol}${Math.abs(val).toLocaleString()}`;
     }
     return val;
   };

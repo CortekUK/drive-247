@@ -9,6 +9,8 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { TimePicker } from "@/components/ui/time-picker";
 import { supabase } from "@/integrations/supabase/client";
 import { useTenant } from "@/contexts/TenantContext";
+import { formatCurrency, getCurrencySymbol, getDistanceUnitLong } from "@/lib/format-utils";
+import type { DistanceUnit } from "@/lib/format-utils";
 import { toast } from "sonner";
 import { Car } from "lucide-react";
 import BookingConfirmation from "./BookingConfirmation";
@@ -27,6 +29,8 @@ interface Vehicle {
 
 const BookingWidget = () => {
   const { tenant } = useTenant();
+  const currencyCode = tenant?.currency_code || 'GBP';
+  const distanceUnit = (tenant?.distance_unit || 'miles') as DistanceUnit;
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
   const [selectedVehicle, setSelectedVehicle] = useState<Vehicle | null>(null);
   const [estimatedMiles, setEstimatedMiles] = useState(50);
@@ -333,7 +337,7 @@ const BookingWidget = () => {
               onCheckedChange={(checked) => setIsLongDrive(checked as boolean)}
             />
             <Label htmlFor="longDrive" className="text-sm cursor-pointer">
-              Long drive (over 100 miles)
+              Long drive (over 100 {getDistanceUnitLong(distanceUnit)})
             </Label>
           </div>
           
@@ -350,7 +354,7 @@ const BookingWidget = () => {
         </div>
 
         <div className="space-y-2">
-          <Label htmlFor="estimatedMiles">Estimated Miles</Label>
+          <Label htmlFor="estimatedMiles">Estimated {getDistanceUnitLong(distanceUnit) === 'miles' ? 'Miles' : 'Kilometres'}</Label>
           <Input
             id="estimatedMiles"
             type="number"
@@ -409,7 +413,7 @@ const BookingWidget = () => {
                       {vehicle.capacity} passengers
                     </span>
                     <span className="font-semibold text-accent">
-                      ${vehicle.base_price_per_mile.toFixed(2)}/mile
+                      {formatCurrency(vehicle.base_price_per_mile, currencyCode)}/{distanceUnit === 'miles' ? 'mile' : 'km'}
                     </span>
                   </div>
 
@@ -444,7 +448,7 @@ const BookingWidget = () => {
               <div className="flex justify-between items-center pt-2 border-t border-border">
                 <span className="text-sm">Estimated Price:</span>
                 <span className="text-2xl font-display font-bold text-accent">
-                  ${calculatePrice()}
+                  {formatCurrency(calculatePriceNumber(), currencyCode)}
                 </span>
               </div>
             </div>

@@ -9,6 +9,8 @@ import { Badge } from "@/components/ui/badge";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { ArrowLeft, Calendar, Hash, Car, FileText, ExternalLink, DollarSign } from "lucide-react";
 import { formatInTimeZone } from "date-fns-tz";
+import { formatCurrency } from "@/lib/format-utils";
+import { useTenant } from "@/contexts/TenantContext";
 
 interface PlateDetailData {
   id: string;
@@ -35,6 +37,7 @@ interface PlateDetailData {
 export default function PlateDetail() {
   const params = useParams();
   const router = useRouter();
+  const { tenant } = useTenant();
   const id = params.id as string;
 
   const { data: plate, isLoading, error } = useQuery({
@@ -169,7 +172,7 @@ export default function PlateDetail() {
                 <div className="text-sm text-muted-foreground">Cost</div>
                 <div className="flex items-center gap-1">
                   <DollarSign className="h-4 w-4 text-muted-foreground" />
-                  ${plate.cost.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                  {formatCurrency(plate.cost, tenant?.currency_code || 'GBP')}
                 </div>
               </div>
             )}

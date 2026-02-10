@@ -20,7 +20,7 @@ import { RefundDialog } from "@/components/shared/dialogs/refund-dialog";
 import { useToast } from "@/hooks/use-toast";
 import { useTenant } from "@/contexts/TenantContext";
 // integration_bonzah controls Bonzah-specific features only; insurance document upload is always available
-import { useRentalTotals } from "@/hooks/use-rental-ledger-data";
+import { useRentalTotals, useRentalCharges } from "@/hooks/use-rental-ledger-data";
 import { useRentalInvoice, useRentalPaymentBreakdown, useRentalRefundBreakdown } from "@/hooks/use-rental-invoice";
 import { RentalLedger } from "@/components/rentals/rental-ledger";
 import { KeyHandoverSection } from "@/components/rentals/key-handover-section";
@@ -33,6 +33,7 @@ import { AdminExtendRentalDialog } from "@/components/rentals/AdminExtendRentalD
 import InstallmentPlanCard from "@/components/rentals/InstallmentPlanCard";
 import { useInstallmentPlan } from "@/hooks/use-installment-plan";
 import { formatCurrency } from "@/lib/formatters";
+import { formatCurrency as formatCurrencyUtil } from "@/lib/format-utils";
 
 interface Rental {
   id: string;
@@ -106,6 +107,10 @@ const RentalDetail = () => {
   const [showExtensionDialog, setShowExtensionDialog] = useState(false);
   const [showAdminExtendDialog, setShowAdminExtendDialog] = useState(false);
 
+  // Extension payment state
+  const [showExtensionPayment, setShowExtensionPayment] = useState(false);
+  const [extensionPaymentAmount, setExtensionPaymentAmount] = useState<number | undefined>();
+
   // Installment sheet state
   const [showInstallmentSheet, setShowInstallmentSheet] = useState(false);
   const { plan: installmentPlan, hasInstallmentPlan, retryPayment, isRetrying, markPaid, isMarkingPaid } = useInstallmentPlan(id);
@@ -135,6 +140,7 @@ const RentalDetail = () => {
   });
 
   const { data: rentalTotals } = useRentalTotals(id);
+  const { data: rentalCharges } = useRentalCharges(id);
   const { data: invoiceBreakdown } = useRentalInvoice(id);
   const { data: paymentBreakdown } = useRentalPaymentBreakdown(id);
   const { data: refundBreakdown } = useRentalRefundBreakdown(id);
@@ -730,6 +736,11 @@ const RentalDetail = () => {
   const totalPayments = rentalTotals?.totalPayments || 0;
   const outstandingBalance = rentalTotals?.outstanding || 0;
 
+  // Filter extension charges for the Extensions section
+  const extensionCharges = (rentalCharges || [])
+    .filter(c => c.category === 'Extension')
+    .sort((a, b) => new Date(a.entry_date).getTime() - new Date(b.entry_date).getTime());
+
   // Compute rental status based on approval_status, payment_status, AND key handover
   const computeStatus = (rental: Rental): string => {
     if (rental.status === 'Cancelled') return 'Cancelled';
@@ -1052,7 +1063,7 @@ const RentalDetail = () => {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-green-600">
-              ${totalPayments.toLocaleString()}
+              {formatCurrencyUtil(totalPayments, tenant?.currency_code || 'GBP')}
             </div>
           </CardContent>
         </Card>
@@ -1063,7 +1074,7 @@ const RentalDetail = () => {
           </CardHeader>
           <CardContent>
             <div className={`text-2xl font-bold ${outstandingBalance > 0 ? 'text-red-600' : 'text-green-600'}`}>
-              ${outstandingBalance.toLocaleString()}
+              {formatCurrencyUtil(outstandingBalance, tenant?.currency_code || 'GBP')}
             </div>
           </CardContent>
         </Card>
@@ -1151,12 +1162,12 @@ const RentalDetail = () => {
                         </TableCell>
                         <TableCell className="text-right">
                           <span className={`text-sm font-semibold ${!applied ? 'text-muted-foreground/50' : ''}`}>
-                            ${net.toFixed(2)}
+                            {formatCurrencyUtil(net, tenant?.currency_code || 'USD')}
                           </span>
                         </TableCell>
                         <TableCell className="text-right">
                           {refunded > 0 ? (
-                            <span className="text-sm text-green-500 font-medium">${refunded.toFixed(2)}</span>
+                            <span className="text-sm text-green-500 font-medium">{formatCurrencyUtil(refunded, tenant?.currency_code || 'USD')}</span>
                           ) : (
                             <span className="text-sm text-muted-foreground/40">-</span>
                           )}
@@ -1179,6 +1190,107 @@ const RentalDetail = () => {
                               {refunded > 0 ? 'Refund More' : 'Refund'}
                             </button>
                           ) : applied && fullyRefunded ? (
+                            <Check className="h-4 w-4 text-green-500 inline-block" />
+                          ) : (
+                            <span className="text-muted-foreground/30">-</span>
+                          )}
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+            </CardContent>
+          </Card>
+        );
+      })()}
+
+      {/* Extensions Section */}
+      {extensionCharges.length > 0 && (() => {
+        const canRefund = totalPayments > 0 && rental.status !== 'Cancelled' && rental.status !== 'Closed';
+        return (
+          <Card>
+            <CardHeader className="pb-4">
+              <CardTitle className="text-base font-medium flex items-center gap-2">
+                <CalendarPlus className="h-4 w-4 text-blue-500" />
+                Extensions
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="p-0">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="pl-6 w-10">#</TableHead>
+                    <TableHead>Details</TableHead>
+                    <TableHead className="text-right">Amount</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead className="text-right pr-6">Action</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {extensionCharges.map((charge, index) => {
+                    const isPaid = charge.remaining_amount === 0;
+                    const isPartial = charge.remaining_amount > 0 && charge.remaining_amount < charge.amount;
+                    const refunded = refundBreakdown?.['Extension'] ?? 0;
+                    const fullyRefunded = isPaid && refunded >= charge.amount;
+
+                    return (
+                      <TableRow key={charge.id}>
+                        <TableCell className="pl-6 text-sm text-muted-foreground">{index + 1}</TableCell>
+                        <TableCell>
+                          <p className="text-sm font-medium">
+                            {charge.reference || `Extension #${index + 1}`}
+                          </p>
+                          <p className="text-xs text-muted-foreground">
+                            Charged on {new Date(charge.entry_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                          </p>
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <span className="text-sm font-semibold">
+                            {formatCurrencyUtil(charge.amount, tenant?.currency_code || 'USD')}
+                          </span>
+                          {isPartial && (
+                            <p className="text-xs text-muted-foreground">
+                              {formatCurrencyUtil(charge.remaining_amount, tenant?.currency_code || 'USD')} remaining
+                            </p>
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          {fullyRefunded ? (
+                            <Badge variant="outline" className="text-green-500 border-green-500/30 bg-green-500/10 text-[11px]">Refunded</Badge>
+                          ) : isPaid ? (
+                            <Badge variant="outline" className="text-green-500 border-green-500/30 bg-green-500/10 text-[11px]">Paid</Badge>
+                          ) : isPartial ? (
+                            <Badge variant="outline" className="text-amber-500 border-amber-500/30 bg-amber-500/10 text-[11px]">Partial</Badge>
+                          ) : (
+                            <Badge variant="outline" className="text-red-500 border-red-500/30 bg-red-500/10 text-[11px]">Unpaid</Badge>
+                          )}
+                        </TableCell>
+                        <TableCell className="text-right pr-6">
+                          {!isPaid ? (
+                            <button
+                              className="text-xs text-blue-500 hover:text-blue-400 hover:underline font-medium"
+                              onClick={() => {
+                                setExtensionPaymentAmount(charge.remaining_amount);
+                                setShowExtensionPayment(true);
+                              }}
+                            >
+                              Pay
+                            </button>
+                          ) : isPaid && !fullyRefunded && canRefund ? (
+                            <button
+                              className="text-xs text-orange-500 hover:text-orange-400 hover:underline font-medium"
+                              onClick={() => {
+                                setRefundCategory('Extension');
+                                setRefundTotalAmount(charge.amount);
+                                const alreadyRefunded = refundBreakdown?.['Extension'] ?? 0;
+                                setRefundPaidAmount(Math.max(0, charge.amount - alreadyRefunded));
+                                setShowRefundDialog(true);
+                              }}
+                            >
+                              Refund
+                            </button>
+                          ) : fullyRefunded ? (
                             <Check className="h-4 w-4 text-green-500 inline-block" />
                           ) : (
                             <span className="text-muted-foreground/30">-</span>
@@ -1370,7 +1482,7 @@ const RentalDetail = () => {
             </div>
             <div className="bg-muted/30 rounded-lg p-4 space-y-1">
               <p className="text-xs uppercase tracking-wider text-muted-foreground">{rental.rental_period_type || 'Monthly'} Amount</p>
-              <p className="text-lg font-semibold">${Number(rental.monthly_amount).toLocaleString()}</p>
+              <p className="text-lg font-semibold">{formatCurrencyUtil(Number(rental.monthly_amount), tenant?.currency_code || 'GBP')}</p>
             </div>
           </div>
 
@@ -1459,7 +1571,7 @@ const RentalDetail = () => {
                     <p className="text-sm text-muted-foreground">{rental.delivery_address}</p>
                     {rental.delivery_fee && rental.delivery_fee > 0 && (
                       <p className="text-sm font-medium mt-2">
-                        Fee: ${Number(rental.delivery_fee).toFixed(2)}
+                        Fee: {formatCurrencyUtil(Number(rental.delivery_fee), tenant?.currency_code || 'USD')}
                       </p>
                     )}
                   </div>
@@ -1473,7 +1585,7 @@ const RentalDetail = () => {
                     <p className="text-sm text-muted-foreground">{rental.collection_address}</p>
                     {rental.collection_fee && rental.collection_fee > 0 && (
                       <p className="text-sm font-medium mt-2">
-                        Fee: ${Number(rental.collection_fee).toFixed(2)}
+                        Fee: {formatCurrencyUtil(Number(rental.collection_fee), tenant?.currency_code || 'USD')}
                       </p>
                     )}
                   </div>
@@ -2280,19 +2392,19 @@ const RentalDetail = () => {
                           {extractedData.coverageLimits?.liability && (
                             <div>
                               <span className="text-muted-foreground">Liability:</span>{' '}
-                              <span className="font-medium">${extractedData.coverageLimits.liability.toLocaleString()}</span>
+                              <span className="font-medium">{formatCurrencyUtil(extractedData.coverageLimits.liability, tenant?.currency_code || 'GBP')}</span>
                             </div>
                           )}
                           {extractedData.coverageLimits?.collision && (
                             <div>
                               <span className="text-muted-foreground">Collision:</span>{' '}
-                              <span className="font-medium">${extractedData.coverageLimits.collision.toLocaleString()}</span>
+                              <span className="font-medium">{formatCurrencyUtil(extractedData.coverageLimits.collision, tenant?.currency_code || 'GBP')}</span>
                             </div>
                           )}
                           {extractedData.coverageLimits?.comprehensive && (
                             <div>
                               <span className="text-muted-foreground">Comprehensive:</span>{' '}
-                              <span className="font-medium">${extractedData.coverageLimits.comprehensive.toLocaleString()}</span>
+                              <span className="font-medium">{formatCurrencyUtil(extractedData.coverageLimits.comprehensive, tenant?.currency_code || 'GBP')}</span>
                             </div>
                           )}
                         </div>
@@ -2728,6 +2840,18 @@ const RentalDetail = () => {
         />
       )}
 
+      {/* Extension Payment Dialog */}
+      {rental && (
+        <AddPaymentDialog
+          open={showExtensionPayment}
+          onOpenChange={setShowExtensionPayment}
+          customer_id={rental.customers?.id}
+          vehicle_id={rental.vehicles?.id}
+          rental_id={rental.id}
+          defaultAmount={extensionPaymentAmount}
+        />
+      )}
+
       {/* Cancel Rental Dialog */}
       {rental && (
         <CancelRentalDialog
@@ -2785,15 +2909,15 @@ const RentalDetail = () => {
                           )}
                         </TableCell>
                         <TableCell className="text-center text-sm">{item.quantity}</TableCell>
-                        <TableCell className="text-right text-sm">${item.price_at_booking.toFixed(2)}</TableCell>
-                        <TableCell className="text-right text-sm font-medium">${(item.quantity * item.price_at_booking).toFixed(2)}</TableCell>
+                        <TableCell className="text-right text-sm">{formatCurrencyUtil(item.price_at_booking, tenant?.currency_code || 'USD')}</TableCell>
+                        <TableCell className="text-right text-sm font-medium">{formatCurrencyUtil(item.quantity * item.price_at_booking, tenant?.currency_code || 'USD')}</TableCell>
                       </TableRow>
                     ))}
                   </TableBody>
                 </Table>
                 <div className="flex justify-between items-center pt-3 border-t px-2">
                   <span className="text-sm font-semibold">Total</span>
-                  <span className="text-sm font-bold">${extrasTotal.toFixed(2)}</span>
+                  <span className="text-sm font-bold">{formatCurrencyUtil(extrasTotal, tenant?.currency_code || 'USD')}</span>
                 </div>
                 <p className="text-xs text-muted-foreground pt-2 px-2">Extras are non-refundable.</p>
               </>

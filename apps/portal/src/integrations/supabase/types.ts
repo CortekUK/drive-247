@@ -2440,7 +2440,9 @@ export type Database = {
         Row: {
           created_at: string | null
           customer_id: string | null
+          delivery_fee: number | null
           due_date: string | null
+          extras_total: number | null
           id: string
           insurance_premium: number | null
           invoice_date: string
@@ -2462,7 +2464,9 @@ export type Database = {
         Insert: {
           created_at?: string | null
           customer_id?: string | null
+          delivery_fee?: number | null
           due_date?: string | null
+          extras_total?: number | null
           id?: string
           insurance_premium?: number | null
           invoice_date: string
@@ -2484,7 +2488,9 @@ export type Database = {
         Update: {
           created_at?: string | null
           customer_id?: string | null
+          delivery_fee?: number | null
           due_date?: string | null
+          extras_total?: number | null
           id?: string
           insurance_premium?: number | null
           invoice_date?: string
@@ -2999,6 +3005,7 @@ export type Database = {
           dark_primary_color: string | null
           dark_secondary_color: string | null
           date_format: string
+          distance_unit: string
           email_from_address: string | null
           email_from_name: string | null
           email_reply_to: string | null
@@ -3045,6 +3052,7 @@ export type Database = {
           dark_primary_color?: string | null
           dark_secondary_color?: string | null
           date_format?: string
+          distance_unit?: string
           email_from_address?: string | null
           email_from_name?: string | null
           email_reply_to?: string | null
@@ -3091,6 +3099,7 @@ export type Database = {
           dark_primary_color?: string | null
           dark_secondary_color?: string | null
           date_format?: string
+          distance_unit?: string
           email_from_address?: string | null
           email_from_name?: string | null
           email_reply_to?: string | null
@@ -5321,6 +5330,7 @@ export type Database = {
           date_format: string | null
           delivery_enabled: boolean | null
           deposit_mode: string | null
+          distance_unit: string | null
           facebook_url: string | null
           favicon_url: string | null
           fixed_address_enabled: boolean | null
@@ -5440,6 +5450,7 @@ export type Database = {
           date_format?: string | null
           delivery_enabled?: boolean | null
           deposit_mode?: string | null
+          distance_unit?: string | null
           facebook_url?: string | null
           favicon_url?: string | null
           fixed_address_enabled?: boolean | null
@@ -5559,6 +5570,7 @@ export type Database = {
           date_format?: string | null
           delivery_enabled?: boolean | null
           deposit_mode?: string | null
+          distance_unit?: string | null
           facebook_url?: string | null
           favicon_url?: string | null
           fixed_address_enabled?: boolean | null

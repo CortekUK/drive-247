@@ -14,6 +14,7 @@ import {
   wrapWithBrandedTemplate
 } from "../_shared/resend-service.ts";
 import { renderEmail, EmailTemplateData } from "../_shared/email-template-service.ts";
+import { formatCurrency } from "../_shared/format-utils.ts";
 
 interface NotifyRequest {
   paymentId: string;
@@ -35,7 +36,7 @@ interface NotifyRequest {
 }
 
 // Email template for customer
-const getCustomerEmailHtml = (data: NotifyRequest) => `
+const getCustomerEmailHtml = (data: NotifyRequest, currencyCode: string = 'USD') => `
 <!DOCTYPE html>
 <html>
 <head>
@@ -87,7 +88,7 @@ const getCustomerEmailHtml = (data: NotifyRequest) => `
                                 <tr>
                                     <td style="padding: 20px; text-align: center;">
                                         <p style="margin: 0 0 5px; color: rgba(255,255,255,0.9); font-size: 14px;">Amount Held</p>
-                                        <p style="margin: 0; color: white; font-size: 32px; font-weight: bold;">$${data.amount.toLocaleString()}</p>
+                                        <p style="margin: 0; color: white; font-size: 32px; font-weight: bold;">${formatCurrency(data.amount, currencyCode)}</p>
                                         <p style="margin: 10px 0 0; color: rgba(255,255,255,0.8); font-size: 12px;">Your card has been authorized. You will only be charged upon approval.</p>
                                     </td>
                                 </tr>
@@ -114,7 +115,7 @@ const getCustomerEmailHtml = (data: NotifyRequest) => `
 `;
 
 // Email content for admin (to be wrapped with branded template)
-const getAdminEmailContent = (data: NotifyRequest, branding: TenantBranding) => `
+const getAdminEmailContent = (data: NotifyRequest, branding: TenantBranding, currencyCode: string = 'USD') => `
                     <tr>
                         <td style="padding: 30px 30px 0; text-align: center;">
                             <span style="display: inline-block; background: #fef3c7; color: #f97316; padding: 8px 20px; border-radius: 20px; font-weight: 600; font-size: 14px;">
@@ -134,7 +135,7 @@ const getAdminEmailContent = (data: NotifyRequest, branding: TenantBranding) => 
                                             <tr><td style="padding: 8px 0; color: #666; font-size: 14px;">Phone:</td><td style="padding: 8px 0; color: #1a1a1a; font-size: 14px; text-align: right;">${data.customerPhone || 'N/A'}</td></tr>
                                             <tr><td style="padding: 8px 0; color: #666; font-size: 14px;">Vehicle:</td><td style="padding: 8px 0; color: #1a1a1a; font-weight: 600; font-size: 14px; text-align: right;">${data.vehicleName} (${data.vehicleReg})</td></tr>
                                             <tr><td style="padding: 8px 0; color: #666; font-size: 14px;">Dates:</td><td style="padding: 8px 0; color: #1a1a1a; font-size: 14px; text-align: right;">${data.pickupDate} - ${data.returnDate}</td></tr>
-                                            <tr><td style="padding: 8px 0; color: #666; font-size: 14px;">Amount:</td><td style="padding: 8px 0; color: #1a1a1a; font-weight: 600; font-size: 14px; text-align: right;">$${data.amount.toLocaleString()}</td></tr>
+                                            <tr><td style="padding: 8px 0; color: #666; font-size: 14px;">Amount:</td><td style="padding: 8px 0; color: #1a1a1a; font-weight: 600; font-size: 14px; text-align: right;">${formatCurrency(data.amount, currencyCode)}</td></tr>
                                         </table>
                                     </td>
                                 </tr>
@@ -206,14 +207,34 @@ serve(async (req) => {
       adminSMS: null as any,
     };
 
-    // Build customer email using template service if tenantId is provided
-    let customerSubject = `Booking Received - Reference: ${data.bookingRef} | DRIVE 247`;
-    let customerHtml = getCustomerEmailHtml(data);
-
     // Create supabase client for all email operations
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
+
+    // Fetch tenant currency code
+    let currencyCode = 'USD';
+    if (data.tenantId) {
+      try {
+        const { data: tenantData, error: tenantError } = await supabase
+          .from('tenants')
+          .select('currency_code')
+          .eq('id', data.tenantId)
+          .single();
+
+        if (tenantError) {
+          console.warn('Error fetching tenant currency:', tenantError);
+        } else if (tenantData?.currency_code) {
+          currencyCode = tenantData.currency_code;
+        }
+      } catch (error) {
+        console.warn('Error fetching tenant currency:', error);
+      }
+    }
+
+    // Build customer email using template service if tenantId is provided
+    let customerSubject = `Booking Received - Reference: ${data.bookingRef} | DRIVE 247`;
+    let customerHtml = getCustomerEmailHtml(data, currencyCode);
 
     if (data.tenantId) {
       try {
@@ -229,7 +250,7 @@ serve(async (req) => {
           rental_number: data.bookingRef,
           rental_start_date: data.pickupDate,
           rental_end_date: data.returnDate,
-          rental_amount: `$${data.amount.toLocaleString()}`,
+          rental_amount: formatCurrency(data.amount, currencyCode),
         };
 
         // Render email from custom or default template
@@ -279,7 +300,7 @@ serve(async (req) => {
     }
 
     // Build branded admin email HTML
-    const adminEmailContent = getAdminEmailContent(data, branding);
+    const adminEmailContent = getAdminEmailContent(data, branding, currencyCode);
     const adminEmailHtml = wrapWithBrandedTemplate(adminEmailContent, branding);
 
     // Send admin email
@@ -299,7 +320,7 @@ serve(async (req) => {
     if (adminPhone) {
       results.adminSMS = await sendSMS(
         adminPhone,
-        `${branding.companyName}: New booking pending from ${data.customerName} for ${data.vehicleName}. Amount: $${data.amount}. Review now.`
+        `${branding.companyName}: New booking pending from ${data.customerName} for ${data.vehicleName}. Amount: ${formatCurrency(data.amount, currencyCode)}. Review now.`
       );
       console.log('Admin SMS result:', results.adminSMS);
     }
@@ -338,7 +359,7 @@ serve(async (req) => {
               user_id: user.id,
               tenant_id: data.tenantId,
               title: 'New Booking Pending',
-              message: `${data.customerName} booked ${data.vehicleName} for ${data.pickupDate} - ${data.returnDate}. Amount: $${data.amount}`,
+              message: `${data.customerName} booked ${data.vehicleName} for ${data.pickupDate} - ${data.returnDate}. Amount: ${formatCurrency(data.amount, currencyCode)}`,
               type: 'booking_new',
               is_read: false,
               link: `/rentals/${data.rentalId}`,

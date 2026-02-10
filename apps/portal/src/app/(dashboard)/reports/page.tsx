@@ -17,6 +17,7 @@ import { AgingReceivablesDetail } from '@/components/reports/aging-receivables-d
 import { EmptyStateIllustration } from '@/components/reports/empty-state-illustration';
 import { useToast } from '@/hooks/use-toast';
 import { useTenant } from '@/contexts/TenantContext';
+import { formatCurrency } from '@/lib/format-utils';
 
 export interface ReportFilters {
   fromDate: Date;
@@ -260,18 +261,18 @@ const Reports = () => {
       title: 'Payments Export',
       description: 'Applied/unapplied payment analysis (CSV/XLSX)',
       icon: CreditCard,
-      value: `$${reportStats?.payments.totalAmount?.toLocaleString() || '0'}`,
+      value: formatCurrency(reportStats?.payments.totalAmount || 0, tenant?.currency_code || 'GBP'),
       subtitle: `${reportStats?.payments.count || 0} payments`,
-      metadata: `Applied: $${reportStats?.payments.appliedAmount?.toLocaleString() || '0'}`
+      metadata: `Applied: ${formatCurrency(reportStats?.payments.appliedAmount || 0, tenant?.currency_code || 'GBP')}`
     },
     {
       id: 'pl-report',
       title: 'P&L Report',
       description: 'Vehicle & consolidated profit/loss (CSV/XLSX)',
       icon: TrendingUp,
-      value: `$${reportStats?.pl.net_profit?.toLocaleString() || '0'}`,
+      value: formatCurrency(reportStats?.pl.net_profit || 0, tenant?.currency_code || 'GBP'),
       subtitle: 'Net Profit',
-      metadata: `Revenue: $${reportStats?.pl.total_revenue?.toLocaleString() || '0'}`
+      metadata: `Revenue: ${formatCurrency(reportStats?.pl.total_revenue || 0, tenant?.currency_code || 'GBP')}`
     },
     {
       id: 'customer-statements',
@@ -280,7 +281,7 @@ const Reports = () => {
       icon: FileText,
       value: `${reportStats?.aging.count || 0}`,
       subtitle: 'Customers with balances',
-      metadata: `Total Due: $${reportStats?.aging.totalDue?.toLocaleString() || '0'}`
+      metadata: `Total Due: ${formatCurrency(reportStats?.aging.totalDue || 0, tenant?.currency_code || 'GBP')}`
     },
     {
       id: 'rentals',
@@ -289,7 +290,7 @@ const Reports = () => {
       icon: Car,
       value: `${reportStats?.rentals.count || 0}`,
       subtitle: 'Active rentals',
-      metadata: `Outstanding: $${reportStats?.rentals.totalBalance?.toLocaleString() || '0'}`
+      metadata: `Outstanding: ${formatCurrency(reportStats?.rentals.totalBalance || 0, tenant?.currency_code || 'GBP')}`
     },
     {
       id: 'fines',
@@ -298,14 +299,14 @@ const Reports = () => {
       icon: AlertTriangle,
       value: `${reportStats?.fines?.count || 0}`,
       subtitle: 'Total fines',
-      metadata: `Outstanding: $${reportStats?.fines?.totalOutstanding?.toLocaleString() || '0'}`
+      metadata: `Outstanding: ${formatCurrency(reportStats?.fines?.totalOutstanding || 0, tenant?.currency_code || 'GBP')}`
     },
     {
       id: 'aging',
       title: 'Aging Receivables',
       description: 'Age buckets 0-30/31-60/61-90/90+ days (CSV/XLSX)',
       icon: Clock,
-      value: `$${reportStats?.aging.totalDue?.toLocaleString() || '0'}`,
+      value: formatCurrency(reportStats?.aging.totalDue || 0, tenant?.currency_code || 'GBP'),
       subtitle: 'Total overdue',
       metadata: `${reportStats?.aging.count || 0} customers`
     }
@@ -387,7 +388,7 @@ const Reports = () => {
                     <h2 className="text-lg font-medium mb-2">Available Reports</h2>
                     <p className="text-muted-foreground text-sm">
                       Click on a report card to preview data or use export icons for direct downloads.
-                      All amounts shown in USD with America/NewYork timezone.
+                      All amounts shown in {tenant?.currency_code || 'GBP'} with America/NewYork timezone.
                     </p>
                   </div>
 

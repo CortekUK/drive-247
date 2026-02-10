@@ -2,7 +2,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Button } from "@/components/ui/button";
 import { FileText, Download, Shield } from "lucide-react";
 import { format } from "date-fns";
-import { formatCurrency } from "@/lib/invoice-utils";
+import { formatCurrency } from "@/lib/format-utils";
 import { useRef } from "react";
 import { useReactToPrint } from "react-to-print";
 import { useTenant } from "@/contexts/TenantContext";
@@ -48,10 +48,12 @@ interface InvoiceDialogProps {
     rentalFee: number; // Vehicle rental cost only (excluding protection)
   };
   selectedExtras?: { name: string; quantity: number; price: number }[];
+  currencyCode?: string;
 }
 
 // Separate printable component
-const PrintableInvoice = ({ invoice, customer, vehicle, rental, protectionPlan, selectedExtras, companyName, logoUrl, accentColor }: Omit<InvoiceDialogProps, "open" | "onOpenChange"> & { companyName: string; logoUrl?: string | null; accentColor: string }) => {
+const PrintableInvoice = ({ invoice, customer, vehicle, rental, protectionPlan, selectedExtras, companyName, logoUrl, accentColor, currencyCode = 'GBP' }: Omit<InvoiceDialogProps, "open" | "onOpenChange"> & { companyName: string; logoUrl?: string | null; accentColor: string }) => {
+  const fc = (amount: number) => formatCurrency(amount, currencyCode);
   const vehicleName = vehicle.make && vehicle.model ? `${vehicle.make} ${vehicle.model}` : vehicle.reg;
   const hasDiscount = (invoice.discount_amount ?? 0) > 0;
   // If there's a discount, show original price (subtotal + discount), otherwise show subtotal
@@ -131,11 +133,11 @@ const PrintableInvoice = ({ invoice, customer, vehicle, rental, protectionPlan, 
               <td className="p-3 text-sm text-right font-medium">
                 {hasDiscount ? (
                   <div>
-                    <span className="line-through text-gray-400 mr-2">{formatCurrency(originalRentalFee)}</span>
-                    <span>{formatCurrency(rentalFee)}</span>
+                    <span className="line-through text-gray-400 mr-2">{fc(originalRentalFee)}</span>
+                    <span>{fc(rentalFee)}</span>
                   </div>
                 ) : (
-                  formatCurrency(rentalFee)
+                  fc(rentalFee)
                 )}
               </td>
             </tr>
@@ -150,7 +152,7 @@ const PrintableInvoice = ({ invoice, customer, vehicle, rental, protectionPlan, 
                   </div>
                 </td>
                 <td className="p-3 text-sm text-right font-medium" style={{ color: '#16a34a' }}>
-                  -{formatCurrency(invoice.discount_amount ?? 0)}
+                  -{fc(invoice.discount_amount ?? 0)}
                 </td>
               </tr>
             )}
@@ -166,7 +168,7 @@ const PrintableInvoice = ({ invoice, customer, vehicle, rental, protectionPlan, 
                   </div>
                 </td>
                 <td className="p-3 text-sm text-right font-medium" style={{ color: accentColor }}>
-                  {formatCurrency(protectionPlan.cost)}
+                  {fc(protectionPlan.cost)}
                 </td>
               </tr>
             )}
@@ -175,19 +177,19 @@ const PrintableInvoice = ({ invoice, customer, vehicle, rental, protectionPlan, 
                 <td className="p-3 text-sm">
                   {extra.name}{extra.quantity > 1 ? ` x${extra.quantity}` : ''}
                 </td>
-                <td className="p-3 text-sm text-right">{formatCurrency(extra.price * extra.quantity)}</td>
+                <td className="p-3 text-sm text-right">{fc(extra.price * extra.quantity)}</td>
               </tr>
             ))}
             {!selectedExtras && (invoice.extras_total ?? 0) > 0 && (
               <tr className="border-b border-gray-300">
                 <td className="p-3 text-sm">Rental Extras</td>
-                <td className="p-3 text-sm text-right">{formatCurrency(invoice.extras_total ?? 0)}</td>
+                <td className="p-3 text-sm text-right">{fc(invoice.extras_total ?? 0)}</td>
               </tr>
             )}
             {(invoice.delivery_fee ?? 0) > 0 && (
               <tr className="border-b border-gray-300">
                 <td className="p-3 text-sm">Delivery Fee</td>
-                <td className="p-3 text-sm text-right">{formatCurrency(invoice.delivery_fee ?? 0)}</td>
+                <td className="p-3 text-sm text-right">{fc(invoice.delivery_fee ?? 0)}</td>
               </tr>
             )}
             {(invoice.insurance_premium ?? 0) > 0 && (
@@ -198,31 +200,31 @@ const PrintableInvoice = ({ invoice, customer, vehicle, rental, protectionPlan, 
                     <p className="font-medium">Bonzah Insurance</p>
                   </div>
                 </td>
-                <td className="p-3 text-sm text-right font-medium">{formatCurrency(invoice.insurance_premium ?? 0)}</td>
+                <td className="p-3 text-sm text-right font-medium">{fc(invoice.insurance_premium ?? 0)}</td>
               </tr>
             )}
             {invoice.tax_amount > 0 && (
               <tr className="border-b border-gray-300">
                 <td className="p-3 text-sm">Tax</td>
-                <td className="p-3 text-sm text-right">{formatCurrency(invoice.tax_amount)}</td>
+                <td className="p-3 text-sm text-right">{fc(invoice.tax_amount)}</td>
               </tr>
             )}
             {(invoice.service_fee ?? 0) > 0 && (
               <tr className="border-b border-gray-300">
                 <td className="p-3 text-sm">Service Fee</td>
-                <td className="p-3 text-sm text-right">{formatCurrency(invoice.service_fee ?? 0)}</td>
+                <td className="p-3 text-sm text-right">{fc(invoice.service_fee ?? 0)}</td>
               </tr>
             )}
             {(invoice.security_deposit ?? 0) > 0 && (
               <tr className="border-b border-gray-300">
                 <td className="p-3 text-sm">Security Deposit</td>
-                <td className="p-3 text-sm text-right">{formatCurrency(invoice.security_deposit ?? 0)}</td>
+                <td className="p-3 text-sm text-right">{fc(invoice.security_deposit ?? 0)}</td>
               </tr>
             )}
             <tr className="bg-gray-100">
               <td className="p-3 text-sm font-bold">Total</td>
               <td className="p-3 text-lg font-bold text-right" style={{ color: accentColor }}>
-                {formatCurrency(invoice.total_amount)}
+                {fc(invoice.total_amount)}
               </td>
             </tr>
           </tbody>
@@ -255,12 +257,15 @@ export const InvoiceDialog = ({
   rental,
   protectionPlan,
   selectedExtras,
+  currencyCode: currencyCodeProp,
 }: InvoiceDialogProps) => {
   const { tenant } = useTenant();
   const { branding } = useTenantBranding();
   const companyName = branding?.app_name || tenant?.company_name || 'Invoice';
   const logoUrl = branding?.logo_url;
   const accentColor = branding?.accent_color || '#C5A572';
+  const currencyCode = currencyCodeProp || tenant?.currency_code || 'GBP';
+  const fc = (amount: number) => formatCurrency(amount, currencyCode);
   const printRef = useRef<HTMLDivElement>(null);
   const vehicleName = vehicle.make && vehicle.model ? `${vehicle.make} ${vehicle.model}` : vehicle.reg;
   const hasDiscount = (invoice.discount_amount ?? 0) > 0;
@@ -299,6 +304,7 @@ export const InvoiceDialog = ({
             companyName={companyName}
             logoUrl={logoUrl}
             accentColor={accentColor}
+            currencyCode={currencyCode}
           />
         </div>
       </div>
@@ -386,11 +392,11 @@ export const InvoiceDialog = ({
                     <td className="p-3 text-sm text-right font-medium">
                       {hasDiscount ? (
                         <div>
-                          <span className="line-through text-muted-foreground mr-2">{formatCurrency(originalRentalFee)}</span>
-                          <span>{formatCurrency(rentalFee)}</span>
+                          <span className="line-through text-muted-foreground mr-2">{fc(originalRentalFee)}</span>
+                          <span>{fc(rentalFee)}</span>
                         </div>
                       ) : (
-                        formatCurrency(rentalFee)
+                        fc(rentalFee)
                       )}
                     </td>
                   </tr>
@@ -405,7 +411,7 @@ export const InvoiceDialog = ({
                         </div>
                       </td>
                       <td className="p-3 text-sm text-right font-medium text-green-600">
-                        -{formatCurrency(invoice.discount_amount ?? 0)}
+                        -{fc(invoice.discount_amount ?? 0)}
                       </td>
                     </tr>
                   )}
@@ -421,7 +427,7 @@ export const InvoiceDialog = ({
                         </div>
                       </td>
                       <td className="p-3 text-sm text-right font-medium" style={{ color: accentColor }}>
-                        {formatCurrency(protectionPlan.cost)}
+                        {fc(protectionPlan.cost)}
                       </td>
                     </tr>
                   )}
@@ -430,19 +436,19 @@ export const InvoiceDialog = ({
                       <td className="p-3 text-sm">
                         {extra.name}{extra.quantity > 1 ? ` x${extra.quantity}` : ''}
                       </td>
-                      <td className="p-3 text-sm text-right">{formatCurrency(extra.price * extra.quantity)}</td>
+                      <td className="p-3 text-sm text-right">{fc(extra.price * extra.quantity)}</td>
                     </tr>
                   ))}
                   {!selectedExtras && (invoice.extras_total ?? 0) > 0 && (
                     <tr className="border-b">
                       <td className="p-3 text-sm">Rental Extras</td>
-                      <td className="p-3 text-sm text-right">{formatCurrency(invoice.extras_total ?? 0)}</td>
+                      <td className="p-3 text-sm text-right">{fc(invoice.extras_total ?? 0)}</td>
                     </tr>
                   )}
                   {(invoice.delivery_fee ?? 0) > 0 && (
                     <tr className="border-b">
                       <td className="p-3 text-sm">Delivery Fee</td>
-                      <td className="p-3 text-sm text-right">{formatCurrency(invoice.delivery_fee ?? 0)}</td>
+                      <td className="p-3 text-sm text-right">{fc(invoice.delivery_fee ?? 0)}</td>
                     </tr>
                   )}
                   {(invoice.insurance_premium ?? 0) > 0 && (
@@ -453,31 +459,31 @@ export const InvoiceDialog = ({
                           <p className="font-medium">Bonzah Insurance</p>
                         </div>
                       </td>
-                      <td className="p-3 text-sm text-right font-medium">{formatCurrency(invoice.insurance_premium ?? 0)}</td>
+                      <td className="p-3 text-sm text-right font-medium">{fc(invoice.insurance_premium ?? 0)}</td>
                     </tr>
                   )}
                   {invoice.tax_amount > 0 && (
                     <tr className="border-b">
                       <td className="p-3 text-sm">Tax</td>
-                      <td className="p-3 text-sm text-right">{formatCurrency(invoice.tax_amount)}</td>
+                      <td className="p-3 text-sm text-right">{fc(invoice.tax_amount)}</td>
                     </tr>
                   )}
                   {(invoice.service_fee ?? 0) > 0 && (
                     <tr className="border-b">
                       <td className="p-3 text-sm">Service Fee</td>
-                      <td className="p-3 text-sm text-right">{formatCurrency(invoice.service_fee ?? 0)}</td>
+                      <td className="p-3 text-sm text-right">{fc(invoice.service_fee ?? 0)}</td>
                     </tr>
                   )}
                   {(invoice.security_deposit ?? 0) > 0 && (
                     <tr className="border-b">
                       <td className="p-3 text-sm">Security Deposit</td>
-                      <td className="p-3 text-sm text-right">{formatCurrency(invoice.security_deposit ?? 0)}</td>
+                      <td className="p-3 text-sm text-right">{fc(invoice.security_deposit ?? 0)}</td>
                     </tr>
                   )}
                   <tr className="bg-muted/50">
                     <td className="p-3 text-sm font-bold">Total</td>
                     <td className="p-3 text-lg font-bold text-right text-primary">
-                      {formatCurrency(invoice.total_amount)}
+                      {fc(invoice.total_amount)}
                     </td>
                   </tr>
                 </tbody>

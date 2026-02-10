@@ -9,6 +9,7 @@ export interface OrgSettings {
   company_name: string;
   timezone: string;
   currency_code: string;
+  distance_unit: 'km' | 'miles';
   date_format: string;
   logo_url?: string;
   reminder_due_today: boolean;
@@ -101,7 +102,8 @@ export const useOrgSettings = () => {
       org_id: 'placeholder',
       company_name: 'Fleet Management System',
       timezone: 'America/New_York',
-      currency_code: 'USD',
+      currency_code: 'GBP',
+      distance_unit: 'miles',
       date_format: 'MM/DD/YYYY',
       reminder_due_today: true,
       reminder_overdue_1d: true,
@@ -173,10 +175,11 @@ export const useOrgSettings = () => {
 
   // Convenience methods for specific updates
   const updateCompanyProfile = (profile: {
-    company_name: string;
-    timezone: string;
-    currency_code: string;
-    date_format: string;
+    company_name?: string;
+    timezone?: string;
+    currency_code?: string;
+    distance_unit?: 'km' | 'miles';
+    date_format?: string;
     logo_url?: string;
   }) => {
     return updateSettingsMutation.mutate(profile);

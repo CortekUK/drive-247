@@ -15,6 +15,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useTenant } from "@/contexts/TenantContext";
 import { DollarSign, Percent, AlertCircle } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { formatCurrency, getCurrencySymbol } from "@/lib/format-utils";
 
 const refundSchema = z.object({
   refundType: z.enum(["full", "partial"]),
@@ -112,7 +113,7 @@ export const RefundDialog = ({
       }
 
       if (finalRefundAmount > maxRefundAmount) {
-        throw new Error(`Refund amount cannot exceed $${maxRefundAmount.toFixed(2)}`);
+        throw new Error(`Refund amount cannot exceed ${formatCurrency(maxRefundAmount, tenant?.currency_code || 'USD')}`);
       }
 
       // Call the process-refund edge function (supports Stripe Connect)
@@ -139,7 +140,7 @@ export const RefundDialog = ({
 
       toast({
         title: "Refund Processed",
-        description: `$${finalRefundAmount.toFixed(2)} has been refunded for ${category}.`,
+        description: `${formatCurrency(finalRefundAmount, tenant?.currency_code || 'USD')} has been refunded for ${category}.`,
       });
 
       // Invalidate queries to refresh data
@@ -198,16 +199,16 @@ export const RefundDialog = ({
                   <div className="grid grid-cols-2 gap-3 text-sm">
                     <div>
                       <p className="text-muted-foreground text-xs">Total Charged</p>
-                      <p className="font-semibold">${totalAmount.toFixed(2)}</p>
+                      <p className="font-semibold">{formatCurrency(totalAmount, tenant?.currency_code || 'USD')}</p>
                     </div>
                     <div>
                       <p className="text-muted-foreground text-xs">Amount Paid</p>
-                      <p className="font-semibold text-green-600">${paidAmount.toFixed(2)}</p>
+                      <p className="font-semibold text-green-600">{formatCurrency(paidAmount, tenant?.currency_code || 'USD')}</p>
                     </div>
                   </div>
                   <div className="mt-2 pt-2 border-t">
                     <p className="text-muted-foreground text-xs">Maximum Refundable</p>
-                    <p className="font-bold text-lg">${maxRefundAmount.toFixed(2)}</p>
+                    <p className="font-bold text-lg">{formatCurrency(maxRefundAmount, tenant?.currency_code || 'USD')}</p>
                   </div>
                 </div>
 
@@ -226,7 +227,7 @@ export const RefundDialog = ({
                           <div className="flex items-center space-x-2">
                             <RadioGroupItem value="full" id="full" />
                             <Label htmlFor="full" className="cursor-pointer text-sm">
-                              Full (${maxRefundAmount.toFixed(2)})
+                              Full ({formatCurrency(maxRefundAmount, tenant?.currency_code || 'USD')})
                             </Label>
                           </div>
                           <div className="flex items-center space-x-2">
@@ -283,7 +284,7 @@ export const RefundDialog = ({
                         name="refundAmount"
                         render={({ field }) => (
                           <FormItem>
-                            <FormLabel>Refund Amount ($)</FormLabel>
+                            <FormLabel>Refund Amount ({getCurrencySymbol(tenant?.currency_code || 'USD')})</FormLabel>
                             <FormControl>
                               <div className="relative">
                                 <DollarSign className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -300,7 +301,7 @@ export const RefundDialog = ({
                               </div>
                             </FormControl>
                             <FormDescription>
-                              Max: ${maxRefundAmount.toFixed(2)}
+                              Max: {formatCurrency(maxRefundAmount, tenant?.currency_code || 'USD')}
                             </FormDescription>
                             <FormMessage />
                           </FormItem>
@@ -333,7 +334,7 @@ export const RefundDialog = ({
                             </FormControl>
                             {field.value && (
                               <FormDescription>
-                                Refund Amount: ${((maxRefundAmount * field.value) / 100).toFixed(2)}
+                                Refund Amount: {formatCurrency((maxRefundAmount * field.value) / 100, tenant?.currency_code || 'USD')}
                               </FormDescription>
                             )}
                             <FormMessage />
@@ -369,7 +370,7 @@ export const RefundDialog = ({
                 {calculatedRefundAmount > 0 && (
                   <div className="bg-primary/10 rounded-lg p-3 border border-primary/20">
                     <p className="text-sm text-muted-foreground">Refund Amount</p>
-                    <p className="text-xl font-bold text-primary">${calculatedRefundAmount.toFixed(2)}</p>
+                    <p className="text-xl font-bold text-primary">{formatCurrency(calculatedRefundAmount, tenant?.currency_code || 'USD')}</p>
                   </div>
                 )}
               </div>

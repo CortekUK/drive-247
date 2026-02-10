@@ -16,6 +16,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { useToast } from '@/hooks/use-toast';
 import { useTenant } from '@/contexts/TenantContext';
+import { formatCurrency, getCurrencySymbol } from '@/lib/format-utils';
 
 interface PLSummary {
   total_revenue: number;
@@ -56,6 +57,7 @@ const PLDashboard: React.FC = () => {
   const router = useRouter();
   const { toast } = useToast();
   const { tenant } = useTenant();
+  const currencyCode = tenant?.currency_code || 'GBP';
   const searchParams = useSearchParams();
 
   // State for filters and sorting - initialize from URL params
@@ -298,15 +300,6 @@ const PLDashboard: React.FC = () => {
     enabled: groupByMonth,
   });
 
-  const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency: 'USD',
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2,
-    }).format(amount);
-  };
-
   const handleSort = (field: SortField) => {
     if (field === sortField) {
       setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
@@ -514,19 +507,19 @@ const PLDashboard: React.FC = () => {
   const summaryCards = [
     {
       title: 'Total Revenue',
-      value: formatCurrency(plSummary?.total_revenue || 0),
+      value: formatCurrency(plSummary?.total_revenue || 0, currencyCode),
       icon: TrendingUp,
       trend: 'positive' as const,
     },
     {
       title: 'Total Costs',
-      value: formatCurrency(plSummary?.total_costs || 0),
+      value: formatCurrency(plSummary?.total_costs || 0, currencyCode),
       icon: TrendingDown,
       trend: 'negative' as const,
     },
     {
       title: 'Net Profit',
-      value: formatCurrency(plSummary?.net_profit || 0),
+      value: formatCurrency(plSummary?.net_profit || 0, currencyCode),
       icon: DollarSign,
       trend: (plSummary?.net_profit || 0) > 0 ? 'positive' : (plSummary?.net_profit || 0) < 0 ? 'negative' : 'neutral' as const,
     },
@@ -709,9 +702,9 @@ const PLDashboard: React.FC = () => {
                    >
                     <CartesianGrid strokeDasharray="3 3" className="opacity-30" />
                     <XAxis dataKey="month" className="text-xs" />
-                    <YAxis className="text-xs" tickFormatter={(value) => `$${(value / 1000).toFixed(0)}k`} />
+                    <YAxis className="text-xs" tickFormatter={(value) => `${getCurrencySymbol(currencyCode)}${(value / 1000).toFixed(0)}k`} />
                     <Tooltip
-                      formatter={(value: number, name: string) => [formatCurrency(value), name]}
+                      formatter={(value: number, name: string) => [formatCurrency(value, currencyCode), name]}
                       labelClassName="text-foreground"
                       contentStyle={{ backgroundColor: 'hsl(var(--background))', border: '1px solid hsl(var(--border))' }}
                     />
@@ -766,14 +759,14 @@ const PLDashboard: React.FC = () => {
                           onKeyDown={(e) => e.key === 'Enter' && handleMonthClick(month)}
                         >
                          <TableCell className="font-medium">{month.month}</TableCell>
-                        <TableCell className="text-left">{formatCurrency(month.total_revenue)}</TableCell>
-                        <TableCell className="text-left">{formatCurrency(month.total_costs)}</TableCell>
+                        <TableCell className="text-left">{formatCurrency(month.total_revenue, currencyCode)}</TableCell>
+                        <TableCell className="text-left">{formatCurrency(month.total_costs, currencyCode)}</TableCell>
                         <TableCell className="text-left font-medium">
                           <span className={cn(
                             month.net_profit > 0 ? 'text-success' :
                             month.net_profit < 0 ? 'text-destructive' : ''
                           )}>
-                            {formatCurrency(month.net_profit)}
+                            {formatCurrency(month.net_profit, currencyCode)}
                           </span>
                         </TableCell>
                         <TableCell className="text-left">{month.vehicle_count}</TableCell>
@@ -833,18 +826,18 @@ const PLDashboard: React.FC = () => {
                             <div className="text-xs text-muted-foreground">{vehicle.make_model}</div>
                           </div>
                         </TableCell>
-                        <TableCell className="text-left font-mono">{formatCurrency(vehicle.revenue_rental || 0)}</TableCell>
-                        <TableCell className="text-left font-mono">{formatCurrency(vehicle.revenue_fees || 0)}</TableCell>
-                        <TableCell className="text-left font-mono">{formatCurrency(vehicle.cost_service || 0)}</TableCell>
-                        <TableCell className="text-left font-mono">{formatCurrency(vehicle.cost_fines || 0)}</TableCell>
-                        <TableCell className="text-left font-mono">{formatCurrency(vehicle.cost_other || 0)}</TableCell>
-                        <TableCell className="text-left font-mono font-medium">{formatCurrency(vehicle.total_costs || 0)}</TableCell>
+                        <TableCell className="text-left font-mono">{formatCurrency(vehicle.revenue_rental || 0, currencyCode)}</TableCell>
+                        <TableCell className="text-left font-mono">{formatCurrency(vehicle.revenue_fees || 0, currencyCode)}</TableCell>
+                        <TableCell className="text-left font-mono">{formatCurrency(vehicle.cost_service || 0, currencyCode)}</TableCell>
+                        <TableCell className="text-left font-mono">{formatCurrency(vehicle.cost_fines || 0, currencyCode)}</TableCell>
+                        <TableCell className="text-left font-mono">{formatCurrency(vehicle.cost_other || 0, currencyCode)}</TableCell>
+                        <TableCell className="text-left font-mono font-medium">{formatCurrency(vehicle.total_costs || 0, currencyCode)}</TableCell>
                         <TableCell className="text-left font-mono font-bold">
                           <span className={cn(
                             (vehicle.net_profit || 0) > 0 ? 'text-success' :
                             (vehicle.net_profit || 0) < 0 ? 'text-destructive' : ''
                           )}>
-                            {formatCurrency(vehicle.net_profit || 0)}
+                            {formatCurrency(vehicle.net_profit || 0, currencyCode)}
                           </span>
                         </TableCell>
                         <TableCell>{getStatusBadge(vehicle)}</TableCell>
@@ -855,18 +848,18 @@ const PLDashboard: React.FC = () => {
                     <TableFooter className="bg-muted border-t-2 border-border">
                       <TableRow className="hover:bg-muted">
                         <TableCell className="font-bold text-base">Category Totals</TableCell>
-                        <TableCell className="text-left font-mono font-bold">{formatCurrency(categoryTotals.revenue_rental)}</TableCell>
-                        <TableCell className="text-left font-mono font-bold">{formatCurrency(categoryTotals.revenue_fees)}</TableCell>
-                        <TableCell className="text-left font-mono font-bold">{formatCurrency(categoryTotals.cost_service)}</TableCell>
-                        <TableCell className="text-left font-mono font-bold">{formatCurrency(categoryTotals.cost_fines)}</TableCell>
-                        <TableCell className="text-left font-mono font-bold">{formatCurrency(categoryTotals.cost_other)}</TableCell>
-                        <TableCell className="text-left font-mono font-bold">{formatCurrency(categoryTotals.total_costs)}</TableCell>
+                        <TableCell className="text-left font-mono font-bold">{formatCurrency(categoryTotals.revenue_rental, currencyCode)}</TableCell>
+                        <TableCell className="text-left font-mono font-bold">{formatCurrency(categoryTotals.revenue_fees, currencyCode)}</TableCell>
+                        <TableCell className="text-left font-mono font-bold">{formatCurrency(categoryTotals.cost_service, currencyCode)}</TableCell>
+                        <TableCell className="text-left font-mono font-bold">{formatCurrency(categoryTotals.cost_fines, currencyCode)}</TableCell>
+                        <TableCell className="text-left font-mono font-bold">{formatCurrency(categoryTotals.cost_other, currencyCode)}</TableCell>
+                        <TableCell className="text-left font-mono font-bold">{formatCurrency(categoryTotals.total_costs, currencyCode)}</TableCell>
                         <TableCell className="text-left font-mono font-bold">
                           <span className={cn(
                             categoryTotals.net_profit > 0 ? 'text-success' :
                             categoryTotals.net_profit < 0 ? 'text-destructive' : ''
                           )}>
-                            {formatCurrency(categoryTotals.net_profit)}
+                            {formatCurrency(categoryTotals.net_profit, currencyCode)}
                           </span>
                         </TableCell>
                         <TableCell>{getTotalsBadge(categoryTotals.net_profit)}</TableCell>

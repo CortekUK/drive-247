@@ -46,6 +46,7 @@ import { Progress } from "@/components/ui/progress";
 import { Textarea } from "@/components/ui/textarea";
 import { toast as sonnerToast } from "sonner";
 import { useRentalExtras, type RentalExtra } from "@/hooks/use-rental-extras";
+import { formatCurrency } from "@/lib/format-utils";
 
 const rentalSchema = z.object({
   customer_id: z.string().min(1, "Customer is required"),
@@ -53,7 +54,7 @@ const rentalSchema = z.object({
   start_date: z.date(),
   end_date: z.date(),
   rental_period_type: z.enum(["Daily", "Weekly", "Monthly"]),
-  monthly_amount: z.coerce.number().min(1, "Rental amount must be at least $1"),
+  monthly_amount: z.coerce.number().min(1, "Rental amount must be at least 1"),
   // New booking-aligned fields
   pickup_location: z.string().optional(),
   return_location: z.string().optional(),
@@ -207,7 +208,7 @@ const CreateRental = () => {
         title: "Promo code applied!",
         description: data.type === 'percentage'
           ? `${data.value}% discount will be applied`
-          : `$${data.value} discount will be applied`,
+          : `${formatCurrency(data.value, tenant?.currency_code || 'GBP')} discount will be applied`,
       });
 
     } catch (err) {
@@ -983,7 +984,7 @@ const CreateRental = () => {
           object_type: 'Rental',
           object_id: rental.id,
           title: `Payment due — ${customerName} (${vehicleReg})`,
-          message: `$${data.monthly_amount.toLocaleString()} payment due for rental of ${selectedVehicle?.make} ${selectedVehicle?.model} (${vehicleReg}). Due date: ${dueDate}.`,
+          message: `${formatCurrency(data.monthly_amount, tenant?.currency_code || 'GBP')} payment due for rental of ${selectedVehicle?.make} ${selectedVehicle?.model} (${vehicleReg}). Due date: ${dueDate}.`,
           due_on: dueDate,
           remind_on: dueDate,
           severity: 'warning',
@@ -1801,7 +1802,7 @@ const CreateRental = () => {
                                   <div className="flex items-center justify-between gap-1">
                                     <span className="font-medium text-sm truncate">{extra.name}</span>
                                     <span className="text-sm font-semibold text-primary whitespace-nowrap">
-                                      ${Number(extra.price).toFixed(2)}
+                                      {formatCurrency(Number(extra.price), tenant?.currency_code || 'USD')}
                                     </span>
                                   </div>
                                   {extra.description && (
@@ -1856,7 +1857,7 @@ const CreateRental = () => {
                                       </Button>
                                       {qty > 0 && (
                                         <span className="text-xs text-muted-foreground ml-1">
-                                          = ${(Number(extra.price) * qty).toFixed(2)}
+                                          = {formatCurrency(Number(extra.price) * qty, tenant?.currency_code || 'USD')}
                                         </span>
                                       )}
                                     </div>
@@ -1869,10 +1870,10 @@ const CreateRental = () => {
                       </div>
                       {Object.keys(selectedExtras).length > 0 && (
                         <div className="text-sm text-right font-medium">
-                          Extras Total: ${Object.entries(selectedExtras).reduce((sum, [id, qty]) => {
+                          Extras Total: {formatCurrency(Object.entries(selectedExtras).reduce((sum, [id, qty]) => {
                             const extra = activeExtras.find(e => e.id === id);
                             return sum + (extra ? Number(extra.price) * qty : 0);
-                          }, 0).toFixed(2)}
+                          }, 0), tenant?.currency_code || 'USD')}
                         </div>
                       )}
                     </div>
@@ -1938,7 +1939,7 @@ const CreateRental = () => {
                             {promoDetails && (
                               <p className="text-sm text-green-600 font-medium flex items-center gap-1">
                                 <Check className="w-4 h-4" />
-                                Code applied: {promoDetails.type === 'percentage' ? `${promoDetails.value}% off` : `$${promoDetails.value} off`}
+                                Code applied: {promoDetails.type === 'percentage' ? `${promoDetails.value}% off` : `${formatCurrency(promoDetails.value, tenant?.currency_code || 'GBP')} off`}
                               </p>
                             )}
                             <FormMessage />

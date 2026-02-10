@@ -97,11 +97,12 @@ serve(async (req) => {
         // Get tenant details for Stripe configuration
         const { data: tenant } = await supabase
           .from('tenants')
-          .select('stripe_mode, stripe_account_id, stripe_onboarding_complete')
+          .select('stripe_mode, stripe_account_id, stripe_onboarding_complete, currency_code')
           .eq('id', installment.tenant_id)
           .single()
 
         const stripeMode: StripeMode = (tenant?.stripe_mode as StripeMode) || 'test'
+        const currencyCode = (tenant?.currency_code || 'GBP').toLowerCase()
         const stripe = getStripeClient(stripeMode)
         const stripeAccountId = tenant ? getConnectAccountId(tenant) : null
         const stripeOptions = stripeAccountId ? { stripeAccount: stripeAccountId } : undefined
@@ -121,7 +122,7 @@ serve(async (req) => {
         // Create PaymentIntent with saved payment method (off-session)
         const paymentIntent = await stripe.paymentIntents.create({
           amount: Math.round(installment.amount * 100), // Convert to cents
-          currency: 'usd',
+          currency: currencyCode,
           customer: installment.stripe_customer_id,
           payment_method: installment.stripe_payment_method_id,
           off_session: true, // KEY: Charge without customer present

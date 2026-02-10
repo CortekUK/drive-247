@@ -1,5 +1,7 @@
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
+import { formatCurrency } from "@/lib/format-utils";
+import { useTenant } from "@/contexts/TenantContext";
 
 interface CustomerBalanceChipProps {
   balance: number;
@@ -18,11 +20,11 @@ export const CustomerBalanceChip = ({
   className = "",
   size = "default"
 }: CustomerBalanceChipProps) => {
-  const formatCurrency = (amount: number) =>
-    `$${amount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  const { tenant } = useTenant();
+  const currencyCode = tenant?.currency_code || 'GBP';
 
   const tooltipContent = totalCharges !== undefined && totalPayments !== undefined
-    ? `Charges ${formatCurrency(totalCharges)} • Payments ${formatCurrency(totalPayments)}`
+    ? `Charges ${formatCurrency(totalCharges, currencyCode)} • Payments ${formatCurrency(totalPayments, currencyCode)}`
     : status;
 
   const isSmall = size === 'small';
@@ -65,7 +67,7 @@ export const CustomerBalanceChip = ({
               isDebt ? "text-red-500" : "text-green-500",
               isSmall ? "text-xs" : "text-sm"
             )}>
-              {formatCurrency(balance)}
+              {formatCurrency(balance, currencyCode)}
             </span>
             <span className={cn(
               "text-muted-foreground",

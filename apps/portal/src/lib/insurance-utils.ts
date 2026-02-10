@@ -1,4 +1,5 @@
 import { differenceInDays } from "date-fns";
+import { formatCurrency as _formatCurrency } from "@/lib/format-utils";
 
 export type InsurancePolicyStatus = "Active" | "ExpiringSoon" | "Expired" | "Suspended" | "Cancelled" | "Inactive";
 
@@ -95,12 +96,15 @@ export const INSURANCE_DOCUMENT_TYPES = [
 
 export type InsuranceDocumentType = typeof INSURANCE_DOCUMENT_TYPES[number];
 
-export function formatCurrency(amount: number): string {
-  return new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currency: 'USD'
-  }).format(amount);
+/**
+ * Format currency for display (delegates to shared format-utils)
+ */
+export function formatInsuranceCurrency(amount: number, currencyCode: string = 'GBP'): string {
+  return _formatCurrency(amount, currencyCode);
 }
+
+// Re-export for backwards compatibility
+export { formatCurrency } from "@/lib/format-utils";
 
 export function validatePolicyNumber(policyNumber: string): boolean {
   return policyNumber.trim().length >= 3;

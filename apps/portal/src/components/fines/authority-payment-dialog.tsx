@@ -37,6 +37,8 @@ import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import { useAuditLog } from "@/hooks/use-audit-log";
 import { authorityPaymentSchema, type AuthorityPaymentFormValues } from "@/client-schemas/fines/authority-payment";
+import { formatCurrency } from "@/lib/format-utils";
+import { useTenant } from "@/contexts/TenantContext";
 
 interface AuthorityPaymentDialogProps {
   open: boolean;
@@ -56,6 +58,7 @@ export function AuthorityPaymentDialog({
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const { logAction } = useAuditLog();
+  const { tenant } = useTenant();
 
   const form = useForm<AuthorityPaymentFormValues>({
     resolver: zodResolver(authorityPaymentSchema),
@@ -86,7 +89,7 @@ export function AuthorityPaymentDialog({
     onSuccess: (data) => {
       toast({
         title: "Authority Payment Recorded",
-        description: `Payment of $${form.getValues('amount')} recorded successfully`,
+        description: `Payment of ${formatCurrency(form.getValues('amount'), tenant?.currency_code || 'GBP')} recorded successfully`,
       });
 
       // Invalidate relevant queries

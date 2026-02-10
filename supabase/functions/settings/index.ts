@@ -12,6 +12,7 @@ interface OrgSettings {
   company_name: string;
   timezone: string;
   currency_code: string;
+  distance_unit: 'km' | 'miles';
   date_format: string;
   logo_url?: string;
   reminder_due_today: boolean;
@@ -219,7 +220,7 @@ serve(async (req) => {
 
       // 3. Validate required fields
       const validFields = [
-        'company_name', 'timezone', 'currency_code', 'date_format',
+        'company_name', 'timezone', 'currency_code', 'distance_unit', 'date_format',
         'logo_url', 'reminder_due_today', 'reminder_overdue_1d',
         'reminder_overdue_multi', 'reminder_due_soon_2d', 'payment_mode',
         'tests_last_run_dashboard', 'tests_last_result_dashboard',
@@ -256,6 +257,13 @@ serve(async (req) => {
 
       if (filteredUpdate.currency_code && !['GBP', 'EUR', 'USD'].includes(filteredUpdate.currency_code)) {
         return new Response(JSON.stringify({ error: 'Invalid currency code' }), {
+          status: 400,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+
+      if (filteredUpdate.distance_unit && !['km', 'miles'].includes(filteredUpdate.distance_unit)) {
+        return new Response(JSON.stringify({ error: 'Invalid distance unit' }), {
           status: 400,
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         });

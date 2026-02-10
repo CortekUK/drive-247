@@ -8,6 +8,7 @@ import {
 } from "../_shared/aws-config.ts";
 import { sendEmail } from "../_shared/resend-service.ts";
 import { renderEmail, EmailTemplateData } from "../_shared/email-template-service.ts";
+import { formatCurrency } from "../_shared/format-utils.ts";
 
 interface NotifyRequest {
   customerName: string;
@@ -26,7 +27,7 @@ interface NotifyRequest {
   tenantId?: string;
 }
 
-const getApprovalEmailHtml = (data: NotifyRequest) => `
+const getApprovalEmailHtml = (data: NotifyRequest, currencyCode: string = 'USD') => `
 <!DOCTYPE html>
 <html>
 <head>
@@ -73,7 +74,7 @@ const getApprovalEmailHtml = (data: NotifyRequest) => `
                                 <tr>
                                     <td style="padding: 20px; text-align: center;">
                                         <p style="margin: 0 0 5px; color: rgba(255,255,255,0.9); font-size: 14px;">Total Charged</p>
-                                        <p style="margin: 0; color: white; font-size: 32px; font-weight: bold;">$${data.amount.toLocaleString()}</p>
+                                        <p style="margin: 0; color: white; font-size: 32px; font-weight: bold;">${formatCurrency(data.amount, currencyCode)}</p>
                                     </td>
                                 </tr>
                             </table>
@@ -174,15 +175,36 @@ serve(async (req) => {
       customerSMS: null as any,
     };
 
+    // Fetch tenant currency code
+    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+    const supabase = createClient(supabaseUrl, supabaseServiceKey);
+
+    let currencyCode = 'USD';
+    if (data.tenantId) {
+      try {
+        const { data: tenantData, error: tenantError } = await supabase
+          .from('tenants')
+          .select('currency_code')
+          .eq('id', data.tenantId)
+          .single();
+
+        if (tenantError) {
+          console.warn('Error fetching tenant currency:', tenantError);
+        } else if (tenantData?.currency_code) {
+          currencyCode = tenantData.currency_code;
+        }
+      } catch (error) {
+        console.warn('Error fetching tenant currency:', error);
+      }
+    }
+
     // Build customer email using template service if tenantId is provided
     let customerSubject = `Booking Confirmed! Reference: ${data.bookingRef} | DRIVE 247`;
-    let customerHtml = getApprovalEmailHtml(data);
+    let customerHtml = getApprovalEmailHtml(data, currencyCode);
 
     if (data.tenantId) {
       try {
-        const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
-        const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-        const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
         const templateData: EmailTemplateData = {
           customer_name: data.customerName,
@@ -195,7 +217,7 @@ serve(async (req) => {
           rental_number: data.bookingRef,
           rental_start_date: data.pickupDate,
           rental_end_date: data.returnDate,
-          rental_amount: `$${data.amount.toLocaleString()}`,
+          rental_amount: formatCurrency(data.amount, currencyCode),
         };
 
         const rendered = await renderEmail(supabase, data.tenantId, 'booking_approved', templateData);

@@ -1,4 +1,5 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
+import { formatCurrency } from '../_shared/format-utils.ts'
 
 const RESEND_API_KEY = Deno.env.get('RESEND_API_KEY')
 const FROM_EMAIL = Deno.env.get('FROM_EMAIL') || 'onboarding@resend.dev'
@@ -18,7 +19,8 @@ serve(async (req) => {
       customerEmail,
       customerName,
       bookingDetails,
-      supportEmail
+      supportEmail,
+      currencyCode = 'GBP'
     } = await req.json()
 
     // This is for admin notifications - customerEmail is the admin's email
@@ -103,7 +105,7 @@ serve(async (req) => {
 
                 ${hasPrice ? `
                   <div class="total">
-                    Total: $${bookingDetails.totalPrice}
+                    Total: ${formatCurrency(parseFloat(bookingDetails.totalPrice), currencyCode)}
                   </div>
                 ` : ''}
               </div>
@@ -158,7 +160,7 @@ Drop-off Location: ${bookingDetails.dropoffLocation}
 Date & Time: ${bookingDetails.pickupDate} at ${bookingDetails.pickupTime}
 Vehicle: ${bookingDetails.vehicleName}
 Passengers: ${bookingDetails.passengers || 'N/A'}
-${hasPrice ? `Total: $${bookingDetails.totalPrice}` : ''}
+${hasPrice ? `Total: ${formatCurrency(parseFloat(bookingDetails.totalPrice), currencyCode)}` : ''}
 
 ${bookingDetails.additionalRequirements ? `Additional Information:\n${bookingDetails.additionalRequirements}` : ''}
 

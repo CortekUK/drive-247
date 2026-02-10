@@ -24,6 +24,8 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { Wrench, Plus, Edit } from "lucide-react";
 import { ServiceRecord, ServiceFormData } from "@/hooks/use-vehicle-services";
 import { addServiceRecordSchema } from "@/client-schemas/vehicles/add-service-record";
+import { getCurrencySymbol } from "@/lib/format-utils";
+import { useTenant } from "@/contexts/TenantContext";
 
 interface AddServiceRecordDialogProps {
   onSubmit: (data: ServiceFormData) => void;
@@ -32,13 +34,15 @@ interface AddServiceRecordDialogProps {
   trigger?: React.ReactNode;
 }
 
-export function AddServiceRecordDialog({ 
-  onSubmit, 
-  isLoading, 
+export function AddServiceRecordDialog({
+  onSubmit,
+  isLoading,
   editingRecord,
-  trigger 
+  trigger
 }: AddServiceRecordDialogProps) {
   const [open, setOpen] = useState(false);
+  const { tenant } = useTenant();
+  const currencySymbol = getCurrencySymbol(tenant?.currency_code || 'GBP');
 
   const form = useForm<ServiceFormData>({
     resolver: zodResolver(addServiceRecordSchema),
@@ -165,10 +169,10 @@ export function AddServiceRecordDialog({
               name="cost"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Cost ($)</FormLabel>
+                  <FormLabel>Cost ({currencySymbol})</FormLabel>
                   <FormControl>
-                    <Input 
-                      type="number" 
+                    <Input
+                      type="number"
                       step="0.01"
                       placeholder="0.00"
                       {...field}

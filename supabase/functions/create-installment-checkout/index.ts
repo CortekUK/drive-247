@@ -2,6 +2,7 @@ import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.57.4'
 import Stripe from 'https://esm.sh/stripe@14.21.0?target=deno'
 import { getStripeClient, getConnectAccountId, type StripeMode } from '../_shared/stripe-client.ts'
+import { formatCurrency } from '../_shared/format-utils.ts'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -114,7 +115,7 @@ serve(async (req) => {
     if (tenantId) {
       const { data: tenant } = await supabase
         .from('tenants')
-        .select('stripe_mode, stripe_account_id, stripe_onboarding_complete')
+        .select('stripe_mode, stripe_account_id, stripe_onboarding_complete, currency_code')
         .eq('id', tenantId)
         .single()
 
@@ -125,12 +126,15 @@ serve(async (req) => {
       }
     }
 
+    // Get currency from tenant settings (Stripe expects lowercase)
+    const currencyCode = (tenantData?.currency_code || 'GBP').toLowerCase()
+
     // Get Stripe client for the tenant's mode
     const stripe = getStripeClient(stripeMode)
     const stripeAccountId = tenantData ? getConnectAccountId(tenantData) : null
     const stripeOptions = stripeAccountId ? { stripeAccount: stripeAccountId } : undefined
 
-    console.log('Stripe mode:', stripeMode, 'Connect account:', stripeAccountId)
+    console.log('Stripe mode:', stripeMode, 'Connect account:', stripeAccountId, 'currency:', currencyCode)
 
     // Use the installment amount provided (already calculated with proper rounding)
     const installmentAmount = body.installmentAmount
@@ -216,8 +220,8 @@ serve(async (req) => {
       ? 'Deposit, Fees & First Installment'
       : 'Deposit & Fees'
     const lineItemDescription = chargeFirstUpfront
-      ? `${body.vehicleName} - Deposit & Fees (${body.baseUpfrontAmount.toFixed(2)}) + 1st installment (${body.firstInstallmentAmount.toFixed(2)})`
-      : `${body.vehicleName} - Deposit & Fees (${body.baseUpfrontAmount.toFixed(2)})`
+      ? `${body.vehicleName} - Deposit & Fees (${formatCurrency(body.baseUpfrontAmount, currencyCode)}) + 1st installment (${formatCurrency(body.firstInstallmentAmount, currencyCode)})`
+      : `${body.vehicleName} - Deposit & Fees (${formatCurrency(body.baseUpfrontAmount, currencyCode)})`
     const paymentDescription = chargeFirstUpfront
       ? `Installment Plan: ${body.vehicleName} - Upfront + 1st payment`
       : `Installment Plan: ${body.vehicleName} - Upfront deposit & fees`
@@ -230,7 +234,7 @@ serve(async (req) => {
       line_items: [
         {
           price_data: {
-            currency: 'usd',
+            currency: currencyCode,
             product_data: {
               name: lineItemName,
               description: lineItemDescription,

@@ -16,6 +16,7 @@ import { cn } from "@/lib/utils";
 import { formatInTimeZone } from "date-fns-tz";
 import { closeRentalSchema, type CloseRentalFormValues } from "@/client-schemas/rentals/close-rental";
 import { useTenant } from "@/contexts/TenantContext";
+import { formatCurrency } from "@/lib/format-utils";
 
 type CloseRentalFormData = CloseRentalFormValues;
 
@@ -48,6 +49,7 @@ export const CloseRentalDialog = ({ open, onOpenChange, rental }: CloseRentalDia
   const queryClient = useQueryClient();
   const { tenant } = useTenant();
   const { logAction } = useAuditLog();
+  const currencyCode = tenant?.currency_code || 'GBP';
   
   const form = useForm<CloseRentalFormData>({
     resolver: zodResolver(closeRentalSchema),
@@ -168,7 +170,7 @@ export const CloseRentalDialog = ({ open, onOpenChange, rental }: CloseRentalDia
                 <p><span className="font-medium">Customer:</span> {rental.customer.name}</p>
                 <p><span className="font-medium">Vehicle:</span> {rental.vehicle.reg} ({rental.vehicle.make} {rental.vehicle.model})</p>
                 <p><span className="font-medium">Start Date:</span> {new Date(rental.start_date).toLocaleDateString()}</p>
-                <p><span className="font-medium">Monthly Amount:</span> ${rental.monthly_amount.toLocaleString()}</p>
+                <p><span className="font-medium">Monthly Amount:</span> {formatCurrency(rental.monthly_amount, currencyCode)}</p>
               </div>
             </div>
 

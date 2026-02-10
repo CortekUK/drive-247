@@ -8,11 +8,11 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { 
-  DropdownMenu, 
-  DropdownMenuContent, 
-  DropdownMenuItem, 
-  DropdownMenuTrigger 
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger
 } from "@/components/ui/dropdown-menu";
 import { EnhancedAddPlateDialog } from "@/components/plates/enhanced-add-plate-dialog";
 import { EnhancedAssignPlateDialog } from "@/components/plates/enhanced-assign-plate-dialog";
@@ -20,12 +20,13 @@ import { PlateStatusBadge } from "@/components/plates/plate-status-badge";
 import { PlateHistoryDrawer } from "@/components/plates/plate-history-drawer";
 import { useToast } from "@/hooks/use-toast";
 import { useTenant } from "@/contexts/TenantContext";
-import { 
-  Plus, 
-  ExternalLink, 
-  MoreHorizontal, 
-  Edit, 
-  History, 
+import { formatCurrency } from "@/lib/format-utils";
+import {
+  Plus,
+  ExternalLink,
+  MoreHorizontal,
+  Edit,
+  History,
   UserX,
   FileText
 } from "lucide-react";
@@ -247,7 +248,7 @@ export const EnhancedVehiclePlatesPanel = ({ vehicleId, vehicleReg }: EnhancedVe
                         {plate.order_date ? format(new Date(plate.order_date), "MM/dd/yyyy") : "-"}
                       </TableCell>
                       <TableCell className="text-right">
-                        {plate.cost ? `$${Number(plate.cost).toFixed(2)}` : "-"}
+                        {plate.cost ? formatCurrency(Number(plate.cost), tenant?.currency_code || 'USD') : "-"}
                       </TableCell>
                       <TableCell>
                         {plate.document_url ? (

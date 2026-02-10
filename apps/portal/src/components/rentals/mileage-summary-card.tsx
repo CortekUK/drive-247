@@ -4,6 +4,8 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { Gauge, TrendingUp, TrendingDown, Minus, Car } from "lucide-react";
 import { useTenant } from "@/contexts/TenantContext";
+import { formatDistance, formatDistanceLong, getDistanceUnitShort } from "@/lib/format-utils";
+import type { DistanceUnit } from "@/lib/format-utils";
 
 interface MileageSummaryCardProps {
   rentalId: string;
@@ -25,6 +27,7 @@ interface Vehicle {
 
 export function MileageSummaryCard({ rentalId, vehicleId }: MileageSummaryCardProps) {
   const { tenant } = useTenant();
+  const distanceUnit = (tenant?.distance_unit || 'miles') as DistanceUnit;
 
   // Fetch key handovers for this rental
   const { data: handovers } = useQuery({
@@ -95,7 +98,7 @@ export function MileageSummaryCard({ rentalId, vehicleId }: MileageSummaryCardPr
           <div className="space-y-1 p-3 bg-muted/50 rounded-lg">
             <p className="text-xs text-muted-foreground uppercase tracking-wide">At Pickup</p>
             <p className="text-xl font-semibold">
-              {pickupMileage ? `${pickupMileage.toLocaleString()} mi` : "—"}
+              {pickupMileage ? formatDistance(pickupMileage, distanceUnit) : "—"}
             </p>
           </div>
 
@@ -103,15 +106,15 @@ export function MileageSummaryCard({ rentalId, vehicleId }: MileageSummaryCardPr
           <div className="space-y-1 p-3 bg-muted/50 rounded-lg">
             <p className="text-xs text-muted-foreground uppercase tracking-wide">At Return</p>
             <p className="text-xl font-semibold">
-              {returnMileage ? `${returnMileage.toLocaleString()} mi` : "—"}
+              {returnMileage ? formatDistance(returnMileage, distanceUnit) : "—"}
             </p>
           </div>
 
           {/* Miles Driven */}
           <div className="space-y-1 p-3 bg-muted/50 rounded-lg">
-            <p className="text-xs text-muted-foreground uppercase tracking-wide">Miles Driven</p>
+            <p className="text-xs text-muted-foreground uppercase tracking-wide">{distanceUnit === 'miles' ? 'Miles' : 'Km'} Driven</p>
             <p className="text-xl font-semibold text-primary">
-              {milesDriven !== null ? `${milesDriven.toLocaleString()} mi` : "—"}
+              {milesDriven !== null ? formatDistance(milesDriven, distanceUnit) : "—"}
             </p>
           </div>
 
@@ -126,7 +129,7 @@ export function MileageSummaryCard({ rentalId, vehicleId }: MileageSummaryCardPr
                   <>
                     <TrendingUp className="h-4 w-4 text-destructive" />
                     <span className="text-xl font-semibold text-destructive">
-                      +{mileageDifference.toLocaleString()} mi
+                      +{mileageDifference.toLocaleString()} {getDistanceUnitShort(distanceUnit)}
                     </span>
                     <Badge variant="destructive" className="text-xs">Over</Badge>
                   </>
@@ -134,7 +137,7 @@ export function MileageSummaryCard({ rentalId, vehicleId }: MileageSummaryCardPr
                   <>
                     <TrendingDown className="h-4 w-4 text-green-600" />
                     <span className="text-xl font-semibold text-green-600">
-                      {mileageDifference.toLocaleString()} mi
+                      {mileageDifference.toLocaleString()} {getDistanceUnitShort(distanceUnit)}
                     </span>
                     <Badge className="bg-green-100 text-green-700 text-xs">Under</Badge>
                   </>
@@ -160,7 +163,7 @@ export function MileageSummaryCard({ rentalId, vehicleId }: MileageSummaryCardPr
               <Car className="h-4 w-4" />
               <span>Vehicle's Current Odometer</span>
             </div>
-            <span className="font-semibold">{currentVehicleMileage.toLocaleString()} miles</span>
+            <span className="font-semibold">{formatDistanceLong(currentVehicleMileage, distanceUnit)}</span>
           </div>
         )}
       </CardContent>

@@ -2,6 +2,8 @@ import { Badge } from "@/components/ui/badge";
 import { TableCell, TableRow } from "@/components/ui/table";
 import { formatInTimeZone } from "date-fns-tz";
 import { RentalCharge } from "@/hooks/use-rental-ledger-data";
+import { useTenant } from "@/contexts/TenantContext";
+import { formatCurrency } from "@/lib/format-utils";
 
 interface RentalChargeRowProps {
   charge: RentalCharge;
@@ -26,7 +28,9 @@ const getChargeStatus = (charge: RentalCharge) => {
 };
 
 export const RentalChargeRow = ({ charge }: RentalChargeRowProps) => {
+  const { tenant } = useTenant();
   const status = getChargeStatus(charge);
+  const currencyCode = tenant?.currency_code || 'GBP';
 
   return (
     <TableRow className="hover:bg-muted/50">
@@ -45,7 +49,7 @@ export const RentalChargeRow = ({ charge }: RentalChargeRowProps) => {
         {charge.due_date ? formatInTimeZone(new Date(charge.due_date), 'Europe/London', "dd MMM yyyy") : '-'}
       </TableCell>
       <TableCell className="text-right font-medium">
-        ${Math.abs(Number(charge.amount)).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+        {formatCurrency(Math.abs(Number(charge.amount)), currencyCode)}
       </TableCell>
     </TableRow>
   );

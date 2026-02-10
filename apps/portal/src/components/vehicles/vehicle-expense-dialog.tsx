@@ -10,6 +10,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { Plus, Receipt } from "lucide-react";
 import { ExpenseFormData } from "@/hooks/use-vehicle-expenses";
 import { vehicleExpenseSchema } from "@/client-schemas/vehicles/vehicle-expense";
+import { getCurrencySymbol } from "@/lib/format-utils";
+import { useTenant } from "@/contexts/TenantContext";
 
 interface VehicleExpenseDialogProps {
   onSubmit: (data: ExpenseFormData) => void;
@@ -18,7 +20,9 @@ interface VehicleExpenseDialogProps {
 
 export const VehicleExpenseDialog = ({ onSubmit, isLoading }: VehicleExpenseDialogProps) => {
   const [open, setOpen] = useState(false);
-  
+  const { tenant } = useTenant();
+  const currencySymbol = getCurrencySymbol(tenant?.currency_code || 'GBP');
+
   const form = useForm<ExpenseFormData>({
     resolver: zodResolver(vehicleExpenseSchema),
     defaultValues: {
@@ -98,7 +102,7 @@ export const VehicleExpenseDialog = ({ onSubmit, isLoading }: VehicleExpenseDial
               name="amount"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Amount ($)</FormLabel>
+                  <FormLabel>Amount ({currencySymbol})</FormLabel>
                   <FormControl>
                     <Input
                       type="number"

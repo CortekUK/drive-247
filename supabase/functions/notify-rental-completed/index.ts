@@ -8,6 +8,7 @@ import {
 } from "../_shared/aws-config.ts";
 import { sendEmail } from "../_shared/resend-service.ts";
 import { renderEmail, EmailTemplateData } from "../_shared/email-template-service.ts";
+import { formatCurrency } from "../_shared/format-utils.ts";
 
 interface NotifyRequest {
   customerName: string;
@@ -27,7 +28,7 @@ interface NotifyRequest {
   tenantId?: string;
 }
 
-const getEmailHtml = (data: NotifyRequest) => {
+const getEmailHtml = (data: NotifyRequest, currencyCode: string) => {
   const hasAdditionalCharges = data.additionalCharges && data.additionalCharges > 0;
 
   return `
@@ -91,12 +92,12 @@ const getEmailHtml = (data: NotifyRequest) => {
                                         <table role="presentation" style="width: 100%; border-collapse: collapse;">
                                             <tr>
                                                 <td style="padding: 8px 0; color: #666; font-size: 14px;">Rental Total:</td>
-                                                <td style="padding: 8px 0; color: #1a1a1a; font-weight: 600; font-size: 14px; text-align: right;">$${data.totalAmount.toLocaleString()}</td>
+                                                <td style="padding: 8px 0; color: #1a1a1a; font-weight: 600; font-size: 14px; text-align: right;">${formatCurrency(data.totalAmount, currencyCode)}</td>
                                             </tr>
                                             ${hasAdditionalCharges ? `
                                             <tr>
                                                 <td style="padding: 8px 0; color: #666; font-size: 14px;">Additional Charges:</td>
-                                                <td style="padding: 8px 0; color: #dc2626; font-weight: 600; font-size: 14px; text-align: right;">$${data.additionalCharges?.toLocaleString()}</td>
+                                                <td style="padding: 8px 0; color: #dc2626; font-weight: 600; font-size: 14px; text-align: right;">${formatCurrency(data.additionalCharges || 0, currencyCode)}</td>
                                             </tr>
                                             <tr>
                                                 <td colspan="2" style="padding: 8px 0 0;">
@@ -110,7 +111,7 @@ const getEmailHtml = (data: NotifyRequest) => {
                                             </tr>
                                             <tr>
                                                 <td style="padding: 12px 0; color: #1a1a1a; font-size: 16px; font-weight: 600;">Total:</td>
-                                                <td style="padding: 12px 0; color: #1a1a1a; font-weight: 700; font-size: 18px; text-align: right;">$${((data.totalAmount || 0) + (data.additionalCharges || 0)).toLocaleString()}</td>
+                                                <td style="padding: 12px 0; color: #1a1a1a; font-weight: 700; font-size: 18px; text-align: right;">${formatCurrency((data.totalAmount || 0) + (data.additionalCharges || 0), currencyCode)}</td>
                                             </tr>
                                             ` : ''}
                                         </table>
@@ -210,6 +211,21 @@ serve(async (req) => {
     const data: NotifyRequest = await req.json();
     console.log('Sending rental completed notification for:', data.bookingRef);
 
+    // Fetch tenant currency code
+    let currencyCode = 'GBP';
+    if (data.tenantId) {
+      const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+      const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+      const supabase = createClient(supabaseUrl, supabaseServiceKey);
+
+      const { data: tenantInfo } = await supabase
+        .from('tenants')
+        .select('currency_code')
+        .eq('id', data.tenantId)
+        .single();
+      currencyCode = tenantInfo?.currency_code || 'GBP';
+    }
+
     const results = {
       customerEmail: null as any,
       customerSMS: null as any,
@@ -217,7 +233,7 @@ serve(async (req) => {
 
     // Build customer email using template service if tenantId is provided
     let customerSubject = `Rental Completed - Thank You! | DRIVE 247`;
-    let customerHtml = getEmailHtml(data);
+    let customerHtml = getEmailHtml(data, currencyCode);
 
     if (data.tenantId) {
       try {

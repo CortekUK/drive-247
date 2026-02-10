@@ -15,6 +15,8 @@ import {
   getStatusColor,
 } from "@/lib/calendar-utils";
 import { cn } from "@/lib/utils";
+import { formatCurrency } from "@/lib/format-utils";
+import { useTenant } from "@/contexts/TenantContext";
 
 interface RentalBarProps {
   rental: CalendarRental;
@@ -38,6 +40,7 @@ function getDuration(start: string, end: string | null) {
 
 export function RentalBar({ rental, position, topOffset, barHeight }: RentalBarProps) {
   const router = useRouter();
+  const { tenant } = useTenant();
   const colors = getStatusColor(rental.computed_status);
   const isInactive =
     rental.computed_status === "Completed" ||
@@ -125,7 +128,7 @@ export function RentalBar({ rental, position, topOffset, barHeight }: RentalBarP
             <div className="flex items-center gap-2">
               <DollarSign className="h-3.5 w-3.5 text-muted-foreground/60 shrink-0" />
               <span className="text-xs font-semibold text-foreground">
-                ${rental.monthly_amount.toLocaleString("en-US", { minimumFractionDigits: 2 })}
+                {formatCurrency(rental.monthly_amount, tenant?.currency_code || 'GBP')}
                 <span className="text-muted-foreground/60 font-normal">/mo</span>
               </span>
             </div>

@@ -17,6 +17,7 @@ import { Loader2, Calendar, AlertCircle, RefreshCw, Car } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { useTenant } from '@/contexts/TenantContext';
+import { formatCurrency } from '@/lib/format-utils';
 import { useCustomerAuthStore } from '@/stores/customer-auth-store';
 import { format, addDays, parseISO, differenceInDays } from 'date-fns';
 import type { CustomerRental } from '@/hooks/use-customer-rentals';
@@ -136,8 +137,7 @@ export function RenewRentalDialog({ open, onOpenChange, rental }: RenewRentalDia
     setShowConfirmation(false);
   };
 
-  const formatCurrency = (amount: number) =>
-    new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(amount);
+  const currencyCode = tenant?.currency_code || 'GBP';
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
@@ -164,7 +164,7 @@ export function RenewRentalDialog({ open, onOpenChange, rental }: RenewRentalDia
                     {format(sourceStartDate, 'MMM dd, yyyy')} — {format(sourceEndDate, 'MMM dd, yyyy')}
                   </p>
                   <p className="text-sm font-medium mt-0.5">
-                    {formatCurrency(rental.monthly_amount)} / {rental.rental_period_type?.toLowerCase() || 'month'}
+                    {formatCurrency(rental.monthly_amount, currencyCode)} / {rental.rental_period_type?.toLowerCase() || 'month'}
                   </p>
                 </div>
               </div>
@@ -262,7 +262,7 @@ export function RenewRentalDialog({ open, onOpenChange, rental }: RenewRentalDia
                 <div className="border-t pt-3 flex justify-between items-center">
                   <span className="text-sm font-medium">Rate</span>
                   <span className="font-bold text-lg">
-                    {formatCurrency(rental.monthly_amount)} / {rental.rental_period_type?.toLowerCase() || 'month'}
+                    {formatCurrency(rental.monthly_amount, currencyCode)} / {rental.rental_period_type?.toLowerCase() || 'month'}
                   </span>
                 </div>
               </div>

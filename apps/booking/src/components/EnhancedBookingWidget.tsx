@@ -10,6 +10,8 @@ import { Separator } from "@/components/ui/separator";
 import { TimePicker } from "@/components/ui/time-picker";
 import { supabase } from "@/integrations/supabase/client";
 import { useTenant } from "@/contexts/TenantContext";
+import { formatCurrency, getCurrencySymbol, getDistanceUnitLong } from "@/lib/format-utils";
+import type { DistanceUnit } from "@/lib/format-utils";
 import { toast } from "sonner";
 import { Car } from "lucide-react";
 import BookingConfirmation from "./BookingConfirmation";
@@ -38,6 +40,8 @@ interface PricingExtra {
 
 const EnhancedBookingWidget = () => {
   const { tenant } = useTenant();
+  const currencyCode = tenant?.currency_code || 'GBP';
+  const distanceUnit = (tenant?.distance_unit || 'miles') as DistanceUnit;
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
   const [pricingExtras, setPricingExtras] = useState<PricingExtra[]>([]);
   const [selectedVehicle, setSelectedVehicle] = useState<Vehicle | null>(null);
@@ -379,7 +383,7 @@ const EnhancedBookingWidget = () => {
         </div>
 
         <div className="space-y-2">
-          <Label htmlFor="estimatedMiles">Estimated Miles</Label>
+          <Label htmlFor="estimatedMiles">Estimated {getDistanceUnitLong(distanceUnit) === 'miles' ? 'Miles' : 'Kilometres'}</Label>
           <Input
             id="estimatedMiles"
             type="number"
@@ -400,7 +404,7 @@ const EnhancedBookingWidget = () => {
               onCheckedChange={(checked) => setIsLongDrive(checked as boolean)}
             />
             <Label htmlFor="longDrive" className="text-sm cursor-pointer">
-              Long drive (over 100 miles)
+              Long drive (over 100 {getDistanceUnitLong(distanceUnit)})
             </Label>
           </div>
           
@@ -462,7 +466,7 @@ const EnhancedBookingWidget = () => {
                       {vehicle.capacity} passengers
                     </span>
                     <span className="font-semibold text-accent">
-                      ${vehicle.base_price_per_mile.toFixed(2)}/mile
+                      {formatCurrency(vehicle.base_price_per_mile, currencyCode)}/{distanceUnit === 'miles' ? 'mile' : 'km'}
                     </span>
                   </div>
 
@@ -491,7 +495,7 @@ const EnhancedBookingWidget = () => {
                   />
                   <div className="flex-1">
                     <Label htmlFor={extra.id} className="cursor-pointer font-medium">
-                      {extra.extra_name} - ${extra.price}
+                      {extra.extra_name} - {formatCurrency(extra.price, currencyCode)}
                     </Label>
                     <p className="text-xs text-muted-foreground">{extra.description}</p>
                   </div>
@@ -522,28 +526,28 @@ const EnhancedBookingWidget = () => {
               
               <div className="space-y-2 text-sm">
                 <div className="flex justify-between">
-                  <span>Base fare ({estimatedMiles} miles)</span>
-                  <span>${breakdown.basePrice.toFixed(2)}</span>
+                  <span>Base fare ({estimatedMiles} {getDistanceUnitLong(distanceUnit)})</span>
+                  <span>{formatCurrency(breakdown.basePrice, currencyCode)}</span>
                 </div>
 
                 {breakdown.extras > 0 && (
                   <div className="flex justify-between text-muted-foreground">
                     <span>Extras</span>
-                    <span>${breakdown.extras.toFixed(2)}</span>
+                    <span>{formatCurrency(breakdown.extras, currencyCode)}</span>
                   </div>
                 )}
 
                 {breakdown.waitTime > 0 && (
                   <div className="flex justify-between text-muted-foreground">
                     <span>Wait time ({waitTimeHours}h)</span>
-                    <span>${breakdown.waitTime.toFixed(2)}</span>
+                    <span>{formatCurrency(breakdown.waitTime, currencyCode)}</span>
                   </div>
                 )}
 
                 {breakdown.overnight > 0 && (
                   <div className="flex justify-between text-muted-foreground">
                     <span>Overnight surcharge</span>
-                    <span>${breakdown.overnight.toFixed(2)}</span>
+                    <span>{formatCurrency(breakdown.overnight, currencyCode)}</span>
                   </div>
                 )}
 
@@ -552,7 +556,7 @@ const EnhancedBookingWidget = () => {
                 <div className="flex justify-between items-center pt-2">
                   <span className="font-semibold">Total Price:</span>
                   <span className="text-3xl font-display font-bold text-accent">
-                    ${breakdown.total.toFixed(2)}
+                    {formatCurrency(breakdown.total, currencyCode)}
                   </span>
                 </div>
               </div>

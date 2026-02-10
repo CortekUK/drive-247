@@ -4,6 +4,8 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Check, Shield, ShieldCheck, Crown, ChevronDown, ChevronUp, Info } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { formatCurrency, getCurrencySymbol } from "@/lib/format-utils";
+import { useTenant } from "@/contexts/TenantContext";
 import { supabase } from "@/integrations/supabase/client";
 import {
   Collapsible,
@@ -51,6 +53,8 @@ const TierIcon = ({ tier, className }: { tier: string; className?: string }) => 
 };
 
 const ProtectionPlanSelector = ({ selectedPlanId, onSelectPlan, rentalDays }: ProtectionPlanSelectorProps) => {
+  const { tenant } = useTenant();
+  const currencyCode = tenant?.currency_code || 'GBP';
   const [plans, setPlans] = useState<ProtectionPlan[]>([]);
   const [loading, setLoading] = useState(true);
   const [expandedPlan, setExpandedPlan] = useState<string | null>(null);
@@ -78,25 +82,26 @@ const ProtectionPlanSelector = ({ selectedPlanId, onSelectPlan, rentalDays }: Pr
 
   const calculatePlanCost = (plan: ProtectionPlan) => {
     // Calculate most cost-effective pricing
+    const sym = getCurrencySymbol(currencyCode);
     if (rentalDays >= 30 && plan.price_per_month) {
       const months = Math.ceil(rentalDays / 30);
       return {
         total: plan.price_per_month * months,
         perDay: plan.price_per_month / 30,
-        label: `$${plan.price_per_month}/month`
+        label: `${sym}${plan.price_per_month}/month`
       };
     } else if (rentalDays >= 7 && plan.price_per_week) {
       const weeks = Math.ceil(rentalDays / 7);
       return {
         total: plan.price_per_week * weeks,
         perDay: plan.price_per_week / 7,
-        label: `$${plan.price_per_week}/week`
+        label: `${sym}${plan.price_per_week}/week`
       };
     } else {
       return {
         total: plan.price_per_day * rentalDays,
         perDay: plan.price_per_day,
-        label: `$${plan.price_per_day}/day`
+        label: `${sym}${plan.price_per_day}/day`
       };
     }
   };
@@ -162,7 +167,7 @@ const ProtectionPlanSelector = ({ selectedPlanId, onSelectPlan, rentalDays }: Pr
             </div>
             <div className="flex items-center justify-between sm:justify-end gap-3 sm:gap-4 pt-2 sm:pt-0 border-t sm:border-0 border-border/50">
               <div className="sm:text-right">
-                <div className="text-xl sm:text-2xl font-bold">$0</div>
+                <div className="text-xl sm:text-2xl font-bold">{getCurrencySymbol(currencyCode)}0</div>
                 <div className="text-xs text-muted-foreground">No additional cost</div>
               </div>
               {selectedPlanId === null && (
@@ -236,7 +241,7 @@ const ProtectionPlanSelector = ({ selectedPlanId, onSelectPlan, rentalDays }: Pr
                     {plan.deductible_amount === 0 ? (
                       <Badge variant="default" className="bg-green-600 text-xs">ZERO DEDUCTIBLE</Badge>
                     ) : (
-                      <Badge variant="secondary" className="text-xs">${plan.deductible_amount.toLocaleString()} Deductible</Badge>
+                      <Badge variant="secondary" className="text-xs">{formatCurrency(plan.deductible_amount, currencyCode, { minimumFractionDigits: 0, maximumFractionDigits: 0 })} Deductible</Badge>
                     )}
                   </div>
                 </div>
@@ -245,7 +250,7 @@ const ProtectionPlanSelector = ({ selectedPlanId, onSelectPlan, rentalDays }: Pr
                 <div className="flex sm:flex-col items-center sm:items-end justify-between sm:justify-start gap-2 sm:gap-0 pt-2 sm:pt-0 border-t sm:border-0 border-border/50">
                   <div className="flex flex-col sm:items-end">
                     <div className="text-2xl sm:text-3xl font-bold" style={{ color: plan.color_theme || '#60A5FA' }}>
-                      ${cost.total.toLocaleString()}
+                      {formatCurrency(cost.total, currencyCode)}
                     </div>
                     <div className="text-xs text-muted-foreground">{cost.label} × {rentalDays} days</div>
                     <div className="text-xs font-medium text-green-600 mt-1">
@@ -332,7 +337,7 @@ const ProtectionPlanSelector = ({ selectedPlanId, onSelectPlan, rentalDays }: Pr
                       <div className="pt-3 border-t border-border">
                         <div className="flex items-center justify-between text-sm">
                           <span className="text-muted-foreground">Maximum Coverage:</span>
-                          <span className="font-semibold">${plan.max_coverage_amount.toLocaleString()}</span>
+                          <span className="font-semibold">{formatCurrency(plan.max_coverage_amount, currencyCode, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}</span>
                         </div>
                       </div>
                     )}

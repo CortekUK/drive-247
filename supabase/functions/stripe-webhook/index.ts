@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.4";
 import Stripe from "https://esm.sh/stripe@14.21.0?target=deno";
+import { formatCurrency } from '../_shared/format-utils.ts';
 
 const stripe = new Stripe(Deno.env.get("STRIPE_SECRET_KEY") || "", {
   apiVersion: "2023-10-16",
@@ -823,13 +824,22 @@ serve(async (req) => {
 
           // Create portal notification
           if (payment.tenant_id) {
+            // Get tenant currency for formatting
+            let refundCurrencyCode = 'GBP';
+            const { data: refundTenant } = await supabase
+              .from("tenants")
+              .select("currency_code")
+              .eq("id", payment.tenant_id)
+              .single();
+            if (refundTenant?.currency_code) refundCurrencyCode = refundTenant.currency_code;
+
             const { error: notificationError } = await supabase
               .from("notifications")
               .insert({
                 tenant_id: payment.tenant_id,
                 type: "refund_processed",
                 title: "Refund Processed",
-                message: `Refund of $${refundAmount.toFixed(2)} has been processed successfully`,
+                message: `Refund of ${formatCurrency(refundAmount, refundCurrencyCode)} has been processed successfully`,
                 data: {
                   payment_id: payment.id,
                   rental_id: payment.rental_id,

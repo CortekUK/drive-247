@@ -14,6 +14,7 @@ interface Tenant {
   integration_bonzah: boolean | null;
   timezone: string | null;
   currency_code: string | null;
+  distance_unit: 'km' | 'miles' | null;
 }
 
 interface TenantContextType {
@@ -109,7 +110,7 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
       // Query the tenants table by slug
       const { data, error: queryError } = await supabase
         .from('tenants')
-        .select('id, slug, company_name, status, contact_email, admin_name, integration_veriff, integration_bonzah, timezone, currency_code')
+        .select('id, slug, company_name, status, contact_email, admin_name, integration_veriff, integration_bonzah, timezone, currency_code, distance_unit')
         .eq('slug', slug)
         .eq('status', 'active')
         .single();

@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { formatCurrency } from '../_shared/format-utils.ts'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -104,6 +105,17 @@ async function chargeFineToAccount(supabase: any, fineId: string): Promise<FineC
       remainingAmount: 0,
       error: 'Fine not found'
     };
+  }
+
+  // Get tenant currency code
+  let currencyCode = 'GBP';
+  if (fine.tenant_id) {
+    const { data: tenant } = await supabase
+      .from('tenants')
+      .select('currency_code')
+      .eq('id', fine.tenant_id)
+      .single();
+    if (tenant?.currency_code) currencyCode = tenant.currency_code;
   }
 
   // Validate fine can be charged
@@ -219,7 +231,7 @@ async function chargeFineToAccount(supabase: any, fineId: string): Promise<FineC
     console.error('Error creating P&L cost entry:', pnlError);
     // Continue processing even if P&L entry fails - the charge should still work
   } else {
-    console.log(`P&L cost entry created for fine ${fineId}: £${fine.amount}`);
+    console.log(`P&L cost entry created for fine ${fineId}: ${formatCurrency(fine.amount, currencyCode)}`);
   }
 
   // Auto-allocate available credit (FIFO)

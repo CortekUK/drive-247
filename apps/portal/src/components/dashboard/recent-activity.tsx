@@ -3,6 +3,8 @@ import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Activity, DollarSign, Car, User, Settings } from "lucide-react";
 import { useRecentActivity } from "@/hooks/use-recent-activity";
+import { useTenant } from "@/contexts/TenantContext";
+import { formatCurrency } from "@/lib/format-utils";
 import { Skeleton } from "@/components/ui/skeleton";
 
 const ActivityIcon = ({ type }: { type: string }) => {
@@ -36,6 +38,8 @@ const StatusBadge = ({ status }: { status: string }) => {
 
 export const RecentActivity = () => {
   const { data: activities = [], isLoading } = useRecentActivity();
+  const { tenant } = useTenant();
+  const currencyCode = tenant?.currency_code || 'GBP';
 
   return (
     <Card className="shadow-card rounded-lg overflow-hidden">
@@ -83,7 +87,7 @@ export const RecentActivity = () => {
                       <span className="text-xs text-muted-foreground truncate block max-w-full">{activity.customer}</span>
                     )}
                     {activity.amount && (
-                      <span className="text-xs font-semibold text-success whitespace-nowrap flex-shrink-0">${activity.amount}</span>
+                      <span className="text-xs font-semibold text-success whitespace-nowrap flex-shrink-0">{formatCurrency(Number(activity.amount), currencyCode)}</span>
                     )}
                   </div>
                 </div>

@@ -11,6 +11,9 @@ import { Badge } from "@/components/ui/badge";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { ChevronLeft, Car, FileText, DollarSign, Wrench, Calendar, TrendingUp, TrendingDown, Plus, Shield, Clock, Trash2, Receipt, Users, Eye, EyeOff, Pencil, Ban, Upload } from "lucide-react";
 import { getContractTotal } from "@/lib/vehicle-utils";
+import { useTenant } from "@/contexts/TenantContext";
+import { formatCurrency, getPerMonthLabelLong, getUnlimitedLabel } from "@/lib/format-utils";
+import type { DistanceUnit } from "@/lib/format-utils";
 import { format } from "date-fns";
 import { startOfMonth, endOfMonth, parseISO } from "date-fns";
 import { AcquisitionBadge } from "@/components/vehicles/acquisition-badge";
@@ -130,6 +133,9 @@ export default function VehicleDetail() {
   const searchParams = useSearchParams();
   const { toast } = useToast();
   const { logAction } = useAuditLog();
+  const { tenant } = useTenant();
+  const distanceUnit = (tenant?.distance_unit || 'miles') as DistanceUnit;
+  const currencyCode = tenant?.currency_code || 'GBP';
   const [showAddFineDialog, setShowAddFineDialog] = useState(false);
   const [showEditDialog, setShowEditDialog] = useState(false);
   const [showDisposeDialog, setShowDisposeDialog] = useState(false);
@@ -499,7 +505,7 @@ export default function VehicleDetail() {
                 {vehicle.fuel_type && <MetricItem label="Fuel Type" value={vehicle.fuel_type === 'Petrol' ? 'Gas' : vehicle.fuel_type} />}
                 <MetricItem
                   label="Allowed Mileage"
-                  value={vehicle.allowed_mileage ? `${vehicle.allowed_mileage.toLocaleString()} mi/month` : 'Unlimited'}
+                  value={vehicle.allowed_mileage ? `${vehicle.allowed_mileage.toLocaleString()} ${getPerMonthLabelLong(distanceUnit)}` : getUnlimitedLabel(distanceUnit)}
                 />
                 <div className="flex items-center gap-2">
                   <span className="text-xs text-muted-foreground">Acquisition:</span>
@@ -584,7 +590,7 @@ export default function VehicleDetail() {
                   <MetricCard title="Total Revenue" icon={TrendingUp}>
                     <div className="space-y-2">
                       <div className="text-3xl font-bold text-emerald-600">
-                        ${plSummary.totalRevenue.toLocaleString()}
+                        {formatCurrency(plSummary.totalRevenue, currencyCode)}
                       </div>
                       <p className="text-xs text-muted-foreground">All rental income</p>
                     </div>
@@ -593,7 +599,7 @@ export default function VehicleDetail() {
                   <MetricCard title="Total Costs" icon={Receipt}>
                     <div className="space-y-2">
                       <div className="text-3xl font-bold text-orange-600">
-                        ${plSummary.totalCosts.toLocaleString()}
+                        {formatCurrency(plSummary.totalCosts, currencyCode)}
                       </div>
                       <p className="text-xs text-muted-foreground">All vehicle expenses</p>
                     </div>
@@ -602,7 +608,7 @@ export default function VehicleDetail() {
                   <MetricCard title={netProfit >= 0 ? "Net Profit" : "Net Loss"} icon={TrendingUp}>
                     <div className="space-y-2">
                       <div className={`text-3xl font-bold ${netProfit >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
-                        ${Math.abs(netProfit).toLocaleString()}
+                        {formatCurrency(Math.abs(netProfit), currencyCode)}
                       </div>
                       {netProfit >= 0 && (
                         <p className="text-xs text-muted-foreground">Total profit</p>
@@ -660,7 +666,7 @@ export default function VehicleDetail() {
                             </TableCell>
                             <TableCell>{service.mileage?.toLocaleString() || '-'}</TableCell>
                             <TableCell className="text-right font-medium">
-                              ${service.cost.toLocaleString()}
+                              {formatCurrency(service.cost, currencyCode)}
                             </TableCell>
                             <TableCell className="max-w-[200px]">
                               <TruncatedCell content={service.description || '-'} maxLength={30} />

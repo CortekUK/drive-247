@@ -23,6 +23,7 @@ import { useCustomerVehicleRental } from "@/hooks/use-customer-vehicle-rental";
 import { useCustomerBalanceWithStatus } from "@/hooks/use-customer-balance";
 import { createInvoice } from "@/lib/invoice-utils";
 import { cn } from "@/lib/utils";
+import { formatCurrency, getCurrencySymbol } from "@/lib/format-utils";
 
 const paymentSchema = z.object({
   customer_id: z.string().min(1, "Customer is required"),
@@ -43,6 +44,7 @@ interface AddPaymentDialogProps {
   customer_id?: string;
   vehicle_id?: string;
   rental_id?: string;
+  defaultAmount?: number;
 }
 
 export const AddPaymentDialog = ({
@@ -50,7 +52,8 @@ export const AddPaymentDialog = ({
   onOpenChange,
   customer_id,
   vehicle_id,
-  rental_id: propRentalId
+  rental_id: propRentalId,
+  defaultAmount
 }: AddPaymentDialogProps) => {
   const [loading, setLoading] = useState(false);
   const [stripeLoading, setStripeLoading] = useState(false);
@@ -81,8 +84,11 @@ export const AddPaymentDialog = ({
       if (vehicle_id) {
         form.setValue("vehicle_id", vehicle_id);
       }
+      if (defaultAmount) {
+        form.setValue("amount", defaultAmount);
+      }
     }
-  }, [open, customer_id, vehicle_id, form]);
+  }, [open, customer_id, vehicle_id, defaultAmount, form]);
 
   // Reset form when dialog closes
   useEffect(() => {
@@ -295,8 +301,8 @@ export const AddPaymentDialog = ({
       // Prevent overpayment - warn if paying more than outstanding
       if (outstandingBalance !== undefined && data.amount > outstandingBalance && outstandingBalance > 0) {
         const confirmOverpay = window.confirm(
-          `The payment amount ($${data.amount.toFixed(2)}) exceeds the outstanding balance ($${outstandingBalance.toFixed(2)}). ` +
-          `The excess $${(data.amount - outstandingBalance).toFixed(2)} will remain as credit. Continue?`
+          `The payment amount (${formatCurrency(data.amount, tenant?.currency_code || 'USD')}) exceeds the outstanding balance (${formatCurrency(outstandingBalance, tenant?.currency_code || 'USD')}). ` +
+          `The excess ${formatCurrency(data.amount - outstandingBalance, tenant?.currency_code || 'USD')} will remain as credit. Continue?`
         );
         if (!confirmOverpay) {
           setLoading(false);
@@ -364,7 +370,7 @@ export const AddPaymentDialog = ({
 
       toast({
         title: "Payment Recorded",
-        description: `Payment of $${data.amount} has been recorded and applied.`,
+        description: `Payment of ${formatCurrency(data.amount, tenant?.currency_code || 'USD')} has been recorded and applied.`,
       });
 
       logAction({
@@ -630,7 +636,7 @@ export const AddPaymentDialog = ({
         {/* Outstanding balance info */}
         {selectedCustomerId && outstandingBalance > 0 && (
           <div className="text-sm px-3 py-2 rounded-lg bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800">
-            Outstanding balance: <span className="font-semibold">${outstandingBalance.toLocaleString('en-US', { minimumFractionDigits: 2 })}</span>
+            Outstanding balance: <span className="font-semibold">{formatCurrency(outstandingBalance, tenant?.currency_code || 'USD')}</span>
           </div>
         )}
 
@@ -659,7 +665,7 @@ export const AddPaymentDialog = ({
                   name="amount"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Payment Amount ($)</FormLabel>
+                      <FormLabel>Payment Amount ({getCurrencySymbol(tenant?.currency_code || 'USD')})</FormLabel>
                       <FormControl>
                         <div className="space-y-2">
                           <Input
@@ -673,7 +679,7 @@ export const AddPaymentDialog = ({
                           {outstandingBalance !== undefined && outstandingBalance > 0 && (
                             <div className="flex items-center justify-between text-sm">
                               <span className="text-muted-foreground">
-                                Outstanding: <span className="font-medium text-foreground">${outstandingBalance.toLocaleString('en-US', { minimumFractionDigits: 2 })}</span>
+                                Outstanding: <span className="font-medium text-foreground">{formatCurrency(outstandingBalance, tenant?.currency_code || 'USD')}</span>
                               </span>
                               <Button
                                 type="button"
@@ -818,7 +824,7 @@ export const AddPaymentDialog = ({
                     <p className="text-xs text-muted-foreground mt-0.5">
                       Opens a Stripe checkout page in a new tab for card payment.
                       {stripeAmount > 0 && (
-                        <> Amount: <span className="font-medium">${stripeAmount.toLocaleString('en-US', { minimumFractionDigits: 2 })}</span></>
+                        <> Amount: <span className="font-medium">{formatCurrency(stripeAmount, tenant?.currency_code || 'USD')}</span></>
                       )}
                     </p>
                   </div>
@@ -880,7 +886,7 @@ export const AddPaymentDialog = ({
                 )}
                 {rentalId && !latestInvoice && rentalDetails && (
                   <p className="text-xs text-muted-foreground">
-                    An invoice for <span className="font-medium">${(rentalDetails.monthly_amount || 0).toLocaleString('en-US', { minimumFractionDigits: 2 })}</span> will be auto-generated and sent.
+                    An invoice for <span className="font-medium">{formatCurrency(rentalDetails.monthly_amount || 0, tenant?.currency_code || 'USD')}</span> will be auto-generated and sent.
                   </p>
                 )}
                 {rentalId && !latestInvoice && !rentalDetails && (
@@ -888,7 +894,7 @@ export const AddPaymentDialog = ({
                 )}
                 {latestInvoice && (
                   <p className="text-xs text-muted-foreground">
-                    Invoice: <span className="font-medium">{latestInvoice.invoice_number}</span> — ${latestInvoice.total_amount?.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                    Invoice: <span className="font-medium">{latestInvoice.invoice_number}</span> — {formatCurrency(latestInvoice.total_amount || 0, tenant?.currency_code || 'USD')}
                   </p>
                 )}
 

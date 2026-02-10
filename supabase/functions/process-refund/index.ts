@@ -2,6 +2,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.4";
 import Stripe from "https://esm.sh/stripe@14.21.0?target=deno";
 import { getStripeClient, getConnectAccountId, type StripeMode } from '../_shared/stripe-client.ts';
+import { formatCurrency } from '../_shared/format-utils.ts';
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -53,7 +54,20 @@ serve(async (req) => {
     console.log("Processing refund:", { rentalId, refundType, refundAmount, category, reason });
 
     // Get tenant ID for queries
-    const tenantId = requestTenantId;
+    let tenantId = requestTenantId;
+
+    // Fetch tenant currency code early for error messages
+    let currencyCode = 'GBP';
+    if (tenantId) {
+      const { data: tenantCurrency } = await supabase
+        .from("tenants")
+        .select("currency_code")
+        .eq("id", tenantId)
+        .single();
+      if (tenantCurrency?.currency_code) {
+        currencyCode = tenantCurrency.currency_code;
+      }
+    }
 
     // VALIDATION: Check if there's actually paid amount for this category
     // Get ledger entries to calculate what was actually paid vs charged
@@ -90,7 +104,7 @@ serve(async (req) => {
     if (availableForRefund <= 0) {
       return new Response(
         JSON.stringify({
-          error: `No refundable amount available for ${category}. Total paid: $${totalPaid.toFixed(2)}, Already refunded: $${totalAlreadyRefunded.toFixed(2)}`
+          error: `No refundable amount available for ${category}. Total paid: ${formatCurrency(totalPaid, currencyCode)}, Already refunded: ${formatCurrency(totalAlreadyRefunded, currencyCode)}`
         }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
@@ -99,7 +113,7 @@ serve(async (req) => {
     if (refundAmount > availableForRefund) {
       return new Response(
         JSON.stringify({
-          error: `Refund amount ($${refundAmount.toFixed(2)}) exceeds available refundable amount ($${availableForRefund.toFixed(2)}) for ${category}`
+          error: `Refund amount (${formatCurrency(refundAmount, currencyCode)}) exceeds available refundable amount (${formatCurrency(availableForRefund, currencyCode)}) for ${category}`
         }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
@@ -121,20 +135,23 @@ serve(async (req) => {
     }
 
     // Get tenant's Stripe mode and Connect account
-    const tenantId = requestTenantId || rental.tenant_id;
+    tenantId = requestTenantId || rental.tenant_id;
     let stripeAccountId: string | null = null;
     let stripeMode: StripeMode = 'test';
 
     if (tenantId) {
       const { data: tenant } = await supabase
         .from("tenants")
-        .select("stripe_mode, stripe_account_id, stripe_onboarding_complete")
+        .select("stripe_mode, stripe_account_id, stripe_onboarding_complete, currency_code")
         .eq("id", tenantId)
         .single();
 
       if (tenant) {
         stripeMode = (tenant.stripe_mode as StripeMode) || 'test';
         stripeAccountId = getConnectAccountId(tenant);
+        if (tenant.currency_code) {
+          currencyCode = tenant.currency_code;
+        }
         console.log("Refund - tenantId:", tenantId, "mode:", stripeMode, "connectAccount:", stripeAccountId);
       }
     }

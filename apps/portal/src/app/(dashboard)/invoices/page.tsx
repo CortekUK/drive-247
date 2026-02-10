@@ -24,7 +24,8 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Calendar as CalendarComponent } from "@/components/ui/calendar";
 import { FileText, MoreVertical, Trash2, Mail, Search, Calendar, X, Download } from "lucide-react";
 import { format } from "date-fns";
-import { formatCurrency } from "@/lib/invoice-utils";
+import { formatCurrency } from "@/lib/format-utils";
+import { InvoiceDialog } from "@/components/shared/dialogs/invoice-dialog";
 import { EmptyState } from "@/components/shared/data-display/empty-state";
 import { DeleteInvoiceDialog } from "@/components/invoices/delete-invoice-dialog";
 import { SendInvoiceEmailDialog } from "@/components/invoices/send-invoice-email-dialog";
@@ -381,7 +382,7 @@ const InvoicesList = () => {
                         {invoice.due_date ? format(new Date(invoice.due_date), "PP") : "—"}
                       </TableCell>
                       <TableCell className="text-left font-medium">
-                        {formatCurrency(invoice.total_amount)}
+                        {formatCurrency(invoice.total_amount, tenant?.currency_code || 'GBP')}
                       </TableCell>
                       <TableCell>
                         <div className="flex items-center gap-1">

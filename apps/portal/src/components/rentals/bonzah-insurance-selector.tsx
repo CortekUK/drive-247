@@ -18,6 +18,8 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from '@/components/ui/tooltip';
+import { useTenant } from '@/contexts/TenantContext';
+import { formatCurrency } from '@/lib/format-utils';
 
 interface BonzahInsuranceSelectorProps {
   tripStartDate: string | null;
@@ -59,6 +61,7 @@ export default function BonzahInsuranceSelector({
   onSkipInsurance,
   initialCoverage = DEFAULT_COVERAGE,
 }: BonzahInsuranceSelectorProps) {
+  const { tenant } = useTenant();
   const [coverage, setCoverage] = useState<CoverageOptions>(initialCoverage);
   const hasInitialCoverage = initialCoverage.cdw || initialCoverage.rcli || initialCoverage.sli || initialCoverage.pai;
   const [showInsurance, setShowInsurance] = useState(hasInitialCoverage);
@@ -222,7 +225,7 @@ export default function BonzahInsuranceSelector({
                   />
                   {isSelected && price > 0 && (
                     <span className="text-xs font-semibold" style={{ color }}>
-                      ${price.toFixed(2)}
+                      {formatCurrency(price, tenant?.currency_code || 'USD')}
                     </span>
                   )}
                 </div>
@@ -258,7 +261,7 @@ export default function BonzahInsuranceSelector({
                 <span className="text-sm text-muted-foreground">Calculating...</span>
               </div>
             ) : (
-              <span className="text-lg font-bold text-primary">${totalPremium.toFixed(2)}</span>
+              <span className="text-lg font-bold text-primary">{formatCurrency(totalPremium, tenant?.currency_code || 'USD')}</span>
             )}
           </div>
         </div>
@@ -266,16 +269,16 @@ export default function BonzahInsuranceSelector({
         {hasCoverage && totalPremium > 0 && !isLoading && (
           <div className="mt-2 pt-2 border-t border-primary/10 flex flex-wrap gap-3 text-xs">
             {coverage.cdw && breakdown.cdw > 0 && (
-              <span><span className="text-muted-foreground">CDW:</span> <span className="font-medium">${breakdown.cdw.toFixed(2)}</span></span>
+              <span><span className="text-muted-foreground">CDW:</span> <span className="font-medium">{formatCurrency(breakdown.cdw, tenant?.currency_code || 'USD')}</span></span>
             )}
             {coverage.rcli && breakdown.rcli > 0 && (
-              <span><span className="text-muted-foreground">RCLI:</span> <span className="font-medium">${breakdown.rcli.toFixed(2)}</span></span>
+              <span><span className="text-muted-foreground">RCLI:</span> <span className="font-medium">{formatCurrency(breakdown.rcli, tenant?.currency_code || 'USD')}</span></span>
             )}
             {coverage.sli && breakdown.sli > 0 && (
-              <span><span className="text-muted-foreground">SLI:</span> <span className="font-medium">${breakdown.sli.toFixed(2)}</span></span>
+              <span><span className="text-muted-foreground">SLI:</span> <span className="font-medium">{formatCurrency(breakdown.sli, tenant?.currency_code || 'USD')}</span></span>
             )}
             {coverage.pai && breakdown.pai > 0 && (
-              <span><span className="text-muted-foreground">PAI:</span> <span className="font-medium">${breakdown.pai.toFixed(2)}</span></span>
+              <span><span className="text-muted-foreground">PAI:</span> <span className="font-medium">{formatCurrency(breakdown.pai, tenant?.currency_code || 'USD')}</span></span>
             )}
           </div>
         )}

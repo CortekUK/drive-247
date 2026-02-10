@@ -7,6 +7,7 @@ import {
 } from "../_shared/aws-config.ts";
 import { sendEmail } from "../_shared/resend-service.ts";
 import { renderEmail, EmailTemplateData } from "../_shared/email-template-service.ts";
+import { formatCurrency } from "../_shared/format-utils.ts";
 
 interface NotifyRequest {
   customerName: string;
@@ -24,7 +25,7 @@ interface NotifyRequest {
   tenantId: string;
 }
 
-const getFallbackHtml = (data: NotifyRequest) => {
+const getFallbackHtml = (data: NotifyRequest, currencyCode: string = 'GBP') => {
   const paymentSection = data.paymentUrl
     ? `<table role="presentation" style="width: 100%; border-collapse: collapse; margin-bottom: 25px;">
         <tr>
@@ -63,7 +64,7 @@ const getFallbackHtml = (data: NotifyRequest) => {
                 <tr><td style="padding: 12px 20px; color: #666; font-size: 14px;">Previous End Date:</td><td style="padding: 12px 20px; color: #f59e0b; font-weight: 600; font-size: 14px; text-align: right;">${data.previousEndDate}</td></tr>
                 <tr><td style="padding: 12px 20px; color: #666; font-size: 14px;">New End Date:</td><td style="padding: 12px 20px; color: #10b981; font-weight: 600; font-size: 14px; text-align: right;">${data.newEndDate}</td></tr>
                 <tr><td style="padding: 12px 20px; color: #666; font-size: 14px;">Extension:</td><td style="padding: 12px 20px; color: #1a1a1a; font-weight: 600; font-size: 14px; text-align: right;">+${data.extensionDays} days</td></tr>
-                <tr><td style="padding: 12px 20px; color: #666; font-size: 14px;">Extension Cost:</td><td style="padding: 12px 20px; color: #1a1a1a; font-weight: 600; font-size: 14px; text-align: right;">$${data.extensionAmount.toFixed(2)}</td></tr>
+                <tr><td style="padding: 12px 20px; color: #666; font-size: 14px;">Extension Cost:</td><td style="padding: 12px 20px; color: #1a1a1a; font-weight: 600; font-size: 14px; text-align: right;">${formatCurrency(data.extensionAmount, currencyCode)}</td></tr>
               </table>
               ${paymentSection}
               <p style="margin: 0; color: #444; line-height: 1.6; font-size: 16px;">If you have any questions, please contact support.</p>
@@ -131,13 +132,27 @@ Deno.serve(async (req) => {
     };
 
     let customerSubject = `Your Rental Has Been Extended | DRIVE 247`;
-    let customerHtml = getFallbackHtml(data);
+    let currencyCode = 'GBP';
+    let customerHtml = getFallbackHtml(data, currencyCode);
 
     if (data.tenantId) {
       try {
         const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
         const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
         const supabase = createClient(supabaseUrl, supabaseServiceKey);
+
+        // Fetch tenant currency
+        const { data: tenant } = await supabase
+          .from('tenants')
+          .select('currency_code')
+          .eq('id', data.tenantId)
+          .single();
+        if (tenant?.currency_code) {
+          currencyCode = tenant.currency_code;
+        }
+
+        // Re-generate fallback HTML with correct currency
+        customerHtml = getFallbackHtml(data, currencyCode);
 
         const templateData: EmailTemplateData = {
           customer_name: data.customerName,
@@ -150,7 +165,7 @@ Deno.serve(async (req) => {
           previous_end_date: data.previousEndDate,
           new_end_date: data.newEndDate,
           extension_days: String(data.extensionDays),
-          extension_amount: `$${data.extensionAmount.toFixed(2)}`,
+          extension_amount: formatCurrency(data.extensionAmount, currencyCode),
           payment_url: data.paymentUrl || '',
         };
 
@@ -175,7 +190,7 @@ Deno.serve(async (req) => {
     if (data.customerPhone) {
       results.customerSMS = await sendSMS(
         data.customerPhone,
-        `Your rental has been extended by ${data.extensionDays} day(s). New end date: ${data.newEndDate}. Extension fee: $${data.extensionAmount.toFixed(2)}.${data.paymentUrl ? ' Pay here: ' + data.paymentUrl : ''}`
+        `Your rental has been extended by ${data.extensionDays} day(s). New end date: ${data.newEndDate}. Extension fee: ${formatCurrency(data.extensionAmount, currencyCode)}.${data.paymentUrl ? ' Pay here: ' + data.paymentUrl : ''}`
       );
       console.log('Customer SMS result:', results.customerSMS);
     }

@@ -6,6 +6,7 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
 import { useTenant } from "@/contexts/TenantContext";
+import { formatCurrency } from "@/lib/format-utils";
 import { toast } from "sonner";
 import { useBookingStore } from "@/stores/booking-store";
 import { Car, Users, Briefcase, Check, ArrowLeft, Loader2 } from "lucide-react";
@@ -253,7 +254,7 @@ const BookingVehiclesContent = () => {
                     <div className="pt-4 border-t border-border">
                       <div className="flex items-baseline justify-between mb-4">
                         <span className="text-2xl font-bold text-accent">
-                          ${calculatePrice(vehicle).toLocaleString()}
+                          {formatCurrency(calculatePrice(vehicle), tenant?.currency_code || 'GBP')}
                         </span>
                         <span className="text-sm text-muted-foreground">
                           monthly

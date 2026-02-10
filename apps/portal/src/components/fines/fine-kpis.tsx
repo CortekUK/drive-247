@@ -2,8 +2,12 @@ import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { AlertTriangle, Clock, DollarSign, Calendar } from "lucide-react";
+import { useTenant } from "@/contexts/TenantContext";
+import { formatCurrency } from "@/lib/format-utils";
 
 export const FineKPIs = () => {
+  const { tenant } = useTenant();
+  const currencyCode = tenant?.currency_code || 'GBP';
   const { data: kpiData, isLoading } = useQuery({
     queryKey: ["fines-kpis"],
     queryFn: async () => {
@@ -91,7 +95,7 @@ export const FineKPIs = () => {
           <DollarSign className="h-4 w-4 text-destructive" />
         </CardHeader>
         <CardContent>
-          <div className="text-2xl font-bold">${kpiData?.outstandingAmount?.toLocaleString() || 0}</div>
+          <div className="text-2xl font-bold">{formatCurrency(kpiData?.outstandingAmount || 0, currencyCode)}</div>
           <p className="text-xs text-muted-foreground">
             To collect from customers
           </p>

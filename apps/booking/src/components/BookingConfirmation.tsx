@@ -1,6 +1,8 @@
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { CheckCircle2 } from "lucide-react";
+import { formatCurrency } from "@/lib/format-utils";
+import { useTenant } from "@/contexts/TenantContext";
 
 interface BookingConfirmationProps {
   bookingDetails: {
@@ -17,6 +19,9 @@ interface BookingConfirmationProps {
 }
 
 const BookingConfirmation = ({ bookingDetails, onClose }: BookingConfirmationProps) => {
+  const { tenant } = useTenant();
+  const currencyCode = tenant?.currency_code || 'GBP';
+
   return (
     <Card className="p-8 shadow-metal bg-card/50 backdrop-blur max-w-2xl mx-auto">
       <div className="text-center mb-6">
@@ -69,7 +74,7 @@ const BookingConfirmation = ({ bookingDetails, onClose }: BookingConfirmationPro
         <div className="pt-4 border-t border-border flex justify-between items-center">
           <span className="text-lg font-semibold">Total Price:</span>
           <span className="text-3xl font-display font-bold text-accent">
-            ${bookingDetails.totalPrice}
+            {formatCurrency(Number(bookingDetails.totalPrice), currencyCode)}
           </span>
         </div>
       </div>

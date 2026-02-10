@@ -17,6 +17,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { useTenant } from '@/contexts/TenantContext';
+import { formatCurrency } from '@/lib/format-utils';
 
 type BookingFilter = 'all' | 'current' | 'past';
 type SortOrder = 'newest' | 'oldest';
@@ -51,6 +53,7 @@ function StatCard({
 export default function BookingsPage() {
   const [filter, setFilter] = useState<BookingFilter>('all');
   const [sortOrder, setSortOrder] = useState<SortOrder>('newest');
+  const { tenant } = useTenant();
 
   const { data: rentals, isLoading } = useCustomerRentals(filter);
   const { data: stats } = useCustomerRentalStats();
@@ -135,7 +138,7 @@ export default function BookingsPage() {
         />
         <StatCard
           title="Total Spent"
-          value={`$${(stats?.totalSpent || 0).toLocaleString()}`}
+          value={formatCurrency(stats?.totalSpent || 0, tenant?.currency_code || 'GBP')}
           icon={DollarSign}
         />
       </div>

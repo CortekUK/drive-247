@@ -13,6 +13,7 @@ import {
   TenantBranding,
   wrapWithBrandedTemplate
 } from "../_shared/resend-service.ts";
+import { formatCurrency } from "../_shared/format-utils.ts";
 
 interface NotifyRequest {
   customerName: string;
@@ -31,7 +32,7 @@ interface NotifyRequest {
   tenantId?: string;
 }
 
-const getCustomerEmailContent = (data: NotifyRequest, branding: TenantBranding) => {
+const getCustomerEmailContent = (data: NotifyRequest, branding: TenantBranding, currencyCode: string = 'USD') => {
   return `
                     <tr>
                         <td style="padding: 30px 30px 0; text-align: center;">
@@ -95,7 +96,7 @@ const getCustomerEmailContent = (data: NotifyRequest, branding: TenantBranding) 
                                 <tr>
                                     <td style="padding: 20px; text-align: center;">
                                         <p style="margin: 0 0 5px; color: #666; font-size: 14px;">Fine Amount</p>
-                                        <p style="margin: 0; color: #dc2626; font-size: 32px; font-weight: 700;">$${data.fineAmount.toLocaleString()}</p>
+                                        <p style="margin: 0; color: #dc2626; font-size: 32px; font-weight: 700;">${formatCurrency(data.fineAmount, currencyCode)}</p>
                                         ${data.dueDate ? `<p style="margin: 10px 0 0; color: #991b1b; font-size: 14px;">Due by: ${data.dueDate}</p>` : ''}
                                     </td>
                                 </tr>
@@ -115,7 +116,7 @@ const getCustomerEmailContent = (data: NotifyRequest, branding: TenantBranding) 
                     </tr>`;
 };
 
-const getAdminEmailContent = (data: NotifyRequest, branding: TenantBranding) => {
+const getAdminEmailContent = (data: NotifyRequest, branding: TenantBranding, currencyCode: string = 'USD') => {
   return `
                     <tr>
                         <td style="padding: 30px;">
@@ -124,7 +125,7 @@ const getAdminEmailContent = (data: NotifyRequest, branding: TenantBranding) => 
                             <table style="width: 100%; border-collapse: collapse; background: #f8f9fa; border-radius: 8px;">
                                 <tr><td style="padding: 12px; border-bottom: 1px solid #e5e7eb; color: #666;">Fine Reference:</td><td style="padding: 12px; border-bottom: 1px solid #e5e7eb; font-weight: 600;">${data.fineRef}</td></tr>
                                 <tr><td style="padding: 12px; border-bottom: 1px solid #e5e7eb; color: #666;">Type:</td><td style="padding: 12px; border-bottom: 1px solid #e5e7eb;">${data.fineType}</td></tr>
-                                <tr><td style="padding: 12px; border-bottom: 1px solid #e5e7eb; color: #666;">Amount:</td><td style="padding: 12px; border-bottom: 1px solid #e5e7eb; color: #dc2626; font-weight: 600;">$${data.fineAmount.toLocaleString()}</td></tr>
+                                <tr><td style="padding: 12px; border-bottom: 1px solid #e5e7eb; color: #666;">Amount:</td><td style="padding: 12px; border-bottom: 1px solid #e5e7eb; color: #dc2626; font-weight: 600;">${formatCurrency(data.fineAmount, currencyCode)}</td></tr>
                                 <tr><td style="padding: 12px; border-bottom: 1px solid #e5e7eb; color: #666;">Customer:</td><td style="padding: 12px; border-bottom: 1px solid #e5e7eb;">${data.customerName}</td></tr>
                                 <tr><td style="padding: 12px; border-bottom: 1px solid #e5e7eb; color: #666;">Email:</td><td style="padding: 12px; border-bottom: 1px solid #e5e7eb;">${data.customerEmail}</td></tr>
                                 <tr><td style="padding: 12px; border-bottom: 1px solid #e5e7eb; color: #666;">Vehicle:</td><td style="padding: 12px; border-bottom: 1px solid #e5e7eb;">${data.vehicleName} (${data.vehicleReg})</td></tr>
@@ -192,6 +193,26 @@ serve(async (req) => {
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
+    // Fetch tenant currency code
+    let currencyCode = 'USD';
+    if (data.tenantId) {
+      try {
+        const { data: tenantData, error: tenantError } = await supabase
+          .from('tenants')
+          .select('currency_code')
+          .eq('id', data.tenantId)
+          .single();
+
+        if (tenantError) {
+          console.warn('Error fetching tenant currency:', tenantError);
+        } else if (tenantData?.currency_code) {
+          currencyCode = tenantData.currency_code;
+        }
+      } catch (error) {
+        console.warn('Error fetching tenant currency:', error);
+      }
+    }
+
     // Get tenant branding
     const branding = data.tenantId
       ? await getTenantBranding(data.tenantId, supabase)
@@ -204,13 +225,13 @@ serve(async (req) => {
     };
 
     // Build branded customer email HTML
-    const customerEmailContent = getCustomerEmailContent(data, branding);
+    const customerEmailContent = getCustomerEmailContent(data, branding, currencyCode);
     const customerEmailHtml = wrapWithBrandedTemplate(customerEmailContent, branding);
 
     // Send customer email (with tenant-specific from address)
     results.customerEmail = await sendEmail(
       data.customerEmail,
-      `Traffic Fine Notice - $${data.fineAmount}`,
+      `Traffic Fine Notice - ${formatCurrency(data.fineAmount, currencyCode)}`,
       customerEmailHtml,
       supabase,
       data.tenantId
@@ -221,7 +242,7 @@ serve(async (req) => {
     if (data.customerPhone) {
       results.customerSMS = await sendSMS(
         data.customerPhone,
-        `A ${data.fineType} fine of $${data.fineAmount} has been recorded for your rental ${data.bookingRef}. Check your email for details.`
+        `A ${data.fineType} fine of ${formatCurrency(data.fineAmount, currencyCode)} has been recorded for your rental ${data.bookingRef}. Check your email for details.`
       );
       console.log('Customer SMS result:', results.customerSMS);
     }
@@ -238,14 +259,14 @@ serve(async (req) => {
     }
 
     // Build branded admin email HTML
-    const adminEmailContent = getAdminEmailContent(data, branding);
+    const adminEmailContent = getAdminEmailContent(data, branding, currencyCode);
     const adminEmailHtml = wrapWithBrandedTemplate(adminEmailContent, branding);
 
     // Send admin email
     if (adminEmail) {
       results.adminEmail = await sendEmail(
         adminEmail,
-        `New Fine Recorded - ${data.fineRef} - $${data.fineAmount}`,
+        `New Fine Recorded - ${data.fineRef} - ${formatCurrency(data.fineAmount, currencyCode)}`,
         adminEmailHtml,
         supabase,
         data.tenantId

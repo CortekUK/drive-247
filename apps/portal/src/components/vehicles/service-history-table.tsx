@@ -23,6 +23,8 @@ import { Badge } from "@/components/ui/badge";
 import { Edit, Trash2 } from "lucide-react";
 import { ServiceRecord } from "@/hooks/use-vehicle-services";
 import { AddServiceRecordDialog } from "./add-service-record-dialog";
+import { useTenant } from "@/contexts/TenantContext";
+import { formatCurrency } from "@/lib/format-utils";
 
 interface ServiceHistoryTableProps {
   serviceRecords: ServiceRecord[];
@@ -40,16 +42,15 @@ export function ServiceHistoryTable({
   isDeleting 
 }: ServiceHistoryTableProps) {
   const [editingRecord, setEditingRecord] = useState<ServiceRecord | undefined>();
+  const { tenant } = useTenant();
+  const currencyCode = tenant?.currency_code || 'GBP';
 
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString('en-US');
   };
 
-  const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency: 'USD',
-    }).format(amount);
+  const formatCost = (amount: number) => {
+    return formatCurrency(amount, currencyCode);
   };
 
   if (serviceRecords.length === 0) {
@@ -96,7 +97,7 @@ export function ServiceHistoryTable({
               <TableCell>
                 <div className="flex items-center gap-2">
                   <span className={record.cost > 0 ? "font-medium" : "text-muted-foreground"}>
-                    {formatCurrency(record.cost)}
+                    {formatCost(record.cost)}
                   </span>
                   {record.cost > 0 && <Badge variant="secondary" className="text-xs">P&L</Badge>}
                 </div>

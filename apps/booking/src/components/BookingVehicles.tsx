@@ -13,6 +13,7 @@ import Navigation from "@/components/Navigation";
 import Footer from "@/components/Footer";
 import SEO from "@/components/SEO";
 import { formatInTimeZone } from "date-fns-tz";
+import { formatCurrency } from "@/lib/format-utils";
 
 interface VehiclePhoto {
   photo_url: string;
@@ -42,6 +43,7 @@ const BookingVehicles = () => {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { tenant } = useTenant();
+  const currencyCode = tenant?.currency_code || 'GBP';
   const { updateContext } = useBookingStore();
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
   const [loading, setLoading] = useState(true);
@@ -254,7 +256,7 @@ const BookingVehicles = () => {
                     <div className="pt-4 border-t border-border">
                       <div className="flex items-baseline justify-between mb-4">
                         <span className="text-2xl font-bold text-accent">
-                          ${calculatePrice(vehicle).toLocaleString()}
+                          {formatCurrency(calculatePrice(vehicle), currencyCode)}
                         </span>
                         <span className="text-sm text-muted-foreground">
                           monthly

@@ -1,6 +1,8 @@
 // Agreement Template Variables
 // These variables can be used in agreement templates and will be replaced with actual data
 
+import { formatCurrency } from "@/lib/format-utils";
+
 export interface TemplateVariable {
   key: string;
   label: string;
@@ -208,16 +210,13 @@ export function formatDate(date: string | Date | null | undefined): string {
   });
 }
 
-// Format currency for display
-export function formatCurrency(
+// Format currency for display (delegates to shared format-utils)
+export function formatTemplateCurrency(
   amount: number | null | undefined,
-  currency: string = 'USD'
+  currencyCode: string = 'GBP'
 ): string {
   if (amount === null || amount === undefined) return '';
-  return new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currency,
-  }).format(amount);
+  return formatCurrency(amount, currencyCode);
 }
 
 // Build data object from rental, customer, vehicle, and tenant data
@@ -249,7 +248,8 @@ export function buildTemplateData(
     company_name?: string | null;
     contact_email?: string | null;
     contact_phone?: string | null;
-  }
+  },
+  currencyCode: string = 'GBP'
 ): Record<string, string> {
   return {
     // Customer
@@ -271,7 +271,7 @@ export function buildTemplateData(
     rental_number: rental.rental_number || rental.id.substring(0, 8).toUpperCase(),
     rental_start_date: formatDate(rental.start_date),
     rental_end_date: rental.end_date ? formatDate(rental.end_date) : 'Ongoing',
-    monthly_amount: formatCurrency(rental.monthly_amount),
+    monthly_amount: formatTemplateCurrency(rental.monthly_amount, currencyCode),
     rental_period_type: rental.rental_period_type || 'Monthly',
 
     // Company

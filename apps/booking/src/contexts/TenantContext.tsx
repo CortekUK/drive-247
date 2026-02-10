@@ -51,6 +51,7 @@ export interface Tenant {
 
   // Operational settings
   currency_code: string | null;
+  distance_unit: 'km' | 'miles' | null;
   timezone: string | null;
   date_format: string | null;
   min_rental_days: number | null;
@@ -266,7 +267,7 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
                 meta_title, meta_description, og_image_url,
                 phone, address, business_hours, google_maps_url,
                 facebook_url, instagram_url, twitter_url, linkedin_url,
-                currency_code, timezone, date_format,
+                currency_code, distance_unit, timezone, date_format,
                 min_rental_days, max_rental_days, booking_lead_time_hours, minimum_rental_age,
                 require_identity_verification, require_insurance_upload, payment_mode,
                 pickup_location_mode, return_location_mode, fixed_pickup_address, fixed_return_address,

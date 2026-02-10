@@ -19,6 +19,7 @@ import { useTenant } from '@/contexts/TenantContext';
 import { useToast } from '@/hooks/use-toast';
 import { useAuditLog } from '@/hooks/use-audit-log';
 import { format, differenceInDays } from 'date-fns';
+import { getCurrencySymbol } from '@/lib/format-utils';
 
 interface ExtensionRequestDialogProps {
   open: boolean;
@@ -65,7 +66,7 @@ export function ExtensionRequestDialog({
     return Math.round(dailyRate * extensionDays * 100) / 100;
   }, [dailyRate, extensionDays]);
 
-  const currencySymbol = tenant?.currency_code === 'GBP' ? '£' : tenant?.currency_code === 'EUR' ? '€' : '$';
+  const currencySymbol = getCurrencySymbol(tenant?.currency_code || 'USD');
 
   // Fetch vehicle daily rate when dialog opens
   useEffect(() => {

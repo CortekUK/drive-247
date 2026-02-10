@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import Handlebars from "https://esm.sh/handlebars@4.7.8";
+import { formatCurrency } from "../_shared/format-utils.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -64,12 +65,12 @@ serve(async (req) => {
       }
     });
 
+    // Use currency_code from variables if provided, otherwise default to GBP
+    const currencyCode = variables?.currency_code || 'GBP';
+
     Handlebars.registerHelper('formatCurrency', function(amount: number) {
       if (typeof amount !== 'number') return amount;
-      return new Intl.NumberFormat('en-US', {
-        style: 'currency',
-        currency: 'USD'
-      }).format(amount);
+      return formatCurrency(amount, currencyCode);
     });
 
     Handlebars.registerHelper('formatDate', function(dateString: string) {

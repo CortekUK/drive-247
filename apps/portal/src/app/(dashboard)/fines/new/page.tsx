@@ -28,6 +28,7 @@ import { useAuditLog } from "@/hooks/use-audit-log";
 import { DatePickerInput } from "@/components/shared/forms/date-picker-input";
 import { CurrencyInput } from "@/components/shared/forms/currency-input";
 import { EnhancedFileUpload } from "@/components/fines/enhanced-file-upload";
+import { getCurrencySymbol, formatCurrency } from "@/lib/format-utils";
 
 const fineSchema = z.object({
   type: z.string().min(1, "Fine type is required"),
@@ -36,7 +37,7 @@ const fineSchema = z.object({
   reference_no: z.string().optional(),
   issue_date: z.date(),
   due_date: z.date(),
-  amount: z.number().min(1, "Amount must be at least $1"),
+  amount: z.number().min(1, "Amount must be at least 1"),
   notes: z.string().optional(),
 }).refine((data) => data.due_date >= data.issue_date, {
   message: "Due date must be on or after issue date",
@@ -61,6 +62,7 @@ const CreateFine = () => {
   const [showOtherTypeDialog, setShowOtherTypeDialog] = useState(false);
   const [otherTypeValue, setOtherTypeValue] = useState("");
   const [selectedTypeOption, setSelectedTypeOption] = useState("PCN");
+  const currencySymbol = getCurrencySymbol(tenant?.currency_code || 'GBP');
 
   const form = useForm<FineFormData>({
     resolver: zodResolver(fineSchema),
@@ -508,7 +510,7 @@ const CreateFine = () => {
                       name="amount"
                       render={({ field }) => (
                         <FormItem className="flex flex-col">
-                          <FormLabel>Amount ($) <span className="text-red-500">*</span></FormLabel>
+                          <FormLabel>Amount ({currencySymbol}) <span className="text-red-500">*</span></FormLabel>
                           <FormControl>
                             <CurrencyInput
                               value={field.value}
@@ -612,7 +614,7 @@ const CreateFine = () => {
               <div>
                 <p className="text-sm font-medium text-muted-foreground">Amount</p>
                 <p className="font-medium text-lg text-destructive">
-                  ${form.watch("amount")?.toLocaleString() || "0"}
+                  {formatCurrency(form.watch("amount") || 0, tenant?.currency_code || 'GBP')}
                 </p>
               </div>
 

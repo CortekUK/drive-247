@@ -10,9 +10,13 @@ import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { format } from "date-fns";
+import { formatCurrency } from "@/lib/format-utils";
+import { useTenant } from "@/contexts/TenantContext";
 
 const BookingSuccess = () => {
   const searchParams = useSearchParams();
+  const { tenant } = useTenant();
+  const currencyCode = tenant?.currency_code || 'GBP';
   const [bookingDetails, setBookingDetails] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const sessionId = searchParams?.get("session_id");
@@ -269,13 +273,13 @@ const BookingSuccess = () => {
                       {bookingDetails.monthly_amount && (
                         <div className="flex justify-between pt-3 border-t border-accent/20">
                           <span className="text-muted-foreground font-medium">Rental Amount:</span>
-                          <span className="font-bold text-accent text-lg">${bookingDetails.monthly_amount?.toLocaleString()}</span>
+                          <span className="font-bold text-accent text-lg">{formatCurrency(bookingDetails.monthly_amount, currencyCode)}</span>
                         </div>
                       )}
                       {bookingDetails.total && (
                         <div className="flex justify-between pt-3 border-t border-accent/20">
                           <span className="text-muted-foreground font-medium">Amount Paid:</span>
-                          <span className="font-bold text-accent text-lg">${bookingDetails.total?.toLocaleString()}</span>
+                          <span className="font-bold text-accent text-lg">{formatCurrency(bookingDetails.total, currencyCode)}</span>
                         </div>
                       )}
                     </div>

@@ -12,7 +12,7 @@ import {
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { useToast } from "@/hooks/use-toast";
 import { useTenant } from "@/contexts/TenantContext";
-import { formatCurrency } from "@/lib/invoice-utils";
+import { formatCurrency } from "@/lib/format-utils";
 import { useAuditLog } from "@/hooks/use-audit-log";
 
 interface Invoice {
@@ -139,7 +139,7 @@ export const DeleteInvoiceDialog = ({
               )}
               <p>
                 <span className="font-medium">Amount:</span>{" "}
-                {formatCurrency(invoice.total_amount)}
+                {formatCurrency(invoice.total_amount, tenant?.currency_code || 'GBP')}
               </p>
             </div>
           </div>

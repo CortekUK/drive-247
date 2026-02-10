@@ -10,6 +10,8 @@ import { format, differenceInDays, isPast, isToday } from 'date-fns';
 import { CustomerRental } from '@/hooks/use-customer-rentals';
 import { cn } from '@/lib/utils';
 import Link from 'next/link';
+import { useTenant } from '@/contexts/TenantContext';
+import { formatCurrency } from '@/lib/format-utils';
 import { EditInsuranceDialog } from './EditInsuranceDialog';
 import { ExtendRentalDialog } from './ExtendRentalDialog';
 import { CancelBookingDialog } from './CancelBookingDialog';
@@ -18,13 +20,6 @@ import { RenewRentalDialog } from './RenewRentalDialog';
 interface RentalCardProps {
   rental: CustomerRental;
   insuranceReuploadRequired?: boolean;
-}
-
-function formatCurrency(amount: number): string {
-  return new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currency: 'USD',
-  }).format(amount);
 }
 
 function getStatusBadgeVariant(
@@ -47,6 +42,8 @@ function getStatusBadgeVariant(
 }
 
 export function RentalCard({ rental, insuranceReuploadRequired }: RentalCardProps) {
+  const { tenant } = useTenant();
+  const currencyCode = tenant?.currency_code || 'GBP';
   const [showEditInsurance, setShowEditInsurance] = useState(false);
   const [showExtendDialog, setShowExtendDialog] = useState(false);
   const [showCancelDialog, setShowCancelDialog] = useState(false);
@@ -344,11 +341,11 @@ export function RentalCard({ rental, insuranceReuploadRequired }: RentalCardProp
                   <div className="flex items-center justify-between">
                     <div>
                       <span className="text-xs text-muted-foreground">Paid</span>
-                      <p className="font-medium text-green-600">{formatCurrency(totalPaid)}</p>
+                      <p className="font-medium text-green-600">{formatCurrency(totalPaid, currencyCode)}</p>
                     </div>
                     <div className="text-right">
                       <span className="text-xs text-muted-foreground">Total</span>
-                      <p className="font-semibold">{formatCurrency(totalAmount)}</p>
+                      <p className="font-semibold">{formatCurrency(totalAmount, currencyCode)}</p>
                     </div>
                   </div>
 
@@ -383,7 +380,7 @@ export function RentalCard({ rental, insuranceReuploadRequired }: RentalCardProp
                           'font-semibold',
                           (isOverdue || isFailed) ? 'text-red-600' : ''
                         )}>
-                          {formatCurrency(nextInstallment.amount)}
+                          {formatCurrency(nextInstallment.amount, currencyCode)}
                         </span>
                       </div>
                     </Link>
@@ -402,7 +399,7 @@ export function RentalCard({ rental, insuranceReuploadRequired }: RentalCardProp
                 <div className="pt-2 flex items-center justify-between border-t mt-2">
                   <span className="text-muted-foreground">Total</span>
                   <span className="font-semibold text-lg">
-                    {formatCurrency(rental.monthly_amount || 0)}
+                    {formatCurrency(rental.monthly_amount || 0, currencyCode)}
                   </span>
                 </div>
               )}

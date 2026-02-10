@@ -9,6 +9,7 @@ export interface RentalCharge {
   amount: number;
   remaining_amount: number;
   category: string;
+  reference: string | null;
   allocations: PaymentAllocation[];
   rental_start_date: string | null;
 }
@@ -96,6 +97,7 @@ export const useRentalCharges = (rentalId: string | undefined) => {
         amount: charge.amount,
         remaining_amount: charge.remaining_amount,
         category: charge.category,
+        reference: charge.reference || null,
         rental_start_date: charge.rentals?.start_date || null,
         allocations: applications
           .filter(app => app.charge_entry_id === charge.id)

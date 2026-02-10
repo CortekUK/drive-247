@@ -12,6 +12,8 @@ import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { History, Car, FileText, Plus, Trash2 } from "lucide-react";
 import { format } from "date-fns";
+import { useTenant } from "@/contexts/TenantContext";
+import { formatCurrency } from "@/lib/format-utils";
 
 interface Plate {
   id: string;
@@ -49,6 +51,8 @@ export const PlateHistoryDrawer = ({
   onOpenChange,
   plate,
 }: PlateHistoryDrawerProps) => {
+  const { tenant } = useTenant();
+
   // Fetch plate events
   const { data: events, isLoading } = useQuery({
     queryKey: ["plate-events", plate?.id],
@@ -150,7 +154,7 @@ export const PlateHistoryDrawer = ({
               {plate.cost && (
                 <div>
                   <span className="text-muted-foreground">Cost:</span>
-                  <span className="ml-2">${Number(plate.cost).toFixed(2)}</span>
+                  <span className="ml-2">{formatCurrency(Number(plate.cost), tenant?.currency_code || 'USD')}</span>
                 </div>
               )}
               {plate.order_date && (

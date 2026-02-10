@@ -1,4 +1,5 @@
 import { supabase } from "@/integrations/supabase/client";
+import { formatCurrency as _formatCurrency } from "@/lib/format-utils";
 
 export type VehicleStatus = 'Available' | 'Rented' | 'Disposed';
 
@@ -93,16 +94,16 @@ export function getContractTotal(vehicle: {
 }
 
 /**
- * Format currency for display
+ * Format currency for display (delegates to shared format-utils)
+ * Uses whole-number formatting (no decimals) for vehicle values.
  */
-export function formatCurrency(amount: number): string {
-  return new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currency: 'USD',
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 0,
-  }).format(amount);
+export function formatVehicleCurrency(amount: number, currencyCode: string = 'GBP'): string {
+  return _formatCurrency(amount, currencyCode, { minimumFractionDigits: 0, maximumFractionDigits: 0 });
 }
+
+// Re-export for backwards compatibility — callers should migrate to using
+// formatCurrency from '@/lib/format-utils' or formatVehicleCurrency directly.
+export { formatCurrency } from "@/lib/format-utils";
 
 /**
  * Normalize registration for comparison (uppercase, no spaces)

@@ -8,6 +8,8 @@ import { CreditCard, Plus } from "lucide-react";
 import { formatInTimeZone } from "date-fns-tz";
 import { useState } from "react";
 import { AddPaymentDialog } from "@/components/shared/dialogs/add-payment-dialog";
+import { formatCurrency } from "@/lib/format-utils";
+import { useTenant } from "@/contexts/TenantContext";
 
 interface PaymentEntry {
   id: string;
@@ -74,6 +76,8 @@ const PaymentStatusBadge = ({ status, remaining_amount }: { status?: string; rem
 
 export const PaymentManagement = () => {
   const [showAddDialog, setShowAddDialog] = useState(false);
+  const { tenant } = useTenant();
+  const currencyCode = tenant?.currency_code || 'GBP';
 
   const { data: payments, isLoading } = useQuery({
     queryKey: ["payments"],
@@ -145,10 +149,10 @@ export const PaymentManagement = () => {
                       <PaymentStatusBadge status={payment.status} remaining_amount={payment.remaining_amount} />
                     </TableCell>
                     <TableCell className="text-right font-medium">
-                      ${Number(payment.amount).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      {formatCurrency(Number(payment.amount), currencyCode)}
                     </TableCell>
                     <TableCell className="text-right font-medium">
-                      ${Number(payment.remaining_amount || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      {formatCurrency(Number(payment.remaining_amount || 0), currencyCode)}
                     </TableCell>
                   </TableRow>
                 ))}

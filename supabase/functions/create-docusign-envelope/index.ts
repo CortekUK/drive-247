@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.57.4';
+import { formatCurrency as sharedFormatCurrency } from '../_shared/format-utils.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -64,13 +65,11 @@ function formatDate(date: string | Date | null): string {
   });
 }
 
-// Format currency
+// Format currency using tenant's currency code
+let _docusignCurrencyCode = 'GBP';
 function formatCurrency(amount: number | null): string {
-  if (amount === null || amount === undefined) return '$0';
-  return new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currency: 'USD',
-  }).format(amount);
+  if (amount === null || amount === undefined) return sharedFormatCurrency(0, _docusignCurrencyCode);
+  return sharedFormatCurrency(amount, _docusignCurrencyCode);
 }
 
 // Process template by replacing variables with actual data
@@ -258,13 +257,24 @@ async function generateDocument(
     const processedContent = processTemplate(template, rental, customer, vehicle, tenant);
     // Convert HTML to plain text
     const plainText = htmlToText(processedContent);
-    return btoa(plainText);
+    return btoaUtf8(plainText);
   }
 
   // Fallback to default template
   console.log('Using default template');
   const defaultText = generateDefaultTemplate(rental, customer, vehicle, tenant);
-  return btoa(defaultText);
+  return btoaUtf8(defaultText);
+}
+
+// UTF-8 safe base64 encoding (btoa only supports Latin1)
+function btoaUtf8(str: string): string {
+  const encoder = new TextEncoder();
+  const bytes = encoder.encode(str);
+  let binary = '';
+  for (let i = 0; i < bytes.length; i++) {
+    binary += String.fromCharCode(bytes[i]);
+  }
+  return btoa(binary);
 }
 
 // ============================================================================
@@ -552,13 +562,23 @@ serve(async (req) => {
     console.log('Vehicle:', vehicle?.make, vehicle?.model, vehicle?.reg);
     console.log('Tenant ID:', tenantId);
 
+    // Get tenant currency code for document formatting
+    if (tenantId) {
+      const { data: tenantCurrency } = await supabase
+        .from('tenants')
+        .select('currency_code')
+        .eq('id', tenantId)
+        .single();
+      if (tenantCurrency?.currency_code) _docusignCurrencyCode = tenantCurrency.currency_code;
+    }
+
     // Generate document (uses admin template if available)
     let doc: string;
     if (tenantId) {
       doc = await generateDocument(supabase, rental, customer, vehicle, tenantId);
     } else {
       // No tenant, use basic default
-      doc = btoa(generateDefaultTemplate(rental, customer, vehicle, null));
+      doc = btoaUtf8(generateDefaultTemplate(rental, customer, vehicle, null));
     }
 
     // Get access token

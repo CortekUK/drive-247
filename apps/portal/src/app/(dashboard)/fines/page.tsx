@@ -20,6 +20,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { useAuditLog } from "@/hooks/use-audit-log";
 import { cn } from "@/lib/utils";
+import { formatCurrency } from "@/lib/format-utils";
+import { useTenant } from "@/contexts/TenantContext";
 
 const FinesList = () => {
   const router = useRouter();
@@ -27,6 +29,7 @@ const FinesList = () => {
   const queryClient = useQueryClient();
   const searchParams = useSearchParams();
   const { logAction } = useAuditLog();
+  const { tenant } = useTenant();
 
   // State for filtering, sorting, and selection
   const [filters, setFilters] = useState<FineFilterState>({
@@ -210,7 +213,7 @@ const FinesList = () => {
         </TableCell>
 
         <TableCell className="text-left font-medium">
-          ${Number(fine.amount).toLocaleString()}
+          {formatCurrency(Number(fine.amount), tenant?.currency_code || 'GBP')}
         </TableCell>
 
         <TableCell>

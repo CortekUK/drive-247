@@ -63,7 +63,7 @@ serve(async (req) => {
     if (tenantId) {
       const { data: tenant } = await supabase
         .from('tenants')
-        .select('stripe_mode, stripe_account_id, stripe_onboarding_complete')
+        .select('stripe_mode, stripe_account_id, stripe_onboarding_complete, currency_code')
         .eq('id', tenantId)
         .single()
 
@@ -74,12 +74,15 @@ serve(async (req) => {
       }
     }
 
+    // Get currency from tenant settings (Stripe expects lowercase)
+    const currencyCode = (tenantData?.currency_code || 'GBP').toLowerCase()
+
     // Get Stripe client for the tenant's mode
     const stripe = getStripeClient(stripeMode)
 
     // Determine which Connect account to use based on tenant mode
     const stripeAccountId = tenantData ? getConnectAccountId(tenantData) : null
-    console.log('Pre-auth checkout - mode:', stripeMode, 'connectAccount:', stripeAccountId)
+    console.log('Pre-auth checkout - mode:', stripeMode, 'connectAccount:', stripeAccountId, 'currency:', currencyCode)
 
     // Calculate pre-auth expiry (7 days from now)
     const preauthExpiresAt = new Date()
@@ -116,7 +119,7 @@ serve(async (req) => {
     const lineItems: Stripe.Checkout.SessionCreateParams.LineItem[] = [
       {
         price_data: {
-          currency: 'usd',
+          currency: currencyCode,
           product_data: {
             name: 'Vehicle Rental Deposit',
             description: `${body.vehicleName} - ${body.pickupDate} to ${body.returnDate}`,
@@ -133,7 +136,7 @@ serve(async (req) => {
       console.log('Adding Bonzah insurance line item:', body.insuranceAmount)
       lineItems.push({
         price_data: {
-          currency: 'usd',
+          currency: currencyCode,
           product_data: {
             name: 'Bonzah Insurance Premium',
             description: 'Rental car insurance coverage',

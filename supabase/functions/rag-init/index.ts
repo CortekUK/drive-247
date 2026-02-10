@@ -43,11 +43,11 @@ serve(async (req) => {
     const { tenantId } = body;
 
     // Get list of tenants to process
-    let tenants: { id: string; company_name: string }[] = [];
+    let tenants: { id: string; company_name: string; currency_code?: string }[] = [];
     if (tenantId) {
       const { data, error } = await supabase
         .from('tenants')
-        .select('id, company_name')
+        .select('id, company_name, currency_code')
         .eq('id', tenantId)
         .single();
 
@@ -58,7 +58,7 @@ serve(async (req) => {
     } else {
       const { data, error } = await supabase
         .from('tenants')
-        .select('id, company_name')
+        .select('id, company_name, currency_code')
         .eq('status', 'active');
 
       if (error) {
@@ -110,8 +110,8 @@ serve(async (req) => {
 
           console.log(`    Found ${records.length} records`);
 
-          // Get document loader for this table
-          const toDocument = getDocumentLoader(tableName);
+          // Get document loader for this table with tenant currency
+          const toDocument = getDocumentLoader(tableName, tenant.currency_code || 'GBP');
           if (!toDocument) {
             console.error(`    No document loader for ${tableName}`);
             tableResult.errors++;

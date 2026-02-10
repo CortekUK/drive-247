@@ -1,6 +1,8 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
+import { formatCurrency } from "@/lib/format-utils";
+import { useTenant } from "@/contexts/TenantContext";
 
 export interface DisposalData {
   disposal_date: string;
@@ -12,6 +14,7 @@ export interface DisposalData {
 export function useVehicleDisposal(vehicleId: string) {
   const queryClient = useQueryClient();
   const { toast } = useToast();
+  const { tenant } = useTenant();
 
   const disposeMutation = useMutation({
     mutationFn: async (disposalData: DisposalData) => {
@@ -33,10 +36,11 @@ export function useVehicleDisposal(vehicleId: string) {
       queryClient.invalidateQueries({ queryKey: ['pnlEntries'] });
       
       const gainLoss = data?.gain_loss || 0;
+      const currencyCode = tenant?.currency_code || 'GBP';
       const message = gainLoss > 0
-        ? `Vehicle disposed with gain of $${gainLoss}`
+        ? `Vehicle disposed with gain of ${formatCurrency(gainLoss, currencyCode)}`
         : gainLoss < 0
-        ? `Vehicle disposed with loss of $${Math.abs(gainLoss)}`
+        ? `Vehicle disposed with loss of ${formatCurrency(Math.abs(gainLoss), currencyCode)}`
         : 'Vehicle disposed at break-even';
       
       toast({

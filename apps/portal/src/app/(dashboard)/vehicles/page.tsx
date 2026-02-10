@@ -18,7 +18,7 @@ import { AddVehicleDialog } from "@/components/vehicles/add-vehicle-dialog";
 import { FleetSummaryCards } from "@/components/vehicles/fleet-summary-cards";
 import { VehicleStatusBadge } from "@/components/vehicles/vehicle-status-badge";
 import { VehiclePhotoThumbnail } from "@/components/vehicles/vehicle-photo-thumbnail";
-import { VehicleStatus, VehiclePLData, formatCurrency } from "@/lib/vehicle-utils";
+import { VehicleStatus, VehiclePLData } from "@/lib/vehicle-utils";
 import { useToast } from "@/hooks/use-toast";
 import { useTenant } from "@/contexts/TenantContext";
 
@@ -371,7 +371,7 @@ export default function VehiclesListEnhanced() {
       </div>
 
       {/* Fleet Summary Cards */}
-      <FleetSummaryCards vehicles={filteredVehicles} />
+      <FleetSummaryCards vehicles={filteredVehicles} currencyCode={tenant?.currency_code || 'GBP'} />
 
       {/* Filters */}
       <div className="grid grid-cols-1 md:grid-cols-5 gap-4">

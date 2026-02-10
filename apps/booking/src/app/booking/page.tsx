@@ -27,6 +27,8 @@ import { useTenant } from "@/contexts/TenantContext";
 import { useDeliveryLocations, type DeliveryLocation } from "@/hooks/useDeliveryLocations";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { useBookingStore } from "@/stores/booking-store";
+import { formatCurrency, kmToDisplayUnit, getDistanceUnitShort } from "@/lib/format-utils";
+import type { DistanceUnit } from "@/lib/format-utils";
 
 const TIMEZONE = "America/Los_Angeles";
 const MIN_RENTAL_DAYS = 30;
@@ -388,11 +390,9 @@ export default function Booking() {
                       // If multiple options are available, show the selection UI
                       const showDeliveryOptions = enabledCount > 1 || multipleEnabled || areaEnabled;
 
-                      const formatCurrency = (amount: number) =>
-                        new Intl.NumberFormat('en-GB', {
-                          style: 'currency',
-                          currency: tenant?.currency_code || 'GBP'
-                        }).format(amount);
+                      const currencyCode = tenant?.currency_code || 'GBP';
+                      const distanceUnit = (tenant?.distance_unit || 'miles') as DistanceUnit;
+                      const fmtCurrency = (amount: number) => formatCurrency(amount, currencyCode);
 
                       // Calculate delivery fee based on selected option
                       const getDeliveryFee = () => {
@@ -592,7 +592,7 @@ export default function Booking() {
                                             <SelectContent>
                                               {deliveryLocations.map((loc) => (
                                                 <SelectItem key={loc.id} value={loc.id}>
-                                                  {loc.name} {loc.delivery_fee > 0 ? `- +${formatCurrency(loc.delivery_fee)}` : '- Free'}
+                                                  {loc.name} {loc.delivery_fee > 0 ? `- +${fmtCurrency(loc.delivery_fee)}` : '- Free'}
                                                 </SelectItem>
                                               ))}
                                             </SelectContent>
@@ -623,11 +623,11 @@ export default function Booking() {
                                           Area Delivery
                                         </Label>
                                         <span className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full font-medium">
-                                          +{formatCurrency(tenant?.area_delivery_fee || 0)}
+                                          +{fmtCurrency(tenant?.area_delivery_fee || 0)}
                                         </span>
                                       </div>
                                       <p className="text-sm text-muted-foreground mt-1">
-                                        We deliver and collect anywhere within {tenant?.pickup_area_radius_km || 25}km
+                                        We deliver and collect anywhere within {kmToDisplayUnit(tenant?.pickup_area_radius_km || 25, distanceUnit)} {getDistanceUnitShort(distanceUnit)}
                                       </p>
 
                                       {deliveryOption === 'area' && (
@@ -708,7 +708,7 @@ export default function Booking() {
                               <div className="p-3 bg-muted/30 rounded-lg mt-4">
                                 <div className="flex justify-between font-semibold">
                                   <span>Delivery Fee</span>
-                                  <span className="text-accent">+{formatCurrency(deliveryFee)}</span>
+                                  <span className="text-accent">+{fmtCurrency(deliveryFee)}</span>
                                 </div>
                                 <p className="text-xs text-muted-foreground mt-1">
                                   Same fee applies for both delivery and collection

@@ -32,13 +32,20 @@ function formatDate(date: string | Date | null): string {
     return d.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
 }
 
-function formatCurrency(amount: number | null): string {
-    if (amount === null || amount === undefined) return '$0';
-    return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(amount);
+function formatCurrency(amount: number | null, currencyCode: string = 'GBP'): string {
+    const value = amount ?? 0;
+    const code = currencyCode?.toUpperCase() || 'GBP';
+    const localeMap: Record<string, string> = { USD: 'en-US', GBP: 'en-GB', EUR: 'en-IE' };
+    const locale = localeMap[code] || 'en-US';
+    try {
+        return new Intl.NumberFormat(locale, { style: 'currency', currency: code }).format(value);
+    } catch {
+        return `${code} ${value.toFixed(2)}`;
+    }
 }
 
 // Process template variables - ALL AVAILABLE VARIABLES
-function processTemplate(template: string, rental: any, customer: any, vehicle: any, tenant: any): string {
+function processTemplate(template: string, rental: any, customer: any, vehicle: any, tenant: any, currencyCode: string = 'GBP'): string {
     const variables: Record<string, string> = {
         // ===== CUSTOMER DETAILS =====
         customer_name: customer?.name || '',
@@ -63,17 +70,17 @@ function processTemplate(template: string, rental: any, customer: any, vehicle: 
         vehicle_color: vehicle?.color || vehicle?.colour || '',
         vehicle_fuel_type: vehicle?.fuel_type || '',
         vehicle_description: vehicle?.description || '',
-        vehicle_daily_rent: formatCurrency(vehicle?.daily_rent),
-        vehicle_weekly_rent: formatCurrency(vehicle?.weekly_rent),
-        vehicle_monthly_rent: formatCurrency(vehicle?.monthly_rent),
+        vehicle_daily_rent: formatCurrency(vehicle?.daily_rent, currencyCode),
+        vehicle_weekly_rent: formatCurrency(vehicle?.weekly_rent, currencyCode),
+        vehicle_monthly_rent: formatCurrency(vehicle?.monthly_rent, currencyCode),
 
         // ===== RENTAL DETAILS =====
         rental_number: rental?.rental_number || rental?.id?.substring(0, 8)?.toUpperCase() || '',
         rental_id: rental?.id || '',
         rental_start_date: formatDate(rental?.start_date),
         rental_end_date: rental?.end_date ? formatDate(rental.end_date) : 'Ongoing',
-        monthly_amount: formatCurrency(rental?.monthly_amount),
-        rental_amount: formatCurrency(rental?.monthly_amount), // Alias
+        monthly_amount: formatCurrency(rental?.monthly_amount, currencyCode),
+        rental_amount: formatCurrency(rental?.monthly_amount, currencyCode), // Alias
         rental_period_type: rental?.rental_period_type || 'Monthly',
         pickup_location: rental?.pickup_location || '',
         return_location: rental?.return_location || '',
@@ -123,7 +130,7 @@ function htmlToText(html: string): string {
 }
 
 // Default agreement
-function generateDefaultAgreement(rental: any, customer: any, vehicle: any, tenant: any): string {
+function generateDefaultAgreement(rental: any, customer: any, vehicle: any, tenant: any, currencyCode: string = 'GBP'): string {
     const companyName = tenant?.company_name || 'Drive 247';
     return `
 RENTAL AGREEMENT
@@ -155,7 +162,7 @@ ${'='.repeat(70)}
 RENTAL TERMS:
 Start Date: ${formatDate(rental?.start_date)}
 End Date: ${rental?.end_date ? formatDate(rental.end_date) : 'Ongoing'}
-Amount: ${formatCurrency(rental?.monthly_amount)}
+Amount: ${formatCurrency(rental?.monthly_amount, currencyCode)}
 
 ${'='.repeat(70)}
 
@@ -340,13 +347,14 @@ export async function POST(request: NextRequest) {
         if (body.tenantId) {
             const { data: tenantData } = await supabase
                 .from('tenants')
-                .select('company_name, contact_email, contact_phone, phone, address, admin_name, admin_email')
+                .select('company_name, contact_email, contact_phone, phone, address, admin_name, admin_email, currency_code')
                 .eq('id', body.tenantId)
                 .single();
             tenant = tenantData;
         }
 
         // Fetch template
+        const currencyCode = tenant?.currency_code || 'GBP';
         let documentContent: string;
         if (body.tenantId) {
             const { data: templateData } = await supabase
@@ -358,13 +366,13 @@ export async function POST(request: NextRequest) {
 
             if (templateData?.template_content) {
                 console.log('Using admin template');
-                documentContent = htmlToText(processTemplate(templateData.template_content, rental, customer, vehicle, tenant));
+                documentContent = htmlToText(processTemplate(templateData.template_content, rental, customer, vehicle, tenant, currencyCode));
             } else {
                 console.log('Using default template');
-                documentContent = generateDefaultAgreement(rental, customer, vehicle, tenant);
+                documentContent = generateDefaultAgreement(rental, customer, vehicle, tenant, currencyCode);
             }
         } else {
-            documentContent = generateDefaultAgreement(rental, customer, vehicle, tenant);
+            documentContent = generateDefaultAgreement(rental, customer, vehicle, tenant, currencyCode);
         }
 
         const documentBase64 = Buffer.from(documentContent).toString('base64');

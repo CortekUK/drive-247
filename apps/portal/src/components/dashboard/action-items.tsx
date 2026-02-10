@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { format, subMonths, startOfMonth, endOfMonth, eachDayOfInterval, parseISO } from "date-fns";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 import { useTenant } from "@/contexts/TenantContext";
+import { formatCurrency, getCurrencySymbol } from "@/lib/format-utils";
 import { TrendingUp, TrendingDown, DollarSign, Loader2 } from "lucide-react";
 
 interface PerformanceData {
@@ -20,6 +21,8 @@ interface PerformanceData {
 
 export const ActionItems = () => {
   const { tenant } = useTenant();
+  const currencyCode = tenant?.currency_code || 'GBP';
+  const currencySymbol = getCurrencySymbol(currencyCode);
 
   // Fetch performance data from payments and expenses
   const { data: performanceData, isLoading } = useQuery({
@@ -235,7 +238,7 @@ export const ActionItems = () => {
                 )}
               </div>
               <p className="text-2xl font-bold text-green-500">
-                ${(performanceData?.totalRevenue || 0).toLocaleString()}
+                {formatCurrency(performanceData?.totalRevenue || 0, currencyCode)}
               </p>
             </div>
             <div className="p-4 rounded-lg bg-red-500/10 border border-red-500/20">
@@ -249,7 +252,7 @@ export const ActionItems = () => {
                 )}
               </div>
               <p className="text-2xl font-bold text-red-500">
-                ${(performanceData?.totalExpenses || 0).toLocaleString()}
+                {formatCurrency(performanceData?.totalExpenses || 0, currencyCode)}
               </p>
             </div>
             <div className="p-4 rounded-lg bg-blue-500/10 border border-blue-500/20">
@@ -258,7 +261,7 @@ export const ActionItems = () => {
                 <DollarSign className="h-4 w-4 text-blue-500" />
               </div>
               <p className={`text-2xl font-bold ${(performanceData?.netProfit || 0) >= 0 ? 'text-blue-500' : 'text-red-500'}`}>
-                ${(performanceData?.netProfit || 0).toLocaleString()}
+                {formatCurrency(performanceData?.netProfit || 0, currencyCode)}
               </p>
             </div>
           </div>
@@ -292,7 +295,7 @@ export const ActionItems = () => {
                       <YAxis
                         tick={{ fill: '#9ca3af', fontSize: 10 }}
                         stroke="#4b5563"
-                        tickFormatter={(value) => `$${value >= 1000 ? `${(value/1000).toFixed(0)}k` : value}`}
+                        tickFormatter={(value) => `${currencySymbol}${value >= 1000 ? `${(value/1000).toFixed(0)}k` : value}`}
                       />
                       <Tooltip
                         cursor={{ stroke: '#4b5563', strokeWidth: 1, strokeDasharray: '5 5' }}
@@ -306,7 +309,7 @@ export const ActionItems = () => {
                         labelStyle={{ color: '#9ca3af', fontWeight: 'bold', marginBottom: '8px' }}
                         itemStyle={{ color: '#e5e7eb' }}
                         labelFormatter={(value) => format(new Date(value), 'MMM d, yyyy')}
-                        formatter={(value: number) => [`$${value.toLocaleString()}`, '']}
+                        formatter={(value: number) => [formatCurrency(value, currencyCode), '']}
                       />
                       <Line
                         type="monotone"

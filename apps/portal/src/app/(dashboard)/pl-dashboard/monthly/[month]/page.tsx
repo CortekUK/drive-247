@@ -14,6 +14,8 @@ import { format, parseISO, startOfMonth, endOfMonth } from "date-fns";
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend } from "recharts";
 import { cn } from "@/lib/utils";
 import { PLBreadcrumb } from "@/components/shared/data-display/pl-breadcrumb";
+import { useTenant } from "@/contexts/TenantContext";
+import { formatCurrency as formatCurrencyUtil } from "@/lib/format-utils";
 
 interface VehicleMonthlyPL {
   vehicle_id: string;
@@ -36,6 +38,7 @@ const MonthlyPLDrilldown = () => {
   const params = useParams();
   const router = useRouter();
   const searchParams = useSearchParams();
+  const { tenant } = useTenant();
   const [sortField, setSortField] = useState<SortField>('net_profit');
   const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
   const [showChart, setShowChart] = useState(false);
@@ -163,10 +166,7 @@ const MonthlyPLDrilldown = () => {
   }, [vehicleData, sortField, sortDirection]);
 
   const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency: 'USD',
-    }).format(amount);
+    return formatCurrencyUtil(amount, tenant?.currency_code || 'USD');
   };
 
   const handleSort = (field: SortField) => {
@@ -413,7 +413,7 @@ const MonthlyPLDrilldown = () => {
                 <BarChart data={chartData} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
                   <CartesianGrid strokeDasharray="3 3" className="opacity-30" />
                   <XAxis dataKey="vehicle" className="text-xs" />
-                  <YAxis className="text-xs" tickFormatter={(value) => `$${(value / 1000).toFixed(0)}k`} />
+                  <YAxis className="text-xs" tickFormatter={(value) => `${formatCurrencyUtil(value / 1000, tenant?.currency_code || 'GBP').replace(/[^0-9.-]/g, '')}k`} />
                   <Tooltip
                     formatter={(value: number, name: string) => [formatCurrency(value), name]}
                     labelClassName="text-foreground"

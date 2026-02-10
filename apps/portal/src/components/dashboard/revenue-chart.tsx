@@ -18,6 +18,7 @@ import {
 } from 'recharts';
 import { format, subDays, eachDayOfInterval, startOfDay } from 'date-fns';
 import { TrendingUp, DollarSign } from 'lucide-react';
+import { formatCurrency, getCurrencySymbol } from '@/lib/format-utils';
 
 interface DailyData {
   date: string;
@@ -105,14 +106,8 @@ export function RevenueChart() {
     return { totalRevenue, totalRentals, avgDaily, trend };
   }, [chartData]);
 
-  const formatCurrency = (value: number) => {
-    return new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency: 'USD',
-      minimumFractionDigits: 0,
-      maximumFractionDigits: 0,
-    }).format(value);
-  };
+  const currencyCode = tenant?.currency_code || 'GBP';
+  const currencySymbol = getCurrencySymbol(currencyCode);
 
   if (isLoading) {
     return (
@@ -142,7 +137,7 @@ export function RevenueChart() {
             </CardDescription>
           </div>
           <div className="text-right">
-            <div className="text-2xl font-bold">{formatCurrency(stats.totalRevenue)}</div>
+            <div className="text-2xl font-bold">{formatCurrency(stats.totalRevenue, currencyCode, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}</div>
             <div className="flex items-center justify-end gap-1 text-sm">
               {stats.trend !== 0 && (
                 <>
@@ -165,12 +160,12 @@ export function RevenueChart() {
           </div>
           <div>
             <div className="text-sm text-muted-foreground">Avg. Daily Revenue</div>
-            <div className="text-xl font-semibold">{formatCurrency(stats.avgDaily)}</div>
+            <div className="text-xl font-semibold">{formatCurrency(stats.avgDaily, currencyCode, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}</div>
           </div>
           <div>
             <div className="text-sm text-muted-foreground">Avg. Per Rental</div>
             <div className="text-xl font-semibold">
-              {stats.totalRentals > 0 ? formatCurrency(stats.totalRevenue / stats.totalRentals) : '$0'}
+              {stats.totalRentals > 0 ? formatCurrency(stats.totalRevenue / stats.totalRentals, currencyCode, { minimumFractionDigits: 0, maximumFractionDigits: 0 }) : formatCurrency(0, currencyCode, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
             </div>
           </div>
         </div>
@@ -203,7 +198,7 @@ export function RevenueChart() {
                 axisLine={false}
                 tickLine={false}
                 tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 12 }}
-                tickFormatter={(value) => `$${(value / 1000).toFixed(0)}k`}
+                tickFormatter={(value) => `${currencySymbol}${(value / 1000).toFixed(0)}k`}
                 dx={-10}
                 width={50}
               />
@@ -216,7 +211,7 @@ export function RevenueChart() {
                 }}
                 labelStyle={{ color: 'hsl(var(--foreground))', fontWeight: 600, marginBottom: 4 }}
                 formatter={(value: number, name: string) => {
-                  if (name === 'revenue') return [formatCurrency(value), 'Revenue'];
+                  if (name === 'revenue') return [formatCurrency(value, currencyCode, { minimumFractionDigits: 0, maximumFractionDigits: 0 }), 'Revenue'];
                   return [value, 'Rentals'];
                 }}
               />

@@ -10,9 +10,13 @@ import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { format } from "date-fns";
+import { formatCurrency } from "@/lib/format-utils";
+import { useTenant } from "@/contexts/TenantContext";
 
 const BookingPending = () => {
   const searchParams = useSearchParams();
+  const { tenant } = useTenant();
+  const currencyCode = tenant?.currency_code || 'GBP';
   const [bookingDetails, setBookingDetails] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const sessionId = searchParams?.get("session_id");
@@ -153,7 +157,7 @@ const BookingPending = () => {
                       <div className="border-t pt-3 mt-2 flex justify-between">
                         <span className="font-medium">Total Amount (Held):</span>
                         <span className="font-bold text-accent">
-                          ${bookingDetails.monthly_amount?.toLocaleString() || "N/A"}
+                          {bookingDetails.monthly_amount ? formatCurrency(bookingDetails.monthly_amount, currencyCode) : "N/A"}
                         </span>
                       </div>
                     </div>

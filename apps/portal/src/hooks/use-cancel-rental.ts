@@ -2,6 +2,8 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
 import { useAuditLog } from "./use-audit-log";
+import { formatCurrency } from "@/lib/format-utils";
+import { useTenant } from "@/contexts/TenantContext";
 
 interface CancelRefundParams {
   rentalId: string;
@@ -40,6 +42,7 @@ interface CancelRefundResult {
 export const useCancelRental = () => {
   const queryClient = useQueryClient();
   const { logAction } = useAuditLog();
+  const { tenant } = useTenant();
 
   return useMutation({
     mutationFn: async (params: CancelRefundParams): Promise<CancelRefundResult & { params: CancelRefundParams }> => {
@@ -110,7 +113,8 @@ export const useCancelRental = () => {
       let successMessage = "Rental cancelled successfully.";
       if (data.refund) {
         if (data.refund.type === "full" || data.refund.type === "partial") {
-          successMessage += ` Refund of $${data.refund.amount?.toLocaleString()} processed.`;
+          const currencyCode = tenant?.currency_code || 'GBP';
+          successMessage += ` Refund of ${formatCurrency(data.refund.amount || 0, currencyCode)} processed.`;
         } else if (data.refund.type === "cancelled") {
           successMessage += " Payment hold released.";
         }

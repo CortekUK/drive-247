@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
+import { formatCurrency } from '@/lib/utils';
 import { DashboardSkeleton } from '@/components/skeletons/DashboardSkeleton';
 
 interface PlatformMetrics {
@@ -129,7 +130,7 @@ export default function DashboardPage() {
 
         <MetricCard
           title="Total Revenue"
-          value={`$${metrics.totalRevenue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
+          value={formatCurrency(metrics.totalRevenue)}
           subtitle="All-time earnings"
           icon="💰"
           bgColor="bg-indigo-900/20 border border-indigo-800/50"

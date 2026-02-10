@@ -5,14 +5,18 @@ import { TableCell, TableRow } from "@/components/ui/table";
 import { ChevronDown, ChevronRight } from "lucide-react";
 import { formatInTimeZone } from "date-fns-tz";
 import { RentalPayment } from "@/hooks/use-rental-ledger-data";
+import { useTenant } from "@/contexts/TenantContext";
+import { formatCurrency } from "@/lib/format-utils";
 
 interface RentalPaymentRowProps {
   payment: RentalPayment;
 }
 
 export const RentalPaymentRow = ({ payment }: RentalPaymentRowProps) => {
+  const { tenant } = useTenant();
   const [showAllocations, setShowAllocations] = useState(false);
   const totalAllocated = payment.allocations.reduce((sum, alloc) => sum + alloc.amount_applied, 0);
+  const currencyCode = tenant?.currency_code || 'GBP';
 
   const getAllocationSummary = () => {
     const grouped = payment.allocations.reduce((acc, alloc) => {
@@ -24,10 +28,10 @@ export const RentalPaymentRow = ({ payment }: RentalPaymentRowProps) => {
     }, {} as Record<string, number>);
 
     const summary = Object.entries(grouped)
-      .map(([category, amount]) => `$${amount.toLocaleString('en-US', { minimumFractionDigits: 2 })} → ${category}`)
+      .map(([category, amount]) => `${formatCurrency(amount, currencyCode)} → ${category}`)
       .join(', ');
 
-    return `Allocated: ${summary}. Remaining: $${payment.remaining_amount.toLocaleString('en-US', { minimumFractionDigits: 2 })}`;
+    return `Allocated: ${summary}. Remaining: ${formatCurrency(payment.remaining_amount, currencyCode)}`;
   };
 
   return (
@@ -47,7 +51,7 @@ export const RentalPaymentRow = ({ payment }: RentalPaymentRowProps) => {
         <TableCell className="text-right">
           <div className="space-y-1">
             <div className="font-medium text-green-600">
-              +${Math.abs(Number(payment.amount)).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              +{formatCurrency(Math.abs(Number(payment.amount)), currencyCode)}
             </div>
             {payment.allocations.length > 0 && (
               <div className="text-xs text-muted-foreground">
@@ -61,7 +65,7 @@ export const RentalPaymentRow = ({ payment }: RentalPaymentRowProps) => {
                     onClick={() => setShowAllocations(!showAllocations)}
                   >
                     {showAllocations ? <ChevronDown className="h-3 w-3 mr-1" /> : <ChevronRight className="h-3 w-3 mr-1" />}
-                    View allocation details (${totalAllocated.toLocaleString('en-US', { minimumFractionDigits: 2 })})
+                    View allocation details ({formatCurrency(totalAllocated, currencyCode)})
                   </Button>
                 )}
               </div>
@@ -69,7 +73,7 @@ export const RentalPaymentRow = ({ payment }: RentalPaymentRowProps) => {
           </div>
         </TableCell>
         <TableCell className="text-right font-medium">
-          ${payment.remaining_amount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+          {formatCurrency(payment.remaining_amount, currencyCode)}
         </TableCell>
       </TableRow>
       
@@ -81,16 +85,16 @@ export const RentalPaymentRow = ({ payment }: RentalPaymentRowProps) => {
               {payment.allocations.map((allocation, index) => (
                 <div key={index} className="text-xs text-muted-foreground flex justify-between">
                   <span>
-                    {allocation.charge_category} 
+                    {allocation.charge_category}
                     {allocation.charge_due_date && ` (due ${formatInTimeZone(new Date(allocation.charge_due_date), 'Europe/London', "dd/MM/yyyy")})`}
                   </span>
-                  <span>${allocation.amount_applied.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                  <span>{formatCurrency(allocation.amount_applied, currencyCode)}</span>
                 </div>
               ))}
               <div className="text-xs text-muted-foreground border-t pt-1 mt-1">
                 <div className="flex justify-between font-medium">
                   <span>Remaining Credit:</span>
-                  <span>${payment.remaining_amount.toLocaleString('en-US', { minimumFractionDigits: 2 })}</span>
+                  <span>{formatCurrency(payment.remaining_amount, currencyCode)}</span>
                 </div>
               </div>
             </div>

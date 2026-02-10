@@ -46,7 +46,16 @@ import {
   usePickupLocations,
   PickupLocation,
 } from '@/hooks/use-pickup-locations';
+import { useTenant } from '@/contexts/TenantContext';
 import { cn } from '@/lib/utils';
+import {
+  formatCurrency,
+  getCurrencySymbol,
+  kmToDisplayUnit,
+  displayUnitToKm,
+  getDistanceUnitShort,
+} from '@/lib/format-utils';
+import type { DistanceUnit } from '@/lib/format-utils';
 
 interface LocationFormData {
   name: string;
@@ -64,15 +73,6 @@ const EMPTY_FORM: LocationFormData = {
   is_return_enabled: true,
 };
 
-const formatCurrency = (amount: number) => {
-  return new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currency: 'USD',
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 2,
-  }).format(amount);
-};
-
 export function LocationSettings() {
   const {
     locationSettings,
@@ -88,6 +88,12 @@ export function LocationSettings() {
     deleteLocation,
     isDeleting,
   } = usePickupLocations();
+
+  const { tenant } = useTenant();
+  const currencyCode = tenant?.currency_code || 'GBP';
+  const distanceUnit: DistanceUnit = (tenant?.distance_unit as DistanceUnit) || 'miles';
+  const distanceUnitLabel = getDistanceUnitShort(distanceUnit);
+  const currencySymbol = getCurrencySymbol(currencyCode);
 
   // PICKUP options
   const [pickupFixedEnabled, setPickupFixedEnabled] = useState(true);
@@ -135,7 +141,7 @@ export function LocationSettings() {
         !locationSettings.fixed_return_address ||
         locationSettings.fixed_return_address === locationSettings.fixed_pickup_address
       );
-      setAreaRadius(locationSettings.pickup_area_radius_km ?? 100);
+      setAreaRadius(locationSettings.pickup_area_radius_km != null ? kmToDisplayUnit(locationSettings.pickup_area_radius_km, distanceUnit) : 100);
       setAreaDeliveryFee(locationSettings.area_delivery_fee ?? 0);
       setAreaCenterLat(locationSettings.area_center_lat);
       setAreaCenterLon(locationSettings.area_center_lon);
@@ -250,8 +256,8 @@ export function LocationSettings() {
         // Addresses and area settings
         fixed_pickup_address: pickupFixedEnabled ? fixedPickupAddress : null,
         fixed_return_address: returnFixedEnabled ? (sameReturnAddress ? fixedPickupAddress : fixedReturnAddress) : null,
-        pickup_area_radius_km: areaUsed ? (areaRadius ?? 100) : null,
-        return_area_radius_km: areaUsed ? (areaRadius ?? 100) : null,
+        pickup_area_radius_km: areaUsed ? displayUnitToKm(areaRadius ?? 100, distanceUnit) : null,
+        return_area_radius_km: areaUsed ? displayUnitToKm(areaRadius ?? 100, distanceUnit) : null,
         area_delivery_fee: areaUsed ? (areaDeliveryFee ?? 0) : 0,
         area_center_lat: areaUsed ? areaCenterLat : null,
         area_center_lon: areaUsed ? areaCenterLon : null,
@@ -453,6 +459,7 @@ export function LocationSettings() {
                     onDelete={handleDeleteLocation}
                     onToggleActive={handleToggleActive}
                     isUpdating={isUpdating}
+                    currencyCode={currencyCode}
                   />
                 </div>
               )}
@@ -620,6 +627,7 @@ export function LocationSettings() {
                     onDelete={handleDeleteLocation}
                     onToggleActive={handleToggleActive}
                     isUpdating={isUpdating}
+                    currencyCode={currencyCode}
                   />
                 </div>
               )}
@@ -715,14 +723,14 @@ export function LocationSettings() {
                       max={100}
                       placeholder="100"
                     />
-                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">km</span>
+                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">{distanceUnitLabel}</span>
                   </div>
                 </div>
 
                 <div className="space-y-2">
                   <Label className="text-sm font-medium">Fee</Label>
                   <div className="relative">
-                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">$</span>
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">{currencySymbol}</span>
                     <Input
                       type="number"
                       value={areaDeliveryFee ?? ''}
@@ -743,8 +751,8 @@ export function LocationSettings() {
 
             <div className="mt-4 p-3 rounded-lg bg-muted/50 border">
               <p className="text-sm text-muted-foreground">
-                Customers can enter any address within <strong className="text-foreground">{areaRadius ?? 100}km</strong> of your center point.
-                A fee of <strong className="text-foreground">{formatCurrency(areaDeliveryFee ?? 0)}</strong> will apply per delivery/collection.
+                Customers can enter any address within <strong className="text-foreground">{areaRadius ?? 100}{distanceUnitLabel}</strong> of your center point.
+                A fee of <strong className="text-foreground">{formatCurrency(areaDeliveryFee ?? 0, currencyCode)}</strong> will apply per delivery/collection.
               </p>
             </div>
           </CardContent>
@@ -811,7 +819,7 @@ export function LocationSettings() {
             <div className="space-y-2">
               <Label className="text-sm font-medium">{dialogMode === 'pickup' ? 'Delivery' : 'Collection'} Fee</Label>
               <div className="relative w-32">
-                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">$</span>
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">{currencySymbol}</span>
                 <Input
                   type="number"
                   value={formData.delivery_fee ?? ''}
@@ -849,6 +857,7 @@ function LocationsGrid({
   onDelete,
   onToggleActive,
   isUpdating,
+  currencyCode,
 }: {
   locations: PickupLocation[];
   onAdd: () => void;
@@ -856,6 +865,7 @@ function LocationsGrid({
   onDelete: (id: string) => void;
   onToggleActive: (location: PickupLocation) => void;
   isUpdating: boolean;
+  currencyCode: string;
 }) {
   return (
     <div className="space-y-3">
@@ -878,7 +888,7 @@ function LocationsGrid({
                 <div className="flex items-center gap-2">
                   <span className="font-medium text-sm">{location.name}</span>
                   <span className="text-xs font-semibold text-amber-500">
-                    {formatCurrency(location.delivery_fee)}
+                    {formatCurrency(location.delivery_fee, currencyCode)}
                   </span>
                 </div>
                 <p className="text-xs text-muted-foreground truncate">{location.address}</p>

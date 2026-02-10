@@ -1,27 +1,34 @@
 // Centralized formatting utilities that respect org settings
 
 import { format } from 'date-fns';
+import { getCurrencySymbol } from '@/lib/format-utils';
 
 // Default values when settings are not available
-const DEFAULT_CURRENCY = 'USD';
+const DEFAULT_CURRENCY = 'GBP';
 const DEFAULT_DATE_FORMAT = 'MM/DD/YYYY';
 const DEFAULT_TIMEZONE = 'America/New_York';
 
+// Currency locale mapping (same pattern as format-utils.ts)
+const CURRENCY_LOCALE_MAP: Record<string, string> = {
+  USD: 'en-US',
+  GBP: 'en-GB',
+  EUR: 'en-IE',
+};
+
 // Currency formatting
 export const formatCurrency = (
-  amount: number | null | undefined, 
+  amount: number | null | undefined,
   currencyCode: string = DEFAULT_CURRENCY
 ): string => {
-  if (amount === null || amount === undefined) return '$0.00';
+  if (amount === null || amount === undefined) {
+    return `${getCurrencySymbol(currencyCode)}0.00`;
+  }
 
-  const currencySymbols: Record<string, string> = {
-    USD: '$',
-    GBP: '£',
-    EUR: '€',
-  };
+  const code = currencyCode?.toUpperCase() || DEFAULT_CURRENCY;
+  const symbol = getCurrencySymbol(code);
+  const locale = CURRENCY_LOCALE_MAP[code] || 'en-US';
 
-  const symbol = currencySymbols[currencyCode] || '$';
-  const formatter = new Intl.NumberFormat('en-US', {
+  const formatter = new Intl.NumberFormat(locale, {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   });
@@ -110,9 +117,9 @@ export const formatPercentage = (value: number | null | undefined): string => {
 };
 
 // Number formatting with thousands separators
-export const formatNumber = (value: number | null | undefined): string => {
+export const formatNumber = (value: number | null | undefined, locale: string = 'en-US'): string => {
   if (value === null || value === undefined) return '0';
-  return new Intl.NumberFormat('en-US').format(value);
+  return new Intl.NumberFormat(locale).format(value);
 };
 
 // Status badge variant mapping

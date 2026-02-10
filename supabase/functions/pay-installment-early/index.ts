@@ -59,7 +59,7 @@ serve(async (req) => {
     if (tenantId) {
       const { data: tenant } = await supabase
         .from('tenants')
-        .select('stripe_mode, stripe_account_id, stripe_onboarding_complete')
+        .select('stripe_mode, stripe_account_id, stripe_onboarding_complete, currency_code')
         .eq('id', tenantId)
         .single()
 
@@ -68,6 +68,9 @@ serve(async (req) => {
         tenantData = tenant
       }
     }
+
+    // Get currency from tenant settings (Stripe expects lowercase)
+    const currencyCode = (tenantData?.currency_code || 'GBP').toLowerCase()
 
     const stripe = getStripeClient(stripeMode)
     const stripeAccountId = tenantData ? getConnectAccountId(tenantData) : null
@@ -126,7 +129,7 @@ serve(async (req) => {
         // Create PaymentIntent and charge immediately
         const paymentIntent = await stripe.paymentIntents.create({
           amount: Math.round(installment.amount * 100),
-          currency: 'usd',
+          currency: currencyCode,
           customer: plan.stripe_customer_id,
           payment_method: paymentMethodId,
           off_session: true,
@@ -279,7 +282,7 @@ serve(async (req) => {
         // Create single PaymentIntent for total
         const paymentIntent = await stripe.paymentIntents.create({
           amount: Math.round(totalAmount * 100),
-          currency: 'usd',
+          currency: currencyCode,
           customer: plan.stripe_customer_id,
           payment_method: plan.stripe_payment_method_id,
           off_session: true,

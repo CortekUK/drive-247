@@ -7,6 +7,7 @@ import {
   TenantBranding,
   wrapWithBrandedTemplate
 } from "../_shared/resend-service.ts";
+import { formatCurrency } from "../_shared/format-utils.ts";
 
 interface PaymentRejectionRequest {
   paymentId: string;
@@ -21,7 +22,7 @@ interface PaymentRejectionRequest {
 
 // sendEmail is now imported from resend-service.ts
 
-function generateRejectionEmailContent(data: PaymentRejectionRequest, branding: TenantBranding): string {
+function generateRejectionEmailContent(data: PaymentRejectionRequest, branding: TenantBranding, currencyCode: string = 'GBP'): string {
   return `
                     <tr>
                         <td style="padding: 30px;">
@@ -41,7 +42,7 @@ function generateRejectionEmailContent(data: PaymentRejectionRequest, branding: 
                                         <table role="presentation" style="width: 100%; border-collapse: collapse;">
                                             <tr>
                                                 <td style="padding: 8px 0; color: #666; font-size: 14px;">Amount:</td>
-                                                <td style="padding: 8px 0; color: #1a1a1a; font-weight: 600; font-size: 14px; text-align: right;">$${data.amount.toFixed(2)}</td>
+                                                <td style="padding: 8px 0; color: #1a1a1a; font-weight: 600; font-size: 14px; text-align: right;">${formatCurrency(data.amount, currencyCode)}</td>
                                             </tr>
                                             ${data.vehicleReg ? `
                                             <tr>
@@ -106,13 +107,25 @@ serve(async (req) => {
       tenantId = payment?.tenant_id;
     }
 
-    // Get tenant branding
+    // Get tenant branding and currency
     const branding = tenantId
       ? await getTenantBranding(tenantId, supabase)
       : { companyName: 'Drive 247', logoUrl: null, primaryColor: '#1a1a1a', accentColor: '#C5A572', contactEmail: 'support@drive-247.com', contactPhone: null, slug: 'drive247' };
 
+    let currencyCode = 'GBP';
+    if (tenantId) {
+      const { data: tenant } = await supabase
+        .from('tenants')
+        .select('currency_code')
+        .eq('id', tenantId)
+        .single();
+      if (tenant?.currency_code) {
+        currencyCode = tenant.currency_code;
+      }
+    }
+
     // Build branded customer email HTML
-    const emailContent = generateRejectionEmailContent(data, branding);
+    const emailContent = generateRejectionEmailContent(data, branding, currencyCode);
     const html = wrapWithBrandedTemplate(emailContent, branding);
 
     // Send rejection email to customer

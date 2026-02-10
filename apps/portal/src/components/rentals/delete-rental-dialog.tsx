@@ -12,6 +12,8 @@ import {
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { useToast } from "@/hooks/use-toast";
 import { useAuditLog } from "@/hooks/use-audit-log";
+import { useTenant } from "@/contexts/TenantContext";
+import { formatCurrency } from "@/lib/format-utils";
 
 interface Rental {
   id: string;
@@ -45,6 +47,8 @@ export const DeleteRentalDialog = ({
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const { logAction } = useAuditLog();
+  const { tenant } = useTenant();
+  const currencyCode = tenant?.currency_code || 'GBP';
 
   const deleteRentalMutation = useMutation({
     mutationFn: async () => {
@@ -144,8 +148,8 @@ export const DeleteRentalDialog = ({
                 {new Date(rental.start_date).toLocaleDateString()}
               </p>
               <p>
-                <span className="font-medium">Monthly Amount:</span> $
-                {rental.monthly_amount.toLocaleString()}
+                <span className="font-medium">Monthly Amount:</span>{" "}
+                {formatCurrency(rental.monthly_amount, currencyCode)}
               </p>
             </div>
           </div>

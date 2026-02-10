@@ -31,6 +31,7 @@ import {
 } from "lucide-react";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
+import { formatCurrency } from "@/lib/format-utils";
 
 interface RejectionDialogProps {
   open: boolean;
@@ -90,6 +91,7 @@ export default function RejectionDialog({
   // Show refund tab for captured payments OR pre-authorized payments (to show release info)
   const showRefundTab = isPaymentCaptured || isPreAuth;
   const refundAmount = payment?.amount || 0;
+  const currencyCode = tenant?.currency_code || 'GBP';
 
   // Auto-fetch payment intent ID when dialog opens and it's missing
   useEffect(() => {
@@ -240,13 +242,13 @@ export default function RejectionDialog({
         customer_email: rental.customer?.email || '',
         rental_number: rental.id.substring(0, 8).toUpperCase(),
         rejection_reason: rejectionReason || 'We were unable to verify all required information.',
-        refund_amount: `$${refundAmount.toFixed(2)}`,
+        refund_amount: formatCurrency(refundAmount, currencyCode),
         vehicle_make: rental.vehicle?.make || '',
         vehicle_model: rental.vehicle?.model || '',
         vehicle_reg: rental.vehicle?.reg || '',
         rental_start_date: rental.start_date ? format(new Date(rental.start_date), 'MMMM dd, yyyy') : 'N/A',
         rental_end_date: rental.end_date ? format(new Date(rental.end_date), 'MMMM dd, yyyy') : 'N/A',
-        rental_amount: `$${(rental.monthly_amount || 0).toFixed(2)}`,
+        rental_amount: formatCurrency(rental.monthly_amount || 0, currencyCode),
         company_name: (tenant as any)?.name || 'Our Company',
         company_email: (tenant as any)?.email || '',
         company_phone: (tenant as any)?.phone || '',
@@ -430,7 +432,7 @@ export default function RejectionDialog({
       if (refundTiming === 'scheduled') {
         successDescription = 'Booking has been rejected and refund scheduled.';
       } else if (refundTiming === 'manual') {
-        successDescription = 'Booking has been rejected. Manual refund of $' + refundAmount.toLocaleString() + ' is pending.';
+        successDescription = 'Booking has been rejected. Manual refund of ' + formatCurrency(refundAmount, currencyCode) + ' is pending.';
       } else if (canProcessStripeRefund && refundTiming === 'now') {
         successDescription = 'Booking has been rejected and refund processed.';
       }
@@ -567,12 +569,12 @@ export default function RejectionDialog({
               <AlertDescription>
                 {isPreAuth ? (
                   <p>
-                    This booking has a <strong>pre-authorized payment</strong> of <strong>${refundAmount.toLocaleString()}</strong>.
+                    This booking has a <strong>pre-authorized payment</strong> of <strong>{formatCurrency(refundAmount, currencyCode)}</strong>.
                     The hold will be released automatically when you reject this booking.
                   </p>
                 ) : isPaymentCaptured ? (
                   <p>
-                    This booking has a <strong>captured payment</strong> of <strong>${refundAmount.toLocaleString()}</strong>.
+                    This booking has a <strong>captured payment</strong> of <strong>{formatCurrency(refundAmount, currencyCode)}</strong>.
                     You'll configure the refund in the next step.
                   </p>
                 ) : (
@@ -590,7 +592,7 @@ export default function RejectionDialog({
               <div>
                 <h3 className="font-semibold mb-2">{isPreAuth ? 'Pre-Authorization Release' : 'Refund Configuration'}</h3>
                 <p className="text-sm text-muted-foreground mb-4">
-                  {isPreAuth ? 'Hold' : 'Refund'} amount: <strong>${refundAmount.toLocaleString()}</strong>
+                  {isPreAuth ? 'Hold' : 'Refund'} amount: <strong>{formatCurrency(refundAmount, currencyCode)}</strong>
                 </p>
               </div>
 
@@ -602,7 +604,7 @@ export default function RejectionDialog({
                     <AlertDescription className="text-blue-800 dark:text-blue-200">
                       <p className="font-medium mb-1">Pre-Authorization Hold</p>
                       <p className="text-sm">
-                        This booking has a pre-authorized hold of <strong>${refundAmount.toLocaleString()}</strong> on the customer's card.
+                        This booking has a pre-authorized hold of <strong>{formatCurrency(refundAmount, currencyCode)}</strong> on the customer's card.
                         The hold will be <strong>automatically released</strong> when you reject this booking.
                       </p>
                     </AlertDescription>
@@ -801,7 +803,7 @@ export default function RejectionDialog({
                       {manualPaymentIntentId.startsWith("pi_") && (
                         <Alert className="border-green-200 bg-green-50 dark:bg-green-950/30">
                           <AlertDescription className="text-green-800 dark:text-green-200 text-sm">
-                            Refund of <strong>${refundAmount.toLocaleString()}</strong> will be processed automatically via Stripe.
+                            Refund of <strong>{formatCurrency(refundAmount, currencyCode)}</strong> will be processed automatically via Stripe.
                           </AlertDescription>
                         </Alert>
                       )}
@@ -817,7 +819,7 @@ export default function RejectionDialog({
                           onCheckedChange={(checked) => setManualRefundConfirmed(checked === true)}
                         />
                         <Label htmlFor="manual-confirm" className="text-sm cursor-pointer">
-                          I confirm that I will process the refund of <strong>${refundAmount.toLocaleString()}</strong> manually.
+                          I confirm that I will process the refund of <strong>{formatCurrency(refundAmount, currencyCode)}</strong> manually.
                         </Label>
                       </div>
                       {!manualRefundConfirmed && (

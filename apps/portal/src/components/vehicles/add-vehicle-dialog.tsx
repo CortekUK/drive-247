@@ -24,6 +24,7 @@ import { useAuditLog } from "@/hooks/use-audit-log";
 import { format, startOfDay } from "date-fns";
 import { cn } from "@/lib/utils";
 import { addVehicleDialogSchema, type AddVehicleDialogFormValues } from "@/client-schemas/vehicles/add-vehicle-dialog";
+import { getCurrencySymbol } from "@/lib/format-utils";
 import { toast as sonnerToast } from "sonner";
 
 type VehicleFormData = AddVehicleDialogFormValues;
@@ -42,6 +43,7 @@ export const AddVehicleDialog = ({ open, onOpenChange }: AddVehicleDialogProps) 
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const { tenant } = useTenant();
+  const currencySymbol = getCurrencySymbol(tenant?.currency_code || 'GBP');
   const { logAction } = useAuditLog();
 
   const form = useForm<VehicleFormData>({
@@ -687,7 +689,7 @@ export const AddVehicleDialog = ({ open, onOpenChange }: AddVehicleDialogProps) 
                       name="purchase_price"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>Purchase Price ($) <span className="text-red-500">*</span></FormLabel>
+                          <FormLabel>Purchase Price ({currencySymbol}) <span className="text-red-500">*</span></FormLabel>
                           <FormControl>
                             <Input
                               type="number"
@@ -738,7 +740,7 @@ export const AddVehicleDialog = ({ open, onOpenChange }: AddVehicleDialogProps) 
                     name="daily_rent"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel className="whitespace-nowrap">Daily ($) <span className="text-red-500">*</span></FormLabel>
+                        <FormLabel className="whitespace-nowrap">Daily ({currencySymbol}) <span className="text-red-500">*</span></FormLabel>
                         <FormControl>
                           <Input
                             type="number"
@@ -767,7 +769,7 @@ export const AddVehicleDialog = ({ open, onOpenChange }: AddVehicleDialogProps) 
                     name="weekly_rent"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel className="whitespace-nowrap">Weekly ($) <span className="text-red-500">*</span></FormLabel>
+                        <FormLabel className="whitespace-nowrap">Weekly ({currencySymbol}) <span className="text-red-500">*</span></FormLabel>
                         <FormControl>
                           <Input
                             type="number"
@@ -796,7 +798,7 @@ export const AddVehicleDialog = ({ open, onOpenChange }: AddVehicleDialogProps) 
                     name="monthly_rent"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel className="whitespace-nowrap">Monthly ($) <span className="text-red-500">*</span></FormLabel>
+                        <FormLabel className="whitespace-nowrap">Monthly ({currencySymbol}) <span className="text-red-500">*</span></FormLabel>
                         <FormControl>
                           <Input
                             type="number"
@@ -825,7 +827,7 @@ export const AddVehicleDialog = ({ open, onOpenChange }: AddVehicleDialogProps) 
                     name="security_deposit"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel className="whitespace-nowrap">Deposit ($)</FormLabel>
+                        <FormLabel className="whitespace-nowrap">Deposit ({currencySymbol})</FormLabel>
                         <FormControl>
                           <Input
                             type="number"
@@ -1104,7 +1106,7 @@ export const AddVehicleDialog = ({ open, onOpenChange }: AddVehicleDialogProps) 
                       name="contract_total"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>Contract Total ($) <span className="text-red-500">*</span></FormLabel>
+                          <FormLabel>Contract Total ({currencySymbol}) <span className="text-red-500">*</span></FormLabel>
                           <FormControl>
                             <Input
                               type="number"

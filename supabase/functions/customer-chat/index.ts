@@ -122,9 +122,29 @@ function parseChartData(content: string): { cleanContent: string; chart?: ChartD
 }
 
 // ============================================================================
+// Currency Helpers (inlined - this function is self-contained)
+// ============================================================================
+function getCurrencySymbolLocal(currencyCode: string = 'GBP'): string {
+  const symbols: Record<string, string> = { USD: '$', GBP: '\u00a3', EUR: '\u20ac' };
+  return symbols[currencyCode?.toUpperCase()] || currencyCode;
+}
+
+function formatCurrencyLocal(amount: number, currencyCode: string = 'GBP'): string {
+  const code = currencyCode?.toUpperCase() || 'GBP';
+  const localeMap: Record<string, string> = { USD: 'en-US', GBP: 'en-GB', EUR: 'en-IE' };
+  const locale = localeMap[code] || 'en-US';
+  try {
+    return new Intl.NumberFormat(locale, { style: 'currency', currency: code }).format(amount);
+  } catch {
+    return `${code} ${amount.toFixed(2)}`;
+  }
+}
+
+// ============================================================================
 // System Prompt Builder
 // ============================================================================
-function getSystemPrompt(customerName: string, context: Record<string, unknown>, tenantName: string): string {
+function getSystemPrompt(customerName: string, context: Record<string, unknown>, tenantName: string, currencyCode: string = 'GBP'): string {
+  const currencySymbol = getCurrencySymbolLocal(currencyCode);
   const customer = context.customer as Record<string, unknown> || {};
   const rentals = context.rentals as Array<Record<string, unknown>> || [];
   const payments = context.payments as Array<Record<string, unknown>> || [];
@@ -147,12 +167,12 @@ ${rentals.map((r, i) => `${i + 1}. Rental #${r.rental_number || 'N/A'}
    - Status: ${r.status || 'N/A'}
    - Vehicle: ${r.vehicle_make || ''} ${r.vehicle_model || ''} (${r.vehicle_registration || 'N/A'})
    - Dates: ${r.start_date || 'N/A'} to ${r.end_date || 'N/A'}
-   - Monthly: £${r.monthly_amount || 0}
+   - Monthly: ${formatCurrencyLocal(Number(r.monthly_amount) || 0, currencyCode)}
    - Payment Status: ${r.payment_status || 'N/A'}`).join('\n')}` : '\nNo recent rentals.';
 
   const paymentsInfo = payments.length > 0 ? `
 Recent Payments (${payments.length}):
-${payments.slice(0, 5).map((p, i) => `${i + 1}. £${p.amount || 0} - ${p.status || 'N/A'} (${p.payment_type || 'N/A'})
+${payments.slice(0, 5).map((p, i) => `${i + 1}. ${formatCurrencyLocal(Number(p.amount) || 0, currencyCode)} - ${p.status || 'N/A'} (${p.payment_type || 'N/A'})
    - Rental: ${p.rental_number || 'N/A'}
    - Date: ${p.created_at ? new Date(p.created_at as string).toLocaleDateString('en-GB') : 'N/A'}`).join('\n')}` : '\nNo recent payments.';
 
@@ -166,9 +186,9 @@ ${agreements.map((a, i) => `${i + 1}. Rental #${a.rental_number || 'N/A'}
   const installmentsInfo = installments.length > 0 ? `
 Active Installment Plans:
 ${installments.map((ip, i) => `${i + 1}. Rental #${ip.rental_number || 'N/A'}
-   - Total: £${ip.total_amount || 0}
-   - Paid: £${ip.paid_amount || 0}
-   - Remaining: £${ip.remaining_amount || 0}
+   - Total: ${formatCurrencyLocal(Number(ip.total_amount) || 0, currencyCode)}
+   - Paid: ${formatCurrencyLocal(Number(ip.paid_amount) || 0, currencyCode)}
+   - Remaining: ${formatCurrencyLocal(Number(ip.remaining_amount) || 0, currencyCode)}
    - Next Payment: ${ip.next_payment_date || 'N/A'}`).join('\n')}` : '';
 
   const insuranceInfo = bonzahPolicies.length > 0 ? `
@@ -213,7 +233,7 @@ Always include the chart AFTER your text explanation.
 Guidelines:
 - Be friendly, helpful, and conversational
 - Use the customer's data above to answer questions accurately
-- Format currency as £X,XXX using British English
+- Format currency using the ${currencySymbol} symbol (${currencyCode})
 - Use British date formats (DD/MM/YYYY)
 - If you don't have specific information, say so politely
 - For complex issues (disputes, refunds, changes), suggest contacting support via the Chat tab
@@ -297,14 +317,15 @@ serve(async (req) => {
       return errorResponse('No tenant context found for customer', 403);
     }
 
-    // Get tenant name for personalized branding
+    // Get tenant name and currency for personalized branding
     const { data: tenantData } = await supabase
       .from('tenants')
-      .select('company_name')
+      .select('company_name, currency_code')
       .eq('id', tenantId)
       .single();
 
     const tenantName = tenantData?.company_name || 'Drive247';
+    const currencyCode = tenantData?.currency_code || 'GBP';
 
     // Parse request body
     let body: CustomerChatRequest;
@@ -388,7 +409,7 @@ serve(async (req) => {
 
     // Build messages array for chat completion
     const messages: ChatMessage[] = [
-      { role: 'system', content: getSystemPrompt(customerName, context || {}, tenantName) },
+      { role: 'system', content: getSystemPrompt(customerName, context || {}, tenantName, currencyCode) },
       { role: 'user', content: message },
     ];
 

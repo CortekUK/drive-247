@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.57.4';
+import { formatCurrency } from '../_shared/format-utils.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -37,6 +38,17 @@ async function applyPayment(supabase: any, paymentId: string): Promise<PaymentPr
       };
     }
 
+    // Get tenant currency code
+    let currencyCode = 'GBP';
+    if (payment.tenant_id) {
+      const { data: tenant } = await supabase
+        .from('tenants')
+        .select('currency_code')
+        .eq('id', payment.tenant_id)
+        .single();
+      if (tenant?.currency_code) currencyCode = tenant.currency_code;
+    }
+
     // For customer payments, all are treated as generic 'Payment' type
     // InitialFee payments are system-generated and handled separately
     const isCustomerPayment = payment.payment_type === 'Payment';
@@ -61,7 +73,7 @@ async function applyPayment(supabase: any, paymentId: string): Promise<PaymentPr
     // Determine entry date
     const entryDate = payment.payment_date || payment.paid_at || payment.created_at || new Date().toISOString().split('T')[0];
 
-    console.log(`Payment ${paymentId}: ${payment.payment_type}, ${entryDate}, £${payment.amount}`);
+    console.log(`Payment ${paymentId}: ${payment.payment_type}, ${entryDate}, ${formatCurrency(payment.amount, currencyCode)}`);
     
     // Insert/Update Ledger entry (idempotent)
     console.log(`Creating ledger entry for payment ${paymentId}: amount=${payment.amount}, category=${ledgerCategory}`);
@@ -126,7 +138,7 @@ async function applyPayment(supabase: any, paymentId: string): Promise<PaymentPr
 
           const toApply = Math.min(remainingAmount, charge.remaining_amount);
 
-          console.log(`Applying $${toApply} to rental charge ${charge.id} (due ${charge.due_date})`);
+          console.log(`Applying ${formatCurrency(toApply, currencyCode)} to rental charge ${charge.id} (due ${charge.due_date})`);
 
           // Create payment application record
           const applicationData1: any = {
@@ -186,7 +198,7 @@ async function applyPayment(supabase: any, paymentId: string): Promise<PaymentPr
         }
       }
 
-      console.log(`Initial Fee allocation complete: $${totalAllocated} allocated, $${remainingAmount} remaining`);
+      console.log(`Initial Fee allocation complete: ${formatCurrency(totalAllocated, currencyCode)} allocated, ${formatCurrency(remainingAmount, currencyCode)} remaining`);
 
       // Update payment status
       let paymentStatus = 'Applied';
@@ -265,7 +277,7 @@ async function applyPayment(supabase: any, paymentId: string): Promise<PaymentPr
           const toApply = Math.min(remainingAmount, charge.remaining_amount);
           const chargeDueDate = charge.due_date;
 
-          console.log(`Applying £${toApply} to ${category} charge ${charge.id} (due ${chargeDueDate})`);
+          console.log(`Applying ${formatCurrency(toApply, currencyCode)} to ${category} charge ${charge.id} (due ${chargeDueDate})`);
 
           // Create payment application record
           const applicationData2: any = {
@@ -325,7 +337,7 @@ async function applyPayment(supabase: any, paymentId: string): Promise<PaymentPr
         }
       }
 
-      console.log(`Universal FIFO allocation complete: £${totalAllocated} allocated, £${remainingAmount} remaining`);
+      console.log(`Universal FIFO allocation complete: ${formatCurrency(totalAllocated, currencyCode)} allocated, ${formatCurrency(remainingAmount, currencyCode)} remaining`);
       
       // Update payment status based on allocation
       let paymentStatus = 'Applied';

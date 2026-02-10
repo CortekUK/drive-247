@@ -15,7 +15,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useAuditLog } from "@/hooks/use-audit-log";
 import { useTenant } from "@/contexts/TenantContext";
 import { useTenantBranding } from "@/hooks/use-tenant-branding";
-import { formatCurrency } from "@/lib/invoice-utils";
+import { formatCurrency } from "@/lib/format-utils";
 import { format } from "date-fns";
 
 interface Invoice {
@@ -319,19 +319,19 @@ export const SendInvoiceEmailDialog = ({
                       </div>
                     </td>
                     <td className="p-3 text-sm text-right font-medium">
-                      {formatCurrency(invoice.subtotal)}
+                      {formatCurrency(invoice.subtotal, tenant?.currency_code || 'GBP')}
                     </td>
                   </tr>
                   {invoice.tax_amount > 0 && (
                     <tr className="border-b">
                       <td className="p-3 text-sm">Tax</td>
-                      <td className="p-3 text-sm text-right">{formatCurrency(invoice.tax_amount)}</td>
+                      <td className="p-3 text-sm text-right">{formatCurrency(invoice.tax_amount, tenant?.currency_code || 'GBP')}</td>
                     </tr>
                   )}
                   <tr className="bg-muted/50">
                     <td className="p-3 text-sm font-bold">Total</td>
                     <td className="p-3 text-lg font-bold text-right text-primary">
-                      {formatCurrency(invoice.total_amount)}
+                      {formatCurrency(invoice.total_amount, tenant?.currency_code || 'GBP')}
                     </td>
                   </tr>
                 </tbody>

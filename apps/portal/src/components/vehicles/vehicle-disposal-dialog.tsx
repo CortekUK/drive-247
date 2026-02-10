@@ -34,6 +34,8 @@ import { cn } from "@/lib/utils";
 import { useVehicleDisposal, DisposalData } from "@/hooks/use-vehicle-disposal";
 import { Card, CardContent } from "@/components/ui/card";
 import { vehicleDisposalSchema, type VehicleDisposalFormValues } from "@/client-schemas/vehicles/vehicle-disposal";
+import { useTenant } from "@/contexts/TenantContext";
+import { formatCurrency } from "@/lib/format-utils";
 
 type DisposalFormData = VehicleDisposalFormValues;
 
@@ -63,13 +65,14 @@ interface VehicleDisposalDialogProps {
 }
 
 export function VehicleDisposalDialog({ vehicle, onDisposal, open: controlledOpen, onOpenChange }: VehicleDisposalDialogProps) {
+  const { tenant } = useTenant();
   const [internalOpen, setInternalOpen] = useState(false);
   const isControlled = controlledOpen !== undefined;
   const open = isControlled ? controlledOpen : internalOpen;
   const [showConfirm, setShowConfirm] = useState(false);
   const [bookCost, setBookCost] = useState<number | null>(null);
   const [gainLoss, setGainLoss] = useState<number | null>(null);
-  
+
   const { disposeVehicle, calculateBookCost, isDisposing, isCalculatingBookCost } = useVehicleDisposal(vehicle.id);
 
   const form = useForm<DisposalFormData>({
@@ -260,13 +263,13 @@ export function VehicleDisposalDialog({ vehicle, onDisposal, open: controlledOpe
                         {bookCost !== null && (
                           <div className="flex justify-between">
                             <span>Book Cost:</span>
-                            <span className="font-mono">${bookCost.toFixed(2)}</span>
+                            <span className="font-mono">{formatCurrency(bookCost, tenant?.currency_code || 'USD')}</span>
                           </div>
                         )}
                         {saleProceeds > 0 && (
                           <div className="flex justify-between">
                             <span>Sale Proceeds:</span>
-                            <span className="font-mono">${saleProceeds.toFixed(2)}</span>
+                            <span className="font-mono">{formatCurrency(saleProceeds, tenant?.currency_code || 'USD')}</span>
                           </div>
                         )}
                         {gainLoss !== null && (
@@ -276,7 +279,7 @@ export function VehicleDisposalDialog({ vehicle, onDisposal, open: controlledOpe
                           )}>
                             <span>{gainLoss > 0 ? "Gain:" : gainLoss < 0 ? "Loss:" : "Break-even:"}</span>
                             <span className="font-mono">
-                              {gainLoss !== 0 && (gainLoss > 0 ? "+" : "")}${Math.abs(gainLoss).toFixed(2)}
+                              {gainLoss !== 0 && (gainLoss > 0 ? "+" : "")}{formatCurrency(Math.abs(gainLoss), tenant?.currency_code || 'USD')}
                             </span>
                           </div>
                         )}

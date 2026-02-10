@@ -72,6 +72,16 @@ serve(async (req) => {
 
     console.log(`Processing ${queueItems.length} queue items`);
 
+    // Cache tenant currency codes to avoid repeated lookups
+    const tenantCurrencyCache: Record<string, string> = {};
+    async function getTenantCurrency(tid: string): Promise<string> {
+      if (tenantCurrencyCache[tid]) return tenantCurrencyCache[tid];
+      const { data: t } = await supabase.from('tenants').select('currency_code').eq('id', tid).single();
+      const code = t?.currency_code || 'GBP';
+      tenantCurrencyCache[tid] = code;
+      return code;
+    }
+
     const result: SyncResult = {
       processed: 0,
       inserted: 0,
@@ -123,8 +133,9 @@ serve(async (req) => {
               throw new Error(`Fetch failed: ${fetchError.message}`);
             }
           } else if (record) {
-            // Get document loader
-            const toDocument = getDocumentLoader(item.source_table);
+            // Get document loader with tenant currency
+            const itemCurrency = await getTenantCurrency(item.tenant_id);
+            const toDocument = getDocumentLoader(item.source_table, itemCurrency);
             if (!toDocument) {
               throw new Error(`No document loader for table: ${item.source_table}`);
             }

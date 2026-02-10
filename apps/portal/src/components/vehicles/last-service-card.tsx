@@ -1,6 +1,9 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Calendar, Gauge, Wrench } from "lucide-react";
+import { useTenant } from "@/contexts/TenantContext";
+import { getDistanceUnitLong } from "@/lib/format-utils";
+import type { DistanceUnit } from "@/lib/format-utils";
 
 interface Vehicle {
   last_service_date?: string;
@@ -12,6 +15,9 @@ interface LastServiceCardProps {
 }
 
 export function LastServiceCard({ vehicle }: LastServiceCardProps) {
+  const { tenant } = useTenant();
+  const distanceUnit = (tenant?.distance_unit || 'miles') as DistanceUnit;
+
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString('en-US', {
       day: 'numeric',
@@ -47,7 +53,7 @@ export function LastServiceCard({ vehicle }: LastServiceCardProps) {
             {vehicle.last_service_mileage && (
               <div className="flex items-center gap-2 text-sm text-muted-foreground">
                 <Gauge className="h-4 w-4" />
-                <span>{formatMileage(vehicle.last_service_mileage)} miles</span>
+                <span>{formatMileage(vehicle.last_service_mileage)} {getDistanceUnitLong(distanceUnit)}</span>
               </div>
             )}
           </div>

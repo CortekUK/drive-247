@@ -17,6 +17,7 @@ import Footer from "@/components/Footer";
 import SEO from "@/components/SEO";
 import { z } from "zod";
 import BookingConfirmation from "@/components/BookingConfirmation";
+import { formatCurrency } from "@/lib/format-utils";
 
 const checkoutSchema = z.object({
   customerName: z.string().min(2, "Name must be at least 2 characters"),
@@ -37,6 +38,7 @@ const BookingCheckout = () => {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { tenant } = useTenant();
+  const currencyCode = tenant?.currency_code || 'GBP';
   const { context: bookingContext, pendingInsuranceFiles, clearPendingInsuranceFiles } = useBookingStore();
   const [loading, setLoading] = useState(false);
   const [extras, setExtras] = useState<PricingExtra[]>([]);
@@ -483,7 +485,7 @@ const BookingCheckout = () => {
                         <div className="flex-1">
                           <div className="flex items-center justify-between">
                             <Label className="font-medium cursor-pointer">{extra.extra_name}</Label>
-                            <span className="text-sm font-semibold">${extra.price}</span>
+                            <span className="text-sm font-semibold">{formatCurrency(extra.price, currencyCode)}</span>
                           </div>
                           {extra.description && (
                             <p className="text-xs text-muted-foreground mt-1">{extra.description}</p>
@@ -589,7 +591,7 @@ const BookingCheckout = () => {
                     </div>
                     <div className="flex justify-between text-sm">
                       <span className="text-muted-foreground">Vehicle Cost</span>
-                      <span className="font-medium">${calculateVehiclePrice().toLocaleString()}</span>
+                      <span className="font-medium">{formatCurrency(calculateVehiclePrice(), currencyCode)}</span>
                     </div>
                   </div>
                 )}
@@ -602,7 +604,7 @@ const BookingCheckout = () => {
                       return extra ? (
                         <div key={extraId} className="flex justify-between text-sm">
                           <span className="text-muted-foreground">{extra.extra_name}</span>
-                          <span className="font-medium">${extra.price}</span>
+                          <span className="font-medium">{formatCurrency(extra.price, currencyCode)}</span>
                         </div>
                       ) : null;
                     })}
@@ -612,7 +614,7 @@ const BookingCheckout = () => {
                 <div className="pt-4 space-y-4">
                   <div className="flex justify-between items-baseline">
                     <span className="text-lg font-semibold">Total</span>
-                    <span className="text-2xl font-bold text-accent">${calculateTotal().toLocaleString()}</span>
+                    <span className="text-2xl font-bold text-accent">{formatCurrency(calculateTotal(), currencyCode)}</span>
                   </div>
 
                   <Button

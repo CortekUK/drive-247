@@ -37,6 +37,7 @@ import { StripeConnectSettings } from '@/components/settings/stripe-connect-sett
 import { LocationSettings } from '@/components/settings/location-settings';
 import { ExtrasSettings } from '@/components/settings/extras-settings';
 import { BonzahSettings } from '@/components/settings/bonzah-settings';
+import { formatCurrency } from '@/lib/format-utils';
 
 const Settings = () => {
   const queryClient = useQueryClient();
@@ -45,6 +46,11 @@ const Settings = () => {
   const [activeTab, setActiveTab] = useState('reminders');
   const [isBackfilling, setIsBackfilling] = useState(false);
   const [showDataCleanupDialog, setShowDataCleanupDialog] = useState(false);
+  const [generalForm, setGeneralForm] = useState({
+    currency_code: 'USD',
+    distance_unit: 'miles' as 'km' | 'miles',
+  });
+  const [isSavingGeneral, setIsSavingGeneral] = useState(false);
 
   // Use the new centralized settings hook - must be before useEffects that depend on it
   const {
@@ -52,6 +58,7 @@ const Settings = () => {
     isLoading,
     error,
     updateCompanyProfile,
+    updateSettingsAsync,
     toggleReminder,
     setPaymentMode,
     setBookingPaymentMode,
@@ -59,8 +66,8 @@ const Settings = () => {
     isUpdating
   } = useOrgSettings();
 
-  // Get tenant context for ID
-  const { tenant } = useTenant();
+  // Get tenant context for ID and refetch
+  const { tenant, refetchTenant } = useTenant();
 
   // Use tenant branding hook for multi-tenant branding updates
   const {
@@ -169,10 +176,18 @@ const Settings = () => {
   // Handle URL tab parameter
   useEffect(() => {
     const tabParam = searchParams.get('tab');
-    if (tabParam && ['branding', 'reminders', 'payments', 'stripe-connect', 'locations', 'agreement', 'rental', 'blacklist'].includes(tabParam)) {
+    if (tabParam && ['general', 'branding', 'reminders', 'payments', 'stripe-connect', 'locations', 'agreement', 'rental', 'blacklist'].includes(tabParam)) {
       setActiveTab(tabParam);
     }
   }, [searchParams]);
+
+  // Sync general form with loaded settings and tenant context
+  useEffect(() => {
+    setGeneralForm({
+      currency_code: settings?.currency_code || tenant?.currency_code || 'USD',
+      distance_unit: (settings?.distance_unit as 'km' | 'miles') || (tenant?.distance_unit as 'km' | 'miles') || 'miles',
+    });
+  }, [settings, tenant]);
 
   // Branding form state
   const [brandingForm, setBrandingForm] = useState({
@@ -553,6 +568,40 @@ const Settings = () => {
     updateCompanyProfile(profile);
   };
 
+  const handleSaveGeneralSettings = async () => {
+    setIsSavingGeneral(true);
+    try {
+      // Update currency_code and distance_unit in org_settings
+      await updateSettingsAsync({
+        currency_code: generalForm.currency_code,
+        distance_unit: generalForm.distance_unit,
+      });
+
+      // Also update distance_unit on the tenants table (primary source for tenant context)
+      if (tenant?.id) {
+        const { error: tenantError } = await supabase
+          .from('tenants')
+          .update({ distance_unit: generalForm.distance_unit, currency_code: generalForm.currency_code })
+          .eq('id', tenant.id);
+
+        if (tenantError) {
+          console.error('Failed to update tenant distance_unit:', tenantError);
+        } else {
+          // Refresh tenant context so the new values propagate
+          await refetchTenant();
+        }
+      }
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to save general settings",
+        variant: "destructive",
+      });
+    } finally {
+      setIsSavingGeneral(false);
+    }
+  };
+
   const handleSaveBranding = async () => {
     setIsSavingBranding(true);
     try {
@@ -656,7 +705,7 @@ const Settings = () => {
 
       toast({
         title: "Maintenance Complete",
-        description: `Processed ${data[0]?.payments_processed || 0} payments, affected ${data[0]?.customers_affected || 0} customers, applied $${data[0]?.total_credit_applied?.toFixed(2) || '0.00'} in credit. Duration: ${duration}s`,
+        description: `Processed ${data[0]?.payments_processed || 0} payments, affected ${data[0]?.customers_affected || 0} customers, applied ${formatCurrency(data[0]?.total_credit_applied || 0, tenant?.currency_code || 'USD')} in credit. Duration: ${duration}s`,
       });
 
       // Invalidate queries
@@ -749,6 +798,10 @@ const Settings = () => {
       {/* Settings Tabs */}
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
         <TabsList className="grid w-full grid-cols-12">
+          <TabsTrigger value="general" className="flex items-center gap-2">
+            <Building2 className="h-4 w-4" />
+            <span className="hidden sm:inline">General</span>
+          </TabsTrigger>
           <TabsTrigger value="branding" className="flex items-center gap-2">
             <Palette className="h-4 w-4" />
             <span className="hidden sm:inline">Branding</span>
@@ -793,6 +846,84 @@ const Settings = () => {
             <span className="hidden sm:inline">Blacklist</span>
           </TabsTrigger>
         </TabsList>
+
+        {/* General Tab */}
+        <TabsContent value="general" className="space-y-6">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Building2 className="h-5 w-5 text-primary" />
+                Regional Settings
+              </CardTitle>
+              <CardDescription>
+                Configure currency and distance units for your organisation
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              {/* Currency */}
+              <div className="space-y-2">
+                <Label htmlFor="currency_code">Currency</Label>
+                <Select
+                  value={generalForm.currency_code}
+                  onValueChange={(value) => setGeneralForm(prev => ({ ...prev, currency_code: value }))}
+                >
+                  <SelectTrigger id="currency_code" className="w-full">
+                    <SelectValue placeholder="Select currency" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="USD">USD - US Dollar ($)</SelectItem>
+                    <SelectItem value="GBP">GBP - British Pound (£)</SelectItem>
+                    <SelectItem value="EUR">EUR - Euro (€)</SelectItem>
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground">
+                  Currency used for pricing, invoices, and financial reports
+                </p>
+              </div>
+
+              {/* Distance Unit */}
+              <div className="space-y-2">
+                <Label htmlFor="distance_unit">Distance Unit</Label>
+                <Select
+                  value={generalForm.distance_unit}
+                  onValueChange={(value: 'km' | 'miles') => setGeneralForm(prev => ({ ...prev, distance_unit: value }))}
+                >
+                  <SelectTrigger id="distance_unit" className="w-full">
+                    <SelectValue placeholder="Select distance unit" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="miles">Miles</SelectItem>
+                    <SelectItem value="km">Kilometres</SelectItem>
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground">
+                  Unit of measurement for vehicle mileage and distance tracking
+                </p>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Save Button */}
+          <div className="flex justify-end">
+            <Button
+              onClick={handleSaveGeneralSettings}
+              disabled={isSavingGeneral}
+              className="min-w-[120px]"
+            >
+              {isSavingGeneral ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Saving...
+                </>
+              ) : (
+                <>
+                  <Save className="mr-2 h-4 w-4" />
+                  Save Changes
+                </>
+              )}
+            </Button>
+          </div>
+        </TabsContent>
 
         {/* Branding Tab */}
         <TabsContent value="branding" className="space-y-6">
@@ -2457,7 +2588,7 @@ const Settings = () => {
                               <td className="p-3 font-medium">{promo.name}</td>
                               <td className="p-3 capitalize">{promo.type}</td>
                               <td className="p-3">
-                                {promo.type === 'percentage' ? `${promo.value}%` : `$${Number(promo.value).toFixed(2)}`}
+                                {promo.type === 'percentage' ? `${promo.value}%` : formatCurrency(Number(promo.value), tenant?.currency_code || 'USD')}
                               </td>
                               <td className="p-3 text-muted-foreground">{promo.created_at}</td>
                               <td className="p-3 text-muted-foreground">{promo.expires_at}</td>

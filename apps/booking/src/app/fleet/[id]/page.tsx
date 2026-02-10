@@ -15,6 +15,8 @@ import Footer from "@/components/Footer";
 import { usePageContent, defaultFleetContent, mergeWithDefaults } from "@/hooks/usePageContent";
 import { ArrowLeft, Users, Briefcase, Gauge, Droplet, Check, AlertCircle } from "lucide-react";
 import { toast } from "sonner";
+import { useTenant } from "@/contexts/TenantContext";
+import { formatCurrency } from "@/lib/format-utils";
 
 interface VehiclePhoto {
   photo_url: string;
@@ -53,6 +55,7 @@ export default function FleetDetail() {
   const params = useParams();
   const id = params?.id as string;
   const router = useRouter();
+  const { tenant } = useTenant();
   const [vehicle, setVehicle] = useState<Vehicle | null>(null);
   const [similarVehicles, setSimilarVehicles] = useState<Vehicle[]>([]);
   const [serviceInclusions, setServiceInclusions] = useState<ServiceInclusion[]>([]);
@@ -248,7 +251,7 @@ export default function FleetDetail() {
               {/* Price Preview */}
               <div className="flex items-baseline gap-2 mb-8">
                 <span className="text-white/50 text-sm">From</span>
-                <span className="text-3xl font-serif font-bold text-accent">${vehicle.daily_rent}</span>
+                <span className="text-3xl font-serif font-bold text-accent">{formatCurrency(vehicle.daily_rent, tenant?.currency_code || 'GBP')}</span>
                 <span className="text-white/50 text-sm">/ day</span>
               </div>
 
@@ -456,7 +459,7 @@ export default function FleetDetail() {
                         </Badge>
                         <h3 className="font-serif text-lg font-bold mb-1">{similarVehicleName}</h3>
                         <p className="text-lg font-bold text-accent mb-3">
-                          ${similarVehicle.daily_rent}
+                          {formatCurrency(similarVehicle.daily_rent, tenant?.currency_code || 'GBP')}
                           <span className="text-sm text-muted-foreground font-normal ml-1">per day</span>
                         </p>
                         <Button asChild className="w-full">
@@ -482,7 +485,7 @@ export default function FleetDetail() {
               </h2>
               <p className="text-lg text-muted-foreground mb-8">
                 The <span className="text-foreground font-medium">{vehicleName}</span> awaits you from{' '}
-                <span className="text-accent font-semibold">${vehicle.daily_rent}</span> per day
+                <span className="text-accent font-semibold">{formatCurrency(vehicle.daily_rent, tenant?.currency_code || 'GBP')}</span> per day
               </p>
               <div className="flex flex-col sm:flex-row gap-4 justify-center">
                 <Button

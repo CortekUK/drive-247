@@ -832,11 +832,11 @@ export function wrapEmailHtml(
 export async function getTenantInfo(
   supabaseClient: any,
   tenantId: string
-): Promise<{ company_name: string; company_email: string; company_phone: string; primary_color: string; accent_color: string; logo_url: string | null }> {
+): Promise<{ company_name: string; company_email: string; company_phone: string; primary_color: string; accent_color: string; logo_url: string | null; currency_code: string }> {
   try {
     const { data, error } = await supabaseClient
       .from('tenants')
-      .select('company_name, contact_email, contact_phone, primary_color, accent_color, logo_url')
+      .select('company_name, contact_email, contact_phone, primary_color, accent_color, logo_url, currency_code')
       .eq('id', tenantId)
       .single();
 
@@ -849,6 +849,7 @@ export async function getTenantInfo(
       primary_color: data.primary_color || '#1a1a1a',
       accent_color: data.accent_color || '#C5A572',
       logo_url: data.logo_url || null,
+      currency_code: data.currency_code || 'GBP',
     };
   } catch (err) {
     console.warn('Error fetching tenant info:', err);
@@ -859,6 +860,7 @@ export async function getTenantInfo(
       primary_color: '#1a1a1a',
       accent_color: '#C5A572',
       logo_url: null,
+      currency_code: 'GBP',
     };
   }
 }

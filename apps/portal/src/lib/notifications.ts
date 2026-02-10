@@ -1,5 +1,6 @@
 import { supabase } from "@/integrations/supabase/client";
 import { notificationService } from "./services/notification-service";
+import { formatCurrency } from "@/lib/format-utils";
 
 interface PaymentVerificationNotificationData {
   paymentId: string;
@@ -7,6 +8,7 @@ interface PaymentVerificationNotificationData {
   customerName: string;
   customerEmail: string;
   amount: number;
+  currencyCode?: string;
   rentalId?: string;
   vehicleReg?: string;
 }
@@ -27,10 +29,13 @@ export async function sendPaymentVerificationNotification(data: PaymentVerificat
   console.log('Sending payment verification notification for payment:', data.paymentId);
 
   try {
+    // Format amount with tenant currency (default to GBP if not provided)
+    const formattedAmount = formatCurrency(data.amount, data.currencyCode || 'GBP');
+
     // Create in-app notification for all admins
     await notificationService.notifyAdmins(
       'Payment Requires Verification',
-      `New payment of $${data.amount.toFixed(2)} from ${data.customerName} needs your approval`,
+      `New payment of ${formattedAmount} from ${data.customerName} needs your approval`,
       'payment_verification',
       `/payments?status=pending`,
       {

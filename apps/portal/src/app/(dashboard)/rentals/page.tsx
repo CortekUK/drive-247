@@ -33,6 +33,7 @@ import { RentalsFilters } from "@/components/rentals/rentals-filters";
 import { ExtensionRequestDialog } from "@/components/rentals/ExtensionRequestDialog";
 import { CalendarView } from "@/components/rentals/calendar/calendar-view";
 import { formatDuration, formatRentalDuration } from "@/lib/rental-utils";
+import { formatCurrency, getCurrencySymbol } from "@/lib/format-utils";
 import {
   Pagination,
   PaginationContent,
@@ -47,6 +48,7 @@ const RentalsList = () => {
   const searchParams = useSearchParams();
   const [showExtensionDialog, setShowExtensionDialog] = useState(false);
   const [selectedRental, setSelectedRental] = useState<EnhancedRental | null>(null);
+  const { tenant } = useTenant();
 
   const currentView = searchParams.get("view") || "list";
 
@@ -117,6 +119,9 @@ const RentalsList = () => {
   const handleExportCSV = () => {
     if (!data?.rentals) return;
 
+    const currencyCode = tenant?.currency_code || 'GBP';
+    const currencySymbol = getCurrencySymbol(currencyCode);
+
     const csvContent = [
       [
         "Rental #",
@@ -141,10 +146,10 @@ const RentalsList = () => {
           rental.end_date || "",
           formatRentalDuration(rental.start_date, rental.end_date),
           rental.rental_period_type || "Monthly",
-          `$${rental.monthly_amount}`,
-          rental.protection_cost > 0 ? `$${rental.protection_cost}` : "—",
-          `$${rental.total_amount}`,
-          rental.initial_payment ? `$${rental.initial_payment}` : "—",
+          `${currencySymbol}${rental.monthly_amount}`,
+          rental.protection_cost > 0 ? `${currencySymbol}${rental.protection_cost}` : "—",
+          `${currencySymbol}${rental.total_amount}`,
+          rental.initial_payment ? `${currencySymbol}${rental.initial_payment}` : "—",
           rental.computed_status,
         ].join(",")
       ),

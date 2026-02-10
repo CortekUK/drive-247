@@ -108,10 +108,5 @@ export const createInvoice = async (data: InvoiceData): Promise<Invoice> => {
   return invoice as Invoice;
 };
 
-// Format currency
-export const formatCurrency = (amount: number): string => {
-  return new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currency: 'USD',
-  }).format(amount);
-};
+// Re-export formatCurrency from shared format-utils
+export { formatCurrency } from "@/lib/format-utils";

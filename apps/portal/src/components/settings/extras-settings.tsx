@@ -16,6 +16,8 @@ import { Plus, Loader2, ImageIcon, GripVertical, Star, X, MoreHorizontal, Pencil
 import { useRentalExtras, type RentalExtra } from '@/hooks/use-rental-extras';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from '@/hooks/use-toast';
+import { useTenant } from '@/contexts/TenantContext';
+import { formatCurrency } from '@/lib/format-utils';
 import {
   DndContext,
   closestCenter,
@@ -126,6 +128,7 @@ function SortableImage({
 }
 
 export function ExtrasSettings() {
+  const { tenant } = useTenant();
   const {
     extras,
     isLoading,
@@ -386,7 +389,7 @@ export function ExtrasSettings() {
                           {extra.description || "—"}
                         </span>
                       </TableCell>
-                      <TableCell className="font-semibold">${Number(extra.price).toFixed(2)}</TableCell>
+                      <TableCell className="font-semibold">{formatCurrency(Number(extra.price), tenant?.currency_code || 'USD')}</TableCell>
                       <TableCell>
                         {extra.max_quantity !== null ? (
                           <Badge variant="secondary">Quantity</Badge>

@@ -3,6 +3,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.4";
 import { corsHeaders } from "../_shared/aws-config.ts";
 import { sendEmail, getTenantAdminEmail } from "../_shared/resend-service.ts";
 import { getTenantInfo, wrapEmailHtml } from "../_shared/email-template-service.ts";
+import { formatCurrency } from "../_shared/format-utils.ts";
 
 interface InstallmentReminder {
   installment_id: string;
@@ -22,13 +23,6 @@ interface InstallmentReminder {
   rental_number: string;
 }
 
-const formatCurrency = (amount: number): string => {
-  return new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currency: 'USD',
-  }).format(amount);
-};
-
 const formatDate = (dateStr: string): string => {
   return new Date(dateStr).toLocaleDateString('en-US', {
     weekday: 'long',
@@ -40,8 +34,9 @@ const formatDate = (dateStr: string): string => {
 
 const getReminderEmailHtml = (
   reminder: InstallmentReminder,
-  tenantInfo: { company_name: string; company_email: string; company_phone: string }
+  tenantInfo: { company_name: string; company_email: string; company_phone: string; currency_code: string }
 ): string => {
+  const cc = tenantInfo.currency_code;
   return `
 <h1>Payment Reminder</h1>
 
@@ -68,7 +63,7 @@ const getReminderEmailHtml = (
   </tr>
   <tr>
     <td><strong>Amount:</strong></td>
-    <td><strong style="color: #1a1a1a;">${formatCurrency(reminder.amount)}</strong></td>
+    <td><strong style="color: #1a1a1a;">${formatCurrency(reminder.amount, cc)}</strong></td>
   </tr>
   <tr>
     <td><strong>Payment Date:</strong></td>
@@ -166,7 +161,7 @@ serve(async (req) => {
           contactEmail: tenantInfo.company_email,
         });
 
-        const subject = `Payment Reminder - ${formatCurrency(reminder.amount)} due ${formatDate(reminder.due_date)} | ${tenantInfo.company_name}`;
+        const subject = `Payment Reminder - ${formatCurrency(reminder.amount, tenantInfo.currency_code)} due ${formatDate(reminder.due_date)} | ${tenantInfo.company_name}`;
 
         // Send email to customer
         const emailResult = await sendEmail(

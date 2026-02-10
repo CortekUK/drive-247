@@ -39,6 +39,8 @@ import { useCustomerVerification } from "@/hooks/use-customer-verification";
 import { AuthPromptDialog } from "@/components/booking/AuthPromptDialog";
 import { getTimezonesByRegion, findTimezone, getDetectedTimezone } from "@/lib/timezones";
 import { useCustomerDocuments, getDocumentStatus } from "@/hooks/use-customer-documents";
+import { formatCurrency, getEarthRadius, metersToUnit, getPerMonthLabel, getUnlimitedLabel, getDistanceUnitLong } from "@/lib/format-utils";
+import type { DistanceUnit } from "@/lib/format-utils";
 interface VehiclePhoto {
   photo_url: string;
 }
@@ -87,6 +89,8 @@ const MultiStepBookingWidget = () => {
   };
 
   const { tenant } = useTenant();
+  const currencyCode = tenant?.currency_code || 'GBP';
+  const distanceUnit = (tenant?.distance_unit || 'miles') as DistanceUnit;
   const workingHours = useWorkingHours();
   const skipInsurance = isInsuranceExemptTenant(tenant?.id);
   const { updateContext: updateBookingContext } = useBookingStore();
@@ -1883,7 +1887,7 @@ const MultiStepBookingWidget = () => {
 
   // Calculate distance using Haversine formula (great-circle distance)
   const calculateDistance = (lat1: number, lon1: number, lat2: number, lon2: number): number => {
-    const R = 3958.8; // Earth's radius in miles
+    const R = getEarthRadius(distanceUnit);
     const dLat = (lat2 - lat1) * Math.PI / 180;
     const dLon = (lon2 - lon1) * Math.PI / 180;
     const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) + Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLon / 2) * Math.sin(dLon / 2);
@@ -1909,8 +1913,8 @@ const MultiStepBookingWidget = () => {
       if (response.ok) {
         const data = await response.json();
         if (data.routes && data.routes.length > 0) {
-          // Distance is in meters, convert to miles
-          const distanceInMiles = Math.round(data.routes[0].distance / 1609.34 * 10) / 10;
+          // Distance is in meters, convert to tenant unit
+          const distanceInMiles = Math.round(metersToUnit(data.routes[0].distance, distanceUnit) * 10) / 10;
           const durationInMinutes = Math.round(data.routes[0].duration / 60);
           setCalculatedDistance(distanceInMiles);
         } else {
@@ -1925,7 +1929,7 @@ const MultiStepBookingWidget = () => {
       // Fallback to straight-line distance
       const straightLineDistance = calculateDistance(pickupLat, pickupLon, dropoffLat, dropoffLon);
       setCalculatedDistance(straightLineDistance);
-      toast.warning(`Estimated distance: ${straightLineDistance} miles (straight-line, route unavailable)`);
+      toast.warning(`Estimated distance: ${straightLineDistance} ${getDistanceUnitLong(distanceUnit)} (straight-line, route unavailable)`);
     } finally {
       setLoading(false);
     }
@@ -2135,20 +2139,20 @@ const MultiStepBookingWidget = () => {
     if (days > 30 && monthlyRent > 0) {
       // Monthly rental - show monthly price as primary
       const secondaryPrices: string[] = [];
-      if (weeklyRent > 0) secondaryPrices.push(`$${weeklyRent} / week`);
-      if (dailyRent > 0) secondaryPrices.push(`$${dailyRent} / day`);
+      if (weeklyRent > 0) secondaryPrices.push(`${formatCurrency(weeklyRent, currencyCode, { minimumFractionDigits: 0, maximumFractionDigits: 0 })} / week`);
+      if (dailyRent > 0) secondaryPrices.push(`${formatCurrency(dailyRent, currencyCode, { minimumFractionDigits: 0, maximumFractionDigits: 0 })} / day`);
       return { price: monthlyRent, label: '/ month', secondaryPrices };
     } else if (days >= 7 && days <= 30 && weeklyRent > 0) {
       // Weekly rental - show weekly price as primary
       const secondaryPrices: string[] = [];
-      if (dailyRent > 0) secondaryPrices.push(`$${dailyRent} / day`);
-      if (monthlyRent > 0) secondaryPrices.push(`$${monthlyRent} / month`);
+      if (dailyRent > 0) secondaryPrices.push(`${formatCurrency(dailyRent, currencyCode, { minimumFractionDigits: 0, maximumFractionDigits: 0 })} / day`);
+      if (monthlyRent > 0) secondaryPrices.push(`${formatCurrency(monthlyRent, currencyCode, { minimumFractionDigits: 0, maximumFractionDigits: 0 })} / month`);
       return { price: weeklyRent, label: '/ week', secondaryPrices };
     } else if (dailyRent > 0) {
       // Daily rental - show daily price as primary
       const secondaryPrices: string[] = [];
-      if (weeklyRent > 0) secondaryPrices.push(`$${weeklyRent} / week`);
-      if (monthlyRent > 0) secondaryPrices.push(`$${monthlyRent} / month`);
+      if (weeklyRent > 0) secondaryPrices.push(`${formatCurrency(weeklyRent, currencyCode, { minimumFractionDigits: 0, maximumFractionDigits: 0 })} / week`);
+      if (monthlyRent > 0) secondaryPrices.push(`${formatCurrency(monthlyRent, currencyCode, { minimumFractionDigits: 0, maximumFractionDigits: 0 })} / month`);
       return { price: dailyRent, label: '/ day', secondaryPrices };
     } else {
       // Fallback to monthly or whatever is available
@@ -3420,7 +3424,7 @@ const MultiStepBookingWidget = () => {
                       {/* Price Range */}
                       <div className="space-y-2">
                         <Label className="text-sm font-medium">
-                          Price Range: ${filters.priceRange[0]} - ${filters.priceRange[1]}
+                          Price Range: {formatCurrency(filters.priceRange[0], currencyCode, { minimumFractionDigits: 0, maximumFractionDigits: 0 })} - {formatCurrency(filters.priceRange[1], currencyCode, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
                           <span className="text-xs text-muted-foreground ml-1">
                             / {priceFilterMode === "daily" ? "day" : priceFilterMode === "weekly" ? "week" : "month"}
                           </span>
@@ -3635,7 +3639,7 @@ const MultiStepBookingWidget = () => {
                                   {vehicle.colour && <p className="text-xs text-muted-foreground mt-1">{vehicle.colour}</p>}
                                   <div className="flex items-center gap-1 text-xs text-muted-foreground mt-1">
                                     <Gauge className="h-3 w-3" />
-                                    <span>{vehicle.allowed_mileage ? `${vehicle.allowed_mileage.toLocaleString()} mi/mo` : 'Unlimited miles'}</span>
+                                    <span>{vehicle.allowed_mileage ? `${vehicle.allowed_mileage.toLocaleString()} ${getPerMonthLabel(distanceUnit)}` : getUnlimitedLabel(distanceUnit)}</span>
                                   </div>
                                 </div>
                                 {isSelected && <div className="w-6 h-6 bg-primary rounded-full flex items-center justify-center">
@@ -3673,11 +3677,11 @@ const MultiStepBookingWidget = () => {
                                     <div className="flex items-baseline gap-2">
                                       {hasDiscount ? (
                                         <>
-                                          <span className="text-base text-muted-foreground line-through">${Number(originalPrice).toFixed(0)}</span>
-                                          <span className="text-3xl font-bold text-green-600">${Number(displayPrice).toFixed(0)}</span>
+                                          <span className="text-base text-muted-foreground line-through">{formatCurrency(Number(originalPrice), currencyCode, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}</span>
+                                          <span className="text-3xl font-bold text-green-600">{formatCurrency(Number(displayPrice), currencyCode, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}</span>
                                         </>
                                       ) : (
-                                        <span className="text-3xl font-bold text-primary">${priceDisplay.price}</span>
+                                        <span className="text-3xl font-bold text-primary">{formatCurrency(priceDisplay.price, currencyCode, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}</span>
                                       )}
                                       <span className="text-sm text-muted-foreground">{priceDisplay.label}</span>
                                     </div>
@@ -3850,8 +3854,8 @@ const MultiStepBookingWidget = () => {
                             <span className="flex items-center gap-1" title="Mileage Allowance">
                               <Gauge className="h-3 w-3" />
                               {vehicle.allowed_mileage
-                                ? `${vehicle.allowed_mileage.toLocaleString()} mi/mo`
-                                : 'Unlimited'}
+                                ? `${vehicle.allowed_mileage.toLocaleString()} ${getPerMonthLabel(distanceUnit)}`
+                                : getUnlimitedLabel(distanceUnit)}
                             </span>
                           </div>
 
@@ -3864,13 +3868,13 @@ const MultiStepBookingWidget = () => {
                                   {hasDiscount ? (
                                     <div className="flex flex-col items-end w-full">
                                       <div className="flex items-center gap-2">
-                                        <span className="text-xs text-muted-foreground line-through">${Number(originalPrice).toFixed(0)}</span>
-                                        <span className="text-2xl font-bold text-green-600">${Number(displayPrice).toFixed(0)}</span>
+                                        <span className="text-xs text-muted-foreground line-through">{formatCurrency(Number(originalPrice), currencyCode, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}</span>
+                                        <span className="text-2xl font-bold text-green-600">{formatCurrency(Number(displayPrice), currencyCode, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}</span>
                                       </div>
                                     </div>
                                   ) : (
                                     <span className="text-2xl font-bold text-primary">
-                                      ${priceDisplay.price}
+                                      {formatCurrency(priceDisplay.price, currencyCode, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
                                     </span>
                                   )}
                                   <span className="text-sm text-muted-foreground">{priceDisplay.label}</span>
@@ -3942,7 +3946,7 @@ const MultiStepBookingWidget = () => {
                     <p className="text-muted-foreground text-xs uppercase tracking-wide mb-1">Pickup Location</p>
                     <p className="font-medium text-xs">{formData.pickupLocation.split(',').slice(0, 2).join(',') || "—"}</p>
                     {formData.pickupDeliveryFee > 0 && (
-                      <p className="text-xs text-amber-500">+${formData.pickupDeliveryFee.toFixed(0)} delivery</p>
+                      <p className="text-xs text-amber-500">+{formatCurrency(formData.pickupDeliveryFee, currencyCode, { minimumFractionDigits: 0, maximumFractionDigits: 0 })} delivery</p>
                     )}
                   </div>
 
@@ -3950,7 +3954,7 @@ const MultiStepBookingWidget = () => {
                     <p className="text-muted-foreground text-xs uppercase tracking-wide mb-1">Return Location</p>
                     <p className="font-medium text-xs">{formData.dropoffLocation.split(',').slice(0, 2).join(',') || "—"}</p>
                     {formData.returnDeliveryFee > 0 && (
-                      <p className="text-xs text-amber-500">+${formData.returnDeliveryFee.toFixed(0)} collection</p>
+                      <p className="text-xs text-amber-500">+{formatCurrency(formData.returnDeliveryFee, currencyCode, { minimumFractionDigits: 0, maximumFractionDigits: 0 })} collection</p>
                     )}
                   </div>
                 </div>
@@ -4001,14 +4005,14 @@ const MultiStepBookingWidget = () => {
 
                         return hasDiscount ? (
                           <div className="mt-1 flex items-baseline gap-2">
-                            <span className="text-xs text-muted-foreground line-through">${originalPrice.toFixed(0)}</span>
+                            <span className="text-xs text-muted-foreground line-through">{formatCurrency(originalPrice, currencyCode, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}</span>
                             <span className="text-lg font-bold text-green-600">
-                              ${displayPrice.toFixed(0)}
+                              {formatCurrency(displayPrice, currencyCode, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
                             </span>
                           </div>
                         ) : (
                           <p className="text-lg font-bold text-primary mt-1">
-                            ${estimatedBooking.total.toFixed(0)}
+                            {formatCurrency(estimatedBooking.total, currencyCode, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
                           </p>
                         );
                       })()}
@@ -4020,18 +4024,18 @@ const MultiStepBookingWidget = () => {
                     <div className="text-xs space-y-1 pt-2 border-t border-border/30">
                       <div className="flex justify-between text-muted-foreground">
                         <span>Vehicle rental</span>
-                        <span>${estimatedBooking.vehicleTotal.toFixed(0)}</span>
+                        <span>{formatCurrency(estimatedBooking.vehicleTotal, currencyCode, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}</span>
                       </div>
                       {formData.pickupDeliveryFee > 0 && (
                         <div className="flex justify-between text-muted-foreground">
                           <span>Pickup delivery</span>
-                          <span>+${formData.pickupDeliveryFee.toFixed(0)}</span>
+                          <span>+{formatCurrency(formData.pickupDeliveryFee, currencyCode, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}</span>
                         </div>
                       )}
                       {formData.returnDeliveryFee > 0 && (
                         <div className="flex justify-between text-muted-foreground">
                           <span>Return collection</span>
-                          <span>+${formData.returnDeliveryFee.toFixed(0)}</span>
+                          <span>+{formatCurrency(formData.returnDeliveryFee, currencyCode, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}</span>
                         </div>
                       )}
                     </div>
@@ -5274,7 +5278,7 @@ const MultiStepBookingWidget = () => {
               {promoDetails && (
                 <p className="text-sm text-green-600 font-medium flex items-center gap-1">
                   <Check className="w-4 h-4" />
-                  Code applied: {promoDetails.type === 'percentage' ? `${promoDetails.value}% off` : `$${promoDetails.value} off`}
+                  Code applied: {promoDetails.type === 'percentage' ? `${promoDetails.value}% off` : `${formatCurrency(promoDetails.value, currencyCode)} off`}
                 </p>
               )}
             </div>

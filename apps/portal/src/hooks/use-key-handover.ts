@@ -2,6 +2,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { useTenant } from "@/contexts/TenantContext";
+import { formatCurrency } from "@/lib/format-utils";
 
 export type HandoverType = "giving" | "receiving";
 
@@ -381,7 +382,7 @@ export function useKeyHandover(rentalId: string | undefined) {
         const securityDeposit = invoice?.security_deposit || 0;
 
         if (securityDeposit > 0) {
-          console.log(`[KEY-HANDOVER] Auto-refunding security deposit: $${securityDeposit} for rental ${rentalId}`);
+          console.log(`[KEY-HANDOVER] Auto-refunding security deposit: ${formatCurrency(securityDeposit, tenant?.currency_code || 'GBP')} for rental ${rentalId}`);
 
           try {
             // Call the process-refund edge function
@@ -439,7 +440,7 @@ export function useKeyHandover(rentalId: string | undefined) {
         if (depositRefunded && depositAmount && depositAmount > 0) {
           toast({
             title: "Key Received & Deposit Refunded",
-            description: `Rental is now closed. Security deposit of $${depositAmount.toFixed(2)} has been refunded to the customer.`,
+            description: `Rental is now closed. Security deposit of ${formatCurrency(depositAmount, tenant?.currency_code || 'GBP')} has been refunded to the customer.`,
           });
         } else {
           toast({

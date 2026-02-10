@@ -2,6 +2,7 @@ import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import Stripe from "https://esm.sh/stripe@14.21.0?target=deno";
 import { getStripeClient, getConnectAccountId, type StripeMode } from '../_shared/stripe-client.ts';
+import { formatCurrency } from '../_shared/format-utils.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -63,17 +64,21 @@ serve(async (req) => {
       const tenantId = requestBody.tenantId || payment.tenant_id || payment.rentals?.tenant_id;
       let stripeMode: StripeMode = 'test'; // Default to test
       let stripeAccountId: string | null = null;
+      let currencyCode = 'GBP';
 
       if (tenantId) {
         const { data: tenant } = await supabase
           .from('tenants')
-          .select('stripe_mode, stripe_account_id, stripe_onboarding_complete')
+          .select('stripe_mode, stripe_account_id, stripe_onboarding_complete, currency_code')
           .eq('id', tenantId)
           .single();
 
         if (tenant) {
           stripeMode = (tenant.stripe_mode as StripeMode) || 'test';
           stripeAccountId = getConnectAccountId(tenant);
+          if (tenant.currency_code) {
+            currencyCode = tenant.currency_code;
+          }
           console.log('Tenant mode:', stripeMode, 'Connect account:', stripeAccountId);
         }
       }
@@ -162,7 +167,7 @@ serve(async (req) => {
             };
 
             await supabase.from('ledger_entries').insert(ledgerEntry);
-            console.log(`Created ledger entry for ${category.name} refund: $${categoryRefund.toFixed(2)}`);
+            console.log(`Created ledger entry for ${category.name} refund: ${formatCurrency(categoryRefund, currencyCode)}`);
           }
         }
       }

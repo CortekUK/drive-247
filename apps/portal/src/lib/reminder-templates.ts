@@ -1,4 +1,4 @@
-import { formatCurrency } from "@/lib/vehicle-utils";
+import { formatCurrency } from "@/lib/format-utils";
 
 export interface ReminderContext {
   // Vehicle context
@@ -35,6 +35,9 @@ export interface ReminderContext {
   days_overdue?: number;
   acquisition_date?: string;
   days_since_acquisition?: number;
+
+  // Currency
+  currencyCode?: string;
 }
 
 export function getTitleTemplate(ruleCode: string, context: ReminderContext): string {
@@ -131,12 +134,12 @@ export function getMessageTemplate(ruleCode: string, context: ReminderContext): 
     DOC_EXP_0D: (ctx) => `Document for ${ctx.customer_name} expires today (${ctx.due_date}). Immediate action required!`,
     
     // Rental overdue reminders
-    RENT_OVERDUE: (ctx) => `${formatCurrency(ctx.overdue_total || 0)} overdue since ${ctx.oldest_due_date}. Review ledger & contact customer.`,
-    
+    RENT_OVERDUE: (ctx) => `${formatCurrency(ctx.overdue_total || 0, ctx.currencyCode)} overdue since ${ctx.oldest_due_date}. Review ledger & contact customer.`,
+
     // Fine due reminders
-    FINE_DUE_14D: (ctx) => `Fine ${ctx.reference} for ${ctx.reg} (${formatCurrency(ctx.amount || 0)}) due on ${ctx.due_date}. Prepare payment or appeal.`,
-    FINE_DUE_7D: (ctx) => `Fine ${ctx.reference} for ${ctx.reg} (${formatCurrency(ctx.amount || 0)}) due on ${ctx.due_date}. Urgent action required!`,
-    FINE_DUE_0D: (ctx) => `Fine ${ctx.reference} for ${ctx.reg} (${formatCurrency(ctx.amount || 0)}) due today (${ctx.due_date}). Immediate payment required!`,
+    FINE_DUE_14D: (ctx) => `Fine ${ctx.reference} for ${ctx.reg} (${formatCurrency(ctx.amount || 0, ctx.currencyCode)}) due on ${ctx.due_date}. Prepare payment or appeal.`,
+    FINE_DUE_7D: (ctx) => `Fine ${ctx.reference} for ${ctx.reg} (${formatCurrency(ctx.amount || 0, ctx.currencyCode)}) due on ${ctx.due_date}. Urgent action required!`,
+    FINE_DUE_0D: (ctx) => `Fine ${ctx.reference} for ${ctx.reg} (${formatCurrency(ctx.amount || 0, ctx.currencyCode)}) due today (${ctx.due_date}). Immediate payment required!`,
     
     // Immobiliser fitting reminders
     IMM_FIT_30D: (ctx) => `Vehicle ${ctx.reg} (${ctx.make} ${ctx.model}) acquired on ${ctx.acquisition_date} needs an immobilizer fitted. Please schedule installation.`,

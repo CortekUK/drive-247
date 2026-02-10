@@ -20,6 +20,7 @@ import { useTenant } from '@/contexts/TenantContext';
 import { useToast } from '@/hooks/use-toast';
 import { useAuditLog } from '@/hooks/use-audit-log';
 import { format, differenceInDays } from 'date-fns';
+import { getCurrencySymbol } from '@/lib/format-utils';
 
 interface AdminExtendRentalDialogProps {
   open: boolean;
@@ -272,7 +273,7 @@ export function AdminExtendRentalDialog({
     }
   };
 
-  const currencySymbol = tenant?.currency_code === 'GBP' ? '£' : tenant?.currency_code === 'EUR' ? '€' : '$';
+  const currencySymbol = getCurrencySymbol(tenant?.currency_code || 'USD');
 
   return (
     <Dialog

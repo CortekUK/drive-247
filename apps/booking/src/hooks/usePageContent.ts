@@ -789,7 +789,7 @@ export const defaultFleetContent: PageContent = {
     items: [
       { name: "Child Safety Seat", price: 15, description: "Per day" },
       { name: "Mobile WiFi Hotspot", price: 10, description: "Per day" },
-      { name: "Delivery & Collection", price: 50, description: "Within 25 miles" },
+      { name: "Delivery & Collection", price: 50, description: "Within 25 mi" },
       { name: "Extended Insurance", price: 25, description: "Per day" },
     ],
     footer_text: "All add-ons can be selected and customized during booking.",

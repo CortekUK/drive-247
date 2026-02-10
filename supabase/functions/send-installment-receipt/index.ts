@@ -3,6 +3,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.4";
 import { corsHeaders } from "../_shared/aws-config.ts";
 import { sendEmail } from "../_shared/resend-service.ts";
 import { getTenantInfo, wrapEmailHtml } from "../_shared/email-template-service.ts";
+import { formatCurrency } from "../_shared/format-utils.ts";
 
 interface ReceiptRequest {
   installmentId: string;
@@ -16,18 +17,12 @@ interface ReceiptRequest {
   vehicleName?: string;
 }
 
-const formatCurrency = (amount: number): string => {
-  return new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currency: 'USD',
-  }).format(amount);
-};
-
 const getReceiptEmailHtml = (
   data: ReceiptRequest,
-  tenantInfo: { company_name: string; company_email: string; company_phone: string },
+  tenantInfo: { company_name: string; company_email: string; company_phone: string; currency_code: string },
   planDetails?: { total_paid: number; total_installable_amount: number; paid_installments: number; number_of_installments: number }
 ): string => {
+  const cc = tenantInfo.currency_code;
   const progressPercent = planDetails
     ? Math.round((planDetails.paid_installments / planDetails.number_of_installments) * 100)
     : null;
@@ -62,7 +57,7 @@ const getReceiptEmailHtml = (
   </tr>
   <tr>
     <td><strong>Amount Paid:</strong></td>
-    <td><strong style="color: #16a34a;">${formatCurrency(data.amount)}</strong></td>
+    <td><strong style="color: #16a34a;">${formatCurrency(data.amount, cc)}</strong></td>
   </tr>
   <tr>
     <td><strong>Payment Date:</strong></td>
@@ -82,11 +77,11 @@ ${planDetails ? `
   </tr>
   <tr>
     <td><strong>Total Paid:</strong></td>
-    <td>${formatCurrency(planDetails.total_paid)}</td>
+    <td>${formatCurrency(planDetails.total_paid, cc)}</td>
   </tr>
   <tr>
     <td><strong>Remaining:</strong></td>
-    <td>${formatCurrency(planDetails.total_installable_amount - planDetails.total_paid)}</td>
+    <td>${formatCurrency(planDetails.total_installable_amount - planDetails.total_paid, cc)}</td>
   </tr>
 </table>
 
@@ -188,7 +183,7 @@ serve(async (req) => {
       contactEmail: tenantInfo.company_email,
     });
 
-    const subject = `Payment Received - ${formatCurrency(data.amount)} | ${tenantInfo.company_name}`;
+    const subject = `Payment Received - ${formatCurrency(data.amount, tenantInfo.currency_code)} | ${tenantInfo.company_name}`;
 
     // Send email to customer
     const emailResult = await sendEmail(

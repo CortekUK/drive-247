@@ -13,6 +13,7 @@ import {
   TenantBranding,
   wrapWithBrandedTemplate
 } from "../_shared/resend-service.ts";
+import { formatCurrency } from "../_shared/format-utils.ts";
 
 interface NotifyRequest {
   bookingRef: string;
@@ -26,7 +27,7 @@ interface NotifyRequest {
   tenantId?: string;
 }
 
-const getEmailContent = (data: NotifyRequest, branding: TenantBranding) => {
+const getEmailContent = (data: NotifyRequest, branding: TenantBranding, currencyCode: string) => {
   const urgencyColor = data.hoursRemaining <= 24 ? "#dc2626" : "#f59e0b";
   const urgencyBg = data.hoursRemaining <= 24 ? "#fef2f2" : "#fef3c7";
   const urgencyText = data.hoursRemaining <= 24 ? "URGENT" : "ACTION REQUIRED";
@@ -70,7 +71,7 @@ const getEmailContent = (data: NotifyRequest, branding: TenantBranding) => {
                                             ` : ''}
                                             <tr>
                                                 <td style="padding: 8px 0; color: #666; font-size: 14px;">Amount Held:</td>
-                                                <td style="padding: 8px 0; color: #1a1a1a; font-weight: 600; font-size: 14px; text-align: right;">$${data.amount.toLocaleString()}</td>
+                                                <td style="padding: 8px 0; color: #1a1a1a; font-weight: 600; font-size: 14px; text-align: right;">${formatCurrency(data.amount, currencyCode)}</td>
                                             </tr>
                                             <tr>
                                                 <td style="padding: 8px 0; color: #666; font-size: 14px;">Expires At:</td>
@@ -158,6 +159,17 @@ serve(async (req) => {
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
+    // Fetch tenant currency code
+    let currencyCode = 'GBP';
+    if (data.tenantId) {
+      const { data: tenantInfo } = await supabase
+        .from('tenants')
+        .select('currency_code')
+        .eq('id', data.tenantId)
+        .single();
+      currencyCode = tenantInfo?.currency_code || 'GBP';
+    }
+
     // Get tenant branding
     const branding = data.tenantId
       ? await getTenantBranding(data.tenantId, supabase)
@@ -182,7 +194,7 @@ serve(async (req) => {
     const urgencyPrefix = data.hoursRemaining <= 24 ? "URGENT: " : "";
 
     // Build branded admin email HTML
-    const adminEmailContent = getEmailContent(data, branding);
+    const adminEmailContent = getEmailContent(data, branding, currencyCode);
     const adminEmailHtml = wrapWithBrandedTemplate(adminEmailContent, branding);
 
     // Send admin email
@@ -202,7 +214,7 @@ serve(async (req) => {
     if (adminPhone) {
       results.adminSMS = await sendSMS(
         adminPhone,
-        `${branding.companyName}: Pre-auth for ${data.bookingRef} expires in ${data.hoursRemaining}h. Amount: $${data.amount}. Action required.`
+        `${branding.companyName}: Pre-auth for ${data.bookingRef} expires in ${data.hoursRemaining}h. Amount: ${formatCurrency(data.amount, currencyCode)}. Action required.`
       );
       console.log('Admin SMS result:', results.adminSMS);
     }

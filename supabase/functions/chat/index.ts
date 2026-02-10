@@ -6,6 +6,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.57.4';
 import { generateEmbedding, chatCompletion, ChatMessage } from '../_shared/openai.ts';
 import { corsHeaders, jsonResponse, errorResponse, handleCors } from '../_shared/cors.ts';
+import { formatCurrency, getCurrencySymbol } from '../_shared/format-utils.ts';
 
 const MAX_HISTORY_MESSAGES = 10;
 const MATCH_THRESHOLD = 0.7;
@@ -32,7 +33,8 @@ interface ChatResponse {
 }
 
 // System prompt for the AI assistant
-function getSystemPrompt(userName: string, metrics: Record<string, unknown>): string {
+function getSystemPrompt(userName: string, metrics: Record<string, unknown>, currencyCode: string = 'GBP'): string {
+  const sym = getCurrencySymbol(currencyCode);
   return `You are Drive247 Assistant, a helpful AI assistant for the Drive247 car rental management portal. You help users understand their business data and answer questions about customers, vehicles, rentals, payments, and fines.
 
 ${userName ? `You're speaking with ${userName}. Be friendly and personalized.` : ''}
@@ -41,7 +43,7 @@ Current Business Metrics:
 - Total Customers: ${metrics.total_customers || 0} (${metrics.active_customers || 0} active)
 - Total Vehicles: ${metrics.total_vehicles || 0} (${metrics.available_vehicles || 0} available)
 - Active Rentals: ${metrics.active_rentals || 0} of ${metrics.total_rentals || 0} total
-- Pending Payments: £${metrics.pending_payments || 0}
+- Pending Payments: ${formatCurrency(Number(metrics.pending_payments) || 0, currencyCode)}
 - Fines: ${metrics.total_fines || 0} total (${metrics.unpaid_fines || 0} unpaid)
 
 You have access to search results from the database that will be provided as context. Use this data to answer questions accurately.
@@ -59,7 +61,7 @@ Guidelines:
 - Be concise and helpful
 - Reference specific data when available
 - If you don't have enough information, say so
-- Format currency as £X,XXX
+- Format currency using the ${sym} symbol (${currencyCode})
 - Use British English spelling and date formats (DD/MM/YYYY)
 - When mentioning specific records, include relevant identifiers (rental numbers, registration plates, etc.)`;
 }
@@ -150,16 +152,18 @@ serve(async (req) => {
       return errorResponse('No tenant context available. Please select a tenant or ensure you are associated with one.', 403);
     }
 
-    // Verify the tenant exists
+    // Verify the tenant exists and get currency code
     const { data: tenantExists, error: tenantError } = await supabase
       .from('tenants')
-      .select('id')
+      .select('id, currency_code')
       .eq('id', tenantId)
       .single();
 
     if (tenantError || !tenantExists) {
       return errorResponse('Invalid tenant', 403);
     }
+
+    const tenantCurrencyCode = tenantExists.currency_code || 'GBP';
 
     if (!message || typeof message !== 'string' || message.trim().length === 0) {
       return errorResponse('Message is required', 400);
@@ -223,7 +227,7 @@ serve(async (req) => {
     // System prompt with context
     messages.push({
       role: 'system',
-      content: getSystemPrompt(userName, metrics || {}),
+      content: getSystemPrompt(userName, metrics || {}, tenantCurrencyCode),
     });
 
     // Add relevant context from semantic search

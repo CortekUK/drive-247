@@ -1,6 +1,8 @@
 // Document loaders for converting Drive247 database records to text for RAG indexing
 // Each function converts a record to { content: string, metadata: object }
 
+import { getCurrencySymbol } from './format-utils.ts';
+
 export interface DocumentResult {
   content: string;
   metadata: Record<string, unknown>;
@@ -161,7 +163,8 @@ export function customerToDocument(customer: CustomerRecord): DocumentResult {
 /**
  * Convert vehicle record to searchable text
  */
-export function vehicleToDocument(vehicle: VehicleRecord): DocumentResult {
+export function vehicleToDocument(vehicle: VehicleRecord, currencyCode: string = 'GBP'): DocumentResult {
+  const sym = getCurrencySymbol(currencyCode);
   const color = vehicle.colour || vehicle.color;
   const vehicleName = [vehicle.year, vehicle.make, vehicle.model].filter(Boolean).join(' ');
 
@@ -177,9 +180,9 @@ export function vehicleToDocument(vehicle: VehicleRecord): DocumentResult {
 
   // Pricing info
   const pricing: string[] = [];
-  if (vehicle.daily_rent) pricing.push(`£${vehicle.daily_rent}/day`);
-  if (vehicle.weekly_rent) pricing.push(`£${vehicle.weekly_rent}/week`);
-  if (vehicle.monthly_rent) pricing.push(`£${vehicle.monthly_rent}/month`);
+  if (vehicle.daily_rent) pricing.push(`${sym}${vehicle.daily_rent}/day`);
+  if (vehicle.weekly_rent) pricing.push(`${sym}${vehicle.weekly_rent}/week`);
+  if (vehicle.monthly_rent) pricing.push(`${sym}${vehicle.monthly_rent}/month`);
   if (pricing.length > 0) parts.push(`Rental rates: ${pricing.join(', ')}`);
 
   if (vehicle.acquisition_type) parts.push(`Acquisition: ${vehicle.acquisition_type}`);
@@ -205,7 +208,8 @@ export function vehicleToDocument(vehicle: VehicleRecord): DocumentResult {
 /**
  * Convert rental record to searchable text
  */
-export function rentalToDocument(rental: RentalRecord): DocumentResult {
+export function rentalToDocument(rental: RentalRecord, currencyCode: string = 'GBP'): DocumentResult {
+  const sym = getCurrencySymbol(currencyCode);
   const parts: string[] = [];
 
   if (rental.rental_number) {
@@ -224,7 +228,7 @@ export function rentalToDocument(rental: RentalRecord): DocumentResult {
   parts.push(`Start: ${formatDate(rental.start_date)}`);
   if (rental.end_date) parts.push(`End: ${formatDate(rental.end_date)}`);
   if (rental.status) parts.push(`Status: ${rental.status}`);
-  parts.push(`Monthly amount: £${rental.monthly_amount}`);
+  parts.push(`Monthly amount: ${sym}${rental.monthly_amount}`);
 
   if (rental.payment_mode) parts.push(`Payment mode: ${rental.payment_mode}`);
   if (rental.approval_status) parts.push(`Approval: ${rental.approval_status}`);
@@ -234,7 +238,7 @@ export function rentalToDocument(rental: RentalRecord): DocumentResult {
   if (rental.pickup_location) parts.push(`Pickup: ${rental.pickup_location}`);
   if (rental.return_location) parts.push(`Return: ${rental.return_location}`);
   if (rental.promo_code) parts.push(`Promo code: ${rental.promo_code}`);
-  if (rental.discount_applied) parts.push(`Discount: £${rental.discount_applied}`);
+  if (rental.discount_applied) parts.push(`Discount: ${sym}${rental.discount_applied}`);
 
   return {
     content: parts.join('. '),
@@ -253,9 +257,10 @@ export function rentalToDocument(rental: RentalRecord): DocumentResult {
 /**
  * Convert payment record to searchable text
  */
-export function paymentToDocument(payment: PaymentRecord): DocumentResult {
+export function paymentToDocument(payment: PaymentRecord, currencyCode: string = 'GBP'): DocumentResult {
+  const sym = getCurrencySymbol(currencyCode);
   const parts: string[] = [
-    `Payment of £${payment.amount}`,
+    `Payment of ${sym}${payment.amount}`,
     `Type: ${payment.payment_type}`,
     `Date: ${formatDate(payment.payment_date)}`,
   ];
@@ -270,7 +275,7 @@ export function paymentToDocument(payment: PaymentRecord): DocumentResult {
   if (payment.capture_status) parts.push(`Capture: ${payment.capture_status}`);
   if (payment.refund_status) {
     parts.push(`Refund status: ${payment.refund_status}`);
-    if (payment.refund_amount) parts.push(`Refund amount: £${payment.refund_amount}`);
+    if (payment.refund_amount) parts.push(`Refund amount: ${sym}${payment.refund_amount}`);
   }
 
   return {
@@ -290,10 +295,11 @@ export function paymentToDocument(payment: PaymentRecord): DocumentResult {
 /**
  * Convert fine record to searchable text
  */
-export function fineToDocument(fine: FineRecord): DocumentResult {
+export function fineToDocument(fine: FineRecord, currencyCode: string = 'GBP'): DocumentResult {
+  const sym = getCurrencySymbol(currencyCode);
   const parts: string[] = [
     `Fine: ${fine.type}`,
-    `Amount: £${fine.amount}`,
+    `Amount: ${sym}${fine.amount}`,
     `Issue date: ${formatDate(fine.issue_date)}`,
     `Due date: ${formatDate(fine.due_date)}`,
   ];
@@ -322,13 +328,14 @@ export function fineToDocument(fine: FineRecord): DocumentResult {
 /**
  * Convert plate record to searchable text
  */
-export function plateToDocument(plate: PlateRecord): DocumentResult {
+export function plateToDocument(plate: PlateRecord, currencyCode: string = 'GBP'): DocumentResult {
+  const sym = getCurrencySymbol(currencyCode);
   const parts: string[] = [
     `Plate: ${plate.plate_number}`,
   ];
 
   if (plate.status) parts.push(`Status: ${plate.status}`);
-  if (plate.cost) parts.push(`Cost: £${plate.cost}`);
+  if (plate.cost) parts.push(`Cost: ${sym}${plate.cost}`);
   if (plate.supplier) parts.push(`Supplier: ${plate.supplier}`);
   if (plate.order_date) parts.push(`Order date: ${formatDate(plate.order_date)}`);
   if (plate.vehicle?.reg) parts.push(`Assigned to vehicle: ${plate.vehicle.reg}`);
@@ -349,14 +356,14 @@ export function plateToDocument(plate: PlateRecord): DocumentResult {
 /**
  * Get document loader for a given table
  */
-export function getDocumentLoader(tableName: string): ((record: unknown) => DocumentResult) | null {
+export function getDocumentLoader(tableName: string, currencyCode: string = 'GBP'): ((record: unknown) => DocumentResult) | null {
   const loaders: Record<string, (record: unknown) => DocumentResult> = {
     customers: (r) => customerToDocument(r as CustomerRecord),
-    vehicles: (r) => vehicleToDocument(r as VehicleRecord),
-    rentals: (r) => rentalToDocument(r as RentalRecord),
-    payments: (r) => paymentToDocument(r as PaymentRecord),
-    fines: (r) => fineToDocument(r as FineRecord),
-    plates: (r) => plateToDocument(r as PlateRecord),
+    vehicles: (r) => vehicleToDocument(r as VehicleRecord, currencyCode),
+    rentals: (r) => rentalToDocument(r as RentalRecord, currencyCode),
+    payments: (r) => paymentToDocument(r as PaymentRecord, currencyCode),
+    fines: (r) => fineToDocument(r as FineRecord, currencyCode),
+    plates: (r) => plateToDocument(r as PlateRecord, currencyCode),
   };
 
   return loaders[tableName] || null;

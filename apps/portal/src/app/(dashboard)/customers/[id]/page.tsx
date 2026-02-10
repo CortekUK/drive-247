@@ -38,6 +38,8 @@ import { NextOfKinCard } from "@/components/customers/next-of-kin-card";
 import { PaymentStatusBadge } from "@/components/customers/payment-status-badge";
 import { FineStatusBadge } from "@/components/shared/status/fine-status-badge";
 import { format } from "date-fns";
+import { useTenant } from "@/contexts/TenantContext";
+import { formatCurrency, getCurrencySymbol } from "@/lib/format-utils";
 
 interface Customer {
   id: string;
@@ -73,6 +75,9 @@ const CustomerDetail = () => {
   const [editCustomerOpen, setEditCustomerOpen] = useState(false);
   const [blockDialogOpen, setBlockDialogOpen] = useState(false);
   const [blockReason, setBlockReason] = useState("");
+
+  const { tenant } = useTenant();
+  const currencyCode = tenant?.currency_code || 'GBP';
 
   const { blockCustomer, unblockCustomer, isLoading: blockingLoading } = useCustomerBlockingActions();
 
@@ -455,7 +460,7 @@ const CustomerDetail = () => {
                             {rental.end_date ? format(new Date(rental.end_date), "MM/dd/yyyy") : "Ongoing"}
                           </TableCell>
                           <TableCell className="text-right font-medium">
-                            ${rental.monthly_amount.toLocaleString()}
+                            {formatCurrency(rental.monthly_amount, currencyCode)}
                           </TableCell>
                           <TableCell>
                             <Badge variant={rental.status === 'Active' ? 'default' : 'secondary'}>
@@ -524,7 +529,7 @@ const CustomerDetail = () => {
                             {format(new Date(payment.payment_date), "MM/dd/yyyy")}
                           </TableCell>
                           <TableCell className="text-right font-medium">
-                            ${payment.amount.toLocaleString()}
+                            {formatCurrency(payment.amount, currencyCode)}
                           </TableCell>
                           <TableCell>
                             <Badge variant="outline">{payment.method}</Badge>
@@ -549,7 +554,7 @@ const CustomerDetail = () => {
                           <TableCell className="text-right">
                             {payment.remaining_amount > 0 ? (
                               <span className="text-orange-600 font-medium">
-                                ${payment.remaining_amount.toLocaleString()}
+                                {formatCurrency(payment.remaining_amount, currencyCode)}
                               </span>
                             ) : (
                               <span className="text-green-600 font-medium">Fully Applied</span>
@@ -627,7 +632,7 @@ const CustomerDetail = () => {
                             </div>
                           </TableCell>
                           <TableCell className="text-right font-medium">
-                            ${fine.amount.toLocaleString()}
+                            {formatCurrency(fine.amount, currencyCode)}
                           </TableCell>
                           <TableCell className="whitespace-nowrap">
                             {format(new Date(fine.issue_date), "MM/dd/yyyy")}
@@ -705,7 +710,7 @@ const CustomerDetail = () => {
                             {history.end_date ? format(new Date(history.end_date), "MM/dd/yyyy") : "Ongoing"}
                           </TableCell>
                           <TableCell className="text-right font-medium">
-                            ${history.monthly_amount.toLocaleString()}
+                            {formatCurrency(history.monthly_amount, currencyCode)}
                           </TableCell>
                           <TableCell>
                             <Badge variant={history.status === 'Active' ? 'default' : 'secondary'}>

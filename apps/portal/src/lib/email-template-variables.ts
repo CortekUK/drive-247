@@ -1,6 +1,8 @@
 // Email Template Variables
 // These variables can be used in email templates and will be replaced with actual data
 
+import { formatCurrency } from "@/lib/format-utils";
+
 export interface EmailTemplateVariable {
   key: string;
   label: string;
@@ -285,16 +287,13 @@ export function formatEmailDate(date: string | Date | null | undefined): string 
   });
 }
 
-// Format currency for display
+// Format currency for display (delegates to shared format-utils)
 export function formatEmailCurrency(
   amount: number | null | undefined,
-  currency: string = 'USD'
+  currencyCode: string = 'GBP'
 ): string {
   if (amount === null || amount === undefined) return '';
-  return new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currency,
-  }).format(amount);
+  return formatCurrency(amount, currencyCode);
 }
 
 // Get template type by key

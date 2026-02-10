@@ -3,6 +3,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.4";
 import { corsHeaders } from "../_shared/aws-config.ts";
 import { sendEmail, getTenantAdminEmail } from "../_shared/resend-service.ts";
 import { getTenantInfo, wrapEmailHtml } from "../_shared/email-template-service.ts";
+import { formatCurrency } from "../_shared/format-utils.ts";
 
 interface FailedRequest {
   installmentId: string;
@@ -18,17 +19,11 @@ interface FailedRequest {
   failureCount?: number;
 }
 
-const formatCurrency = (amount: number): string => {
-  return new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currency: 'USD',
-  }).format(amount);
-};
-
 const getFailedEmailHtml = (
   data: FailedRequest,
-  tenantInfo: { company_name: string; company_email: string; company_phone: string }
+  tenantInfo: { company_name: string; company_email: string; company_phone: string; currency_code: string }
 ): string => {
+  const cc = tenantInfo.currency_code;
   return `
 <h1>Payment Issue - Action Required</h1>
 
@@ -59,7 +54,7 @@ const getFailedEmailHtml = (
   </tr>
   <tr>
     <td><strong>Amount Due:</strong></td>
-    <td><strong style="color: #dc2626;">${formatCurrency(data.amount)}</strong></td>
+    <td><strong style="color: #dc2626;">${formatCurrency(data.amount, cc)}</strong></td>
   </tr>
   ${data.dueDate ? `
   <tr>
@@ -110,8 +105,9 @@ ${data.failureReason ? `
 
 const getAdminFailedEmailHtml = (
   data: FailedRequest,
-  tenantInfo: { company_name: string }
+  tenantInfo: { company_name: string; currency_code: string }
 ): string => {
+  const cc = tenantInfo.currency_code;
   return `
 <!DOCTYPE html>
 <html>
@@ -138,7 +134,7 @@ const getAdminFailedEmailHtml = (
                     <tr><td style="padding: 12px; border-bottom: 1px solid #e5e7eb; color: #666;">Email:</td><td style="padding: 12px; border-bottom: 1px solid #e5e7eb;">${data.customerEmail}</td></tr>
                     ${data.vehicleName ? `<tr><td style="padding: 12px; border-bottom: 1px solid #e5e7eb; color: #666;">Vehicle:</td><td style="padding: 12px; border-bottom: 1px solid #e5e7eb;">${data.vehicleName}</td></tr>` : ''}
                     <tr><td style="padding: 12px; border-bottom: 1px solid #e5e7eb; color: #666;">Installment #:</td><td style="padding: 12px; border-bottom: 1px solid #e5e7eb;">${data.installmentNumber}</td></tr>
-                    <tr><td style="padding: 12px; border-bottom: 1px solid #e5e7eb; color: #666;">Amount:</td><td style="padding: 12px; border-bottom: 1px solid #e5e7eb; color: #dc2626; font-weight: 600;">${formatCurrency(data.amount)}</td></tr>
+                    <tr><td style="padding: 12px; border-bottom: 1px solid #e5e7eb; color: #666;">Amount:</td><td style="padding: 12px; border-bottom: 1px solid #e5e7eb; color: #dc2626; font-weight: 600;">${formatCurrency(data.amount, cc)}</td></tr>
                     ${data.failureCount ? `<tr><td style="padding: 12px; border-bottom: 1px solid #e5e7eb; color: #666;">Failure Count:</td><td style="padding: 12px; border-bottom: 1px solid #e5e7eb; color: #dc2626;">${data.failureCount}</td></tr>` : ''}
                     ${data.failureReason ? `<tr><td style="padding: 12px; color: #666;">Failure Reason:</td><td style="padding: 12px; color: #dc2626;">${data.failureReason}</td></tr>` : ''}
                 </table>
@@ -244,7 +240,7 @@ serve(async (req) => {
     if (adminEmail) {
       results.adminEmail = await sendEmail(
         adminEmail,
-        `Installment Payment Failed - ${data.customerName} - ${formatCurrency(data.amount)}`,
+        `Installment Payment Failed - ${data.customerName} - ${formatCurrency(data.amount, tenantInfo.currency_code)}`,
         getAdminFailedEmailHtml({ ...data, rentalNumber, vehicleName, dueDate, failureCount }, tenantInfo),
         supabase,
         data.tenantId

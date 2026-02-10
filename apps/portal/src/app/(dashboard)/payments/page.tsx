@@ -40,6 +40,7 @@ import { usePaymentVerificationActions, getVerificationStatusInfo, VerificationS
 import { useOrgSettings } from "@/hooks/use-org-settings";
 import { supabase } from "@/integrations/supabase/client";
 import { useQueryClient } from "@tanstack/react-query";
+import { formatCurrency } from "@/lib/format-utils";
 
 // Helper function to display user-friendly payment type names
 const getPaymentTypeDisplay = (paymentType: string): string => {
@@ -57,6 +58,7 @@ const PaymentsList = () => {
   const router = useRouter();
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const { tenant } = useTenant();
   const [showAddDialog, setShowAddDialog] = useState(false);
   const [showRejectDialog, setShowRejectDialog] = useState(false);
   const [rejectPaymentId, setRejectPaymentId] = useState<string | null>(null);
@@ -209,7 +211,7 @@ const PaymentsList = () => {
 
       toast({
         title: "Payment Reversed",
-        description: `Payment of $${reversePaymentDetails?.amount.toFixed(2)} has been reversed. ${data.details?.applicationsReversed || 0} allocations were undone.`,
+        description: `Payment of ${formatCurrency(reversePaymentDetails?.amount || 0, tenant?.currency_code || 'USD')} has been reversed. ${data.details?.applicationsReversed || 0} allocations were undone.`,
       });
 
       // Invalidate all related queries
@@ -396,7 +398,7 @@ const PaymentsList = () => {
                            </TableCell>
                            <TableCell>{payment.method || '-'}</TableCell>
                           <TableCell className="text-left font-medium">
-                            ${payment.amount.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                            {formatCurrency(payment.amount, tenant?.currency_code || 'USD')}
                           </TableCell>
                           <TableCell>
                             {(() => {
@@ -594,7 +596,7 @@ const PaymentsList = () => {
               Reverse Payment
             </DialogTitle>
             <DialogDescription>
-              This will reverse the payment of <span className="font-semibold">${reversePaymentDetails?.amount.toFixed(2)}</span> for{' '}
+              This will reverse the payment of <span className="font-semibold">{formatCurrency(reversePaymentDetails?.amount || 0, tenant?.currency_code || 'USD')}</span> for{' '}
               <span className="font-semibold">{reversePaymentDetails?.customerName}</span>.
               All charge allocations will be undone and the charges will return to outstanding status.
             </DialogDescription>

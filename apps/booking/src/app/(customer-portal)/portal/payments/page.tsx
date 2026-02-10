@@ -67,6 +67,8 @@ import {
   ChevronRight,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { useTenant } from '@/contexts/TenantContext';
+import { formatCurrency } from '@/lib/format-utils';
 
 // Mock data for demo installments
 const mockInstallmentPlans = [
@@ -123,13 +125,6 @@ const mockInstallmentPlans = [
   },
 ];
 
-function formatCurrency(amount: number): string {
-  return new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currency: 'USD',
-  }).format(amount);
-}
-
 function StatCard({
   title,
   value,
@@ -181,6 +176,8 @@ function NextPaymentCard({
   onUpdateCard: (planId: string) => void;
   isPaying: boolean;
 }) {
+  const { tenant } = useTenant();
+  const currencyCode = tenant?.currency_code || 'GBP';
   const dueDate = new Date(installment.due_date);
   const isOverdue = isPast(dueDate) && !isToday(dueDate);
   const isDueToday = isToday(dueDate);
@@ -224,7 +221,7 @@ function NextPaymentCard({
       <CardContent className="space-y-4">
         <div className="flex items-center justify-between">
           <div>
-            <p className="text-3xl font-bold">{formatCurrency(installment.amount)}</p>
+            <p className="text-3xl font-bold">{formatCurrency(installment.amount, currencyCode)}</p>
             <p className="text-sm text-muted-foreground">
               Installment #{installment.installment_number} of {plan.number_of_installments}
             </p>
@@ -326,6 +323,8 @@ function InstallmentPlanCard({
   onPayOff: (planId: string) => void;
   isPaying: boolean;
 }) {
+  const { tenant } = useTenant();
+  const currencyCode = tenant?.currency_code || 'GBP';
   const vehicle = plan.rentals?.vehicles;
   const vehicleName = vehicle
     ? `${vehicle.make || ''} ${vehicle.model || ''} (${vehicle.reg})`.trim()
@@ -368,7 +367,7 @@ function InstallmentPlanCard({
           </div>
           <div className="text-right">
             <p className="text-sm text-muted-foreground">Total</p>
-            <p className="font-semibold">{formatCurrency(plan.total_installable_amount + plan.upfront_amount)}</p>
+            <p className="font-semibold">{formatCurrency(plan.total_installable_amount + plan.upfront_amount, currencyCode)}</p>
           </div>
         </div>
       </CardHeader>
@@ -383,9 +382,9 @@ function InstallmentPlanCard({
           </div>
           <Progress value={progressPercent} className="h-2" />
           <div className="flex justify-between text-sm">
-            <span className="text-green-600">Paid: {formatCurrency(totalPaid + plan.upfront_amount)}</span>
+            <span className="text-green-600">Paid: {formatCurrency(totalPaid + plan.upfront_amount, currencyCode)}</span>
             {remaining > 0 && (
-              <span className="text-muted-foreground">Remaining: {formatCurrency(remaining)}</span>
+              <span className="text-muted-foreground">Remaining: {formatCurrency(remaining, currencyCode)}</span>
             )}
           </div>
         </div>
@@ -403,7 +402,7 @@ function InstallmentPlanCard({
             ) : (
               <Zap className="h-4 w-4 mr-2" />
             )}
-            Pay Off Remaining ({formatCurrency(remaining)})
+            Pay Off Remaining ({formatCurrency(remaining, currencyCode)})
           </Button>
         )}
 
@@ -427,7 +426,7 @@ function InstallmentPlanCard({
                     <span>Upfront (Deposit + Fees)</span>
                   </div>
                   <div className="text-right">
-                    <span className="font-medium">{formatCurrency(plan.upfront_amount)}</span>
+                    <span className="font-medium">{formatCurrency(plan.upfront_amount, currencyCode)}</span>
                     <Badge variant="default" className="ml-2 text-xs">Paid</Badge>
                   </div>
                 </div>
@@ -464,7 +463,7 @@ function InstallmentPlanCard({
                         </div>
                       </div>
                       <div className="flex items-center gap-2">
-                        <span className="font-medium">{formatCurrency(inst.amount)}</span>
+                        <span className="font-medium">{formatCurrency(inst.amount, currencyCode)}</span>
                         {isPaid ? (
                           <Badge variant="default" className="text-xs">Paid</Badge>
                         ) : isFailed ? (
@@ -509,6 +508,8 @@ function InstallmentPlanCard({
 }
 
 function PaymentHistoryList() {
+  const { tenant } = useTenant();
+  const currencyCode = tenant?.currency_code || 'GBP';
   const { data: payments, isLoading } = useCustomerPaymentHistory(10);
 
   if (isLoading) {
@@ -571,7 +572,7 @@ function PaymentHistoryList() {
             </div>
             <div className="text-right">
               <p className="font-semibold text-green-600">
-                {formatCurrency(payment.amount)}
+                {formatCurrency(payment.amount, currencyCode)}
               </p>
               <Badge variant="outline" className="text-xs">
                 {payment.status}
@@ -589,6 +590,8 @@ function InvoiceList({
 }: {
   onViewInvoice: (invoice: CustomerInvoice) => void;
 }) {
+  const { tenant } = useTenant();
+  const currencyCode = tenant?.currency_code || 'GBP';
   const { data: invoices, isLoading } = useCustomerInvoices();
 
   if (isLoading) {
@@ -693,7 +696,7 @@ function InvoiceList({
             <div className="flex items-center gap-3">
               <div className="text-right">
                 <p className="font-semibold">
-                  {formatCurrency(invoice.total_amount)}
+                  {formatCurrency(invoice.total_amount, currencyCode)}
                 </p>
                 <Badge variant={getStatusVariant(invoice.computed_status)} className="text-xs">
                   {getStatusLabel(invoice.computed_status)}
@@ -717,6 +720,8 @@ function InvoiceDetailSheet({
   onOpenChange: (open: boolean) => void;
   invoice: CustomerInvoice | null;
 }) {
+  const { tenant } = useTenant();
+  const currencyCode = tenant?.currency_code || 'GBP';
   if (!invoice) return null;
 
   const vehicle = invoice.vehicles;
@@ -793,42 +798,42 @@ function InvoiceDetailSheet({
             {invoice.rental_fee != null && invoice.rental_fee > 0 && (
               <div className="flex justify-between text-sm">
                 <span className="text-muted-foreground">Rental Fee</span>
-                <span>{formatCurrency(invoice.rental_fee)}</span>
+                <span>{formatCurrency(invoice.rental_fee, currencyCode)}</span>
               </div>
             )}
             {invoice.protection_fee != null && invoice.protection_fee > 0 && (
               <div className="flex justify-between text-sm">
                 <span className="text-muted-foreground">Protection Fee</span>
-                <span>{formatCurrency(invoice.protection_fee)}</span>
+                <span>{formatCurrency(invoice.protection_fee, currencyCode)}</span>
               </div>
             )}
             {invoice.service_fee != null && invoice.service_fee > 0 && (
               <div className="flex justify-between text-sm">
                 <span className="text-muted-foreground">Service Fee</span>
-                <span>{formatCurrency(invoice.service_fee)}</span>
+                <span>{formatCurrency(invoice.service_fee, currencyCode)}</span>
               </div>
             )}
             {invoice.security_deposit != null && invoice.security_deposit > 0 && (
               <div className="flex justify-between text-sm">
                 <span className="text-muted-foreground">Security Deposit</span>
-                <span>{formatCurrency(invoice.security_deposit)}</span>
+                <span>{formatCurrency(invoice.security_deposit, currencyCode)}</span>
               </div>
             )}
             <Separator />
             <div className="flex justify-between text-sm">
               <span className="text-muted-foreground">Subtotal</span>
-              <span>{formatCurrency(invoice.subtotal)}</span>
+              <span>{formatCurrency(invoice.subtotal, currencyCode)}</span>
             </div>
             {invoice.tax_amount != null && invoice.tax_amount > 0 && (
               <div className="flex justify-between text-sm">
                 <span className="text-muted-foreground">Tax</span>
-                <span>{formatCurrency(invoice.tax_amount)}</span>
+                <span>{formatCurrency(invoice.tax_amount, currencyCode)}</span>
               </div>
             )}
             <Separator />
             <div className="flex justify-between font-semibold">
               <span>Total</span>
-              <span className="text-lg">{formatCurrency(invoice.total_amount)}</span>
+              <span className="text-lg">{formatCurrency(invoice.total_amount, currencyCode)}</span>
             </div>
           </div>
 
@@ -877,6 +882,8 @@ function DemoInstallmentCard({
   plan: MockInstallmentPlan;
   onClick: () => void;
 }) {
+  const { tenant } = useTenant();
+  const currencyCode = tenant?.currency_code || 'GBP';
   const progressPercent = (plan.paidAmount / plan.totalAmount) * 100;
   const paidInstallments = plan.installments.filter(i => i.status === 'paid').length;
 
@@ -896,7 +903,7 @@ function DemoInstallmentCard({
           </div>
           <div className="text-right">
             <p className="text-sm text-muted-foreground">Total</p>
-            <p className="font-semibold">{formatCurrency(plan.totalAmount)}</p>
+            <p className="font-semibold">{formatCurrency(plan.totalAmount, currencyCode)}</p>
           </div>
         </div>
       </CardHeader>
@@ -910,8 +917,8 @@ function DemoInstallmentCard({
           </div>
           <Progress value={progressPercent} className="h-2" />
           <div className="flex justify-between text-sm">
-            <span className="text-green-600">Paid: {formatCurrency(plan.paidAmount)}</span>
-            <span className="text-muted-foreground">Remaining: {formatCurrency(plan.remainingAmount)}</span>
+            <span className="text-green-600">Paid: {formatCurrency(plan.paidAmount, currencyCode)}</span>
+            <span className="text-muted-foreground">Remaining: {formatCurrency(plan.remainingAmount, currencyCode)}</span>
           </div>
         </div>
       </CardContent>
@@ -928,6 +935,8 @@ function DemoInstallmentTimeline({
   onOpenChange: (open: boolean) => void;
   plan: MockInstallmentPlan | null;
 }) {
+  const { tenant } = useTenant();
+  const currencyCode = tenant?.currency_code || 'GBP';
   if (!plan) return null;
 
   return (
@@ -948,15 +957,15 @@ function DemoInstallmentTimeline({
           <div className="bg-muted/50 rounded-lg p-4">
             <div className="grid grid-cols-3 gap-4 text-center">
               <div>
-                <p className="text-xl font-bold text-green-600">{formatCurrency(plan.paidAmount)}</p>
+                <p className="text-xl font-bold text-green-600">{formatCurrency(plan.paidAmount, currencyCode)}</p>
                 <p className="text-xs text-muted-foreground">Paid</p>
               </div>
               <div>
-                <p className="text-xl font-bold">{formatCurrency(plan.remainingAmount)}</p>
+                <p className="text-xl font-bold">{formatCurrency(plan.remainingAmount, currencyCode)}</p>
                 <p className="text-xs text-muted-foreground">Remaining</p>
               </div>
               <div>
-                <p className="text-xl font-bold">{formatCurrency(plan.totalAmount)}</p>
+                <p className="text-xl font-bold">{formatCurrency(plan.totalAmount, currencyCode)}</p>
                 <p className="text-xs text-muted-foreground">Total</p>
               </div>
             </div>
@@ -992,7 +1001,7 @@ function DemoInstallmentTimeline({
                       </p>
                     </div>
                     <div className="text-right">
-                      <p className="font-semibold">{formatCurrency(inst.amount)}</p>
+                      <p className="font-semibold">{formatCurrency(inst.amount, currencyCode)}</p>
                       <Badge
                         variant={
                           inst.status === 'paid' ? 'default' :
@@ -1024,6 +1033,8 @@ function DemoInstallmentTimeline({
 }
 
 export default function PaymentsPage() {
+  const { tenant } = useTenant();
+  const currencyCode = tenant?.currency_code || 'GBP';
   const { data: plans, isLoading: plansLoading } = useCustomerInstallmentPlans();
   const { data: installmentStats, isLoading: installmentStatsLoading } = useInstallmentStats();
   const { data: invoiceStats, isLoading: invoiceStatsLoading } = useInvoiceStats();
@@ -1163,13 +1174,13 @@ export default function PaymentsPage() {
           />
           <StatCard
             title="Total Paid"
-            value={formatCurrency(stats.totalPaid)}
+            value={formatCurrency(stats.totalPaid, currencyCode)}
             icon={CheckCircle2}
             variant="success"
           />
           <StatCard
             title="Remaining"
-            value={formatCurrency(stats.totalRemaining)}
+            value={formatCurrency(stats.totalRemaining, currencyCode)}
             icon={DollarSign}
             description={stats.pendingInvoices ? `${stats.pendingInvoices} pending` : undefined}
           />
@@ -1340,19 +1351,19 @@ export default function PaymentsPage() {
                 <>
                   This will retry the failed payment for <strong>{confirmDialog.title}</strong>.
                   <br />
-                  Amount: <strong>{formatCurrency(confirmDialog.amount)}</strong>
+                  Amount: <strong>{formatCurrency(confirmDialog.amount, currencyCode)}</strong>
                 </>
               ) : confirmDialog?.type === 'payoff' ? (
                 <>
                   This will pay off all remaining installments at once.
                   <br />
-                  Total: <strong>{formatCurrency(confirmDialog.amount)}</strong>
+                  Total: <strong>{formatCurrency(confirmDialog.amount, currencyCode)}</strong>
                 </>
               ) : (
                 <>
                   This will charge your saved card for <strong>{confirmDialog?.title}</strong> now.
                   <br />
-                  Amount: <strong>{formatCurrency(confirmDialog?.amount || 0)}</strong>
+                  Amount: <strong>{formatCurrency(confirmDialog?.amount || 0, currencyCode)}</strong>
                 </>
               )}
             </AlertDialogDescription>
@@ -1366,7 +1377,7 @@ export default function PaymentsPage() {
                   Processing...
                 </>
               ) : (
-                `Pay ${formatCurrency(confirmDialog?.amount || 0)}`
+                `Pay ${formatCurrency(confirmDialog?.amount || 0, currencyCode)}`
               )}
             </AlertDialogAction>
           </AlertDialogFooter>

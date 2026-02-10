@@ -15,6 +15,7 @@ import Navigation from "@/components/Navigation";
 import Footer from "@/components/Footer";
 import { ArrowLeft, Users, Briefcase, Gauge, Droplet, Check, AlertCircle } from "lucide-react";
 import { toast } from "sonner";
+import { formatCurrency, getCurrencySymbol } from "@/lib/format-utils";
 
 interface VehiclePhoto {
   photo_url: string;
@@ -54,6 +55,7 @@ export default function FleetDetail() {
   const id = params?.id as string;
   const router = useRouter();
   const { tenant } = useTenant();
+  const currencyCode = tenant?.currency_code || 'GBP';
   const [vehicle, setVehicle] = useState<Vehicle | null>(null);
   const [similarVehicles, setSimilarVehicles] = useState<Vehicle[]>([]);
   const [serviceInclusions, setServiceInclusions] = useState<ServiceInclusion[]>([]);
@@ -433,21 +435,21 @@ export default function FleetDetail() {
                       <tr className="border-b border-accent/10">
                         <td className="p-4 font-medium">Daily</td>
                         <td className="p-4 text-right">
-                          <span className="text-2xl font-bold text-accent">${vehicle.daily_rent}</span>
+                          <span className="text-2xl font-bold text-accent">{formatCurrency(vehicle.daily_rent, currencyCode, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}</span>
                         </td>
                         <td className="p-4 text-muted-foreground">Ideal for short-term hires</td>
                       </tr>
                       <tr className="border-b border-accent/10">
                         <td className="p-4 font-medium">Weekly</td>
                         <td className="p-4 text-right">
-                          <span className="text-2xl font-bold text-accent">${vehicle.weekly_rent}</span>
+                          <span className="text-2xl font-bold text-accent">{formatCurrency(vehicle.weekly_rent, currencyCode, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}</span>
                         </td>
                         <td className="p-4 text-muted-foreground">Best value for extended use</td>
                       </tr>
                       <tr>
                         <td className="p-4 font-medium">Monthly</td>
                         <td className="p-4 text-right">
-                          <span className="text-2xl font-bold text-accent">${vehicle.monthly_rent}</span>
+                          <span className="text-2xl font-bold text-accent">{formatCurrency(vehicle.monthly_rent, currencyCode, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}</span>
                         </td>
                         <td className="p-4 text-muted-foreground">Perfect for long-term luxury</td>
                       </tr>
@@ -545,7 +547,7 @@ export default function FleetDetail() {
                             )}
                           </div>
                         </div>
-                        <span className="text-sm font-semibold text-accent whitespace-nowrap">+${extra.price}</span>
+                        <span className="text-sm font-semibold text-accent whitespace-nowrap">+{formatCurrency(extra.price, currencyCode, { minimumFractionDigits: 0, maximumFractionDigits: 2 })}</span>
                       </div>
                     ))
                   ) : (
@@ -623,7 +625,7 @@ export default function FleetDetail() {
                         </Badge>
                         <h3 className="font-serif text-xl font-bold mb-2">{similarVehicleName}</h3>
                         <p className="text-2xl font-bold text-accent mb-4">
-                          ${similarVehicle.daily_rent}
+                          {formatCurrency(similarVehicle.daily_rent, currencyCode, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
                           <span className="text-sm text-muted-foreground font-normal ml-1">per day</span>
                         </p>
                         <Button asChild className="w-full">
@@ -647,7 +649,7 @@ export default function FleetDetail() {
                   Ready to Book This Vehicle?
                 </h2>
                 <p className="text-lg text-muted-foreground mb-8">
-                  Experience luxury from ${vehicle.daily_rent} per day
+                  Experience luxury from {formatCurrency(vehicle.daily_rent, currencyCode, { minimumFractionDigits: 0, maximumFractionDigits: 0 })} per day
                 </p>
                 <div className="flex flex-col sm:flex-row gap-4 justify-center">
                   <Button

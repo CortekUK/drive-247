@@ -16,6 +16,7 @@ import { useCancelRental } from "@/hooks/use-cancel-rental";
 import { useAuth } from "@/stores/auth-store";
 import { useTenant } from "@/contexts/TenantContext";
 import { AlertTriangle, Loader2 } from "lucide-react";
+import { formatCurrency, getCurrencySymbol } from "@/lib/format-utils";
 
 interface CancelRentalDialogProps {
   open: boolean;
@@ -50,6 +51,8 @@ export function CancelRentalDialog({
 
   const maxRefundAmount = payment?.amount || rental.monthly_amount || 0;
   const isPreAuth = payment?.capture_status === "requires_capture";
+  const currencyCode = tenant?.currency_code || 'GBP';
+  const currencySymbol = getCurrencySymbol(currencyCode);
 
   const handleCancel = async () => {
     if (!reason.trim()) {
@@ -99,7 +102,7 @@ export function CancelRentalDialog({
               <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
                 <p className="text-sm text-blue-800">
                   This is a pre-authorized payment. The hold of{" "}
-                  <strong>${maxRefundAmount.toLocaleString()}</strong> will be released automatically.
+                  <strong>{formatCurrency(maxRefundAmount, currencyCode)}</strong> will be released automatically.
                   No refund is needed as the payment was never captured.
                 </p>
               </div>
@@ -114,7 +117,7 @@ export function CancelRentalDialog({
                   <Label htmlFor="full" className="cursor-pointer flex-1">
                     <div className="font-medium">Full Refund</div>
                     <div className="text-sm text-muted-foreground">
-                      Refund ${maxRefundAmount.toLocaleString()} to customer
+                      Refund {formatCurrency(maxRefundAmount, currencyCode)} to customer
                     </div>
                   </Label>
                 </div>
@@ -143,7 +146,7 @@ export function CancelRentalDialog({
           {/* Partial Refund Amount */}
           {refundType === "partial" && !isPreAuth && (
             <div className="space-y-2">
-              <Label htmlFor="refundAmount">Refund Amount ($)</Label>
+              <Label htmlFor="refundAmount">Refund Amount ({currencySymbol})</Label>
               <Input
                 id="refundAmount"
                 type="number"
@@ -152,11 +155,11 @@ export function CancelRentalDialog({
                 step="0.01"
                 value={refundAmount}
                 onChange={(e) => setRefundAmount(e.target.value)}
-                placeholder={`Max: $${maxRefundAmount.toLocaleString()}`}
+                placeholder={`Max: ${formatCurrency(maxRefundAmount, currencyCode)}`}
               />
               {parseFloat(refundAmount) > maxRefundAmount && (
                 <p className="text-sm text-red-500">
-                  Amount cannot exceed ${maxRefundAmount.toLocaleString()}
+                  Amount cannot exceed {formatCurrency(maxRefundAmount, currencyCode)}
                 </p>
               )}
             </div>

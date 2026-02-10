@@ -18,6 +18,7 @@ import BookingConfirmation from "@/components/BookingConfirmation";
 import { useTenant } from "@/contexts/TenantContext";
 import InstallmentSelector, { InstallmentOption, InstallmentConfig } from "@/components/InstallmentSelector";
 import { useBookingStore } from "@/stores/booking-store";
+import { formatCurrency as formatCurrencyUtil } from "@/lib/format-utils";
 const checkoutSchema = z.object({
   customerName: z.string().min(2, "Name must be at least 2 characters"),
   customerEmail: z.string().email("Invalid email address"),
@@ -258,12 +259,8 @@ const BookingCheckoutContent = () => {
   })();
 
   // Format currency based on tenant settings
-  const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat('en-GB', {
-      style: 'currency',
-      currency: tenant?.currency_code || 'GBP',
-    }).format(amount);
-  };
+  const currencyCode = tenant?.currency_code || 'GBP';
+  const formatCurrency = (amount: number) => formatCurrencyUtil(amount, currencyCode);
 
   const validateForm = () => {
     try {

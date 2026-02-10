@@ -1,5 +1,6 @@
 // Enhanced search service with comprehensive search, ranking, and fuzzy matching
 import { supabase } from "@/integrations/supabase/client";
+import { formatCurrency } from "@/lib/format-utils";
 
 export interface SearchResult {
   id: string;
@@ -71,7 +72,7 @@ const rankResults = (results: SearchResult[], query: string): SearchResult[] => 
 };
 
 export const searchService = {
-  async searchAll(query: string, entityFilter: string = 'all', tenantId?: string): Promise<SearchResults> {
+  async searchAll(query: string, entityFilter: string = 'all', tenantId?: string, currencyCode: string = 'GBP'): Promise<SearchResults> {
     if (!query.trim()) {
       return {
         customers: [],
@@ -213,7 +214,7 @@ export const searchService = {
         const fineResults = (fines || []).map(fine => ({
           id: fine.id,
           title: fine.reference_no || `${fine.type} Fine`,
-          subtitle: `$${fine.amount} • ${(fine.vehicles as any)?.reg} • ${(fine.customers as any)?.name || 'Unknown'} • ${fine.status}`,
+          subtitle: `${formatCurrency(fine.amount, currencyCode)} • ${(fine.vehicles as any)?.reg} • ${(fine.customers as any)?.name || 'Unknown'} • ${fine.status}`,
           category: "Fines",
           url: `/fines/${fine.id}`,
           icon: "alert-triangle",
@@ -248,7 +249,7 @@ export const searchService = {
           .filter(payment => payment.customers)
           .map(payment => ({
             id: payment.id,
-            title: `$${payment.amount} ${payment.payment_type}`,
+            title: `${formatCurrency(payment.amount, currencyCode)} ${payment.payment_type}`,
             subtitle: `${(payment.customers as any)?.name} • ${payment.method || 'Unknown method'} • ${payment.payment_date}`,
             category: "Payments",
             url: `/payments/${payment.id}`,

@@ -15,6 +15,8 @@ import {
 import { Skeleton } from '@/components/ui/skeleton';
 import { MapPin, Building2, Navigation, Check, Truck } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { formatCurrency, kmToDisplayUnit, getDistanceUnitShort } from '@/lib/format-utils';
+import type { DistanceUnit } from '@/lib/format-utils';
 
 interface LocationPickerProps {
   type: 'pickup' | 'return';
@@ -48,6 +50,7 @@ export default function LocationPicker({
   disabled = false,
 }: LocationPickerProps) {
   const { tenant, loading: tenantLoading } = useTenant();
+  const distanceUnit = (tenant?.distance_unit || 'miles') as DistanceUnit;
   const { pickupLocations, returnLocations, isLoading: locationsLoading } = useDeliveryLocations();
 
   // Get the right locations list based on type
@@ -211,6 +214,7 @@ export default function LocationPicker({
             radiusKm={type === 'pickup' ? tenant?.pickup_area_radius_km ?? 25 : tenant?.return_area_radius_km ?? 25}
             centerLat={tenant?.area_center_lat}
             centerLon={tenant?.area_center_lon}
+            distanceUnit={distanceUnit}
           />
           {tenant?.area_delivery_fee && tenant.area_delivery_fee > 0 && (
             <p className="text-xs text-muted-foreground flex items-center gap-1">
@@ -339,7 +343,7 @@ export default function LocationPicker({
                 {type === 'pickup' ? 'Deliver to my address' : 'Collect from my address'}
               </p>
               <p className="text-xs text-muted-foreground mt-0.5">
-                Within {type === 'pickup' ? tenant?.pickup_area_radius_km ?? 25 : tenant?.return_area_radius_km ?? 25}km service area
+                Within {kmToDisplayUnit(type === 'pickup' ? tenant?.pickup_area_radius_km ?? 25 : tenant?.return_area_radius_km ?? 25, distanceUnit)}{getDistanceUnitShort(distanceUnit)} service area
               </p>
             </div>
             {tenant?.area_delivery_fee && tenant.area_delivery_fee > 0 && (
@@ -364,6 +368,7 @@ export default function LocationPicker({
                 radiusKm={type === 'pickup' ? tenant?.pickup_area_radius_km ?? 25 : tenant?.return_area_radius_km ?? 25}
                 centerLat={tenant?.area_center_lat}
                 centerLon={tenant?.area_center_lon}
+                distanceUnit={distanceUnit}
               />
             </div>
           )}
@@ -511,19 +516,3 @@ function LocationDropdown({
   );
 }
 
-/**
- * Format currency with proper symbol
- */
-function formatCurrency(amount: number, currencyCode?: string | null): string {
-  const currency = currencyCode || 'USD';
-  try {
-    return new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency: currency,
-      minimumFractionDigits: 0,
-      maximumFractionDigits: 2,
-    }).format(amount);
-  } catch {
-    return `${currency} ${amount.toFixed(2)}`;
-  }
-}

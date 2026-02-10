@@ -7,6 +7,8 @@ import { CheckSquare, CreditCard, Ban, X, AlertTriangle } from "lucide-react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
+import { formatCurrency } from "@/lib/format-utils";
+import { useTenant } from "@/contexts/TenantContext";
 
 interface Fine {
   id: string;
@@ -25,6 +27,7 @@ export const BulkActionBar = ({ selectedFines, onClearSelection }: BulkActionBar
   const [showWaiveDialog, setShowWaiveDialog] = useState(false);
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const { tenant } = useTenant();
 
   // Filter eligible fines for each action
   const chargeableFines = selectedFines.filter(fine => fine.status === 'Open');
@@ -118,7 +121,7 @@ export const BulkActionBar = ({ selectedFines, onClearSelection }: BulkActionBar
                 <CheckSquare className="h-5 w-5 text-primary" />
                 <span className="font-medium">{selectedFines.length} fines selected</span>
                 <Badge variant="outline">
-                  Total: ${totalAmount.toLocaleString()}
+                  Total: {formatCurrency(totalAmount, tenant?.currency_code || 'GBP')}
                 </Badge>
               </div>
             </div>
@@ -177,7 +180,7 @@ export const BulkActionBar = ({ selectedFines, onClearSelection }: BulkActionBar
           <AlertDialogHeader>
             <AlertDialogTitle>Charge {chargeableFines.length} Fines to Customer Accounts</AlertDialogTitle>
             <AlertDialogDescription>
-              This will create charges of ${chargeableFines.reduce((sum, fine) => sum + fine.amount, 0).toLocaleString()}
+              This will create charges of {formatCurrency(chargeableFines.reduce((sum, fine) => sum + fine.amount, 0), tenant?.currency_code || 'GBP')}
               to the respective customer accounts. This action cannot be undone.
 
               <div className="mt-4 p-3 bg-muted rounded">
@@ -186,7 +189,7 @@ export const BulkActionBar = ({ selectedFines, onClearSelection }: BulkActionBar
                   {chargeableFines.map(fine => (
                     <div key={fine.id} className="text-xs flex justify-between">
                       <span>{fine.reference_no || fine.id.slice(0, 8)}</span>
-                      <span>${fine.amount.toLocaleString()}</span>
+                      <span>{formatCurrency(fine.amount, tenant?.currency_code || 'GBP')}</span>
                     </div>
                   ))}
                 </div>
@@ -212,7 +215,7 @@ export const BulkActionBar = ({ selectedFines, onClearSelection }: BulkActionBar
           <AlertDialogHeader>
             <AlertDialogTitle>Waive {waivableFines.length} Selected Fines</AlertDialogTitle>
             <AlertDialogDescription>
-              This will waive the selected fines totaling ${waivableFines.reduce((sum, fine) => sum + fine.amount, 0).toLocaleString()}.
+              This will waive the selected fines totaling {formatCurrency(waivableFines.reduce((sum, fine) => sum + fine.amount, 0), tenant?.currency_code || 'GBP')}.
               Waived fines will not be charged to customers. This action cannot be undone.
 
               <div className="mt-4 p-3 bg-muted rounded">
@@ -221,7 +224,7 @@ export const BulkActionBar = ({ selectedFines, onClearSelection }: BulkActionBar
                   {waivableFines.map(fine => (
                     <div key={fine.id} className="text-xs flex justify-between">
                       <span>{fine.reference_no || fine.id.slice(0, 8)}</span>
-                      <span>${fine.amount.toLocaleString()}</span>
+                      <span>{formatCurrency(fine.amount, tenant?.currency_code || 'GBP')}</span>
                     </div>
                   ))}
                 </div>
