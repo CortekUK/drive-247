@@ -5,10 +5,9 @@ import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
-import { Label } from '@/components/ui/label';
-import { Check, Shield, ShieldCheck, Car, Users, AlertCircle, Loader2, Info, X } from 'lucide-react';
+import { Check, Shield, ShieldCheck, Car, Users, AlertCircle, Loader2, X, ChevronDown, ChevronUp, XCircle } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { formatCurrency, getCurrencySymbol } from '@/lib/format-utils';
+import { formatCurrency } from '@/lib/format-utils';
 import { useTenant } from '@/contexts/TenantContext';
 import {
   useBonzahPremium,
@@ -16,11 +15,10 @@ import {
   type CoverageOptions,
 } from '@/hooks/useBonzahPremium';
 import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from '@/components/ui/tooltip';
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from '@/components/ui/collapsible';
 
 interface BonzahInsuranceSelectorProps {
   tripStartDate: string | null;  // YYYY-MM-DD
@@ -39,16 +37,16 @@ const DEFAULT_COVERAGE: CoverageOptions = {
 };
 
 // Coverage card icons
-const CoverageIcon = ({ type, className }: { type: keyof CoverageOptions; className?: string }) => {
+const CoverageIcon = ({ type, className, style }: { type: keyof CoverageOptions; className?: string; style?: React.CSSProperties }) => {
   switch (type) {
     case 'cdw':
-      return <Car className={className} />;
+      return <Car className={className} style={style} />;
     case 'rcli':
-      return <Shield className={className} />;
+      return <Shield className={className} style={style} />;
     case 'sli':
-      return <ShieldCheck className={className} />;
+      return <ShieldCheck className={className} style={style} />;
     case 'pai':
-      return <Users className={className} />;
+      return <Users className={className} style={style} />;
   }
 };
 
@@ -72,6 +70,7 @@ export default function BonzahInsuranceSelector({
   const currencyCode = tenant?.currency_code || 'GBP';
   const [coverage, setCoverage] = useState<CoverageOptions>(initialCoverage);
   const [showInsurance, setShowInsurance] = useState(true);
+  const [expandedCoverage, setExpandedCoverage] = useState<string | null>(null);
 
   // Use the premium calculation hook
   const {
@@ -178,6 +177,8 @@ export default function BonzahInsuranceSelector({
           const isDisabled = type === 'sli' && !coverage.rcli;
           const color = coverageColors[type];
           const price = breakdown[type];
+          const isExpanded = expandedCoverage === type;
+          const keyFeatures = info.features.slice(0, 4);
 
           return (
             <Card
@@ -188,13 +189,20 @@ export default function BonzahInsuranceSelector({
                   ? 'border-primary bg-primary/5'
                   : isDisabled
                     ? 'border-muted bg-muted/30 opacity-60'
-                    : 'border-border hover:border-primary/40 cursor-pointer'
+                    : 'border-border hover:border-primary/40'
               )}
-              onClick={() => !isDisabled && handleCoverageToggle(type)}
             >
+              {/* Left accent bar */}
+              {isSelected && (
+                <div
+                  className="absolute top-0 left-0 w-1 h-full"
+                  style={{ backgroundColor: color }}
+                />
+              )}
+
               <div className="p-4 sm:p-5">
+                {/* Header row: Icon + Name + Badge + Price + Switch */}
                 <div className="flex items-start justify-between gap-3">
-                  {/* Left: Icon and Info */}
                   <div className="flex items-start gap-3 flex-1 min-w-0">
                     <div
                       className="w-10 h-10 sm:w-12 sm:h-12 rounded-lg flex items-center justify-center flex-shrink-0"
@@ -210,60 +218,115 @@ export default function BonzahInsuranceSelector({
                       />
                     </div>
                     <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-2 flex-wrap">
                         <h4 className="font-semibold text-sm sm:text-base">{info.name}</h4>
-                        <TooltipProvider>
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <Info className="w-4 h-4 text-muted-foreground cursor-help" />
-                            </TooltipTrigger>
-                            <TooltipContent className="max-w-xs">
-                              <p className="text-sm">{info.description}</p>
-                            </TooltipContent>
-                          </Tooltip>
-                        </TooltipProvider>
+                        <Badge variant="secondary" className="text-xs">
+                          {info.shortName}
+                        </Badge>
                       </div>
-                      <Badge variant="secondary" className="mt-1 text-xs">
-                        {info.shortName}
-                      </Badge>
-                      {type === 'sli' && !coverage.rcli && (
-                        <p className="text-xs text-amber-600 mt-2 flex items-center gap-1">
-                          <AlertCircle className="w-3 h-3" />
-                          Requires RCLI
+                      {/* Price under name */}
+                      {isSelected && price > 0 ? (
+                        <p className="text-sm font-semibold mt-0.5" style={{ color }}>
+                          {formatCurrency(price, currencyCode)}
+                          <span className="text-xs font-normal text-muted-foreground ml-1">total</span>
                         </p>
-                      )}
+                      ) : !isSelected && !isDisabled ? (
+                        <p className="text-xs text-muted-foreground mt-0.5">Click to add coverage</p>
+                      ) : null}
                     </div>
                   </div>
 
-                  {/* Right: Switch and Price */}
-                  <div className="flex flex-col items-end gap-2">
+                  {/* Switch */}
+                  <div className="flex-shrink-0 pt-1">
                     <Switch
                       checked={isSelected}
                       disabled={isDisabled}
                       onCheckedChange={() => handleCoverageToggle(type)}
-                      onClick={(e) => e.stopPropagation()}
                     />
-                    {isSelected && price > 0 && (
-                      <span className="text-sm font-semibold" style={{ color }}>
-                        {formatCurrency(price, currencyCode)}
-                      </span>
-                    )}
                   </div>
                 </div>
 
-                {/* Description on larger screens */}
-                <p className="hidden sm:block text-xs text-muted-foreground mt-3 leading-relaxed">
+                {/* Description */}
+                <p className="text-xs text-muted-foreground mt-3 leading-relaxed">
                   {info.description}
                 </p>
-              </div>
 
-              {/* Selected indicator */}
-              {isSelected && (
-                <div
-                  className="absolute top-0 left-0 w-1 h-full"
-                  style={{ backgroundColor: color }}
-                />
-              )}
+                {/* Deductible badge */}
+                <div className="mt-2">
+                  {info.deductible === 'None' ? (
+                    <Badge variant="secondary" className="bg-emerald-50 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-400 border-0 text-xs">
+                      No Deductible
+                    </Badge>
+                  ) : (
+                    <Badge variant="secondary" className="text-xs">
+                      {info.deductible} Deductible
+                    </Badge>
+                  )}
+                  <Badge variant="outline" className="ml-1.5 text-xs">
+                    {info.maxCoverage.startsWith('$') ? `Up to ${info.maxCoverage}` : info.maxCoverage}
+                  </Badge>
+                </div>
+
+                {/* SLI requires RCLI warning */}
+                {type === 'sli' && !coverage.rcli && (
+                  <p className="text-xs text-amber-600 mt-2 flex items-center gap-1">
+                    <AlertCircle className="w-3 h-3" />
+                    Requires RCLI to be active
+                  </p>
+                )}
+
+                {/* Key features - always visible */}
+                <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-x-3 gap-y-1">
+                  {keyFeatures.map((feature, i) => (
+                    <div key={i} className="flex items-start gap-1.5">
+                      <Check className="w-3.5 h-3.5 text-emerald-500 flex-shrink-0 mt-0.5" />
+                      <span className="text-xs text-muted-foreground">{feature}</span>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Collapsible full coverage details */}
+                <Collapsible
+                  open={isExpanded}
+                  onOpenChange={(open) => setExpandedCoverage(open ? type : null)}
+                >
+                  <CollapsibleContent className="mt-3 space-y-3">
+                    {/* Exclusions */}
+                    <div>
+                      <p className="text-xs font-medium text-muted-foreground mb-1.5">Not Covered:</p>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-3 gap-y-1">
+                        {info.exclusions.map((exclusion, i) => (
+                          <div key={i} className="flex items-start gap-1.5">
+                            <XCircle className="w-3.5 h-3.5 text-red-400 flex-shrink-0 mt-0.5" />
+                            <span className="text-xs text-muted-foreground">{exclusion}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Max coverage row */}
+                    <div className="pt-2 border-t border-border/50 flex items-center justify-between">
+                      <span className="text-xs text-muted-foreground">Maximum Coverage</span>
+                      <span className="text-xs font-semibold">{info.maxCoverage}</span>
+                    </div>
+                  </CollapsibleContent>
+
+                  <CollapsibleTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="w-full mt-2 text-xs text-muted-foreground hover:text-foreground h-7"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      {isExpanded ? (
+                        <>Show Less <ChevronUp className="w-3 h-3 ml-1" /></>
+                      ) : (
+                        <>View Full Coverage Details <ChevronDown className="w-3 h-3 ml-1" /></>
+                      )}
+                    </Button>
+                  </CollapsibleTrigger>
+                </Collapsible>
+              </div>
             </Card>
           );
         })}
@@ -354,8 +417,23 @@ export default function BonzahInsuranceSelector({
         </Button>
       </div>
 
-      {/* Powered by Bonzah */}
-      <div className="text-center">
+      {/* Bonzah Disclaimer & Links */}
+      <div className="text-center space-y-2">
+        <p className="text-xs text-muted-foreground leading-relaxed max-w-2xl mx-auto">
+          By selecting any of these insurances, the renter agrees to the{' '}
+          <a href="https://bonzah.com/terms" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">
+            Terms &amp; Conditions
+          </a>
+          ,{' '}
+          <a href="https://bonzah.com/privacy" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">
+            Privacy Policy
+          </a>
+          , and{' '}
+          <a href="https://bonzah.com/included-and-restricted-vehicle-types" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">
+            Covered Vehicles
+          </a>
+          . Insurance is only for drivers 21 years and older with a valid driver&apos;s license.
+        </p>
         <p className="text-xs text-muted-foreground">
           Insurance provided by{' '}
           <a
