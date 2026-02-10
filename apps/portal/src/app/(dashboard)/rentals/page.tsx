@@ -34,6 +34,7 @@ import { ExtensionRequestDialog } from "@/components/rentals/ExtensionRequestDia
 import { CalendarView } from "@/components/rentals/calendar/calendar-view";
 import { formatDuration, formatRentalDuration } from "@/lib/rental-utils";
 import { formatCurrency, getCurrencySymbol } from "@/lib/format-utils";
+import { useTenant } from "@/contexts/TenantContext";
 import {
   Pagination,
   PaginationContent,

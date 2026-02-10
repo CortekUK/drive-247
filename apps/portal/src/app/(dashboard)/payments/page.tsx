@@ -41,6 +41,7 @@ import { useOrgSettings } from "@/hooks/use-org-settings";
 import { supabase } from "@/integrations/supabase/client";
 import { useQueryClient } from "@tanstack/react-query";
 import { formatCurrency } from "@/lib/format-utils";
+import { useTenant } from "@/contexts/TenantContext";
 
 // Helper function to display user-friendly payment type names
 const getPaymentTypeDisplay = (paymentType: string): string => {
