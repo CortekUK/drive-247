@@ -66,15 +66,20 @@ export default function Home() {
   useEffect(() => {
     if (typeof window !== 'undefined') {
       const hash = window.location.hash;
-      if (hash) {
-        const element = document.querySelector(hash);
-        if (element) {
-          setTimeout(() => {
-            element.scrollIntoView({
-              behavior: 'smooth',
-              block: 'start'
-            });
-          }, 100);
+      // Skip auth callback hash fragments (e.g. #access_token=...) — they are not scroll targets
+      if (hash && !hash.includes('=')) {
+        try {
+          const element = document.querySelector(hash);
+          if (element) {
+            setTimeout(() => {
+              element.scrollIntoView({
+                behavior: 'smooth',
+                block: 'start'
+              });
+            }, 100);
+          }
+        } catch {
+          // Invalid selector, ignore
         }
       }
     }

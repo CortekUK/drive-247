@@ -279,7 +279,10 @@ const Navigation = () => {
         onOpenChange={setShowAuthDialog}
         prefillEmail=""
         onSkip={() => setShowAuthDialog(false)}
-        onSuccess={() => setShowAuthDialog(false)}
+        onSuccess={() => {
+          setShowAuthDialog(false);
+          router.push('/portal');
+        }}
       />
     </nav>
   );

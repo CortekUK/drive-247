@@ -29,15 +29,15 @@ export default function AuthCallbackPage() {
         }
 
         if (session) {
-          // User is authenticated, redirect to portal
-          console.log('Auth callback: Session found, redirecting to portal');
-          router.replace('/portal');
+          // User is authenticated, redirect to booking homepage
+          console.log('Auth callback: Session found, redirecting to homepage');
+          router.replace('/');
         } else {
           // No session yet, wait a bit and try again (tokens might still be processing)
           setTimeout(async () => {
             const { data: { session: retrySession } } = await supabase.auth.getSession();
             if (retrySession) {
-              router.replace('/portal');
+              router.replace('/');
             } else {
               // Still no session, redirect to home
               console.log('Auth callback: No session after retry, redirecting to home');

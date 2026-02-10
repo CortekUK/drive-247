@@ -3,6 +3,7 @@
 import { useEffect } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import { useCustomerAuthStore } from '@/stores/customer-auth-store';
+import { useTenant } from '@/contexts/TenantContext';
 import { CustomerPortalSidebar } from '@/components/customer-portal/CustomerPortalSidebar';
 import { CustomerPortalHeader } from '@/components/customer-portal/CustomerPortalHeader';
 import { TraxChatWidget } from '@/components/customer-portal/trax-chat';
@@ -44,26 +45,31 @@ export default function CustomerPortalLayout({
   const router = useRouter();
   const pathname = usePathname();
   const { customerUser, session, loading, initialized } = useCustomerAuthStore();
+  const { tenant } = useTenant();
+
+  // Defense-in-depth: ensure customer belongs to the current tenant
+  const tenantMismatch = customerUser && tenant?.id &&
+    customerUser.customer.tenant_id !== tenant.id;
 
   useEffect(() => {
     // Wait for auth to initialize
     if (!initialized) return;
 
-    // Not authenticated - redirect to home with login prompt
-    if (!customerUser || !session) {
+    // Not authenticated or wrong tenant - redirect to home with login prompt
+    if (!customerUser || !session || tenantMismatch) {
       // Store the intended destination
       const returnUrl = encodeURIComponent(pathname || '/portal');
       router.replace(`/?auth=login&from=${returnUrl}`);
     }
-  }, [customerUser, session, loading, initialized, router, pathname]);
+  }, [customerUser, session, loading, initialized, router, pathname, tenantMismatch]);
 
   // Show loading skeleton while checking auth
   if (loading || !initialized) {
     return <LoadingSkeleton />;
   }
 
-  // Not authenticated - show skeleton while redirecting
-  if (!customerUser || !session) {
+  // Not authenticated or tenant mismatch - show skeleton while redirecting
+  if (!customerUser || !session || tenantMismatch) {
     return <LoadingSkeleton />;
   }
 

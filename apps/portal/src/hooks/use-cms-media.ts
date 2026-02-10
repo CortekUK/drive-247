@@ -2,6 +2,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { useTenant } from "@/contexts/TenantContext";
+import { useAuditLog } from "@/hooks/use-audit-log";
 import type { CMSMedia } from "@/types/cms";
 
 const BUCKET_NAME = "cms-media";
@@ -12,6 +13,7 @@ export const useCMSMedia = (folder?: string) => {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const { tenant } = useTenant();
+  const { logAction } = useAuditLog();
 
   // Fetch media files (filtered by tenant)
   const { data: media = [], isLoading, error } = useQuery({
@@ -107,11 +109,17 @@ export const useCMSMedia = (folder?: string) => {
 
       return data as CMSMedia;
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ["cms-media"] });
       toast({
         title: "File Uploaded",
         description: "Image has been added to the media library.",
+      });
+      logAction({
+        action: "cms_media_uploaded",
+        entityType: "cms_media",
+        entityId: data.id,
+        details: { file_name: data.file_name, folder: data.folder },
       });
     },
     onError: (error: any) => {
@@ -164,11 +172,16 @@ export const useCMSMedia = (folder?: string) => {
 
       if (deleteError) throw deleteError;
     },
-    onSuccess: () => {
+    onSuccess: (_data, mediaId) => {
       queryClient.invalidateQueries({ queryKey: ["cms-media"] });
       toast({
         title: "File Deleted",
         description: "Image has been removed from the media library.",
+      });
+      logAction({
+        action: "cms_media_deleted",
+        entityType: "cms_media",
+        entityId: mediaId,
       });
     },
     onError: (error: any) => {
@@ -196,8 +209,14 @@ export const useCMSMedia = (folder?: string) => {
 
       if (error) throw error;
     },
-    onSuccess: () => {
+    onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({ queryKey: ["cms-media"] });
+      logAction({
+        action: "cms_media_updated",
+        entityType: "cms_media",
+        entityId: variables.mediaId,
+        details: { altText: variables.altText },
+      });
     },
     onError: (error: any) => {
       toast({

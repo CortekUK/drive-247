@@ -5,6 +5,8 @@ import { format } from "date-fns";
 import { formatCurrency } from "@/lib/invoice-utils";
 import { useRef } from "react";
 import { useReactToPrint } from "react-to-print";
+import { useTenant } from "@/contexts/TenantContext";
+import { useTenantBranding } from "@/hooks/use-tenant-branding";
 
 interface InvoiceDialogProps {
   open: boolean;
@@ -49,7 +51,7 @@ interface InvoiceDialogProps {
 }
 
 // Separate printable component
-const PrintableInvoice = ({ invoice, customer, vehicle, rental, protectionPlan, selectedExtras }: Omit<InvoiceDialogProps, "open" | "onOpenChange">) => {
+const PrintableInvoice = ({ invoice, customer, vehicle, rental, protectionPlan, selectedExtras, companyName, logoUrl, accentColor }: Omit<InvoiceDialogProps, "open" | "onOpenChange"> & { companyName: string; logoUrl?: string | null; accentColor: string }) => {
   const vehicleName = vehicle.make && vehicle.model ? `${vehicle.make} ${vehicle.model}` : vehicle.reg;
   const hasDiscount = (invoice.discount_amount ?? 0) > 0;
   // If there's a discount, show original price (subtotal + discount), otherwise show subtotal
@@ -60,7 +62,11 @@ const PrintableInvoice = ({ invoice, customer, vehicle, rental, protectionPlan, 
     <div className="p-8 bg-white text-black">
       {/* Company Header */}
       <div className="border-b border-gray-300 pb-6 mb-6">
-        <h1 className="text-3xl font-bold" style={{ color: '#C5A572' }}>DRIVE 917</h1>
+        {logoUrl ? (
+          <img src={logoUrl} alt={companyName} className="h-12 object-contain" />
+        ) : (
+          <h1 className="text-3xl font-bold" style={{ color: accentColor }}>{companyName}</h1>
+        )}
       </div>
 
       {/* Invoice Details */}
@@ -152,14 +158,14 @@ const PrintableInvoice = ({ invoice, customer, vehicle, rental, protectionPlan, 
               <tr className="border-b border-gray-300">
                 <td className="p-3 text-sm">
                   <div className="flex items-start gap-2">
-                    <span style={{ color: '#C5A572' }}>🛡</span>
+                    <span style={{ color: accentColor }}>🛡</span>
                     <div>
                       <p className="font-medium">Protection Plan</p>
                       <p className="text-xs text-gray-600">{protectionPlan.name}</p>
                     </div>
                   </div>
                 </td>
-                <td className="p-3 text-sm text-right font-medium" style={{ color: '#C5A572' }}>
+                <td className="p-3 text-sm text-right font-medium" style={{ color: accentColor }}>
                   {formatCurrency(protectionPlan.cost)}
                 </td>
               </tr>
@@ -215,7 +221,7 @@ const PrintableInvoice = ({ invoice, customer, vehicle, rental, protectionPlan, 
             )}
             <tr className="bg-gray-100">
               <td className="p-3 text-sm font-bold">Total</td>
-              <td className="p-3 text-lg font-bold text-right" style={{ color: '#C5A572' }}>
+              <td className="p-3 text-lg font-bold text-right" style={{ color: accentColor }}>
                 {formatCurrency(invoice.total_amount)}
               </td>
             </tr>
@@ -250,6 +256,11 @@ export const InvoiceDialog = ({
   protectionPlan,
   selectedExtras,
 }: InvoiceDialogProps) => {
+  const { tenant } = useTenant();
+  const { branding } = useTenantBranding();
+  const companyName = branding?.app_name || tenant?.company_name || 'Invoice';
+  const logoUrl = branding?.logo_url;
+  const accentColor = branding?.accent_color || '#C5A572';
   const printRef = useRef<HTMLDivElement>(null);
   const vehicleName = vehicle.make && vehicle.model ? `${vehicle.make} ${vehicle.model}` : vehicle.reg;
   const hasDiscount = (invoice.discount_amount ?? 0) > 0;
@@ -285,6 +296,9 @@ export const InvoiceDialog = ({
             rental={rental}
             protectionPlan={protectionPlan}
             selectedExtras={selectedExtras}
+            companyName={companyName}
+            logoUrl={logoUrl}
+            accentColor={accentColor}
           />
         </div>
       </div>
@@ -303,7 +317,11 @@ export const InvoiceDialog = ({
           <div className="space-y-6">
             {/* Company Header */}
             <div className="border-b pb-6">
-              <h1 className="text-3xl font-bold text-primary">DRIVE 917</h1>
+              {logoUrl ? (
+                <img src={logoUrl} alt={companyName} className="h-12 object-contain" />
+              ) : (
+                <h1 className="text-3xl font-bold text-primary">{companyName}</h1>
+              )}
             </div>
 
             {/* Invoice Details */}
@@ -395,14 +413,14 @@ export const InvoiceDialog = ({
                     <tr className="border-b">
                       <td className="p-3 text-sm">
                         <div className="flex items-start gap-2">
-                          <Shield className="w-4 h-4 text-[#C5A572] mt-0.5" />
+                          <Shield className="w-4 h-4 mt-0.5" style={{ color: accentColor }} />
                           <div>
                             <p className="font-medium">Protection Plan</p>
                             <p className="text-xs text-muted-foreground">{protectionPlan.name}</p>
                           </div>
                         </div>
                       </td>
-                      <td className="p-3 text-sm text-right font-medium text-[#C5A572]">
+                      <td className="p-3 text-sm text-right font-medium" style={{ color: accentColor }}>
                         {formatCurrency(protectionPlan.cost)}
                       </td>
                     </tr>

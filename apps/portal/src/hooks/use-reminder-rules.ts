@@ -2,6 +2,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "./use-toast";
 import { useTenant } from "@/contexts/TenantContext";
+import { useAuditLog } from "@/hooks/use-audit-log";
 
 export interface ReminderRule {
   id: string;
@@ -81,6 +82,7 @@ export function useReminderRuleActions() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const { tenant } = useTenant();
+  const { logAction } = useAuditLog();
 
   const updateRule = useMutation({
     mutationFn: async (updates: ReminderRuleUpdate) => {
@@ -104,11 +106,17 @@ export function useReminderRuleActions() {
 
       return data[0];
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['reminder-rules'] });
       toast({
         title: "Success",
         description: "Reminder rule updated successfully",
+      });
+      logAction({
+        action: "reminder_rule_updated",
+        entityType: "reminder_rule",
+        entityId: data.id,
+        details: { rule_type: data.rule_type, is_enabled: data.is_enabled, severity: data.severity },
       });
     },
     onError: (error) => {
@@ -147,11 +155,17 @@ export function useReminderRuleActions() {
 
       return results;
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['reminder-rules'] });
       toast({
         title: "Success",
         description: "Reminder rules updated successfully",
+      });
+      logAction({
+        action: "reminder_rules_bulk_updated",
+        entityType: "reminder_rule",
+        entityId: data[0]?.id || "bulk",
+        details: { count: data.length },
       });
     },
     onError: (error) => {
@@ -238,11 +252,17 @@ export function useReminderRuleActions() {
 
       return results;
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['reminder-rules'] });
       toast({
         title: "Success",
         description: "All reminder rules reset to defaults",
+      });
+      logAction({
+        action: "reminder_rules_reset",
+        entityType: "reminder_rule",
+        entityId: tenant?.id || "all",
+        details: { count: data.length },
       });
     },
     onError: (error) => {

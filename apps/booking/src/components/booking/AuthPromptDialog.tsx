@@ -149,7 +149,7 @@ export function AuthPromptDialog({
   const handleLogin = async (data: LoginFormData) => {
     setIsLoading(true);
     try {
-      const { error } = await signIn(data.email, data.password);
+      const { error } = await signIn(data.email, data.password, tenant?.id);
 
       if (error) {
         if (error.message?.includes('Invalid login')) {

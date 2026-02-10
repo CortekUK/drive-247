@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
-import { generateMasterPassword, hashMasterPassword } from '@/lib/masterPassword';
 import { toast } from '@/components/ui/sonner';
 import { TableSkeleton } from '@/components/skeletons/TableSkeleton';
 
@@ -14,7 +13,6 @@ interface Tenant {
   status: string;
   contact_email: string;
   created_at: string;
-  master_password_hash: string | null;
   tenant_type: 'production' | 'test' | null;
 }
 
@@ -23,7 +21,6 @@ interface TenantCredentials {
   companyName: string;
   slug: string;
   contactEmail: string;
-  masterPassword: string;
   adminEmail: string;
   adminPassword: string;
   portalUrl: string;
@@ -130,18 +127,7 @@ export default function RentalCompaniesPage() {
 
       if (tenantError) throw tenantError;
 
-      // Step 2: Generate master password
-      const masterPassword = generateMasterPassword();
-      const masterPasswordHash = await hashMasterPassword(masterPassword);
-
-      const { error: updateError } = await supabase
-        .from('tenants')
-        .update({ master_password_hash: masterPasswordHash })
-        .eq('id', tenant.id);
-
-      if (updateError) throw updateError;
-
-      // Step 3: Generate admin credentials
+      // Step 2: Generate admin credentials
       const adminEmail = formData.contactEmail;
       const adminPassword = generateRandomPassword();
 
@@ -181,7 +167,6 @@ export default function RentalCompaniesPage() {
         companyName: formData.companyName,
         slug: slug,
         contactEmail: formData.contactEmail,
-        masterPassword: masterPassword,
         adminEmail: adminEmail,
         adminPassword: adminPassword,
         portalUrl: `https://${slug}.portal.drive-247.com`,
@@ -226,9 +211,6 @@ Company Information:
 - Company Name: ${selectedTenantCreds.companyName}
 - Slug: ${selectedTenantCreds.slug}
 - Contact Email: ${selectedTenantCreds.contactEmail}
-
-Master Password (Super Admin Access):
-- Password: ${selectedTenantCreds.masterPassword}
 
 Admin User Credentials:
 - Email: ${selectedTenantCreds.adminEmail}
@@ -568,23 +550,6 @@ Access URLs:
                   <span className="text-sm text-gray-400">Contact Email:</span>
                   <span className="text-sm font-medium text-white">{selectedTenantCreds.contactEmail}</span>
                 </div>
-              </div>
-            </div>
-
-            {/* Master Password */}
-            <div className="bg-indigo-900/20 rounded-lg p-4 mb-4 border border-indigo-800/50">
-              <h3 className="text-lg font-semibold text-white mb-3">Master Password (Super Admin)</h3>
-              <p className="text-xs text-gray-400 mb-2">Use this to access the tenant portal as super admin</p>
-              <div className="flex items-center space-x-2">
-                <code className="flex-1 bg-indigo-900/30 px-4 py-3 rounded-lg border border-indigo-700 text-sm font-mono break-all text-indigo-300 font-semibold">
-                  {selectedTenantCreds.masterPassword}
-                </code>
-                <button
-                  onClick={() => copyToClipboard(selectedTenantCreds.masterPassword, 'Master password')}
-                  className="px-4 py-3 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 text-sm whitespace-nowrap font-medium shadow-sm"
-                >
-                  Copy
-                </button>
               </div>
             </div>
 

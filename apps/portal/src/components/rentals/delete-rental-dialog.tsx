@@ -11,6 +11,7 @@ import {
 } from "@/components/ui/dialog";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { useToast } from "@/hooks/use-toast";
+import { useAuditLog } from "@/hooks/use-audit-log";
 
 interface Rental {
   id: string;
@@ -43,6 +44,7 @@ export const DeleteRentalDialog = ({
 }: DeleteRentalDialogProps) => {
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const { logAction } = useAuditLog();
 
   const deleteRentalMutation = useMutation({
     mutationFn: async () => {
@@ -73,6 +75,15 @@ export const DeleteRentalDialog = ({
       queryClient.invalidateQueries({ queryKey: ["invoices"] });
       queryClient.invalidateQueries({ queryKey: ["rental-ledger"] });
       queryClient.invalidateQueries({ queryKey: ["ledger-entries"] });
+
+      if (rental) {
+        logAction({
+          action: "rental_deleted",
+          entityType: "rental",
+          entityId: rental.id,
+          details: { rental_number: rental.rental_number, customer: rental.customer.name, vehicle_reg: rental.vehicle.reg },
+        });
+      }
 
       onOpenChange(false);
     },

@@ -18,6 +18,7 @@ import { Loader2, CalendarPlus, Calendar, AlertCircle, AlertTriangle, CreditCard
 import { supabase } from '@/integrations/supabase/client';
 import { useTenant } from '@/contexts/TenantContext';
 import { useToast } from '@/hooks/use-toast';
+import { useAuditLog } from '@/hooks/use-audit-log';
 import { format, differenceInDays } from 'date-fns';
 
 interface AdminExtendRentalDialogProps {
@@ -43,6 +44,7 @@ export function AdminExtendRentalDialog({
   const { tenant } = useTenant();
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const { logAction } = useAuditLog();
 
   const [newEndDate, setNewEndDate] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -247,6 +249,13 @@ export function AdminExtendRentalDialog({
       queryClient.invalidateQueries({ queryKey: ['rentals-list'] });
       queryClient.invalidateQueries({ queryKey: ['enhanced-rentals'] });
       queryClient.invalidateQueries({ queryKey: ['ledger-entries'] });
+
+      logAction({
+        action: "rental_extended",
+        entityType: "rental",
+        entityId: rental.id,
+        details: { newEndDate, previousEndDate: rental.end_date, extensionDays, extensionCost },
+      });
 
       setNewEndDate('');
       setStep(1);

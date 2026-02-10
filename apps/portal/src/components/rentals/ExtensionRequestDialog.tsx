@@ -17,6 +17,7 @@ import { Loader2, CalendarPlus, Check, X, AlertCircle, AlertTriangle, Calendar, 
 import { supabase } from '@/integrations/supabase/client';
 import { useTenant } from '@/contexts/TenantContext';
 import { useToast } from '@/hooks/use-toast';
+import { useAuditLog } from '@/hooks/use-audit-log';
 import { format, differenceInDays } from 'date-fns';
 
 interface ExtensionRequestDialogProps {
@@ -43,6 +44,7 @@ export function ExtensionRequestDialog({
   const { tenant } = useTenant();
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const { logAction } = useAuditLog();
 
   const [isApproving, setIsApproving] = useState(false);
   const [isRejecting, setIsRejecting] = useState(false);
@@ -228,6 +230,13 @@ export function ExtensionRequestDialog({
       queryClient.invalidateQueries({ queryKey: ['enhanced-rentals'] });
       queryClient.invalidateQueries({ queryKey: ['ledger-entries'] });
 
+      logAction({
+        action: "rental_extension_approved",
+        entityType: "rental",
+        entityId: rental.id,
+        details: { newEndDate: rental.previous_end_date, previousEndDate: rental.end_date, extensionDays, extensionCost },
+      });
+
       onOpenChange(false);
     } catch (error: any) {
       console.error('Extension approval error:', error);
@@ -288,6 +297,13 @@ export function ExtensionRequestDialog({
       queryClient.invalidateQueries({ queryKey: ['rental', rental.id, tenant.id] });
       queryClient.invalidateQueries({ queryKey: ['rentals-list'] });
       queryClient.invalidateQueries({ queryKey: ['enhanced-rentals'] });
+
+      logAction({
+        action: "rental_extension_rejected",
+        entityType: "rental",
+        entityId: rental.id,
+        details: { requestedEndDate: rental.previous_end_date },
+      });
 
       onOpenChange(false);
     } catch (error: any) {

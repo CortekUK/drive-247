@@ -7,6 +7,7 @@ import { CalendarIcon, Upload, X } from "lucide-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useTenant } from "@/contexts/TenantContext";
+import { useAuditLog } from "@/hooks/use-audit-log";
 import { toast } from "sonner";
 
 import {
@@ -72,6 +73,7 @@ export const AddFineDialog = ({ open, onOpenChange, vehicle_id, customer_id }: A
   const [uploadedFiles, setUploadedFiles] = useState<File[]>([]);
   const { tenant } = useTenant();
   const queryClient = useQueryClient();
+  const { logAction } = useAuditLog();
 
   const form = useForm<FineFormValues>({
     resolver: zodResolver(fineFormSchema),
@@ -343,7 +345,7 @@ export const AddFineDialog = ({ open, onOpenChange, vehicle_id, customer_id }: A
 
       return fine;
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
       toast.success("Fine created successfully");
       queryClient.invalidateQueries({ queryKey: ["fines"] });
       queryClient.invalidateQueries({ queryKey: ["vehicle-fines"] });
@@ -351,6 +353,12 @@ export const AddFineDialog = ({ open, onOpenChange, vehicle_id, customer_id }: A
       queryClient.invalidateQueries({ queryKey: ["customer-fine-stats"] });
       queryClient.invalidateQueries({ queryKey: ["fines-enhanced"] });
       queryClient.invalidateQueries({ queryKey: ["fines-kpis"] });
+      logAction({
+        action: "fine_created",
+        entityType: "fine",
+        entityId: data.id,
+        details: { type: data.type, amount: data.amount, reference_no: data.reference_no },
+      });
       onOpenChange(false);
       form.reset();
       setUploadedFiles([]);

@@ -51,7 +51,7 @@ export async function getTenantBranding(tenantId: string, supabaseClient: any): 
   try {
     const { data, error } = await supabaseClient
       .from('tenants')
-      .select('slug, company_name, logo_url, primary_color, accent_color, contact_email, contact_phone')
+      .select('slug, company_name, app_name, logo_url, primary_color, accent_color, contact_email, contact_phone')
       .eq('id', tenantId)
       .single();
 
@@ -61,7 +61,7 @@ export async function getTenantBranding(tenantId: string, supabaseClient: any): 
     }
 
     return {
-      companyName: data.company_name || DEFAULT_BRANDING.companyName,
+      companyName: data.app_name || data.company_name || DEFAULT_BRANDING.companyName,
       logoUrl: data.logo_url || null,
       primaryColor: data.primary_color || DEFAULT_BRANDING.primaryColor,
       accentColor: data.accent_color || DEFAULT_BRANDING.accentColor,

@@ -2,12 +2,14 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { useTenant } from "@/contexts/TenantContext";
+import { useAuditLog } from "@/hooks/use-audit-log";
 import type { CMSPage, CMSPageWithSections } from "@/types/cms";
 
 export const useCMSPages = () => {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const { tenant } = useTenant();
+  const { logAction } = useAuditLog();
 
   // Fetch all CMS pages for the current tenant
   const { data: pages = [], isLoading, error } = useQuery({
@@ -125,11 +127,16 @@ export const useCMSPages = () => {
 
       if (error) throw error;
     },
-    onSuccess: () => {
+    onSuccess: (_data, pageId) => {
       queryClient.invalidateQueries({ queryKey: ["cms-pages"] });
       toast({
         title: "Page Published",
         description: "Your changes are now live on the website.",
+      });
+      logAction({
+        action: "cms_page_published",
+        entityType: "cms_page",
+        entityId: pageId,
       });
     },
     onError: (error: any) => {
@@ -161,11 +168,16 @@ export const useCMSPages = () => {
 
       if (error) throw error;
     },
-    onSuccess: () => {
+    onSuccess: (_data, pageId) => {
       queryClient.invalidateQueries({ queryKey: ["cms-pages"] });
       toast({
         title: "Page Unpublished",
         description: "Page is now in draft mode.",
+      });
+      logAction({
+        action: "cms_page_unpublished",
+        entityType: "cms_page",
+        entityId: pageId,
       });
     },
     onError: (error: any) => {
@@ -205,11 +217,17 @@ export const useCMSPages = () => {
       if (error) throw error;
       return data as CMSPage;
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ["cms-pages"] });
       toast({
         title: "Page Created",
         description: "New CMS page has been created.",
+      });
+      logAction({
+        action: "cms_page_created",
+        entityType: "cms_page",
+        entityId: data.id,
+        details: { slug: data.slug, name: data.name },
       });
     },
     onError: (error: any) => {

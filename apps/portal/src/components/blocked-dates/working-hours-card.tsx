@@ -12,6 +12,7 @@ import { Clock, Save, Loader2, Copy } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
 import { useTenant } from '@/contexts/TenantContext';
 import { supabase } from '@/integrations/supabase/client';
+import { useAuditLog } from '@/hooks/use-audit-log';
 import { getTimezonesByRegion, findTimezone } from '@/lib/timezones';
 
 const DAYS_OF_WEEK = [
@@ -51,6 +52,7 @@ const DEFAULT_SCHEDULE: Record<DayKey, DaySchedule> = {
 export function WorkingHoursCard() {
   const queryClient = useQueryClient();
   const { tenant } = useTenant();
+  const { logAction } = useAuditLog();
   const [isSaving, setIsSaving] = useState(false);
 
   // Fetch working hours data directly
@@ -210,6 +212,12 @@ export function WorkingHoursCard() {
       toast({
         title: "Success",
         description: "Working hours updated successfully",
+      });
+      logAction({
+        action: "working_hours_updated",
+        entityType: "working_hours",
+        entityId: tenant.id,
+        details: { always_open: form.working_hours_always_open, timezone: form.timezone },
       });
     } catch (error) {
       console.error('Failed to update working hours:', error);
