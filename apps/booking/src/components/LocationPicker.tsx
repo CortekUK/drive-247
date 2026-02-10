@@ -135,6 +135,7 @@ export default function LocationPicker({
 
   // Handle method change
   const handleMethodChange = (method: DeliveryMethod) => {
+    if (method === selectedMethod) return; // Don't reset if already selected
     setSelectedMethod(method);
 
     // Clear current value when switching methods
@@ -309,7 +310,7 @@ export default function LocationPicker({
 
           {/* Expanded location selector */}
           {selectedMethod === 'location' && (
-            <div className="mt-3 pt-3 border-t border-border/50">
+            <div className="mt-3 pt-3 border-t border-border/50" onClick={(e) => e.stopPropagation()}>
               <LocationDropdown
                 type={type}
                 locations={locations}
@@ -355,7 +356,7 @@ export default function LocationPicker({
 
           {/* Expanded address input */}
           {selectedMethod === 'area' && (
-            <div className="mt-3 pt-3 border-t border-border/50">
+            <div className="mt-3 pt-3 border-t border-border/50" onClick={(e) => e.stopPropagation()}>
               <LocationAutocompleteWithRadius
                 id={`${type}Location`}
                 value={value}
