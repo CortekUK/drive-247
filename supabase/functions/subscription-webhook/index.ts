@@ -1,23 +1,13 @@
 import { jsonResponse, errorResponse } from "../_shared/cors.ts";
 import Stripe from "https://esm.sh/stripe@14.21.0?target=deno";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
-
-function getSubscriptionStripe() {
-  const key = Deno.env.get("STRIPE_SUBSCRIPTION_SECRET_KEY");
-  if (!key) throw new Error("Missing STRIPE_SUBSCRIPTION_SECRET_KEY");
-  return new Stripe(key, { apiVersion: "2023-10-16", httpClient: Stripe.createFetchHttpClient() });
-}
+import {
+  getSubscriptionStripeClient,
+  getSubscriptionWebhookSecret,
+} from "../_shared/subscription-stripe.ts";
 
 Deno.serve(async (req) => {
   if (req.method !== "POST") return errorResponse("Method not allowed", 405);
-
-  const webhookSecret = Deno.env.get("STRIPE_SUBSCRIPTION_WEBHOOK_SECRET");
-  if (!webhookSecret) {
-    console.error("Missing STRIPE_SUBSCRIPTION_WEBHOOK_SECRET");
-    return errorResponse("Webhook not configured", 500);
-  }
-
-  const stripe = getSubscriptionStripe();
 
   const supabase = createClient(
     Deno.env.get("SUPABASE_URL")!,
@@ -28,6 +18,23 @@ Deno.serve(async (req) => {
   const signature = req.headers.get("stripe-signature");
   if (!signature) return errorResponse("Missing stripe-signature header", 400);
 
+  // Determine mode from Stripe's livemode flag, then verify signature with correct secret
+  let payload: any;
+  try {
+    payload = JSON.parse(body);
+  } catch {
+    return errorResponse("Invalid JSON body", 400);
+  }
+  const mode: "test" | "live" = payload.livemode ? "live" : "test";
+
+  const webhookSecret = getSubscriptionWebhookSecret(mode);
+  if (!webhookSecret) {
+    console.error(`Missing webhook secret for mode: ${mode}`);
+    return errorResponse("Webhook not configured", 500);
+  }
+
+  const stripe = getSubscriptionStripeClient(mode);
+
   let event: Stripe.Event;
   try {
     event = await stripe.webhooks.constructEventAsync(body, signature, webhookSecret);
@@ -36,7 +43,7 @@ Deno.serve(async (req) => {
     return errorResponse("Invalid signature", 400);
   }
 
-  console.log(`Subscription webhook event: ${event.type} (${event.id})`);
+  console.log(`Subscription webhook event: ${event.type} (${event.id}) [mode: ${mode}]`);
 
   try {
     switch (event.type) {
@@ -75,11 +82,9 @@ async function handleCheckoutCompleted(stripe: Stripe, supabase: any, session: a
   const subscriptionId = session.subscription;
   if (!subscriptionId) { console.error("No subscription ID in checkout session"); return; }
 
-  // Read plan info from session metadata
   const planId = session.metadata?.plan_id || null;
   const planName = session.metadata?.plan_name || null;
 
-  // If we have a plan_id, look up the plan for authoritative name
   let resolvedPlanName = planName || "pro";
   if (planId) {
     const { data: plan } = await supabase
@@ -163,14 +168,12 @@ async function handleSubscriptionUpdated(stripe: Stripe, supabase: any, subscrip
 
   if (error) { console.error("Error updating subscription:", error); throw error; }
 
-  // Resolve plan name from subscription metadata or existing record
   let activePlan = "basic";
   if (["active", "trialing"].includes(subscription.status)) {
     const subPlanName = subscription.metadata?.plan_name;
     if (subPlanName) {
       activePlan = subPlanName;
     } else {
-      // Fall back to what's stored in our DB
       const { data: existingSub } = await supabase
         .from("tenant_subscriptions")
         .select("plan_name")

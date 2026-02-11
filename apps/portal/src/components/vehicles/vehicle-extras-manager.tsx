@@ -14,6 +14,7 @@ import { useVehicleExtras } from '@/hooks/use-vehicle-extras';
 import { useRentalExtras } from '@/hooks/use-rental-extras';
 import { useTenant } from '@/contexts/TenantContext';
 import { formatCurrency } from '@/lib/format-utils';
+import { useQueryClient } from '@tanstack/react-query';
 
 interface VehicleExtrasManagerProps {
   vehicleId: string;
@@ -21,12 +22,16 @@ interface VehicleExtrasManagerProps {
 
 export function VehicleExtrasManager({ vehicleId }: VehicleExtrasManagerProps) {
   const { tenant } = useTenant();
+  const queryClient = useQueryClient();
   const { vehicleExtras, isLoading, upsertVehicleExtraPrice, isUpserting, removeVehicleExtraPrice, isRemoving } = useVehicleExtras(vehicleId);
-  const { extras: allExtras } = useRentalExtras();
+  const { extras: allExtras, createExtra, isCreating } = useRentalExtras();
 
   const [showAssignDialog, setShowAssignDialog] = useState(false);
+  const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [selectedExtraId, setSelectedExtraId] = useState('');
   const [assignPrice, setAssignPrice] = useState('');
+  const [newExtraName, setNewExtraName] = useState('');
+  const [newExtraPrice, setNewExtraPrice] = useState('');
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editPrice, setEditPrice] = useState('');
   const [removeTarget, setRemoveTarget] = useState<string | null>(null);
@@ -69,6 +74,25 @@ export function VehicleExtrasManager({ vehicleId }: VehicleExtrasManagerProps) {
     }
   };
 
+  const handleCreate = async () => {
+    const price = parseFloat(newExtraPrice);
+    if (!newExtraName.trim() || isNaN(price) || price < 0) return;
+    try {
+      await createExtra({
+        name: newExtraName.trim(),
+        price: 0,
+        pricing_type: 'per_vehicle',
+        vehicle_pricing: [{ vehicle_id: vehicleId, price }],
+      });
+      queryClient.invalidateQueries({ queryKey: ['vehicle-extras', tenant?.id, vehicleId] });
+      setShowCreateDialog(false);
+      setNewExtraName('');
+      setNewExtraPrice('');
+    } catch {
+      // Error handled by mutation
+    }
+  };
+
   if (isLoading) {
     return (
       <div className="py-8 flex items-center justify-center">
@@ -84,12 +108,18 @@ export function VehicleExtrasManager({ vehicleId }: VehicleExtrasManagerProps) {
         <p className="text-sm text-muted-foreground">
           Per-vehicle extras assigned to this vehicle
         </p>
-        {availableExtras.length > 0 && (
-          <Button size="sm" variant="outline" onClick={() => setShowAssignDialog(true)}>
+        <div className="flex items-center gap-2">
+          {availableExtras.length > 0 && (
+            <Button size="sm" variant="outline" onClick={() => setShowAssignDialog(true)}>
+              <Plus className="h-3.5 w-3.5 mr-1.5" />
+              Assign Extra
+            </Button>
+          )}
+          <Button size="sm" variant="outline" onClick={() => setShowCreateDialog(true)}>
             <Plus className="h-3.5 w-3.5 mr-1.5" />
-            Assign Extra
+            Create Extra
           </Button>
-        )}
+        </div>
       </div>
 
       {vehicleExtras.length > 0 ? (
@@ -176,7 +206,8 @@ export function VehicleExtrasManager({ vehicleId }: VehicleExtrasManagerProps) {
         </Table>
       ) : (
         <p className="text-sm text-muted-foreground text-center py-4">
-          No per-vehicle extras assigned. {availableExtras.length > 0 ? 'Click "Assign Extra" to add one.' : 'Create per-vehicle extras in Settings first.'}
+          No per-vehicle extras assigned.{' '}
+          {availableExtras.length > 0 ? 'Click "Assign Extra" to add one, or create a new extra.' : 'Click "Create Extra" to add one.'}
         </p>
       )}
 
@@ -237,6 +268,48 @@ export function VehicleExtrasManager({ vehicleId }: VehicleExtrasManagerProps) {
             <Button onClick={handleAssign} disabled={isUpserting || !selectedExtraId || !assignPrice}>
               {isUpserting && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
               Assign
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Create Extra Dialog */}
+      <Dialog open={showCreateDialog} onOpenChange={setShowCreateDialog}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Create Extra</DialogTitle>
+            <DialogDescription>Create a new per-vehicle extra and assign it to this vehicle.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3 py-2">
+            <div className="space-y-2">
+              <Label>Name</Label>
+              <Input
+                value={newExtraName}
+                onChange={(e) => setNewExtraName(e.target.value)}
+                placeholder="e.g. GPS Navigation"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Price for this vehicle</Label>
+              <div className="relative">
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">$</span>
+                <Input
+                  type="number"
+                  value={newExtraPrice}
+                  onChange={(e) => setNewExtraPrice(e.target.value)}
+                  className="pl-7"
+                  min={0}
+                  step={0.01}
+                  placeholder="0.00"
+                />
+              </div>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowCreateDialog(false)}>Cancel</Button>
+            <Button onClick={handleCreate} disabled={isCreating || !newExtraName.trim() || !newExtraPrice}>
+              {isCreating && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
+              Create & Assign
             </Button>
           </DialogFooter>
         </DialogContent>
