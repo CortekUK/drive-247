@@ -1,12 +1,9 @@
 import { handleCors, jsonResponse, errorResponse } from "../_shared/cors.ts";
-import Stripe from "https://esm.sh/stripe@14.21.0?target=deno";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
-
-function getSubscriptionStripe() {
-  const key = Deno.env.get("STRIPE_SUBSCRIPTION_SECRET_KEY");
-  if (!key) throw new Error("Missing STRIPE_SUBSCRIPTION_SECRET_KEY");
-  return new Stripe(key, { apiVersion: "2023-10-16", httpClient: Stripe.createFetchHttpClient() });
-}
+import {
+  getSubscriptionStripeMode,
+  getSubscriptionStripeClient,
+} from "../_shared/subscription-stripe.ts";
 
 Deno.serve(async (req) => {
   const corsResponse = handleCors(req);
@@ -62,7 +59,8 @@ Deno.serve(async (req) => {
     if (!plan.is_active) return errorResponse("Plan is no longer active", 400);
     if (!plan.stripe_price_id) return errorResponse("Plan has no Stripe price configured", 500);
 
-    const stripe = getSubscriptionStripe();
+    const mode = await getSubscriptionStripeMode(supabase, tenantId);
+    const stripe = getSubscriptionStripeClient(mode);
     const priceId = plan.stripe_price_id;
 
     let stripeCustomerId = tenant.stripe_subscription_customer_id;
@@ -80,8 +78,13 @@ Deno.serve(async (req) => {
         .update({ stripe_subscription_customer_id: customer.id })
         .eq("id", tenantId);
 
-      console.log(`Created Stripe customer ${customer.id} for tenant ${tenantId}`);
+      console.log(`Created Stripe customer ${customer.id} for tenant ${tenantId} (mode: ${mode})`);
     }
+
+    // Always enforce a minimum 2-day (48h) trial so the card is captured
+    // but no charge happens until 48 hours after setup, as promised in the UI.
+    // If the plan has a longer trial configured, use that instead.
+    const trialDays = Math.max(2, plan.trial_days || 0);
 
     const session = await stripe.checkout.sessions.create({
       mode: "subscription",
@@ -92,11 +95,11 @@ Deno.serve(async (req) => {
       metadata: { tenant_id: tenantId, plan_id: planId, plan_name: plan.name, source: "platform_subscription" },
       subscription_data: {
         metadata: { tenant_id: tenantId, plan_id: planId, plan_name: plan.name },
-        ...(plan.trial_days > 0 ? { trial_period_days: plan.trial_days } : {}),
+        trial_period_days: trialDays,
       },
     });
 
-    console.log(`Created subscription checkout session ${session.id} for tenant ${tenantId}`);
+    console.log(`Created subscription checkout session ${session.id} for tenant ${tenantId} (mode: ${mode})`);
 
     return jsonResponse({ sessionId: session.id, url: session.url });
   } catch (error) {

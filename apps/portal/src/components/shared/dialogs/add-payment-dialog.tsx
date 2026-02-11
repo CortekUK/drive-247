@@ -45,6 +45,7 @@ interface AddPaymentDialogProps {
   vehicle_id?: string;
   rental_id?: string;
   defaultAmount?: number;
+  insuranceChargeMode?: boolean;
 }
 
 export const AddPaymentDialog = ({
@@ -53,7 +54,8 @@ export const AddPaymentDialog = ({
   customer_id,
   vehicle_id,
   rental_id: propRentalId,
-  defaultAmount
+  defaultAmount,
+  insuranceChargeMode
 }: AddPaymentDialogProps) => {
   const [loading, setLoading] = useState(false);
   const [stripeLoading, setStripeLoading] = useState(false);
@@ -435,21 +437,29 @@ export const AddPaymentDialog = ({
 
       window.open(data.url, '_blank');
 
-      // Record payment as fulfilled
-      await createAndApplyPayment(amount, 'Card', finalCustomerId, selectedVehicleId || vehicle_id);
-      await invalidateAllPaymentQueries(finalCustomerId);
+      if (insuranceChargeMode) {
+        // In insurance mode, do NOT record payment — charge stays outstanding until customer pays
+        toast({
+          title: "Stripe Checkout Opened",
+          description: "Payment link opened in a new tab. The insurance charge will remain outstanding until the customer pays.",
+        });
+      } else {
+        // Record payment as fulfilled
+        await createAndApplyPayment(amount, 'Card', finalCustomerId, selectedVehicleId || vehicle_id);
+        await invalidateAllPaymentQueries(finalCustomerId);
 
-      toast({
-        title: "Stripe Checkout Opened",
-        description: "Stripe checkout opened in a new tab. Payment has been marked as fulfilled.",
-      });
+        toast({
+          title: "Stripe Checkout Opened",
+          description: "Stripe checkout opened in a new tab. Payment has been marked as fulfilled.",
+        });
 
-      logAction({
-        action: "payment_created",
-        entityType: "payment",
-        entityId: finalCustomerId,
-        details: { amount, method: "Card (Stripe)", customer_id: finalCustomerId },
-      });
+        logAction({
+          action: "payment_created",
+          entityType: "payment",
+          entityId: finalCustomerId,
+          details: { amount, method: "Card (Stripe)", customer_id: finalCustomerId },
+        });
+      }
 
       onOpenChange(false);
     } catch (error: any) {
@@ -529,24 +539,33 @@ export const AddPaymentDialog = ({
       if (error) throw new Error(error.message || 'Failed to send invoice email');
       if (data && !data.success) throw new Error(data.error || 'Failed to send invoice email');
 
-      // Record payment as fulfilled
       const amount = invoiceToSend.total_amount || outstandingBalance || 0;
-      if (amount > 0) {
-        await createAndApplyPayment(amount, 'Other', finalCustomerId, selectedVehicleId || vehicle_id);
-        await invalidateAllPaymentQueries(finalCustomerId);
+
+      if (insuranceChargeMode) {
+        // In insurance mode, do NOT record payment — charge stays outstanding until customer pays
+        toast({
+          title: "Invoice Sent",
+          description: `Invoice emailed to ${customerEmail}. The insurance charge will remain outstanding until the customer pays.`,
+        });
+      } else {
+        // Record payment as fulfilled
+        if (amount > 0) {
+          await createAndApplyPayment(amount, 'Other', finalCustomerId, selectedVehicleId || vehicle_id);
+          await invalidateAllPaymentQueries(finalCustomerId);
+        }
+
+        toast({
+          title: "Invoice Sent",
+          description: `Invoice emailed to ${customerEmail}. Payment has been marked as fulfilled.`,
+        });
+
+        logAction({
+          action: "payment_created",
+          entityType: "payment",
+          entityId: finalCustomerId,
+          details: { amount, method: "Invoice Email", customer_id: finalCustomerId, invoiceId: latestInvoice?.id },
+        });
       }
-
-      toast({
-        title: "Invoice Sent",
-        description: `Invoice emailed to ${customerEmail}. Payment has been marked as fulfilled.`,
-      });
-
-      logAction({
-        action: "payment_created",
-        entityType: "payment",
-        entityId: finalCustomerId,
-        details: { amount, method: "Invoice Email", customer_id: finalCustomerId, invoiceId: latestInvoice.id },
-      });
 
       onOpenChange(false);
     } catch (error: any) {
@@ -836,6 +855,11 @@ export const AddPaymentDialog = ({
                 {selectedCustomerId && stripeAmount <= 0 && (
                   <p className="text-xs text-green-600">No outstanding amount to charge.</p>
                 )}
+                {insuranceChargeMode && (
+                  <p className="text-xs text-blue-600 bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-800 rounded-md px-3 py-2">
+                    Payment link will open in a new tab. The insurance charge will remain outstanding until the customer pays.
+                  </p>
+                )}
 
                 <div className="flex justify-end gap-2">
                   <Button variant="outline" onClick={() => onOpenChange(false)} disabled={isAnyLoading}>
@@ -895,6 +919,11 @@ export const AddPaymentDialog = ({
                 {latestInvoice && (
                   <p className="text-xs text-muted-foreground">
                     Invoice: <span className="font-medium">{latestInvoice.invoice_number}</span> — {formatCurrency(latestInvoice.total_amount || 0, tenant?.currency_code || 'USD')}
+                  </p>
+                )}
+                {insuranceChargeMode && (
+                  <p className="text-xs text-blue-600 bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-800 rounded-md px-3 py-2">
+                    Invoice will be sent via email. The insurance charge will remain outstanding until the customer pays.
                   </p>
                 )}
 

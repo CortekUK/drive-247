@@ -21,6 +21,7 @@ interface Tenant {
   integration_bonzah: boolean;
   subscription_plan: string | null;
   stripe_subscription_customer_id: string | null;
+  subscription_stripe_mode: 'test' | 'live';
 }
 
 interface TenantSubscription {
@@ -139,6 +140,7 @@ export default function TenantDetailsPage() {
     amount: '',
     currency: 'usd',
     interval: 'month',
+    trialDays: '',
     features: [],
   });
   const [newFeature, setNewFeature] = useState('');
@@ -369,6 +371,32 @@ export default function TenantDetailsPage() {
       loadPlans(tenant.id);
     } catch (error: any) {
       toast.error(`Something went wrong while deleting the plan. Please try again.`);
+    }
+  };
+
+  const handleToggleStripeMode = async (newMode: 'test' | 'live') => {
+    if (!tenant) return;
+    if (newMode === tenant.subscription_stripe_mode) return;
+
+    if (newMode === 'live') {
+      const confirmed = confirm(
+        'Switch to LIVE Stripe mode for this tenant?\n\nReal charges will be made. Make sure live Stripe keys are configured.'
+      );
+      if (!confirmed) return;
+    }
+
+    try {
+      const { error } = await supabase
+        .from('tenants')
+        .update({ subscription_stripe_mode: newMode })
+        .eq('id', tenant.id);
+
+      if (error) throw error;
+
+      setTenant({ ...tenant, subscription_stripe_mode: newMode });
+      toast.success(`Stripe mode switched to ${newMode} for ${tenant.company_name}`);
+    } catch (error: any) {
+      toast.error(`Failed to update Stripe mode: ${error.message}`);
     }
   };
 
@@ -882,6 +910,60 @@ export default function TenantDetailsPage() {
 
         {/* Subscription Tab */}
         <TabsContent value="subscription">
+          {/* Stripe Mode Toggle */}
+          <div className="mb-6 bg-dark-card rounded-lg p-6 border border-dark-border">
+            <h2 className="text-xl font-semibold text-white mb-2">Stripe Mode</h2>
+            <p className="text-sm text-gray-400 mb-4">
+              Controls whether subscription billing for this tenant uses Stripe test or live keys.
+            </p>
+            <div className="flex items-center gap-3">
+              <button
+                onClick={() => handleToggleStripeMode('test')}
+                className={`flex items-center gap-2 px-4 py-2.5 rounded-lg border font-medium transition-colors ${
+                  tenant.subscription_stripe_mode === 'test' || !tenant.subscription_stripe_mode
+                    ? 'bg-blue-600/20 border-blue-500 text-blue-400'
+                    : 'bg-dark-bg border-dark-border text-gray-400 hover:border-gray-500'
+                }`}
+              >
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                </svg>
+                Test
+                {(tenant.subscription_stripe_mode === 'test' || !tenant.subscription_stripe_mode) && (
+                  <span className="text-[10px] font-bold uppercase bg-blue-500/30 px-1.5 py-0.5 rounded">Active</span>
+                )}
+              </button>
+              <button
+                onClick={() => handleToggleStripeMode('live')}
+                className={`flex items-center gap-2 px-4 py-2.5 rounded-lg border font-medium transition-colors ${
+                  tenant.subscription_stripe_mode === 'live'
+                    ? 'bg-green-600/20 border-green-500 text-green-400'
+                    : 'bg-dark-bg border-dark-border text-gray-400 hover:border-gray-500'
+                }`}
+              >
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" />
+                </svg>
+                Live
+                {tenant.subscription_stripe_mode === 'live' && (
+                  <span className="text-[10px] font-bold uppercase bg-green-500/30 px-1.5 py-0.5 rounded">Active</span>
+                )}
+              </button>
+            </div>
+            {tenant.subscription_stripe_mode === 'live' && (
+              <div className="mt-4 p-3 rounded-lg bg-yellow-500/10 border border-yellow-500/30">
+                <p className="text-sm text-yellow-400">
+                  <strong>Live mode is active.</strong> Real charges will be made to this tenant's card.
+                </p>
+              </div>
+            )}
+            {(tenant.subscription_stripe_mode === 'test' || !tenant.subscription_stripe_mode) && (
+              <p className="mt-3 text-xs text-gray-500">
+                Using test Stripe keys — only test cards accepted (4242 4242 4242 4242)
+              </p>
+            )}
+          </div>
+
           {/* Subscription Plans Management */}
           <div className="mb-6 bg-dark-card rounded-lg p-6 border border-dark-border">
             <div className="flex items-center justify-between mb-4">
