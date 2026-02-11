@@ -20,7 +20,7 @@ import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { format } from 'date-fns';
-import { Calendar as CalendarIcon, Settings as SettingsIcon, Building2, Bell, Zap, Upload, Save, Loader2, Database, AlertTriangle, Trash2, CreditCard, Palette, Link2, CheckCircle2, AlertCircle, ExternalLink, MapPin, FileText, Car, Mail, ShieldX, FilePenLine, Receipt, Banknote, Shield, Copy, Check, Clock } from 'lucide-react';
+import { Calendar as CalendarIcon, Settings as SettingsIcon, Building2, Bell, Zap, Upload, Save, Loader2, Database, AlertTriangle, Trash2, CreditCard, Palette, Link2, CheckCircle2, AlertCircle, ExternalLink, MapPin, FileText, Car, Mail, ShieldX, FilePenLine, Receipt, Banknote, Shield, Copy, Check, Clock, Crown } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
 import { useOrgSettings } from '@/hooks/use-org-settings';
 import { useTenantBranding } from '@/hooks/use-tenant-branding';
@@ -37,6 +37,7 @@ import { StripeConnectSettings } from '@/components/settings/stripe-connect-sett
 import { LocationSettings } from '@/components/settings/location-settings';
 import { ExtrasSettings } from '@/components/settings/extras-settings';
 import { BonzahSettings } from '@/components/settings/bonzah-settings';
+import { SubscriptionSettings } from '@/components/settings/subscription-settings';
 import { formatCurrency } from '@/lib/format-utils';
 
 const Settings = () => {
@@ -176,7 +177,7 @@ const Settings = () => {
   // Handle URL tab parameter
   useEffect(() => {
     const tabParam = searchParams.get('tab');
-    if (tabParam && ['general', 'branding', 'reminders', 'payments', 'stripe-connect', 'locations', 'agreement', 'rental', 'blacklist'].includes(tabParam)) {
+    if (tabParam && ['general', 'branding', 'reminders', 'payments', 'stripe-connect', 'locations', 'agreement', 'rental', 'blacklist', 'subscription'].includes(tabParam)) {
       setActiveTab(tabParam);
     }
   }, [searchParams]);
@@ -844,6 +845,10 @@ const Settings = () => {
           <TabsTrigger value="blacklist" className="flex items-center gap-2">
             <ShieldX className="h-4 w-4" />
             <span className="hidden sm:inline">Blacklist</span>
+          </TabsTrigger>
+          <TabsTrigger value="subscription" className="flex items-center gap-2">
+            <Crown className="h-4 w-4" />
+            <span className="hidden sm:inline">Subscription</span>
           </TabsTrigger>
         </TabsList>
 
@@ -2876,6 +2881,11 @@ const Settings = () => {
               </Button>
             </CardContent>
           </Card>
+        </TabsContent>
+
+        {/* Subscription Tab */}
+        <TabsContent value="subscription" className="space-y-6">
+          <SubscriptionSettings />
         </TabsContent>
       </Tabs>
 

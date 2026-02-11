@@ -17,3 +17,6 @@ verify_jwt = false
 
 [functions.custom-auth-email]
 verify_jwt = false
+
+[functions.subscription-webhook]
+verify_jwt = false

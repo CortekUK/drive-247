@@ -3,6 +3,8 @@
 import { useEffect } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import { useAuth } from "@/stores/auth-store";
+import { useTenantSubscription } from "@/hooks/use-tenant-subscription";
+import { SubscriptionGateDialog } from "@/components/subscription/subscription-gate-dialog";
 import { ThemeToggle } from "@/components/shared/layout/theme-toggle";
 import { HeaderSearch } from "@/components/shared/layout/header-search";
 import { UserMenu } from "@/components/shared/layout/user-menu";
@@ -58,6 +60,7 @@ export default function DashboardLayout({
   const router = useRouter();
   const pathname = usePathname();
   const { user, appUser, loading } = useAuth();
+  const { isSubscribed, isLoading: subscriptionLoading } = useTenantSubscription();
 
   useEffect(() => {
     if (!loading) {
@@ -109,6 +112,12 @@ export default function DashboardLayout({
 
         {/* RAG Chatbot */}
         <ChatSidebar />
+
+        {/* Subscription gate dialog */}
+        <SubscriptionGateDialog
+          isSubscribed={isSubscribed}
+          isLoading={subscriptionLoading}
+        />
       </SidebarProvider>
     </DynamicThemeProvider>
   );
