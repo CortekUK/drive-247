@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Car, Users, FileText, CreditCard, LayoutDashboard, Bell, BarChart3, AlertCircle, TrendingUp, Settings, CalendarDays, Receipt, FolderOpen, UserX, Globe, History, Clock, UsersRound, MessageSquare, Crown, Sparkles, Timer, ChevronRight } from "lucide-react";
+import { Car, Users, FileText, CreditCard, LayoutDashboard, Bell, BarChart3, AlertCircle, TrendingUp, Settings, CalendarDays, Receipt, FolderOpen, UserX, Globe, History, Clock, UsersRound, MessageSquare, ChevronRight } from "lucide-react";
 import { Sidebar, SidebarContent, SidebarGroup, SidebarGroupContent, SidebarHeader, SidebarMenu, SidebarMenuButton, SidebarMenuItem, SidebarFooter, useSidebar } from "@/components/ui/sidebar";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { useReminderStats } from "@/hooks/use-reminders";
@@ -12,7 +12,6 @@ import { useTenantBranding } from "@/hooks/use-tenant-branding";
 import { usePendingBookingsCount } from "@/hooks/use-pending-bookings";
 import { useUnreadCount } from "@/hooks/use-unread-count";
 import { useAuthStore } from "@/stores/auth-store";
-import { useTenantSubscription } from "@/hooks/use-tenant-subscription";
 
 interface NavItem {
   name: string;
@@ -38,7 +37,6 @@ export function AppSidebar() {
   const { data: pendingBookingsCount } = usePendingBookingsCount();
   const { unreadCount: chatUnreadCount } = useUnreadCount();
   const { appUser } = useAuthStore();
-  const { isSubscribed, isTrialing, trialDaysRemaining } = useTenantSubscription();
 
   const appName = branding?.app_name || 'DRIVE247';
   const shortName = appName.length > 4 ? appName.substring(0, 4) : appName;
@@ -270,36 +268,6 @@ export function AppSidebar() {
       {/* Pinned Footer */}
       <SidebarFooter className="border-t p-1.5">
         <SidebarMenu>
-          <SidebarMenuItem>
-            <SidebarMenuButton
-              asChild
-              isActive={isActive("/subscription") || isActive("/settings?tab=subscription")}
-              tooltip={collapsed ? (isTrialing ? "Trial Active" : isSubscribed ? "Subscription" : "Upgrade") : undefined}
-              className={`h-8 transition-all duration-200 ease-in-out ${
-                !isSubscribed
-                  ? "bg-primary/[0.08] text-primary hover:bg-primary/[0.14] font-medium"
-                  : ""
-              }`}
-            >
-              <Link href={isSubscribed ? "/settings?tab=subscription" : "/subscription"}>
-                {isTrialing ? (
-                  <Timer className="h-4 w-4 shrink-0 text-amber-500" />
-                ) : isSubscribed ? (
-                  <Crown className="h-4 w-4 shrink-0 text-muted-foreground" />
-                ) : (
-                  <Sparkles className="h-4 w-4 shrink-0 text-primary" />
-                )}
-                <span className={`text-[13px] transition-all duration-200 ease-in-out ${collapsed ? "sr-only opacity-0 w-0" : "opacity-100"}`}>
-                  {isTrialing ? "Trial Active" : isSubscribed ? "Subscription" : "Upgrade"}
-                </span>
-              </Link>
-            </SidebarMenuButton>
-            {isTrialing && !collapsed && (
-              <div className="px-3 py-1 text-xs text-amber-500 font-medium">
-                {trialDaysRemaining} day{trialDaysRemaining !== 1 ? 's' : ''} remaining
-              </div>
-            )}
-          </SidebarMenuItem>
           <SidebarMenuItem>
             <SidebarMenuButton
               asChild
