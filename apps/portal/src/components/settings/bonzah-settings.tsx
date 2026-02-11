@@ -237,26 +237,23 @@ export function BonzahSettings() {
                     <>
                       <Zap className="h-4 w-4 text-green-600 dark:text-green-400" />
                       <span className="dark:text-white">Live Mode</span>
-                      <Badge className="bg-green-600 hover:bg-green-700 dark:bg-green-500 dark:hover:bg-green-600">LIVE</Badge>
                     </>
                   ) : (
                     <>
                       <TestTube2 className="h-4 w-4 text-blue-600 dark:text-blue-400" />
-                      <span className="dark:text-white">Test Mode</span>
-                      <Badge className="bg-blue-600 hover:bg-blue-700 dark:bg-blue-500 dark:hover:bg-blue-600">TEST</Badge>
+                      <span className="dark:text-white">Test Mode (Setup Phase)</span>
                     </>
                   )}
                 </h4>
                 <p className="text-sm text-muted-foreground mt-1 dark:text-gray-300">
-                  {currentMode === 'live'
-                    ? 'Using production Bonzah API — insurance policies are real'
-                    : 'Using sandbox Bonzah API — insurance policies are test only'}
+                  Live mode is enabled by Drive247
                 </p>
               </div>
-              <div className="flex items-center gap-2 text-xs text-muted-foreground dark:text-gray-400">
-                <Lock className="h-3.5 w-3.5" />
-                <span>Managed by platform admin</span>
-              </div>
+              {currentMode === 'live' ? (
+                <Badge className="bg-green-600 hover:bg-green-700 dark:bg-green-500 dark:hover:bg-green-600 shrink-0">LIVE</Badge>
+              ) : (
+                <Badge className="bg-blue-600 hover:bg-blue-700 dark:bg-blue-500 dark:hover:bg-blue-600 shrink-0">TEST</Badge>
+              )}
             </div>
           </div>
         </CardContent>

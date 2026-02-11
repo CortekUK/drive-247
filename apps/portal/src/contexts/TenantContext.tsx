@@ -12,6 +12,7 @@ interface Tenant {
   admin_name: string | null;
   integration_veriff: boolean | null;
   integration_bonzah: boolean | null;
+  bonzah_username: string | null;
   timezone: string | null;
   currency_code: string | null;
   distance_unit: 'km' | 'miles' | null;
@@ -110,7 +111,7 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
       // Query the tenants table by slug
       const { data, error: queryError } = await supabase
         .from('tenants')
-        .select('id, slug, company_name, status, contact_email, admin_name, integration_veriff, integration_bonzah, timezone, currency_code, distance_unit')
+        .select('id, slug, company_name, status, contact_email, admin_name, integration_veriff, integration_bonzah, bonzah_username, timezone, currency_code, distance_unit')
         .eq('slug', slug)
         .eq('status', 'active')
         .single();

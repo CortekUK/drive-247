@@ -26,6 +26,7 @@ interface BonzahInsuranceSelectorProps {
   onCoverageChange: (coverage: CoverageOptions, premium: number) => void;
   onSkipInsurance: () => void;
   initialCoverage?: CoverageOptions;
+  hidePremiumSummary?: boolean;
 }
 
 const DEFAULT_COVERAGE: CoverageOptions = {
@@ -58,6 +59,7 @@ export default function BonzahInsuranceSelector({
   onCoverageChange,
   onSkipInsurance,
   initialCoverage = DEFAULT_COVERAGE,
+  hidePremiumSummary = false,
 }: BonzahInsuranceSelectorProps) {
   const { tenant } = useTenant();
   const [coverage, setCoverage] = useState<CoverageOptions>(initialCoverage);
@@ -318,46 +320,48 @@ export default function BonzahInsuranceSelector({
       </div>
 
       {/* Premium Summary */}
-      <div className="p-3 rounded-lg bg-primary/5 border border-primary/20">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <ShieldCheck className="w-4 h-4 text-primary" />
-            <span className="text-sm font-medium">Insurance Premium</span>
-            {hasCoverage && (
-              <Badge variant="secondary" className="text-xs">
-                {Object.values(coverage).filter(Boolean).length} selected
-              </Badge>
-            )}
+      {!hidePremiumSummary && (
+        <div className="p-3 rounded-lg bg-primary/5 border border-primary/20">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <ShieldCheck className="w-4 h-4 text-primary" />
+              <span className="text-sm font-medium">Insurance Premium</span>
+              {hasCoverage && (
+                <Badge variant="secondary" className="text-xs">
+                  {Object.values(coverage).filter(Boolean).length} selected
+                </Badge>
+              )}
+            </div>
+            <div className="text-right">
+              {isLoading || isFetching ? (
+                <div className="flex items-center gap-1.5">
+                  <Loader2 className="w-3 h-3 animate-spin" />
+                  <span className="text-sm text-muted-foreground">Calculating...</span>
+                </div>
+              ) : (
+                <span className="text-lg font-bold text-primary">{formatCurrency(totalPremium, tenant?.currency_code || 'USD')}</span>
+              )}
+            </div>
           </div>
-          <div className="text-right">
-            {isLoading || isFetching ? (
-              <div className="flex items-center gap-1.5">
-                <Loader2 className="w-3 h-3 animate-spin" />
-                <span className="text-sm text-muted-foreground">Calculating...</span>
-              </div>
-            ) : (
-              <span className="text-lg font-bold text-primary">{formatCurrency(totalPremium, tenant?.currency_code || 'USD')}</span>
-            )}
-          </div>
-        </div>
 
-        {hasCoverage && totalPremium > 0 && !isLoading && (
-          <div className="mt-2 pt-2 border-t border-primary/10 flex flex-wrap gap-3 text-xs">
-            {coverage.cdw && breakdown.cdw > 0 && (
-              <span><span className="text-muted-foreground">CDW:</span> <span className="font-medium">{formatCurrency(breakdown.cdw, tenant?.currency_code || 'USD')}</span></span>
-            )}
-            {coverage.rcli && breakdown.rcli > 0 && (
-              <span><span className="text-muted-foreground">RCLI:</span> <span className="font-medium">{formatCurrency(breakdown.rcli, tenant?.currency_code || 'USD')}</span></span>
-            )}
-            {coverage.sli && breakdown.sli > 0 && (
-              <span><span className="text-muted-foreground">SLI:</span> <span className="font-medium">{formatCurrency(breakdown.sli, tenant?.currency_code || 'USD')}</span></span>
-            )}
-            {coverage.pai && breakdown.pai > 0 && (
-              <span><span className="text-muted-foreground">PAI:</span> <span className="font-medium">{formatCurrency(breakdown.pai, tenant?.currency_code || 'USD')}</span></span>
-            )}
-          </div>
-        )}
-      </div>
+          {hasCoverage && totalPremium > 0 && !isLoading && (
+            <div className="mt-2 pt-2 border-t border-primary/10 flex flex-wrap gap-3 text-xs">
+              {coverage.cdw && breakdown.cdw > 0 && (
+                <span><span className="text-muted-foreground">CDW:</span> <span className="font-medium">{formatCurrency(breakdown.cdw, tenant?.currency_code || 'USD')}</span></span>
+              )}
+              {coverage.rcli && breakdown.rcli > 0 && (
+                <span><span className="text-muted-foreground">RCLI:</span> <span className="font-medium">{formatCurrency(breakdown.rcli, tenant?.currency_code || 'USD')}</span></span>
+              )}
+              {coverage.sli && breakdown.sli > 0 && (
+                <span><span className="text-muted-foreground">SLI:</span> <span className="font-medium">{formatCurrency(breakdown.sli, tenant?.currency_code || 'USD')}</span></span>
+              )}
+              {coverage.pai && breakdown.pai > 0 && (
+                <span><span className="text-muted-foreground">PAI:</span> <span className="font-medium">{formatCurrency(breakdown.pai, tenant?.currency_code || 'USD')}</span></span>
+              )}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Bonzah Disclaimer & Links */}
       <p className="text-[11px] text-muted-foreground leading-relaxed">

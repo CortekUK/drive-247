@@ -12,7 +12,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { FileText, ArrowLeft, DollarSign, Plus, X, Send, Download, Ban, Check, AlertTriangle, Loader2, Shield, CheckCircle, XCircle, ExternalLink, UserCheck, IdCard, Camera, FileSignature, Clock, Mail, RefreshCw, Trash2, Receipt, Percent, Car, Undo2, Truck, MapPin, Key, KeyRound, CalendarPlus, Package, Banknote, CreditCard, Calendar } from "lucide-react";
+import { FileText, ArrowLeft, DollarSign, Plus, X, Send, Download, Ban, Check, AlertTriangle, Loader2, Shield, ShieldCheck, CheckCircle, XCircle, ExternalLink, UserCheck, IdCard, Camera, FileSignature, Clock, Mail, RefreshCw, Trash2, Receipt, Percent, Car, Undo2, Truck, MapPin, Key, KeyRound, CalendarPlus, Package, Banknote, CreditCard, Calendar } from "lucide-react";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Progress } from "@/components/ui/progress";
 import { AddPaymentDialog } from "@/components/shared/dialogs/add-payment-dialog";
@@ -32,6 +32,7 @@ import { ExtensionRequestDialog } from "@/components/rentals/ExtensionRequestDia
 import { AdminExtendRentalDialog } from "@/components/rentals/AdminExtendRentalDialog";
 import InstallmentPlanCard from "@/components/rentals/InstallmentPlanCard";
 import { useInstallmentPlan } from "@/hooks/use-installment-plan";
+import { BuyInsuranceDialog } from "@/components/rentals/buy-insurance-dialog";
 import { formatCurrency } from "@/lib/formatters";
 import { formatCurrency as formatCurrencyUtil } from "@/lib/format-utils";
 
@@ -110,6 +111,11 @@ const RentalDetail = () => {
   // Extension payment state
   const [showExtensionPayment, setShowExtensionPayment] = useState(false);
   const [extensionPaymentAmount, setExtensionPaymentAmount] = useState<number | undefined>();
+
+  // Buy Insurance dialog state
+  const [showBuyInsurance, setShowBuyInsurance] = useState(false);
+  const [insurancePaymentMode, setInsurancePaymentMode] = useState(false);
+  const [insurancePaymentAmount, setInsurancePaymentAmount] = useState<number | undefined>();
 
   // Installment sheet state
   const [showInstallmentSheet, setShowInstallmentSheet] = useState(false);
@@ -1093,6 +1099,20 @@ const RentalDetail = () => {
           { label: 'Extras', category: 'Extras', amount: extrasTotal, detail: (extrasDetails?.length || 0) > 0 ? `${extrasDetails!.length} item${extrasDetails!.length > 1 ? 's' : ''}` : 'Add-ons', icon: Package, color: 'text-indigo-500', bg: 'bg-indigo-500/10', nonRefundable: true, onClick: extrasTotal > 0 ? () => setShowExtrasDialog(true) : undefined },
         ];
 
+        // Add insurance row if an insurance charge exists in the ledger
+        const insuranceCharge = (rentalCharges || []).find(c => c.category === 'Insurance');
+        if (insuranceCharge) {
+          rows.push({
+            label: 'Insurance',
+            category: 'Insurance',
+            amount: insuranceCharge.amount,
+            detail: bonzahPolicy ? 'Bonzah Insurance' : 'Insurance',
+            icon: Shield,
+            color: 'text-green-500',
+            bg: 'bg-green-500/10',
+          });
+        }
+
         // Add installment plan row if one exists
         if (hasInstallmentPlan && installmentPlan) {
           rows.push({
@@ -1130,6 +1150,8 @@ const RentalDetail = () => {
                     const applied = amount > 0;
                     const fullyRefunded = applied && refunded >= amount;
                     const net = amount - refunded;
+                    // Check if insurance charge is unpaid
+                    const isInsuranceUnpaid = category === 'Insurance' && insuranceCharge && insuranceCharge.remaining_amount > 0;
 
                     return (
                       <TableRow key={category} className={`${!applied ? 'opacity-40' : ''} ${onClick ? 'cursor-pointer hover:bg-muted/30' : ''}`} onClick={onClick}>
@@ -1150,6 +1172,8 @@ const RentalDetail = () => {
                         <TableCell>
                           {!applied ? (
                             <Badge variant="outline" className="text-muted-foreground/60 border-muted-foreground/20 text-[11px]">N/A</Badge>
+                          ) : isInsuranceUnpaid ? (
+                            <Badge variant="outline" className="text-red-500 border-red-500/30 bg-red-500/10 text-[11px]">Unpaid</Badge>
                           ) : nonRefundable ? (
                             <Badge variant="outline" className="text-muted-foreground border-muted-foreground/30 text-[11px]">Non-refundable</Badge>
                           ) : fullyRefunded ? (
@@ -1173,7 +1197,18 @@ const RentalDetail = () => {
                           )}
                         </TableCell>
                         <TableCell className="text-right pr-6">
-                          {nonRefundable && applied ? (
+                          {isInsuranceUnpaid ? (
+                            <button
+                              className="text-xs text-blue-500 hover:text-blue-400 hover:underline font-medium"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setInsurancePaymentAmount(insuranceCharge.remaining_amount);
+                                setInsurancePaymentMode(true);
+                              }}
+                            >
+                              Mark Paid
+                            </button>
+                          ) : nonRefundable && applied ? (
                             <span className="text-xs text-muted-foreground/50">-</span>
                           ) : applied && !fullyRefunded && canRefund ? (
                             <button
@@ -2059,6 +2094,56 @@ const RentalDetail = () => {
             </CardTitle>
           </CardHeader>
         <CardContent className="space-y-4">
+          {/* Bonzah Insurance CTA - Show when no Bonzah policy exists */}
+          {!bonzahPolicy && (
+            <div
+              className={`relative overflow-hidden rounded-lg border border-[#CC004A]/20 bg-gradient-to-r from-[#CC004A]/5 via-[#CC004A]/10 to-[#CC004A]/5 dark:from-[#CC004A]/10 dark:via-[#CC004A]/15 dark:to-[#CC004A]/10 p-4 transition-all ${tenant?.bonzah_username ? 'cursor-pointer hover:border-[#CC004A]/40 group' : 'opacity-60'}`}
+              onClick={() => { if (tenant?.bonzah_username) setShowBuyInsurance(true); }}
+            >
+              <div className="flex items-center justify-between gap-4">
+                <div className="flex items-center gap-4">
+                  <div className="h-10 w-16 flex-shrink-0 flex items-center">
+                    <img
+                      src="/bonzah-logo.svg"
+                      alt="Bonzah"
+                      className="h-8 w-auto dark:invert"
+                    />
+                  </div>
+                  <div>
+                    <p className="font-medium text-sm">Purchase Rental Car Insurance</p>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      CDW, Liability, Supplemental &amp; Personal Accident coverage powered by Bonzah
+                    </p>
+                  </div>
+                </div>
+                {tenant?.bonzah_username ? (
+                  <Button
+                    size="sm"
+                    className="bg-[#CC004A] hover:bg-[#A80040] text-white flex-shrink-0 group-hover:shadow-md transition-shadow"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setShowBuyInsurance(true);
+                    }}
+                  >
+                    <ShieldCheck className="h-4 w-4 mr-1.5" />
+                    Get Insurance
+                  </Button>
+                ) : (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    disabled
+                    className="flex-shrink-0 pointer-events-none"
+                    title="Connect Bonzah in Settings → Integrations first"
+                  >
+                    <ShieldCheck className="h-4 w-4 mr-1.5" />
+                    Get Insurance
+                  </Button>
+                )}
+              </div>
+            </div>
+          )}
+
           <div className="flex items-center justify-between">
             <p className="text-sm text-muted-foreground">Upload customer's insurance documents for verification</p>
             <div className="flex gap-2">
@@ -2075,7 +2160,7 @@ const RentalDetail = () => {
                   ) : (
                     <Send className="h-4 w-4 mr-1" />
                   )}
-                  Request Re-upload
+                  Request Re-Upload
                 </Button>
               )}
             <Button
@@ -2849,6 +2934,32 @@ const RentalDetail = () => {
           vehicle_id={rental.vehicles?.id}
           rental_id={rental.id}
           defaultAmount={extensionPaymentAmount}
+        />
+      )}
+
+      {/* Buy Insurance Dialog */}
+      {rental && (
+        <BuyInsuranceDialog
+          open={showBuyInsurance}
+          onOpenChange={setShowBuyInsurance}
+          rental={rental}
+          onPurchaseComplete={(premium) => {
+            setInsurancePaymentAmount(premium);
+            setInsurancePaymentMode(true);
+          }}
+        />
+      )}
+
+      {/* Insurance Payment Dialog (Mark Paid) */}
+      {rental && (
+        <AddPaymentDialog
+          open={insurancePaymentMode}
+          onOpenChange={setInsurancePaymentMode}
+          customer_id={rental.customers?.id}
+          vehicle_id={rental.vehicles?.id}
+          rental_id={rental.id}
+          defaultAmount={insurancePaymentAmount}
+          insuranceChargeMode
         />
       )}
 
