@@ -65,6 +65,16 @@ Deno.serve(async (req) => {
 
     let stripeCustomerId = tenant.stripe_subscription_customer_id;
 
+    // Verify the stored customer exists on the current Stripe account (handles test→live mode switch)
+    if (stripeCustomerId) {
+      try {
+        await stripe.customers.retrieve(stripeCustomerId);
+      } catch (_e) {
+        console.log(`Stored customer ${stripeCustomerId} not found on ${mode} Stripe account, creating new one`);
+        stripeCustomerId = null;
+      }
+    }
+
     if (!stripeCustomerId) {
       const customer = await stripe.customers.create({
         email: tenant.contact_email,
