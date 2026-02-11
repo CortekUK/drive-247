@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Car, Users, FileText, CreditCard, LayoutDashboard, Bell, BarChart3, AlertCircle, TrendingUp, Settings, CalendarDays, Receipt, FolderOpen, UserX, Globe, History, Clock, UsersRound, MessageSquare, ChevronRight, ChevronsUpDown } from "lucide-react";
+import { Car, Users, FileText, CreditCard, LayoutDashboard, Bell, BarChart3, AlertCircle, TrendingUp, Settings, CalendarDays, Receipt, FolderOpen, UserX, Globe, History, Clock, UsersRound, MessageSquare, ChevronRight, Layers } from "lucide-react";
 import { Sidebar, SidebarContent, SidebarGroup, SidebarGroupContent, SidebarHeader, SidebarMenu, SidebarMenuButton, SidebarMenuItem, SidebarFooter, useSidebar } from "@/components/ui/sidebar";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { useReminderStats } from "@/hooks/use-reminders";
@@ -213,14 +213,13 @@ export function AppSidebar() {
 
       {/* Collapse/Expand all toggle */}
       {!collapsed && (
-        <div className="flex justify-end px-3 pt-1.5">
+        <div className="flex justify-end px-2 pt-1">
           <button
             onClick={toggleAll}
-            className="flex items-center gap-1 text-[11px] text-muted-foreground/60 hover:text-muted-foreground transition-colors"
+            className="p-1 rounded text-muted-foreground/40 hover:text-muted-foreground hover:bg-muted/50 transition-colors"
             title={allOpen ? "Collapse all" : "Expand all"}
           >
-            <ChevronsUpDown className="h-3 w-3" />
-            <span>{allOpen ? "Collapse" : "Expand"}</span>
+            <Layers className="h-3.5 w-3.5" />
           </button>
         </div>
       )}
@@ -269,7 +268,7 @@ export function AppSidebar() {
                         }`}
                       >
                         <group.icon className={`h-4 w-4 shrink-0 ${hasActive ? "text-primary" : ""}`} />
-                        <span className={`flex-1 text-left text-[13px] transition-all duration-200 ease-in-out ${collapsed ? "sr-only opacity-0 w-0" : "opacity-100"}`}>
+                        <span className={`flex-1 text-left text-[13.5px] font-semibold transition-all duration-200 ease-in-out ${collapsed ? "sr-only opacity-0 w-0" : "opacity-100"}`}>
                           {group.label}
                         </span>
                         {!collapsed && totalBadge > 0 && !isOpen && (

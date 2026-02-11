@@ -4,7 +4,7 @@ import { useEffect } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import { useAuth } from "@/stores/auth-store";
 import { useTenantSubscription } from "@/hooks/use-tenant-subscription";
-import { SubscriptionBlockScreen } from "@/components/subscription/subscription-block-screen";
+import { SubscriptionGateDialog } from "@/components/subscription/subscription-gate-dialog";
 import { ThemeToggle } from "@/components/shared/layout/theme-toggle";
 import { HeaderSearch } from "@/components/shared/layout/header-search";
 import { UserMenu } from "@/components/shared/layout/user-menu";
@@ -60,8 +60,9 @@ export default function DashboardLayout({
   const router = useRouter();
   const pathname = usePathname();
   const { user, appUser, loading } = useAuth();
-  const { isSubscribed, hasExpiredSubscription } = useTenantSubscription();
+  const { isSubscribed, isLoading: subscriptionLoading } = useTenantSubscription();
   const isSubscriptionPage = pathname === "/subscription" || pathname?.startsWith("/settings");
+  const showSetupGate = !subscriptionLoading && !isSubscribed && !isSubscriptionPage;
 
   useEffect(() => {
     if (!loading) {
@@ -114,13 +115,9 @@ export default function DashboardLayout({
         {/* RAG Chatbot */}
         <ChatSidebar />
 
-        {/* Hard block for expired/canceled subscriptions */}
-        {hasExpiredSubscription && !isSubscriptionPage && (
-          <SubscriptionBlockScreen onViewPlans={() => router.push("/subscription")} />
-        )}
-
+        {/* Hard gate — blocks access until billing setup is complete */}
+        {showSetupGate && <SubscriptionGateDialog />}
       </SidebarProvider>
     </DynamicThemeProvider>
   );
 }
-

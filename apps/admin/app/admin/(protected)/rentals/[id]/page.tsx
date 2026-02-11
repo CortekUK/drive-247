@@ -21,6 +21,12 @@ interface Tenant {
   integration_bonzah: boolean;
   subscription_plan: string | null;
   stripe_subscription_customer_id: string | null;
+  stripe_mode: 'test' | 'live';
+  bonzah_mode: string | null;
+  stripe_account_id: string | null;
+  stripe_onboarding_complete: boolean | null;
+  stripe_account_status: string | null;
+  bonzah_username: string | null;
 }
 
 interface TenantSubscription {
@@ -139,9 +145,15 @@ export default function TenantDetailsPage() {
     amount: '',
     currency: 'usd',
     interval: 'month',
+    trialDays: '0',
     features: [],
   });
   const [newFeature, setNewFeature] = useState('');
+
+  // Integration mode state
+  const [showModeConfirm, setShowModeConfirm] = useState(false);
+  const [pendingModeChange, setPendingModeChange] = useState<{ type: 'stripe' | 'bonzah'; newMode: 'test' | 'live' } | null>(null);
+  const [modeUpdating, setModeUpdating] = useState(false);
 
   useEffect(() => {
     if (params.id) {
@@ -442,6 +454,45 @@ export default function TenantDetailsPage() {
     } catch (error: any) {
       toast.error(`Error updating integration: ${error.message}`);
     }
+  };
+
+  const handleModeToggle = (type: 'stripe' | 'bonzah', newMode: 'test' | 'live') => {
+    if (newMode === 'live') {
+      setPendingModeChange({ type, newMode });
+      setShowModeConfirm(true);
+    } else {
+      executeModeChange(type, newMode);
+    }
+  };
+
+  const executeModeChange = async (type: 'stripe' | 'bonzah', newMode: 'test' | 'live') => {
+    if (!tenant) return;
+    setModeUpdating(true);
+    try {
+      const field = type === 'stripe' ? 'stripe_mode' : 'bonzah_mode';
+      const { error } = await supabase
+        .from('tenants')
+        .update({ [field]: newMode })
+        .eq('id', tenant.id);
+
+      if (error) throw error;
+
+      setTenant({ ...tenant, [field]: newMode });
+      const label = type === 'stripe' ? 'Stripe Connect' : 'Bonzah API';
+      toast.success(`${label} switched to ${newMode} mode`);
+    } catch (error: any) {
+      toast.error(`Error updating mode: ${error.message}`);
+    } finally {
+      setModeUpdating(false);
+    }
+  };
+
+  const confirmModeChange = () => {
+    if (pendingModeChange) {
+      executeModeChange(pendingModeChange.type, pendingModeChange.newMode);
+    }
+    setShowModeConfirm(false);
+    setPendingModeChange(null);
   };
 
   const handleSaveEdit = async () => {
@@ -845,6 +896,120 @@ export default function TenantDetailsPage() {
                       }`}
                     />
                   </button>
+                </div>
+              </div>
+            </div>
+
+            {/* Integration Modes */}
+            <div className="bg-dark-card rounded-lg p-6 border border-dark-border">
+              <h2 className="text-xl font-semibold text-white mb-1">Integration Modes</h2>
+              <p className="text-sm text-gray-400 mb-6">Control whether integrations operate in test or live mode</p>
+
+              <div className="space-y-6">
+                {/* Stripe Connect Mode */}
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h3 className="text-white font-medium">Stripe Connect</h3>
+                      <p className="text-sm text-gray-400 mt-0.5">
+                        {tenant.stripe_mode === 'live'
+                          ? 'Real payments — live Stripe keys, real bank deposits'
+                          : 'Test cards only — no real money is processed'}
+                      </p>
+                    </div>
+                    <span className={`px-2.5 py-1 text-xs font-bold rounded-full uppercase tracking-wide ${
+                      tenant.stripe_mode === 'live'
+                        ? 'bg-green-900/30 text-green-400 border border-green-800/50'
+                        : 'bg-blue-900/30 text-blue-400 border border-blue-800/50'
+                    }`}>
+                      {tenant.stripe_mode || 'test'}
+                    </span>
+                  </div>
+                  <p className="text-xs text-gray-500">
+                    {tenant.stripe_account_id
+                      ? tenant.stripe_onboarding_complete
+                        ? `Connected — ${tenant.stripe_account_id}`
+                        : `Onboarding incomplete — ${tenant.stripe_account_id}`
+                      : 'Stripe Connect not set up'}
+                  </p>
+                  <div className="flex items-center gap-1 bg-dark-bg rounded-lg p-1 border border-dark-border w-fit">
+                    <button
+                      onClick={() => handleModeToggle('stripe', 'test')}
+                      disabled={tenant.stripe_mode === 'test' || modeUpdating}
+                      className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors disabled:opacity-50 ${
+                        tenant.stripe_mode === 'test'
+                          ? 'bg-blue-600 text-white'
+                          : 'text-gray-400 hover:text-white'
+                      }`}
+                    >
+                      Test
+                    </button>
+                    <button
+                      onClick={() => handleModeToggle('stripe', 'live')}
+                      disabled={tenant.stripe_mode === 'live' || modeUpdating}
+                      className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors disabled:opacity-50 ${
+                        tenant.stripe_mode === 'live'
+                          ? 'bg-green-600 text-white'
+                          : 'text-gray-400 hover:text-white'
+                      }`}
+                    >
+                      Live
+                    </button>
+                  </div>
+                </div>
+
+                <div className="border-t border-dark-border"></div>
+
+                {/* Bonzah API Mode */}
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h3 className="text-white font-medium">Bonzah API</h3>
+                      <p className="text-sm text-gray-400 mt-0.5">
+                        {tenant.bonzah_mode === 'live'
+                          ? 'Production API — real insurance policies and invoices'
+                          : 'Sandbox API — test insurance quotes only'}
+                      </p>
+                    </div>
+                    <span className={`px-2.5 py-1 text-xs font-bold rounded-full uppercase tracking-wide ${
+                      tenant.bonzah_mode === 'live'
+                        ? 'bg-green-900/30 text-green-400 border border-green-800/50'
+                        : 'bg-blue-900/30 text-blue-400 border border-blue-800/50'
+                    }`}>
+                      {tenant.bonzah_mode || 'test'}
+                    </span>
+                  </div>
+                  <p className="text-xs text-gray-500">
+                    {tenant.bonzah_username
+                      ? `Credentials: ${tenant.bonzah_username}`
+                      : 'No credentials configured'}
+                    {' · '}
+                    {tenant.integration_bonzah ? 'Enabled' : 'Disabled'}
+                  </p>
+                  <div className="flex items-center gap-1 bg-dark-bg rounded-lg p-1 border border-dark-border w-fit">
+                    <button
+                      onClick={() => handleModeToggle('bonzah', 'test')}
+                      disabled={(tenant.bonzah_mode || 'test') === 'test' || modeUpdating}
+                      className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors disabled:opacity-50 ${
+                        (tenant.bonzah_mode || 'test') === 'test'
+                          ? 'bg-blue-600 text-white'
+                          : 'text-gray-400 hover:text-white'
+                      }`}
+                    >
+                      Test
+                    </button>
+                    <button
+                      onClick={() => handleModeToggle('bonzah', 'live')}
+                      disabled={tenant.bonzah_mode === 'live' || modeUpdating}
+                      className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors disabled:opacity-50 ${
+                        tenant.bonzah_mode === 'live'
+                          ? 'bg-green-600 text-white'
+                          : 'text-gray-400 hover:text-white'
+                      }`}
+                    >
+                      Live
+                    </button>
+                  </div>
                 </div>
               </div>
             </div>
@@ -1269,6 +1434,53 @@ export default function TenantDetailsPage() {
                 className="flex-1 px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700 disabled:opacity-50"
               >
                 {planSaving ? 'Saving...' : editingPlan ? 'Update Plan' : 'Create Plan'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Mode Confirmation Modal */}
+      {showModeConfirm && pendingModeChange && (
+        <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50 p-4">
+          <div className="bg-dark-card rounded-lg p-6 max-w-md w-full border border-dark-border">
+            <h2 className="text-xl font-bold text-white mb-2">
+              Switch {pendingModeChange.type === 'stripe' ? 'Stripe Connect' : 'Bonzah API'} to Live?
+            </h2>
+            <div className="bg-yellow-900/20 border border-yellow-700/50 rounded-lg p-4 mb-4">
+              {pendingModeChange.type === 'stripe' ? (
+                <div className="text-sm text-yellow-400 space-y-2">
+                  <p className="font-medium">This will enable real payments for {tenant.company_name}:</p>
+                  <ul className="list-disc list-inside space-y-1">
+                    <li>All new bookings will use live Stripe keys</li>
+                    <li>Real credit cards will be charged</li>
+                    <li>Funds will be deposited to the tenant's bank account</li>
+                  </ul>
+                </div>
+              ) : (
+                <div className="text-sm text-yellow-400 space-y-2">
+                  <p className="font-medium">This will enable the production Bonzah API for {tenant.company_name}:</p>
+                  <ul className="list-disc list-inside space-y-1">
+                    <li>Insurance quotes will create real policies</li>
+                    <li>Real invoices will be generated</li>
+                    <li>Customers will receive actual insurance coverage</li>
+                  </ul>
+                </div>
+              )}
+            </div>
+            <div className="flex space-x-3">
+              <button
+                onClick={() => { setShowModeConfirm(false); setPendingModeChange(null); }}
+                className="flex-1 px-4 py-2 border border-dark-border rounded-md text-gray-300 hover:bg-dark-hover"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={confirmModeChange}
+                disabled={modeUpdating}
+                className="flex-1 px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 disabled:opacity-50"
+              >
+                {modeUpdating ? 'Switching...' : 'Yes, Switch to Live'}
               </button>
             </div>
           </div>

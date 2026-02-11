@@ -1,14 +1,14 @@
 'use client';
 
 import React, { useState } from 'react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
-import { Shield, CheckCircle2, AlertCircle, ExternalLink, Loader2, TestTube2, Zap, Unplug } from 'lucide-react';
+import { Shield, CheckCircle2, AlertCircle, ExternalLink, Loader2, TestTube2, Zap, Unplug, Lock } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
 import { useTenant } from '@/contexts/TenantContext';
 import {
@@ -35,8 +35,6 @@ export function BonzahSettings() {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [isVerifying, setIsVerifying] = useState(false);
-  const [showModeWarning, setShowModeWarning] = useState(false);
-  const [pendingMode, setPendingMode] = useState<'test' | 'live' | null>(null);
   const [showDisconnectWarning, setShowDisconnectWarning] = useState(false);
 
   // Fetch current Bonzah status
@@ -60,39 +58,6 @@ export function BonzahSettings() {
       return data as BonzahStatus;
     },
     enabled: !!tenantContext?.id,
-  });
-
-  // Mode toggle mutation
-  const updateModeMutation = useMutation({
-    mutationFn: async (newMode: 'test' | 'live') => {
-      if (!tenantContext?.id) throw new Error('No tenant context');
-
-      const { error } = await supabase
-        .from('tenants')
-        .update({ bonzah_mode: newMode })
-        .eq('id', tenantContext.id);
-
-      if (error) throw error;
-      return newMode;
-    },
-    onSuccess: (newMode) => {
-      queryClient.invalidateQueries({ queryKey: ['tenant-bonzah-status'] });
-      toast({
-        title: 'Bonzah Mode Updated',
-        description: `Switched to ${newMode} mode. ${
-          newMode === 'live'
-            ? 'Insurance quotes will use the production Bonzah API.'
-            : 'Insurance quotes will use the sandbox Bonzah API.'
-        }`,
-      });
-    },
-    onError: (error: Error) => {
-      toast({
-        title: 'Error',
-        description: error.message || 'Failed to update Bonzah mode',
-        variant: 'destructive',
-      });
-    },
   });
 
   // Verify & connect mutation
@@ -182,19 +147,6 @@ export function BonzahSettings() {
     setShowDisconnectWarning(false);
   };
 
-  const handleModeToggle = (newMode: 'test' | 'live') => {
-    setPendingMode(newMode);
-    setShowModeWarning(true);
-  };
-
-  const confirmModeSwitch = async () => {
-    if (pendingMode) {
-      await updateModeMutation.mutateAsync(pendingMode);
-    }
-    setShowModeWarning(false);
-    setPendingMode(null);
-  };
-
   if (isLoading) {
     return (
       <Card>
@@ -273,7 +225,7 @@ export function BonzahSettings() {
         <CardHeader>
           <CardTitle>API Mode</CardTitle>
           <CardDescription>
-            Switch between sandbox (test) and production (live) Bonzah API
+            Current Bonzah API environment
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -301,27 +253,9 @@ export function BonzahSettings() {
                     : 'Using sandbox Bonzah API — insurance policies are test only'}
                 </p>
               </div>
-              <div className="flex gap-2">
-                <Button
-                  variant={currentMode === 'test' ? 'default' : 'outline'}
-                  size="sm"
-                  onClick={() => handleModeToggle('test')}
-                  disabled={currentMode === 'test' || updateModeMutation.isPending}
-                  className={currentMode === 'test' ? 'bg-blue-600 hover:bg-blue-700 dark:bg-blue-500 dark:hover:bg-blue-600' : 'dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-800'}
-                >
-                  <TestTube2 className="h-4 w-4 mr-1" />
-                  Test
-                </Button>
-                <Button
-                  variant={currentMode === 'live' ? 'default' : 'outline'}
-                  size="sm"
-                  onClick={() => handleModeToggle('live')}
-                  disabled={currentMode === 'live' || updateModeMutation.isPending}
-                  className={currentMode === 'live' ? 'bg-green-600 hover:bg-green-700 dark:bg-green-500 dark:hover:bg-green-600' : 'dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-800'}
-                >
-                  <Zap className="h-4 w-4 mr-1" />
-                  Live
-                </Button>
+              <div className="flex items-center gap-2 text-xs text-muted-foreground dark:text-gray-400">
+                <Lock className="h-3.5 w-3.5" />
+                <span>Managed by platform admin</span>
               </div>
             </div>
           </div>
@@ -473,75 +407,6 @@ export function BonzahSettings() {
           </p>
         </CardContent>
       </Card>
-
-      {/* Mode Switch Warning Dialog */}
-      <AlertDialog open={showModeWarning} onOpenChange={setShowModeWarning}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle className="flex items-center gap-2">
-              {pendingMode === 'live' ? (
-                <>
-                  <Zap className="h-5 w-5 text-yellow-600" />
-                  Switch to Live Mode?
-                </>
-              ) : (
-                <>
-                  <TestTube2 className="h-5 w-5 text-blue-600" />
-                  Switch to Test Mode?
-                </>
-              )}
-            </AlertDialogTitle>
-            <AlertDialogDescription asChild>
-              <div className="text-sm text-muted-foreground space-y-3 pt-2">
-                {pendingMode === 'live' ? (
-                  <>
-                    <div className="font-medium text-yellow-700 dark:text-yellow-500">
-                      Warning: This will use the production Bonzah API
-                    </div>
-                    <div>By switching to live mode:</div>
-                    <ul className="list-disc list-inside space-y-1 text-sm">
-                      <li>Insurance quotes and policies will be real</li>
-                      <li>Bonzah will issue actual insurance policies to your customers</li>
-                      <li>You will receive real monthly invoices from Bonzah</li>
-                    </ul>
-                    <div className="text-sm font-medium text-red-600 dark:text-red-500">
-                      Make sure your Bonzah credentials work with the production API before switching.
-                    </div>
-                  </>
-                ) : (
-                  <>
-                    <div className="font-medium text-blue-700 dark:text-blue-500">
-                      Switching back to test mode
-                    </div>
-                    <div>By switching to test mode:</div>
-                    <ul className="list-disc list-inside space-y-1 text-sm">
-                      <li>Insurance quotes will use the sandbox API</li>
-                      <li>No real policies will be issued</li>
-                      <li>Existing live policies will not be affected</li>
-                    </ul>
-                  </>
-                )}
-              </div>
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel onClick={() => setPendingMode(null)}>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={confirmModeSwitch}
-              className={pendingMode === 'live' ? 'bg-green-600 hover:bg-green-700' : 'bg-blue-600 hover:bg-blue-700'}
-            >
-              {updateModeMutation.isPending ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Switching...
-                </>
-              ) : (
-                <>Yes, Switch to {pendingMode === 'live' ? 'Live' : 'Test'} Mode</>
-              )}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
 
       {/* Disconnect Warning Dialog */}
       <AlertDialog open={showDisconnectWarning} onOpenChange={setShowDisconnectWarning}>
