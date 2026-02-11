@@ -4,7 +4,6 @@ import { useEffect } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import { useAuth } from "@/stores/auth-store";
 import { useTenantSubscription } from "@/hooks/use-tenant-subscription";
-import { SubscriptionGateDialog } from "@/components/subscription/subscription-gate-dialog";
 import { SubscriptionBlockScreen } from "@/components/subscription/subscription-block-screen";
 import { ThemeToggle } from "@/components/shared/layout/theme-toggle";
 import { HeaderSearch } from "@/components/shared/layout/header-search";
@@ -61,7 +60,7 @@ export default function DashboardLayout({
   const router = useRouter();
   const pathname = usePathname();
   const { user, appUser, loading } = useAuth();
-  const { isSubscribed, hasExpiredSubscription, isLoading: subscriptionLoading } = useTenantSubscription();
+  const { isSubscribed, hasExpiredSubscription } = useTenantSubscription();
   const isSubscriptionPage = pathname === "/subscription" || pathname?.startsWith("/settings");
 
   useEffect(() => {
@@ -120,13 +119,6 @@ export default function DashboardLayout({
           <SubscriptionBlockScreen onViewPlans={() => router.push("/subscription")} />
         )}
 
-        {/* Soft gate for tenants who never subscribed */}
-        {!isSubscribed && !hasExpiredSubscription && (
-          <SubscriptionGateDialog
-            isSubscribed={isSubscribed}
-            isLoading={subscriptionLoading}
-          />
-        )}
       </SidebarProvider>
     </DynamicThemeProvider>
   );
