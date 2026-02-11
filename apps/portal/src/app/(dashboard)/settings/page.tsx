@@ -20,7 +20,7 @@ import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { format } from 'date-fns';
-import { Calendar as CalendarIcon, Settings as SettingsIcon, Building2, Bell, Zap, Upload, Save, Loader2, Database, AlertTriangle, Trash2, CreditCard, Palette, Link2, CheckCircle2, AlertCircle, ExternalLink, MapPin, FileText, Car, Mail, ShieldX, FilePenLine, Receipt, Banknote, Shield, Copy, Check, Clock, Crown } from 'lucide-react';
+import { Calendar as CalendarIcon, Settings as SettingsIcon, Building2, Bell, Zap, Upload, Save, Loader2, Database, AlertTriangle, Trash2, CreditCard, Palette, Link2, CheckCircle2, AlertCircle, ExternalLink, MapPin, FileText, Car, Mail, ShieldX, FilePenLine, Receipt, Banknote, Shield, Copy, Check, Clock, Crown, Package } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
 import { useOrgSettings } from '@/hooks/use-org-settings';
 import { useTenantBranding } from '@/hooks/use-tenant-branding';
@@ -44,7 +44,7 @@ const Settings = () => {
   const queryClient = useQueryClient();
   const searchParams = useSearchParams();
   const router = useRouter();
-  const [activeTab, setActiveTab] = useState('reminders');
+  const [activeTab, setActiveTab] = useState('general');
   const [isBackfilling, setIsBackfilling] = useState(false);
   const [showDataCleanupDialog, setShowDataCleanupDialog] = useState(false);
   const [generalForm, setGeneralForm] = useState({
@@ -177,7 +177,7 @@ const Settings = () => {
   // Handle URL tab parameter
   useEffect(() => {
     const tabParam = searchParams.get('tab');
-    if (tabParam && ['general', 'branding', 'reminders', 'payments', 'stripe-connect', 'locations', 'agreement', 'rental', 'blacklist', 'subscription'].includes(tabParam)) {
+    if (tabParam && ['general', 'branding', 'reminders', 'payments', 'locations', 'rental', 'extras', 'integrations', 'subscription'].includes(tabParam)) {
       setActiveTab(tabParam);
     }
   }, [searchParams]);
@@ -787,70 +787,110 @@ const Settings = () => {
   return (
     <div className="container mx-auto p-6 space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold">Settings</h1>
-          <p className="text-muted-foreground mt-1">
-            Configure your fleet management system
-          </p>
-        </div>
+      <div>
+        <h1 className="text-2xl font-semibold">Settings</h1>
+        <p className="text-sm text-muted-foreground mt-0.5">
+          Configure your fleet management system
+        </p>
       </div>
 
       {/* Settings Tabs */}
-      <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-        <TabsList className="grid w-full grid-cols-12">
-          <TabsTrigger value="general" className="flex items-center gap-2">
-            <Building2 className="h-4 w-4" />
-            <span className="hidden sm:inline">General</span>
-          </TabsTrigger>
-          <TabsTrigger value="branding" className="flex items-center gap-2">
-            <Palette className="h-4 w-4" />
-            <span className="hidden sm:inline">Branding</span>
-          </TabsTrigger>
-          <TabsTrigger value="reminders" className="flex items-center gap-2">
-            <Bell className="h-4 w-4" />
-            <span className="hidden sm:inline">Reminders</span>
-          </TabsTrigger>
-          <TabsTrigger value="payments" className="flex items-center gap-2">
-            <CreditCard className="h-4 w-4" />
-            <span className="hidden sm:inline">Payments</span>
-          </TabsTrigger>
-          <TabsTrigger value="stripe-connect" className="flex items-center gap-2">
-            <Link2 className="h-4 w-4" />
-            <span className="hidden sm:inline">Stripe Connect</span>
-          </TabsTrigger>
-          <TabsTrigger value="locations" className="flex items-center gap-2">
-            <MapPin className="h-4 w-4" />
-            <span className="hidden sm:inline">Locations</span>
-          </TabsTrigger>
-          <TabsTrigger value="rental" className="flex items-center gap-2">
-            <Car className="h-4 w-4" />
-            <span className="hidden sm:inline">Bookings</span>
-          </TabsTrigger>
-          <TabsTrigger value="extras">
-            <span>Extras</span>
-          </TabsTrigger>
-          <TabsTrigger value="agreement" className="flex items-center gap-2">
-            <FileText className="h-4 w-4" />
-            <span className="hidden sm:inline">Agreement</span>
-          </TabsTrigger>
-          <TabsTrigger value="emails" className="flex items-center gap-2">
-            <Mail className="h-4 w-4" />
-            <span className="hidden sm:inline">Emails</span>
-          </TabsTrigger>
-          <TabsTrigger value="bonzah" className="flex items-center gap-2">
-            <Shield className="h-4 w-4" />
-            <span className="hidden sm:inline">Bonzah</span>
-          </TabsTrigger>
-          <TabsTrigger value="blacklist" className="flex items-center gap-2">
-            <ShieldX className="h-4 w-4" />
-            <span className="hidden sm:inline">Blacklist</span>
-          </TabsTrigger>
-          <TabsTrigger value="subscription" className="flex items-center gap-2">
-            <Crown className="h-4 w-4" />
-            <span className="hidden sm:inline">Subscription</span>
-          </TabsTrigger>
-        </TabsList>
+      <Tabs value={activeTab} onValueChange={setActiveTab}>
+        <div className="flex flex-col lg:flex-row gap-6">
+          {/* Mobile: Horizontal scrollable nav */}
+          <div className="lg:hidden">
+            <TabsList className="flex w-full overflow-x-auto gap-1 bg-muted/50 p-1 rounded-lg">
+              {([
+                { value: 'general', icon: Building2, label: 'General' },
+                { value: 'locations', icon: MapPin, label: 'Locations' },
+                { value: 'branding', icon: Palette, label: 'Branding' },
+                { value: 'rental', icon: Car, label: 'Bookings' },
+                { value: 'extras', icon: Package, label: 'Extras' },
+                { value: 'payments', icon: CreditCard, label: 'Payments' },
+                { value: 'reminders', icon: Bell, label: 'Notifications' },
+                { value: 'integrations', icon: Shield, label: 'Integrations' },
+                { value: 'subscription', icon: Crown, label: 'Subscription' },
+              ] as const).map(item => (
+                <TabsTrigger key={item.value} value={item.value} className="flex items-center gap-1.5 whitespace-nowrap text-xs px-3">
+                  <item.icon className="h-3.5 w-3.5" />{item.label}
+                </TabsTrigger>
+              ))}
+            </TabsList>
+          </div>
+
+          {/* Desktop: Vertical sidebar nav */}
+          <nav className="hidden lg:block w-52 shrink-0">
+            <div className="sticky top-6 rounded-lg border bg-card p-2 space-y-1">
+              {/* Business group */}
+              <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground/50 px-2.5 pt-1 pb-0.5">Business</p>
+              {([
+                { value: 'general', icon: Building2, label: 'General' },
+                { value: 'locations', icon: MapPin, label: 'Locations' },
+                { value: 'branding', icon: Palette, label: 'Branding' },
+              ] as const).map(item => (
+                <button
+                  key={item.value}
+                  onClick={() => setActiveTab(item.value)}
+                  className={`flex items-center gap-2.5 w-full px-2.5 py-1.5 text-[13px] rounded-md transition-colors ${
+                    activeTab === item.value
+                      ? 'bg-primary/10 text-primary font-medium'
+                      : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'
+                  }`}
+                >
+                  <item.icon className="h-4 w-4 shrink-0" />
+                  {item.label}
+                </button>
+              ))}
+
+              <Separator className="!my-2" />
+
+              {/* Operations group */}
+              <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground/50 px-2.5 pt-0.5 pb-0.5">Operations</p>
+              {([
+                { value: 'rental', icon: Car, label: 'Bookings' },
+                { value: 'extras', icon: Package, label: 'Extras' },
+                { value: 'payments', icon: CreditCard, label: 'Payments & Stripe' },
+                { value: 'reminders', icon: Bell, label: 'Notifications' },
+              ] as const).map(item => (
+                <button
+                  key={item.value}
+                  onClick={() => setActiveTab(item.value)}
+                  className={`flex items-center gap-2.5 w-full px-2.5 py-1.5 text-[13px] rounded-md transition-colors ${
+                    activeTab === item.value
+                      ? 'bg-primary/10 text-primary font-medium'
+                      : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'
+                  }`}
+                >
+                  <item.icon className="h-4 w-4 shrink-0" />
+                  {item.label}
+                </button>
+              ))}
+
+              <Separator className="!my-2" />
+
+              {/* More group */}
+              {([
+                { value: 'integrations', icon: Shield, label: 'Integrations' },
+                { value: 'subscription', icon: Crown, label: 'Subscription' },
+              ] as const).map(item => (
+                <button
+                  key={item.value}
+                  onClick={() => setActiveTab(item.value)}
+                  className={`flex items-center gap-2.5 w-full px-2.5 py-1.5 text-[13px] rounded-md transition-colors ${
+                    activeTab === item.value
+                      ? 'bg-primary/10 text-primary font-medium'
+                      : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'
+                  }`}
+                >
+                  <item.icon className="h-4 w-4 shrink-0" />
+                  {item.label}
+                </button>
+              ))}
+            </div>
+          </nav>
+
+          {/* Tab Content Area */}
+          <div className="flex-1 min-w-0 space-y-6">
 
         {/* General Tab */}
         <TabsContent value="general" className="space-y-6">
@@ -1534,6 +1574,32 @@ const Settings = () => {
 
           {/* Advanced Reminder Rules Configuration */}
           <ReminderRulesConfig />
+
+          {/* Email Templates */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Mail className="h-5 w-5 text-primary" />
+                Email Templates
+              </CardTitle>
+              <CardDescription>
+                Customize the emails sent to your customers
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <p className="text-sm text-muted-foreground mb-4">
+                Personalize your customer communications by customizing email templates for booking confirmations,
+                reminders, and other notifications. Use variables to automatically include customer and rental details.
+              </p>
+              <Button
+                onClick={() => router.push('/settings/email-templates')}
+                className="flex items-center gap-2"
+              >
+                <Mail className="h-4 w-4" />
+                Manage Email Templates
+              </Button>
+            </CardContent>
+          </Card>
         </TabsContent>
 
         {/* Payments Tab */}
@@ -1678,10 +1744,8 @@ const Settings = () => {
               </div>
             </CardContent>
           </Card>
-        </TabsContent>
 
-        {/* Stripe Connect Tab */}
-        <TabsContent value="stripe-connect" className="space-y-6">
+          {/* Stripe Connect */}
           <StripeConnectSettings />
         </TabsContent>
 
@@ -2785,15 +2849,8 @@ const Settings = () => {
               </AlertDialogFooter>
             </AlertDialogContent>
           </AlertDialog>
-        </TabsContent>
 
-        {/* Extras Tab */}
-        <TabsContent value="extras" className="space-y-6">
-          <ExtrasSettings />
-        </TabsContent>
-
-        {/* Agreement Tab */}
-        <TabsContent value="agreement" className="space-y-6">
+          {/* Agreement Templates */}
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
@@ -2822,41 +2879,16 @@ const Settings = () => {
           </Card>
         </TabsContent>
 
-        {/* Email Templates Tab */}
-        <TabsContent value="emails" className="space-y-6">
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Mail className="h-5 w-5 text-primary" />
-                Email Templates
-              </CardTitle>
-              <CardDescription>
-                Customize the emails sent to your customers
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <p className="text-sm text-muted-foreground mb-4">
-                Personalize your customer communications by customizing email templates for booking confirmations,
-                reminders, and other notifications. Use variables to automatically include customer and rental details.
-              </p>
-              <Button
-                onClick={() => router.push('/settings/email-templates')}
-                className="flex items-center gap-2"
-              >
-                <Mail className="h-4 w-4" />
-                Manage Email Templates
-              </Button>
-            </CardContent>
-          </Card>
+        {/* Extras Tab */}
+        <TabsContent value="extras" className="space-y-6">
+          <ExtrasSettings />
         </TabsContent>
 
-        {/* Bonzah Insurance Tab */}
-        <TabsContent value="bonzah" className="space-y-6">
+        {/* Integrations Tab (Bonzah + Blacklist) */}
+        <TabsContent value="integrations" className="space-y-6">
           <BonzahSettings />
-        </TabsContent>
 
-        {/* Global Blacklist Tab */}
-        <TabsContent value="blacklist" className="space-y-6">
+          {/* Global Blacklist */}
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
@@ -2887,6 +2919,9 @@ const Settings = () => {
         <TabsContent value="subscription" className="space-y-6">
           <SubscriptionSettings />
         </TabsContent>
+
+          </div>{/* end Tab Content Area */}
+        </div>{/* end flex layout */}
       </Tabs>
 
       {/* Data Cleanup Dialog */}

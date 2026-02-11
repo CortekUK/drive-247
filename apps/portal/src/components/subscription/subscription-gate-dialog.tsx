@@ -11,7 +11,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Crown } from "lucide-react";
+import { Sparkles } from "lucide-react";
 
 const DISMISSED_KEY = "subscription-gate-dismissed";
 
@@ -50,7 +50,7 @@ export function SubscriptionGateDialog({
   const handleUpgrade = () => {
     sessionStorage.setItem(DISMISSED_KEY, "true");
     setOpen(false);
-    router.push("/settings?tab=subscription");
+    router.push("/subscription");
   };
 
   return (
@@ -58,14 +58,14 @@ export function SubscriptionGateDialog({
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <div className="mx-auto mb-2 flex h-12 w-12 items-center justify-center rounded-full bg-primary/10">
-            <Crown className="h-6 w-6 text-primary" />
+            <Sparkles className="h-6 w-6 text-primary" />
           </div>
           <DialogTitle className="text-center">
-            Upgrade to Drive247 Pro
+            Unlock the full platform
           </DialogTitle>
           <DialogDescription className="text-center">
-            Subscribe to unlock the full platform and keep your rental business
-            running smoothly. Just $200/month for everything you need.
+            Subscribe to Drive247 to access all features and keep your rental
+            business running smoothly.
           </DialogDescription>
         </DialogHeader>
         <DialogFooter className="flex-col gap-2 sm:flex-col">

@@ -153,9 +153,10 @@ Uses Supabase Realtime channels (replaced Socket.io):
 - **Insurance**: `bonzah-calculate-premium`, `bonzah-create-quote`, `bonzah-confirm-payment`, `bonzah-download-pdf`, `bonzah-verify-credentials`, `bonzah-view-policy`
 - **Admin**: `admin-create-user`, `admin-update-role`, `admin-deactivate-user`, `emergency-bootstrap`
 - **RAG chatbot**: `chat`, `rag-init`, `rag-sync`
+- **Subscriptions**: `create-subscription-checkout`, `create-subscription-portal-session`, `get-subscription-details`, `subscription-webhook`
 - **Shared utilities** in `supabase/functions/_shared/`: `cors.ts`, `stripe-client.ts`, `aws-config.ts`, `email-template-service.ts`, `openai.ts`, `bonzah-client.ts`, `resend-service.ts`, `document-loaders.ts`
 
-5 functions have `verify_jwt = false` in `supabase/config.toml`: `docusign-webhook`, `veriff-webhook`, `customer-chat`, `validate-customer-invite`, `submit-customer-registration`. Stripe webhook functions handle their own signature verification. All other functions require JWT auth by default.
+6 functions have `verify_jwt = false` in `supabase/config.toml`: `docusign-webhook`, `veriff-webhook`, `customer-chat`, `validate-customer-invite`, `submit-customer-registration`, `subscription-webhook`. Stripe webhook functions handle their own signature verification. All other functions require JWT auth by default.
 
 Edge function pattern:
 ```typescript
@@ -212,6 +213,7 @@ Required variables (see `.env.example`):
 - `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`
 - `STRIPE_TEST_SECRET_KEY`, `STRIPE_LIVE_SECRET_KEY` (edge functions)
 - `STRIPE_TEST_PUBLISHABLE_KEY`, `STRIPE_LIVE_PUBLISHABLE_KEY`
+- `STRIPE_SUBSCRIPTION_SECRET_KEY`, `STRIPE_SUBSCRIPTION_PRICE_ID`, `STRIPE_SUBSCRIPTION_WEBHOOK_SECRET` (platform subscription billing)
 - `NEXT_PUBLIC_VERIFF_API_KEY` (booking)
 - DocuSign credentials (portal)
 - AWS SES/SNS credentials for emails and SMS
@@ -238,6 +240,103 @@ Required variables (see `.env.example`):
 Migrations in `supabase/migrations/` (naming: `YYYYMMDDHHMMSS_description.sql`). Full schema reference in `docs/DATABASE_SCHEMA.md` including RLS policies. Stripe Connect details in `docs/STRIPE_CONNECT_PRODUCTION.md` and `docs/STRIPE_CONNECT_TESTING.md`.
 
 Key RLS helper functions: `get_user_tenant_id()`, `is_super_admin()`, `is_primary_super_admin()`, `is_global_master_admin()`. Super admins must have `tenant_id = NULL` in `app_users`.
+
+## Tenant Subscription System
+
+Platform-level billing where Drive247 charges tenants (rental operators) a monthly fee. This is **separate** from the existing Stripe Connect/dual-mode system used for booking payments — subscriptions use their own Stripe account with dedicated env vars (`STRIPE_SUBSCRIPTION_SECRET_KEY`, `STRIPE_SUBSCRIPTION_WEBHOOK_SECRET`).
+
+### Database Schema
+
+**`subscription_plans`** — per-tenant plans managed by super admin
+- Links to `tenants` via `tenant_id`; stores `stripe_price_id` and `stripe_product_id`
+- Fields: `name`, `description`, `features` (JSONB array), `amount` (cents), `currency`, `interval` (month/year), `is_active`, `sort_order`, `trial_days` (int, default 0)
+- RLS: tenants can SELECT their own plans (+ super admins); only `service_role` can manage
+- Migration: `supabase/migrations/20260211063727_add_subscription_plans.sql`
+
+**`tenant_subscriptions`** — one active subscription per tenant (enforced by unique index on `tenant_id` where status in `active`, `trialing`, `past_due`)
+- Links to `tenants` via `tenant_id`, stores `stripe_subscription_id` and `stripe_customer_id`
+- `plan_id` (UUID FK) links to the `subscription_plans` row the tenant subscribed to
+- Status enum: `incomplete`, `active`, `past_due`, `canceled`, `unpaid`, `trialing`, `paused`
+- Stores payment method details: `card_brand`, `card_last4`, `card_exp_month`, `card_exp_year`
+- Billing cycle tracked via `current_period_start/end`, cancellation via `cancel_at/canceled_at/ended_at`, trial via `trial_end` (timestamptz)
+- RLS: tenants can SELECT their own; only `service_role` (edge functions) can INSERT/UPDATE/DELETE
+
+**`tenant_subscription_invoices`** — historical invoices per tenant
+- References `tenant_subscriptions` (nullable FK, set NULL on delete)
+- Stores `stripe_invoice_pdf`, `stripe_hosted_invoice_url`, amounts in cents
+- Status enum: `draft`, `open`, `paid`, `void`, `uncollectible`
+- Same RLS pattern as subscriptions
+
+**`tenants` table additions:**
+- `stripe_subscription_customer_id` (TEXT) — Stripe Customer ID for platform billing
+- `subscription_plan` (TEXT, default `"basic"`) — current plan name, set dynamically based on active subscription
+
+Migrations: `supabase/migrations/20260212100000_add_tenant_subscriptions.sql`, `supabase/migrations/20260211063727_add_subscription_plans.sql`, `supabase/migrations/20260211072016_add_trial_support.sql`
+
+### Edge Functions
+
+| Function | JWT | Purpose |
+|----------|-----|---------|
+| `manage-subscription-plans` | Yes | CRUD for per-tenant plans (super admin only). Actions: `create`, `update`, `deactivate`, `activate`, `delete`, `list`. Creates Stripe Price objects automatically. |
+| `create-subscription-checkout` | Yes | Accepts `planId`, looks up `stripe_price_id` from DB; creates Stripe Checkout session with plan metadata. Passes `trial_period_days` to Stripe when plan has trial. |
+| `create-subscription-portal-session` | Yes | Creates Stripe Billing Portal session for managing payment methods |
+| `get-subscription-details` | Yes | Fetches DB subscription + live Stripe data (expanded payment method & latest invoice) |
+| `subscription-webhook` | **No** | Handles Stripe webhook events; reads plan info from metadata instead of hardcoding. Stores `trial_end` from Stripe subscription. |
+
+**Webhook events handled** (`subscription-webhook`):
+- `checkout.session.completed` → reads `plan_id`/`plan_name` from metadata, upserts subscription with actual plan, stores card details
+- `customer.subscription.updated` → resolves plan name from metadata or DB fallback, syncs status/period/card changes
+- `customer.subscription.deleted` → marks canceled, reverts to `"basic"`
+- `invoice.paid` / `invoice.payment_failed` → upserts invoice records
+
+All webhook handlers use `service_role` Supabase client to bypass RLS. Tenant is identified via `metadata.tenant_id` on Stripe objects.
+
+### Stripe Architecture
+
+One shared Stripe Product ("Drive247 Platform Subscription") with separate Stripe Price objects per plan. When admin creates/updates a plan, a Stripe Price is created (Prices are immutable — changing amount creates a new Price and deactivates the old one). At checkout, the specific plan's `stripe_price_id` is used.
+
+### Admin UI (apps/admin)
+
+**Tenant detail page** (`app/admin/(protected)/rentals/[id]/page.tsx`) — Subscription tab includes:
+- **Subscription Plans card**: table of plans for this tenant (name, amount, interval, features count, status, actions)
+- **Add/Edit Plan modal**: form with name, description, amount (dollars), currency, interval, dynamic features list
+- **Actions**: Edit, Activate/Deactivate toggle, Delete (blocked if subscriptions exist)
+- All actions call `manage-subscription-plans` edge function
+
+### Portal UI (apps/portal)
+
+**Hooks**:
+- `src/hooks/use-tenant-subscription.ts` — queries, mutations (`createCheckoutSession` accepts `planId`), computed: `isSubscribed`, `hasExpiredSubscription`, `isTrialing`, `trialDaysRemaining`
+- `src/hooks/use-subscription-plans.ts` — fetches active plans for tenant: `["subscription-plans", tenant?.id]`
+
+**Pages/Components**:
+- `src/app/(dashboard)/subscription/page.tsx` — shows grid of dynamic `PricingCard` components when unsubscribed; "Contact us" if no plans configured
+- `src/components/settings/subscription-settings.tsx` — same dynamic plan rendering embedded in Settings page (includes `LocalInvoiceView` dialog)
+- `src/components/subscription/pricing-card.tsx` — accepts `plan` prop (name, amount, currency, interval, features, trial_days from DB), `onSubscribe(planId)`. Shows "Start X-Day Free Trial" button when plan has trial.
+- `src/components/subscription/subscription-gate-dialog.tsx` — soft-gate modal for never-subscribed tenants, dismissible
+- `src/components/subscription/subscription-block-screen.tsx` — hard-block full-screen overlay for expired/canceled subscriptions, non-dismissible
+
+**Sidebar** (`app-sidebar.tsx`): Shows "Trial Active" with Timer icon when trialing (plus days-remaining countdown), "Subscription" with Crown icon if subscribed, "Upgrade" with Sparkles icon if not.
+
+**Dashboard layout** (`(dashboard)/layout.tsx`): Two-tier gating — `SubscriptionBlockScreen` (hard) for `hasExpiredSubscription`, `SubscriptionGateDialog` (soft) for never-subscribed. `/subscription` and `/settings` routes bypass the hard block.
+
+### Data Flow
+
+1. Super admin creates plan(s) for tenant in admin UI → `manage-subscription-plans` creates Stripe Price + DB row
+2. Tenant sees their plan(s) in portal → clicks "Subscribe Now" on a plan → `createCheckoutSession({ planId })` → redirected to Stripe Checkout
+3. Payment completes → Stripe sends `checkout.session.completed` webhook → DB updated with plan info from metadata
+4. Portal detects `?status=success` query param → polls `refetch()` every 2s for 15s waiting for webhook to land
+5. Ongoing changes (renewals, cancellations, payment failures) arrive via webhook events → DB stays in sync
+6. `isSubscribed` drives all UI gating: sidebar labels, gate dialog, settings display
+
+### Key Design Decisions
+
+- **Dynamic per-tenant pricing** — super admin configures different plans/prices for each tenant via admin UI
+- **Two-tier gating** — soft gate (dismissible dialog) for tenants who never subscribed; hard block (full-screen, non-dismissible) for tenants whose trial/subscription expired or was canceled. `/subscription` and `/settings` routes bypass the hard block so tenants can resubscribe
+- **Configurable trial periods** — `trial_days` per plan (0 = no trial). Stripe handles trial logic via `trial_period_days`. Sidebar shows trial countdown when `status === "trialing"`
+- **Separate Stripe account** — subscription billing is NOT on Stripe Connect; uses platform's own Stripe keys
+- **Webhook as source of truth** — frontend never writes subscription state directly; all mutations come through Stripe webhooks
+- **Plan info in Stripe metadata** — `plan_id` and `plan_name` are stored in checkout session and subscription metadata for webhook resolution
 
 ## Reserved Subdomains
 

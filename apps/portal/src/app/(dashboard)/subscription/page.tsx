@@ -1,11 +1,12 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import {
   useTenantSubscription,
   TenantSubscriptionInvoice,
 } from "@/hooks/use-tenant-subscription";
+import { useSubscriptionPlans } from "@/hooks/use-subscription-plans";
 import { PricingCard } from "@/components/subscription/pricing-card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -18,6 +19,8 @@ import {
   Loader2,
   CalendarDays,
   RefreshCw,
+  Crown,
+  Shield,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -29,7 +32,7 @@ function formatCurrency(amount: number, currency: string) {
 }
 
 function formatDate(dateStr: string | null) {
-  if (!dateStr) return "—";
+  if (!dateStr) return "\u2014";
   return new Date(dateStr).toLocaleDateString("en-US", {
     year: "numeric",
     month: "short",
@@ -54,47 +57,6 @@ function StatusBadge({ status }: { status: string }) {
   );
 }
 
-function InvoiceRow({ invoice }: { invoice: TenantSubscriptionInvoice }) {
-  return (
-    <tr className="border-b last:border-0">
-      <td className="py-3 pr-4 text-sm">{invoice.invoice_number || "—"}</td>
-      <td className="py-3 pr-4 text-sm">{formatDate(invoice.created_at)}</td>
-      <td className="py-3 pr-4 text-sm">
-        {formatCurrency(invoice.amount_due, invoice.currency)}
-      </td>
-      <td className="py-3 pr-4">
-        <StatusBadge status={invoice.status} />
-      </td>
-      <td className="py-3 text-sm">
-        <div className="flex items-center gap-2">
-          {invoice.stripe_hosted_invoice_url && (
-            <a
-              href={invoice.stripe_hosted_invoice_url}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center gap-1 text-primary hover:underline"
-            >
-              <ExternalLink className="h-3.5 w-3.5" />
-              View
-            </a>
-          )}
-          {invoice.stripe_invoice_pdf && (
-            <a
-              href={invoice.stripe_invoice_pdf}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center gap-1 text-primary hover:underline"
-            >
-              <Download className="h-3.5 w-3.5" />
-              PDF
-            </a>
-          )}
-        </div>
-      </td>
-    </tr>
-  );
-}
-
 export default function SubscriptionPage() {
   const searchParams = useSearchParams();
   const {
@@ -107,11 +69,14 @@ export default function SubscriptionPage() {
     createPortalSession,
     refetch,
   } = useTenantSubscription();
+  const { data: plans, isLoading: plansLoading } = useSubscriptionPlans();
+
+  const [subscribingPlanId, setSubscribingPlanId] = useState<string | null>(null);
 
   // Handle return from Stripe Checkout
   useEffect(() => {
     if (searchParams.get("status") === "success") {
-      toast.success("Subscription activated! Welcome to Drive247 Pro.");
+      toast.success("Subscription activated successfully!");
       // Poll for webhook to process
       const interval = setInterval(() => {
         refetch();
@@ -124,15 +89,21 @@ export default function SubscriptionPage() {
     }
   }, [searchParams]);
 
-  const handleSubscribe = async () => {
-    const origin = window.location.origin;
-    const result = await createCheckoutSession.mutateAsync({
-      successUrl: `${origin}/subscription?status=success`,
-      cancelUrl: `${origin}/subscription?status=canceled`,
-    });
+  const handleSubscribe = async (planId: string) => {
+    setSubscribingPlanId(planId);
+    try {
+      const origin = window.location.origin;
+      const result = await createCheckoutSession.mutateAsync({
+        planId,
+        successUrl: `${origin}/subscription?status=success`,
+        cancelUrl: `${origin}/subscription?status=canceled`,
+      });
 
-    if (result?.url) {
-      window.location.href = result.url;
+      if (result?.url) {
+        window.location.href = result.url;
+      }
+    } finally {
+      setSubscribingPlanId(null);
     }
   };
 
@@ -146,29 +117,76 @@ export default function SubscriptionPage() {
     }
   };
 
-  if (isLoading) {
+  if (isLoading || plansLoading) {
     return (
       <div className="p-6 space-y-6">
         <Skeleton className="h-8 w-48" />
-        <Skeleton className="h-[400px] w-full max-w-md mx-auto rounded-xl" />
+        <Skeleton className="h-[400px] w-full max-w-sm mx-auto rounded-2xl" />
       </div>
     );
   }
 
   // Unsubscribed state
   if (!isSubscribed) {
+    const hasPlans = plans && plans.length > 0;
+
     return (
       <div className="p-6">
-        <div className="mb-8 text-center">
-          <h1 className="text-3xl font-bold tracking-tight">Subscription</h1>
-          <p className="mt-2 text-muted-foreground">
-            Subscribe to access the full Drive247 platform
+        {/* Header */}
+        <div className="mb-10 text-center max-w-2xl mx-auto">
+          <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-primary/10">
+            <Crown className="h-7 w-7 text-primary" />
+          </div>
+          <h1 className="text-3xl font-bold tracking-tight">
+            Choose your plan
+          </h1>
+          <p className="mt-2 text-muted-foreground text-base">
+            Subscribe to unlock the full Drive247 platform and grow your rental business
           </p>
         </div>
-        <PricingCard
-          onSubscribe={handleSubscribe}
-          isLoading={createCheckoutSession.isPending}
-        />
+
+        {hasPlans ? (
+          <>
+            <div className={`flex flex-wrap justify-center gap-8 ${plans.length === 1 ? '' : 'max-w-5xl mx-auto'}`}>
+              {plans.map((plan) => (
+                <PricingCard
+                  key={plan.id}
+                  plan={plan}
+                  onSubscribe={handleSubscribe}
+                  isLoading={subscribingPlanId === plan.id && createCheckoutSession.isPending}
+                />
+              ))}
+            </div>
+
+            {/* Trust signals */}
+            <div className="mt-10 flex flex-wrap items-center justify-center gap-6 text-xs text-muted-foreground">
+              <div className="flex items-center gap-1.5">
+                <Shield className="h-3.5 w-3.5" />
+                <span>Secure payment via Stripe</span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <CreditCard className="h-3.5 w-3.5" />
+                <span>No hidden fees</span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <CalendarDays className="h-3.5 w-3.5" />
+                <span>Cancel anytime</span>
+              </div>
+            </div>
+          </>
+        ) : (
+          <div className="text-center py-12 max-w-md mx-auto">
+            <p className="text-muted-foreground">
+              No subscription plans are available yet. Please contact us to get started.
+            </p>
+            <a
+              href="mailto:support@drive-247.com"
+              className="mt-4 inline-block text-primary hover:underline"
+            >
+              support@drive-247.com
+            </a>
+          </div>
+        )}
       </div>
     );
   }
@@ -180,7 +198,7 @@ export default function SubscriptionPage() {
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Subscription</h1>
           <p className="mt-1 text-muted-foreground">
-            Manage your Drive247 Pro subscription
+            Manage your {subscription?.plan_name || "subscription"}
           </p>
         </div>
         <Button variant="outline" size="sm" onClick={refetch}>
@@ -215,7 +233,7 @@ export default function SubscriptionPage() {
                   <span className="text-sm text-muted-foreground">Amount</span>
                   <span className="font-medium">
                     {formatCurrency(
-                      subscription?.amount || 20000,
+                      subscription?.amount || 0,
                       subscription?.currency || "usd"
                     )}
                     /{subscription?.interval || "month"}
@@ -358,7 +376,7 @@ export default function SubscriptionPage() {
                     {invoices.map((invoice) => (
                       <tr key={invoice.id} className="border-b last:border-0">
                         <td className="py-3 px-6 text-sm">
-                          {invoice.invoice_number || "—"}
+                          {invoice.invoice_number || "\u2014"}
                         </td>
                         <td className="py-3 pr-4 text-sm">
                           {formatDate(invoice.created_at)}

@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { useSearchParams } from "next/navigation";
 import { useTenantSubscription, TenantSubscriptionInvoice } from "@/hooks/use-tenant-subscription";
+import { useSubscriptionPlans } from "@/hooks/use-subscription-plans";
 import { PricingCard } from "@/components/subscription/pricing-card";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -207,13 +208,15 @@ export function SubscriptionSettings() {
     createPortalSession,
     refetch,
   } = useTenantSubscription();
+  const { data: plans, isLoading: plansLoading } = useSubscriptionPlans();
 
   const [viewingInvoice, setViewingInvoice] = useState<TenantSubscriptionInvoice | null>(null);
+  const [subscribingPlanId, setSubscribingPlanId] = useState<string | null>(null);
 
   // Handle return from Stripe Checkout
   useEffect(() => {
     if (searchParams.get("status") === "success") {
-      toast.success("Subscription activated! Welcome to Drive247 Pro.");
+      toast.success("Subscription activated successfully!");
       const interval = setInterval(() => refetch(), 2000);
       const timeout = setTimeout(() => clearInterval(interval), 15000);
       return () => {
@@ -223,15 +226,21 @@ export function SubscriptionSettings() {
     }
   }, [searchParams]);
 
-  const handleSubscribe = async () => {
-    const origin = window.location.origin;
-    const result = await createCheckoutSession.mutateAsync({
-      successUrl: `${origin}/settings?tab=subscription&status=success`,
-      cancelUrl: `${origin}/settings?tab=subscription&status=canceled`,
-    });
+  const handleSubscribe = async (planId: string) => {
+    setSubscribingPlanId(planId);
+    try {
+      const origin = window.location.origin;
+      const result = await createCheckoutSession.mutateAsync({
+        planId,
+        successUrl: `${origin}/settings?tab=subscription&status=success`,
+        cancelUrl: `${origin}/settings?tab=subscription&status=canceled`,
+      });
 
-    if (result?.url) {
-      window.location.href = result.url;
+      if (result?.url) {
+        window.location.href = result.url;
+      }
+    } finally {
+      setSubscribingPlanId(null);
     }
   };
 
@@ -245,7 +254,7 @@ export function SubscriptionSettings() {
     }
   };
 
-  if (isLoading) {
+  if (isLoading || plansLoading) {
     return (
       <div className="space-y-6">
         <Skeleton className="h-8 w-48" />
@@ -256,6 +265,8 @@ export function SubscriptionSettings() {
 
   // Unsubscribed state
   if (!isSubscribed) {
+    const hasPlans = plans && plans.length > 0;
+
     return (
       <div className="space-y-6">
         <Card>
@@ -269,10 +280,30 @@ export function SubscriptionSettings() {
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <PricingCard
-              onSubscribe={handleSubscribe}
-              isLoading={createCheckoutSession.isPending}
-            />
+            {hasPlans ? (
+              <div className={`flex flex-wrap justify-center gap-6 ${plans.length === 1 ? '' : 'max-w-4xl mx-auto'}`}>
+                {plans.map((plan) => (
+                  <PricingCard
+                    key={plan.id}
+                    plan={plan}
+                    onSubscribe={handleSubscribe}
+                    isLoading={subscribingPlanId === plan.id && createCheckoutSession.isPending}
+                  />
+                ))}
+              </div>
+            ) : (
+              <div className="text-center py-8">
+                <p className="text-muted-foreground">
+                  No subscription plans are available yet. Please contact us to get started.
+                </p>
+                <a
+                  href="mailto:support@drive-247.com"
+                  className="mt-2 inline-block text-primary hover:underline"
+                >
+                  support@drive-247.com
+                </a>
+              </div>
+            )}
           </CardContent>
         </Card>
       </div>

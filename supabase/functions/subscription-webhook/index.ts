@@ -75,6 +75,21 @@ async function handleCheckoutCompleted(stripe: Stripe, supabase: any, session: a
   const subscriptionId = session.subscription;
   if (!subscriptionId) { console.error("No subscription ID in checkout session"); return; }
 
+  // Read plan info from session metadata
+  const planId = session.metadata?.plan_id || null;
+  const planName = session.metadata?.plan_name || null;
+
+  // If we have a plan_id, look up the plan for authoritative name
+  let resolvedPlanName = planName || "pro";
+  if (planId) {
+    const { data: plan } = await supabase
+      .from("subscription_plans")
+      .select("name")
+      .eq("id", planId)
+      .single();
+    if (plan) resolvedPlanName = plan.name;
+  }
+
   const subscription = await stripe.subscriptions.retrieve(subscriptionId, {
     expand: ["default_payment_method"],
   });
@@ -89,8 +104,9 @@ async function handleCheckoutCompleted(stripe: Stripe, supabase: any, session: a
       stripe_subscription_id: subscription.id,
       stripe_customer_id: subscription.customer as string,
       status: subscription.status,
-      plan_name: "pro",
-      amount: subscription.items.data[0]?.price?.unit_amount || 20000,
+      plan_name: resolvedPlanName,
+      plan_id: planId,
+      amount: subscription.items.data[0]?.price?.unit_amount || 0,
       currency: subscription.currency,
       interval: subscription.items.data[0]?.price?.recurring?.interval || "month",
       current_period_start: new Date(subscription.current_period_start * 1000).toISOString(),
@@ -99,17 +115,20 @@ async function handleCheckoutCompleted(stripe: Stripe, supabase: any, session: a
       card_last4: card?.last4 || null,
       card_exp_month: card?.exp_month || null,
       card_exp_year: card?.exp_year || null,
+      trial_end: subscription.trial_end
+        ? new Date(subscription.trial_end * 1000).toISOString()
+        : null,
     }, { onConflict: "stripe_subscription_id" });
 
   if (subError) { console.error("Error upserting subscription:", subError); throw subError; }
 
   const { error: tenantError } = await supabase
     .from("tenants")
-    .update({ subscription_plan: "pro", stripe_subscription_customer_id: subscription.customer as string })
+    .update({ subscription_plan: resolvedPlanName, stripe_subscription_customer_id: subscription.customer as string })
     .eq("id", tenantId);
 
   if (tenantError) console.error("Error updating tenant plan:", tenantError);
-  console.log(`Subscription ${subscription.id} activated for tenant ${tenantId}`);
+  console.log(`Subscription ${subscription.id} activated for tenant ${tenantId}, plan: ${resolvedPlanName}`);
 }
 
 async function handleSubscriptionUpdated(stripe: Stripe, supabase: any, subscription: any) {
@@ -132,6 +151,9 @@ async function handleSubscriptionUpdated(stripe: Stripe, supabase: any, subscrip
       cancel_at: subscription.cancel_at ? new Date(subscription.cancel_at * 1000).toISOString() : null,
       canceled_at: subscription.canceled_at ? new Date(subscription.canceled_at * 1000).toISOString() : null,
       ended_at: subscription.ended_at ? new Date(subscription.ended_at * 1000).toISOString() : null,
+      trial_end: subscription.trial_end
+        ? new Date(subscription.trial_end * 1000).toISOString()
+        : null,
       card_brand: card?.brand || null,
       card_last4: card?.last4 || null,
       card_exp_month: card?.exp_month || null,
@@ -141,9 +163,24 @@ async function handleSubscriptionUpdated(stripe: Stripe, supabase: any, subscrip
 
   if (error) { console.error("Error updating subscription:", error); throw error; }
 
-  const activePlan = ["active", "trialing"].includes(subscription.status) ? "pro" : "basic";
+  // Resolve plan name from subscription metadata or existing record
+  let activePlan = "basic";
+  if (["active", "trialing"].includes(subscription.status)) {
+    const subPlanName = subscription.metadata?.plan_name;
+    if (subPlanName) {
+      activePlan = subPlanName;
+    } else {
+      // Fall back to what's stored in our DB
+      const { data: existingSub } = await supabase
+        .from("tenant_subscriptions")
+        .select("plan_name")
+        .eq("stripe_subscription_id", subscription.id)
+        .single();
+      activePlan = existingSub?.plan_name || "pro";
+    }
+  }
   await supabase.from("tenants").update({ subscription_plan: activePlan }).eq("id", tenantId);
-  console.log(`Subscription ${subscription.id} updated: status=${subscription.status}`);
+  console.log(`Subscription ${subscription.id} updated: status=${subscription.status}, plan=${activePlan}`);
 }
 
 async function handleSubscriptionDeleted(supabase: any, subscription: any) {

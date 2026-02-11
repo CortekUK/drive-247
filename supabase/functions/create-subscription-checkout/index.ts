@@ -25,8 +25,9 @@ Deno.serve(async (req) => {
     const { data: { user }, error: userError } = await supabase.auth.getUser(token);
     if (userError || !user) return errorResponse("Unauthorized", 401);
 
-    const { tenantId, successUrl, cancelUrl } = await req.json();
+    const { tenantId, planId, successUrl, cancelUrl } = await req.json();
     if (!tenantId) return errorResponse("tenantId is required");
+    if (!planId) return errorResponse("planId is required");
     if (!successUrl) return errorResponse("successUrl is required");
     if (!cancelUrl) return errorResponse("cancelUrl is required");
 
@@ -49,9 +50,20 @@ Deno.serve(async (req) => {
       return errorResponse("Tenant already has an active subscription", 409);
     }
 
+    // Look up the plan from DB
+    const { data: plan, error: planError } = await supabase
+      .from("subscription_plans")
+      .select("id, name, stripe_price_id, tenant_id, is_active, trial_days")
+      .eq("id", planId)
+      .single();
+
+    if (planError || !plan) return errorResponse("Plan not found", 404);
+    if (plan.tenant_id !== tenantId) return errorResponse("Plan does not belong to this tenant", 403);
+    if (!plan.is_active) return errorResponse("Plan is no longer active", 400);
+    if (!plan.stripe_price_id) return errorResponse("Plan has no Stripe price configured", 500);
+
     const stripe = getSubscriptionStripe();
-    const priceId = Deno.env.get("STRIPE_SUBSCRIPTION_PRICE_ID");
-    if (!priceId) return errorResponse("Subscription price not configured", 500);
+    const priceId = plan.stripe_price_id;
 
     let stripeCustomerId = tenant.stripe_subscription_customer_id;
 
@@ -77,8 +89,11 @@ Deno.serve(async (req) => {
       line_items: [{ price: priceId, quantity: 1 }],
       success_url: successUrl,
       cancel_url: cancelUrl,
-      metadata: { tenant_id: tenantId, source: "platform_subscription" },
-      subscription_data: { metadata: { tenant_id: tenantId } },
+      metadata: { tenant_id: tenantId, plan_id: planId, plan_name: plan.name, source: "platform_subscription" },
+      subscription_data: {
+        metadata: { tenant_id: tenantId, plan_id: planId, plan_name: plan.name },
+        ...(plan.trial_days > 0 ? { trial_period_days: plan.trial_days } : {}),
+      },
     });
 
     console.log(`Created subscription checkout session ${session.id} for tenant ${tenantId}`);

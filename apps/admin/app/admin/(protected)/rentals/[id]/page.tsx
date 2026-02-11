@@ -58,6 +58,33 @@ interface TenantInvoice {
   created_at: string;
 }
 
+interface SubscriptionPlan {
+  id: string;
+  tenant_id: string;
+  name: string;
+  description: string | null;
+  features: string[];
+  amount: number;
+  currency: string;
+  interval: string;
+  stripe_price_id: string | null;
+  is_active: boolean;
+  sort_order: number;
+  trial_days: number;
+  created_at: string;
+  active_subscriptions: number;
+}
+
+interface PlanFormData {
+  name: string;
+  description: string;
+  amount: string;
+  currency: string;
+  interval: string;
+  trialDays: string;
+  features: string[];
+}
+
 function formatCurrency(amount: number, currency: string) {
   return new Intl.NumberFormat('en-US', {
     style: 'currency',
@@ -100,6 +127,22 @@ export default function TenantDetailsPage() {
   const [invoices, setInvoices] = useState<TenantInvoice[]>([]);
   const [subscriptionLoading, setSubscriptionLoading] = useState(false);
 
+  // Plans state
+  const [plans, setPlans] = useState<SubscriptionPlan[]>([]);
+  const [plansLoading, setPlansLoading] = useState(false);
+  const [showPlanModal, setShowPlanModal] = useState(false);
+  const [editingPlan, setEditingPlan] = useState<SubscriptionPlan | null>(null);
+  const [planSaving, setPlanSaving] = useState(false);
+  const [planForm, setPlanForm] = useState<PlanFormData>({
+    name: '',
+    description: '',
+    amount: '',
+    currency: 'usd',
+    interval: 'month',
+    features: [],
+  });
+  const [newFeature, setNewFeature] = useState('');
+
   useEffect(() => {
     if (params.id) {
       loadTenant(params.id as string);
@@ -123,8 +166,9 @@ export default function TenantDetailsPage() {
         contact_email: data.contact_email,
       });
 
-      // Load subscription data
+      // Load subscription data and plans
       loadSubscription(id);
+      loadPlans(id);
     } catch (error) {
       console.error('Error loading tenant:', error);
       toast.error('Failed to load tenant details');
@@ -160,6 +204,183 @@ export default function TenantDetailsPage() {
     } finally {
       setSubscriptionLoading(false);
     }
+  };
+
+  const loadPlans = async (tenantId: string) => {
+    setPlansLoading(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('manage-subscription-plans', {
+        body: { action: 'list', tenantId },
+      });
+      if (error) throw error;
+      const rawPlans = data?.plans || [];
+
+      // Fetch active subscription counts per plan
+      const { data: subCounts } = await supabase
+        .from('tenant_subscriptions')
+        .select('plan_id')
+        .eq('tenant_id', tenantId)
+        .in('status', ['active', 'trialing', 'past_due']);
+
+      const countMap: Record<string, number> = {};
+      (subCounts || []).forEach((s: any) => {
+        if (s.plan_id) countMap[s.plan_id] = (countMap[s.plan_id] || 0) + 1;
+      });
+
+      setPlans(rawPlans.map((p: any) => ({ ...p, active_subscriptions: countMap[p.id] || 0 })));
+    } catch (error) {
+      console.error('Error loading plans:', error);
+    } finally {
+      setPlansLoading(false);
+    }
+  };
+
+  const openAddPlan = () => {
+    setEditingPlan(null);
+    setPlanForm({ name: '', description: '', amount: '', currency: 'usd', interval: 'month', trialDays: '0', features: [] });
+    setNewFeature('');
+    setShowPlanModal(true);
+  };
+
+  const openEditPlan = (plan: SubscriptionPlan) => {
+    setEditingPlan(plan);
+    setPlanForm({
+      name: plan.name,
+      description: plan.description || '',
+      amount: (plan.amount / 100).toString(),
+      currency: plan.currency,
+      interval: plan.interval,
+      trialDays: (plan.trial_days || 0).toString(),
+      features: [...plan.features],
+    });
+    setNewFeature('');
+    setShowPlanModal(true);
+  };
+
+  const handleSavePlan = async () => {
+    if (!tenant) return;
+    if (!planForm.name.trim()) { toast.error('Plan name is required'); return; }
+    const amountDollars = parseFloat(planForm.amount);
+    if (isNaN(amountDollars) || amountDollars <= 0) { toast.error('Amount must be a positive number'); return; }
+
+    setPlanSaving(true);
+    try {
+      const amountCents = Math.round(amountDollars * 100);
+
+      if (editingPlan) {
+        // Update
+        const { data, error } = await supabase.functions.invoke('manage-subscription-plans', {
+          body: {
+            action: 'update',
+            planId: editingPlan.id,
+            name: planForm.name,
+            description: planForm.description || null,
+            features: planForm.features,
+            amount: amountCents,
+            currency: planForm.currency,
+            interval: planForm.interval,
+            trialDays: parseInt(planForm.trialDays) || 0,
+          },
+        });
+        if (error) throw error;
+        if (data?.error) throw new Error(data.error);
+        if (data?.pricingChanged && editingPlan.active_subscriptions > 0) {
+          toast.success('Plan updated! Note: existing subscribers will continue at their current rate until they renew.');
+        } else {
+          toast.success(`"${planForm.name}" plan updated successfully`);
+        }
+      } else {
+        // Create
+        const { data, error } = await supabase.functions.invoke('manage-subscription-plans', {
+          body: {
+            action: 'create',
+            tenantId: tenant.id,
+            name: planForm.name,
+            description: planForm.description || null,
+            features: planForm.features,
+            amount: amountCents,
+            currency: planForm.currency,
+            interval: planForm.interval,
+            trialDays: parseInt(planForm.trialDays) || 0,
+          },
+        });
+        if (error) throw error;
+        if (data?.error) throw new Error(data.error);
+        toast.success(`"${planForm.name}" plan created — tenant can now subscribe from their portal`);
+      }
+
+      setShowPlanModal(false);
+      loadPlans(tenant.id);
+    } catch (error: any) {
+      toast.error(`Something went wrong while saving the plan. Please try again.`);
+    } finally {
+      setPlanSaving(false);
+    }
+  };
+
+  const handleTogglePlanActive = async (plan: SubscriptionPlan) => {
+    if (!tenant) return;
+
+    if (plan.is_active && plan.active_subscriptions > 0) {
+      const confirmed = confirm(
+        `"${plan.name}" has ${plan.active_subscriptions} active subscriber${plan.active_subscriptions > 1 ? 's' : ''}.\n\nDeactivating will hide this plan from new signups, but existing subscribers will continue to be billed.\n\nContinue?`
+      );
+      if (!confirmed) return;
+    }
+
+    try {
+      const action = plan.is_active ? 'deactivate' : 'activate';
+      const { data, error } = await supabase.functions.invoke('manage-subscription-plans', {
+        body: { action, planId: plan.id },
+      });
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+
+      if (plan.is_active) {
+        toast.success(`"${plan.name}" deactivated — no longer visible to new subscribers`);
+      } else {
+        toast.success(`"${plan.name}" activated — now visible to the tenant in their portal`);
+      }
+      loadPlans(tenant.id);
+    } catch (error: any) {
+      toast.error(`Something went wrong while updating the plan. Please try again.`);
+    }
+  };
+
+  const handleDeletePlan = async (plan: SubscriptionPlan) => {
+    if (!tenant) return;
+
+    if (plan.active_subscriptions > 0) {
+      toast.error(
+        `Can't delete "${plan.name}" because it has ${plan.active_subscriptions} active subscriber${plan.active_subscriptions > 1 ? 's' : ''}. Deactivate it instead to hide it from new signups.`
+      );
+      return;
+    }
+
+    if (!confirm(`Permanently delete "${plan.name}"? This cannot be undone.`)) return;
+
+    try {
+      const { data, error } = await supabase.functions.invoke('manage-subscription-plans', {
+        body: { action: 'delete', planId: plan.id },
+      });
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+      toast.success(`"${plan.name}" has been deleted`);
+      loadPlans(tenant.id);
+    } catch (error: any) {
+      toast.error(`Something went wrong while deleting the plan. Please try again.`);
+    }
+  };
+
+  const addFeature = () => {
+    if (newFeature.trim()) {
+      setPlanForm({ ...planForm, features: [...planForm.features, newFeature.trim()] });
+      setNewFeature('');
+    }
+  };
+
+  const removeFeature = (index: number) => {
+    setPlanForm({ ...planForm, features: planForm.features.filter((_, i) => i !== index) });
   };
 
   const copyToClipboard = (text: string, label: string) => {
@@ -661,6 +882,112 @@ export default function TenantDetailsPage() {
 
         {/* Subscription Tab */}
         <TabsContent value="subscription">
+          {/* Subscription Plans Management */}
+          <div className="mb-6 bg-dark-card rounded-lg p-6 border border-dark-border">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-xl font-semibold text-white">Subscription Plans</h2>
+              <button
+                onClick={openAddPlan}
+                className="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 text-sm font-medium"
+              >
+                + Add Plan
+              </button>
+            </div>
+
+            {plansLoading ? (
+              <div className="animate-pulse space-y-3">
+                <div className="h-10 bg-dark-bg rounded"></div>
+                <div className="h-10 bg-dark-bg rounded"></div>
+              </div>
+            ) : plans.length === 0 ? (
+              <div className="text-center py-8">
+                <p className="text-gray-400 mb-2">No subscription plans configured</p>
+                <p className="text-sm text-gray-500">Add a plan to enable subscriptions for this tenant</p>
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead>
+                    <tr className="border-b border-dark-border">
+                      <th className="text-left py-2 pr-4 text-xs font-medium text-gray-400 uppercase">Name</th>
+                      <th className="text-left py-2 pr-4 text-xs font-medium text-gray-400 uppercase">Amount</th>
+                      <th className="text-left py-2 pr-4 text-xs font-medium text-gray-400 uppercase">Interval</th>
+                      <th className="text-left py-2 pr-4 text-xs font-medium text-gray-400 uppercase">Features</th>
+                      <th className="text-left py-2 pr-4 text-xs font-medium text-gray-400 uppercase">Status</th>
+                      <th className="text-left py-2 pr-4 text-xs font-medium text-gray-400 uppercase">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {plans.map((plan) => (
+                      <tr key={plan.id} className="border-b border-dark-border last:border-0">
+                        <td className="py-3 pr-4">
+                          <p className="text-white font-medium">{plan.name}</p>
+                          {plan.description && (
+                            <p className="text-xs text-gray-400 mt-0.5">{plan.description}</p>
+                          )}
+                        </td>
+                        <td className="py-3 pr-4 text-white">
+                          {formatCurrency(plan.amount, plan.currency)}
+                        </td>
+                        <td className="py-3 pr-4 text-gray-300 capitalize">
+                          {plan.interval}
+                          {plan.trial_days > 0 && (
+                            <span className="ml-2 inline-flex px-1.5 py-0.5 text-[10px] font-medium rounded bg-purple-900/30 text-purple-400">
+                              {plan.trial_days}-day trial
+                            </span>
+                          )}
+                        </td>
+                        <td className="py-3 pr-4 text-gray-300 text-sm">
+                          {plan.features.length} feature{plan.features.length !== 1 ? 's' : ''}
+                        </td>
+                        <td className="py-3 pr-4">
+                          <div className="flex items-center gap-2">
+                            <span className={`inline-flex px-2 py-0.5 text-xs font-semibold rounded-full ${
+                              plan.is_active
+                                ? 'bg-green-900/30 text-green-400'
+                                : 'bg-gray-900/30 text-gray-400'
+                            }`}>
+                              {plan.is_active ? 'Active' : 'Inactive'}
+                            </span>
+                            {plan.active_subscriptions > 0 && (
+                              <span className="inline-flex px-2 py-0.5 text-xs font-semibold rounded-full bg-blue-900/30 text-blue-400">
+                                {plan.active_subscriptions} subscriber{plan.active_subscriptions > 1 ? 's' : ''}
+                              </span>
+                            )}
+                          </div>
+                        </td>
+                        <td className="py-3 pr-4">
+                          <div className="flex items-center gap-2">
+                            <button
+                              onClick={() => openEditPlan(plan)}
+                              className="text-primary-400 hover:text-primary-300 text-sm"
+                            >
+                              Edit
+                            </button>
+                            <button
+                              onClick={() => handleTogglePlanActive(plan)}
+                              className={`text-sm ${plan.is_active ? 'text-yellow-400 hover:text-yellow-300' : 'text-green-400 hover:text-green-300'}`}
+                            >
+                              {plan.is_active ? 'Deactivate' : 'Activate'}
+                            </button>
+                            <button
+                              onClick={() => handleDeletePlan(plan)}
+                              disabled={plan.active_subscriptions > 0}
+                              className={`text-sm ${plan.active_subscriptions > 0 ? 'text-gray-600 cursor-not-allowed' : 'text-red-400 hover:text-red-300'}`}
+                              title={plan.active_subscriptions > 0 ? 'Cannot delete a plan with active subscribers — deactivate it instead' : 'Permanently delete this plan'}
+                            >
+                              Delete
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+
           {subscriptionLoading ? (
             <div className="animate-pulse space-y-4">
               <div className="h-32 bg-dark-card rounded-lg"></div>
@@ -800,6 +1127,153 @@ export default function TenantDetailsPage() {
           )}
         </TabsContent>
       </Tabs>
+
+      {/* Plan Modal */}
+      {showPlanModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50 p-4">
+          <div className="bg-dark-card rounded-lg p-6 max-w-lg w-full border border-dark-border max-h-[90vh] overflow-y-auto">
+            <h2 className="text-xl font-bold text-white mb-4">
+              {editingPlan ? 'Edit Plan' : 'Add Plan'}
+            </h2>
+
+            {editingPlan && editingPlan.active_subscriptions > 0 && (
+              <div className="bg-yellow-900/20 border border-yellow-700/50 rounded-lg p-3 mb-4">
+                <p className="text-sm text-yellow-400">
+                  This plan has {editingPlan.active_subscriptions} active subscriber{editingPlan.active_subscriptions > 1 ? 's' : ''}.
+                  Changing the name, description, or features will update immediately.
+                  Changing the price will only apply to new subscriptions — existing subscribers will continue at their current rate.
+                </p>
+              </div>
+            )}
+
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-400 mb-1">Plan Name</label>
+                <input
+                  type="text"
+                  value={planForm.name}
+                  onChange={(e) => setPlanForm({ ...planForm, name: e.target.value })}
+                  className="w-full px-3 py-2 bg-dark-bg border border-dark-border rounded-md text-white focus:outline-none focus:ring-2 focus:ring-primary-500"
+                  placeholder="e.g., Starter, Pro, Enterprise"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-400 mb-1">Description</label>
+                <input
+                  type="text"
+                  value={planForm.description}
+                  onChange={(e) => setPlanForm({ ...planForm, description: e.target.value })}
+                  className="w-full px-3 py-2 bg-dark-bg border border-dark-border rounded-md text-white focus:outline-none focus:ring-2 focus:ring-primary-500"
+                  placeholder="Short description of the plan"
+                />
+              </div>
+
+              <div className="grid grid-cols-3 gap-3">
+                <div>
+                  <label className="block text-sm font-medium text-gray-400 mb-1">Amount ($)</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    value={planForm.amount}
+                    onChange={(e) => setPlanForm({ ...planForm, amount: e.target.value })}
+                    className="w-full px-3 py-2 bg-dark-bg border border-dark-border rounded-md text-white focus:outline-none focus:ring-2 focus:ring-primary-500"
+                    placeholder="200"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-400 mb-1">Currency</label>
+                  <select
+                    value={planForm.currency}
+                    onChange={(e) => setPlanForm({ ...planForm, currency: e.target.value })}
+                    className="w-full px-3 py-2 bg-dark-bg border border-dark-border rounded-md text-white focus:outline-none focus:ring-2 focus:ring-primary-500"
+                  >
+                    <option value="usd">USD</option>
+                    <option value="gbp">GBP</option>
+                    <option value="eur">EUR</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-400 mb-1">Interval</label>
+                  <select
+                    value={planForm.interval}
+                    onChange={(e) => setPlanForm({ ...planForm, interval: e.target.value })}
+                    className="w-full px-3 py-2 bg-dark-bg border border-dark-border rounded-md text-white focus:outline-none focus:ring-2 focus:ring-primary-500"
+                  >
+                    <option value="month">Monthly</option>
+                    <option value="year">Yearly</option>
+                  </select>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-400 mb-1">Trial Period (days)</label>
+                <input
+                  type="number"
+                  min="0"
+                  value={planForm.trialDays}
+                  onChange={(e) => setPlanForm({ ...planForm, trialDays: e.target.value })}
+                  className="w-full px-3 py-2 bg-dark-bg border border-dark-border rounded-md text-white focus:outline-none focus:ring-2 focus:ring-primary-500"
+                  placeholder="0 = no trial"
+                />
+                <p className="text-xs text-gray-500 mt-1">Set to 0 for no trial. Customers enter card at checkout but aren't charged until trial ends.</p>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-400 mb-1">Features</label>
+                <div className="space-y-2">
+                  {planForm.features.map((feature, index) => (
+                    <div key={index} className="flex items-center gap-2">
+                      <span className="flex-1 px-3 py-1.5 bg-dark-bg border border-dark-border rounded-md text-white text-sm">
+                        {feature}
+                      </span>
+                      <button
+                        onClick={() => removeFeature(index)}
+                        className="text-red-400 hover:text-red-300 text-sm px-2"
+                      >
+                        Remove
+                      </button>
+                    </div>
+                  ))}
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="text"
+                      value={newFeature}
+                      onChange={(e) => setNewFeature(e.target.value)}
+                      onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), addFeature())}
+                      className="flex-1 px-3 py-2 bg-dark-bg border border-dark-border rounded-md text-white focus:outline-none focus:ring-2 focus:ring-primary-500 text-sm"
+                      placeholder="Add a feature..."
+                    />
+                    <button
+                      onClick={addFeature}
+                      className="px-3 py-2 bg-dark-hover text-white rounded-md hover:bg-dark-border border border-dark-border text-sm"
+                    >
+                      Add
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex space-x-3 pt-4 mt-4 border-t border-dark-border">
+              <button
+                onClick={() => setShowPlanModal(false)}
+                className="flex-1 px-4 py-2 border border-dark-border rounded-md text-gray-300 hover:bg-dark-hover"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleSavePlan}
+                disabled={planSaving}
+                className="flex-1 px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700 disabled:opacity-50"
+              >
+                {planSaving ? 'Saving...' : editingPlan ? 'Update Plan' : 'Create Plan'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Delete Confirmation Modal */}
       {showDeleteConfirm && (

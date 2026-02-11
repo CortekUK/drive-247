@@ -22,6 +22,7 @@ export interface TenantSubscription {
   card_last4: string | null;
   card_exp_month: number | null;
   card_exp_year: number | null;
+  trial_end: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -85,11 +86,31 @@ export function useTenantSubscription() {
     retry: false,
   });
 
+  // Check for past subscriptions (expired trials / canceled)
+  const pastSubscriptionQuery = useQuery({
+    queryKey: ["tenant-past-subscription", tenant?.id],
+    queryFn: async () => {
+      const { data } = await (supabase as any)
+        .from("tenant_subscriptions")
+        .select("id, status, trial_end, ended_at, canceled_at")
+        .eq("tenant_id", tenant!.id)
+        .in("status", ["canceled", "incomplete_expired", "unpaid"])
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      return data;
+    },
+    enabled: !!tenant && !subscriptionQuery.data,
+    staleTime: 60_000,
+  });
+
   const createCheckoutSession = useMutation({
     mutationFn: async ({
+      planId,
       successUrl,
       cancelUrl,
     }: {
+      planId: string;
       successUrl: string;
       cancelUrl: string;
     }) => {
@@ -98,6 +119,7 @@ export function useTenantSubscription() {
         {
           body: {
             tenantId: tenant!.id,
+            planId,
             successUrl,
             cancelUrl,
           },
@@ -147,12 +169,28 @@ export function useTenantSubscription() {
     subscriptionQuery.data?.status === "active" ||
     subscriptionQuery.data?.status === "trialing";
 
+  // Tenant had a subscription that's no longer active (expired trial or canceled)
+  const hasExpiredSubscription = !isSubscribed && !!pastSubscriptionQuery.data;
+
+  const isTrialing = subscriptionQuery.data?.status === "trialing";
+
+  const trialDaysRemaining = (() => {
+    if (!isTrialing || !subscriptionQuery.data?.trial_end) return 0;
+    const now = new Date();
+    const trialEnd = new Date(subscriptionQuery.data.trial_end);
+    const diff = Math.ceil((trialEnd.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+    return Math.max(0, diff);
+  })();
+
   // Only consider "loading" when actually fetching, not when errored
   const isLoading = subscriptionQuery.isLoading && !subscriptionQuery.isError;
 
   return {
     subscription: subscriptionQuery.data,
     isSubscribed,
+    hasExpiredSubscription,
+    isTrialing,
+    trialDaysRemaining,
     isLoading,
     invoices: invoicesQuery.data || [],
     invoicesLoading: invoicesQuery.isLoading,
