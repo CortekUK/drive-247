@@ -3,12 +3,22 @@ import { supabase } from '@/integrations/supabase/client';
 import { useTenant } from '@/contexts/TenantContext';
 import { toast } from '@/hooks/use-toast';
 
+export interface VehiclePricing {
+  id: string;
+  vehicle_id: string;
+  price: number;
+  vehicle_reg?: string;
+  vehicle_make?: string;
+  vehicle_model?: string;
+}
+
 export interface RentalExtra {
   id: string;
   tenant_id: string;
   name: string;
   description: string | null;
   price: number;
+  pricing_type: 'global' | 'per_vehicle';
   image_urls: string[];
   is_active: boolean;
   max_quantity: number | null;
@@ -19,12 +29,16 @@ export interface RentalExtra {
   booked_quantity: number;
   /** Computed: remaining stock (max_quantity - booked). null for toggle extras */
   remaining_stock: number | null;
+  /** Computed: per-vehicle pricing rows (only for per_vehicle extras) */
+  vehicle_pricing: VehiclePricing[];
 }
 
 export interface CreateRentalExtraInput {
   name: string;
   description?: string | null;
   price: number;
+  pricing_type?: 'global' | 'per_vehicle';
+  vehicle_pricing?: { vehicle_id: string; price: number }[];
   image_urls?: string[];
   is_active?: boolean;
   max_quantity?: number | null;
@@ -36,6 +50,8 @@ export interface UpdateRentalExtraInput {
   name?: string;
   description?: string | null;
   price?: number;
+  pricing_type?: 'global' | 'per_vehicle';
+  vehicle_pricing?: { vehicle_id: string; price: number }[];
   image_urls?: string[];
   is_active?: boolean;
   max_quantity?: number | null;
@@ -84,6 +100,33 @@ export const useRentalExtras = () => {
         }
       }
 
+      // Fetch vehicle pricing for per_vehicle extras
+      const perVehicleExtras = (data || []).filter((e: any) => e.pricing_type === 'per_vehicle');
+      let vehiclePricingMap: Record<string, VehiclePricing[]> = {};
+
+      if (perVehicleExtras.length > 0) {
+        const { data: pricingRows } = await supabase
+          .from('rental_extras_vehicle_pricing')
+          .select('id, extra_id, vehicle_id, price, vehicles(reg, make, model)')
+          .in('extra_id', perVehicleExtras.map((e: any) => e.id));
+
+        if (pricingRows) {
+          for (const row of pricingRows as any[]) {
+            if (!vehiclePricingMap[row.extra_id]) {
+              vehiclePricingMap[row.extra_id] = [];
+            }
+            vehiclePricingMap[row.extra_id].push({
+              id: row.id,
+              vehicle_id: row.vehicle_id,
+              price: Number(row.price),
+              vehicle_reg: row.vehicles?.reg,
+              vehicle_make: row.vehicles?.make,
+              vehicle_model: row.vehicles?.model,
+            });
+          }
+        }
+      }
+
       return (data || []).map((extra: any) => ({
         ...extra,
         image_urls: extra.image_urls || [],
@@ -91,6 +134,7 @@ export const useRentalExtras = () => {
         remaining_stock: extra.max_quantity !== null
           ? Math.max(0, extra.max_quantity - (bookedMap[extra.id] || 0))
           : null,
+        vehicle_pricing: vehiclePricingMap[extra.id] || [],
       })) as RentalExtra[];
     },
     enabled: !!tenant?.id,
@@ -108,6 +152,7 @@ export const useRentalExtras = () => {
           name: input.name,
           description: input.description ?? null,
           price: input.price,
+          pricing_type: input.pricing_type ?? 'global',
           image_urls: input.image_urls ?? [],
           is_active: input.is_active ?? true,
           max_quantity: input.max_quantity ?? null,
@@ -119,6 +164,22 @@ export const useRentalExtras = () => {
       if (error) {
         console.error('[RentalExtras] Create error:', error);
         throw error;
+      }
+
+      // Insert vehicle pricing rows if per_vehicle
+      if (input.pricing_type === 'per_vehicle' && input.vehicle_pricing?.length) {
+        const { error: vpError } = await supabase
+          .from('rental_extras_vehicle_pricing')
+          .insert(
+            input.vehicle_pricing.map((vp) => ({
+              extra_id: data.id,
+              vehicle_id: vp.vehicle_id,
+              price: vp.price,
+            }))
+          );
+        if (vpError) {
+          console.error('[RentalExtras] Vehicle pricing insert error:', vpError);
+        }
       }
 
       return data as RentalExtra;
@@ -143,7 +204,7 @@ export const useRentalExtras = () => {
 
   const updateExtraMutation = useMutation({
     mutationFn: async (input: UpdateRentalExtraInput): Promise<RentalExtra> => {
-      const { id, ...updates } = input;
+      const { id, vehicle_pricing, ...updates } = input;
 
       const { data, error } = await supabase
         .from('rental_extras')
@@ -155,6 +216,31 @@ export const useRentalExtras = () => {
       if (error) {
         console.error('[RentalExtras] Update error:', error);
         throw error;
+      }
+
+      // If vehicle_pricing is provided, replace all rows
+      if (vehicle_pricing !== undefined) {
+        // Delete existing rows
+        await supabase
+          .from('rental_extras_vehicle_pricing')
+          .delete()
+          .eq('extra_id', id);
+
+        // Insert new rows if per_vehicle
+        if (updates.pricing_type === 'per_vehicle' && vehicle_pricing.length > 0) {
+          const { error: vpError } = await supabase
+            .from('rental_extras_vehicle_pricing')
+            .insert(
+              vehicle_pricing.map((vp) => ({
+                extra_id: id,
+                vehicle_id: vp.vehicle_id,
+                price: vp.price,
+              }))
+            );
+          if (vpError) {
+            console.error('[RentalExtras] Vehicle pricing update error:', vpError);
+          }
+        }
       }
 
       return data as RentalExtra;

@@ -21,6 +21,8 @@ import { cn } from "@/lib/utils";
 import BookingConfirmation from "./BookingConfirmation";
 import LocationPicker from "./LocationPicker";
 import BookingCheckoutStep from "./BookingCheckoutStep";
+import ExtrasSelector from "./booking/extras-selector";
+import { useRentalExtras } from "@/hooks/use-rental-extras";
 import InsuranceUploadDialog from "./insurance-upload-dialog";
 import BonzahInsuranceSelector from "./BonzahInsuranceSelector";
 import type { CoverageOptions } from "@/hooks/useBonzahPremium";
@@ -123,7 +125,7 @@ const MultiStepBookingWidget = () => {
   const [currentStep, setCurrentStep] = useState(1);
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
   const [extras, setExtras] = useState<PricingExtra[]>([]);
-  const [selectedExtras, setSelectedExtras] = useState<string[]>([]);
+  const [selectedExtras, setSelectedExtras] = useState<Record<string, number>>({});
   const [loading, setLoading] = useState(false);
   const [showConfirmation, setShowConfirmation] = useState(false);
   const [bookingReference, setBookingReference] = useState("");
@@ -186,6 +188,9 @@ const MultiStepBookingWidget = () => {
     verificationSessionId: "",
     customerTimezone: "", // Will be set from tenant timezone or detected browser timezone
   });
+
+  // Fetch rental extras for the selected vehicle
+  const { extras: availableExtras, isLoading: extrasLoading } = useRentalExtras(formData.vehicleId || null);
 
   // Calculate working hours for the selected pickup date (per-day hours)
   const pickupDateWorkingHours = useMemo(() => {
@@ -714,10 +719,18 @@ const MultiStepBookingWidget = () => {
 
   // Persist selected extras
   useEffect(() => {
-    if (selectedExtras.length > 0) {
+    if (Object.keys(selectedExtras).length > 0) {
       sessionStorage.setItem('booking_selected_extras', JSON.stringify(selectedExtras));
+    } else {
+      sessionStorage.removeItem('booking_selected_extras');
     }
   }, [selectedExtras]);
+
+  // Reset selected extras when vehicle changes
+  useEffect(() => {
+    setSelectedExtras({});
+    sessionStorage.removeItem('booking_selected_extras');
+  }, [formData.vehicleId]);
 
   // Auto-populate DOB from customer profile on Step 1 (when authenticated)
   useEffect(() => {
@@ -1543,9 +1556,9 @@ const MultiStepBookingWidget = () => {
         rentalPrice = (rentalDays / 30) * monthlyRent;
       }
     }
-    const extrasTotal = selectedExtras.reduce((sum, extraId) => {
-      const extra = extras.find(e => e.id === extraId);
-      return sum + (extra?.price || 0);
+    const extrasTotal = Object.entries(selectedExtras).reduce((sum, [extraId, qty]) => {
+      const extra = availableExtras.find(e => e.id === extraId);
+      return sum + (extra ? extra.price * qty : 0);
     }, 0);
 
     // Calculate delivery fees
@@ -1875,7 +1888,7 @@ const MultiStepBookingWidget = () => {
     // Clear promo localStorage after successful booking
     localStorage.removeItem('appliedPromoCode');
     localStorage.removeItem('appliedPromoDetails');
-    setSelectedExtras([]);
+    setSelectedExtras({});
     setCalculatedDistance(null);
     setDistanceOverride(false);
 
@@ -5284,10 +5297,20 @@ const MultiStepBookingWidget = () => {
             </div>
           </div>
 
+          {/* Optional Extras */}
+          <ExtrasSelector
+            extras={availableExtras}
+            selectedExtras={selectedExtras}
+            onExtrasChange={setSelectedExtras}
+            isLoading={extrasLoading}
+            currencyCode={currencyCode}
+          />
+
           <BookingCheckoutStep
             formData={formData}
             selectedVehicle={selectedVehicle}
-            extras={extras}
+            extras={availableExtras}
+            selectedExtras={selectedExtras}
             rentalDuration={calculateRentalDuration() || {
               days: 1,
               formatted: '1 day'

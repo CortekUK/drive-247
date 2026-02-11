@@ -12,8 +12,10 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Plus, Loader2, ImageIcon, GripVertical, Star, X, MoreHorizontal, Pencil, Trash2, Power, AlertTriangle, PackagePlus } from 'lucide-react';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Plus, Loader2, ImageIcon, GripVertical, Star, X, MoreHorizontal, Pencil, Trash2, Power, AlertTriangle, PackagePlus, Car } from 'lucide-react';
 import { useRentalExtras, type RentalExtra } from '@/hooks/use-rental-extras';
+import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from '@/hooks/use-toast';
 import { useTenant } from '@/contexts/TenantContext';
@@ -36,10 +38,20 @@ import {
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 
+interface VehiclePricingRow {
+  vehicle_id: string;
+  price: string;
+  vehicle_reg?: string;
+  vehicle_make?: string;
+  vehicle_model?: string;
+}
+
 interface ExtraFormData {
   name: string;
   description: string;
   price: string;
+  pricing_type: 'global' | 'per_vehicle';
+  vehicle_pricing: VehiclePricingRow[];
   image_urls: string[];
   max_quantity: string;
   is_quantity_based: boolean;
@@ -50,6 +62,8 @@ const EMPTY_FORM: ExtraFormData = {
   name: '',
   description: '',
   price: '',
+  pricing_type: 'global',
+  vehicle_pricing: [],
   image_urls: [],
   max_quantity: '10',
   is_quantity_based: false,
@@ -149,6 +163,22 @@ export function ExtrasSettings() {
   const [stockValue, setStockValue] = useState('');
   const notifiedRef = useRef(false);
 
+  // Fetch all tenant vehicles for per-vehicle pricing picker
+  const { data: allVehicles } = useQuery({
+    queryKey: ['vehicles-list', tenant?.id],
+    queryFn: async () => {
+      if (!tenant?.id) return [];
+      const { data } = await supabase
+        .from('vehicles')
+        .select('id, reg, make, model')
+        .eq('tenant_id', tenant.id)
+        .neq('status', 'Disposed')
+        .order('reg');
+      return data || [];
+    },
+    enabled: !!tenant?.id,
+  });
+
   // Notify admin about low stock items
   useEffect(() => {
     if (notifiedRef.current || !extras.length) return;
@@ -180,6 +210,14 @@ export function ExtrasSettings() {
       name: extra.name,
       description: extra.description || '',
       price: String(extra.price),
+      pricing_type: extra.pricing_type || 'global',
+      vehicle_pricing: (extra.vehicle_pricing || []).map((vp) => ({
+        vehicle_id: vp.vehicle_id,
+        price: String(vp.price),
+        vehicle_reg: vp.vehicle_reg,
+        vehicle_make: vp.vehicle_make,
+        vehicle_model: vp.vehicle_model,
+      })),
       image_urls: extra.image_urls || [],
       max_quantity: extra.max_quantity ? String(extra.max_quantity) : '10',
       is_quantity_based: extra.max_quantity !== null,
@@ -251,16 +289,42 @@ export function ExtrasSettings() {
       toast({ title: 'Error', description: 'At least one image is required.', variant: 'destructive' });
       return;
     }
-    const price = parseFloat(formData.price);
-    if (isNaN(price) || price < 0) {
-      toast({ title: 'Error', description: 'Price must be a valid positive number.', variant: 'destructive' });
-      return;
+
+    // Validate price for global extras
+    if (formData.pricing_type === 'global') {
+      const price = parseFloat(formData.price);
+      if (isNaN(price) || price < 0) {
+        toast({ title: 'Error', description: 'Price must be a valid positive number.', variant: 'destructive' });
+        return;
+      }
     }
+
+    // Validate vehicle pricing for per_vehicle extras
+    if (formData.pricing_type === 'per_vehicle') {
+      if (formData.vehicle_pricing.length === 0) {
+        toast({ title: 'Error', description: 'Add at least one vehicle with pricing.', variant: 'destructive' });
+        return;
+      }
+      for (const vp of formData.vehicle_pricing) {
+        const vpPrice = parseFloat(vp.price);
+        if (isNaN(vpPrice) || vpPrice < 0) {
+          toast({ title: 'Error', description: 'All vehicle prices must be valid positive numbers.', variant: 'destructive' });
+          return;
+        }
+      }
+    }
+
+    const price = formData.pricing_type === 'global' ? parseFloat(formData.price) : 0;
 
     const payload = {
       name: formData.name.trim(),
       description: formData.description.trim() || null,
       price,
+      pricing_type: formData.pricing_type,
+      vehicle_pricing: formData.vehicle_pricing.map((vp) => ({
+        vehicle_id: vp.vehicle_id,
+        price: parseFloat(vp.price),
+      })),
       image_urls: formData.image_urls,
       max_quantity: formData.is_quantity_based ? parseInt(formData.max_quantity) || 1 : null,
       is_active: formData.is_active,
@@ -345,6 +409,7 @@ export function ExtrasSettings() {
                   <TableHead>Name</TableHead>
                   <TableHead className="hidden md:table-cell">Description</TableHead>
                   <TableHead>Price</TableHead>
+                  <TableHead>Pricing</TableHead>
                   <TableHead>Type</TableHead>
                   <TableHead>Stock</TableHead>
                   <TableHead>Status</TableHead>
@@ -389,7 +454,22 @@ export function ExtrasSettings() {
                           {extra.description || "—"}
                         </span>
                       </TableCell>
-                      <TableCell className="font-semibold">{formatCurrency(Number(extra.price), tenant?.currency_code || 'USD')}</TableCell>
+                      <TableCell className="font-semibold">
+                        {extra.pricing_type === 'per_vehicle'
+                          ? <span className="text-muted-foreground text-xs">Varies</span>
+                          : formatCurrency(Number(extra.price), tenant?.currency_code || 'USD')
+                        }
+                      </TableCell>
+                      <TableCell>
+                        {extra.pricing_type === 'per_vehicle' ? (
+                          <Badge variant="secondary" className="gap-1">
+                            <Car className="h-3 w-3" />
+                            Per Vehicle ({extra.vehicle_pricing?.length || 0})
+                          </Badge>
+                        ) : (
+                          <Badge variant="outline">Global</Badge>
+                        )}
+                      </TableCell>
                       <TableCell>
                         {extra.max_quantity !== null ? (
                           <Badge variant="secondary">Quantity</Badge>
@@ -555,10 +635,10 @@ export function ExtrasSettings() {
             </DialogDescription>
           </DialogHeader>
 
-          <div className="space-y-4 py-2">
-            {/* Row 1: Name + Price */}
-            <div className="grid grid-cols-3 gap-4">
-              <div className="col-span-2 space-y-2">
+          <div className="space-y-4 py-2 max-h-[70vh] overflow-y-auto">
+            {/* Row 1: Name + Price (global only) */}
+            <div className={`grid gap-4 ${formData.pricing_type === 'global' ? 'grid-cols-3' : 'grid-cols-1'}`}>
+              <div className={formData.pricing_type === 'global' ? 'col-span-2 space-y-2' : 'space-y-2'}>
                 <Label>Name *</Label>
                 <Input
                   value={formData.name}
@@ -566,22 +646,156 @@ export function ExtrasSettings() {
                   placeholder="e.g., GPS Navigation"
                 />
               </div>
-              <div className="space-y-2">
-                <Label>Price *</Label>
-                <div className="relative">
-                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">$</span>
-                  <Input
-                    type="number"
-                    value={formData.price}
-                    onChange={(e) => setFormData((p) => ({ ...p, price: e.target.value }))}
-                    className="pl-7"
-                    min={0}
-                    step={0.01}
-                    placeholder="0.00"
-                  />
+              {formData.pricing_type === 'global' && (
+                <div className="space-y-2">
+                  <Label>Price *</Label>
+                  <div className="relative">
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">$</span>
+                    <Input
+                      type="number"
+                      value={formData.price}
+                      onChange={(e) => setFormData((p) => ({ ...p, price: e.target.value }))}
+                      className="pl-7"
+                      min={0}
+                      step={0.01}
+                      placeholder="0.00"
+                    />
+                  </div>
                 </div>
+              )}
+            </div>
+
+            {/* Pricing Type */}
+            <div className="space-y-2">
+              <Label>Pricing Type</Label>
+              <div className="grid grid-cols-2 gap-3">
+                <button
+                  type="button"
+                  onClick={() => setFormData((p) => ({ ...p, pricing_type: 'global' }))}
+                  className={`flex items-center gap-2 rounded-lg border p-3 text-left text-sm transition-colors ${
+                    formData.pricing_type === 'global'
+                      ? 'border-primary bg-primary/5 ring-1 ring-primary'
+                      : 'hover:bg-muted/50'
+                  }`}
+                >
+                  <div>
+                    <p className="font-medium">Same price for all vehicles</p>
+                    <p className="text-xs text-muted-foreground">Single global price</p>
+                  </div>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setFormData((p) => ({ ...p, pricing_type: 'per_vehicle' }))}
+                  className={`flex items-center gap-2 rounded-lg border p-3 text-left text-sm transition-colors ${
+                    formData.pricing_type === 'per_vehicle'
+                      ? 'border-primary bg-primary/5 ring-1 ring-primary'
+                      : 'hover:bg-muted/50'
+                  }`}
+                >
+                  <div>
+                    <p className="font-medium">Different price per vehicle</p>
+                    <p className="text-xs text-muted-foreground">Set price for each vehicle</p>
+                  </div>
+                </button>
               </div>
             </div>
+
+            {/* Per-Vehicle Pricing Section */}
+            {formData.pricing_type === 'per_vehicle' && (
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <Label>Vehicle Pricing *</Label>
+                  <p className="text-xs text-muted-foreground">{formData.vehicle_pricing.length} vehicle(s) assigned</p>
+                </div>
+                {formData.vehicle_pricing.length > 0 && (
+                  <div className="space-y-2">
+                    {formData.vehicle_pricing.map((vp, idx) => {
+                      const vehicle = allVehicles?.find((v) => v.id === vp.vehicle_id);
+                      const label = vehicle
+                        ? `${vehicle.reg} - ${vehicle.make || ''} ${vehicle.model || ''}`
+                        : vp.vehicle_reg
+                          ? `${vp.vehicle_reg} - ${vp.vehicle_make || ''} ${vp.vehicle_model || ''}`
+                          : vp.vehicle_id;
+                      return (
+                        <div key={vp.vehicle_id} className="flex items-center gap-2 rounded-lg border p-2">
+                          <span className="flex-1 text-sm truncate">{label}</span>
+                          <div className="relative w-24">
+                            <span className="absolute left-2 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">$</span>
+                            <Input
+                              type="number"
+                              value={vp.price}
+                              onChange={(e) => {
+                                setFormData((p) => {
+                                  const updated = [...p.vehicle_pricing];
+                                  updated[idx] = { ...updated[idx], price: e.target.value };
+                                  return { ...p, vehicle_pricing: updated };
+                                });
+                              }}
+                              className="h-8 text-sm pl-5"
+                              min={0}
+                              step={0.01}
+                            />
+                          </div>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8 flex-shrink-0"
+                            onClick={() => {
+                              setFormData((p) => ({
+                                ...p,
+                                vehicle_pricing: p.vehicle_pricing.filter((_, i) => i !== idx),
+                              }));
+                            }}
+                          >
+                            <X className="h-3.5 w-3.5" />
+                          </Button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+                {/* Add vehicle picker */}
+                {(() => {
+                  const assignedIds = new Set(formData.vehicle_pricing.map((vp) => vp.vehicle_id));
+                  const available = (allVehicles || []).filter((v) => !assignedIds.has(v.id));
+                  if (available.length === 0) return null;
+                  return (
+                    <Select
+                      onValueChange={(vehicleId) => {
+                        const vehicle = allVehicles?.find((v) => v.id === vehicleId);
+                        if (!vehicle) return;
+                        setFormData((p) => ({
+                          ...p,
+                          vehicle_pricing: [
+                            ...p.vehicle_pricing,
+                            {
+                              vehicle_id: vehicle.id,
+                              price: '',
+                              vehicle_reg: vehicle.reg,
+                              vehicle_make: vehicle.make || undefined,
+                              vehicle_model: vehicle.model || undefined,
+                            },
+                          ],
+                        }));
+                      }}
+                      value=""
+                    >
+                      <SelectTrigger className="h-9">
+                        <SelectValue placeholder="Add a vehicle..." />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {available.map((v) => (
+                          <SelectItem key={v.id} value={v.id}>
+                            {v.reg} - {v.make || ''} {v.model || ''}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  );
+                })()}
+              </div>
+            )}
 
             {/* Row 2: Description */}
             <div className="space-y-2">

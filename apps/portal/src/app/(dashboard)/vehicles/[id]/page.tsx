@@ -37,6 +37,8 @@ import { DateRangeFilter } from "@/components/vehicles/date-range-filter";
 import { PLBreadcrumb } from "@/components/shared/data-display/pl-breadcrumb";
 import { VehiclePhotoGallery } from "@/components/vehicles/vehicle-photo-gallery";
 import { BlockedDatesManager } from "@/components/blocked-dates/blocked-dates-manager";
+import { VehicleExtrasManager } from "@/components/vehicles/vehicle-extras-manager";
+import { Package } from "lucide-react";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
@@ -759,6 +761,26 @@ export default function VehicleDetail() {
                 <div className="h-[300px] overflow-y-auto">
                   <BlockedDatesManager vehicle_id={id} />
                 </div>
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Rental Extras Section */}
+          <div className="mt-8">
+            <Card className="shadow-card rounded-lg">
+              <CardHeader className="pb-3">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <CardTitle className="text-lg font-semibold flex items-center gap-2">
+                      <Package className="h-5 w-5" />
+                      Rental Extras
+                    </CardTitle>
+                    <CardDescription>Manage per-vehicle extra pricing and global extras</CardDescription>
+                  </div>
+                </div>
+              </CardHeader>
+              <CardContent>
+                <VehicleExtrasManager vehicleId={id} />
               </CardContent>
             </Card>
           </div>
