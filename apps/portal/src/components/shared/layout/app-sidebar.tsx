@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Car, Users, FileText, CreditCard, LayoutDashboard, Bell, BarChart3, AlertCircle, TrendingUp, Settings, CalendarDays, Receipt, FolderOpen, UserX, Globe, History, Clock, UsersRound, MessageSquare, ChevronRight } from "lucide-react";
+import { Car, Users, FileText, CreditCard, LayoutDashboard, Bell, BarChart3, AlertCircle, TrendingUp, Settings, CalendarDays, Receipt, FolderOpen, UserX, Globe, History, Clock, UsersRound, MessageSquare, ChevronRight, ChevronsUpDown } from "lucide-react";
 import { Sidebar, SidebarContent, SidebarGroup, SidebarGroupContent, SidebarHeader, SidebarMenu, SidebarMenuButton, SidebarMenuItem, SidebarFooter, useSidebar } from "@/components/ui/sidebar";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { useReminderStats } from "@/hooks/use-reminders";
@@ -111,14 +111,21 @@ export function AppSidebar() {
     },
   ].filter(g => g.items.length > 0);
 
-  // Track which groups are open — auto-open the group with the active route
+  // Track which groups are open — all open by default
   const [openGroups, setOpenGroups] = useState<Record<string, boolean>>(() => {
     const initial: Record<string, boolean> = {};
     groups.forEach(g => {
-      initial[g.label] = groupHasActiveItem(g.items);
+      initial[g.label] = true;
     });
     return initial;
   });
+
+  const allOpen = groups.every(g => openGroups[g.label]);
+  const toggleAll = () => {
+    const next: Record<string, boolean> = {};
+    groups.forEach(g => { next[g.label] = !allOpen; });
+    setOpenGroups(next);
+  };
 
   // When route changes, ensure the active group is open
   useEffect(() => {
@@ -139,35 +146,46 @@ export function AppSidebar() {
 
   // --- Render helpers ---
 
-  const renderNavItem = (item: NavItem) => (
-    <SidebarMenuItem key={item.name}>
-      <SidebarMenuButton
-        asChild
-        isActive={isActive(item.href)}
-        tooltip={collapsed ? item.name : undefined}
-        className="h-8 pl-8 transition-all duration-200 ease-in-out"
-      >
-        <Link href={item.href} className="flex items-center justify-between w-full">
-          <div className="flex items-center gap-2 min-w-0">
-            <item.icon className="h-3.5 w-3.5 shrink-0" />
-            <span className={`text-[13px] transition-all duration-200 ease-in-out ${collapsed ? "sr-only opacity-0 w-0" : "truncate opacity-100"}`}>
-              {item.name}
-            </span>
-          </div>
-          {!collapsed && item.badge !== undefined && item.badge > 0 && (
-            <span className="inline-flex items-center justify-center px-1.5 py-0.5 text-[10px] font-semibold leading-none text-white bg-destructive rounded-full shrink-0 animate-in fade-in">
-              {item.badge}
-            </span>
-          )}
-          {collapsed && item.badge !== undefined && item.badge > 0 && (
-            <span className="absolute -top-1 -right-1 inline-flex items-center justify-center w-4 h-4 text-[10px] font-bold leading-none text-white bg-destructive rounded-full animate-in fade-in">
-              {item.badge > 9 ? '9+' : item.badge}
-            </span>
-          )}
-        </Link>
-      </SidebarMenuButton>
-    </SidebarMenuItem>
-  );
+  const renderNavItem = (item: NavItem, index: number, items: NavItem[]) => {
+    const isLast = index === items.length - 1;
+    return (
+      <SidebarMenuItem key={item.name} className="relative">
+        {/* Vertical tree line */}
+        {!isLast && (
+          <span className="absolute left-[18px] top-0 bottom-0 w-px bg-border/50" />
+        )}
+        {/* Horizontal branch line */}
+        <span className="absolute left-[18px] top-1/2 w-2.5 h-px bg-border/50" />
+        {/* Vertical line to this item (connects from above) */}
+        <span className="absolute left-[18px] top-0 h-1/2 w-px bg-border/50" />
+        <SidebarMenuButton
+          asChild
+          isActive={isActive(item.href)}
+          tooltip={collapsed ? item.name : undefined}
+          className="h-8 pl-9 transition-all duration-200 ease-in-out"
+        >
+          <Link href={item.href} className="flex items-center justify-between w-full">
+            <div className="flex items-center gap-2 min-w-0">
+              <item.icon className="h-3.5 w-3.5 shrink-0" />
+              <span className={`text-[13px] transition-all duration-200 ease-in-out ${collapsed ? "sr-only opacity-0 w-0" : "truncate opacity-100"}`}>
+                {item.name}
+              </span>
+            </div>
+            {!collapsed && item.badge !== undefined && item.badge > 0 && (
+              <span className="inline-flex items-center justify-center px-1.5 py-0.5 text-[10px] font-semibold leading-none text-white bg-destructive rounded-full shrink-0 animate-in fade-in">
+                {item.badge}
+              </span>
+            )}
+            {collapsed && item.badge !== undefined && item.badge > 0 && (
+              <span className="absolute -top-1 -right-1 inline-flex items-center justify-center w-4 h-4 text-[10px] font-bold leading-none text-white bg-destructive rounded-full animate-in fade-in">
+                {item.badge > 9 ? '9+' : item.badge}
+              </span>
+            )}
+          </Link>
+        </SidebarMenuButton>
+      </SidebarMenuItem>
+    );
+  };
 
   return (
     <Sidebar collapsible="icon" className="transition-all duration-300 ease-in-out">
@@ -192,6 +210,20 @@ export function AppSidebar() {
           )}
         </div>
       </SidebarHeader>
+
+      {/* Collapse/Expand all toggle */}
+      {!collapsed && (
+        <div className="flex justify-end px-3 pt-1.5">
+          <button
+            onClick={toggleAll}
+            className="flex items-center gap-1 text-[11px] text-muted-foreground/60 hover:text-muted-foreground transition-colors"
+            title={allOpen ? "Collapse all" : "Expand all"}
+          >
+            <ChevronsUpDown className="h-3 w-3" />
+            <span>{allOpen ? "Collapse" : "Expand"}</span>
+          </button>
+        </div>
+      )}
 
       {/* Navigation with collapsible groups */}
       <SidebarContent className="transition-all duration-300 ease-in-out gap-0">
@@ -254,8 +286,8 @@ export function AppSidebar() {
                 </SidebarMenu>
                 <CollapsibleContent>
                   <SidebarGroupContent>
-                    <SidebarMenu>
-                      {group.items.map(renderNavItem)}
+                    <SidebarMenu className="relative ml-1">
+                      {group.items.map((item, i) => renderNavItem(item, i, group.items))}
                     </SidebarMenu>
                   </SidebarGroupContent>
                 </CollapsibleContent>
