@@ -5366,6 +5366,68 @@ export type Database = {
           },
         ]
       }
+      subscription_plans: {
+        Row: {
+          amount: number
+          created_at: string
+          currency: string
+          description: string | null
+          features: Json
+          id: string
+          interval: string
+          is_active: boolean
+          name: string
+          sort_order: number
+          stripe_price_id: string | null
+          stripe_product_id: string | null
+          tenant_id: string
+          trial_days: number
+          updated_at: string
+        }
+        Insert: {
+          amount: number
+          created_at?: string
+          currency?: string
+          description?: string | null
+          features?: Json
+          id?: string
+          interval?: string
+          is_active?: boolean
+          name: string
+          sort_order?: number
+          stripe_price_id?: string | null
+          stripe_product_id?: string | null
+          tenant_id: string
+          trial_days?: number
+          updated_at?: string
+        }
+        Update: {
+          amount?: number
+          created_at?: string
+          currency?: string
+          description?: string | null
+          features?: Json
+          id?: string
+          interval?: string
+          is_active?: boolean
+          name?: string
+          sort_order?: number
+          stripe_price_id?: string | null
+          stripe_product_id?: string | null
+          tenant_id?: string
+          trial_days?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "subscription_plans_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       tenant_subscription_invoices: {
         Row: {
           amount_due: number
@@ -5457,11 +5519,13 @@ export type Database = {
           ended_at: string | null
           id: string
           interval: string
+          plan_id: string | null
           plan_name: string
           status: string
           stripe_customer_id: string
           stripe_subscription_id: string
           tenant_id: string
+          trial_end: string | null
           updated_at: string
         }
         Insert: {
@@ -5479,11 +5543,13 @@ export type Database = {
           ended_at?: string | null
           id?: string
           interval?: string
+          plan_id?: string | null
           plan_name?: string
           status?: string
           stripe_customer_id: string
           stripe_subscription_id: string
           tenant_id: string
+          trial_end?: string | null
           updated_at?: string
         }
         Update: {
@@ -5501,14 +5567,23 @@ export type Database = {
           ended_at?: string | null
           id?: string
           interval?: string
+          plan_id?: string | null
           plan_name?: string
           status?: string
           stripe_customer_id?: string
           stripe_subscription_id?: string
           tenant_id?: string
+          trial_end?: string | null
           updated_at?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "tenant_subscriptions_plan_id_fkey"
+            columns: ["plan_id"]
+            isOneToOne: false
+            referencedRelation: "subscription_plans"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "tenant_subscriptions_tenant_id_fkey"
             columns: ["tenant_id"]
