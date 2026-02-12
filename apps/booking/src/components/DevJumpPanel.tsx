@@ -68,7 +68,7 @@ export default function DevJumpPanel() {
   const [isMinimized, setIsMinimized] = useState(true)
   const [isLoading, setIsLoading] = useState<number | null>(null)
   const [isUploadingInsurance, setIsUploadingInsurance] = useState(false)
-  const { clearContext: clearBookingStore, addPendingInsuranceFile } = useBookingStore()
+  const { clearBooking, addPendingInsuranceFile } = useBookingStore()
 
   // Don't render anything in production
   if (!IS_DEV) {
@@ -320,10 +320,10 @@ export default function DevJumpPanel() {
   }
 
   const clearAllData = () => {
-    // Clear Zustand store
-    clearBookingStore()
+    // Clear Zustand store (also removes legacy sessionStorage/localStorage promo keys)
+    clearBooking()
 
-    // Clear localStorage keys (keeping for backward compatibility and other dev data)
+    // Clear remaining localStorage dev/verification keys
     const keysToRemove = [
       "verificationSessionId",
       "verificationStatus",
@@ -332,17 +332,14 @@ export default function DevJumpPanel() {
       "verifiedCustomerName",
       "verifiedLicenseNumber",
       "verificationVendorData",
+      "verificationMode",
       "dev_last_vehicle_id",
       "dev_widget_step",
       "dev_widget_form_data",
       "dev_insurance_verified",
       "pending_insurance_docs",
-      "booking_form_data",
-      "booking_current_step",
-      "booking_selected_extras",
     ]
     keysToRemove.forEach(key => localStorage.removeItem(key))
-    sessionStorage.clear()
 
     window.dispatchEvent(new CustomEvent(DEV_JUMP_EVENT, {
       detail: { step: 1, formData: MOCK_WIDGET_FORM_DATA, vehicleId: null, setVerified: false, setInsuranceVerified: false }
