@@ -4,6 +4,7 @@ import { useEffect } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import { useAuth } from "@/stores/auth-store";
 import { useTenantSubscription } from "@/hooks/use-tenant-subscription";
+import { useSubscriptionPlans } from "@/hooks/use-subscription-plans";
 import { SubscriptionGateDialog } from "@/components/subscription/subscription-gate-dialog";
 import { ThemeToggle } from "@/components/shared/layout/theme-toggle";
 import { HeaderSearch } from "@/components/shared/layout/header-search";
@@ -61,8 +62,10 @@ export default function DashboardLayout({
   const pathname = usePathname();
   const { user, appUser, loading } = useAuth();
   const { isSubscribed, isLoading: subscriptionLoading } = useTenantSubscription();
+  const { data: plans, isLoading: plansLoading } = useSubscriptionPlans();
   const isSubscriptionPage = pathname === "/subscription" || pathname?.startsWith("/settings");
-  const showSetupGate = !subscriptionLoading && !isSubscribed && !isSubscriptionPage;
+  const hasActivePlans = !!plans && plans.length > 0;
+  const showSetupGate = !subscriptionLoading && !plansLoading && !isSubscribed && hasActivePlans && !isSubscriptionPage;
 
   useEffect(() => {
     if (!loading) {
