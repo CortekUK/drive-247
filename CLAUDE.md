@@ -30,9 +30,10 @@ cd apps/portal && npx vitest run src/__tests__/hooks/use-pickup-locations.test.t
 npx supabase functions serve           # run edge functions locally
 npx supabase db push                   # push migrations to remote
 
-# After schema changes, regenerate types and copy to both apps:
+# After schema changes, regenerate types and copy to all apps:
 npx supabase gen types typescript --project-id hviqoaokxvlancmftwuo > apps/portal/src/integrations/supabase/types.ts
 cp apps/portal/src/integrations/supabase/types.ts apps/booking/src/integrations/supabase/types.ts
+cp apps/portal/src/integrations/supabase/types.ts apps/admin/src/integrations/supabase/types.ts
 ```
 
 ## Architecture Overview

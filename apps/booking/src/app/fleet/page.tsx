@@ -488,20 +488,6 @@ const Pricing = () => {
                               <div className="text-[10px] text-muted-foreground">/month</div>
                             </div>
                           </div>
-                          <div className="flex gap-2">
-                            {vehicle.status === 'Rented' ? (
-                              <Button size="sm" disabled className="w-24 opacity-50 cursor-not-allowed">
-                                Rented
-                              </Button>
-                            ) : (
-                              <a href="/#booking">
-                                <Button size="sm" className="gradient-accent w-24">Book Now</Button>
-                              </a>
-                            )}
-                            <Link href={`/fleet/${vehicle.id}`}>
-                              <Button size="sm" variant="outline" className="border-accent/30 w-24">Details</Button>
-                            </Link>
-                          </div>
                         </div>
                       </div>
                     </div>

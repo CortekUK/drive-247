@@ -166,8 +166,7 @@ const Navigation = () => {
                 <Button
                   variant="outline"
                   onClick={() => setShowAuthDialog(true)}
-                  className="text-sm font-medium border-accent/50 hover:bg-accent hover:text-accent-foreground"
-                  style={{ color: 'hsl(var(--nav-foreground))' }}
+                  className="text-sm font-medium border-accent/50 hover:bg-accent hover:text-accent-foreground text-foreground"
                 >
                   <LogIn className="w-4 h-4 mr-2" />
                   Login / Sign Up
