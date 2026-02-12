@@ -1,9 +1,24 @@
 import { handleCors, jsonResponse, errorResponse } from "../_shared/cors.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
+import Stripe from "https://esm.sh/stripe@14.21.0?target=deno";
 import {
   getSubscriptionStripeMode,
   getSubscriptionStripeClient,
 } from "../_shared/subscription-stripe.ts";
+
+const STRIPE_PRODUCT_NAME = "Drive247 Platform Subscription";
+
+async function getOrCreateProduct(stripe: Stripe): Promise<string> {
+  const products = await stripe.products.search({
+    query: `name:'${STRIPE_PRODUCT_NAME}' AND active:'true'`,
+  });
+  if (products.data.length > 0) return products.data[0].id;
+  const product = await stripe.products.create({
+    name: STRIPE_PRODUCT_NAME,
+    description: "Monthly/yearly subscription for the Drive247 rental management platform",
+  });
+  return product.id;
+}
 
 Deno.serve(async (req) => {
   const corsResponse = handleCors(req);
@@ -50,7 +65,7 @@ Deno.serve(async (req) => {
     // Look up the plan from DB
     const { data: plan, error: planError } = await supabase
       .from("subscription_plans")
-      .select("id, name, stripe_price_id, tenant_id, is_active, trial_days")
+      .select("id, name, stripe_price_id, stripe_product_id, tenant_id, is_active, trial_days, amount, currency, interval")
       .eq("id", planId)
       .single();
 
@@ -61,7 +76,28 @@ Deno.serve(async (req) => {
 
     const mode = await getSubscriptionStripeMode(supabase, tenantId);
     const stripe = getSubscriptionStripeClient(mode);
-    const priceId = plan.stripe_price_id;
+    let priceId = plan.stripe_price_id;
+
+    // Verify the price exists on the current Stripe account (handles test→live mode switch)
+    try {
+      await stripe.prices.retrieve(priceId);
+    } catch (_e) {
+      console.log(`Price ${priceId} not found on ${mode} Stripe account, recreating`);
+      const productId = await getOrCreateProduct(stripe);
+      const newPrice = await stripe.prices.create({
+        product: productId,
+        unit_amount: plan.amount || 0,
+        currency: (plan.currency || "usd").toLowerCase(),
+        recurring: { interval: (plan.interval || "month") as "month" | "year" },
+        metadata: { tenant_id: tenantId, plan_name: plan.name },
+      });
+      priceId = newPrice.id;
+      await supabase
+        .from("subscription_plans")
+        .update({ stripe_price_id: newPrice.id, stripe_product_id: productId })
+        .eq("id", planId);
+      console.log(`Created new Stripe Price ${newPrice.id} on ${mode} account for plan ${planId}`);
+    }
 
     let stripeCustomerId = tenant.stripe_subscription_customer_id;
 
