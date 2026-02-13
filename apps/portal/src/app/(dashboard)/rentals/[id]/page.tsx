@@ -12,7 +12,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { FileText, ArrowLeft, DollarSign, Plus, X, Send, Download, Ban, Check, AlertTriangle, Loader2, Shield, ShieldCheck, CheckCircle, XCircle, ExternalLink, UserCheck, IdCard, Camera, FileSignature, Clock, Mail, RefreshCw, Trash2, Receipt, Percent, Car, Undo2, Truck, MapPin, Key, KeyRound, CalendarPlus, Package, Banknote, CreditCard, Calendar } from "lucide-react";
+import { FileText, ArrowLeft, DollarSign, Plus, X, Send, Download, Ban, Check, AlertTriangle, Loader2, Shield, ShieldCheck, CheckCircle, XCircle, ExternalLink, UserCheck, IdCard, Camera, FileSignature, Clock, Mail, RefreshCw, Trash2, Receipt, Percent, Car, Undo2, Truck, MapPin, Key, KeyRound, CalendarPlus, Package, Banknote, CreditCard, Calendar, Info } from "lucide-react";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Progress } from "@/components/ui/progress";
 import { AddPaymentDialog } from "@/components/shared/dialogs/add-payment-dialog";
@@ -35,6 +35,7 @@ import { useInstallmentPlan } from "@/hooks/use-installment-plan";
 import { BuyInsuranceDialog } from "@/components/rentals/buy-insurance-dialog";
 import { formatCurrency } from "@/lib/formatters";
 import { formatCurrency as formatCurrencyUtil } from "@/lib/format-utils";
+import { usePickupLocations } from "@/hooks/use-pickup-locations";
 
 interface Rental {
   id: string;
@@ -55,15 +56,23 @@ interface Rental {
   cancellation_requested?: boolean;
   customer_id?: string;
   customers: { id: string; name: string; email?: string; phone?: string | null };
-  vehicles: { id: string; reg: string; make: string; model: string; status?: string };
-  // Delivery & Collection fields
+  vehicles: { id: string; reg: string; make: string; model: string; status?: string; lockbox_code?: string | null; lockbox_instructions?: string | null };
+  // Location fields
+  pickup_location?: string | null;
+  pickup_location_id?: string | null;
+  return_location?: string | null;
+  return_location_id?: string | null;
+  pickup_time?: string | null;
+  return_time?: string | null;
+  delivery_fee?: number;
+  collection_fee?: number;
+  // Legacy delivery fields
   uses_delivery_service?: boolean;
   delivery_location_id?: string;
   delivery_address?: string;
-  delivery_fee?: number;
+  delivery_method?: string | null;
   collection_location_id?: string;
   collection_address?: string;
-  collection_fee?: number;
   // Extension fields
   is_extended?: boolean;
   previous_end_date?: string | null;
@@ -84,6 +93,7 @@ const RentalDetail = () => {
   // skipInsurance removed — insurance doc upload is always visible; only Bonzah selector is gated on integration_bonzah
   const [downloadingPdf, setDownloadingPdf] = useState<string | null>(null);
   const [refreshingPolicy, setRefreshingPolicy] = useState(false);
+  const [issuingPolicy, setIssuingPolicy] = useState(false);
   const [showAddPayment, setShowAddPayment] = useState(false);
   const [sendingDocuSign, setSendingDocuSign] = useState(false);
   const [checkingDocuSignStatus, setCheckingDocuSignStatus] = useState(false);
@@ -120,6 +130,7 @@ const RentalDetail = () => {
   // Installment sheet state
   const [showInstallmentSheet, setShowInstallmentSheet] = useState(false);
   const { plan: installmentPlan, hasInstallmentPlan, retryPayment, isRetrying, markPaid, isMarkingPaid } = useInstallmentPlan(id);
+  const { locations: allLocations } = usePickupLocations();
 
   const { data: rental, isLoading, error: rentalError } = useQuery({
     queryKey: ["rental", id, tenant?.id],
@@ -131,7 +142,7 @@ const RentalDetail = () => {
         .select(`
           *,
           customers!rentals_customer_id_fkey(id, name, email, phone),
-          vehicles!rentals_vehicle_id_fkey(id, reg, make, model, status)
+          vehicles!rentals_vehicle_id_fkey(id, reg, make, model, status, lockbox_code, lockbox_instructions)
         `)
         .eq("id", id)
         .eq("tenant_id", tenant.id)
@@ -1589,45 +1600,90 @@ const RentalDetail = () => {
 
           </div>
 
-          {/* Delivery & Collection Info */}
-          {rental.uses_delivery_service && (
-            <div className="border rounded-lg p-4">
-              <div className="flex items-center gap-2 mb-3">
-                <Truck className="h-4 w-4 text-accent" />
-                <p className="text-xs uppercase tracking-wider text-muted-foreground">Delivery & Collection</p>
-              </div>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                {rental.delivery_address && (
-                  <div className="bg-muted/20 rounded-lg p-3">
-                    <div className="flex items-center gap-2 mb-2">
-                      <MapPin className="h-4 w-4 text-green-600" />
-                      <p className="text-sm font-medium">Delivery Location</p>
+          {/* Pickup & Return Locations */}
+          {(rental.pickup_location || rental.return_location || rental.delivery_address || rental.collection_address) && (() => {
+            const pickupAddr = rental.pickup_location || rental.delivery_address;
+            const returnAddr = rental.return_location || rental.collection_address;
+            const pickupLocId = rental.pickup_location_id || rental.delivery_location_id;
+            const returnLocId = rental.return_location_id || rental.collection_location_id;
+            const pickupLoc = pickupLocId ? allLocations.find(l => l.id === pickupLocId) : null;
+            const returnLoc = returnLocId ? allLocations.find(l => l.id === returnLocId) : null;
+            const pickupFee = rental.delivery_fee;
+            const returnFee = rental.collection_fee;
+
+            return (
+              <div className="border rounded-lg p-5">
+                <div className="flex items-center gap-2 mb-4">
+                  <MapPin className="h-4 w-4 text-primary" />
+                  <p className="text-xs uppercase tracking-wider text-muted-foreground">Pickup & Return</p>
+                </div>
+
+                <div className="relative pl-[13px] ml-[7px] border-l-2 border-dashed border-primary/25">
+                  {/* Pickup */}
+                  {pickupAddr && (
+                    <div className="relative pb-6">
+                      <div className="absolute -left-[20px] top-0.5 w-3.5 h-3.5 rounded-full bg-primary border-2 border-background" />
+                      <div className="pl-5">
+                        <p className="text-xs font-semibold uppercase tracking-wider text-primary mb-1.5">Pickup</p>
+                        {pickupLoc && <p className="text-sm font-semibold">{pickupLoc.name}</p>}
+                        <p className="text-sm text-muted-foreground">{pickupAddr}</p>
+                        {pickupLoc?.description && (
+                          <span className="inline-flex items-center gap-1 text-xs text-primary/70 mt-1">
+                            <Info className="w-3 h-3 flex-shrink-0" />
+                            {pickupLoc.description}
+                          </span>
+                        )}
+                        <div className="flex items-center gap-3 mt-2 text-xs text-muted-foreground">
+                          {rental.pickup_time && (
+                            <span className="inline-flex items-center gap-1">
+                              <Clock className="w-3 h-3" />
+                              {rental.pickup_time}
+                            </span>
+                          )}
+                          {pickupFee != null && pickupFee > 0 && (
+                            <span className="font-medium text-amber-600">
+                              +{formatCurrencyUtil(Number(pickupFee), tenant?.currency_code || 'USD')} delivery
+                            </span>
+                          )}
+                        </div>
+                      </div>
                     </div>
-                    <p className="text-sm text-muted-foreground">{rental.delivery_address}</p>
-                    {rental.delivery_fee && rental.delivery_fee > 0 && (
-                      <p className="text-sm font-medium mt-2">
-                        Fee: {formatCurrencyUtil(Number(rental.delivery_fee), tenant?.currency_code || 'USD')}
-                      </p>
-                    )}
-                  </div>
-                )}
-                {rental.collection_address && (
-                  <div className="bg-muted/20 rounded-lg p-3">
-                    <div className="flex items-center gap-2 mb-2">
-                      <MapPin className="h-4 w-4 text-blue-600" />
-                      <p className="text-sm font-medium">Collection Location</p>
+                  )}
+
+                  {/* Return */}
+                  {returnAddr && (
+                    <div className="relative">
+                      <div className="absolute -left-[20px] top-0.5 w-3.5 h-3.5 rounded-full border-2 border-primary bg-background" />
+                      <div className="pl-5">
+                        <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-1.5">Return</p>
+                        {returnLoc && <p className="text-sm font-semibold">{returnLoc.name}</p>}
+                        <p className="text-sm text-muted-foreground">{returnAddr}</p>
+                        {returnLoc?.description && (
+                          <span className="inline-flex items-center gap-1 text-xs text-primary/70 mt-1">
+                            <Info className="w-3 h-3 flex-shrink-0" />
+                            {returnLoc.description}
+                          </span>
+                        )}
+                        <div className="flex items-center gap-3 mt-2 text-xs text-muted-foreground">
+                          {rental.return_time && (
+                            <span className="inline-flex items-center gap-1">
+                              <Clock className="w-3 h-3" />
+                              {rental.return_time}
+                            </span>
+                          )}
+                          {returnFee != null && returnFee > 0 && (
+                            <span className="font-medium text-amber-600">
+                              +{formatCurrencyUtil(Number(returnFee), tenant?.currency_code || 'USD')} collection
+                            </span>
+                          )}
+                        </div>
+                      </div>
                     </div>
-                    <p className="text-sm text-muted-foreground">{rental.collection_address}</p>
-                    {rental.collection_fee && rental.collection_fee > 0 && (
-                      <p className="text-sm font-medium mt-2">
-                        Fee: {formatCurrencyUtil(Number(rental.collection_fee), tenant?.currency_code || 'USD')}
-                      </p>
-                    )}
-                  </div>
-                )}
+                  )}
+                </div>
               </div>
-            </div>
-          )}
+            );
+          })()}
 
           {/* Status Overview */}
           <div className="border rounded-lg p-4">
@@ -1719,6 +1775,17 @@ const RentalDetail = () => {
           rentalId={id}
           rentalStatus={displayStatus}
           needsAction={needsKeyHandover}
+          isDeliveryRental={!!(rental?.delivery_address || rental?.delivery_fee)}
+          vehicleLockboxCode={rental?.vehicles?.lockbox_code || null}
+          vehicleLockboxInstructions={rental?.vehicles?.lockbox_instructions || null}
+          deliveryMethod={rental?.delivery_method || null}
+          customerEmail={rental?.customers?.email || null}
+          customerPhone={rental?.customers?.phone || null}
+          customerName={rental?.customers?.name || ''}
+          vehicleName={rental?.vehicles ? `${rental.vehicles.make} ${rental.vehicles.model}` : ''}
+          vehicleReg={rental?.vehicles?.reg || ''}
+          deliveryAddress={rental?.delivery_address || null}
+          bookingRef={rental?.id?.slice(0, 8)?.toUpperCase() || ''}
         />
       )}
 
@@ -1903,145 +1970,114 @@ const RentalDetail = () => {
       </Card>
 
       {/* Bonzah Insurance Policy Card - Show if policy exists for this rental */}
-      {bonzahPolicy && (
+      {bonzahPolicy && (() => {
+        const ct = bonzahPolicy.coverage_types as any;
+        const rd = bonzahPolicy.renter_details as any;
+        const pdfIds = ct?.pdf_ids as Record<string, string> | undefined;
+        const bonzahMode = tenant?.bonzah_mode || 'test';
+        const portalUrl = bonzahMode === 'live' ? 'https://bonzah.insillion.com/bb1/' : 'https://bonzah.sb.insillion.com/bb1/';
+
+        const coverageLabels: Record<string, string> = {
+          cdw: 'Collision Damage Waiver (CDW)',
+          rcli: "Renter's Contingent Liability Insurance (RCLI)",
+          sli: 'Supplemental Liability Insurance (SLI)',
+          pai: 'Personal Accident Insurance (PAI)',
+        };
+
+        const handleDownloadPdf = async (type: string, pdfId: string) => {
+          setDownloadingPdf(type);
+          try {
+            const { data, error } = await supabase.functions.invoke('bonzah-download-pdf', {
+              body: { tenant_id: tenant?.id, pdf_id: String(pdfId), policy_id: bonzahPolicy.policy_id },
+            });
+            if (error || !data?.documentBase64) {
+              toast({ title: "Error", description: "Failed to download PDF", variant: "destructive" });
+              return;
+            }
+            const byteCharacters = atob(data.documentBase64);
+            const byteNumbers = new Array(byteCharacters.length);
+            for (let i = 0; i < byteCharacters.length; i++) {
+              byteNumbers[i] = byteCharacters.charCodeAt(i);
+            }
+            const byteArray = new Uint8Array(byteNumbers);
+            const blob = new Blob([byteArray], { type: 'application/pdf' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `bonzah-${type}-${bonzahPolicy.policy_no || bonzahPolicy.quote_id}.pdf`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+          } catch (err) {
+            toast({ title: "Error", description: "Failed to download PDF", variant: "destructive" });
+          } finally {
+            setDownloadingPdf(null);
+          }
+        };
+
+        return (
         <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Shield className="h-5 w-5 text-green-600" />
-              Bonzah Insurance Policy
-              <Badge variant={bonzahPolicy.status === 'active' ? 'default' : bonzahPolicy.status === 'quoted' ? 'secondary' : 'outline'}>
-                {bonzahPolicy.status === 'active' ? 'Active' : bonzahPolicy.status === 'quoted' ? 'Quoted' : bonzahPolicy.status === 'payment_confirmed' ? 'Payment Confirmed' : bonzahPolicy.status}
-              </Badge>
-            </CardTitle>
-            <CardDescription>
-              Rental car insurance purchased through Bonzah
-            </CardDescription>
+          <CardHeader className="flex flex-row items-start justify-between gap-4">
+            <div className="space-y-1.5">
+              <div className="flex items-center gap-3">
+                <img src="/bonzah-logo.svg" alt="Bonzah" className="h-12 w-auto dark:hidden" />
+                <img src="/bonzah-logo-dark.svg" alt="Bonzah" className="h-12 w-auto hidden dark:block" />
+                <div>
+                  <CardTitle className="text-xl">Insurance Policy</CardTitle>
+                  <CardDescription className="text-xs">
+                    Rental car insurance purchased through Bonzah
+                  </CardDescription>
+                </div>
+              </div>
+            </div>
+            <Badge
+              className={
+                bonzahPolicy.status === 'active' ? 'bg-emerald-400 text-black font-semibold hover:bg-emerald-400 shadow-[0_0_12px_rgba(52,211,153,0.6)]' :
+                bonzahPolicy.status === 'quoted' ? 'bg-amber-400 text-black font-semibold hover:bg-amber-400 shadow-[0_0_12px_rgba(251,191,36,0.6)]' :
+                bonzahPolicy.status === 'failed' ? 'bg-red-400 text-black font-semibold hover:bg-red-400 shadow-[0_0_12px_rgba(248,113,113,0.6)]' :
+                'bg-sky-400 text-black font-semibold hover:bg-sky-400 shadow-[0_0_12px_rgba(56,189,248,0.6)]'
+              }
+            >
+              {bonzahPolicy.status === 'active' ? 'Active' : bonzahPolicy.status === 'quoted' ? 'Quoted' : bonzahPolicy.status === 'payment_confirmed' ? 'Payment Confirmed' : bonzahPolicy.status === 'failed' ? 'Failed' : bonzahPolicy.status}
+            </Badge>
           </CardHeader>
-          <CardContent className="space-y-4">
-            {/* Policy Details */}
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              <div>
-                <p className="text-sm text-muted-foreground">Policy Number</p>
-                <p className="font-medium">{bonzahPolicy.policy_no || 'Pending'}</p>
-              </div>
-              <div>
-                <p className="text-sm text-muted-foreground">Quote ID</p>
-                <p className="font-medium font-mono text-sm">{bonzahPolicy.quote_id}</p>
-              </div>
-              <div>
-                <p className="text-sm text-muted-foreground">Premium</p>
-                <p className="font-medium text-green-600">{formatCurrency(bonzahPolicy.premium_amount)}</p>
-              </div>
-              <div>
-                <p className="text-sm text-muted-foreground">Coverage Period</p>
-                <p className="font-medium">{new Date(bonzahPolicy.trip_start_date).toLocaleDateString()} - {new Date(bonzahPolicy.trip_end_date).toLocaleDateString()}</p>
-              </div>
-            </div>
-
-            {/* Coverage Types */}
-            <div>
-              <p className="text-sm text-muted-foreground mb-2">Coverage Types</p>
-              <div className="flex flex-wrap gap-2">
-                {(bonzahPolicy.coverage_types as any)?.cdw && (
-                  <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">
-                    <CheckCircle className="h-3 w-3 mr-1" /> CDW - Collision Damage Waiver
-                  </Badge>
-                )}
-                {(bonzahPolicy.coverage_types as any)?.rcli && (
-                  <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">
-                    <CheckCircle className="h-3 w-3 mr-1" /> RCLI - Liability Insurance
-                  </Badge>
-                )}
-                {(bonzahPolicy.coverage_types as any)?.sli && (
-                  <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">
-                    <CheckCircle className="h-3 w-3 mr-1" /> SLI - Supplemental Liability
-                  </Badge>
-                )}
-                {(bonzahPolicy.coverage_types as any)?.pai && (
-                  <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">
-                    <CheckCircle className="h-3 w-3 mr-1" /> PAI - Personal Accident
-                  </Badge>
-                )}
-              </div>
-            </div>
-
-            {/* PDF Downloads */}
-            {(bonzahPolicy.coverage_types as any)?.pdf_ids && (
-              <div>
-                <p className="text-sm text-muted-foreground mb-2">Policy Documents</p>
-                <div className="flex flex-wrap gap-2">
-                  {Object.entries((bonzahPolicy.coverage_types as any).pdf_ids as Record<string, string>).map(([type, pdfId]) => {
-                    const labels: Record<string, string> = {
-                      cdw: 'CDW Certificate',
-                      rcli: 'RCLI Certificate',
-                      sli: 'SLI Certificate',
-                      pai: 'PAI Certificate',
-                    };
-                    return (
-                      <Button
-                        key={type}
-                        variant="outline"
-                        size="sm"
-                        disabled={downloadingPdf === type}
-                        onClick={async () => {
-                          setDownloadingPdf(type);
-                          const newWindow = window.open('', '_blank');
-                          try {
-                            const { data, error } = await supabase.functions.invoke('bonzah-download-pdf', {
-                              body: { tenant_id: tenant?.id, pdf_id: pdfId },
-                            });
-                            if (error || !data?.documentBase64) {
-                              if (newWindow) newWindow.close();
-                              toast({ title: "Error", description: "Failed to download PDF", variant: "destructive" });
-                              return;
-                            }
-                            const byteCharacters = atob(data.documentBase64);
-                            const byteNumbers = new Array(byteCharacters.length);
-                            for (let i = 0; i < byteCharacters.length; i++) {
-                              byteNumbers[i] = byteCharacters.charCodeAt(i);
-                            }
-                            const byteArray = new Uint8Array(byteNumbers);
-                            const blob = new Blob([byteArray], { type: 'application/pdf' });
-                            const url = URL.createObjectURL(blob);
-                            if (newWindow) newWindow.location.href = url;
-                          } catch (err) {
-                            if (newWindow) newWindow.close();
-                            toast({ title: "Error", description: "Failed to download PDF", variant: "destructive" });
-                          } finally {
-                            setDownloadingPdf(null);
-                          }
-                        }}
-                      >
-                        {downloadingPdf === type ? (
-                          <Loader2 className="h-4 w-4 mr-1 animate-spin" />
-                        ) : (
-                          <Download className="h-4 w-4 mr-1" />
-                        )}
-                        {labels[type] || type.toUpperCase()}
-                      </Button>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
-
-            {/* Renter Details */}
-            {bonzahPolicy.renter_details && (
-              <div>
-                <p className="text-sm text-muted-foreground mb-2">Insured Renter</p>
-                <div className="bg-muted/50 rounded-lg p-3 text-sm">
-                  <p className="font-medium">
-                    {(bonzahPolicy.renter_details as any)?.first_name} {(bonzahPolicy.renter_details as any)?.last_name}
-                  </p>
-                  <p className="text-muted-foreground">
-                    License: {(bonzahPolicy.renter_details as any)?.license?.number} ({(bonzahPolicy.renter_details as any)?.license?.state})
-                  </p>
-                </div>
-              </div>
-            )}
-
-            {/* Actions */}
-            <div className="pt-2 border-t flex items-center gap-3 flex-wrap">
+          <CardContent className="space-y-5">
+            {/* Action buttons if needed */}
+            {(bonzahPolicy.status === 'quoted' || bonzahPolicy.status === 'failed' || bonzahPolicy.policy_id) && (
+            <div className="flex items-center gap-2">
+              {(bonzahPolicy.status === 'quoted' || bonzahPolicy.status === 'failed') && (
+                <Button
+                  size="sm"
+                  disabled={issuingPolicy}
+                  className="bg-green-600 hover:bg-green-700 text-white"
+                  onClick={async () => {
+                    setIssuingPolicy(true);
+                    try {
+                      const { data, error } = await supabase.functions.invoke('bonzah-confirm-payment', {
+                        body: {
+                          policy_record_id: bonzahPolicy.id,
+                          stripe_payment_intent_id: `portal-manual-${id}`,
+                        },
+                      });
+                      if (error) throw error;
+                      await queryClient.invalidateQueries({ queryKey: ['rental-bonzah-policy', id] });
+                      toast({ title: "Policy Issued", description: `Bonzah policy ${data?.policy_no || ''} has been issued successfully.` });
+                    } catch (err: any) {
+                      toast({ title: "Error", description: err.message || "Failed to issue policy. Please try again.", variant: "destructive" });
+                    } finally {
+                      setIssuingPolicy(false);
+                    }
+                  }}
+                >
+                  {issuingPolicy ? (
+                    <Loader2 className="h-4 w-4 mr-1.5 animate-spin" />
+                  ) : (
+                    <ShieldCheck className="h-4 w-4 mr-1.5" />
+                  )}
+                  {bonzahPolicy.status === 'failed' ? 'Retry Purchase' : 'Complete Purchase'}
+                </Button>
+              )}
               {bonzahPolicy.policy_id && (
                 <Button
                   variant="outline"
@@ -2054,7 +2090,7 @@ const RentalDetail = () => {
                         body: { tenant_id: tenant?.id, policy_id: bonzahPolicy.policy_id },
                       });
                       if (error) throw error;
-                      queryClient.invalidateQueries({ queryKey: ['rental'] });
+                      queryClient.invalidateQueries({ queryKey: ['rental-bonzah-policy'] });
                       toast({ title: "Policy Refreshed", description: "Latest policy data has been fetched from Bonzah." });
                     } catch (err) {
                       toast({ title: "Error", description: "Failed to refresh policy data", variant: "destructive" });
@@ -2063,19 +2099,156 @@ const RentalDetail = () => {
                     }
                   }}
                 >
-                  {refreshingPolicy ? (
-                    <Loader2 className="h-4 w-4 mr-1 animate-spin" />
-                  ) : (
-                    <RefreshCw className="h-4 w-4 mr-1" />
-                  )}
-                  Refresh Policy
+                  {refreshingPolicy ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+                  Refresh
                 </Button>
               )}
+            </div>
+            )}
+
+            {/* Section: Policy Information */}
+            <div className="rounded-lg border overflow-hidden">
+              <div className="bg-primary/10 px-4 py-2">
+                <h4 className="text-sm font-semibold">Policy Information</h4>
+              </div>
+              <div className="p-4">
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-y-3 gap-x-6 text-sm">
+                  <div>
+                    <p className="text-muted-foreground">Policy Number</p>
+                    <p className="font-semibold font-mono">{bonzahPolicy.policy_no || 'Pending'}</p>
+                  </div>
+                  <div>
+                    <p className="text-muted-foreground">Quote ID</p>
+                    <p className="font-medium font-mono">{bonzahPolicy.quote_id}</p>
+                  </div>
+                  <div>
+                    <p className="text-muted-foreground">Status</p>
+                    <p className="font-medium capitalize">{bonzahPolicy.status}</p>
+                  </div>
+                  <div>
+                    <p className="text-muted-foreground">Purchase Date</p>
+                    <p className="font-medium">{bonzahPolicy.policy_issued_at ? new Date(bonzahPolicy.policy_issued_at).toLocaleString() : new Date(bonzahPolicy.created_at).toLocaleString()}</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Section: Policy Holder */}
+            {rd && (
+              <div className="rounded-lg border overflow-hidden">
+                <div className="bg-primary/10 px-4 py-2">
+                  <h4 className="text-sm font-semibold">Policy Holder</h4>
+                </div>
+                <div className="p-4">
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-y-3 gap-x-6 text-sm">
+                    <div>
+                      <p className="text-muted-foreground">Name</p>
+                      <p className="font-medium">{rd.first_name} {rd.last_name}</p>
+                    </div>
+                    <div>
+                      <p className="text-muted-foreground">Date of Birth</p>
+                      <p className="font-medium">{rd.dob ? new Date(rd.dob).toLocaleDateString() : '—'}</p>
+                    </div>
+                    <div>
+                      <p className="text-muted-foreground">Email</p>
+                      <p className="font-medium truncate">{rd.email || '—'}</p>
+                    </div>
+                    <div>
+                      <p className="text-muted-foreground">Phone</p>
+                      <p className="font-medium">{rd.phone || '—'}</p>
+                    </div>
+                    <div>
+                      <p className="text-muted-foreground">Address</p>
+                      <p className="font-medium">{rd.address?.street || '—'}</p>
+                    </div>
+                    <div>
+                      <p className="text-muted-foreground">City / State</p>
+                      <p className="font-medium">{rd.address?.city || '—'}, {rd.address?.state || '—'}</p>
+                    </div>
+                    <div>
+                      <p className="text-muted-foreground">Zip Code</p>
+                      <p className="font-medium">{rd.address?.zip || '—'}</p>
+                    </div>
+                    <div>
+                      <p className="text-muted-foreground">License</p>
+                      <p className="font-medium">{rd.license?.number || '—'} ({rd.license?.state || '—'})</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Section: Travel Details */}
+            <div className="rounded-lg border overflow-hidden">
+              <div className="bg-primary/10 px-4 py-2">
+                <h4 className="text-sm font-semibold">Travel Details</h4>
+              </div>
+              <div className="p-4">
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-y-3 gap-x-6 text-sm">
+                  <div>
+                    <p className="text-muted-foreground">Departure Date</p>
+                    <p className="font-medium">{new Date(bonzahPolicy.trip_start_date).toLocaleDateString()}</p>
+                  </div>
+                  <div>
+                    <p className="text-muted-foreground">Return Date</p>
+                    <p className="font-medium">{new Date(bonzahPolicy.trip_end_date).toLocaleDateString()}</p>
+                  </div>
+                  <div>
+                    <p className="text-muted-foreground">Pickup State</p>
+                    <p className="font-medium">{bonzahPolicy.pickup_state}</p>
+                  </div>
+                  <div>
+                    <p className="text-muted-foreground">Residence State</p>
+                    <p className="font-medium">{rd?.address?.state || bonzahPolicy.pickup_state}</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Section: Coverages */}
+            <div className="rounded-lg border overflow-hidden">
+              <div className="bg-primary/10 px-4 py-2">
+                <h4 className="text-sm font-semibold">Coverages</h4>
+              </div>
+              <div className="divide-y">
+                {['cdw', 'rcli', 'sli', 'pai'].filter(key => ct?.[key]).map((key) => (
+                  <div key={key} className="flex items-center justify-between px-4 py-2.5 text-sm">
+                    <div className="flex items-center gap-2">
+                      <CheckCircle className="h-4 w-4 text-green-600 shrink-0" />
+                      <span className="font-medium">{coverageLabels[key]}</span>
+                    </div>
+                    {pdfIds?.[key] && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-7 text-xs"
+                        disabled={downloadingPdf === key}
+                        onClick={() => handleDownloadPdf(key, pdfIds[key])}
+                      >
+                        {downloadingPdf === key ? (
+                          <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" />
+                        ) : (
+                          <Download className="h-3.5 w-3.5 mr-1" />
+                        )}
+                        Download PDF
+                      </Button>
+                    )}
+                  </div>
+                ))}
+                <div className="flex items-center justify-between px-4 py-2.5 bg-muted/30">
+                  <span className="text-sm font-semibold">Total Premium</span>
+                  <span className="text-sm font-bold text-green-600">{formatCurrency(bonzahPolicy.premium_amount)}</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Footer Actions */}
+            <div className="flex items-center gap-3">
               <a
-                href="https://bonzah.sb.insillion.com/bb1/"
+                href={portalUrl}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="inline-flex items-center gap-1 text-sm text-blue-600 hover:underline"
+                className="inline-flex items-center gap-1.5 text-sm text-blue-600 hover:underline"
               >
                 <ExternalLink className="h-4 w-4" />
                 View in Bonzah Portal
@@ -2083,7 +2256,8 @@ const RentalDetail = () => {
             </div>
           </CardContent>
         </Card>
-      )}
+        );
+      })()}
 
       {/* Insurance Verification Card - Always shown for customer-uploaded documents */}
       <Card>
@@ -2106,7 +2280,12 @@ const RentalDetail = () => {
                     <img
                       src="/bonzah-logo.svg"
                       alt="Bonzah"
-                      className="h-8 w-auto dark:invert"
+                      className="h-8 w-auto dark:hidden"
+                    />
+                    <img
+                      src="/bonzah-logo-dark.svg"
+                      alt="Bonzah"
+                      className="h-8 w-auto hidden dark:block"
                     />
                   </div>
                   <div>
