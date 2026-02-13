@@ -36,6 +36,7 @@ import { BuyInsuranceDialog } from "@/components/rentals/buy-insurance-dialog";
 import { formatCurrency } from "@/lib/formatters";
 import { formatCurrency as formatCurrencyUtil } from "@/lib/format-utils";
 import { usePickupLocations } from "@/hooks/use-pickup-locations";
+import { LocationMap } from "@/components/ui/location-map";
 
 interface Rental {
   id: string;
@@ -1686,6 +1687,13 @@ const RentalDetail = () => {
                     </div>
                   )}
                 </div>
+
+                {/* Map View */}
+                <LocationMap
+                  pickupAddress={pickupAddr}
+                  returnAddress={returnAddr}
+                  className="mt-4 h-[220px]"
+                />
               </div>
             );
           })()}
@@ -2023,29 +2031,49 @@ const RentalDetail = () => {
 
         return (
         <Card>
-          <CardHeader className="flex flex-row items-start justify-between gap-4">
-            <div className="space-y-1.5">
-              <div className="flex items-center gap-3">
-                <img src="/bonzah-logo.svg" alt="Bonzah" className="h-12 w-auto dark:hidden" />
-                <img src="/bonzah-logo-dark.svg" alt="Bonzah" className="h-12 w-auto hidden dark:block" />
-                <div>
-                  <CardTitle className="text-xl">Insurance Policy</CardTitle>
-                  <CardDescription className="text-xs">
-                    Rental car insurance purchased through Bonzah
-                  </CardDescription>
-                </div>
-              </div>
+          <CardHeader className="flex flex-row items-center justify-between gap-4">
+            <div className="flex items-center gap-3">
+              <img src="/bonzah-logo.svg" alt="Bonzah" className="h-10 w-auto dark:hidden" />
+              <img src="/bonzah-logo-dark.svg" alt="Bonzah" className="h-10 w-auto hidden dark:block" />
             </div>
-            <Badge
-              className={
-                bonzahPolicy.status === 'active' ? 'bg-emerald-400 text-black font-semibold hover:bg-emerald-400 shadow-[0_0_12px_rgba(52,211,153,0.6)]' :
-                bonzahPolicy.status === 'quoted' ? 'bg-amber-400 text-black font-semibold hover:bg-amber-400 shadow-[0_0_12px_rgba(251,191,36,0.6)]' :
-                bonzahPolicy.status === 'failed' ? 'bg-red-400 text-black font-semibold hover:bg-red-400 shadow-[0_0_12px_rgba(248,113,113,0.6)]' :
-                'bg-sky-400 text-black font-semibold hover:bg-sky-400 shadow-[0_0_12px_rgba(56,189,248,0.6)]'
-              }
-            >
-              {bonzahPolicy.status === 'active' ? 'Active' : bonzahPolicy.status === 'quoted' ? 'Quoted' : bonzahPolicy.status === 'payment_confirmed' ? 'Payment Confirmed' : bonzahPolicy.status === 'failed' ? 'Failed' : bonzahPolicy.status}
-            </Badge>
+            <div className="flex items-center gap-2">
+              {bonzahPolicy.policy_id && (
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8"
+                  disabled={refreshingPolicy}
+                  title="Refresh policy data"
+                  onClick={async () => {
+                    setRefreshingPolicy(true);
+                    try {
+                      const { data, error } = await supabase.functions.invoke('bonzah-view-policy', {
+                        body: { tenant_id: tenant?.id, policy_id: bonzahPolicy.policy_id },
+                      });
+                      if (error) throw error;
+                      queryClient.invalidateQueries({ queryKey: ['rental-bonzah-policy'] });
+                      toast({ title: "Policy Refreshed", description: "Latest policy data has been fetched from Bonzah." });
+                    } catch (err) {
+                      toast({ title: "Error", description: "Failed to refresh policy data", variant: "destructive" });
+                    } finally {
+                      setRefreshingPolicy(false);
+                    }
+                  }}
+                >
+                  {refreshingPolicy ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+                </Button>
+              )}
+              <Badge
+                className={
+                  bonzahPolicy.status === 'active' ? 'bg-emerald-400 text-black font-semibold hover:bg-emerald-400 shadow-[0_0_12px_rgba(52,211,153,0.6)]' :
+                  bonzahPolicy.status === 'quoted' ? 'bg-amber-400 text-black font-semibold hover:bg-amber-400 shadow-[0_0_12px_rgba(251,191,36,0.6)]' :
+                  bonzahPolicy.status === 'failed' ? 'bg-red-400 text-black font-semibold hover:bg-red-400 shadow-[0_0_12px_rgba(248,113,113,0.6)]' :
+                  'bg-sky-400 text-black font-semibold hover:bg-sky-400 shadow-[0_0_12px_rgba(56,189,248,0.6)]'
+                }
+              >
+                {bonzahPolicy.status === 'active' ? 'Active' : bonzahPolicy.status === 'quoted' ? 'Quoted' : bonzahPolicy.status === 'payment_confirmed' ? 'Payment Confirmed' : bonzahPolicy.status === 'failed' ? 'Failed' : bonzahPolicy.status}
+              </Badge>
+            </div>
           </CardHeader>
           <CardContent className="space-y-5">
             {/* Action buttons if needed */}
@@ -2081,31 +2109,6 @@ const RentalDetail = () => {
                     <ShieldCheck className="h-4 w-4 mr-1.5" />
                   )}
                   {bonzahPolicy.status === 'failed' ? 'Retry Purchase' : 'Complete Purchase'}
-                </Button>
-              )}
-              {bonzahPolicy.policy_id && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  disabled={refreshingPolicy}
-                  onClick={async () => {
-                    setRefreshingPolicy(true);
-                    try {
-                      const { data, error } = await supabase.functions.invoke('bonzah-view-policy', {
-                        body: { tenant_id: tenant?.id, policy_id: bonzahPolicy.policy_id },
-                      });
-                      if (error) throw error;
-                      queryClient.invalidateQueries({ queryKey: ['rental-bonzah-policy'] });
-                      toast({ title: "Policy Refreshed", description: "Latest policy data has been fetched from Bonzah." });
-                    } catch (err) {
-                      toast({ title: "Error", description: "Failed to refresh policy data", variant: "destructive" });
-                    } finally {
-                      setRefreshingPolicy(false);
-                    }
-                  }}
-                >
-                  {refreshingPolicy ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
-                  Refresh
                 </Button>
               )}
             </div>
