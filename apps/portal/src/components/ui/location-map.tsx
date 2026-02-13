@@ -162,14 +162,14 @@ async function renderMapToContainer(
         icons: [
           {
             icon: {
-              path: google.maps.SymbolPath.CIRCLE,
-              fillColor: '#991b1b',
-              fillOpacity: 0.8,
-              strokeWeight: 0,
-              scale: 3,
+              path: 'M 0,-1 0,1',
+              strokeOpacity: 0.8,
+              strokeColor: '#991b1b',
+              strokeWeight: 4,
+              scale: 4,
             },
             offset: '0',
-            repeat: '12px',
+            repeat: '16px',
           },
         ],
       });
