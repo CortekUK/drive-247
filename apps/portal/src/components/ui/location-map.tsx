@@ -158,8 +158,20 @@ async function renderMapToContainer(
         map,
         path: [pickupLatLng, returnLatLng],
         strokeColor: '#991b1b',
-        strokeOpacity: 0.7,
-        strokeWeight: 4,
+        strokeOpacity: 0,
+        icons: [
+          {
+            icon: {
+              path: google.maps.SymbolPath.CIRCLE,
+              fillColor: '#991b1b',
+              fillOpacity: 0.8,
+              strokeWeight: 0,
+              scale: 3,
+            },
+            offset: '0',
+            repeat: '12px',
+          },
+        ],
       });
 
       const bounds = new google.maps.LatLngBounds();
