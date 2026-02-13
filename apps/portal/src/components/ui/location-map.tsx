@@ -377,39 +377,45 @@ export function LocationMap({ pickupAddress, returnAddress, className }: Locatio
 
   return (
     <>
-      <div className={`relative overflow-hidden rounded-lg ${className || ''}`}>
-        {loading && <Skeleton className="absolute inset-0 z-10" />}
-        <div ref={mapRef} className="w-full h-full" style={{ minHeight: 220 }} />
+      <div className="space-y-3">
+        <div className={`relative overflow-hidden rounded-lg ${className || ''}`}>
+          {loading && <Skeleton className="absolute inset-0 z-10" />}
+          <div ref={mapRef} className="w-full h-full" style={{ minHeight: 220 }} />
 
-        {/* Action buttons */}
-        {!loading && (
-          <div className="absolute top-3 right-3 z-10 flex items-center gap-1.5">
+          {/* Expand button on map */}
+          {!loading && (
             <Button
               variant="secondary"
               size="icon"
-              className="h-8 w-8 bg-background/80 backdrop-blur-sm border border-border/50 shadow-md hover:bg-background"
-              onClick={handleCopyLink}
-              title="Copy Google Maps link"
-            >
-              {copied ? <Check className="h-3.5 w-3.5 text-emerald-500" /> : <Copy className="h-3.5 w-3.5" />}
-            </Button>
-            <Button
-              variant="secondary"
-              size="icon"
-              className="h-8 w-8 bg-background/80 backdrop-blur-sm border border-border/50 shadow-md hover:bg-background"
-              onClick={handleOpenInMaps}
-              title="Open in Google Maps"
-            >
-              <ExternalLink className="h-3.5 w-3.5" />
-            </Button>
-            <Button
-              variant="secondary"
-              size="icon"
-              className="h-8 w-8 bg-background/80 backdrop-blur-sm border border-border/50 shadow-md hover:bg-background"
+              className="absolute top-3 right-3 z-10 h-8 w-8 bg-background/80 backdrop-blur-sm border border-border/50 shadow-md hover:bg-background"
               onClick={handleFullscreen}
               title="View fullscreen"
             >
               <Maximize2 className="h-3.5 w-3.5" />
+            </Button>
+          )}
+        </div>
+
+        {/* Action buttons below map */}
+        {!loading && (
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-8 text-xs gap-1.5"
+              onClick={handleCopyLink}
+            >
+              {copied ? <Check className="h-3.5 w-3.5 text-emerald-500" /> : <Copy className="h-3.5 w-3.5" />}
+              {copied ? 'Copied!' : 'Copy Link'}
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-8 text-xs gap-1.5"
+              onClick={handleOpenInMaps}
+            >
+              <ExternalLink className="h-3.5 w-3.5" />
+              Open in Google Maps
             </Button>
           </div>
         )}
