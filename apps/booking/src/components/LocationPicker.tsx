@@ -481,13 +481,13 @@ function LocationDropdown({
       >
         <SelectTrigger
           className={cn(
-            "h-auto min-h-[48px] py-2.5 px-3 border-0 bg-muted/30 hover:bg-muted/50 rounded-lg",
+            "h-auto min-h-[56px] py-3.5 px-4 border-0 bg-muted/30 hover:bg-muted/50 rounded-lg",
             selectedLocation && "bg-muted/40",
             className
           )}
         >
           {selectedLocation ? (
-            <div className="flex flex-col items-start text-left w-full gap-0.5">
+            <div className="flex flex-col items-start text-left w-full gap-1.5">
               <div className="flex items-center gap-2 w-full">
                 <span className="font-semibold text-sm">{selectedLocation.name}</span>
                 {selectedLocation.delivery_fee > 0 ? (
@@ -498,9 +498,9 @@ function LocationDropdown({
                   <span className="text-xs font-semibold text-green-600">FREE</span>
                 )}
               </div>
-              <span className="text-xs text-muted-foreground leading-tight">{selectedLocation.address}</span>
+              <span className="text-xs text-muted-foreground">{selectedLocation.address}</span>
               {selectedLocation.description && (
-                <span className="inline-flex items-center gap-1 text-[11px] text-accent/80 leading-tight">
+                <span className="inline-flex items-center gap-1 text-[11px] text-accent/80 mt-0.5">
                   <Info className="w-3 h-3 flex-shrink-0" />
                   {selectedLocation.description}
                 </span>
@@ -512,8 +512,8 @@ function LocationDropdown({
         </SelectTrigger>
         <SelectContent align="start" className="w-[var(--radix-select-trigger-width)]">
           {locations.map((location) => (
-            <SelectItem key={location.id} value={location.id} className="py-3 cursor-pointer">
-              <div className="flex flex-col items-start gap-0.5">
+            <SelectItem key={location.id} value={location.id} className="py-3.5 cursor-pointer">
+              <div className="flex flex-col items-start gap-1.5">
                 <div className="flex items-center gap-2">
                   <span className="font-semibold text-sm">{location.name}</span>
                   {location.delivery_fee > 0 ? (
@@ -524,9 +524,9 @@ function LocationDropdown({
                     <span className="text-xs font-semibold text-green-600">FREE</span>
                   )}
                 </div>
-                <span className="text-xs text-muted-foreground leading-tight">{location.address}</span>
+                <span className="text-xs text-muted-foreground">{location.address}</span>
                 {location.description && (
-                  <span className="inline-flex items-center gap-1 text-[11px] text-accent/80 leading-tight">
+                  <span className="inline-flex items-center gap-1 text-[11px] text-accent/80 mt-0.5">
                     <Info className="w-3 h-3 flex-shrink-0" />
                     {location.description}
                   </span>
