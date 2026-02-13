@@ -31,6 +31,7 @@ export interface Tenant {
   light_header_footer_color: string | null;
   dark_header_footer_color: string | null;
   logo_url: string | null;
+  dark_logo_url: string | null;
   favicon_url: string | null;
   hero_background_url: string | null;
 
@@ -138,6 +139,9 @@ export interface Tenant {
   // Installment settings
   installments_enabled: boolean | null;
   installment_config: Record<string, any> | null;
+
+  // Lockbox settings
+  lockbox_enabled: boolean | null;
 }
 
 interface TenantContextType {
@@ -263,7 +267,7 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
                 light_primary_color, light_secondary_color, light_accent_color, light_background_color,
                 dark_primary_color, dark_secondary_color, dark_accent_color, dark_background_color,
                 light_header_footer_color, dark_header_footer_color,
-                logo_url, favicon_url, hero_background_url,
+                logo_url, dark_logo_url, favicon_url, hero_background_url,
                 meta_title, meta_description, og_image_url,
                 phone, address, business_hours, google_maps_url,
                 facebook_url, instagram_url, twitter_url, linkedin_url,
@@ -289,7 +293,8 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
                 pickup_fixed_enabled, return_fixed_enabled,
                 pickup_multiple_locations_enabled, return_multiple_locations_enabled,
                 pickup_area_enabled, return_area_enabled,
-                installments_enabled, installment_config
+                installments_enabled, installment_config,
+                lockbox_enabled
               `)
               .eq('slug', defaultSlug)
               .eq('status', 'active')
@@ -342,6 +347,7 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
           light_header_footer_color,
           dark_header_footer_color,
           logo_url,
+          dark_logo_url,
           favicon_url,
           hero_background_url,
           meta_title,
@@ -419,7 +425,8 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
           pickup_area_enabled,
           return_area_enabled,
           installments_enabled,
-          installment_config
+          installment_config,
+          lockbox_enabled
         `)
         .eq('slug', slug)
         .eq('status', 'active')

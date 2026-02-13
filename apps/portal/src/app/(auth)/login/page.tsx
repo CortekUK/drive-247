@@ -32,6 +32,7 @@ import { useRateLimiting } from "@/hooks/use-rate-limiting";
 import { supabase } from "@/integrations/supabase/client";
 import { ThemeToggle } from "@/components/shared/layout/theme-toggle";
 import { useTenantBranding } from "@/hooks/use-tenant-branding";
+import { useTheme } from "next-themes";
 
 const loginSchema = z.object({
   email: z.string().min(1, "Email is required").email("Please enter a valid email address"),
@@ -68,7 +69,8 @@ function LoginPageContent() {
   } = useRateLimiting();
 
   // Get logo from tenant branding or use default
-  const logoUrl = branding?.logo_url || "/logo.png";
+  const { resolvedTheme } = useTheme();
+  const logoUrl = (resolvedTheme === 'dark' && branding?.dark_logo_url ? branding.dark_logo_url : branding?.logo_url) || "/logo.png";
   const appName = branding?.app_name || "Drive247";
 
   // Role-based redirect logic

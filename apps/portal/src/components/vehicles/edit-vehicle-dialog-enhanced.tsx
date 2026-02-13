@@ -8,7 +8,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Edit, Car, DollarSign, CalendarIcon } from "lucide-react";
+import { Edit, Car, DollarSign, CalendarIcon, Lock, RefreshCw } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Textarea } from "@/components/ui/textarea";
@@ -22,6 +22,7 @@ import { getContractTotal } from "@/lib/vehicle-utils";
 import { editVehicleEnhancedSchema, type EditVehicleEnhancedFormValues } from "@/client-schemas/vehicles/edit-vehicle-enhanced";
 import { useTenant } from "@/contexts/TenantContext";
 import { getCurrencySymbol } from "@/lib/format-utils";
+import { useRentalSettings } from "@/hooks/use-rental-settings";
 
 type VehicleFormData = EditVehicleEnhancedFormValues;
 
@@ -59,6 +60,8 @@ interface Vehicle {
   description?: string | null;
   security_deposit?: number | null;
   allowed_mileage?: number | null;
+  lockbox_code?: string | null;
+  lockbox_instructions?: string | null;
 }
 
 interface EditVehicleDialogProps {
@@ -75,7 +78,17 @@ export const EditVehicleDialogEnhanced = ({ vehicle, open, onOpenChange }: EditV
   const { logAction } = useAuditLog();
   const { tenant } = useTenant();
   const currencySymbol = getCurrencySymbol(tenant?.currency_code || 'GBP');
-  
+  const { settings: rentalSettings } = useRentalSettings();
+  const [lockboxCode, setLockboxCode] = useState(vehicle.lockbox_code || '');
+  const [lockboxInstructions, setLockboxInstructions] = useState(vehicle.lockbox_instructions || '');
+
+  const generateLockboxCode = () => {
+    const length = rentalSettings?.lockbox_code_length || 4;
+    const max = Math.pow(10, length);
+    const code = Math.floor(Math.random() * max).toString().padStart(length, '0');
+    setLockboxCode(code);
+  };
+
   // Calculate contract total for existing finance vehicles
   const existingContractTotal = vehicle.acquisition_type === 'Finance' 
     ? getContractTotal(vehicle)
@@ -89,15 +102,15 @@ export const EditVehicleDialogEnhanced = ({ vehicle, open, onOpenChange }: EditV
       reg: vehicle.reg,
       make: vehicle.make,
       model: vehicle.model,
-      colour: vehicle.colour,
+      colour: vehicle.colour || '',
       fuel_type: (vehicle.fuel_type as 'Petrol' | 'Diesel' | 'Hybrid' | 'Electric') || 'Petrol',
       purchase_price: vehicle.purchase_price,
       contract_total: existingContractTotal,
-      acquisition_date: new Date(vehicle.acquisition_date),
-      acquisition_type: vehicle.acquisition_type as 'Purchase' | 'Finance',
-      daily_rent: vehicle.daily_rent,
-      weekly_rent: vehicle.weekly_rent,
-      monthly_rent: vehicle.monthly_rent,
+      acquisition_date: vehicle.acquisition_date ? new Date(vehicle.acquisition_date) : new Date(),
+      acquisition_type: vehicle.acquisition_type ? (vehicle.acquisition_type as 'Purchase' | 'Finance') : undefined,
+      daily_rent: vehicle.daily_rent ?? 0,
+      weekly_rent: vehicle.weekly_rent ?? 0,
+      monthly_rent: vehicle.monthly_rent ?? 0,
       mot_due_date: vehicle.mot_due_date ? new Date(vehicle.mot_due_date) : undefined,
       tax_due_date: vehicle.tax_due_date ? new Date(vehicle.tax_due_date) : undefined,
       warranty_start_date: vehicle.warranty_start_date ? new Date(vehicle.warranty_start_date) : undefined,
@@ -105,7 +118,7 @@ export const EditVehicleDialogEnhanced = ({ vehicle, open, onOpenChange }: EditV
       has_logbook: vehicle.has_logbook || false,
       has_service_plan: vehicle.has_service_plan || false,
       has_spare_key: vehicle.has_spare_key || false,
-      spare_key_holder: vehicle.spare_key_holder ? (vehicle.spare_key_holder as 'Company' | 'Customer') : undefined,
+      spare_key_holder: vehicle.spare_key_holder ? (vehicle.spare_key_holder as 'Company' | 'Customer') : (vehicle.has_spare_key ? 'Company' : undefined),
       spare_key_notes: vehicle.spare_key_notes || "",
       has_tracker: vehicle.has_tracker || false,
       has_remote_immobiliser: vehicle.has_remote_immobiliser || false,
@@ -142,7 +155,7 @@ export const EditVehicleDialogEnhanced = ({ vehicle, open, onOpenChange }: EditV
         model: data.model,
         colour: data.colour,
         fuel_type: data.fuel_type,
-        acquisition_type: data.acquisition_type,
+        acquisition_type: data.acquisition_type || null,
         acquisition_date: format(data.acquisition_date, 'yyyy-MM-dd'),
         daily_rent: data.daily_rent || null,
         weekly_rent: data.weekly_rent || null,
@@ -162,6 +175,8 @@ export const EditVehicleDialogEnhanced = ({ vehicle, open, onOpenChange }: EditV
         security_notes: data.security_notes || null,
         security_deposit: data.security_deposit || null,
         allowed_mileage: data.allowed_mileage || null,
+        lockbox_code: lockboxCode || null,
+        lockbox_instructions: lockboxInstructions || null,
       };
 
       // Add type-specific fields
@@ -296,6 +311,43 @@ export const EditVehicleDialogEnhanced = ({ vehicle, open, onOpenChange }: EditV
             }}
             className="space-y-4 px-1"
           >
+            {/* Lockbox Section - top of form when tenant has lockbox enabled */}
+            {rentalSettings?.lockbox_enabled && (
+              <div className="flex items-center gap-3 p-3 border rounded-lg bg-muted/30">
+                <Lock className="h-4 w-4 text-primary flex-shrink-0" />
+                <div className="flex items-center gap-2 flex-1 min-w-0">
+                  <Input
+                    placeholder={rentalSettings.lockbox_code_length ? `${rentalSettings.lockbox_code_length}-digit code` : 'Lockbox code'}
+                    value={lockboxCode}
+                    onChange={(e) => {
+                      const val = rentalSettings.lockbox_code_length
+                        ? e.target.value.replace(/[^0-9]/g, '').slice(0, rentalSettings.lockbox_code_length)
+                        : e.target.value;
+                      setLockboxCode(val);
+                    }}
+                    className="w-36 font-mono tracking-widest text-center text-lg h-9"
+                    maxLength={rentalSettings.lockbox_code_length || undefined}
+                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={generateLockboxCode}
+                    className="flex items-center gap-1.5 h-9"
+                  >
+                    <RefreshCw className="h-3.5 w-3.5" />
+                    Generate
+                  </Button>
+                </div>
+                <Input
+                  placeholder="Instructions (optional)"
+                  value={lockboxInstructions}
+                  onChange={(e) => setLockboxInstructions(e.target.value)}
+                  className="flex-1 h-9 text-sm"
+                />
+              </div>
+            )}
+
             <div className="grid grid-cols-2 gap-4">
               <FormField
                 control={form.control}
@@ -930,6 +982,7 @@ export const EditVehicleDialogEnhanced = ({ vehicle, open, onOpenChange }: EditV
                 </div>
               </div>
             </div>
+
 
             <div className="flex justify-end gap-2 pt-4">
               <Button type="button" variant="outline" onClick={() => handleOpenChange(false)}>

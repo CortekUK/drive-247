@@ -9,6 +9,7 @@ import { handleCors, jsonResponse, errorResponse } from '../_shared/cors.ts'
 interface DownloadPdfRequest {
   tenant_id: string
   pdf_id: string
+  policy_id?: string
 }
 
 Deno.serve(async (req) => {
@@ -27,47 +28,95 @@ Deno.serve(async (req) => {
       return errorResponse('Missing tenant_id or pdf_id')
     }
 
-    console.log('[Bonzah PDF] Downloading PDF:', body.pdf_id, 'for tenant:', body.tenant_id)
+    if (!body.policy_id) {
+      return errorResponse('Missing policy_id')
+    }
 
-    // Get tenant credentials
+    console.log('[Bonzah PDF] Downloading PDF:', body.pdf_id, 'policy:', body.policy_id, 'tenant:', body.tenant_id)
+
+    // Get tenant credentials and auth token
     const credentials = await getTenantBonzahCredentials(supabase, body.tenant_id)
     const apiUrl = getBonzahApiUrl(credentials.mode)
     const token = await getBonzahTokenForCredentials(credentials.username, credentials.password, apiUrl)
 
-    // Download the PDF from Bonzah
-    const pdfUrl = `${apiUrl}/policy/data?data_id=${encodeURIComponent(body.pdf_id)}&download=1`
+    // Insillion platform endpoint: GET /policy/data/{policy_id}?data_id={pdf_id}&download=1&token={token}
+    // Note: Uses generic Insillion path (no /Bonzah/ prefix), token as URL-encoded query param
+    const downloadUrl = `${apiUrl}/policy/data/${encodeURIComponent(body.policy_id)}?data_id=${encodeURIComponent(body.pdf_id)}&download=1&token=${encodeURIComponent(token)}`
 
-    console.log('[Bonzah PDF] Fetching from:', pdfUrl)
+    console.log('[Bonzah PDF] Fetching:', downloadUrl.replace(/token=[^&]+/, 'token=***'))
 
-    const pdfResponse = await fetch(pdfUrl, {
-      method: 'GET',
-      headers: {
-        'in-auth-token': token,
-      },
-    })
+    const resp = await fetch(downloadUrl)
 
-    if (!pdfResponse.ok) {
-      console.error('[Bonzah PDF] Failed to download:', pdfResponse.status, pdfResponse.statusText)
-      return errorResponse(`Failed to download PDF: ${pdfResponse.statusText}`, pdfResponse.status)
+    if (!resp.ok) {
+      const errorText = await resp.text()
+      console.error('[Bonzah PDF] Download failed:', resp.status, errorText.substring(0, 300))
+      return errorResponse(`Failed to download PDF: ${resp.status}`, resp.status)
     }
 
-    // Convert to base64
-    const pdfBuffer = await pdfResponse.arrayBuffer()
-    const uint8Array = new Uint8Array(pdfBuffer)
-    let binary = ''
-    for (let i = 0; i < uint8Array.length; i++) {
-      binary += String.fromCharCode(uint8Array[i])
+    const contentType = resp.headers.get('content-type') || ''
+    console.log('[Bonzah PDF] Response content-type:', contentType, 'status:', resp.status)
+
+    // If response is a direct PDF binary
+    if (contentType.includes('application/pdf')) {
+      const pdfBuffer = await resp.arrayBuffer()
+      const uint8Array = new Uint8Array(pdfBuffer)
+      let binary = ''
+      for (let i = 0; i < uint8Array.length; i++) {
+        binary += String.fromCharCode(uint8Array[i])
+      }
+      const base64 = btoa(binary)
+
+      console.log('[Bonzah PDF] PDF downloaded, size:', pdfBuffer.byteLength, 'bytes')
+
+      return jsonResponse({
+        documentBase64: base64,
+        contentType: 'application/pdf',
+      })
     }
-    const base64 = btoa(binary)
 
-    const contentType = pdfResponse.headers.get('content-type') || 'application/pdf'
+    // If response is JSON (shouldn't happen with this endpoint, but handle gracefully)
+    const responseText = await resp.text()
 
-    console.log('[Bonzah PDF] PDF downloaded, size:', pdfBuffer.byteLength, 'bytes')
+    // Check if it starts with %PDF (binary PDF without proper content-type)
+    if (responseText.startsWith('%PDF')) {
+      const encoder = new TextEncoder()
+      const uint8Array = encoder.encode(responseText)
+      let binary = ''
+      for (let i = 0; i < uint8Array.length; i++) {
+        binary += String.fromCharCode(uint8Array[i])
+      }
+      console.log('[Bonzah PDF] PDF detected from content, size:', uint8Array.length)
+      return jsonResponse({
+        documentBase64: btoa(binary),
+        contentType: 'application/pdf',
+      })
+    }
 
-    return jsonResponse({
-      documentBase64: base64,
-      contentType,
-    })
+    // Try parsing as JSON
+    try {
+      const jsonData = JSON.parse(responseText)
+      if (jsonData.status !== 0) {
+        return errorResponse(`Bonzah API error: ${jsonData.txt || 'Unknown error'}`, 400)
+      }
+      // If JSON contains base64 content
+      if (jsonData.data?.content) {
+        return jsonResponse({
+          documentBase64: jsonData.data.content,
+          contentType: jsonData.data.content_type || 'application/pdf',
+        })
+      }
+      if (typeof jsonData.data === 'string') {
+        return jsonResponse({
+          documentBase64: jsonData.data,
+          contentType: 'application/pdf',
+        })
+      }
+    } catch {
+      // Not JSON
+    }
+
+    console.error('[Bonzah PDF] Unexpected response:', responseText.substring(0, 500))
+    return errorResponse('Unexpected response format from Bonzah', 500)
   } catch (error) {
     console.error('[Bonzah PDF] Error:', error)
     return errorResponse(

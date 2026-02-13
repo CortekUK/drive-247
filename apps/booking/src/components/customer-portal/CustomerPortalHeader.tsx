@@ -26,11 +26,13 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useSidebar } from '@/components/ui/sidebar';
 import { useSiteSettings } from '@/hooks/useSiteSettings';
+import { useTheme } from 'next-themes';
 import { Separator } from '@/components/ui/separator';
 
 export function CustomerPortalHeader() {
   const { state } = useSidebar();
   const { settings } = useSiteSettings();
+  const { resolvedTheme } = useTheme();
   const router = useRouter();
   const { notifications, unreadCount, markAsRead } = useCustomerNotifications();
   const { customerUser, signOut } = useCustomerAuthStore();
@@ -57,7 +59,7 @@ export function CustomerPortalHeader() {
         <Link href="/" className="flex items-center">
           {settings.logo_url ? (
             <img
-              src={settings.logo_url}
+              src={resolvedTheme === 'dark' && settings.dark_logo_url ? settings.dark_logo_url : settings.logo_url}
               alt={settings.logo_alt || 'Logo'}
               className="h-6 w-auto"
             />

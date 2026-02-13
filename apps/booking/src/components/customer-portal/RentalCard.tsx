@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
-import { Calendar, Car, MapPin, CreditCard, Clock, AlertCircle, AlertTriangle, Pencil, CalendarPlus, XCircle, RefreshCw, ExternalLink } from 'lucide-react';
+import { Calendar, Car, MapPin, CreditCard, Clock, AlertCircle, AlertTriangle, Pencil, CalendarPlus, XCircle, RefreshCw, ExternalLink, Lock } from 'lucide-react';
 import { format, differenceInDays, isPast, isToday } from 'date-fns';
 import { CustomerRental } from '@/hooks/use-customer-rentals';
 import { cn } from '@/lib/utils';
@@ -277,6 +277,14 @@ export function RentalCard({ rental, insuranceReuploadRequired }: RentalCardProp
                 <div className="flex items-center gap-2 text-muted-foreground">
                   <MapPin className="h-4 w-4" />
                   <span className="truncate">{rental.pickup_location}</span>
+                </div>
+              )}
+
+              {/* Lockbox delivery indicator */}
+              {rental.delivery_method === 'lockbox' && (
+                <div className="flex items-center gap-2 text-muted-foreground">
+                  <Lock className="h-4 w-4" />
+                  <span>Keys via secure lockbox</span>
                 </div>
               )}
 

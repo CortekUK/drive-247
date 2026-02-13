@@ -136,6 +136,7 @@ function getObjectLink(reminder: Reminder): string {
     case 'Rental': return `/rentals/${reminder.object_id}`;
     case 'Customer': return `/customers/${reminder.object_id}`;
     case 'Fine': return `/fines/${reminder.object_id}`;
+    case 'Integration': return '/settings?tab=integrations';
     default: return '/reminders';
   }
 }

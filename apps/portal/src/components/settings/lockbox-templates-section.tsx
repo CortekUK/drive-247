@@ -1,0 +1,200 @@
+'use client';
+
+import { useState, useEffect } from 'react';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
+import { Badge } from '@/components/ui/badge';
+import { Lock, Mail, MessageSquare, Save, Loader2, Info } from 'lucide-react';
+import { toast } from '@/hooks/use-toast';
+import { useLockboxTemplates } from '@/hooks/use-lockbox-templates';
+import { useRentalSettings } from '@/hooks/use-rental-settings';
+
+const AVAILABLE_VARIABLES = [
+  { key: '{{customer_name}}', desc: 'Customer full name' },
+  { key: '{{vehicle_name}}', desc: 'Vehicle make & model' },
+  { key: '{{vehicle_reg}}', desc: 'Vehicle registration' },
+  { key: '{{lockbox_code}}', desc: 'Lockbox access code' },
+  { key: '{{lockbox_instructions}}', desc: 'Lockbox instructions' },
+  { key: '{{delivery_address}}', desc: 'Delivery address' },
+  { key: '{{booking_ref}}', desc: 'Booking reference' },
+];
+
+export function LockboxTemplatesSection() {
+  const { settings: rentalSettings } = useRentalSettings();
+  const { getEmailTemplate, getSmsTemplate, saveTemplate } = useLockboxTemplates();
+  const lockboxEnabled = rentalSettings?.lockbox_enabled ?? false;
+
+  const [emailSubject, setEmailSubject] = useState('');
+  const [emailBody, setEmailBody] = useState('');
+  const [smsBody, setSmsBody] = useState('');
+  const [savingEmail, setSavingEmail] = useState(false);
+  const [savingSms, setSavingSms] = useState(false);
+
+  // Load templates
+  useEffect(() => {
+    const email = getEmailTemplate();
+    setEmailSubject(email.subject);
+    setEmailBody(email.body);
+
+    const sms = getSmsTemplate();
+    setSmsBody(sms.body);
+  }, [getEmailTemplate, getSmsTemplate]);
+
+  const handleSaveEmail = async () => {
+    setSavingEmail(true);
+    try {
+      await saveTemplate.mutateAsync({
+        channel: 'email',
+        subject: emailSubject,
+        body: emailBody,
+      });
+      toast({ title: 'Email template saved' });
+    } catch (err) {
+      toast({ title: 'Failed to save email template', variant: 'destructive' });
+    } finally {
+      setSavingEmail(false);
+    }
+  };
+
+  const handleSaveSms = async () => {
+    setSavingSms(true);
+    try {
+      await saveTemplate.mutateAsync({
+        channel: 'sms',
+        body: smsBody,
+      });
+      toast({ title: 'SMS template saved' });
+    } catch (err) {
+      toast({ title: 'Failed to save SMS template', variant: 'destructive' });
+    } finally {
+      setSavingSms(false);
+    }
+  };
+
+  if (!lockboxEnabled) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Lock className="h-5 w-5 text-primary" />
+            Lockbox Notification Templates
+          </CardTitle>
+          <CardDescription>
+            Enable lockbox in Bookings settings to configure notification templates
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <p className="text-sm text-muted-foreground">
+            Lockbox notification templates let you customise the email and SMS messages sent to customers when their vehicle keys are placed in a lockbox.
+          </p>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          <Lock className="h-5 w-5 text-primary" />
+          Lockbox Notification Templates
+        </CardTitle>
+        <CardDescription>
+          Customise the messages sent to customers with their lockbox access code
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-6">
+        {/* Available Variables */}
+        <div className="rounded-lg border bg-muted/30 p-3">
+          <div className="flex items-center gap-2 mb-2">
+            <Info className="h-4 w-4 text-muted-foreground" />
+            <span className="text-xs font-medium text-muted-foreground">Available Variables</span>
+          </div>
+          <div className="flex flex-wrap gap-1.5">
+            {AVAILABLE_VARIABLES.map(v => (
+              <Badge key={v.key} variant="outline" className="text-xs font-mono cursor-default" title={v.desc}>
+                {v.key}
+              </Badge>
+            ))}
+          </div>
+        </div>
+
+        {/* Email Template */}
+        <div className="space-y-3">
+          <div className="flex items-center gap-2">
+            <Mail className="h-4 w-4 text-primary" />
+            <h4 className="font-medium text-sm">Email Template</h4>
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="email-subject" className="text-xs text-muted-foreground">Subject</Label>
+            <Input
+              id="email-subject"
+              value={emailSubject}
+              onChange={(e) => setEmailSubject(e.target.value)}
+              placeholder="Your Vehicle Keys - Lockbox Code"
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="email-body" className="text-xs text-muted-foreground">Body</Label>
+            <Textarea
+              id="email-body"
+              value={emailBody}
+              onChange={(e) => setEmailBody(e.target.value)}
+              rows={10}
+              className="font-mono text-sm"
+              placeholder="Email body with {{variable}} placeholders..."
+            />
+          </div>
+          <Button
+            onClick={handleSaveEmail}
+            disabled={savingEmail}
+            size="sm"
+          >
+            {savingEmail ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Save className="h-4 w-4 mr-2" />}
+            Save Email Template
+          </Button>
+        </div>
+
+        <div className="border-t" />
+
+        {/* SMS Template */}
+        <div className="space-y-3">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <MessageSquare className="h-4 w-4 text-primary" />
+              <h4 className="font-medium text-sm">SMS Template</h4>
+            </div>
+            <Badge variant="outline" className="text-xs">
+              {smsBody.length} / 160 chars
+            </Badge>
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="sms-body" className="text-xs text-muted-foreground">Message</Label>
+            <Textarea
+              id="sms-body"
+              value={smsBody}
+              onChange={(e) => setSmsBody(e.target.value)}
+              rows={3}
+              className="font-mono text-sm"
+              placeholder="SMS message with {{variable}} placeholders..."
+            />
+            <p className="text-xs text-muted-foreground">
+              Keep under 160 characters for a single SMS. Variables will be replaced with actual values.
+            </p>
+          </div>
+          <Button
+            onClick={handleSaveSms}
+            disabled={savingSms}
+            size="sm"
+          >
+            {savingSms ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Save className="h-4 w-4 mr-2" />}
+            Save SMS Template
+          </Button>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}

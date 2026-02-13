@@ -163,7 +163,30 @@ export function BuyInsuranceDialog({
         throw new Error(contextError || quoteError.message || 'Failed to create Bonzah quote');
       }
 
-      // 5. Insert ledger entry for insurance charge
+      // 5. Confirm payment with Bonzah to issue the policy
+      const policyRecordId = quoteResult?.policy_record_id;
+      if (policyRecordId) {
+        const { data: confirmResult, error: confirmError } = await supabase.functions.invoke('bonzah-confirm-payment', {
+          body: {
+            policy_record_id: policyRecordId,
+            stripe_payment_intent_id: `portal-admin-${rental.id}`,
+          },
+        });
+
+        if (confirmError) {
+          console.error('Bonzah confirm payment error:', confirmError);
+          toast({
+            title: 'Warning',
+            description: 'Insurance quote created but policy issuance failed. You may need to retry.',
+            variant: 'destructive',
+          });
+        } else {
+          console.log('Bonzah policy issued:', confirmResult);
+        }
+      }
+
+      // 6. Insert ledger entry for insurance charge
+
       const { error: ledgerError } = await supabase
         .from('ledger_entries')
         .insert({
@@ -190,7 +213,7 @@ export function BuyInsuranceDialog({
         });
       }
 
-      // 6. Invalidate queries
+      // 7. Invalidate queries
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ['rental-bonzah-policy', rental.id] }),
         queryClient.invalidateQueries({ queryKey: ['rental-charges', rental.id] }),
@@ -205,7 +228,7 @@ export function BuyInsuranceDialog({
         description: `Bonzah insurance policy created. Premium: ${formatCurrency(premium, tenant?.currency_code || 'USD')}`,
       });
 
-      // 7. Close dialog and trigger payment flow
+      // 8. Close dialog and trigger payment flow
       handleClose();
       onPurchaseComplete(premium);
     } catch (error: any) {
@@ -225,7 +248,8 @@ export function BuyInsuranceDialog({
       <DialogContent className="sm:max-w-4xl max-h-[85vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <img src="/bonzah-logo.svg" alt="Bonzah" className="h-6 w-auto dark:invert" />
+            <img src="/bonzah-logo.svg" alt="Bonzah" className="h-6 w-auto dark:hidden" />
+            <img src="/bonzah-logo-dark.svg" alt="Bonzah" className="h-6 w-auto hidden dark:block" />
             {step === 1 ? 'Select Insurance Coverage' : 'Confirm Insurance Purchase'}
           </DialogTitle>
           <DialogDescription>

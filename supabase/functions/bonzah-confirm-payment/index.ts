@@ -88,12 +88,29 @@ serve(async (req) => {
       // Get per-tenant Bonzah credentials
       const credentials = await getTenantBonzahCredentials(supabase, policyRecord.tenant_id)
 
+      // Check CD balance first
+      try {
+        const balanceResponse = await bonzahFetchWithCredentials<{ status: number; data: { amount: string } }>(
+          '/Bonzah/cdBalance',
+          {},
+          credentials,
+          'GET'
+        )
+        console.log('[Bonzah Payment] CD Balance:', balanceResponse?.data?.amount)
+      } catch (balErr) {
+        console.log('[Bonzah Payment] Could not check CD balance:', balErr)
+      }
+
       // Call the /Bonzah/payment endpoint to complete payment and issue policy
+      // Amount sent as string to match Bonzah Postman collection format
+      const amount = String(policyRecord.premium_amount)
+      console.log('[Bonzah Payment] Sending amount as string:', amount)
+
       const paymentResponse = await bonzahFetchWithCredentials<BonzahPaymentResponse>(
         '/Bonzah/payment',
         {
           payment_id: policyRecord.payment_id,
-          amount: policyRecord.premium_amount,
+          amount: amount,
         },
         credentials
       )

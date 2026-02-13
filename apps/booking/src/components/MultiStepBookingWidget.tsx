@@ -2584,6 +2584,22 @@ const MultiStepBookingWidget = () => {
       }
     }
 
+    // Validate booking lead time (minimum advance notice)
+    if (formData.pickupDate && formData.pickupTime) {
+      const leadTimeHours = tenant?.booking_lead_time_hours ?? 24;
+      if (leadTimeHours > 0) {
+        const pickupDateTime = new Date(`${formData.pickupDate}T${formData.pickupTime}`);
+        const now = new Date();
+        const hoursUntilPickup = (pickupDateTime.getTime() - now.getTime()) / (1000 * 60 * 60);
+        if (hoursUntilPickup < leadTimeHours) {
+          const displayValue = leadTimeHours >= 24 && leadTimeHours % 24 === 0
+            ? `${leadTimeHours / 24} day${leadTimeHours / 24 !== 1 ? 's' : ''}`
+            : `${leadTimeHours} hour${leadTimeHours !== 1 ? 's' : ''}`;
+          newErrors.pickupDate = `Bookings must be made at least ${displayValue} in advance.`;
+        }
+      }
+    }
+
     // DOB validation moved to Step 4 (Customer Details)
 
     setErrors(newErrors);
@@ -3129,7 +3145,13 @@ const MultiStepBookingWidget = () => {
                         oneYearFromNow.setFullYear(oneYearFromNow.getFullYear() + 1);
                         const dayWorkingHours = getWorkingHoursForDate(date, tenant);
                         const isClosedDay = !dayWorkingHours.enabled;
-                        return date < today || date > oneYearFromNow || blockedDates.includes(dateStr) || isClosedDay;
+                        // Disable dates that fall entirely within the lead time window
+                        const leadTimeHours = tenant?.booking_lead_time_hours ?? 24;
+                        const leadTimeCutoff = new Date(Date.now() + leadTimeHours * 60 * 60 * 1000);
+                        const endOfDay = new Date(date);
+                        endOfDay.setHours(23, 59, 59, 999);
+                        const isWithinLeadTime = leadTimeHours >= 24 && endOfDay < leadTimeCutoff;
+                        return date < today || date > oneYearFromNow || blockedDates.includes(dateStr) || isClosedDay || isWithinLeadTime;
                       }} initialFocus className="pointer-events-auto" />
                     </PopoverContent>
                   </Popover>

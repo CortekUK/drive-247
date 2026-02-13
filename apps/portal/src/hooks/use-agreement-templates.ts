@@ -368,6 +368,18 @@ export const useTemplateSelection = () => {
         throw new Error('No tenant ID available');
       }
 
+      // Double-check it doesn't already exist to prevent duplicates
+      const { data: existingArr } = await supabase
+        .from('agreement_templates')
+        .select('*')
+        .eq('tenant_id', tenant.id)
+        .eq('template_name', DEFAULT_TEMPLATE_NAME)
+        .limit(1);
+
+      if (existingArr?.[0]) {
+        return existingArr[0];
+      }
+
       const { data, error } = await supabase
         .from('agreement_templates')
         .insert({
@@ -395,6 +407,18 @@ export const useTemplateSelection = () => {
     mutationFn: async (): Promise<AgreementTemplate> => {
       if (!tenant?.id) {
         throw new Error('No tenant ID available');
+      }
+
+      // Double-check it doesn't already exist to prevent duplicates
+      const { data: existingArr } = await supabase
+        .from('agreement_templates')
+        .select('*')
+        .eq('tenant_id', tenant.id)
+        .eq('template_name', CUSTOM_TEMPLATE_NAME)
+        .limit(1);
+
+      if (existingArr?.[0]) {
+        return existingArr[0];
       }
 
       const { data, error } = await supabase
@@ -428,18 +452,30 @@ export const useTemplateSelection = () => {
 
       const targetName = type === 'default' ? DEFAULT_TEMPLATE_NAME : CUSTOM_TEMPLATE_NAME;
 
+      // Find the specific template to activate (get most recent if duplicates exist)
+      const { data: templateToActivate } = await supabase
+        .from('agreement_templates')
+        .select('id')
+        .eq('tenant_id', tenant.id)
+        .eq('template_name', targetName)
+        .order('updated_at', { ascending: false })
+        .limit(1);
+
+      if (!templateToActivate?.[0]) {
+        throw new Error(`Template "${targetName}" not found`);
+      }
+
       // Deactivate all templates first
       await supabase
         .from('agreement_templates')
         .update({ is_active: false })
         .eq('tenant_id', tenant.id);
 
-      // Activate the selected template
+      // Activate only the single selected template by ID
       const { error } = await supabase
         .from('agreement_templates')
         .update({ is_active: true, updated_at: new Date().toISOString() })
-        .eq('tenant_id', tenant.id)
-        .eq('template_name', targetName);
+        .eq('id', templateToActivate[0].id);
 
       if (error) {
         throw error;
@@ -471,13 +507,16 @@ export const useTemplateSelection = () => {
       const targetName = type === 'default' ? DEFAULT_TEMPLATE_NAME : CUSTOM_TEMPLATE_NAME;
       const isDefaultType = type === 'default';
 
-      // Check if template exists
-      const { data: existing } = await supabase
+      // Check if template exists (use limit(1) to handle duplicates gracefully)
+      const { data: existingArr } = await supabase
         .from('agreement_templates')
         .select('id')
         .eq('tenant_id', tenant.id)
         .eq('template_name', targetName)
-        .single();
+        .order('updated_at', { ascending: false })
+        .limit(1);
+
+      const existing = existingArr?.[0] || null;
 
       if (existing) {
         // Update existing template
@@ -585,13 +624,16 @@ export const useTemplateSelection = () => {
         throw new Error('No tenant ID available');
       }
 
-      // Check if template exists
-      const { data: existing } = await supabase
+      // Check if template exists (use limit(1) to handle duplicates gracefully)
+      const { data: existingArr } = await supabase
         .from('agreement_templates')
         .select('id')
         .eq('tenant_id', tenant.id)
         .eq('template_name', DEFAULT_TEMPLATE_NAME)
-        .single();
+        .order('updated_at', { ascending: false })
+        .limit(1);
+
+      const existing = existingArr?.[0] || null;
 
       if (existing) {
         // Update existing template

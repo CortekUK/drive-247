@@ -174,7 +174,7 @@ export default function PaymentDetail() {
             </div>
             <div>
               <div className="text-sm text-muted-foreground">Method</div>
-              <div>{payment.method || 'Not specified'}</div>
+              <div>{payment.method ? payment.method.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()) : 'Not specified'}</div>
             </div>
             <div>
               <div className="text-sm text-muted-foreground">Type</div>

@@ -5,16 +5,23 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import {
   Key,
   KeyRound,
   AlertCircle,
   AlertTriangle,
-  Gauge
+  Gauge,
+  Lock,
+  Loader2,
+  User,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useKeyHandover, HandoverType } from "@/hooks/use-key-handover";
 import { KeyHandoverPhotos } from "@/components/rentals/key-handover-photos";
+import { supabase } from "@/integrations/supabase/client";
+import { useTenant } from "@/contexts/TenantContext";
+import { useToast } from "@/hooks/use-toast";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -31,9 +38,36 @@ interface KeyHandoverSectionProps {
   rentalStatus: string;
   /** Whether to highlight this section as needing action */
   needsAction?: boolean;
+  /** Lockbox delivery props */
+  isDeliveryRental?: boolean;
+  vehicleLockboxCode?: string | null;
+  vehicleLockboxInstructions?: string | null;
+  deliveryMethod?: string | null;
+  customerEmail?: string | null;
+  customerPhone?: string | null;
+  customerName?: string;
+  vehicleName?: string;
+  vehicleReg?: string;
+  deliveryAddress?: string | null;
+  bookingRef?: string;
 }
 
-export const KeyHandoverSection = ({ rentalId, rentalStatus, needsAction = false }: KeyHandoverSectionProps) => {
+export const KeyHandoverSection = ({
+  rentalId,
+  rentalStatus,
+  needsAction = false,
+  isDeliveryRental = false,
+  vehicleLockboxCode = null,
+  vehicleLockboxInstructions = null,
+  deliveryMethod: savedDeliveryMethod = null,
+  customerEmail = null,
+  customerPhone = null,
+  customerName = '',
+  vehicleName = '',
+  vehicleReg = '',
+  deliveryAddress = null,
+  bookingRef = '',
+}: KeyHandoverSectionProps) => {
   const {
     givingHandover,
     receivingHandover,
@@ -50,6 +84,9 @@ export const KeyHandoverSection = ({ rentalId, rentalStatus, needsAction = false
     isUnmarkingHanded,
   } = useKeyHandover(rentalId);
 
+  const { tenant } = useTenant();
+  const { toast } = useToast();
+
   const [confirmHandover, setConfirmHandover] = useState<HandoverType | null>(null);
   const [confirmUndo, setConfirmUndo] = useState<HandoverType | null>(null);
   const [mileageWarning, setMileageWarning] = useState<HandoverType | null>(null);
@@ -57,6 +94,15 @@ export const KeyHandoverSection = ({ rentalId, rentalStatus, needsAction = false
   const [receivingNotes, setReceivingNotes] = useState<string>("");
   const [givingMileage, setGivingMileage] = useState<string>("");
   const [receivingMileage, setReceivingMileage] = useState<string>("");
+
+  // Lockbox delivery method state
+  const [deliveryMethodChoice, setDeliveryMethodChoice] = useState<'lockbox' | 'in_person'>(
+    savedDeliveryMethod === 'lockbox' ? 'lockbox' : 'in_person'
+  );
+  const [isSendingLockbox, setIsSendingLockbox] = useState(false);
+
+  const showLockboxOption = isDeliveryRental && !!vehicleLockboxCode;
+  const showNoLockboxWarning = isDeliveryRental && !vehicleLockboxCode && tenant?.lockbox_enabled;
 
   // Sync local state with server data
   useEffect(() => {
@@ -93,11 +139,63 @@ export const KeyHandoverSection = ({ rentalId, rentalStatus, needsAction = false
     }
   };
 
-  const handleConfirmHandover = () => {
-    if (confirmHandover) {
-      markKeyHanded.mutate(confirmHandover);
-      setConfirmHandover(null);
+  const handleConfirmHandover = async () => {
+    if (!confirmHandover) return;
+
+    // If giving handover with lockbox delivery method, send notification and save delivery_method
+    if (confirmHandover === "giving" && showLockboxOption && deliveryMethodChoice === "lockbox") {
+      setIsSendingLockbox(true);
+      try {
+        // Save delivery_method on the rental
+        await supabase
+          .from("rentals")
+          .update({ delivery_method: 'lockbox' })
+          .eq("id", rentalId);
+
+        // Send lockbox notification
+        const { error } = await supabase.functions.invoke("notify-lockbox-code", {
+          body: {
+            customerName,
+            customerEmail,
+            customerPhone,
+            vehicleName,
+            vehicleReg,
+            lockboxCode: vehicleLockboxCode,
+            lockboxInstructions: vehicleLockboxInstructions || '',
+            deliveryAddress: deliveryAddress || '',
+            bookingRef,
+            tenantId: tenant?.id,
+          },
+        });
+
+        if (error) {
+          console.error("Failed to send lockbox notification:", error);
+          toast({
+            title: "Warning",
+            description: "Lockbox code notification failed to send. You may need to contact the customer manually.",
+            variant: "destructive",
+          });
+        } else {
+          toast({
+            title: "Lockbox Code Sent",
+            description: `Lockbox code sent to ${customerEmail || 'customer'}`,
+          });
+        }
+      } catch (err) {
+        console.error("Lockbox notification error:", err);
+      } finally {
+        setIsSendingLockbox(false);
+      }
+    } else if (confirmHandover === "giving" && isDeliveryRental) {
+      // In-person delivery — save delivery_method
+      await supabase
+        .from("rentals")
+        .update({ delivery_method: 'in_person' })
+        .eq("id", rentalId);
     }
+
+    markKeyHanded.mutate(confirmHandover);
+    setConfirmHandover(null);
   };
 
   const handleConfirmUndo = () => {
@@ -157,6 +255,70 @@ export const KeyHandoverSection = ({ rentalId, rentalStatus, needsAction = false
             <p className="text-sm text-muted-foreground">
               Before rental - Document car condition before handing over the key
             </p>
+
+            {/* Delivery Method Choice — only for delivery rentals with lockbox available */}
+            {showLockboxOption && !givingCompleted && !isClosed && (
+              <div className="p-3 border rounded-lg bg-primary/5 space-y-3">
+                <Label className="text-sm font-medium">How are the keys being handed over?</Label>
+                <RadioGroup
+                  value={deliveryMethodChoice}
+                  onValueChange={(v) => setDeliveryMethodChoice(v as 'lockbox' | 'in_person')}
+                  className="space-y-2"
+                >
+                  <div className={cn(
+                    "flex items-center gap-3 p-2.5 rounded-md border cursor-pointer transition-colors",
+                    deliveryMethodChoice === 'lockbox' ? "border-primary bg-primary/5" : "border-transparent hover:bg-muted/50"
+                  )}>
+                    <RadioGroupItem value="lockbox" id="method-lockbox" />
+                    <Label htmlFor="method-lockbox" className="flex items-center gap-2 cursor-pointer flex-1">
+                      <Lock className="h-4 w-4 text-primary" />
+                      <div>
+                        <span className="text-sm font-medium">Lockbox</span>
+                        <p className="text-xs text-muted-foreground">Keys placed in lockbox — code will be sent to customer</p>
+                      </div>
+                    </Label>
+                  </div>
+                  <div className={cn(
+                    "flex items-center gap-3 p-2.5 rounded-md border cursor-pointer transition-colors",
+                    deliveryMethodChoice === 'in_person' ? "border-primary bg-primary/5" : "border-transparent hover:bg-muted/50"
+                  )}>
+                    <RadioGroupItem value="in_person" id="method-inperson" />
+                    <Label htmlFor="method-inperson" className="flex items-center gap-2 cursor-pointer flex-1">
+                      <User className="h-4 w-4 text-primary" />
+                      <div>
+                        <span className="text-sm font-medium">In-person handoff</span>
+                        <p className="text-xs text-muted-foreground">Keys handed directly to the customer</p>
+                      </div>
+                    </Label>
+                  </div>
+                </RadioGroup>
+              </div>
+            )}
+
+            {/* Warning if delivery rental but no lockbox code on vehicle */}
+            {showNoLockboxWarning && !givingCompleted && !isClosed && (
+              <div className="flex items-center gap-2 text-muted-foreground text-xs p-2 border rounded-md bg-muted/30">
+                <AlertCircle className="h-3.5 w-3.5 flex-shrink-0" />
+                <span>This vehicle has no lockbox code configured. Only in-person handoff is available.</span>
+              </div>
+            )}
+
+            {/* Show which delivery method was used (after completion) */}
+            {givingCompleted && savedDeliveryMethod && (
+              <div className="flex items-center gap-2 text-sm">
+                {savedDeliveryMethod === 'lockbox' ? (
+                  <Badge variant="outline" className="border-primary/30 bg-primary/5">
+                    <Lock className="h-3 w-3 mr-1" />
+                    Lockbox
+                  </Badge>
+                ) : (
+                  <Badge variant="outline">
+                    <User className="h-3 w-3 mr-1" />
+                    In-person
+                  </Badge>
+                )}
+              </div>
+            )}
 
             {/* Photos */}
             <KeyHandoverPhotos
@@ -223,16 +385,24 @@ export const KeyHandoverSection = ({ rentalId, rentalStatus, needsAction = false
             {!isClosed && (
               <Button
                 onClick={() => givingCompleted ? setConfirmUndo("giving") : handleRequestHandover("giving")}
-                disabled={isMarkingHanded || isUnmarkingHanded}
+                disabled={isMarkingHanded || isUnmarkingHanded || isSendingLockbox}
                 variant={givingCompleted ? "outline" : "default"}
                 className="w-full"
               >
-                <KeyRound className="h-4 w-4 mr-2" />
-                {isMarkingHanded || isUnmarkingHanded
-                  ? "Processing..."
-                  : givingCompleted
-                    ? "Undo Collection"
-                    : "Confirm Collection"}
+                {isSendingLockbox ? (
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                ) : (
+                  <KeyRound className="h-4 w-4 mr-2" />
+                )}
+                {isSendingLockbox
+                  ? "Sending lockbox code..."
+                  : isMarkingHanded || isUnmarkingHanded
+                    ? "Processing..."
+                    : givingCompleted
+                      ? "Undo Collection"
+                      : showLockboxOption && deliveryMethodChoice === 'lockbox'
+                        ? "Confirm Collection & Send Code"
+                        : "Confirm Collection"}
               </Button>
             )}
 
@@ -371,6 +541,15 @@ export const KeyHandoverSection = ({ rentalId, rentalStatus, needsAction = false
                 {confirmHandover === "giving" ? (
                   <>
                     Are you sure you want to mark the vehicle as collected?
+                    {showLockboxOption && deliveryMethodChoice === "lockbox" && (
+                      <>
+                        <br /><br />
+                        <span className="flex items-center gap-1.5 text-primary font-medium">
+                          <Lock className="h-3.5 w-3.5" />
+                          The lockbox code will be sent to the customer via {customerEmail ? 'email' : 'notification'}.
+                        </span>
+                      </>
+                    )}
                     <br />
                     <span className="text-muted-foreground text-sm">
                       The rental will become active once both this and admin approval are completed.

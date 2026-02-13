@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Car, Users, FileText, CreditCard, LayoutDashboard, Bell, BarChart3, AlertCircle, TrendingUp, Settings, CalendarDays, Receipt, FolderOpen, UserX, Globe, History, Clock, UsersRound, MessageSquare, ChevronRight, Layers } from "lucide-react";
+import { Car, Users, FileText, CreditCard, LayoutDashboard, Bell, BarChart3, AlertCircle, TrendingUp, Settings, CalendarDays, Receipt, FolderOpen, UserX, Globe, History, Clock, UsersRound, MessageSquare, ChevronRight, Layers, Timer, Zap } from "lucide-react";
 import { Sidebar, SidebarContent, SidebarGroup, SidebarGroupContent, SidebarHeader, SidebarMenu, SidebarMenuButton, SidebarMenuItem, SidebarFooter, useSidebar } from "@/components/ui/sidebar";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { useReminderStats } from "@/hooks/use-reminders";
@@ -12,6 +12,10 @@ import { useTenantBranding } from "@/hooks/use-tenant-branding";
 import { usePendingBookingsCount } from "@/hooks/use-pending-bookings";
 import { useUnreadCount } from "@/hooks/use-unread-count";
 import { useAuthStore } from "@/stores/auth-store";
+import { useTenantSubscription } from "@/hooks/use-tenant-subscription";
+import { useSetupStatus } from "@/hooks/use-setup-status";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { useTheme } from "next-themes";
 
 interface NavItem {
   name: string;
@@ -37,10 +41,13 @@ export function AppSidebar() {
   const { data: pendingBookingsCount } = usePendingBookingsCount();
   const { unreadCount: chatUnreadCount } = useUnreadCount();
   const { appUser } = useAuthStore();
+  const { isTrialing, trialDaysRemaining } = useTenantSubscription();
+  const { isLive } = useSetupStatus();
 
+  const { resolvedTheme } = useTheme();
   const appName = branding?.app_name || 'DRIVE247';
   const shortName = appName.length > 4 ? appName.substring(0, 4) : appName;
-  const logoUrl = branding?.logo_url;
+  const logoUrl = resolvedTheme === 'dark' && branding?.dark_logo_url ? branding.dark_logo_url : branding?.logo_url;
   const showPendingBookings = settings?.payment_mode === 'manual';
   const collapsed = state === "collapsed";
 
@@ -299,6 +306,45 @@ export function AppSidebar() {
       {/* Pinned Footer */}
       <SidebarFooter className="border-t p-1.5">
         <SidebarMenu>
+          {/* Trial/Live Status Badge */}
+          {(isTrialing || isLive) && (
+            <SidebarMenuItem>
+              {collapsed ? (
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <div className="flex items-center justify-center h-8">
+                      {isTrialing ? (
+                        <Timer className="h-4 w-4 text-blue-500" />
+                      ) : (
+                        <Zap className="h-4 w-4 text-green-500" />
+                      )}
+                    </div>
+                  </TooltipTrigger>
+                  <TooltipContent side="right">
+                    {isTrialing ? `Setup Mode · ${trialDaysRemaining}d left` : "Live"}
+                  </TooltipContent>
+                </Tooltip>
+              ) : (
+                <div className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-xs font-medium ${
+                  isTrialing
+                    ? "bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-400"
+                    : "bg-green-50 text-green-700 dark:bg-green-950/40 dark:text-green-400"
+                }`}>
+                  {isTrialing ? (
+                    <>
+                      <Timer className="h-3.5 w-3.5" />
+                      <span>Setup Mode · {trialDaysRemaining}d left</span>
+                    </>
+                  ) : (
+                    <>
+                      <Zap className="h-3.5 w-3.5" />
+                      <span>Live</span>
+                    </>
+                  )}
+                </div>
+              )}
+            </SidebarMenuItem>
+          )}
           <SidebarMenuItem>
             <SidebarMenuButton
               asChild

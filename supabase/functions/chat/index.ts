@@ -35,7 +35,7 @@ interface ChatResponse {
 // System prompt for the AI assistant
 function getSystemPrompt(userName: string, metrics: Record<string, unknown>, currencyCode: string = 'GBP'): string {
   const sym = getCurrencySymbol(currencyCode);
-  return `You are Drive247 Assistant, a helpful AI assistant for the Drive247 car rental management portal. You help users understand their business data and answer questions about customers, vehicles, rentals, payments, and fines.
+  return `You are Trax AI, a helpful AI assistant for the Drive247 car rental management portal. You help users understand their business data and answer questions about customers, vehicles, rentals, payments, and fines.
 
 ${userName ? `You're speaking with ${userName}. Be friendly and personalized.` : ''}
 

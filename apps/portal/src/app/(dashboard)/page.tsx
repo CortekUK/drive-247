@@ -18,6 +18,9 @@ import { ComplianceOverviewCard } from "@/components/dashboard/compliance-overvi
 import { ActionItems } from "@/components/dashboard/action-items";
 import { CalendarWidget } from "@/components/dashboard/calendar-widget";
 import { AIInsightsPanel } from "@/components/rentals/calendar/ai-insights-panel";
+import { SetupHub } from "@/components/dashboard/setup-hub";
+import { GoLiveBanner } from "@/components/dashboard/go-live-banner";
+import { BonzahBalanceWidget } from "@/components/dashboard/bonzah-balance-widget";
 import { useCalendarRentals } from "@/hooks/use-calendar-rentals";
 import { useDashboardKPIs } from "@/hooks/use-dashboard-kpis";
 import { useAuth } from "@/stores/auth-store";
@@ -140,6 +143,11 @@ export default function DashboardPage() {
           </Button>
         </div>
       </div>
+
+      {/* Setup Hub (trial) / Go-Live Banner */}
+      <SetupHub />
+      <GoLiveBanner />
+      <BonzahBalanceWidget />
 
       {/* AI Insights Marquee */}
       <AIInsightsPanel grouped={todayCalendar?.grouped || []} />

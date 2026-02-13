@@ -20,7 +20,7 @@ import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { format } from 'date-fns';
-import { Calendar as CalendarIcon, Settings as SettingsIcon, Building2, Bell, Zap, Upload, Save, Loader2, Database, AlertTriangle, Trash2, CreditCard, Palette, Link2, CheckCircle2, AlertCircle, ExternalLink, MapPin, FileText, Car, Mail, ShieldX, FilePenLine, Receipt, Banknote, Shield, Copy, Check, Clock, Crown, Package } from 'lucide-react';
+import { Calendar as CalendarIcon, Settings as SettingsIcon, Building2, Bell, Zap, Upload, Save, Loader2, Database, AlertTriangle, Trash2, CreditCard, Palette, Link2, CheckCircle2, AlertCircle, ExternalLink, MapPin, FileText, Car, Mail, ShieldX, FilePenLine, Receipt, Banknote, Shield, Copy, Check, Clock, Crown, Package, Lock, RefreshCw } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
 import { useOrgSettings } from '@/hooks/use-org-settings';
 import { useTenantBranding } from '@/hooks/use-tenant-branding';
@@ -38,6 +38,7 @@ import { LocationSettings } from '@/components/settings/location-settings';
 import { ExtrasSettings } from '@/components/settings/extras-settings';
 import { BonzahSettings } from '@/components/settings/bonzah-settings';
 import { SubscriptionSettings } from '@/components/settings/subscription-settings';
+import { LockboxTemplatesSection } from '@/components/settings/lockbox-templates-section';
 import { formatCurrency } from '@/lib/format-utils';
 
 const Settings = () => {
@@ -107,6 +108,11 @@ const Settings = () => {
       max_retry_attempts: number;
       retry_interval_days: number;
     };
+    booking_lead_time_value: number;
+    booking_lead_time_unit: 'hours' | 'days';
+    lockbox_enabled: boolean;
+    lockbox_code_length: number | null;
+    lockbox_notification_methods: string[];
   }>({
     minimum_rental_age: '',
     tax_enabled: false,
@@ -141,6 +147,13 @@ const Settings = () => {
       max_retry_attempts: number;
       retry_interval_days: number;
     },
+    // Booking lead time
+    booking_lead_time_value: 24,
+    booking_lead_time_unit: 'hours' as 'hours' | 'days',
+    // Lockbox settings
+    lockbox_enabled: false,
+    lockbox_code_length: null as number | null,
+    lockbox_notification_methods: ['email'] as string[],
   });
 
   // Sync rental form with loaded settings
@@ -170,6 +183,15 @@ const Settings = () => {
           max_retry_attempts: rentalSettings.installment_config?.max_retry_attempts ?? 3,
           retry_interval_days: rentalSettings.installment_config?.retry_interval_days ?? 1,
         },
+        // Booking lead time - convert stored hours back to display value based on unit
+        booking_lead_time_unit: (rentalSettings.booking_lead_time_unit as 'hours' | 'days') ?? 'hours',
+        booking_lead_time_value: (rentalSettings.booking_lead_time_unit === 'days' && rentalSettings.booking_lead_time_hours)
+          ? rentalSettings.booking_lead_time_hours / 24
+          : rentalSettings.booking_lead_time_hours ?? 24,
+        // Lockbox settings
+        lockbox_enabled: rentalSettings.lockbox_enabled ?? false,
+        lockbox_code_length: rentalSettings.lockbox_code_length ?? null,
+        lockbox_notification_methods: (rentalSettings.lockbox_notification_methods as string[]) ?? ['email'],
       });
     }
   }, [rentalSettings]);
@@ -177,7 +199,7 @@ const Settings = () => {
   // Handle URL tab parameter
   useEffect(() => {
     const tabParam = searchParams.get('tab');
-    if (tabParam && ['general', 'branding', 'reminders', 'payments', 'locations', 'rental', 'extras', 'integrations', 'subscription'].includes(tabParam)) {
+    if (tabParam && ['general', 'branding', 'reminders', 'payments', 'locations', 'rental', 'extras', 'templates', 'integrations', 'subscription'].includes(tabParam)) {
       setActiveTab(tabParam);
     }
   }, [searchParams]);
@@ -808,6 +830,7 @@ const Settings = () => {
                 { value: 'extras', icon: Package, label: 'Extras' },
                 { value: 'payments', icon: CreditCard, label: 'Payments' },
                 { value: 'reminders', icon: Bell, label: 'Notifications' },
+                { value: 'templates', icon: FileText, label: 'Templates' },
                 { value: 'integrations', icon: Shield, label: 'Integrations' },
                 { value: 'subscription', icon: Crown, label: 'Subscription' },
               ] as const).map(item => (
@@ -851,6 +874,7 @@ const Settings = () => {
                 { value: 'extras', icon: Package, label: 'Extras' },
                 { value: 'payments', icon: CreditCard, label: 'Payments & Stripe' },
                 { value: 'reminders', icon: Bell, label: 'Notifications' },
+                { value: 'templates', icon: FileText, label: 'Templates' },
               ] as const).map(item => (
                 <button
                   key={item.value}
@@ -1802,6 +1826,87 @@ const Settings = () => {
                     });
                   } catch (error) {
                     console.error('Failed to update rental settings:', error);
+                  }
+                }}
+                disabled={isUpdatingRentalSettings}
+                className="flex items-center gap-2"
+              >
+                {isUpdatingRentalSettings ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Save className="h-4 w-4" />
+                )}
+                Save
+              </Button>
+            </CardContent>
+          </Card>
+
+          {/* Minimum Booking Notice Card */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Clock className="h-5 w-5 text-primary" />
+                Minimum Booking Notice
+              </CardTitle>
+              <CardDescription>
+                Set how far in advance bookings must be made
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="flex items-center gap-3">
+                <Input
+                  type="number"
+                  min={0}
+                  value={rentalForm.booking_lead_time_value || ''}
+                  onChange={(e) => {
+                    const val = e.target.value === '' ? 0 : parseInt(e.target.value) || 0;
+                    setRentalForm(prev => ({ ...prev, booking_lead_time_value: Math.max(0, val) }));
+                  }}
+                  placeholder={rentalForm.booking_lead_time_unit === 'days' ? 'e.g. 2' : 'e.g. 24'}
+                  className="w-24"
+                />
+                <Select
+                  value={rentalForm.booking_lead_time_unit}
+                  onValueChange={(value: 'hours' | 'days') => {
+                    const currentHours = rentalForm.booking_lead_time_unit === 'days'
+                      ? rentalForm.booking_lead_time_value * 24
+                      : rentalForm.booking_lead_time_value;
+                    const newValue = value === 'days' ? Math.round(currentHours / 24) : currentHours;
+                    setRentalForm(prev => ({
+                      ...prev,
+                      booking_lead_time_unit: value,
+                      booking_lead_time_value: newValue,
+                    }));
+                  }}
+                >
+                  <SelectTrigger className="w-28">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="hours">Hours</SelectItem>
+                    <SelectItem value="days">Days</SelectItem>
+                  </SelectContent>
+                </Select>
+                <span className="text-sm text-muted-foreground">before pickup</span>
+              </div>
+              <p className="text-sm text-muted-foreground">
+                Customers must book at least {rentalForm.booking_lead_time_value} {rentalForm.booking_lead_time_unit} in advance.
+                {rentalForm.booking_lead_time_unit === 'days' && rentalForm.booking_lead_time_value > 0 && (
+                  <> ({rentalForm.booking_lead_time_value * 24} hours)</>
+                )}
+              </p>
+              <Button
+                onClick={async () => {
+                  try {
+                    const hours = rentalForm.booking_lead_time_unit === 'days'
+                      ? rentalForm.booking_lead_time_value * 24
+                      : rentalForm.booking_lead_time_value;
+                    await updateRentalSettings({
+                      booking_lead_time_hours: hours,
+                      booking_lead_time_unit: rentalForm.booking_lead_time_unit,
+                    });
+                  } catch (error) {
+                    console.error('Failed to update booking notice settings:', error);
                   }
                 }}
                 disabled={isUpdatingRentalSettings}
@@ -2850,11 +2955,146 @@ const Settings = () => {
             </AlertDialogContent>
           </AlertDialog>
 
+          {/* Lockbox Settings */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Lock className="h-5 w-5 text-primary" />
+                Lockbox
+              </CardTitle>
+              <CardDescription>
+                Enable lockbox-based key handover for delivery rentals. When enabled, staff can place keys in a lockbox and the code is sent to the customer automatically.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              {/* Enable Toggle */}
+              <div className="flex items-center justify-between p-4 border rounded-lg">
+                <div className="space-y-1">
+                  <h4 className="font-medium">Enable Lockbox</h4>
+                  <p className="text-sm text-muted-foreground">
+                    Allow lockbox as a key handover method for delivery rentals
+                  </p>
+                </div>
+                <Switch
+                  checked={rentalForm.lockbox_enabled}
+                  onCheckedChange={(checked) => {
+                    setRentalForm(prev => ({ ...prev, lockbox_enabled: checked }));
+                  }}
+                />
+              </div>
+
+              {rentalForm.lockbox_enabled && (
+                <div className="space-y-6">
+                  {/* Code Length */}
+                  <div className="space-y-2">
+                    <Label>Code Length</Label>
+                    <Input
+                      type="number"
+                      min={1}
+                      max={20}
+                      placeholder="Leave empty for free length"
+                      value={rentalForm.lockbox_code_length ?? ''}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setRentalForm(prev => ({
+                          ...prev,
+                          lockbox_code_length: val ? parseInt(val) : null,
+                        }));
+                      }}
+                      className="w-48"
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      {rentalForm.lockbox_code_length
+                        ? `Generate button will create random ${rentalForm.lockbox_code_length}-digit codes on vehicle forms`
+                        : 'Free length — staff can enter any code, generate button creates a random 4-digit code'}
+                    </p>
+                  </div>
+
+                  {/* Notification Methods */}
+                  <div className="space-y-3">
+                    <Label>Notification Methods</Label>
+                    <p className="text-xs text-muted-foreground">
+                      How should customers receive the lockbox code when a vehicle is delivered?
+                    </p>
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between p-3 border rounded-lg">
+                        <div className="flex items-center gap-2">
+                          <Mail className="h-4 w-4 text-muted-foreground" />
+                          <span className="text-sm font-medium">Email</span>
+                        </div>
+                        <Switch
+                          checked={rentalForm.lockbox_notification_methods.includes('email')}
+                          onCheckedChange={(checked) => {
+                            setRentalForm(prev => ({
+                              ...prev,
+                              lockbox_notification_methods: checked
+                                ? [...prev.lockbox_notification_methods.filter(m => m !== 'email'), 'email']
+                                : prev.lockbox_notification_methods.filter(m => m !== 'email'),
+                            }));
+                          }}
+                        />
+                      </div>
+                      <div className="flex items-center justify-between p-3 border rounded-lg opacity-50">
+                        <div className="flex items-center gap-2">
+                          <svg className="h-4 w-4 text-muted-foreground" viewBox="0 0 24 24" fill="currentColor"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/><path d="M12 0C5.373 0 0 5.373 0 12c0 2.625.846 5.059 2.284 7.034L.789 23.492a.5.5 0 00.612.612l4.458-1.495A11.943 11.943 0 0012 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 22c-2.319 0-4.476-.67-6.313-1.822l-.44-.264-2.645.887.887-2.645-.264-.44A9.952 9.952 0 012 12C2 6.486 6.486 2 12 2s10 4.486 10 10-4.486 10-10 10z"/></svg>
+                          <span className="text-sm font-medium">WhatsApp</span>
+                          <Badge variant="outline" className="text-[10px] px-1.5 py-0">Coming soon</Badge>
+                        </div>
+                        <Switch disabled checked={false} />
+                      </div>
+                      <div className="flex items-center justify-between p-3 border rounded-lg opacity-50">
+                        <div className="flex items-center gap-2">
+                          <Bell className="h-4 w-4 text-muted-foreground" />
+                          <span className="text-sm font-medium">SMS</span>
+                          <Badge variant="outline" className="text-[10px] px-1.5 py-0">Coming soon</Badge>
+                        </div>
+                        <Switch disabled checked={false} />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Save Button */}
+              <Button
+                onClick={async () => {
+                  try {
+                    await updateRentalSettings({
+                      lockbox_enabled: rentalForm.lockbox_enabled,
+                      lockbox_code_length: rentalForm.lockbox_code_length,
+                      lockbox_notification_methods: rentalForm.lockbox_notification_methods as any,
+                    });
+                  } catch (error) {
+                    console.error('Failed to update lockbox settings:', error);
+                  }
+                }}
+                disabled={isUpdatingRentalSettings}
+                className="flex items-center gap-2"
+              >
+                {isUpdatingRentalSettings ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Save className="h-4 w-4" />
+                )}
+                Save
+              </Button>
+            </CardContent>
+          </Card>
+
+        </TabsContent>
+
+        {/* Extras Tab */}
+        <TabsContent value="extras" className="space-y-6">
+          <ExtrasSettings />
+        </TabsContent>
+
+        {/* Templates Tab */}
+        <TabsContent value="templates" className="space-y-6">
           {/* Agreement Templates */}
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
-                <FileText className="h-5 w-5 text-primary" />
+                <FilePenLine className="h-5 w-5 text-primary" />
                 Agreement Templates
               </CardTitle>
               <CardDescription>
@@ -2877,11 +3117,9 @@ const Settings = () => {
               </div>
             </CardContent>
           </Card>
-        </TabsContent>
 
-        {/* Extras Tab */}
-        <TabsContent value="extras" className="space-y-6">
-          <ExtrasSettings />
+          {/* Lockbox Notification Templates */}
+          <LockboxTemplatesSection />
         </TabsContent>
 
         {/* Integrations Tab (Bonzah + Blacklist) */}

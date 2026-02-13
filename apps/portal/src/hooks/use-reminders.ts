@@ -7,7 +7,7 @@ import { useAuditLog } from "@/hooks/use-audit-log";
 export interface Reminder {
   id: string;
   rule_code: string;
-  object_type: 'Vehicle' | 'Rental' | 'Customer' | 'Fine' | 'Document';
+  object_type: 'Vehicle' | 'Rental' | 'Customer' | 'Fine' | 'Document' | 'Integration';
   object_id: string;
   title: string;
   message: string;
@@ -84,8 +84,13 @@ export function useReminders(filters?: ReminderFilters) {
         throw new Error('Failed to fetch reminders');
       }
 
-      // Sort by severity priority: critical (1), warning (2), info (3)
+      // Sort: Integration reminders first, then by severity priority
       const sortedData = (data as Reminder[]).sort((a, b) => {
+        // Pin Integration (Bonzah) reminders to top
+        const aIsIntegration = a.object_type === 'Integration' ? 0 : 1;
+        const bIsIntegration = b.object_type === 'Integration' ? 0 : 1;
+        if (aIsIntegration !== bIsIntegration) return aIsIntegration - bIsIntegration;
+
         const severityOrder = { critical: 1, warning: 2, info: 3 };
         return severityOrder[a.severity] - severityOrder[b.severity];
       });

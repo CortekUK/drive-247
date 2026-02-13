@@ -5655,6 +5655,7 @@ export type Database = {
           bonzah_password: string | null
           bonzah_username: string | null
           booking_lead_time_hours: number | null
+          booking_lead_time_unit: string | null
           business_hours: string | null
           collection_enabled: boolean | null
           company_name: string
@@ -5782,6 +5783,7 @@ export type Database = {
           bonzah_password?: string | null
           bonzah_username?: string | null
           booking_lead_time_hours?: number | null
+          booking_lead_time_unit?: string | null
           business_hours?: string | null
           collection_enabled?: boolean | null
           company_name: string
@@ -5909,6 +5911,7 @@ export type Database = {
           bonzah_password?: string | null
           bonzah_username?: string | null
           booking_lead_time_hours?: number | null
+          booking_lead_time_unit?: string | null
           business_hours?: string | null
           collection_enabled?: boolean | null
           company_name?: string

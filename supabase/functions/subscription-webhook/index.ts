@@ -127,9 +127,21 @@ async function handleCheckoutCompleted(stripe: Stripe, supabase: any, session: a
 
   if (subError) { console.error("Error upserting subscription:", subError); throw subError; }
 
+  // If trialing, force test mode for Stripe Connect and Bonzah so tenant can configure safely
+  const tenantUpdate: Record<string, any> = {
+    subscription_plan: resolvedPlanName,
+    stripe_subscription_customer_id: subscription.customer as string,
+  };
+  if (subscription.status === "trialing") {
+    tenantUpdate.stripe_mode = "test";
+    tenantUpdate.bonzah_mode = "test";
+    tenantUpdate.setup_completed_at = null;
+    console.log(`Trial started for tenant ${tenantId} — forcing test mode for Stripe Connect & Bonzah`);
+  }
+
   const { error: tenantError } = await supabase
     .from("tenants")
-    .update({ subscription_plan: resolvedPlanName, stripe_subscription_customer_id: subscription.customer as string })
+    .update(tenantUpdate)
     .eq("id", tenantId);
 
   if (tenantError) console.error("Error updating tenant plan:", tenantError);
@@ -182,7 +194,24 @@ async function handleSubscriptionUpdated(stripe: Stripe, supabase: any, subscrip
       activePlan = existingSub?.plan_name || "pro";
     }
   }
-  await supabase.from("tenants").update({ subscription_plan: activePlan }).eq("id", tenantId);
+  // Auto go-live: when trial ends and subscription becomes active, switch to live mode (once)
+  const goLiveUpdate: Record<string, any> = { subscription_plan: activePlan };
+  if (subscription.status === "active") {
+    const { data: currentTenant } = await supabase
+      .from("tenants")
+      .select("setup_completed_at")
+      .eq("id", tenantId)
+      .single();
+
+    if (currentTenant && !currentTenant.setup_completed_at) {
+      goLiveUpdate.stripe_mode = "live";
+      goLiveUpdate.bonzah_mode = "live";
+      goLiveUpdate.setup_completed_at = new Date().toISOString();
+      console.log(`Auto go-live for tenant ${tenantId} — switching Stripe Connect & Bonzah to live mode`);
+    }
+  }
+
+  await supabase.from("tenants").update(goLiveUpdate).eq("id", tenantId);
   console.log(`Subscription ${subscription.id} updated: status=${subscription.status}, plan=${activePlan}`);
 }
 

@@ -81,7 +81,7 @@ const Navigation = () => {
           <Link href="/" className="flex items-center gap-2 lg:gap-3 flex-shrink-0 group py-1">
             {settings.logo_url ? (
               <img
-                src={settings.logo_url}
+                src={settings.dark_logo_url || settings.logo_url}
                 alt={settings.logo_alt || 'Drive247'}
                 className="h-14 lg:h-16 w-auto max-w-[140px] object-contain"
               />

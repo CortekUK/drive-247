@@ -21,11 +21,13 @@ import {
   Calendar,
   Download,
   Play,
-  MoreHorizontal
+  MoreHorizontal,
+  Shield,
 } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import Image from 'next/image';
 import Link from 'next/link';
 
 const capitalize = (str: string) => str.charAt(0).toUpperCase() + str.slice(1);
@@ -127,6 +129,13 @@ export default function RemindersPageEnhanced() {
         return <Link href={`/rentals/${objectId}`} className={baseClasses}>Rental</Link>;
       case 'Fine':
         return <Link href={`/fines/${objectId}`} className={baseClasses}>{reminder.context?.reference || objectId}</Link>;
+      case 'Integration':
+        return (
+          <Link href="/settings?tab=integrations" className="inline-block hover:opacity-80">
+            <Image src="/bonzah-logo.svg" alt="Bonzah" width={72} height={23} className="dark:hidden" />
+            <Image src="/bonzah-logo-dark.svg" alt="Bonzah" width={72} height={23} className="hidden dark:block" />
+          </Link>
+        );
       default:
         return <span className="text-muted-foreground">{objectId}</span>;
     }
@@ -259,6 +268,7 @@ export default function RemindersPageEnhanced() {
                   <SelectItem value="Rental">Rental</SelectItem>
                   <SelectItem value="Customer">Customer</SelectItem>
                   <SelectItem value="Fine">Fine</SelectItem>
+                  <SelectItem value="Integration">Integration</SelectItem>
                   <SelectItem value="Document">Document</SelectItem>
                 </SelectContent>
               </Select>
@@ -351,15 +361,17 @@ export default function RemindersPageEnhanced() {
                     </TableHead>
                     <TableHead className="w-[50px]"></TableHead>
                     <TableHead>Title</TableHead>
-                    <TableHead>Object</TableHead>
+                    <TableHead className="text-center">Object</TableHead>
                     <TableHead>Due On</TableHead>
                     <TableHead>Remind On</TableHead>
                     <TableHead className="w-[100px]">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {reminders.map((reminder) => (
-                    <TableRow key={reminder.id}>
+                  {reminders.map((reminder) => {
+                    const isIntegration = reminder.object_type === 'Integration';
+                    return (
+                    <TableRow key={reminder.id} className={isIntegration ? 'bg-amber-50/50 dark:bg-amber-950/10' : undefined}>
                       <TableCell>
                         <Checkbox
                           checked={selectedIds.includes(reminder.id)}
@@ -376,27 +388,41 @@ export default function RemindersPageEnhanced() {
                       <TableCell>
                         <div>
                           <div className="font-medium">{reminder.title}</div>
-                          <div className="text-sm text-muted-foreground truncate max-w-[300px]">
-                            {reminder.message}
-                          </div>
+                          {!isIntegration && (
+                            <div className="text-sm text-muted-foreground truncate max-w-[300px]">
+                              {reminder.message}
+                            </div>
+                          )}
                         </div>
                       </TableCell>
-                      <TableCell>
+                      <TableCell className="text-center">
                         <div>
                           <div>{getObjectLink(reminder)}</div>
-                          <div className="text-xs text-muted-foreground">
-                            {reminder.object_type}
-                          </div>
+                          {!isIntegration && (
+                            <div className="text-xs text-muted-foreground">
+                              {reminder.object_type}
+                            </div>
+                          )}
                         </div>
                       </TableCell>
                       <TableCell>
                         <div className="text-sm">
-                          {format(parseISO(reminder.due_on), 'MMM dd, yyyy')}
+                          {isIntegration
+                            ? ''
+                            : format(parseISO(reminder.due_on), 'MMM dd, yyyy')}
                         </div>
                       </TableCell>
                       <TableCell>
                         <div className="text-sm">
-                          {format(parseISO(reminder.remind_on), 'MMM dd, yyyy')}
+                          {isIntegration ? (
+                            reminder.context?.alerted ? (
+                              <Badge variant="destructive" className="text-xs">Triggered</Badge>
+                            ) : (
+                              <Badge variant="outline" className="text-xs">Monitoring</Badge>
+                            )
+                          ) : (
+                            format(parseISO(reminder.remind_on), 'MMM dd, yyyy')
+                          )}
                         </div>
                       </TableCell>
                       <TableCell>
@@ -419,7 +445,8 @@ export default function RemindersPageEnhanced() {
                         </DropdownMenu>
                       </TableCell>
                     </TableRow>
-                  ))}
+                    );
+                  })}
                 </TableBody>
               </Table>
             </div>

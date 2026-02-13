@@ -149,6 +149,11 @@ export default {
           "0%": { opacity: "0" },
           "100%": { opacity: "1" }
         },
+        "wiggle": {
+          "0%, 100%": { transform: "rotate(0deg)" },
+          "25%": { transform: "rotate(-12deg)" },
+          "75%": { transform: "rotate(12deg)" }
+        },
       },
       animation: {
         "accordion-down": "accordion-down 0.2s ease-out",

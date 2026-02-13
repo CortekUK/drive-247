@@ -120,6 +120,8 @@ export const useSiteSettings = () => {
         tenantSettings.google_maps_url = tenant.google_maps_url || defaultSettings.google_maps_url;
         tenantSettings.availability = tenant.business_hours || defaultSettings.availability;
         tenantSettings.logo_url = tenant.logo_url || null;
+        tenantSettings.dark_logo_url = tenant.dark_logo_url || tenant.logo_url || null;
+        tenantSettings.light_logo_url = tenant.logo_url || null;
         tenantSettings.logo_alt = tenant.app_name || tenant.company_name || defaultSettings.logo_alt;
         tenantSettings.favicon_url = tenant.favicon_url || null;
         tenantSettings.accent_color = tenant.accent_color || defaultSettings.accent_color;
@@ -234,7 +236,7 @@ export const useSiteSettings = () => {
     availability: tenant.business_hours || defaultSettings.availability,
     logo_url: tenant.logo_url || null,
     light_logo_url: tenant.logo_url || null,
-    dark_logo_url: tenant.logo_url || null,
+    dark_logo_url: tenant.dark_logo_url || tenant.logo_url || null,
     logo_alt: tenant.app_name || tenant.company_name || defaultSettings.logo_alt,
     favicon_url: tenant.favicon_url || null,
     accent_color: tenant.accent_color || defaultSettings.accent_color,

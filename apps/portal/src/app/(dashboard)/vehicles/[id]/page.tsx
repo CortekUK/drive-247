@@ -1,15 +1,17 @@
 "use client";
 
-import { useState, useMemo, useRef } from "react";
+import { useState, useMemo, useRef, useEffect } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { ChevronLeft, Car, FileText, DollarSign, Wrench, Calendar, TrendingUp, TrendingDown, Plus, Shield, Clock, Trash2, Receipt, Users, Eye, EyeOff, Pencil, Ban, Upload } from "lucide-react";
+import { ChevronLeft, Car, FileText, DollarSign, Wrench, Calendar, TrendingUp, TrendingDown, Plus, Shield, Clock, Trash2, Receipt, Users, Eye, EyeOff, Pencil, Ban, Upload, Lock, RefreshCw, Check } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { useRentalSettings } from "@/hooks/use-rental-settings";
 import { getContractTotal } from "@/lib/vehicle-utils";
 import { useTenant } from "@/contexts/TenantContext";
 import { formatCurrency, getPerMonthLabelLong, getUnlimitedLabel } from "@/lib/format-utils";
@@ -85,6 +87,9 @@ interface Vehicle {
   has_tracker?: boolean;
   has_remote_immobiliser?: boolean;
   security_notes?: string;
+  // Lockbox fields
+  lockbox_code?: string | null;
+  lockbox_instructions?: string | null;
   // Logbook field
   has_logbook?: boolean;
   // Service plan and spare key fields
@@ -136,6 +141,8 @@ export default function VehicleDetail() {
   const { toast } = useToast();
   const { logAction } = useAuditLog();
   const { tenant } = useTenant();
+  const queryClient = useQueryClient();
+  const { settings: rentalSettings } = useRentalSettings();
   const distanceUnit = (tenant?.distance_unit || 'miles') as DistanceUnit;
   const currencyCode = tenant?.currency_code || 'GBP';
   const [showAddFineDialog, setShowAddFineDialog] = useState(false);
@@ -143,6 +150,11 @@ export default function VehicleDetail() {
   const [showDisposeDialog, setShowDisposeDialog] = useState(false);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Lockbox inline edit state
+  const [lockboxCode, setLockboxCode] = useState('');
+  const [lockboxEditing, setLockboxEditing] = useState(false);
+  const [lockboxSaving, setLockboxSaving] = useState(false);
 
   // Get date filtering from URL params
   const monthParam = searchParams.get('month');
@@ -214,6 +226,38 @@ export default function VehicleDetail() {
     },
     enabled: !!id,
   });
+
+  // Sync lockbox code from vehicle data
+  useEffect(() => {
+    if (vehicle) setLockboxCode(vehicle.lockbox_code || '');
+  }, [vehicle?.lockbox_code]);
+
+  const generateLockboxCode = () => {
+    const length = rentalSettings?.lockbox_code_length || 4;
+    const max = Math.pow(10, length);
+    const code = Math.floor(Math.random() * max).toString().padStart(length, '0');
+    setLockboxCode(code);
+    setLockboxEditing(true);
+  };
+
+  const saveLockboxCode = async () => {
+    if (!vehicle) return;
+    setLockboxSaving(true);
+    try {
+      const { error } = await supabase
+        .from('vehicles')
+        .update({ lockbox_code: lockboxCode || null })
+        .eq('id', vehicle.id);
+      if (error) throw error;
+      queryClient.invalidateQueries({ queryKey: ['vehicle', id] });
+      setLockboxEditing(false);
+      toast({ title: 'Lockbox code saved' });
+    } catch {
+      toast({ title: 'Failed to save lockbox code', variant: 'destructive' });
+    } finally {
+      setLockboxSaving(false);
+    }
+  };
 
   // Fetch P&L entries with optional date filtering
   const { data: plEntries } = useQuery({
@@ -409,7 +453,75 @@ export default function VehicleDetail() {
           </div>
         </div>
         <div className="flex items-center gap-2">
-          <VehicleStatusBadge status={vehicle.status} showTooltip />
+          {/* Lockbox code */}
+          {rentalSettings?.lockbox_enabled && (
+            <div className="relative">
+              <div className={`flex items-center h-10 rounded-xl overflow-hidden shadow-sm transition-opacity ${lockboxCode ? '' : 'opacity-40'}`} title={lockboxCode ? `Lockbox Code: ${lockboxCode}` : 'Lockbox Code — not set'}>
+                <div className="flex items-center gap-2.5 px-3.5 h-full bg-amber-500/15 border border-amber-500/30 rounded-l-xl">
+                  {lockboxEditing ? (
+                    <input
+                      value={lockboxCode}
+                      onChange={(e) => {
+                        const val = rentalSettings.lockbox_code_length
+                          ? e.target.value.replace(/[^0-9]/g, '').slice(0, rentalSettings.lockbox_code_length)
+                          : e.target.value;
+                        setLockboxCode(val);
+                      }}
+                      className="w-20 bg-transparent font-mono tracking-[0.3em] text-sm font-bold text-amber-400 text-center outline-none placeholder:text-amber-500/30"
+                      maxLength={rentalSettings.lockbox_code_length || undefined}
+                      placeholder="----"
+                      autoFocus
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') saveLockboxCode();
+                        if (e.key === 'Escape') { setLockboxCode(vehicle.lockbox_code || ''); setLockboxEditing(false); }
+                      }}
+                    />
+                  ) : (
+                    <span
+                      className="font-mono tracking-[0.3em] text-sm font-bold text-amber-400 cursor-pointer min-w-[3.5rem] text-center"
+                      onClick={() => {
+                        if (lockboxCode) {
+                          navigator.clipboard.writeText(lockboxCode);
+                          toast({ title: "Copied", description: "Lockbox code copied to clipboard" });
+                        }
+                      }}
+                      title={lockboxCode ? "Click to copy" : undefined}
+                    >
+                      {lockboxCode || '----'}
+                    </span>
+                  )}
+                </div>
+                {lockboxEditing ? (
+                  <button
+                    onClick={saveLockboxCode}
+                    disabled={lockboxSaving}
+                    className="flex items-center justify-center h-full w-10 bg-emerald-500/15 border-y border-emerald-500/30 hover:bg-emerald-500/25 transition-colors"
+                    title="Save"
+                  >
+                    <Check className="h-4 w-4 text-emerald-400" />
+                  </button>
+                ) : (
+                  <button
+                    onClick={() => setLockboxEditing(true)}
+                    className="flex items-center justify-center h-full w-10 border-y border-border hover:bg-muted/60 transition-colors"
+                    title="Edit code"
+                  >
+                    <Pencil className="h-3.5 w-3.5 text-muted-foreground" />
+                  </button>
+                )}
+                <button
+                  onClick={generateLockboxCode}
+                  className="flex items-center justify-center h-full w-10 border border-border rounded-r-xl hover:bg-muted/60 transition-colors"
+                  title="Generate new code"
+                >
+                  <RefreshCw className="h-3.5 w-3.5 text-muted-foreground" />
+                </button>
+              </div>
+              <span className="absolute -bottom-5 left-0 text-[10px] font-medium px-1 whitespace-nowrap text-white/70">
+                {lockboxCode ? 'Lockbox enabled' : 'No lockbox code'}
+              </span>
+            </div>
+          )}
           <TooltipProvider>
             <Tooltip>
               <TooltipTrigger asChild>
@@ -483,10 +595,13 @@ export default function VehicleDetail() {
           <div className="mt-6">
             <Card className="shadow-card rounded-lg">
               <CardHeader className="pb-3">
-                <CardTitle className="text-lg font-semibold flex items-center gap-2">
-                  <Car className="h-5 w-5" />
-                  Vehicle Details
-                </CardTitle>
+                <div className="flex items-center justify-between">
+                  <CardTitle className="text-lg font-semibold flex items-center gap-2">
+                    <Car className="h-5 w-5" />
+                    Vehicle Details
+                  </CardTitle>
+                  <VehicleStatusBadge status={vehicle.status} showTooltip />
+                </div>
                 <CardDescription>Basic vehicle information and specifications</CardDescription>
               </CardHeader>
               <CardContent>

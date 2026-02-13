@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { Trash2, Sparkles } from 'lucide-react';
+import { Trash2, Bot } from 'lucide-react';
 import {
   Sheet,
   SheetContent,
@@ -41,22 +41,31 @@ export function ChatSidebar() {
     <Sheet open={isOpen} onOpenChange={setIsOpen}>
       {/* Floating trigger button with glow effect */}
       <SheetTrigger asChild>
-        <Button
-          size="icon"
+        <button
           className={cn(
             "fixed bottom-6 right-6 z-[9999] h-14 w-14 rounded-full",
             "shadow-lg transition-all duration-300 hover:scale-110",
-            "border border-white/20",
-            "animate-pulse-subtle"
+            "border border-white/20 flex items-center justify-center",
+            "group cursor-pointer"
           )}
           style={{
             background: `linear-gradient(135deg, ${accentColor}, ${accentColor}dd)`,
             boxShadow: `0 10px 40px -10px ${accentColor}80`,
           }}
         >
-          <Sparkles className="h-6 w-6 text-white animate-spin-slow" />
+          {/* Ping ring */}
+          <span
+            className="absolute inset-0 rounded-full animate-ping opacity-30"
+            style={{ backgroundColor: accentColor }}
+          />
+          {/* Outer pulse ring */}
+          <span
+            className="absolute -inset-1 rounded-full animate-pulse opacity-20"
+            style={{ border: `2px solid ${accentColor}` }}
+          />
+          <Bot className="h-6 w-6 text-white relative z-10 group-hover:animate-[wiggle_0.5s_ease-in-out]" />
           <span className="sr-only">Open AI assistant</span>
-        </Button>
+        </button>
       </SheetTrigger>
 
       {/* Chat panel */}
@@ -84,10 +93,10 @@ export function ChatSidebar() {
                 borderColor: `${accentColor}50`,
               }}
             >
-              <Sparkles className="h-5 w-5" style={{ color: accentColor }} />
+              <Bot className="h-5 w-5" style={{ color: accentColor }} />
             </div>
             <div>
-              <h2 className="font-semibold tracking-tight">{branding?.app_name || 'Drive247'} AI</h2>
+              <h2 className="font-semibold tracking-tight">Trax</h2>
               <p className="text-xs text-muted-foreground">Powered by GPT-4</p>
             </div>
           </div>
@@ -127,7 +136,7 @@ export function ChatSidebar() {
                     borderColor: `${accentColor}50`,
                   }}
                 >
-                  <Sparkles className="h-4 w-4 animate-spin-slow" style={{ color: accentColor }} />
+                  <Bot className="h-4 w-4 animate-spin-slow" style={{ color: accentColor }} />
                 </div>
                 <div className="flex items-center gap-2 pt-2">
                   <div className="flex gap-1">
@@ -186,7 +195,7 @@ function EmptyState({
             borderColor: `${accentColor}50`,
           }}
         >
-          <Sparkles className="h-10 w-10 animate-pulse" style={{ color: accentColor }} />
+          <Bot className="h-10 w-10 animate-pulse" style={{ color: accentColor }} />
         </div>
         <div
           className="absolute -inset-1 -z-10 rounded-2xl blur-xl animate-glow"

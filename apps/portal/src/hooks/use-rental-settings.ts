@@ -41,6 +41,12 @@ export interface RentalSettings {
   // Installment settings
   installments_enabled: boolean | null;
   installment_config: InstallmentConfig | null;
+  // Booking lead time display unit
+  booking_lead_time_unit: 'hours' | 'days' | null;
+  // Lockbox settings
+  lockbox_enabled: boolean | null;
+  lockbox_code_length: number | null;
+  lockbox_notification_methods: string[] | null;
 }
 
 const DEFAULT_RENTAL_SETTINGS: RentalSettings = {
@@ -77,6 +83,12 @@ const DEFAULT_RENTAL_SETTINGS: RentalSettings = {
     max_retry_attempts: 3,
     retry_interval_days: 1,
   },
+  // Booking lead time display unit
+  booking_lead_time_unit: 'hours',
+  // Lockbox defaults
+  lockbox_enabled: false,
+  lockbox_code_length: null,
+  lockbox_notification_methods: ['email'],
 };
 
 /**
@@ -111,6 +123,7 @@ export const useRentalSettings = () => {
           min_rental_days,
           max_rental_days,
           booking_lead_time_hours,
+          booking_lead_time_unit,
           minimum_rental_age,
           require_identity_verification,
           require_insurance_upload,
@@ -127,7 +140,10 @@ export const useRentalSettings = () => {
           working_hours_close,
           working_hours_always_open,
           installments_enabled,
-          installment_config
+          installment_config,
+          lockbox_enabled,
+          lockbox_code_length,
+          lockbox_notification_methods
         `)
         .eq('id', tenant.id)
         .single();
@@ -143,6 +159,10 @@ export const useRentalSettings = () => {
       const result = { ...DEFAULT_RENTAL_SETTINGS, ...data };
       if (result.service_fee_value === null || result.service_fee_value === undefined) {
         result.service_fee_value = result.service_fee_amount ?? 0;
+      }
+      // Parse lockbox_notification_methods from JSON if needed
+      if (result.lockbox_notification_methods && !Array.isArray(result.lockbox_notification_methods)) {
+        result.lockbox_notification_methods = result.lockbox_notification_methods as unknown as string[];
       }
       return result as RentalSettings;
     },
@@ -168,6 +188,7 @@ export const useRentalSettings = () => {
           min_rental_days,
           max_rental_days,
           booking_lead_time_hours,
+          booking_lead_time_unit,
           minimum_rental_age,
           require_identity_verification,
           require_insurance_upload,
@@ -184,7 +205,10 @@ export const useRentalSettings = () => {
           working_hours_close,
           working_hours_always_open,
           installments_enabled,
-          installment_config
+          installment_config,
+          lockbox_enabled,
+          lockbox_code_length,
+          lockbox_notification_methods
         `);
 
       if (error) {

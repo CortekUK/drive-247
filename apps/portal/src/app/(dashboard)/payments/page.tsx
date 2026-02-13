@@ -397,7 +397,7 @@ const PaymentsList = () => {
                                {getPaymentTypeDisplay(payment.payment_type)}
                              </Badge>
                            </TableCell>
-                           <TableCell>{payment.method || '-'}</TableCell>
+                           <TableCell>{payment.method ? payment.method.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()) : '-'}</TableCell>
                           <TableCell className="text-left font-medium">
                             {formatCurrency(payment.amount, tenant?.currency_code || 'USD')}
                           </TableCell>

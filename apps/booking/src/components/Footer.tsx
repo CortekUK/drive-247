@@ -30,7 +30,7 @@ const Footer = () => {
           <div>
             {settings.logo_url ? (
               <img
-                src={settings.logo_url}
+                src={settings.dark_logo_url || settings.logo_url}
                 alt={settings.logo_alt || "Drive247"}
                 className="h-20 w-auto max-w-[160px] mb-4 object-contain"
               />

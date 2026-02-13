@@ -28,6 +28,7 @@ import {
   Settings,
 } from 'lucide-react';
 import { useSiteSettings } from '@/hooks/useSiteSettings';
+import { useTheme } from 'next-themes';
 import { useCustomerUnreadCount } from '@/hooks/use-customer-unread';
 import { useCustomerOnboarding } from '@/hooks/use-customer-onboarding';
 
@@ -79,6 +80,7 @@ const navItems = [
 export function CustomerPortalSidebar() {
   const pathname = usePathname();
   const { settings } = useSiteSettings();
+  const { resolvedTheme } = useTheme();
   const { state } = useSidebar();
   const { unreadCount } = useCustomerUnreadCount();
   const { data: onboarding } = useCustomerOnboarding();
@@ -90,7 +92,7 @@ export function CustomerPortalSidebar() {
           <Link href="/" className="flex items-center gap-2 px-4">
             {settings.logo_url ? (
               <img
-                src={settings.logo_url}
+                src={resolvedTheme === 'dark' && settings.dark_logo_url ? settings.dark_logo_url : settings.logo_url}
                 alt={settings.logo_alt || 'Logo'}
                 className="h-8 w-auto"
               />

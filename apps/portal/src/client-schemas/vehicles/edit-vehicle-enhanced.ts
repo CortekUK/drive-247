@@ -17,7 +17,7 @@ export const editVehicleEnhancedSchema = z.object({
     (date) => startOfDay(date) <= getToday(),
     "Acquisition date cannot be in the future"
   ),
-  acquisition_type: z.enum(['Purchase', 'Finance']),
+  acquisition_type: z.enum(['Purchase', 'Finance']).optional(),
   // Rent fields
   daily_rent: z.number({ required_error: "Daily rent is required", invalid_type_error: "Daily rent must be a number" }).min(0, "Daily rent must be positive"),
   weekly_rent: z.number({ required_error: "Weekly rent is required", invalid_type_error: "Weekly rent must be a number" }).min(0, "Weekly rent must be positive"),

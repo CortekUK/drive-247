@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -8,9 +8,12 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
-import { Shield, CheckCircle2, AlertCircle, ExternalLink, Loader2, TestTube2, Zap, Unplug, Lock } from 'lucide-react';
+import { Switch } from '@/components/ui/switch';
+import { Shield, CheckCircle2, AlertCircle, ExternalLink, Loader2, TestTube2, Zap, Unplug, Lock, Wallet, RefreshCw, Bell } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
 import { useTenant } from '@/contexts/TenantContext';
+import { useBonzahBalance } from '@/hooks/use-bonzah-balance';
+import { useBonzahAlertConfig } from '@/hooks/use-bonzah-alert-config';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -21,6 +24,14 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 
 interface BonzahStatus {
   bonzah_mode: 'test' | 'live';
@@ -36,6 +47,25 @@ export function BonzahSettings() {
   const [password, setPassword] = useState('');
   const [isVerifying, setIsVerifying] = useState(false);
   const [showDisconnectWarning, setShowDisconnectWarning] = useState(false);
+
+  // Shared balance hook
+  const { balanceNumber, refetch: refetchBalance, isFetching: isRefreshingBalance } = useBonzahBalance();
+
+  // Alert config hook
+  const { config: alertConfig, updateConfig } = useBonzahAlertConfig();
+
+  // Alert dialog state
+  const [showAlertDialog, setShowAlertDialog] = useState(false);
+  const [alertEnabled, setAlertEnabled] = useState(false);
+  const [alertThreshold, setAlertThreshold] = useState('');
+
+  // Sync dialog form state when opening
+  useEffect(() => {
+    if (showAlertDialog) {
+      setAlertEnabled(alertConfig?.enabled ?? false);
+      setAlertThreshold(alertConfig?.threshold?.toString() ?? '');
+    }
+  }, [showAlertDialog, alertConfig]);
 
   // Fetch current Bonzah status
   const { data: bonzahStatus, isLoading } = useQuery({
@@ -145,6 +175,39 @@ export function BonzahSettings() {
       });
     }
     setShowDisconnectWarning(false);
+  };
+
+  // Save alert config
+  const handleSaveAlert = async () => {
+    const threshold = parseFloat(alertThreshold);
+    if (alertEnabled && (isNaN(threshold) || threshold <= 0)) {
+      toast({
+        title: 'Invalid threshold',
+        description: 'Please enter a valid dollar amount greater than 0.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    try {
+      await updateConfig.mutateAsync({
+        enabled: alertEnabled,
+        threshold: alertEnabled ? threshold : (alertConfig?.threshold ?? 0),
+      });
+      toast({
+        title: 'Alert settings saved',
+        description: alertEnabled
+          ? `You'll be notified when your balance drops below $${threshold.toLocaleString('en-US', { minimumFractionDigits: 2 })}.`
+          : 'Low balance alerts have been disabled.',
+      });
+      setShowAlertDialog(false);
+    } catch (err: any) {
+      toast({
+        title: 'Error',
+        description: err.message || 'Failed to save alert settings',
+        variant: 'destructive',
+      });
+    }
   };
 
   if (isLoading) {
@@ -314,6 +377,67 @@ export function BonzahSettings() {
             </div>
           </div>
 
+          {/* Balance Display */}
+          {isConnected && (
+            <div className="p-4 rounded-lg border bg-gradient-to-r from-amber-50 to-orange-50 border-amber-200 dark:from-amber-950/30 dark:to-orange-950/30 dark:border-amber-800">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-full bg-amber-100 dark:bg-amber-900/50 flex items-center justify-center">
+                    <Wallet className="h-5 w-5 text-amber-600 dark:text-amber-400" />
+                  </div>
+                  <div>
+                    <p className="text-xs text-amber-700 dark:text-amber-400 font-medium">CD Balance</p>
+                    <p className="text-2xl font-bold text-amber-900 dark:text-amber-200">
+                      {balanceNumber != null
+                        ? `$${balanceNumber.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+                        : '---'}
+                    </p>
+                  </div>
+                </div>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => refetchBalance()}
+                  disabled={isRefreshingBalance}
+                  className="text-amber-700 hover:text-amber-900 hover:bg-amber-100 dark:text-amber-400 dark:hover:bg-amber-900/50"
+                >
+                  <RefreshCw className={`h-4 w-4 ${isRefreshingBalance ? 'animate-spin' : ''}`} />
+                </Button>
+              </div>
+              <p className="text-xs text-amber-600 dark:text-amber-500 mt-2">
+                This is your pre-paid credit balance with Bonzah. Policies are issued from this balance.
+              </p>
+            </div>
+          )}
+
+          {/* Low Balance Alert Config */}
+          {isConnected && (
+            <div className="p-4 rounded-lg border bg-muted/50 dark:bg-gray-900/50 dark:border-gray-700">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-full bg-blue-100 dark:bg-blue-900/50 flex items-center justify-center">
+                    <Bell className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium">Low Balance Alert</p>
+                    <p className="text-xs text-muted-foreground">
+                      {alertConfig?.enabled
+                        ? `Alert when balance drops below $${alertConfig.threshold.toLocaleString('en-US', { minimumFractionDigits: 2 })}`
+                        : 'No alert configured'}
+                    </p>
+                  </div>
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setShowAlertDialog(true)}
+                >
+                  {alertConfig?.enabled ? 'Edit Alert' : 'Set Alert'}
+                </Button>
+              </div>
+            </div>
+          )}
+
           {/* Credential Form */}
           <div className="space-y-3">
             <div className="space-y-2">
@@ -429,6 +553,66 @@ export function BonzahSettings() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Low Balance Alert Dialog */}
+      <Dialog open={showAlertDialog} onOpenChange={setShowAlertDialog}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Bell className="h-5 w-5 text-blue-600" />
+              Low Balance Alert
+            </DialogTitle>
+            <DialogDescription>
+              Get notified when your Bonzah CD balance drops below a threshold.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="flex items-center justify-between">
+              <Label htmlFor="alert-enabled" className="font-medium">Enable alerts</Label>
+              <Switch
+                id="alert-enabled"
+                checked={alertEnabled}
+                onCheckedChange={setAlertEnabled}
+              />
+            </div>
+            {alertEnabled && (
+              <div className="space-y-2">
+                <Label htmlFor="alert-threshold">Threshold amount ($)</Label>
+                <Input
+                  id="alert-threshold"
+                  type="number"
+                  min="1"
+                  step="0.01"
+                  placeholder="e.g. 500"
+                  value={alertThreshold}
+                  onChange={(e) => setAlertThreshold(e.target.value)}
+                />
+                <p className="text-xs text-muted-foreground">
+                  You'll receive an in-app notification and email when your balance drops below this amount.
+                </p>
+              </div>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowAlertDialog(false)}>
+              Cancel
+            </Button>
+            <Button
+              onClick={handleSaveAlert}
+              disabled={updateConfig.isPending}
+            >
+              {updateConfig.isPending ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Saving...
+                </>
+              ) : (
+                'Save'
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

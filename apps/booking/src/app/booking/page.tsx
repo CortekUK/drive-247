@@ -45,8 +45,8 @@ const calculateAge = (dob: Date): number => {
   return age;
 };
 
-// Create form schema with dynamic minimum age
-const createRentalDetailsSchema = (minimumAge: number = 18) => z.object({
+// Create form schema with dynamic minimum age and booking lead time
+const createRentalDetailsSchema = (minimumAge: number = 18, leadTimeHours: number = 24) => z.object({
   pickupLocation: z.string().min(5, "Please enter a valid pickup location"),
   returnLocation: z.string().min(5, "Please enter a valid return location"),
   sameAsPickup: z.boolean(),
@@ -86,6 +86,17 @@ const createRentalDetailsSchema = (minimumAge: number = 18) => z.object({
 }, {
   message: `Maximum rental period is ${MAX_RENTAL_DAYS} days`,
   path: ["returnDate"]
+}).refine((data) => {
+  if (leadTimeHours <= 0) return true;
+  const pickup = new Date(`${format(data.pickupDate, "yyyy-MM-dd")}T${data.pickupTime}`);
+  const now = new Date();
+  const hoursUntilPickup = (pickup.getTime() - now.getTime()) / (1000 * 60 * 60);
+  return hoursUntilPickup >= leadTimeHours;
+}, {
+  message: leadTimeHours >= 24 && leadTimeHours % 24 === 0
+    ? `Bookings must be made at least ${leadTimeHours / 24} day${leadTimeHours / 24 !== 1 ? 's' : ''} in advance`
+    : `Bookings must be made at least ${leadTimeHours} hour${leadTimeHours !== 1 ? 's' : ''} in advance`,
+  path: ["pickupDate"]
 });
 
 // Default schema for type inference
@@ -110,9 +121,10 @@ export default function Booking() {
   const [requestCollection, setRequestCollection] = useState(false);
   const [collectionLocationId, setCollectionLocationId] = useState<string | null>(null);
 
-  // Create schema with tenant's minimum age
+  // Create schema with tenant's minimum age and lead time
   const minimumAge = tenant?.minimum_rental_age || 18;
-  const rentalDetailsSchema = createRentalDetailsSchema(minimumAge);
+  const leadTimeHours = tenant?.booking_lead_time_hours ?? 24;
+  const rentalDetailsSchema = createRentalDetailsSchema(minimumAge, leadTimeHours);
 
   const form = useForm<RentalDetailsForm>({
     resolver: zodResolver(rentalDetailsSchema),
