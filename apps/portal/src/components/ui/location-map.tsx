@@ -164,19 +164,8 @@ function useMapRenderer({ containerRef, pickupAddress, returnAddress, onReady, o
             map,
             path: [pickupLatLng, returnLatLng],
             strokeColor: '#991b1b',
-            strokeOpacity: 0,
-            icons: [
-              {
-                icon: {
-                  path: 'M 0,-1 0,1',
-                  strokeOpacity: 0.6,
-                  strokeWeight: 3,
-                  scale: 3,
-                },
-                offset: '0',
-                repeat: '16px',
-              },
-            ],
+            strokeOpacity: 0.7,
+            strokeWeight: 4,
           });
 
           const bounds = new google.maps.LatLngBounds();
