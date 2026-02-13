@@ -1613,71 +1613,76 @@ const RentalDetail = () => {
 
             return (
               <div className="border rounded-lg p-5">
-                <div className="flex items-center gap-2 mb-4">
-                  <MapPin className="h-4 w-4 text-primary" />
-                  <p className="text-xs uppercase tracking-wider text-muted-foreground">Pickup & Return</p>
-                </div>
+                <p className="text-xs uppercase tracking-wider text-muted-foreground mb-4">Pickup & Return</p>
 
-                <div className="relative pl-[13px] ml-[7px] border-l-2 border-dashed border-primary/25">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   {/* Pickup */}
                   {pickupAddr && (
-                    <div className="relative pb-6">
-                      <div className="absolute -left-[20px] top-0.5 w-3.5 h-3.5 rounded-full bg-primary border-2 border-background" />
-                      <div className="pl-5">
-                        <p className="text-xs font-semibold uppercase tracking-wider text-primary mb-1.5">Pickup</p>
-                        {pickupLoc && <p className="text-sm font-semibold">{pickupLoc.name}</p>}
-                        <p className="text-sm text-muted-foreground">{pickupAddr}</p>
-                        {pickupLoc?.description && (
-                          <span className="inline-flex items-center gap-1 text-xs text-primary/70 mt-1">
-                            <Info className="w-3 h-3 flex-shrink-0" />
-                            {pickupLoc.description}
-                          </span>
-                        )}
-                        <div className="flex items-center gap-3 mt-2 text-xs text-muted-foreground">
+                    <div className="bg-muted/20 rounded-lg p-4">
+                      <div className="flex items-center gap-2 mb-3">
+                        <div className="w-6 h-6 rounded-full bg-emerald-500/15 flex items-center justify-center flex-shrink-0">
+                          <MapPin className="w-3.5 h-3.5 text-emerald-500" />
+                        </div>
+                        <p className="text-xs font-semibold uppercase tracking-wider text-emerald-500">Pickup</p>
+                      </div>
+                      {pickupLoc && <p className="font-semibold text-sm mb-0.5">{pickupLoc.name}</p>}
+                      <p className="text-sm">{pickupAddr}</p>
+                      {pickupLoc?.description && (
+                        <p className="inline-flex items-center gap-1 text-xs text-muted-foreground mt-1.5">
+                          <Info className="w-3 h-3 flex-shrink-0" />
+                          {pickupLoc.description}
+                        </p>
+                      )}
+                      {(rental.pickup_time || (pickupFee != null && pickupFee > 0)) && (
+                        <div className="flex items-center gap-3 mt-3 pt-3 border-t border-border/50 text-xs">
                           {rental.pickup_time && (
-                            <span className="inline-flex items-center gap-1">
+                            <span className="inline-flex items-center gap-1 text-muted-foreground">
                               <Clock className="w-3 h-3" />
                               {rental.pickup_time}
                             </span>
                           )}
                           {pickupFee != null && pickupFee > 0 && (
-                            <span className="font-medium text-amber-600">
+                            <span className="font-semibold text-amber-500">
                               +{formatCurrencyUtil(Number(pickupFee), tenant?.currency_code || 'USD')} delivery
                             </span>
                           )}
                         </div>
-                      </div>
+                      )}
                     </div>
                   )}
 
                   {/* Return */}
                   {returnAddr && (
-                    <div className="relative">
-                      <div className="absolute -left-[20px] top-0.5 w-3.5 h-3.5 rounded-full border-2 border-primary bg-background" />
-                      <div className="pl-5">
-                        <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-1.5">Return</p>
-                        {returnLoc && <p className="text-sm font-semibold">{returnLoc.name}</p>}
-                        <p className="text-sm text-muted-foreground">{returnAddr}</p>
-                        {returnLoc?.description && (
-                          <span className="inline-flex items-center gap-1 text-xs text-primary/70 mt-1">
-                            <Info className="w-3 h-3 flex-shrink-0" />
-                            {returnLoc.description}
-                          </span>
-                        )}
-                        <div className="flex items-center gap-3 mt-2 text-xs text-muted-foreground">
+                    <div className="bg-muted/20 rounded-lg p-4">
+                      <div className="flex items-center gap-2 mb-3">
+                        <div className="w-6 h-6 rounded-full bg-blue-500/15 flex items-center justify-center flex-shrink-0">
+                          <MapPin className="w-3.5 h-3.5 text-blue-500" />
+                        </div>
+                        <p className="text-xs font-semibold uppercase tracking-wider text-blue-500">Return</p>
+                      </div>
+                      {returnLoc && <p className="font-semibold text-sm mb-0.5">{returnLoc.name}</p>}
+                      <p className="text-sm">{returnAddr}</p>
+                      {returnLoc?.description && (
+                        <p className="inline-flex items-center gap-1 text-xs text-muted-foreground mt-1.5">
+                          <Info className="w-3 h-3 flex-shrink-0" />
+                          {returnLoc.description}
+                        </p>
+                      )}
+                      {(rental.return_time || (returnFee != null && returnFee > 0)) && (
+                        <div className="flex items-center gap-3 mt-3 pt-3 border-t border-border/50 text-xs">
                           {rental.return_time && (
-                            <span className="inline-flex items-center gap-1">
+                            <span className="inline-flex items-center gap-1 text-muted-foreground">
                               <Clock className="w-3 h-3" />
                               {rental.return_time}
                             </span>
                           )}
                           {returnFee != null && returnFee > 0 && (
-                            <span className="font-medium text-amber-600">
+                            <span className="font-semibold text-amber-500">
                               +{formatCurrencyUtil(Number(returnFee), tenant?.currency_code || 'USD')} collection
                             </span>
                           )}
                         </div>
-                      </div>
+                      )}
                     </div>
                   )}
                 </div>
