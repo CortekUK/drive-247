@@ -368,8 +368,8 @@ export function LocationMap({ pickupAddress, returnAddress, className }: Locatio
 
       {/* Fullscreen dialog */}
       <Dialog open={fullscreen} onOpenChange={setFullscreen}>
-        <DialogContent className="max-w-[90vw] w-[90vw] h-[80vh] p-0 gap-0 overflow-hidden">
-          <div className="flex items-center justify-between px-4 py-3 border-b">
+        <DialogContent className="max-w-[90vw] w-[90vw] h-[80vh] p-0 gap-0 overflow-hidden flex flex-col">
+          <div className="flex items-center justify-between px-4 py-3 border-b shrink-0">
             <div className="flex items-center gap-3">
               <p className="text-sm font-medium">Pickup & Return Locations</p>
               <div className="flex items-center gap-3 text-xs text-muted-foreground">
@@ -384,9 +384,9 @@ export function LocationMap({ pickupAddress, returnAddress, className }: Locatio
               </div>
             </div>
           </div>
-          <div className="relative flex-1">
+          <div className="relative flex-1 min-h-0">
             {dialogLoading && <Skeleton className="absolute inset-0 z-10" />}
-            <div ref={dialogMapRef} className="w-full h-full" />
+            <div ref={dialogMapRef} className="absolute inset-0" />
           </div>
         </DialogContent>
       </Dialog>
