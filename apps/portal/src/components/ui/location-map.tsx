@@ -163,7 +163,7 @@ function useMapRenderer({ containerRef, pickupAddress, returnAddress, onReady, o
           new google.maps.Polyline({
             map,
             path: [pickupLatLng, returnLatLng],
-            strokeColor: isDark ? '#6366f1' : '#4f46e5',
+            strokeColor: '#991b1b',
             strokeOpacity: 0,
             icons: [
               {
@@ -305,7 +305,7 @@ export function LocationMap({ pickupAddress, returnAddress, className }: Locatio
             new google.maps.Polyline({
               map,
               path: [pickupLatLng, returnLatLng],
-              strokeColor: isDark ? '#6366f1' : '#4f46e5',
+              strokeColor: '#991b1b',
               strokeOpacity: 0,
               icons: [
                 {
