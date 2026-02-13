@@ -3,6 +3,9 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { setOptions, importLibrary } from '@googlemaps/js-api-loader';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Button } from '@/components/ui/button';
+import { Dialog, DialogContent } from '@/components/ui/dialog';
+import { Copy, ExternalLink, Maximize2, Check } from 'lucide-react';
 
 interface LocationMapProps {
   pickupAddress?: string | null;
@@ -10,10 +13,9 @@ interface LocationMapProps {
   className?: string;
 }
 
-const PICKUP_COLOR = '#10b981'; // emerald-500
-const RETURN_COLOR = '#3b82f6'; // blue-500
+const PICKUP_COLOR = '#10b981';
+const RETURN_COLOR = '#3b82f6';
 
-// Dark-mode map style
 const darkMapStyles: google.maps.MapTypeStyle[] = [
   { elementType: 'geometry', stylers: [{ color: '#1a1a2e' }] },
   { elementType: 'labels.text.stroke', stylers: [{ color: '#1a1a2e' }] },
@@ -68,16 +70,33 @@ function geocodeAddress(address: string): Promise<google.maps.LatLng | null> {
   });
 }
 
-export function LocationMap({ pickupAddress, returnAddress, className }: LocationMapProps) {
-  const mapRef = useRef<HTMLDivElement>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(false);
+function buildGoogleMapsUrl(
+  pickupAddress?: string | null,
+  returnAddress?: string | null,
+): string {
+  const pickup = pickupAddress ? encodeURIComponent(pickupAddress) : '';
+  const ret = returnAddress ? encodeURIComponent(returnAddress) : '';
+  if (pickup && ret && pickupAddress !== returnAddress) {
+    return `https://www.google.com/maps/dir/${pickup}/${ret}`;
+  }
+  return `https://www.google.com/maps/search/?api=1&query=${pickup || ret}`;
+}
+
+interface MapRendererProps {
+  containerRef: React.RefObject<HTMLDivElement | null>;
+  pickupAddress?: string | null;
+  returnAddress?: string | null;
+  onReady?: () => void;
+  onError?: () => void;
+}
+
+function useMapRenderer({ containerRef, pickupAddress, returnAddress, onReady, onError }: MapRendererProps) {
   const initialized = useRef(false);
 
-  const initMap = useCallback(async () => {
-    if (!mapRef.current || initialized.current) return;
+  const render = useCallback(async () => {
+    if (!containerRef.current || initialized.current) return;
     if (!pickupAddress && !returnAddress) {
-      setLoading(false);
+      onReady?.();
       return;
     }
 
@@ -92,14 +111,13 @@ export function LocationMap({ pickupAddress, returnAddress, className }: Locatio
       ]);
 
       if (!pickupLatLng && !returnLatLng) {
-        setError(true);
-        setLoading(false);
+        onError?.();
         return;
       }
 
       const isDark = document.documentElement.classList.contains('dark');
 
-      const map = new google.maps.Map(mapRef.current, {
+      const map = new google.maps.Map(containerRef.current, {
         zoom: 14,
         center: pickupLatLng || returnLatLng!,
         disableDefaultUI: true,
@@ -152,32 +170,295 @@ export function LocationMap({ pickupAddress, returnAddress, className }: Locatio
           });
         }
 
+        // Draw a dashed line between pickup and return
         if (pickupLatLng && returnLatLng) {
+          new google.maps.Polyline({
+            map,
+            path: [pickupLatLng, returnLatLng],
+            strokeColor: isDark ? '#6366f1' : '#4f46e5',
+            strokeOpacity: 0,
+            icons: [
+              {
+                icon: {
+                  path: 'M 0,-1 0,1',
+                  strokeOpacity: 0.6,
+                  strokeWeight: 3,
+                  scale: 3,
+                },
+                offset: '0',
+                repeat: '16px',
+              },
+            ],
+          });
+
           const bounds = new google.maps.LatLngBounds();
           bounds.extend(pickupLatLng);
           bounds.extend(returnLatLng);
-          map.fitBounds(bounds, { top: 40, bottom: 40, left: 40, right: 40 });
+          map.fitBounds(bounds, { top: 50, bottom: 50, left: 50, right: 50 });
         }
       }
 
-      setLoading(false);
+      onReady?.();
     } catch {
-      setError(true);
-      setLoading(false);
+      onError?.();
     }
-  }, [pickupAddress, returnAddress]);
+  }, [containerRef, pickupAddress, returnAddress, onReady, onError]);
+
+  return { render, reset: () => { initialized.current = false; } };
+}
+
+export function LocationMap({ pickupAddress, returnAddress, className }: LocationMapProps) {
+  const mapRef = useRef<HTMLDivElement>(null);
+  const dialogMapRef = useRef<HTMLDivElement>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(false);
+  const [fullscreen, setFullscreen] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const [dialogLoading, setDialogLoading] = useState(true);
+  const dialogInitRef = useRef(false);
+
+  // Inline map
+  const { render: renderInline } = useMapRenderer({
+    containerRef: mapRef,
+    pickupAddress,
+    returnAddress,
+    onReady: () => setLoading(false),
+    onError: () => { setError(true); setLoading(false); },
+  });
 
   useEffect(() => {
-    initMap();
-  }, [initMap]);
+    renderInline();
+  }, [renderInline]);
+
+  // Dialog map — render when opened
+  useEffect(() => {
+    if (!fullscreen || !dialogMapRef.current || dialogInitRef.current) return;
+    dialogInitRef.current = true;
+    setDialogLoading(true);
+
+    const renderDialog = async () => {
+      if (!dialogMapRef.current) return;
+      if (!pickupAddress && !returnAddress) {
+        setDialogLoading(false);
+        return;
+      }
+
+      try {
+        await ensureLibraries();
+
+        const [pickupLatLng, returnLatLng] = await Promise.all([
+          pickupAddress ? geocodeAddress(pickupAddress) : null,
+          returnAddress ? geocodeAddress(returnAddress) : null,
+        ]);
+
+        if (!pickupLatLng && !returnLatLng || !dialogMapRef.current) {
+          setDialogLoading(false);
+          return;
+        }
+
+        const isDark = document.documentElement.classList.contains('dark');
+
+        const map = new google.maps.Map(dialogMapRef.current, {
+          zoom: 14,
+          center: pickupLatLng || returnLatLng!,
+          disableDefaultUI: false,
+          zoomControl: true,
+          streetViewControl: false,
+          mapTypeControl: false,
+          fullscreenControl: false,
+          styles: isDark ? darkMapStyles : undefined,
+          backgroundColor: isDark ? '#1a1a2e' : '#f5f5f5',
+        });
+
+        const sameLocation =
+          pickupLatLng &&
+          returnLatLng &&
+          Math.abs(pickupLatLng.lat() - returnLatLng.lat()) < 0.0005 &&
+          Math.abs(pickupLatLng.lng() - returnLatLng.lng()) < 0.0005;
+
+        if (sameLocation) {
+          new google.maps.Marker({
+            map,
+            position: pickupLatLng,
+            title: 'Pickup & Return',
+            icon: {
+              url: createMarkerSvg(PICKUP_COLOR, 'P'),
+              scaledSize: new google.maps.Size(36, 46),
+              anchor: new google.maps.Point(18, 46),
+            },
+          });
+          map.setZoom(15);
+        } else {
+          if (pickupLatLng) {
+            new google.maps.Marker({
+              map,
+              position: pickupLatLng,
+              title: 'Pickup',
+              icon: {
+                url: createMarkerSvg(PICKUP_COLOR, 'P'),
+                scaledSize: new google.maps.Size(36, 46),
+                anchor: new google.maps.Point(18, 46),
+              },
+            });
+          }
+          if (returnLatLng) {
+            new google.maps.Marker({
+              map,
+              position: returnLatLng,
+              title: 'Return',
+              icon: {
+                url: createMarkerSvg(RETURN_COLOR, 'R'),
+                scaledSize: new google.maps.Size(36, 46),
+                anchor: new google.maps.Point(18, 46),
+              },
+            });
+          }
+
+          if (pickupLatLng && returnLatLng) {
+            new google.maps.Polyline({
+              map,
+              path: [pickupLatLng, returnLatLng],
+              strokeColor: isDark ? '#6366f1' : '#4f46e5',
+              strokeOpacity: 0,
+              icons: [
+                {
+                  icon: {
+                    path: 'M 0,-1 0,1',
+                    strokeOpacity: 0.6,
+                    strokeWeight: 3,
+                    scale: 3,
+                  },
+                  offset: '0',
+                  repeat: '16px',
+                },
+              ],
+            });
+
+            const bounds = new google.maps.LatLngBounds();
+            bounds.extend(pickupLatLng);
+            bounds.extend(returnLatLng);
+            map.fitBounds(bounds, { top: 60, bottom: 60, left: 60, right: 60 });
+          }
+        }
+
+        setDialogLoading(false);
+      } catch {
+        setDialogLoading(false);
+      }
+    };
+
+    // Small delay to let the dialog DOM mount
+    setTimeout(renderDialog, 100);
+  }, [fullscreen, pickupAddress, returnAddress]);
+
+  const googleMapsUrl = buildGoogleMapsUrl(pickupAddress, returnAddress);
+
+  const handleCopyLink = async () => {
+    try {
+      await navigator.clipboard.writeText(googleMapsUrl);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      // fallback
+    }
+  };
+
+  const handleOpenInMaps = () => {
+    window.open(googleMapsUrl, '_blank');
+  };
+
+  const handleFullscreen = () => {
+    dialogInitRef.current = false;
+    setFullscreen(true);
+  };
 
   if (!pickupAddress && !returnAddress) return null;
   if (error) return null;
 
   return (
-    <div className={`relative overflow-hidden rounded-lg ${className || ''}`}>
-      {loading && <Skeleton className="absolute inset-0 z-10" />}
-      <div ref={mapRef} className="w-full h-full" style={{ minHeight: 220 }} />
-    </div>
+    <>
+      <div className={`relative overflow-hidden rounded-lg ${className || ''}`}>
+        {loading && <Skeleton className="absolute inset-0 z-10" />}
+        <div ref={mapRef} className="w-full h-full" style={{ minHeight: 220 }} />
+
+        {/* Action buttons */}
+        {!loading && (
+          <div className="absolute top-3 right-3 z-10 flex items-center gap-1.5">
+            <Button
+              variant="secondary"
+              size="icon"
+              className="h-8 w-8 bg-background/80 backdrop-blur-sm border border-border/50 shadow-md hover:bg-background"
+              onClick={handleCopyLink}
+              title="Copy Google Maps link"
+            >
+              {copied ? <Check className="h-3.5 w-3.5 text-emerald-500" /> : <Copy className="h-3.5 w-3.5" />}
+            </Button>
+            <Button
+              variant="secondary"
+              size="icon"
+              className="h-8 w-8 bg-background/80 backdrop-blur-sm border border-border/50 shadow-md hover:bg-background"
+              onClick={handleOpenInMaps}
+              title="Open in Google Maps"
+            >
+              <ExternalLink className="h-3.5 w-3.5" />
+            </Button>
+            <Button
+              variant="secondary"
+              size="icon"
+              className="h-8 w-8 bg-background/80 backdrop-blur-sm border border-border/50 shadow-md hover:bg-background"
+              onClick={handleFullscreen}
+              title="View fullscreen"
+            >
+              <Maximize2 className="h-3.5 w-3.5" />
+            </Button>
+          </div>
+        )}
+      </div>
+
+      {/* Fullscreen dialog */}
+      <Dialog open={fullscreen} onOpenChange={setFullscreen}>
+        <DialogContent className="max-w-[90vw] w-[90vw] h-[80vh] p-0 gap-0 overflow-hidden">
+          <div className="flex items-center justify-between px-4 py-3 border-b">
+            <div className="flex items-center gap-3">
+              <p className="text-sm font-medium">Pickup & Return Locations</p>
+              <div className="flex items-center gap-3 text-xs text-muted-foreground">
+                <span className="inline-flex items-center gap-1.5">
+                  <span className="w-2.5 h-2.5 rounded-full bg-emerald-500" />
+                  Pickup
+                </span>
+                <span className="inline-flex items-center gap-1.5">
+                  <span className="w-2.5 h-2.5 rounded-full bg-blue-500" />
+                  Return
+                </span>
+              </div>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-7 text-xs gap-1.5"
+                onClick={handleCopyLink}
+              >
+                {copied ? <Check className="h-3 w-3 text-emerald-500" /> : <Copy className="h-3 w-3" />}
+                {copied ? 'Copied' : 'Copy Link'}
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-7 text-xs gap-1.5"
+                onClick={handleOpenInMaps}
+              >
+                <ExternalLink className="h-3 w-3" />
+                Open in Maps
+              </Button>
+            </div>
+          </div>
+          <div className="relative flex-1">
+            {dialogLoading && <Skeleton className="absolute inset-0 z-10" />}
+            <div ref={dialogMapRef} className="w-full h-full" />
+          </div>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }
