@@ -5,7 +5,7 @@ import { setOptions, importLibrary } from '@googlemaps/js-api-loader';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
-import { Copy, ExternalLink, Maximize2, Check } from 'lucide-react';
+import { Maximize2 } from 'lucide-react';
 
 interface LocationMapProps {
   pickupAddress?: string | null;
@@ -68,18 +68,6 @@ function geocodeAddress(address: string): Promise<google.maps.LatLng | null> {
       }
     });
   });
-}
-
-function buildGoogleMapsUrl(
-  pickupAddress?: string | null,
-  returnAddress?: string | null,
-): string {
-  const pickup = pickupAddress ? encodeURIComponent(pickupAddress) : '';
-  const ret = returnAddress ? encodeURIComponent(returnAddress) : '';
-  if (pickup && ret && pickupAddress !== returnAddress) {
-    return `https://www.google.com/maps/dir/${pickup}/${ret}`;
-  }
-  return `https://www.google.com/maps/search/?api=1&query=${pickup || ret}`;
 }
 
 interface MapRendererProps {
@@ -213,7 +201,6 @@ export function LocationMap({ pickupAddress, returnAddress, className }: Locatio
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
   const [fullscreen, setFullscreen] = useState(false);
-  const [copied, setCopied] = useState(false);
   const [dialogLoading, setDialogLoading] = useState(true);
   const dialogInitRef = useRef(false);
 
@@ -351,22 +338,6 @@ export function LocationMap({ pickupAddress, returnAddress, className }: Locatio
     setTimeout(renderDialog, 100);
   }, [fullscreen, pickupAddress, returnAddress]);
 
-  const googleMapsUrl = buildGoogleMapsUrl(pickupAddress, returnAddress);
-
-  const handleCopyLink = async () => {
-    try {
-      await navigator.clipboard.writeText(googleMapsUrl);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    } catch {
-      // fallback
-    }
-  };
-
-  const handleOpenInMaps = () => {
-    window.open(googleMapsUrl, '_blank');
-  };
-
   const handleFullscreen = () => {
     dialogInitRef.current = false;
     setFullscreen(true);
@@ -377,47 +348,21 @@ export function LocationMap({ pickupAddress, returnAddress, className }: Locatio
 
   return (
     <>
-      <div className="space-y-3">
-        <div className={`relative overflow-hidden rounded-lg ${className || ''}`}>
-          {loading && <Skeleton className="absolute inset-0 z-10" />}
-          <div ref={mapRef} className="w-full h-full" style={{ minHeight: 220 }} />
+      <div className={`relative overflow-hidden rounded-lg ${className || ''}`}>
+        {loading && <Skeleton className="absolute inset-0 z-10" />}
+        <div ref={mapRef} className="w-full h-full" style={{ minHeight: 220 }} />
 
-          {/* Expand button on map */}
-          {!loading && (
-            <Button
-              variant="secondary"
-              size="icon"
-              className="absolute top-3 right-3 z-10 h-8 w-8 bg-background/80 backdrop-blur-sm border border-border/50 shadow-md hover:bg-background"
-              onClick={handleFullscreen}
-              title="View fullscreen"
-            >
-              <Maximize2 className="h-3.5 w-3.5" />
-            </Button>
-          )}
-        </div>
-
-        {/* Action buttons below map */}
+        {/* Expand button on map */}
         {!loading && (
-          <div className="flex items-center gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              className="h-8 text-xs gap-1.5"
-              onClick={handleCopyLink}
-            >
-              {copied ? <Check className="h-3.5 w-3.5 text-emerald-500" /> : <Copy className="h-3.5 w-3.5" />}
-              {copied ? 'Copied!' : 'Copy Link'}
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              className="h-8 text-xs gap-1.5"
-              onClick={handleOpenInMaps}
-            >
-              <ExternalLink className="h-3.5 w-3.5" />
-              Open in Google Maps
-            </Button>
-          </div>
+          <Button
+            variant="secondary"
+            size="icon"
+            className="absolute top-3 right-3 z-10 h-8 w-8 bg-background/80 backdrop-blur-sm border border-border/50 shadow-md hover:bg-background"
+            onClick={handleFullscreen}
+            title="View fullscreen"
+          >
+            <Maximize2 className="h-3.5 w-3.5" />
+          </Button>
         )}
       </div>
 
@@ -437,26 +382,6 @@ export function LocationMap({ pickupAddress, returnAddress, className }: Locatio
                   Return
                 </span>
               </div>
-            </div>
-            <div className="flex items-center gap-1.5">
-              <Button
-                variant="outline"
-                size="sm"
-                className="h-7 text-xs gap-1.5"
-                onClick={handleCopyLink}
-              >
-                {copied ? <Check className="h-3 w-3 text-emerald-500" /> : <Copy className="h-3 w-3" />}
-                {copied ? 'Copied' : 'Copy Link'}
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                className="h-7 text-xs gap-1.5"
-                onClick={handleOpenInMaps}
-              >
-                <ExternalLink className="h-3 w-3" />
-                Open in Maps
-              </Button>
             </div>
           </div>
           <div className="relative flex-1">

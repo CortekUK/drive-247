@@ -12,7 +12,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { FileText, ArrowLeft, DollarSign, Plus, X, Send, Download, Ban, Check, AlertTriangle, Loader2, Shield, ShieldCheck, CheckCircle, XCircle, ExternalLink, UserCheck, IdCard, Camera, FileSignature, Clock, Mail, RefreshCw, Trash2, Receipt, Percent, Car, Undo2, Truck, MapPin, Key, KeyRound, CalendarPlus, Package, Banknote, CreditCard, Calendar, Info } from "lucide-react";
+import { FileText, ArrowLeft, DollarSign, Plus, X, Send, Download, Ban, Check, AlertTriangle, Loader2, Shield, ShieldCheck, CheckCircle, XCircle, ExternalLink, UserCheck, IdCard, Camera, FileSignature, Clock, Mail, RefreshCw, Trash2, Receipt, Percent, Car, Undo2, Truck, MapPin, Key, KeyRound, CalendarPlus, Package, Banknote, CreditCard, Calendar, Info, Copy } from "lucide-react";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Progress } from "@/components/ui/progress";
 import { AddPaymentDialog } from "@/components/shared/dialogs/add-payment-dialog";
@@ -82,6 +82,116 @@ interface Rental {
   // Installment & Insurance fields
   has_installment_plan?: boolean;
   bonzah_policy_id?: string | null;
+}
+
+function LocationCard({ type, address, location, fee, time, currencyCode }: {
+  type: 'pickup' | 'return';
+  address: string;
+  location: { name: string; description?: string | null } | null;
+  fee: number | null | undefined;
+  time: string | null | undefined;
+  currencyCode: string;
+}) {
+  const [copied, setCopied] = useState(false);
+  const isPickup = type === 'pickup';
+  const mapsUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(address)}`;
+
+  const handleCopy = async () => {
+    try {
+      await navigator.clipboard.writeText(mapsUrl);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {}
+  };
+
+  return (
+    <div className="bg-muted/20 rounded-lg p-4">
+      <div className="flex items-center gap-2 mb-3">
+        <div className={`w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0 ${isPickup ? 'bg-emerald-500/15' : 'bg-blue-500/15'}`}>
+          <MapPin className={`w-3.5 h-3.5 ${isPickup ? 'text-emerald-500' : 'text-blue-500'}`} />
+        </div>
+        <p className={`text-xs font-semibold uppercase tracking-wider ${isPickup ? 'text-emerald-500' : 'text-blue-500'}`}>{isPickup ? 'Pickup' : 'Return'}</p>
+      </div>
+      {location && <p className="font-semibold text-sm mb-0.5">{location.name}</p>}
+      <p className="text-sm">{address}</p>
+      {location?.description && (
+        <p className="inline-flex items-center gap-1 text-xs text-muted-foreground mt-1.5">
+          <Info className="w-3 h-3 flex-shrink-0" />
+          {location.description}
+        </p>
+      )}
+      {(time || (fee != null && fee > 0)) && (
+        <div className="flex items-center gap-3 mt-3 pt-3 border-t border-border/50 text-xs">
+          {time && (
+            <span className="inline-flex items-center gap-1 text-muted-foreground">
+              <Clock className="w-3 h-3" />
+              {time}
+            </span>
+          )}
+          {fee != null && fee > 0 && (
+            <span className="font-semibold text-amber-500">
+              +{formatCurrencyUtil(Number(fee), currencyCode)} {isPickup ? 'delivery' : 'collection'}
+            </span>
+          )}
+        </div>
+      )}
+      <div className="flex items-center gap-2 mt-3 pt-3 border-t border-border/50">
+        <button
+          onClick={handleCopy}
+          className="inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
+        >
+          {copied ? <Check className="w-3 h-3 text-emerald-500" /> : <Copy className="w-3 h-3" />}
+          {copied ? 'Copied!' : 'Copy Link'}
+        </button>
+        <span className="text-border">|</span>
+        <a
+          href={mapsUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
+        >
+          <ExternalLink className="w-3 h-3" />
+          Open in Maps
+        </a>
+      </div>
+    </div>
+  );
+}
+
+function LocationActionButtons({ pickupAddress, returnAddress, pickupLoc, returnLoc, pickupFee, returnFee, rental, currencyCode }: {
+  pickupAddress: string | null | undefined;
+  returnAddress: string | null | undefined;
+  pickupLoc: { name: string; description?: string | null } | null;
+  returnLoc: { name: string; description?: string | null } | null;
+  pickupFee: number | null | undefined;
+  returnFee: number | null | undefined;
+  rental: { pickup_time?: string | null; return_time?: string | null };
+  currencyCode: string;
+}) {
+  return (
+    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      {pickupAddress && (
+        <LocationCard
+          type="pickup"
+          address={pickupAddress}
+          location={pickupLoc}
+          fee={pickupFee}
+          time={rental.pickup_time}
+          currencyCode={currencyCode}
+        />
+      )}
+      {returnAddress && (
+        <LocationCard
+          type="return"
+          address={returnAddress}
+          location={returnLoc}
+          fee={returnFee}
+          time={rental.return_time}
+          currencyCode={currencyCode}
+        />
+      )}
+    </div>
+  );
 }
 
 const RentalDetail = () => {
@@ -1616,77 +1726,7 @@ const RentalDetail = () => {
               <div className="border rounded-lg p-5">
                 <p className="text-xs uppercase tracking-wider text-muted-foreground mb-4">Pickup & Return</p>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {/* Pickup */}
-                  {pickupAddr && (
-                    <div className="bg-muted/20 rounded-lg p-4">
-                      <div className="flex items-center gap-2 mb-3">
-                        <div className="w-6 h-6 rounded-full bg-emerald-500/15 flex items-center justify-center flex-shrink-0">
-                          <MapPin className="w-3.5 h-3.5 text-emerald-500" />
-                        </div>
-                        <p className="text-xs font-semibold uppercase tracking-wider text-emerald-500">Pickup</p>
-                      </div>
-                      {pickupLoc && <p className="font-semibold text-sm mb-0.5">{pickupLoc.name}</p>}
-                      <p className="text-sm">{pickupAddr}</p>
-                      {pickupLoc?.description && (
-                        <p className="inline-flex items-center gap-1 text-xs text-muted-foreground mt-1.5">
-                          <Info className="w-3 h-3 flex-shrink-0" />
-                          {pickupLoc.description}
-                        </p>
-                      )}
-                      {(rental.pickup_time || (pickupFee != null && pickupFee > 0)) && (
-                        <div className="flex items-center gap-3 mt-3 pt-3 border-t border-border/50 text-xs">
-                          {rental.pickup_time && (
-                            <span className="inline-flex items-center gap-1 text-muted-foreground">
-                              <Clock className="w-3 h-3" />
-                              {rental.pickup_time}
-                            </span>
-                          )}
-                          {pickupFee != null && pickupFee > 0 && (
-                            <span className="font-semibold text-amber-500">
-                              +{formatCurrencyUtil(Number(pickupFee), tenant?.currency_code || 'USD')} delivery
-                            </span>
-                          )}
-                        </div>
-                      )}
-                    </div>
-                  )}
-
-                  {/* Return */}
-                  {returnAddr && (
-                    <div className="bg-muted/20 rounded-lg p-4">
-                      <div className="flex items-center gap-2 mb-3">
-                        <div className="w-6 h-6 rounded-full bg-blue-500/15 flex items-center justify-center flex-shrink-0">
-                          <MapPin className="w-3.5 h-3.5 text-blue-500" />
-                        </div>
-                        <p className="text-xs font-semibold uppercase tracking-wider text-blue-500">Return</p>
-                      </div>
-                      {returnLoc && <p className="font-semibold text-sm mb-0.5">{returnLoc.name}</p>}
-                      <p className="text-sm">{returnAddr}</p>
-                      {returnLoc?.description && (
-                        <p className="inline-flex items-center gap-1 text-xs text-muted-foreground mt-1.5">
-                          <Info className="w-3 h-3 flex-shrink-0" />
-                          {returnLoc.description}
-                        </p>
-                      )}
-                      {(rental.return_time || (returnFee != null && returnFee > 0)) && (
-                        <div className="flex items-center gap-3 mt-3 pt-3 border-t border-border/50 text-xs">
-                          {rental.return_time && (
-                            <span className="inline-flex items-center gap-1 text-muted-foreground">
-                              <Clock className="w-3 h-3" />
-                              {rental.return_time}
-                            </span>
-                          )}
-                          {returnFee != null && returnFee > 0 && (
-                            <span className="font-semibold text-amber-500">
-                              +{formatCurrencyUtil(Number(returnFee), tenant?.currency_code || 'USD')} collection
-                            </span>
-                          )}
-                        </div>
-                      )}
-                    </div>
-                  )}
-                </div>
+                <LocationActionButtons pickupAddress={pickupAddr} returnAddress={returnAddr} pickupLoc={pickupLoc} returnLoc={returnLoc} pickupFee={pickupFee} returnFee={returnFee} rental={rental} currencyCode={tenant?.currency_code || 'USD'} />
 
                 {/* Map View */}
                 <LocationMap
