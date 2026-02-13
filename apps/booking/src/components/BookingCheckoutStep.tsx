@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
-import { ChevronLeft, CreditCard, Shield, Calendar, MapPin, Clock, Car, User, Loader2 } from "lucide-react";
+import { ChevronLeft, CreditCard, Shield, Calendar, MapPin, Clock, Car, User, Loader2, ArrowDown, CircleDot } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useTenant } from "@/contexts/TenantContext";
 import { useCustomerAuthStore } from "@/stores/customer-auth-store";
@@ -19,6 +19,7 @@ import { InvoiceDialog } from "@/components/InvoiceDialog";
 import { AuthPromptDialog } from "@/components/booking/AuthPromptDialog";
 import { createInvoiceWithFallback, Invoice } from "@/lib/invoiceUtils";
 import InstallmentSelector, { InstallmentOption, InstallmentConfig } from "@/components/InstallmentSelector";
+import { useDeliveryLocations } from "@/hooks/useDeliveryLocations";
 
 interface PromoDetails {
   code: string;
@@ -72,6 +73,7 @@ export default function BookingCheckoutStep({
   const { tenant } = useTenant();
   const { customerUser } = useCustomerAuthStore();
   const { pendingInsuranceFiles, clearPendingInsuranceFiles } = useBookingStore();
+  const { locations: allDeliveryLocations } = useDeliveryLocations();
   const [agreeTerms, setAgreeTerms] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const [showAuthDialog, setShowAuthDialog] = useState(false);
@@ -1192,11 +1194,12 @@ export default function BookingCheckoutStep({
         <div className="lg:col-span-2 space-y-6">
           {/* Rental Summary Card */}
           <Card className="p-6 bg-card border-accent/20">
-            <h3 className="text-lg font-semibold mb-4">Rental Summary</h3>
-            <div className="space-y-3">
+            <h3 className="text-lg font-semibold mb-5">Rental Summary</h3>
+            <div className="space-y-5">
+              {/* Vehicle & Duration */}
               <div className="flex items-start gap-3">
-                <Car className="w-5 h-5 text-accent mt-0.5" />
-                <div>
+                <Car className="w-5 h-5 text-accent mt-0.5 flex-shrink-0" />
+                <div className="flex-1">
                   <p className="font-medium">
                     {selectedVehicle.make && selectedVehicle.model
                       ? `${selectedVehicle.make} ${selectedVehicle.model}`
@@ -1208,7 +1211,7 @@ export default function BookingCheckoutStep({
                 </div>
               </div>
               <div className="flex items-start gap-3">
-                <Calendar className="w-5 h-5 text-accent mt-0.5" />
+                <Calendar className="w-5 h-5 text-accent mt-0.5 flex-shrink-0" />
                 <div>
                   <p className="font-medium">{rentalDuration.formatted}</p>
                   <p className="text-sm text-muted-foreground">
@@ -1216,22 +1219,40 @@ export default function BookingCheckoutStep({
                   </p>
                 </div>
               </div>
-              <div className="flex items-start gap-3">
-                <MapPin className="w-5 h-5 text-accent mt-0.5" />
-                <div>
-                  <p className="font-medium">Pickup: {formData.pickupLocation}</p>
-                  <p className="text-sm text-muted-foreground">Return: {formData.dropoffLocation}</p>
-                </div>
-              </div>
-              <div className="flex items-start gap-3">
-                <Clock className="w-5 h-5 text-accent mt-0.5" />
-                <div>
-                  <p className="text-sm text-muted-foreground">
-                    Pickup: {formData.pickupTime} | Return: {formData.dropoffTime}
-                  </p>
-                </div>
-              </div>
 
+              {/* Pickup → Return Timeline */}
+              <div className="relative pl-[11px] ml-[9px] border-l-2 border-dashed border-accent/30">
+                {/* Pickup */}
+                <div className="relative pb-5">
+                  <div className="absolute -left-[18px] top-0 w-3.5 h-3.5 rounded-full bg-accent border-2 border-background" />
+                  <div className="pl-5">
+                    <p className="text-xs font-medium uppercase tracking-wider text-accent mb-1">Pickup</p>
+                    <p className="font-medium text-sm">{formData.pickupLocation}</p>
+                    {formData.pickupLocationId && (() => {
+                      const loc = allDeliveryLocations.find(l => l.id === formData.pickupLocationId);
+                      return loc?.description ? <p className="text-xs text-muted-foreground/70 mt-0.5">{loc.description}</p> : null;
+                    })()}
+                    <p className="text-xs text-muted-foreground mt-1">
+                      {format(new Date(formData.pickupDate), 'MMM dd, yyyy')} at {formData.pickupTime}
+                    </p>
+                  </div>
+                </div>
+                {/* Return */}
+                <div className="relative">
+                  <div className="absolute -left-[18px] top-0 w-3.5 h-3.5 rounded-full border-2 border-accent bg-background" />
+                  <div className="pl-5">
+                    <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground mb-1">Return</p>
+                    <p className="font-medium text-sm">{formData.dropoffLocation}</p>
+                    {formData.returnLocationId && (() => {
+                      const loc = allDeliveryLocations.find(l => l.id === formData.returnLocationId);
+                      return loc?.description ? <p className="text-xs text-muted-foreground/70 mt-0.5">{loc.description}</p> : null;
+                    })()}
+                    <p className="text-xs text-muted-foreground mt-1">
+                      {format(new Date(formData.dropoffDate), 'MMM dd, yyyy')} at {formData.dropoffTime}
+                    </p>
+                  </div>
+                </div>
+              </div>
             </div>
           </Card>
 

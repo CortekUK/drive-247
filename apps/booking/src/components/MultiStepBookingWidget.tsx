@@ -21,6 +21,7 @@ import { cn } from "@/lib/utils";
 import BookingConfirmation from "./BookingConfirmation";
 import LocationPicker from "./LocationPicker";
 import BookingCheckoutStep from "./BookingCheckoutStep";
+import { useDeliveryLocations } from "@/hooks/useDeliveryLocations";
 import ExtrasSelector from "./booking/extras-selector";
 import { useRentalExtras } from "@/hooks/use-rental-extras";
 import InsuranceUploadDialog from "./insurance-upload-dialog";
@@ -96,6 +97,7 @@ const MultiStepBookingWidget = () => {
   const workingHours = useWorkingHours();
   const skipInsurance = isInsuranceExemptTenant(tenant?.id);
   const { updateContext: updateBookingContext } = useBookingStore();
+  const { locations: allDeliveryLocations } = useDeliveryLocations();
 
   // Customer authentication state
   const { customerUser, session, loading: authLoading, initialized: authInitialized } = useCustomerAuthStore();
@@ -3958,6 +3960,10 @@ const MultiStepBookingWidget = () => {
                   <div>
                     <p className="text-muted-foreground text-xs uppercase tracking-wide mb-1">Pickup Location</p>
                     <p className="font-medium text-xs">{formData.pickupLocation.split(',').slice(0, 2).join(',') || "—"}</p>
+                    {formData.pickupLocationId && (() => {
+                      const loc = allDeliveryLocations.find(l => l.id === formData.pickupLocationId);
+                      return loc?.description ? <p className="text-xs text-muted-foreground/70 mt-0.5">{loc.description}</p> : null;
+                    })()}
                     {formData.pickupDeliveryFee > 0 && (
                       <p className="text-xs text-amber-500">+{formatCurrency(formData.pickupDeliveryFee, currencyCode, { minimumFractionDigits: 0, maximumFractionDigits: 0 })} delivery</p>
                     )}
@@ -3966,6 +3972,10 @@ const MultiStepBookingWidget = () => {
                   <div>
                     <p className="text-muted-foreground text-xs uppercase tracking-wide mb-1">Return Location</p>
                     <p className="font-medium text-xs">{formData.dropoffLocation.split(',').slice(0, 2).join(',') || "—"}</p>
+                    {formData.returnLocationId && (() => {
+                      const loc = allDeliveryLocations.find(l => l.id === formData.returnLocationId);
+                      return loc?.description ? <p className="text-xs text-muted-foreground/70 mt-0.5">{loc.description}</p> : null;
+                    })()}
                     {formData.returnDeliveryFee > 0 && (
                       <p className="text-xs text-amber-500">+{formatCurrency(formData.returnDeliveryFee, currencyCode, { minimumFractionDigits: 0, maximumFractionDigits: 0 })} collection</p>
                     )}
@@ -4052,6 +4062,14 @@ const MultiStepBookingWidget = () => {
                         </div>
                       )}
                     </div>
+                  )}
+
+                  {/* Lockbox info note */}
+                  {tenant?.lockbox_enabled && formData.pickupDeliveryFee > 0 && (
+                    <p className="text-[11px] text-muted-foreground/80 flex items-center gap-1">
+                      <Shield className="w-3 h-3 flex-shrink-0" />
+                      Keys via secure lockbox
+                    </p>
                   )}
 
                   <p className="text-xs text-muted-foreground">

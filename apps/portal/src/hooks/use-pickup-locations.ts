@@ -8,6 +8,7 @@ export interface PickupLocation {
   tenant_id: string;
   name: string;
   address: string;
+  description: string | null;
   delivery_fee: number;
   is_pickup_enabled: boolean;
   is_return_enabled: boolean;
@@ -20,6 +21,7 @@ export interface PickupLocation {
 export interface CreatePickupLocationInput {
   name: string;
   address: string;
+  description?: string | null;
   delivery_fee?: number;
   is_pickup_enabled?: boolean;
   is_return_enabled?: boolean;
@@ -31,6 +33,7 @@ export interface UpdatePickupLocationInput {
   id: string;
   name?: string;
   address?: string;
+  description?: string | null;
   delivery_fee?: number;
   is_pickup_enabled?: boolean;
   is_return_enabled?: boolean;
@@ -313,6 +316,7 @@ export const usePickupLocations = () => {
           tenant_id: tenant.id,
           name: input.name,
           address: input.address,
+          description: input.description ?? null,
           delivery_fee: input.delivery_fee ?? 0,
           is_pickup_enabled: input.is_pickup_enabled ?? true,
           is_return_enabled: input.is_return_enabled ?? true,

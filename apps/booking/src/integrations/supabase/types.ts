@@ -2849,6 +2849,47 @@ export type Database = {
           },
         ]
       }
+      lockbox_templates: {
+        Row: {
+          body: string
+          channel: string
+          created_at: string | null
+          id: string
+          is_active: boolean | null
+          subject: string | null
+          tenant_id: string
+          updated_at: string | null
+        }
+        Insert: {
+          body: string
+          channel: string
+          created_at?: string | null
+          id?: string
+          is_active?: boolean | null
+          subject?: string | null
+          tenant_id: string
+          updated_at?: string | null
+        }
+        Update: {
+          body?: string
+          channel?: string
+          created_at?: string | null
+          id?: string
+          is_active?: boolean | null
+          subject?: string | null
+          tenant_id?: string
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "lockbox_templates_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       login_attempts: {
         Row: {
           attempted_at: string | null
@@ -3419,6 +3460,7 @@ export type Database = {
           address: string
           created_at: string
           delivery_fee: number
+          description: string | null
           id: string
           is_active: boolean
           is_pickup_enabled: boolean
@@ -3432,6 +3474,7 @@ export type Database = {
           address: string
           created_at?: string
           delivery_fee?: number
+          description?: string | null
           id?: string
           is_active?: boolean
           is_pickup_enabled?: boolean
@@ -3445,6 +3488,7 @@ export type Database = {
           address?: string
           created_at?: string
           delivery_fee?: number
+          description?: string | null
           id?: string
           is_active?: boolean
           is_pickup_enabled?: boolean
@@ -4803,6 +4847,7 @@ export type Database = {
           delivery_address: string | null
           delivery_fee: number | null
           delivery_location_id: string | null
+          delivery_method: string | null
           delivery_option: string | null
           discount_applied: number | null
           document_status: string | null
@@ -4856,6 +4901,7 @@ export type Database = {
           delivery_address?: string | null
           delivery_fee?: number | null
           delivery_location_id?: string | null
+          delivery_method?: string | null
           delivery_option?: string | null
           discount_applied?: number | null
           document_status?: string | null
@@ -4909,6 +4955,7 @@ export type Database = {
           delivery_address?: string | null
           delivery_fee?: number | null
           delivery_location_id?: string | null
+          delivery_method?: string | null
           delivery_option?: string | null
           discount_applied?: number | null
           document_status?: string | null
@@ -5618,6 +5665,7 @@ export type Database = {
           dark_accent_color: string | null
           dark_background_color: string | null
           dark_header_footer_color: string | null
+          dark_logo_url: string | null
           dark_primary_color: string | null
           dark_secondary_color: string | null
           date_format: string | null
@@ -5648,6 +5696,9 @@ export type Database = {
           light_primary_color: string | null
           light_secondary_color: string | null
           linkedin_url: string | null
+          lockbox_code_length: number | null
+          lockbox_enabled: boolean | null
+          lockbox_notification_methods: Json | null
           logo_url: string | null
           master_password_hash: string | null
           max_rental_days: number | null
@@ -5683,6 +5734,7 @@ export type Database = {
           service_fee_enabled: boolean | null
           service_fee_type: string | null
           service_fee_value: number | null
+          setup_completed_at: string | null
           slug: string
           status: string
           stripe_account_id: string | null
@@ -5691,6 +5743,7 @@ export type Database = {
           stripe_onboarding_complete: boolean | null
           stripe_subscription_customer_id: string | null
           subscription_plan: string | null
+          subscription_stripe_mode: string
           sunday_close: string | null
           sunday_enabled: boolean | null
           sunday_open: string | null
@@ -5739,6 +5792,7 @@ export type Database = {
           dark_accent_color?: string | null
           dark_background_color?: string | null
           dark_header_footer_color?: string | null
+          dark_logo_url?: string | null
           dark_primary_color?: string | null
           dark_secondary_color?: string | null
           date_format?: string | null
@@ -5769,6 +5823,9 @@ export type Database = {
           light_primary_color?: string | null
           light_secondary_color?: string | null
           linkedin_url?: string | null
+          lockbox_code_length?: number | null
+          lockbox_enabled?: boolean | null
+          lockbox_notification_methods?: Json | null
           logo_url?: string | null
           master_password_hash?: string | null
           max_rental_days?: number | null
@@ -5804,6 +5861,7 @@ export type Database = {
           service_fee_enabled?: boolean | null
           service_fee_type?: string | null
           service_fee_value?: number | null
+          setup_completed_at?: string | null
           slug: string
           status?: string
           stripe_account_id?: string | null
@@ -5812,6 +5870,7 @@ export type Database = {
           stripe_onboarding_complete?: boolean | null
           stripe_subscription_customer_id?: string | null
           subscription_plan?: string | null
+          subscription_stripe_mode?: string
           sunday_close?: string | null
           sunday_enabled?: boolean | null
           sunday_open?: string | null
@@ -5860,6 +5919,7 @@ export type Database = {
           dark_accent_color?: string | null
           dark_background_color?: string | null
           dark_header_footer_color?: string | null
+          dark_logo_url?: string | null
           dark_primary_color?: string | null
           dark_secondary_color?: string | null
           date_format?: string | null
@@ -5890,6 +5950,9 @@ export type Database = {
           light_primary_color?: string | null
           light_secondary_color?: string | null
           linkedin_url?: string | null
+          lockbox_code_length?: number | null
+          lockbox_enabled?: boolean | null
+          lockbox_notification_methods?: Json | null
           logo_url?: string | null
           master_password_hash?: string | null
           max_rental_days?: number | null
@@ -5925,6 +5988,7 @@ export type Database = {
           service_fee_enabled?: boolean | null
           service_fee_type?: string | null
           service_fee_value?: number | null
+          setup_completed_at?: string | null
           slug?: string
           status?: string
           stripe_account_id?: string | null
@@ -5933,6 +5997,7 @@ export type Database = {
           stripe_onboarding_complete?: boolean | null
           stripe_subscription_customer_id?: string | null
           subscription_plan?: string | null
+          subscription_stripe_mode?: string
           sunday_close?: string | null
           sunday_enabled?: boolean | null
           sunday_open?: string | null
@@ -6321,6 +6386,8 @@ export type Database = {
           is_disposed: boolean | null
           last_service_date: string | null
           last_service_mileage: number | null
+          lockbox_code: string | null
+          lockbox_instructions: string | null
           make: string | null
           model: string | null
           monthly_payment: number | null
@@ -6371,6 +6438,8 @@ export type Database = {
           is_disposed?: boolean | null
           last_service_date?: string | null
           last_service_mileage?: number | null
+          lockbox_code?: string | null
+          lockbox_instructions?: string | null
           make?: string | null
           model?: string | null
           monthly_payment?: number | null
@@ -6421,6 +6490,8 @@ export type Database = {
           is_disposed?: boolean | null
           last_service_date?: string | null
           last_service_mileage?: number | null
+          lockbox_code?: string | null
+          lockbox_instructions?: string | null
           make?: string | null
           model?: string | null
           monthly_payment?: number | null
@@ -7682,4 +7753,3 @@ export const Constants = {
     },
   },
 } as const
-

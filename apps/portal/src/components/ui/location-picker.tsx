@@ -129,6 +129,9 @@ export function LocationPicker({
               <div className="flex flex-col">
                 <span className="font-medium">{location.name}</span>
                 <span className="text-xs text-muted-foreground">{location.address}</span>
+                {location.description && (
+                  <span className="text-xs text-muted-foreground/70">{location.description}</span>
+                )}
               </div>
             </SelectItem>
           ))}

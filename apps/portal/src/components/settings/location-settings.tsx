@@ -60,6 +60,7 @@ import type { DistanceUnit } from '@/lib/format-utils';
 interface LocationFormData {
   name: string;
   address: string;
+  description: string;
   delivery_fee: number | null;
   is_pickup_enabled: boolean;
   is_return_enabled: boolean;
@@ -68,6 +69,7 @@ interface LocationFormData {
 const EMPTY_FORM: LocationFormData = {
   name: '',
   address: '',
+  description: '',
   delivery_fee: null,
   is_pickup_enabled: true,
   is_return_enabled: true,
@@ -292,6 +294,7 @@ export function LocationSettings() {
     setFormData({
       name: location.name,
       address: location.address,
+      description: location.description || '',
       delivery_fee: location.delivery_fee,
       is_pickup_enabled: location.is_pickup_enabled,
       is_return_enabled: location.is_return_enabled,
@@ -309,6 +312,7 @@ export function LocationSettings() {
       const locationData = {
         name: formData.name.trim(),
         address: formData.address.trim(),
+        description: formData.description.trim() || null,
         delivery_fee: formData.delivery_fee ?? 0,
         is_pickup_enabled: dialogMode === 'pickup',
         is_return_enabled: dialogMode === 'return',
@@ -817,6 +821,17 @@ export function LocationSettings() {
             </div>
 
             <div className="space-y-2">
+              <Label className="text-sm font-medium">
+                Description <span className="text-muted-foreground font-normal">(optional)</span>
+              </Label>
+              <Input
+                value={formData.description}
+                onChange={(e) => setFormData(p => ({ ...p, description: e.target.value }))}
+                placeholder="e.g., Meet at arrivals hall, bay 3"
+              />
+            </div>
+
+            <div className="space-y-2">
               <Label className="text-sm font-medium">{dialogMode === 'pickup' ? 'Delivery' : 'Collection'} Fee</Label>
               <div className="relative w-32">
                 <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">{currencySymbol}</span>
@@ -892,6 +907,9 @@ function LocationsGrid({
                   </span>
                 </div>
                 <p className="text-xs text-muted-foreground truncate">{location.address}</p>
+                {location.description && (
+                  <p className="text-xs text-muted-foreground/70 truncate">{location.description}</p>
+                )}
               </div>
               <div className="flex items-center gap-1 flex-shrink-0">
                 <Switch

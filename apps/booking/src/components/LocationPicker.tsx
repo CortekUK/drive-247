@@ -13,7 +13,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
-import { MapPin, Building2, Navigation, Check, Truck } from 'lucide-react';
+import { MapPin, Building2, Navigation, Check, Truck, Lock } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { formatCurrency, kmToDisplayUnit, getDistanceUnitShort } from '@/lib/format-utils';
 import type { DistanceUnit } from '@/lib/format-utils';
@@ -223,6 +223,12 @@ export default function LocationPicker({
               Delivery fee: <span className="font-semibold text-foreground">{formatCurrency(tenant.area_delivery_fee, tenant.currency_code)}</span>
             </p>
           )}
+          {tenant?.lockbox_enabled && type === 'pickup' && (
+            <p className="text-xs text-muted-foreground flex items-center gap-1.5">
+              <Lock className="w-3 h-3 flex-shrink-0" />
+              Vehicle keys will be placed in a secure lockbox at your delivery location
+            </p>
+          )}
         </div>
       );
     }
@@ -375,6 +381,14 @@ export default function LocationPicker({
           )}
         </OptionCard>
       )}
+
+      {/* Lockbox info note - shown when delivery is selected and lockbox is enabled */}
+      {tenant?.lockbox_enabled && type === 'pickup' && (selectedMethod === 'location' || selectedMethod === 'area') && (
+        <p className="text-xs text-muted-foreground flex items-center gap-1.5 px-1">
+          <Lock className="w-3 h-3 flex-shrink-0" />
+          Vehicle keys will be placed in a secure lockbox at your delivery location
+        </p>
+      )}
     </div>
   );
 }
@@ -488,6 +502,9 @@ function LocationDropdown({
                 )}
               </div>
               <span className="text-xs text-muted-foreground">{selectedLocation.address}</span>
+              {selectedLocation.description && (
+                <span className="text-xs text-muted-foreground/70">{selectedLocation.description}</span>
+              )}
             </div>
           ) : (
             <span className="text-muted-foreground">{placeholder || `Select ${type} location`}</span>
@@ -508,6 +525,9 @@ function LocationDropdown({
                   )}
                 </div>
                 <span className="text-xs text-muted-foreground">{location.address}</span>
+                {location.description && (
+                  <span className="text-xs text-muted-foreground/70">{location.description}</span>
+                )}
               </div>
             </SelectItem>
           ))}

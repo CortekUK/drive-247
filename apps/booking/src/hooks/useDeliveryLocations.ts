@@ -9,6 +9,7 @@ export interface DeliveryLocation {
   tenant_id: string;
   name: string;
   address: string;
+  description: string | null;
   delivery_fee: number;
   is_pickup_enabled: boolean;
   is_return_enabled: boolean;
@@ -38,7 +39,7 @@ export function useDeliveryLocations() {
 
       const { data, error } = await supabase
         .from('pickup_locations')
-        .select('id, tenant_id, name, address, delivery_fee, is_pickup_enabled, is_return_enabled, is_active, sort_order')
+        .select('id, tenant_id, name, address, description, delivery_fee, is_pickup_enabled, is_return_enabled, is_active, sort_order')
         .eq('tenant_id', tenant.id)
         .eq('is_active', true)
         .order('sort_order', { ascending: true });
