@@ -13,7 +13,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
-import { MapPin, Building2, Navigation, Check, Truck, Lock } from 'lucide-react';
+import { MapPin, Building2, Navigation, Check, Truck, Lock, Info } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { formatCurrency, kmToDisplayUnit, getDistanceUnitShort } from '@/lib/format-utils';
 import type { DistanceUnit } from '@/lib/format-utils';
@@ -503,7 +503,10 @@ function LocationDropdown({
               </div>
               <span className="text-xs text-muted-foreground">{selectedLocation.address}</span>
               {selectedLocation.description && (
-                <span className="text-xs text-muted-foreground/70">{selectedLocation.description}</span>
+                <span className="inline-flex items-center gap-1 text-xs text-accent/80 mt-0.5">
+                  <Info className="w-3 h-3 flex-shrink-0" />
+                  {selectedLocation.description}
+                </span>
               )}
             </div>
           ) : (
@@ -526,7 +529,10 @@ function LocationDropdown({
                 </div>
                 <span className="text-xs text-muted-foreground">{location.address}</span>
                 {location.description && (
-                  <span className="text-xs text-muted-foreground/70">{location.description}</span>
+                  <span className="inline-flex items-center gap-1 text-xs text-accent/80 mt-0.5">
+                    <Info className="w-3 h-3 flex-shrink-0" />
+                    {location.description}
+                  </span>
                 )}
               </div>
             </SelectItem>
