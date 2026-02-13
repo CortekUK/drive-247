@@ -316,7 +316,7 @@ export default function LocationPicker({
 
           {/* Expanded location selector */}
           {selectedMethod === 'location' && (
-            <div className="mt-3 pt-3 border-t border-border/50" onClick={(e) => e.stopPropagation()}>
+            <div className="mt-3" onClick={(e) => e.stopPropagation()}>
               <LocationDropdown
                 type={type}
                 locations={locations}
@@ -468,8 +468,7 @@ function LocationDropdown({
   }
 
   return (
-    <div className="space-y-1">
-      <label className="text-sm font-medium text-foreground">Location</label>
+    <div>
       <Select
         value={locationId || ''}
         onValueChange={(selectedId) => {
@@ -482,17 +481,15 @@ function LocationDropdown({
       >
         <SelectTrigger
           className={cn(
-            "h-auto min-h-[56px] py-3 px-4",
-            selectedLocation
-              ? "border-primary/30 bg-primary/5"
-              : "bg-background",
+            "h-auto min-h-[48px] py-2.5 px-3 border-0 bg-muted/30 hover:bg-muted/50 rounded-lg",
+            selectedLocation && "bg-muted/40",
             className
           )}
         >
           {selectedLocation ? (
-            <div className="flex flex-col items-start text-left w-full">
+            <div className="flex flex-col items-start text-left w-full gap-0.5">
               <div className="flex items-center gap-2 w-full">
-                <span className="font-medium">{selectedLocation.name}</span>
+                <span className="font-semibold text-sm">{selectedLocation.name}</span>
                 {selectedLocation.delivery_fee > 0 ? (
                   <span className="text-xs font-semibold text-amber-600">
                     +{formatCurrency(selectedLocation.delivery_fee, tenant?.currency_code)}
@@ -501,24 +498,24 @@ function LocationDropdown({
                   <span className="text-xs font-semibold text-green-600">FREE</span>
                 )}
               </div>
-              <span className="text-xs text-muted-foreground">{selectedLocation.address}</span>
+              <span className="text-xs text-muted-foreground leading-tight">{selectedLocation.address}</span>
               {selectedLocation.description && (
-                <span className="inline-flex items-center gap-1 text-xs text-accent/80 mt-0.5">
+                <span className="inline-flex items-center gap-1 text-[11px] text-accent/80 leading-tight">
                   <Info className="w-3 h-3 flex-shrink-0" />
                   {selectedLocation.description}
                 </span>
               )}
             </div>
           ) : (
-            <span className="text-muted-foreground">{placeholder || `Select ${type} location`}</span>
+            <span className="text-muted-foreground text-sm">{placeholder || `Select ${type} location`}</span>
           )}
         </SelectTrigger>
         <SelectContent align="start" className="w-[var(--radix-select-trigger-width)]">
           {locations.map((location) => (
             <SelectItem key={location.id} value={location.id} className="py-3 cursor-pointer">
-              <div className="flex flex-col items-start">
+              <div className="flex flex-col items-start gap-0.5">
                 <div className="flex items-center gap-2">
-                  <span className="font-medium">{location.name}</span>
+                  <span className="font-semibold text-sm">{location.name}</span>
                   {location.delivery_fee > 0 ? (
                     <span className="text-xs font-semibold text-amber-600">
                       +{formatCurrency(location.delivery_fee, tenant?.currency_code)}
@@ -527,9 +524,9 @@ function LocationDropdown({
                     <span className="text-xs font-semibold text-green-600">FREE</span>
                   )}
                 </div>
-                <span className="text-xs text-muted-foreground">{location.address}</span>
+                <span className="text-xs text-muted-foreground leading-tight">{location.address}</span>
                 {location.description && (
-                  <span className="inline-flex items-center gap-1 text-xs text-accent/80 mt-0.5">
+                  <span className="inline-flex items-center gap-1 text-[11px] text-accent/80 leading-tight">
                     <Info className="w-3 h-3 flex-shrink-0" />
                     {location.description}
                   </span>
