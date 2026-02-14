@@ -35,6 +35,7 @@ import { CalendarView } from "@/components/rentals/calendar/calendar-view";
 import { formatDuration, formatRentalDuration } from "@/lib/rental-utils";
 import { formatCurrency, getCurrencySymbol } from "@/lib/format-utils";
 import { useTenant } from "@/contexts/TenantContext";
+import { useManagerPermissions } from "@/hooks/use-manager-permissions";
 import {
   Pagination,
   PaginationContent,
@@ -50,6 +51,7 @@ const RentalsList = () => {
   const [showExtensionDialog, setShowExtensionDialog] = useState(false);
   const [selectedRental, setSelectedRental] = useState<EnhancedRental | null>(null);
   const { tenant } = useTenant();
+  const { canEdit } = useManagerPermissions();
 
   const currentView = searchParams.get("view") || "list";
 
@@ -221,14 +223,16 @@ const RentalsList = () => {
             <span className="hidden xs:inline">Export CSV</span>
             <span className="xs:hidden">Export</span>
           </Button>
-          <Button
-            onClick={() => router.push("/rentals/new")}
-            className="bg-gradient-primary text-white hover:opacity-90 transition-all duration-200 shadow-md hover:shadow-lg"
-          >
-            <Plus className="h-4 w-4 mr-2" />
-            <span className="hidden xs:inline">New Rental</span>
-            <span className="xs:hidden">New</span>
-          </Button>
+          {canEdit('rentals') && (
+            <Button
+              onClick={() => router.push("/rentals/new")}
+              className="bg-gradient-primary text-white hover:opacity-90 transition-all duration-200 shadow-md hover:shadow-lg"
+            >
+              <Plus className="h-4 w-4 mr-2" />
+              <span className="hidden xs:inline">New Rental</span>
+              <span className="xs:hidden">New</span>
+            </Button>
+          )}
         </div>
       </div>
 

@@ -37,6 +37,7 @@ import { formatCurrency } from "@/lib/formatters";
 import { formatCurrency as formatCurrencyUtil } from "@/lib/format-utils";
 import { usePickupLocations } from "@/hooks/use-pickup-locations";
 import { LocationMap } from "@/components/ui/location-map";
+import { useManagerPermissions } from "@/hooks/use-manager-permissions";
 
 interface Rental {
   id: string;
@@ -201,6 +202,7 @@ const RentalDetail = () => {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const { tenant } = useTenant();
+  const { canEdit } = useManagerPermissions();
   // skipInsurance removed — insurance doc upload is always visible; only Bonzah selector is gated on integration_bonzah
   const [downloadingPdf, setDownloadingPdf] = useState<string | null>(null);
   const [refreshingPolicy, setRefreshingPolicy] = useState(false);
@@ -1057,7 +1059,7 @@ const RentalDetail = () => {
         </div>
         <div className="flex gap-2">
           {/* Pending Rental - Show Approve, Reject, Delete buttons */}
-          {displayStatus === 'Pending' && (
+          {canEdit('rentals') && displayStatus === 'Pending' && (
             <>
               <Button
                 variant="default"
@@ -1088,7 +1090,7 @@ const RentalDetail = () => {
           )}
 
           {/* Active Rental - Show Add Payment, Add Fine, Close, Cancel, Delete buttons */}
-          {displayStatus === 'Active' && (
+          {canEdit('rentals') && displayStatus === 'Active' && (
             <>
               {rental.is_extended && (
                 <Button
@@ -1139,7 +1141,7 @@ const RentalDetail = () => {
           )}
 
           {/* Completed Rental - Show Renew and Delete buttons */}
-          {displayStatus === 'Completed' && (
+          {canEdit('rentals') && displayStatus === 'Completed' && (
             <Button
               variant="default"
               onClick={() => router.push(`/rentals/new?renew_from=${rental.id}`)}
@@ -1150,7 +1152,7 @@ const RentalDetail = () => {
           )}
 
           {/* Completed/Cancelled/Rejected Rental - Show Delete button */}
-          {(displayStatus === 'Completed' || displayStatus === 'Cancelled' || displayStatus === 'Rejected') && (
+          {canEdit('rentals') && (displayStatus === 'Completed' || displayStatus === 'Cancelled' || displayStatus === 'Rejected') && (
             <Button
               variant="outline"
               className="text-destructive"
@@ -1919,7 +1921,7 @@ const RentalDetail = () => {
               )}
 
               {/* Send DocuSign Button - only show if not signed */}
-              {!rental.signed_document_id && displayStatus !== 'Completed' && (
+              {canEdit('rentals') && !rental.signed_document_id && displayStatus !== 'Completed' && (
                 <Button
                   variant="outline"
                   onClick={async () => {
@@ -2117,7 +2119,7 @@ const RentalDetail = () => {
           </CardHeader>
           <CardContent className="space-y-5">
             {/* Action buttons if needed */}
-            {(bonzahPolicy.status === 'quoted' || bonzahPolicy.status === 'failed' || bonzahPolicy.policy_id) && (
+            {canEdit('rentals') && (bonzahPolicy.status === 'quoted' || bonzahPolicy.status === 'failed' || bonzahPolicy.policy_id) && (
             <div className="flex items-center gap-2">
               {(bonzahPolicy.status === 'quoted' || bonzahPolicy.status === 'failed') && (
                 <Button
@@ -2317,7 +2319,7 @@ const RentalDetail = () => {
           </CardHeader>
         <CardContent className="space-y-4">
           {/* Bonzah Insurance CTA - Show when no Bonzah policy exists */}
-          {!bonzahPolicy && (
+          {canEdit('rentals') && !bonzahPolicy && (
             <div
               className={`relative overflow-hidden rounded-lg border border-[#CC004A]/20 bg-gradient-to-r from-[#CC004A]/5 via-[#CC004A]/10 to-[#CC004A]/5 dark:from-[#CC004A]/10 dark:via-[#CC004A]/15 dark:to-[#CC004A]/10 p-4 transition-all ${tenant?.bonzah_username ? 'cursor-pointer hover:border-[#CC004A]/40 group' : 'opacity-60'}`}
               onClick={() => { if (tenant?.bonzah_username) setShowBuyInsurance(true); }}
@@ -2373,6 +2375,7 @@ const RentalDetail = () => {
 
           <div className="flex items-center justify-between">
             <p className="text-sm text-muted-foreground">Upload customer's insurance documents for verification</p>
+            {canEdit('rentals') && (
             <div className="flex gap-2">
               {hasInvalidInsuranceDoc && (
                 <Button
@@ -2451,6 +2454,7 @@ const RentalDetail = () => {
                   Upload Document
                 </Button>
             </div>
+            )}
           </div>
 
           {/* Document List */}
@@ -2766,6 +2770,7 @@ const RentalDetail = () => {
                           <ExternalLink className="h-3 w-3 mr-1" />
                           View Document
                         </Button>
+                        {canEdit('rentals') && (
                         <Button
                           variant="outline"
                           size="sm"
@@ -2784,8 +2789,9 @@ const RentalDetail = () => {
                           )}
                           Delete
                         </Button>
+                        )}
                         {/* Link to Rental button for unlinked documents */}
-                        {doc.isUnlinked && (
+                        {canEdit('rentals') && doc.isUnlinked && (
                           <Button
                             variant="outline"
                             size="sm"

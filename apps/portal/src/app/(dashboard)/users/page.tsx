@@ -29,7 +29,8 @@ import {
   Copy,
   AlertCircle,
   Plus,
-  Users
+  Users,
+  Settings2
 } from 'lucide-react';
 import {
   DropdownMenu,
@@ -44,7 +45,8 @@ import { format } from 'date-fns';
 import { useTenant } from '@/contexts/TenantContext';
 import { AddUserDialog } from '@/components/users/add-user-dialog';
 import { CredentialsModal } from '@/components/users/credentials-modal';
-import type { AddUserFormValues } from '@/client-schemas/users/add-user';
+import { ManagerPermissionsSelector } from '@/components/users/manager-permissions-selector';
+import type { AddUserFormValues, PermissionEntry } from '@/client-schemas/users/add-user';
 
 interface UserCredentials {
   name: string;
@@ -66,6 +68,10 @@ export default function UsersManagement() {
   const [resetPassword, setResetPassword] = useState('');
   const [showRoleDialog, setShowRoleDialog] = useState(false);
   const [selectedRole, setSelectedRole] = useState<string>('');
+  const [rolePermissions, setRolePermissions] = useState<PermissionEntry[]>([]);
+  const [showEditPermissionsDialog, setShowEditPermissionsDialog] = useState(false);
+  const [editPermissions, setEditPermissions] = useState<PermissionEntry[]>([]);
+  const [editPermissionsUser, setEditPermissionsUser] = useState<AppUser | null>(null);
 
   // Fetch users for this tenant
   const { data: users, isLoading, refetch } = useQuery({
@@ -125,6 +131,7 @@ export default function UsersManagement() {
           role: data.role,
           temporaryPassword,
           tenant_id: tenant?.id, // Use tenant from URL context, not from logged-in user
+          ...(data.role === 'manager' && data.permissions ? { permissions: data.permissions } : {}),
         }
       });
 
@@ -207,9 +214,9 @@ export default function UsersManagement() {
 
   // Update role mutation
   const updateRoleMutation = useMutation({
-    mutationFn: async ({ userId, newRole }: { userId: string; newRole: string }) => {
+    mutationFn: async ({ userId, newRole, permissions }: { userId: string; newRole: string; permissions?: PermissionEntry[] }) => {
       const { data, error } = await supabase.functions.invoke('admin-update-role', {
-        body: { userId, newRole }
+        body: { userId, newRole, ...(newRole === 'manager' && permissions ? { permissions } : {}) }
       });
 
       if (error) throw error;
@@ -222,6 +229,7 @@ export default function UsersManagement() {
       setShowRoleDialog(false);
       setSelectedUser(null);
       setSelectedRole('');
+      setRolePermissions([]);
       toast({
         title: "Success",
         description: "User role updated successfully",
@@ -231,6 +239,37 @@ export default function UsersManagement() {
       toast({
         title: "Error",
         description: error.message || "Failed to update role",
+        variant: "destructive",
+      });
+    }
+  });
+
+  // Update manager permissions mutation
+  const updatePermissionsMutation = useMutation({
+    mutationFn: async ({ userId, permissions }: { userId: string; permissions: PermissionEntry[] }) => {
+      const { data, error } = await supabase.functions.invoke('update-manager-permissions', {
+        body: { userId, permissions }
+      });
+
+      if (error) throw error;
+      if (!data.success) throw new Error(data.error || 'Failed to update permissions');
+
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['users', tenant?.id] });
+      setShowEditPermissionsDialog(false);
+      setEditPermissionsUser(null);
+      setEditPermissions([]);
+      toast({
+        title: "Success",
+        description: "Manager permissions updated successfully",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to update permissions",
         variant: "destructive",
       });
     }
@@ -268,6 +307,7 @@ export default function UsersManagement() {
     switch (role) {
       case 'head_admin': return 'default';
       case 'admin': return 'secondary';
+      case 'manager': return 'secondary';
       case 'ops': return 'outline';
       case 'viewer': return 'outline';
       default: return 'outline';
@@ -278,10 +318,22 @@ export default function UsersManagement() {
     switch (role) {
       case 'head_admin': return 'Head Admin';
       case 'admin': return 'Admin';
+      case 'manager': return 'Manager';
       case 'ops': return 'Operations';
       case 'viewer': return 'Viewer';
       default: return role;
     }
+  };
+
+  const handleOpenEditPermissions = async (user: AppUser) => {
+    setEditPermissionsUser(user);
+    // Fetch current permissions for this user
+    const { data } = await supabase
+      .from('manager_permissions')
+      .select('tab_key, access_level')
+      .eq('app_user_id', user.id);
+    setEditPermissions((data || []).map((p: any) => ({ tab_key: p.tab_key, access_level: p.access_level })));
+    setShowEditPermissionsDialog(true);
   };
 
   const copyToClipboard = (text: string) => {
@@ -403,11 +455,18 @@ export default function UsersManagement() {
                               onClick={() => {
                                 setSelectedUser(user);
                                 setSelectedRole(user.role);
+                                setRolePermissions([]);
                                 setShowRoleDialog(true);
                               }}
                             >
                               <Shield className="mr-2 h-4 w-4" />
                               Change Role
+                            </DropdownMenuItem>
+                          )}
+                          {user.role === 'manager' && (
+                            <DropdownMenuItem onClick={() => handleOpenEditPermissions(user)}>
+                              <Settings2 className="mr-2 h-4 w-4" />
+                              Edit Permissions
                             </DropdownMenuItem>
                           )}
                           {user.id !== appUser?.id && (
@@ -521,7 +580,7 @@ export default function UsersManagement() {
 
       {/* Change Role Dialog */}
       <Dialog open={showRoleDialog} onOpenChange={setShowRoleDialog}>
-        <DialogContent>
+        <DialogContent className={selectedRole === 'manager' ? 'sm:max-w-[650px]' : ''}>
           <DialogHeader>
             <DialogTitle>Change User Role</DialogTitle>
             <DialogDescription>
@@ -531,17 +590,27 @@ export default function UsersManagement() {
           <div className="space-y-4">
             <div className="space-y-2">
               <Label htmlFor="role-select">New Role</Label>
-              <Select value={selectedRole} onValueChange={setSelectedRole}>
+              <Select value={selectedRole} onValueChange={(v) => { setSelectedRole(v); setRolePermissions([]); }}>
                 <SelectTrigger>
                   <SelectValue placeholder="Select a role" />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="admin">Admin - Full access except user management</SelectItem>
+                  <SelectItem value="manager">Manager - Custom tab access</SelectItem>
                   <SelectItem value="ops">Operations - Day-to-day operations</SelectItem>
                   <SelectItem value="viewer">Viewer - Read-only access</SelectItem>
                 </SelectContent>
               </Select>
             </div>
+            {selectedRole === 'manager' && (
+              <div className="space-y-2">
+                <Label>Tab Permissions</Label>
+                <ManagerPermissionsSelector
+                  value={rolePermissions}
+                  onChange={setRolePermissions}
+                />
+              </div>
+            )}
           </div>
           <DialogFooter>
             <Button
@@ -554,11 +623,53 @@ export default function UsersManagement() {
             <Button
               onClick={() => selectedUser && updateRoleMutation.mutate({
                 userId: selectedUser.id,
-                newRole: selectedRole
+                newRole: selectedRole,
+                ...(selectedRole === 'manager' ? { permissions: rolePermissions } : {}),
               })}
-              disabled={!selectedRole || selectedRole === selectedUser?.role || updateRoleMutation.isPending}
+              disabled={
+                !selectedRole ||
+                (selectedRole === selectedUser?.role && selectedRole !== 'manager') ||
+                (selectedRole === 'manager' && rolePermissions.length === 0) ||
+                updateRoleMutation.isPending
+              }
             >
               {updateRoleMutation.isPending ? 'Updating...' : 'Update Role'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Manager Permissions Dialog */}
+      <Dialog open={showEditPermissionsDialog} onOpenChange={setShowEditPermissionsDialog}>
+        <DialogContent className="sm:max-w-[650px]">
+          <DialogHeader>
+            <DialogTitle>Edit Manager Permissions</DialogTitle>
+            <DialogDescription>
+              Update tab access for {editPermissionsUser?.name} ({editPermissionsUser?.email})
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <ManagerPermissionsSelector
+              value={editPermissions}
+              onChange={setEditPermissions}
+            />
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setShowEditPermissionsDialog(false)}
+              disabled={updatePermissionsMutation.isPending}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={() => editPermissionsUser && updatePermissionsMutation.mutate({
+                userId: editPermissionsUser.id,
+                permissions: editPermissions,
+              })}
+              disabled={editPermissions.length === 0 || updatePermissionsMutation.isPending}
+            >
+              {updatePermissionsMutation.isPending ? 'Saving...' : 'Save Permissions'}
             </Button>
           </DialogFooter>
         </DialogContent>

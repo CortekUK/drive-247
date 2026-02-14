@@ -29,6 +29,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import Image from 'next/image';
 import Link from 'next/link';
+import { useManagerPermissions } from '@/hooks/use-manager-permissions';
 
 const capitalize = (str: string) => str.charAt(0).toUpperCase() + str.slice(1);
 
@@ -47,6 +48,7 @@ const SEVERITY_ICONS = {
 export default function RemindersPageEnhanced() {
   const [filters, setFilters] = useState<ReminderFilters>({});
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const { canEdit } = useManagerPermissions();
 
   const { data: reminders = [], isLoading, error } = useReminders(filters);
   const { data: stats } = useReminderStats();
@@ -180,16 +182,18 @@ export default function RemindersPageEnhanced() {
             Export
           </Button>
 
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => generateReminders.mutate()}
-            disabled={generateReminders.isPending}
-            className="flex-1 sm:flex-none"
-          >
-            <Play className="h-4 w-4 mr-2" />
-            {generateReminders.isPending ? 'Generating...' : 'Generate'}
-          </Button>
+          {canEdit('reminders') && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => generateReminders.mutate()}
+              disabled={generateReminders.isPending}
+              className="flex-1 sm:flex-none"
+            >
+              <Play className="h-4 w-4 mr-2" />
+              {generateReminders.isPending ? 'Generating...' : 'Generate'}
+            </Button>
+          )}
         </div>
       </div>
 
@@ -288,7 +292,7 @@ export default function RemindersPageEnhanced() {
       </Card>
 
       {/* Bulk Actions */}
-      {selectedIds.length > 0 && (
+      {canEdit('reminders') && selectedIds.length > 0 && (
         <Card>
           <CardContent className="pt-6">
             <div className="flex items-center justify-between">
@@ -339,14 +343,16 @@ export default function RemindersPageEnhanced() {
               <Bell className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
               <h3 className="text-lg font-semibold mb-2">No Reminders</h3>
               <p className="text-muted-foreground mb-4">No reminders match your current filters.</p>
-              <Button
-                variant="outline"
-                onClick={() => generateReminders.mutate()}
-                disabled={generateReminders.isPending}
-              >
-                <Play className="h-4 w-4 mr-2" />
-                Generate Reminders
-              </Button>
+              {canEdit('reminders') && (
+                <Button
+                  variant="outline"
+                  onClick={() => generateReminders.mutate()}
+                  disabled={generateReminders.isPending}
+                >
+                  <Play className="h-4 w-4 mr-2" />
+                  Generate Reminders
+                </Button>
+              )}
             </div>
           ) : (
             <div className="rounded-md border">
@@ -354,10 +360,12 @@ export default function RemindersPageEnhanced() {
                 <TableHeader>
                   <TableRow>
                     <TableHead className="w-[50px]">
-                      <Checkbox
-                        checked={selectedIds.length === reminders.length}
-                        onCheckedChange={handleSelectAll}
-                      />
+                      {canEdit('reminders') && (
+                        <Checkbox
+                          checked={selectedIds.length === reminders.length}
+                          onCheckedChange={handleSelectAll}
+                        />
+                      )}
                     </TableHead>
                     <TableHead className="w-[50px]"></TableHead>
                     <TableHead>Title</TableHead>
@@ -373,12 +381,14 @@ export default function RemindersPageEnhanced() {
                     return (
                     <TableRow key={reminder.id} className={isIntegration ? 'bg-amber-50/50 dark:bg-amber-950/10' : undefined}>
                       <TableCell>
-                        <Checkbox
-                          checked={selectedIds.includes(reminder.id)}
-                          onCheckedChange={(checked) =>
-                            handleSelectReminder(reminder.id, checked as boolean)
-                          }
-                        />
+                        {canEdit('reminders') && (
+                          <Checkbox
+                            checked={selectedIds.includes(reminder.id)}
+                            onCheckedChange={(checked) =>
+                              handleSelectReminder(reminder.id, checked as boolean)
+                            }
+                          />
+                        )}
                       </TableCell>
                       <TableCell>
                         <div className="flex items-center">
@@ -433,14 +443,18 @@ export default function RemindersPageEnhanced() {
                             </Button>
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end">
-                            <DropdownMenuItem onClick={() => markDone(reminder.id)}>
-                              <CheckCircle className="h-4 w-4 mr-2" />
-                              Mark Done
-                            </DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => dismiss(reminder.id)}>
-                              <XCircle className="h-4 w-4 mr-2" />
-                              Dismiss
-                            </DropdownMenuItem>
+                            {canEdit('reminders') && (
+                              <DropdownMenuItem onClick={() => markDone(reminder.id)}>
+                                <CheckCircle className="h-4 w-4 mr-2" />
+                                Mark Done
+                              </DropdownMenuItem>
+                            )}
+                            {canEdit('reminders') && (
+                              <DropdownMenuItem onClick={() => dismiss(reminder.id)}>
+                                <XCircle className="h-4 w-4 mr-2" />
+                                Dismiss
+                              </DropdownMenuItem>
+                            )}
                           </DropdownMenuContent>
                         </DropdownMenu>
                       </TableCell>

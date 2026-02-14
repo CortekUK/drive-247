@@ -29,6 +29,7 @@ import { useCustomerStatusActions } from "@/hooks/use-customer-status-actions";
 import { toast } from "sonner";
 import { useTenant } from "@/contexts/TenantContext";
 import { useAuditLog } from "@/hooks/use-audit-log";
+import { useManagerPermissions } from "@/hooks/use-manager-permissions";
 
 interface Customer {
   id: string;
@@ -64,6 +65,7 @@ const CustomersList = () => {
   const searchParams = useSearchParams();
   const { tenant } = useTenant();
   const { logAction } = useAuditLog();
+  const { canEdit } = useManagerPermissions();
 
   // State from URL params
   const [searchTerm, setSearchTerm] = useState(searchParams.get('search') || '');
@@ -533,14 +535,18 @@ const CustomersList = () => {
           <p className="text-muted-foreground">View and manage all customers with contact information and account balances</p>
         </div>
         <div className="flex gap-2 w-full sm:w-auto">
-          <Button variant="outline" className="w-full sm:w-auto" onClick={() => setInviteDialogOpen(true)}>
-            <Link2 className="h-4 w-4 mr-2" />
-            Invite Link
-          </Button>
-          <Button className="bg-gradient-primary w-full sm:w-auto" onClick={handleAddCustomer}>
-            <Plus className="h-4 w-4 mr-2" />
-            Add Customer
-          </Button>
+          {canEdit('customers') && (
+            <Button variant="outline" className="w-full sm:w-auto" onClick={() => setInviteDialogOpen(true)}>
+              <Link2 className="h-4 w-4 mr-2" />
+              Invite Link
+            </Button>
+          )}
+          {canEdit('customers') && (
+            <Button className="bg-gradient-primary w-full sm:w-auto" onClick={handleAddCustomer}>
+              <Plus className="h-4 w-4 mr-2" />
+              Add Customer
+            </Button>
+          )}
         </div>
       </div>
 
@@ -745,43 +751,53 @@ const CustomersList = () => {
                                       <Eye className="h-4 w-4 mr-2" />
                                       View Details
                                     </DropdownMenuItem>
-                                    <DropdownMenuItem onClick={() => handleEditCustomer(customer)}>
-                                      <Edit className="h-4 w-4 mr-2" />
-                                      Edit
-                                    </DropdownMenuItem>
+                                    {canEdit('customers') && (
+                                      <DropdownMenuItem onClick={() => handleEditCustomer(customer)}>
+                                        <Edit className="h-4 w-4 mr-2" />
+                                        Edit
+                                      </DropdownMenuItem>
+                                    )}
                                     <DropdownMenuSeparator />
-                                    <DropdownMenuItem
-                                      onClick={() => handleApproveCustomer(customer)}
-                                      className="text-green-600 focus:text-green-600"
-                                    >
-                                      <UserCheck className="h-4 w-4 mr-2" />
-                                      Approve Customer
-                                    </DropdownMenuItem>
+                                    {canEdit('customers') && (
+                                      <DropdownMenuItem
+                                        onClick={() => handleApproveCustomer(customer)}
+                                        className="text-green-600 focus:text-green-600"
+                                      >
+                                        <UserCheck className="h-4 w-4 mr-2" />
+                                        Approve Customer
+                                      </DropdownMenuItem>
+                                    )}
                                   </>
                                 ) : (
                                   <>
-                                    <DropdownMenuItem onClick={() => handleEditCustomer(customer)}>
-                                      <Edit className="h-4 w-4 mr-2" />
-                                      Edit
-                                    </DropdownMenuItem>
+                                    {canEdit('customers') && (
+                                      <DropdownMenuItem onClick={() => handleEditCustomer(customer)}>
+                                        <Edit className="h-4 w-4 mr-2" />
+                                        Edit
+                                      </DropdownMenuItem>
+                                    )}
                                     <DropdownMenuSeparator />
-                                    <DropdownMenuItem
-                                      onClick={() => handleBlockClick(customer)}
-                                      className="text-orange-600 focus:text-orange-600"
-                                    >
-                                      <Ban className="h-4 w-4 mr-2" />
-                                      Block Customer
-                                    </DropdownMenuItem>
+                                    {canEdit('customers') && (
+                                      <DropdownMenuItem
+                                        onClick={() => handleBlockClick(customer)}
+                                        className="text-orange-600 focus:text-orange-600"
+                                      >
+                                        <Ban className="h-4 w-4 mr-2" />
+                                        Block Customer
+                                      </DropdownMenuItem>
+                                    )}
                                   </>
                                 )}
                                 <DropdownMenuSeparator />
-                                <DropdownMenuItem
-                                  onClick={() => handleDeleteClick(customer)}
-                                  className="text-destructive focus:text-destructive"
-                                >
-                                  <Trash2 className="h-4 w-4 mr-2" />
-                                  Delete
-                                </DropdownMenuItem>
+                                {canEdit('customers') && (
+                                  <DropdownMenuItem
+                                    onClick={() => handleDeleteClick(customer)}
+                                    className="text-destructive focus:text-destructive"
+                                  >
+                                    <Trash2 className="h-4 w-4 mr-2" />
+                                    Delete
+                                  </DropdownMenuItem>
+                                )}
                               </DropdownMenuContent>
                             </DropdownMenu>
                         </TableCell>
@@ -839,10 +855,12 @@ const CustomersList = () => {
               Clear Filters
             </Button>
           ) : (
-            <Button onClick={handleAddCustomer}>
-              <Plus className="h-4 w-4 mr-2" />
-              Add Customer
-            </Button>
+            canEdit('customers') && (
+              <Button onClick={handleAddCustomer}>
+                <Plus className="h-4 w-4 mr-2" />
+                Add Customer
+              </Button>
+            )
           )}
         </div>
       )}

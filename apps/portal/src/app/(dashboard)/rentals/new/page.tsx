@@ -47,6 +47,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { toast as sonnerToast } from "sonner";
 import { useRentalExtras, type RentalExtra } from "@/hooks/use-rental-extras";
 import { formatCurrency } from "@/lib/format-utils";
+import { useManagerPermissions } from "@/hooks/use-manager-permissions";
 
 const rentalSchema = z.object({
   customer_id: z.string().min(1, "Customer is required"),
@@ -97,6 +98,7 @@ const CreateRental = () => {
   const { tenant } = useTenant();
   const skipInsurance = !tenant?.integration_bonzah;
   const queryClient = useQueryClient();
+  const { isManager, canEdit } = useManagerPermissions();
   const [loading, setLoading] = useState(false);
 
   // Bonzah insurance state
@@ -1161,6 +1163,15 @@ const CreateRental = () => {
 
   // Check if start date is in the past
   const isPastStartDate = watchedStartDate && isBefore(watchedStartDate, todayAtMidnight);
+
+  // Redirect managers without edit permission
+  useEffect(() => {
+    if (isManager && !canEdit('rentals')) {
+      router.push('/rentals');
+    }
+  }, [isManager, canEdit, router]);
+
+  if (isManager && !canEdit('rentals')) return null;
 
   return (
     <div className="container mx-auto p-4 md:p-6 space-y-6 min-h-screen">

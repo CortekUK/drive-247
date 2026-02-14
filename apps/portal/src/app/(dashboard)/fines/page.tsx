@@ -22,6 +22,7 @@ import { useAuditLog } from "@/hooks/use-audit-log";
 import { cn } from "@/lib/utils";
 import { formatCurrency } from "@/lib/format-utils";
 import { useTenant } from "@/contexts/TenantContext";
+import { useManagerPermissions } from "@/hooks/use-manager-permissions";
 
 const FinesList = () => {
   const router = useRouter();
@@ -30,6 +31,7 @@ const FinesList = () => {
   const searchParams = useSearchParams();
   const { logAction } = useAuditLog();
   const { tenant } = useTenant();
+  const { canEdit } = useManagerPermissions();
 
   // State for filtering, sorting, and selection
   const [filters, setFilters] = useState<FineFilterState>({
@@ -173,10 +175,12 @@ const FinesList = () => {
         )}
       >
         <TableCell className="w-12">
-          <Checkbox
-            checked={selectedFines.includes(fine.id)}
-            onCheckedChange={(checked) => handleSelectFine(fine.id, checked as boolean)}
-          />
+          {canEdit('fines') && (
+            <Checkbox
+              checked={selectedFines.includes(fine.id)}
+              onCheckedChange={(checked) => handleSelectFine(fine.id, checked as boolean)}
+            />
+          )}
         </TableCell>
 
         <TableCell className="font-medium">
@@ -235,7 +239,7 @@ const FinesList = () => {
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
-                {canCharge && (
+                {canEdit('fines') && canCharge && (
                   <DropdownMenuItem
                     onClick={() => chargeFineAction.mutate(fine.id)}
                     disabled={chargeFineAction.isPending}
@@ -244,7 +248,7 @@ const FinesList = () => {
                     Charge to Customer
                   </DropdownMenuItem>
                 )}
-                {canWaive && (
+                {canEdit('fines') && canWaive && (
                   <DropdownMenuItem
                     onClick={() => waiveFineAction.mutate(fine.id)}
                     disabled={waiveFineAction.isPending}
@@ -268,10 +272,12 @@ const FinesList = () => {
         <TableHeader>
           <TableRow>
             <TableHead className="w-12">
-              <Checkbox
-                checked={selectedFines.length === fines.length && fines.length > 0}
-                onCheckedChange={handleSelectAll}
-              />
+              {canEdit('fines') && (
+                <Checkbox
+                  checked={selectedFines.length === fines.length && fines.length > 0}
+                  onCheckedChange={handleSelectAll}
+                />
+              )}
             </TableHead>
             <TableHead>Reference</TableHead>
             <TableHead>Vehicle</TableHead>
@@ -346,13 +352,15 @@ const FinesList = () => {
             Track and manage traffic fines and penalties
           </p>
         </div>
-        <Button
-          onClick={() => router.push("/fines/new")}
-          className="bg-gradient-primary w-full sm:w-auto"
-        >
-          <Plus className="h-4 w-4 mr-2" />
-          Add Fine
-        </Button>
+        {canEdit('fines') && (
+          <Button
+            onClick={() => router.push("/fines/new")}
+            className="bg-gradient-primary w-full sm:w-auto"
+          >
+            <Plus className="h-4 w-4 mr-2" />
+            Add Fine
+          </Button>
+        )}
       </div>
 
       {/* KPIs */}
@@ -362,7 +370,7 @@ const FinesList = () => {
       <FineFilters onFiltersChange={handleFiltersChange} />
 
       {/* Bulk Action Bar */}
-      {selectedFines.length > 0 && (
+      {canEdit('fines') && selectedFines.length > 0 && (
         <BulkActionBar
           selectedFines={selectedFineObjects}
           onClearSelection={() => setSelectedFines([])}

@@ -21,6 +21,7 @@ import { VehiclePhotoThumbnail } from "@/components/vehicles/vehicle-photo-thumb
 import { VehicleStatus, VehiclePLData } from "@/lib/vehicle-utils";
 import { useToast } from "@/hooks/use-toast";
 import { useTenant } from "@/contexts/TenantContext";
+import { useManagerPermissions } from "@/hooks/use-manager-permissions";
 
 interface VehiclePhoto {
   photo_url: string;
@@ -73,6 +74,7 @@ export default function VehiclesListEnhanced() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const { tenant } = useTenant();
+  const { canEdit } = useManagerPermissions();
 
   // State from URL params
   const [filters, setFilters] = useState<FiltersState>({
@@ -365,9 +367,11 @@ export default function VehiclesListEnhanced() {
             Manage your vehicle fleet, track P&L performance, and monitor compliance
           </p>
         </div>
-        <div data-add-vehicle-trigger>
-          <AddVehicleDialog />
-        </div>
+        {canEdit('vehicles') && (
+          <div data-add-vehicle-trigger>
+            <AddVehicleDialog />
+          </div>
+        )}
       </div>
 
       {/* Fleet Summary Cards */}

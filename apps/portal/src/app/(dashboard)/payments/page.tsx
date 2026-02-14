@@ -42,6 +42,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useQueryClient } from "@tanstack/react-query";
 import { formatCurrency } from "@/lib/format-utils";
 import { useTenant } from "@/contexts/TenantContext";
+import { useManagerPermissions } from "@/hooks/use-manager-permissions";
 
 // Helper function to display user-friendly payment type names
 const getPaymentTypeDisplay = (paymentType: string): string => {
@@ -60,6 +61,7 @@ const PaymentsList = () => {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const { tenant } = useTenant();
+  const { canEdit } = useManagerPermissions();
   const [showAddDialog, setShowAddDialog] = useState(false);
   const [showRejectDialog, setShowRejectDialog] = useState(false);
   const [rejectPaymentId, setRejectPaymentId] = useState<string | null>(null);
@@ -288,10 +290,12 @@ const PaymentsList = () => {
             open={showAddDialog}
             onOpenChange={setShowAddDialog}
           />
-          <Button onClick={() => setShowAddDialog(true)} className="bg-gradient-primary w-full sm:w-auto whitespace-nowrap">
-            <Plus className="h-4 w-4 mr-2 flex-shrink-0" />
-            Record Payment
-          </Button>
+          {canEdit('payments') && (
+            <Button onClick={() => setShowAddDialog(true)} className="bg-gradient-primary w-full sm:w-auto whitespace-nowrap">
+              <Plus className="h-4 w-4 mr-2 flex-shrink-0" />
+              Record Payment
+            </Button>
+          )}
         </div>
       </div>
 
@@ -430,38 +434,42 @@ const PaymentsList = () => {
                               {/* Show Accept/Reject buttons for pending payments */}
                               {payment.verification_status === 'pending' && (
                                 <>
-                                  <TooltipProvider>
-                                    <Tooltip>
-                                      <TooltipTrigger asChild>
-                                        <Button
-                                          variant="ghost"
-                                          size="sm"
-                                          className="h-8 w-8 p-0 text-green-600 hover:text-green-700 hover:bg-green-50"
-                                          onClick={() => handleApprovePayment(payment.id)}
-                                          disabled={isVerifying}
-                                        >
-                                          <CheckCircle className="h-4 w-4" />
-                                        </Button>
-                                      </TooltipTrigger>
-                                      <TooltipContent>Approve Payment</TooltipContent>
-                                    </Tooltip>
-                                  </TooltipProvider>
-                                  <TooltipProvider>
-                                    <Tooltip>
-                                      <TooltipTrigger asChild>
-                                        <Button
-                                          variant="ghost"
-                                          size="sm"
-                                          className="h-8 w-8 p-0 text-red-600 hover:text-red-700 hover:bg-red-50"
-                                          onClick={() => handleOpenRejectDialog(payment.id)}
-                                          disabled={isVerifying}
-                                        >
-                                          <XCircle className="h-4 w-4" />
-                                        </Button>
-                                      </TooltipTrigger>
-                                      <TooltipContent>Reject Payment</TooltipContent>
-                                    </Tooltip>
-                                  </TooltipProvider>
+                                  {canEdit('payments') && (
+                                    <TooltipProvider>
+                                      <Tooltip>
+                                        <TooltipTrigger asChild>
+                                          <Button
+                                            variant="ghost"
+                                            size="sm"
+                                            className="h-8 w-8 p-0 text-green-600 hover:text-green-700 hover:bg-green-50"
+                                            onClick={() => handleApprovePayment(payment.id)}
+                                            disabled={isVerifying}
+                                          >
+                                            <CheckCircle className="h-4 w-4" />
+                                          </Button>
+                                        </TooltipTrigger>
+                                        <TooltipContent>Approve Payment</TooltipContent>
+                                      </Tooltip>
+                                    </TooltipProvider>
+                                  )}
+                                  {canEdit('payments') && (
+                                    <TooltipProvider>
+                                      <Tooltip>
+                                        <TooltipTrigger asChild>
+                                          <Button
+                                            variant="ghost"
+                                            size="sm"
+                                            className="h-8 w-8 p-0 text-red-600 hover:text-red-700 hover:bg-red-50"
+                                            onClick={() => handleOpenRejectDialog(payment.id)}
+                                            disabled={isVerifying}
+                                          >
+                                            <XCircle className="h-4 w-4" />
+                                          </Button>
+                                        </TooltipTrigger>
+                                        <TooltipContent>Reject Payment</TooltipContent>
+                                      </Tooltip>
+                                    </TooltipProvider>
+                                  )}
                                 </>
                               )}
                               <DropdownMenu>
@@ -476,7 +484,8 @@ const PaymentsList = () => {
                                     View Ledger
                                   </DropdownMenuItem>
                                   {/* Show Reverse Payment for non-reversed, non-refunded payments without Stripe intent */}
-                                  {!payment.stripe_payment_intent_id &&
+                                  {canEdit('payments') &&
+                                   !payment.stripe_payment_intent_id &&
                                    payment.status !== 'Reversed' &&
                                    !payment.refund_reason?.includes('[REVERSED]') &&
                                    payment.refund_status !== 'completed' &&
@@ -542,10 +551,12 @@ const PaymentsList = () => {
               "Start recording payments to track your cash flow"
             }
           </p>
-          <Button onClick={() => setShowAddDialog(true)}>
-            <Plus className="h-4 w-4 mr-2" />
-            Record Payment
-          </Button>
+          {canEdit('payments') && (
+            <Button onClick={() => setShowAddDialog(true)}>
+              <Plus className="h-4 w-4 mr-2" />
+              Record Payment
+            </Button>
+          )}
         </div>
       )}
 

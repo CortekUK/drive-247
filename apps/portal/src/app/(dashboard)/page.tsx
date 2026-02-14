@@ -25,6 +25,7 @@ import { useCalendarRentals } from "@/hooks/use-calendar-rentals";
 import { useDashboardKPIs } from "@/hooks/use-dashboard-kpis";
 import { useAuth } from "@/stores/auth-store";
 import { useTenant } from "@/contexts/TenantContext";
+import { useManagerPermissions } from "@/hooks/use-manager-permissions";
 import {
   format,
   startOfMonth,
@@ -69,6 +70,7 @@ export default function DashboardPage() {
   const searchParams = useSearchParams();
   const { appUser } = useAuth();
   const { tenant } = useTenant();
+  const { canView, canEdit } = useManagerPermissions();
 
   // Get date range from URL or default to "This Month"
   const dateRanges = getDateRanges();
@@ -124,6 +126,27 @@ export default function DashboardPage() {
     }
   };
 
+  // Build visible KPI card set based on manager permissions
+  const visibleKpiCards = useMemo(() => {
+    const cards = new Set<string>();
+    if (canView('payments')) cards.add('payments');
+    if (canView('vehicles')) cards.add('vehicles');
+    if (canView('rentals')) cards.add('rentals');
+    if (canView('fines')) cards.add('fines');
+    if (canView('pl_dashboard')) cards.add('pl_dashboard');
+    return cards;
+  }, [canView]);
+
+  // Build allowed activity types based on manager permissions
+  const allowedActivityTypes = useMemo(() => {
+    const types: string[] = [];
+    if (canView('payments')) types.push('payment');
+    if (canView('rentals')) types.push('rental');
+    if (canView('vehicles')) types.push('vehicle');
+    if (canView('audit_logs')) types.push('system');
+    return types.length > 0 ? types : undefined;
+  }, [canView]);
+
   return (
     <div className="container mx-auto py-4 space-y-4">
       {/* Header */}
@@ -137,33 +160,45 @@ export default function DashboardPage() {
           </p>
         </div>
         <div className="flex items-center gap-3">
-          <Button onClick={() => router.push("/rentals/new")}>
-            <Plus className="h-4 w-4 mr-2" />
-            New Rental
-          </Button>
+          {canEdit('rentals') && (
+            <Button onClick={() => router.push("/rentals/new")}>
+              <Plus className="h-4 w-4 mr-2" />
+              New Rental
+            </Button>
+          )}
         </div>
       </div>
 
-      {/* Setup Hub (trial) / Go-Live Banner */}
+      {/* Setup Hub (trial) / Go-Live Banner — always shown */}
       <SetupHub />
       <GoLiveBanner />
-      <BonzahBalanceWidget />
+      {canView('payments') && <BonzahBalanceWidget />}
 
       {/* AI Insights Marquee */}
-      <AIInsightsPanel grouped={todayCalendar?.grouped || []} />
+      {canView('rentals') && <AIInsightsPanel grouped={todayCalendar?.grouped || []} />}
 
       {/* Action Items */}
-      <ActionItems />
+      {canView('payments') && <ActionItems />}
+
+      {/* KPI Cards */}
+      {visibleKpiCards.size > 0 && (
+        <DashboardKPICards
+          data={kpis}
+          isLoading={isLoading}
+          error={error}
+          visibleCards={visibleKpiCards}
+        />
+      )}
 
       {/* Calendar Widget */}
-      <CalendarWidget />
+      {canView('rentals') && <CalendarWidget />}
 
       {/* Fleet Overview */}
-      <FleetOverview />
+      {canView('vehicles') && <FleetOverview />}
 
       {/* Recent Activity */}
       <div className="grid gap-6">
-        <RecentActivity />
+        <RecentActivity allowedTypes={allowedActivityTypes} />
       </div>
     </div>
   );

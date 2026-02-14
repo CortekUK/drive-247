@@ -14,7 +14,7 @@ import { cn } from '@/lib/utils';
 interface ChannelListProps {
   selectedChannelId: string | null;
   onSelectChannel: (channel: ChatChannel) => void;
-  onBulkMessage: () => void;
+  onBulkMessage?: () => void;
 }
 
 export function ChannelList({ selectedChannelId, onSelectChannel, onBulkMessage }: ChannelListProps) {
@@ -128,16 +128,18 @@ export function ChannelList({ selectedChannelId, onSelectChannel, onBulkMessage 
       </ScrollArea>
 
       {/* Bulk message button */}
-      <div className="p-4 border-t border-border/50">
-        <Button
-          variant="outline"
-          className="w-full gap-2 h-11 bg-background/50 hover:bg-primary/5 hover:text-primary hover:border-primary/30 transition-all duration-200"
-          onClick={onBulkMessage}
-        >
-          <Sparkles className="h-4 w-4" />
-          Bulk Message
-        </Button>
-      </div>
+      {onBulkMessage && (
+        <div className="p-4 border-t border-border/50">
+          <Button
+            variant="outline"
+            className="w-full gap-2 h-11 bg-background/50 hover:bg-primary/5 hover:text-primary hover:border-primary/30 transition-all duration-200"
+            onClick={onBulkMessage}
+          >
+            <Sparkles className="h-4 w-4" />
+            Bulk Message
+          </Button>
+        </div>
+      )}
     </div>
   );
 }

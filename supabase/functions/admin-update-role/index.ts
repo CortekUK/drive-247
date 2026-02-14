@@ -5,10 +5,28 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
 
+interface PermissionEntry {
+  tab_key: string;
+  access_level: 'viewer' | 'editor';
+}
+
 interface UpdateRoleRequest {
   userId: string;
-  newRole: 'head_admin' | 'admin' | 'ops' | 'viewer';
+  newRole: 'head_admin' | 'admin' | 'manager' | 'ops' | 'viewer';
+  permissions?: PermissionEntry[]; // Required when newRole is 'manager'
 }
+
+const ALLOWED_TAB_KEYS = [
+  'vehicles', 'rentals', 'pending_bookings', 'availability',
+  'customers', 'blocked_customers', 'messages',
+  'payments', 'invoices', 'fines',
+  'documents', 'reminders', 'reports', 'pl_dashboard',
+  'cms', 'audit_logs', 'settings',
+  'settings.general', 'settings.locations', 'settings.branding',
+  'settings.rental', 'settings.extras', 'settings.payments',
+  'settings.reminders', 'settings.templates', 'settings.integrations',
+  'settings.subscription',
+];
 
 Deno.serve(async (req) => {
   console.log('admin-update-role function called');
@@ -75,7 +93,24 @@ Deno.serve(async (req) => {
       );
     }
 
-    const { userId, newRole }: UpdateRoleRequest = await req.json();
+    const { userId, newRole, permissions }: UpdateRoleRequest = await req.json();
+
+    // Validate manager permissions
+    if (newRole === 'manager') {
+      if (!permissions || !Array.isArray(permissions) || permissions.length === 0) {
+        return new Response(
+          JSON.stringify({ error: 'Manager role requires at least one permission' }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+      const invalidKeys = permissions.filter(p => !ALLOWED_TAB_KEYS.includes(p.tab_key));
+      if (invalidKeys.length > 0) {
+        return new Response(
+          JSON.stringify({ error: `Invalid tab keys: ${invalidKeys.map(k => k.tab_key).join(', ')}` }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+    }
 
     // Get target user details
     const { data: targetUser, error: targetError } = await supabase
@@ -92,14 +127,14 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Only head_admin can change roles of admins or promote to admin/head_admin
+    // Only head_admin can change roles of admins/managers or promote to admin/head_admin/manager
     if (
-      (targetUser.role === 'admin' || targetUser.role === 'head_admin' || 
-       newRole === 'admin' || newRole === 'head_admin') && 
+      (targetUser.role === 'admin' || targetUser.role === 'head_admin' || targetUser.role === 'manager' ||
+       newRole === 'admin' || newRole === 'head_admin' || newRole === 'manager') &&
       currentUserData.role !== 'head_admin'
     ) {
       return new Response(
-        JSON.stringify({ error: 'Only head admin can manage admin roles' }),
+        JSON.stringify({ error: 'Only head admin can manage admin and manager roles' }),
         { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
@@ -126,6 +161,42 @@ Deno.serve(async (req) => {
         JSON.stringify({ error: updateError.message || 'Failed to update role' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
+    }
+
+    // Handle manager permissions
+    if (newRole === 'manager' && permissions && permissions.length > 0) {
+      // Delete existing permissions
+      await supabaseAdmin
+        .from('manager_permissions')
+        .delete()
+        .eq('app_user_id', userId);
+
+      // Insert new permissions
+      const permissionRows = permissions.map(p => ({
+        app_user_id: userId,
+        tab_key: p.tab_key,
+        access_level: p.access_level,
+      }));
+
+      const { error: permError } = await supabaseAdmin
+        .from('manager_permissions')
+        .insert(permissionRows);
+
+      if (permError) {
+        console.error('Failed to insert manager permissions:', permError);
+        // Revert role change
+        await supabaseAdmin.from('app_users').update({ role: oldRole }).eq('id', userId);
+        return new Response(
+          JSON.stringify({ error: 'Failed to set manager permissions' }),
+          { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+    } else if (oldRole === 'manager' && newRole !== 'manager') {
+      // Changing FROM manager — clean up permissions
+      await supabaseAdmin
+        .from('manager_permissions')
+        .delete()
+        .eq('app_user_id', userId);
     }
 
     // Update auth user metadata
