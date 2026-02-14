@@ -39,6 +39,8 @@ export const UserMenu = () => {
         return 'default';
       case 'admin':
         return 'secondary';
+      case 'manager':
+        return 'secondary';
       case 'ops':
         return 'outline';
       case 'viewer':
@@ -54,6 +56,8 @@ export const UserMenu = () => {
         return 'Head Admin';
       case 'admin':
         return 'Admin';
+      case 'manager':
+        return 'Manager';
       case 'ops':
         return 'Operations';
       case 'viewer':

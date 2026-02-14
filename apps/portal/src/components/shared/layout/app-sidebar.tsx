@@ -14,6 +14,8 @@ import { useUnreadCount } from "@/hooks/use-unread-count";
 import { useAuthStore } from "@/stores/auth-store";
 import { useTenantSubscription } from "@/hooks/use-tenant-subscription";
 import { useSetupStatus } from "@/hooks/use-setup-status";
+import { useManagerPermissions } from "@/hooks/use-manager-permissions";
+import { ROUTE_TO_TAB } from "@/lib/permissions";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useTheme } from "next-themes";
 
@@ -43,6 +45,7 @@ export function AppSidebar() {
   const { appUser } = useAuthStore();
   const { isTrialing, trialDaysRemaining } = useTenantSubscription();
   const { isLive } = useSetupStatus();
+  const { isManager, canView } = useManagerPermissions();
 
   const { resolvedTheme } = useTheme();
   const appName = branding?.app_name || 'DRIVE247';
@@ -116,7 +119,12 @@ export function AppSidebar() {
         return true;
       }),
     },
-  ].filter(g => g.items.length > 0);
+  ].filter(g => g.items.length > 0)
+   .map(g => isManager ? { ...g, items: g.items.filter(item => {
+     const tabKey = ROUTE_TO_TAB[item.href];
+     return tabKey ? canView(tabKey) : true;
+   })} : g)
+   .filter(g => g.items.length > 0);
 
   // Track which groups are open — all open by default
   const [openGroups, setOpenGroups] = useState<Record<string, boolean>>(() => {
@@ -345,21 +353,23 @@ export function AppSidebar() {
               )}
             </SidebarMenuItem>
           )}
-          <SidebarMenuItem>
-            <SidebarMenuButton
-              asChild
-              isActive={isActive("/settings")}
-              tooltip={collapsed ? "Settings" : undefined}
-              className="h-8 transition-all duration-200 ease-in-out"
-            >
-              <Link href="/settings">
-                <Settings className="h-4 w-4 shrink-0" />
-                <span className={`text-[13px] transition-all duration-200 ease-in-out ${collapsed ? "sr-only opacity-0 w-0" : "opacity-100"}`}>
-                  Settings
-                </span>
-              </Link>
-            </SidebarMenuButton>
-          </SidebarMenuItem>
+          {(!isManager || canView('settings')) && (
+            <SidebarMenuItem>
+              <SidebarMenuButton
+                asChild
+                isActive={isActive("/settings")}
+                tooltip={collapsed ? "Settings" : undefined}
+                className="h-8 transition-all duration-200 ease-in-out"
+              >
+                <Link href="/settings">
+                  <Settings className="h-4 w-4 shrink-0" />
+                  <span className={`text-[13px] transition-all duration-200 ease-in-out ${collapsed ? "sr-only opacity-0 w-0" : "opacity-100"}`}>
+                    Settings
+                  </span>
+                </Link>
+              </SidebarMenuButton>
+            </SidebarMenuItem>
+          )}
         </SidebarMenu>
       </SidebarFooter>
     </Sidebar>

@@ -25,6 +25,7 @@ import {
   MessageSquare,
   Phone,
   RotateCcw,
+  Eye,
 } from "lucide-react";
 import {
   AlertDialog,
@@ -57,6 +58,7 @@ import type {
   ContactCardContent,
 } from "@/types/cms";
 import { CMS_DEFAULTS } from "@/constants/website-content";
+import { useManagerPermissions } from "@/hooks/use-manager-permissions";
 
 export default function CMSHomeEditor() {
   const router = useRouter();
@@ -66,6 +68,7 @@ export default function CMSHomeEditor() {
   const [activeTab, setActiveTab] = useState("hero");
   const [versionHistoryOpen, setVersionHistoryOpen] = useState(false);
   const [isResetting, setIsResetting] = useState(false);
+  const { canEdit } = useManagerPermissions();
 
   const handleResetToDefaults = async () => {
     setIsResetting(true);
@@ -206,43 +209,53 @@ export default function CMSHomeEditor() {
           </div>
         </div>
         <div className="flex items-center gap-2">
-          <AlertDialog>
-            <AlertDialogTrigger asChild>
-              <Button variant="outline" disabled={isResetting}>
-                {isResetting ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <RotateCcw className="h-4 w-4 mr-2" />}
-                Set to Default
-              </Button>
-            </AlertDialogTrigger>
-            <AlertDialogContent>
-              <AlertDialogHeader>
-                <AlertDialogTitle>Reset to Default Content?</AlertDialogTitle>
-                <AlertDialogDescription>
-                  This will replace all Home page content with Drive 917 default content.
-                  This action cannot be undone, but you can restore previous versions from the History.
-                </AlertDialogDescription>
-              </AlertDialogHeader>
-              <AlertDialogFooter>
-                <AlertDialogCancel>Cancel</AlertDialogCancel>
-                <AlertDialogAction onClick={handleResetToDefaults}>
-                  Reset to Defaults
-                </AlertDialogAction>
-              </AlertDialogFooter>
-            </AlertDialogContent>
-          </AlertDialog>
+          {canEdit('cms') && (
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <Button variant="outline" disabled={isResetting}>
+                  {isResetting ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <RotateCcw className="h-4 w-4 mr-2" />}
+                  Set to Default
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Reset to Default Content?</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    This will replace all Home page content with Drive 917 default content.
+                    This action cannot be undone, but you can restore previous versions from the History.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                  <AlertDialogAction onClick={handleResetToDefaults}>
+                    Reset to Defaults
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+          )}
           <Button variant="outline" onClick={() => setVersionHistoryOpen(true)}>
             <History className="h-4 w-4 mr-2" />
             History
           </Button>
-          <Button onClick={handlePublish} disabled={isPublishing || page.status === "published"}>
-            {isPublishing ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Upload className="h-4 w-4 mr-2" />}
-            {page.status === "published" ? "Published" : "Publish"}
-          </Button>
+          {canEdit('cms') && (
+            <Button onClick={handlePublish} disabled={isPublishing || page.status === "published"}>
+              {isPublishing ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Upload className="h-4 w-4 mr-2" />}
+              {page.status === "published" ? "Published" : "Publish"}
+            </Button>
+          )}
         </div>
       </div>
 
       {/* Editor Tabs */}
       <Card>
         <CardContent className="pt-6">
+          {!canEdit('cms') && (
+            <div className="mb-4 p-3 bg-muted/50 border rounded-lg flex items-center gap-2 text-sm text-muted-foreground">
+              <Eye className="h-4 w-4 shrink-0" />
+              You have view-only access to website content.
+            </div>
+          )}
           <Tabs value={activeTab} onValueChange={setActiveTab}>
             <TabsList className="flex flex-wrap h-auto gap-1">
               <TabsTrigger value="hero" className="flex items-center gap-2">
@@ -279,6 +292,7 @@ export default function CMSHomeEditor() {
               </TabsTrigger>
             </TabsList>
 
+            <div className={!canEdit('cms') ? "pointer-events-none select-none" : ""}>
             <div className="mt-6">
               <TabsContent value="hero" className="mt-0">
                 <HomeHeroEditor
@@ -343,6 +357,7 @@ export default function CMSHomeEditor() {
                   isSaving={isUpdating}
                 />
               </TabsContent>
+            </div>
             </div>
           </Tabs>
         </CardContent>

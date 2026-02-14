@@ -23,6 +23,7 @@ interface DashboardKPICardsProps {
   data?: DashboardKPIs;
   isLoading: boolean;
   error?: Error | null;
+  visibleCards?: Set<string>;
 }
 
 const KPICard = ({ 
@@ -124,15 +125,43 @@ const LoadingSkeleton = () => (
   </Card>
 );
 
-export const DashboardKPICards = ({ data, isLoading, error }: DashboardKPICardsProps) => {
+export const DashboardKPICards = ({ data, isLoading, error, visibleCards }: DashboardKPICardsProps) => {
   const router = useRouter();
   const { tenant } = useTenant();
   const currencyCode = tenant?.currency_code || 'GBP';
 
+  const cards = [];
+
+  if (!visibleCards || visibleCards.has('payments')) {
+    cards.push('payments');
+  }
+  if (!visibleCards || visibleCards.has('vehicles')) {
+    cards.push('vehicles');
+  }
+  if (!visibleCards || visibleCards.has('rentals')) {
+    cards.push('rentals');
+  }
+  if (!visibleCards || visibleCards.has('fines')) {
+    cards.push('fines');
+  }
+  if (!visibleCards || visibleCards.has('pl_dashboard')) {
+    cards.push('pl_dashboard');
+  }
+
+  const colClass = cards.length >= 5
+    ? "grid-cols-1 sm:grid-cols-2 lg:grid-cols-5"
+    : cards.length === 4
+    ? "grid-cols-1 sm:grid-cols-2 lg:grid-cols-4"
+    : cards.length === 3
+    ? "grid-cols-1 sm:grid-cols-2 lg:grid-cols-3"
+    : cards.length === 2
+    ? "grid-cols-1 sm:grid-cols-2"
+    : "grid-cols-1";
+
   if (isLoading) {
     return (
-      <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-5">
-        {Array.from({ length: 5 }, (_, i) => (
+      <div className={`grid gap-4 ${colClass}`}>
+        {Array.from({ length: cards.length || 5 }, (_, i) => (
           <LoadingSkeleton key={i} />
         ))}
       </div>
@@ -141,7 +170,7 @@ export const DashboardKPICards = ({ data, isLoading, error }: DashboardKPICardsP
 
   if (error) {
     return (
-      <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-5">
+      <div className={`grid gap-4 ${colClass}`}>
         <Card className="col-span-full bg-destructive/5 border-destructive/20">
           <CardContent className="pt-6">
             <div className="flex items-center gap-2 text-destructive">
@@ -157,74 +186,84 @@ export const DashboardKPICards = ({ data, isLoading, error }: DashboardKPICardsP
   if (!data) return null;
 
   return (
-    <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-5">
+    <div className={`grid gap-4 ${colClass}`}>
       {/* Outstanding Payments - Overdue + Due Today */}
-      <KPICard
-        title="Outstanding Payments"
-        value={data.overdue.count + data.dueToday.count}
-        subtitle={
-          data.overdue.count + data.dueToday.count > 0
-            ? `${formatCurrency((data.overdue.amount || 0) + (data.dueToday.amount || 0), currencyCode)} • ${data.overdue.count} overdue, ${data.dueToday.count} due today`
-            : undefined
-        }
-        icon={AlertTriangle}
-        variant={data.overdue.count > 0 ? "danger" : data.dueToday.count > 0 ? "warning" : "default"}
-        tooltip="Payments overdue or due today"
-        onClick={() => router.push('/payments?filter=outstanding')}
-        isEmpty={data.overdue.count === 0 && data.dueToday.count === 0}
-        emptyMessage="All payments current"
-      />
+      {(!visibleCards || visibleCards.has('payments')) && (
+        <KPICard
+          title="Outstanding Payments"
+          value={data.overdue.count + data.dueToday.count}
+          subtitle={
+            data.overdue.count + data.dueToday.count > 0
+              ? `${formatCurrency((data.overdue.amount || 0) + (data.dueToday.amount || 0), currencyCode)} • ${data.overdue.count} overdue, ${data.dueToday.count} due today`
+              : undefined
+          }
+          icon={AlertTriangle}
+          variant={data.overdue.count > 0 ? "danger" : data.dueToday.count > 0 ? "warning" : "default"}
+          tooltip="Payments overdue or due today"
+          onClick={() => router.push('/payments?filter=outstanding')}
+          isEmpty={data.overdue.count === 0 && data.dueToday.count === 0}
+          emptyMessage="All payments current"
+        />
+      )}
 
       {/* Fleet Utilization */}
-      <KPICard
-        title="Fleet Utilization"
-        value={`${data.fleetUtilization?.percentage || 0}%`}
-        subtitle={`${data.fleetUtilization?.rented || 0} of ${data.fleetUtilization?.total || 0} vehicles rented`}
-        icon={Car}
-        variant={
-          (data.fleetUtilization?.percentage || 0) >= 70 ? "success" :
-          (data.fleetUtilization?.percentage || 0) >= 40 ? "warning" :
-          "default"
-        }
-        tooltip="Percentage of active fleet currently rented"
-        onClick={() => router.push('/vehicles?status=Rented')}
-      />
+      {(!visibleCards || visibleCards.has('vehicles')) && (
+        <KPICard
+          title="Fleet Utilization"
+          value={`${data.fleetUtilization?.percentage || 0}%`}
+          subtitle={`${data.fleetUtilization?.rented || 0} of ${data.fleetUtilization?.total || 0} vehicles rented`}
+          icon={Car}
+          variant={
+            (data.fleetUtilization?.percentage || 0) >= 70 ? "success" :
+            (data.fleetUtilization?.percentage || 0) >= 40 ? "warning" :
+            "default"
+          }
+          tooltip="Percentage of active fleet currently rented"
+          onClick={() => router.push('/vehicles?status=Rented')}
+        />
+      )}
 
       {/* Active Rentals */}
-      <KPICard
-        title="Active Rentals"
-        value={data.activeRentals.count}
-        subtitle="Currently active rentals"
-        icon={Users}
-        variant="success"
-        onClick={() => router.push('/rentals?status=Active')}
-        isEmpty={data.activeRentals.count === 0}
-        emptyMessage="No active rentals"
-      />
+      {(!visibleCards || visibleCards.has('rentals')) && (
+        <KPICard
+          title="Active Rentals"
+          value={data.activeRentals.count}
+          subtitle="Currently active rentals"
+          icon={Users}
+          variant="success"
+          onClick={() => router.push('/rentals?status=Active')}
+          isEmpty={data.activeRentals.count === 0}
+          emptyMessage="No active rentals"
+        />
+      )}
 
       {/* Open Fines */}
-      <KPICard
-        title="Open Fines"
-        value={data.finesOpen.count}
-        subtitle={data.finesOpen.count > 0 ? formatCurrency(data.finesOpen.amount, currencyCode) : undefined}
-        icon={AlertTriangle}
-        variant={data.finesOpen.count > 0 ? "warning" : "default"}
-        badge={data.finesOpen.dueSoonCount > 0 ? `${data.finesOpen.dueSoonCount} due soon` : undefined}
-        onClick={() => router.push('/fines?status=open')}
-        isEmpty={data.finesOpen.count === 0}
-        emptyMessage="No open fines"
-      />
+      {(!visibleCards || visibleCards.has('fines')) && (
+        <KPICard
+          title="Open Fines"
+          value={data.finesOpen.count}
+          subtitle={data.finesOpen.count > 0 ? formatCurrency(data.finesOpen.amount, currencyCode) : undefined}
+          icon={AlertTriangle}
+          variant={data.finesOpen.count > 0 ? "warning" : "default"}
+          badge={data.finesOpen.dueSoonCount > 0 ? `${data.finesOpen.dueSoonCount} due soon` : undefined}
+          onClick={() => router.push('/fines?status=open')}
+          isEmpty={data.finesOpen.count === 0}
+          emptyMessage="No open fines"
+        />
+      )}
 
       {/* Monthly Revenue */}
-      <KPICard
-        title="Monthly Revenue"
-        value={formatCurrency(data.monthlyRevenue?.amount || 0, currencyCode)}
-        subtitle="Selected period"
-        icon={DollarSign}
-        variant="success"
-        onClick={() => router.push('/pl-dashboard')}
-        tooltip="Total revenue for the selected date range"
-      />
+      {(!visibleCards || visibleCards.has('pl_dashboard')) && (
+        <KPICard
+          title="Monthly Revenue"
+          value={formatCurrency(data.monthlyRevenue?.amount || 0, currencyCode)}
+          subtitle="Selected period"
+          icon={DollarSign}
+          variant="success"
+          onClick={() => router.push('/pl-dashboard')}
+          tooltip="Total revenue for the selected date range"
+        />
+      )}
     </div>
   );
 };

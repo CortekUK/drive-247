@@ -31,6 +31,7 @@ import { DeleteInvoiceDialog } from "@/components/invoices/delete-invoice-dialog
 import { SendInvoiceEmailDialog } from "@/components/invoices/send-invoice-email-dialog";
 import { useTenant } from "@/contexts/TenantContext";
 import { cn } from "@/lib/utils";
+import { useManagerPermissions } from "@/hooks/use-manager-permissions";
 
 interface Invoice {
   id: string;
@@ -73,6 +74,7 @@ interface InvoiceFilters {
 
 const InvoicesList = () => {
   const { tenant } = useTenant();
+  const { canEdit } = useManagerPermissions();
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [sendEmailDialogOpen, setSendEmailDialogOpen] = useState(false);
   const [selectedInvoiceForAction, setSelectedInvoiceForAction] = useState<Invoice | null>(null);
@@ -393,25 +395,29 @@ const InvoicesList = () => {
                               </Button>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end">
-                              <DropdownMenuItem
-                                onClick={() => {
-                                  setSelectedInvoiceForAction(invoice);
-                                  setSendEmailDialogOpen(true);
-                                }}
-                              >
-                                <Mail className="h-4 w-4 mr-2" />
-                                Send Email
-                              </DropdownMenuItem>
-                              <DropdownMenuItem
-                                className="text-destructive focus:text-destructive"
-                                onClick={() => {
-                                  setSelectedInvoiceForAction(invoice);
-                                  setDeleteDialogOpen(true);
-                                }}
-                              >
-                                <Trash2 className="h-4 w-4 mr-2" />
-                                Delete
-                              </DropdownMenuItem>
+                              {canEdit('invoices') && (
+                                <DropdownMenuItem
+                                  onClick={() => {
+                                    setSelectedInvoiceForAction(invoice);
+                                    setSendEmailDialogOpen(true);
+                                  }}
+                                >
+                                  <Mail className="h-4 w-4 mr-2" />
+                                  Send Email
+                                </DropdownMenuItem>
+                              )}
+                              {canEdit('invoices') && (
+                                <DropdownMenuItem
+                                  className="text-destructive focus:text-destructive"
+                                  onClick={() => {
+                                    setSelectedInvoiceForAction(invoice);
+                                    setDeleteDialogOpen(true);
+                                  }}
+                                >
+                                  <Trash2 className="h-4 w-4 mr-2" />
+                                  Delete
+                                </DropdownMenuItem>
+                              )}
                             </DropdownMenuContent>
                           </DropdownMenu>
                         </div>

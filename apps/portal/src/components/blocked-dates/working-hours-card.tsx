@@ -14,6 +14,7 @@ import { useTenant } from '@/contexts/TenantContext';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuditLog } from '@/hooks/use-audit-log';
 import { getTimezonesByRegion, findTimezone } from '@/lib/timezones';
+import { useManagerPermissions } from '@/hooks/use-manager-permissions';
 
 const DAYS_OF_WEEK = [
   { key: 'monday', label: 'Monday' },
@@ -53,6 +54,7 @@ export function WorkingHoursCard() {
   const queryClient = useQueryClient();
   const { tenant } = useTenant();
   const { logAction } = useAuditLog();
+  const { canEdit } = useManagerPermissions();
   const [isSaving, setIsSaving] = useState(false);
 
   // Fetch working hours data directly
@@ -266,6 +268,7 @@ export function WorkingHoursCard() {
             onCheckedChange={(checked) => {
               setForm(prev => ({ ...prev, working_hours_always_open: checked }));
             }}
+            disabled={!canEdit('availability')}
           />
         </div>
 
@@ -316,6 +319,7 @@ export function WorkingHoursCard() {
                     <Switch
                       checked={form.schedule[key].enabled}
                       onCheckedChange={(checked) => updateDaySchedule(key, 'enabled', checked)}
+                      disabled={!canEdit('availability')}
                     />
                     <span className={`font-medium ${!form.schedule[key].enabled ? 'text-muted-foreground' : ''}`}>
                       {label}
@@ -330,6 +334,7 @@ export function WorkingHoursCard() {
                         value={form.schedule[key].open}
                         onChange={(e) => updateDaySchedule(key, 'open', e.target.value)}
                         className="w-32"
+                        disabled={!canEdit('availability')}
                       />
                       <span className="text-muted-foreground">to</span>
                       <Input
@@ -337,18 +342,21 @@ export function WorkingHoursCard() {
                         value={form.schedule[key].close}
                         onChange={(e) => updateDaySchedule(key, 'close', e.target.value)}
                         className="w-32"
+                        disabled={!canEdit('availability')}
                       />
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => copyToAllDays(key)}
-                        className="ml-2 text-xs"
-                        title="Copy to all days"
-                      >
-                        <Copy className="h-3 w-3 mr-1" />
-                        Copy to all
-                      </Button>
+                      {canEdit('availability') && (
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => copyToAllDays(key)}
+                          className="ml-2 text-xs"
+                          title="Copy to all days"
+                        >
+                          <Copy className="h-3 w-3 mr-1" />
+                          Copy to all
+                        </Button>
+                      )}
                     </div>
                   ) : (
                     <span className="text-sm text-muted-foreground">Closed</span>
@@ -359,18 +367,20 @@ export function WorkingHoursCard() {
           </div>
         )}
 
-        <Button
-          onClick={handleSave}
-          disabled={isSaving}
-          className="flex items-center gap-2"
-        >
-          {isSaving ? (
-            <Loader2 className="h-4 w-4 animate-spin" />
-          ) : (
-            <Save className="h-4 w-4" />
-          )}
-          Save Working Hours
-        </Button>
+        {canEdit('availability') && (
+          <Button
+            onClick={handleSave}
+            disabled={isSaving}
+            className="flex items-center gap-2"
+          >
+            {isSaving ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <Save className="h-4 w-4" />
+            )}
+            Save Working Hours
+          </Button>
+        )}
       </CardContent>
     </Card>
   );

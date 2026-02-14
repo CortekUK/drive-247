@@ -5,13 +5,31 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
 
+interface PermissionEntry {
+  tab_key: string;
+  access_level: 'viewer' | 'editor';
+}
+
 interface CreateUserRequest {
   email: string;
   name: string;
-  role: 'head_admin' | 'admin' | 'ops' | 'viewer';
+  role: 'head_admin' | 'admin' | 'manager' | 'ops' | 'viewer';
   temporaryPassword: string;
   tenant_id?: string; // Optional: super admins can specify tenant_id for the new user
+  permissions?: PermissionEntry[]; // Required when role is 'manager'
 }
+
+const ALLOWED_TAB_KEYS = [
+  'vehicles', 'rentals', 'pending_bookings', 'availability',
+  'customers', 'blocked_customers', 'messages',
+  'payments', 'invoices', 'fines',
+  'documents', 'reminders', 'reports', 'pl_dashboard',
+  'cms', 'audit_logs', 'settings',
+  'settings.general', 'settings.locations', 'settings.branding',
+  'settings.rental', 'settings.extras', 'settings.payments',
+  'settings.reminders', 'settings.templates', 'settings.integrations',
+  'settings.subscription',
+];
 
 Deno.serve(async (req) => {
   console.log('admin-create-user function called');
@@ -85,14 +103,38 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Only head_admin can create other admins or head_admins
-    const { email, name, role, temporaryPassword, tenant_id }: CreateUserRequest = await req.json();
+    // Only head_admin can create other admins, head_admins, or managers
+    const { email, name, role, temporaryPassword, tenant_id, permissions }: CreateUserRequest = await req.json();
 
-    if ((role === 'admin' || role === 'head_admin') && currentUserData.role !== 'head_admin' && !currentUserData.is_super_admin) {
+    if ((role === 'admin' || role === 'head_admin' || role === 'manager') && currentUserData.role !== 'head_admin' && !currentUserData.is_super_admin) {
       return new Response(
-        JSON.stringify({ error: 'Only head admin can create admin users' }),
+        JSON.stringify({ error: 'Only head admin can create admin or manager users' }),
         { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
+    }
+
+    // Validate manager permissions
+    if (role === 'manager') {
+      if (!permissions || !Array.isArray(permissions) || permissions.length === 0) {
+        return new Response(
+          JSON.stringify({ error: 'Manager role requires at least one permission' }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+      const invalidKeys = permissions.filter(p => !ALLOWED_TAB_KEYS.includes(p.tab_key));
+      if (invalidKeys.length > 0) {
+        return new Response(
+          JSON.stringify({ error: `Invalid tab keys: ${invalidKeys.map(k => k.tab_key).join(', ')}` }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+      const invalidLevels = permissions.filter(p => !['viewer', 'editor'].includes(p.access_level));
+      if (invalidLevels.length > 0) {
+        return new Response(
+          JSON.stringify({ error: 'Invalid access levels. Must be "viewer" or "editor"' }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
     }
 
     // Determine tenant_id for the new user
@@ -256,6 +298,32 @@ Deno.serve(async (req) => {
         JSON.stringify({ error: 'Failed to create user profile' }),
         { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
+    }
+
+    // Insert manager permissions if role is manager
+    if (role === 'manager' && permissions && permissions.length > 0) {
+      const permissionRows = permissions.map(p => ({
+        app_user_id: appUser.id,
+        tab_key: p.tab_key,
+        access_level: p.access_level,
+      }));
+
+      const { error: permError } = await supabaseAdmin
+        .from('manager_permissions')
+        .insert(permissionRows);
+
+      if (permError) {
+        console.error('Failed to insert manager permissions:', permError);
+        // Cleanup: delete the app_users record we just created
+        await supabaseAdmin.from('app_users').delete().eq('id', appUser.id);
+        if (!isExistingUser) {
+          await supabaseAdmin.auth.admin.deleteUser(authUserId);
+        }
+        return new Response(
+          JSON.stringify({ error: 'Failed to set manager permissions' }),
+          { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
     }
 
     // Log the action (tenant_id is auto-set by trigger, but we can be explicit)

@@ -39,9 +39,24 @@ Deno.serve(async (req) => {
     const mode = await getSubscriptionStripeMode(supabase, tenantId);
     const stripe = getSubscriptionStripeClient(mode);
 
+    // Create a portal configuration that only allows payment method updates
+    // Cancellation is handled via support email, not self-service
+    const configuration = await stripe.billingPortal.configurations.create({
+      business_profile: {
+        headline: "Manage your payment method",
+      },
+      features: {
+        payment_method_update: { enabled: true },
+        subscription_cancel: { enabled: false },
+        subscription_update: { enabled: false },
+        invoice_history: { enabled: true },
+      },
+    });
+
     const session = await stripe.billingPortal.sessions.create({
       customer: tenant.stripe_subscription_customer_id,
       return_url: returnUrl,
+      configuration: configuration.id,
     });
 
     console.log(`Created billing portal session for tenant ${tenantId} (mode: ${mode})`);

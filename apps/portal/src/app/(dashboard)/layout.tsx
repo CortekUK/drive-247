@@ -5,6 +5,7 @@ import { useRouter, usePathname } from "next/navigation";
 import { useAuth } from "@/stores/auth-store";
 import { useTenantSubscription } from "@/hooks/use-tenant-subscription";
 import { useSubscriptionPlans } from "@/hooks/use-subscription-plans";
+import { useManagerPermissions } from "@/hooks/use-manager-permissions";
 import { SubscriptionGateDialog } from "@/components/subscription/subscription-gate-dialog";
 import { ThemeToggle } from "@/components/shared/layout/theme-toggle";
 import { HeaderSearch } from "@/components/shared/layout/header-search";
@@ -62,6 +63,7 @@ export default function DashboardLayout({
   const pathname = usePathname();
   const { user, appUser, loading } = useAuth();
   const { isSubscribed, isLoading: subscriptionLoading } = useTenantSubscription();
+  const { isManager, canAccessRoute, isLoading: permissionsLoading } = useManagerPermissions();
   const { data: plans, isLoading: plansLoading } = useSubscriptionPlans();
   const isSubscriptionPage = pathname === "/subscription" || pathname?.startsWith("/settings");
   const hasActivePlans = !!plans && plans.length > 0;
@@ -82,6 +84,13 @@ export default function DashboardLayout({
       }
     }
   }, [user, appUser, loading, router, pathname]);
+
+  // Manager route protection
+  useEffect(() => {
+    if (!loading && !permissionsLoading && isManager && !canAccessRoute(pathname)) {
+      router.replace('/');
+    }
+  }, [loading, permissionsLoading, isManager, canAccessRoute, pathname, router]);
 
   // Show loading skeleton while checking auth
   if (loading) {

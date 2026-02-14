@@ -9,6 +9,7 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { UserPlus } from "lucide-react";
 import { addUserSchema, type AddUserFormValues } from "@/client-schemas/users/add-user";
+import { ManagerPermissionsSelector } from "@/components/users/manager-permissions-selector";
 
 interface AddUserDialogProps {
   open: boolean;
@@ -24,10 +25,18 @@ export function AddUserDialog({ open, onOpenChange, onSubmit, isLoading }: AddUs
       name: "",
       email: "",
       role: undefined,
+      permissions: [],
     },
   });
 
+  const watchRole = form.watch("role");
+  const isManager = watchRole === "manager";
+
   const handleSubmit = (data: AddUserFormValues) => {
+    // Strip permissions for non-manager roles
+    if (data.role !== 'manager') {
+      data.permissions = undefined;
+    }
     onSubmit(data);
   };
 
@@ -40,7 +49,7 @@ export function AddUserDialog({ open, onOpenChange, onSubmit, isLoading }: AddUs
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogContent className="sm:max-w-[425px]">
+      <DialogContent className={isManager ? "sm:max-w-[650px] max-h-[90vh] overflow-y-auto" : "sm:max-w-[425px]"}>
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <UserPlus className="h-5 w-5 text-primary" />
@@ -94,6 +103,7 @@ export function AddUserDialog({ open, onOpenChange, onSubmit, isLoading }: AddUs
                     </FormControl>
                     <SelectContent>
                       <SelectItem value="admin">Admin - Full access except user management</SelectItem>
+                      <SelectItem value="manager">Manager - Custom tab access</SelectItem>
                       <SelectItem value="ops">Operations - Day-to-day operations</SelectItem>
                       <SelectItem value="viewer">Viewer - Read-only access</SelectItem>
                     </SelectContent>
@@ -102,6 +112,25 @@ export function AddUserDialog({ open, onOpenChange, onSubmit, isLoading }: AddUs
                 </FormItem>
               )}
             />
+
+            {isManager && (
+              <FormField
+                control={form.control}
+                name="permissions"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Tab Permissions <span className="text-red-500">*</span></FormLabel>
+                    <FormControl>
+                      <ManagerPermissionsSelector
+                        value={field.value || []}
+                        onChange={field.onChange}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            )}
 
             <DialogFooter className="pt-4">
               <Button

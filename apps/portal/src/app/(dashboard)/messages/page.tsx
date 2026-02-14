@@ -3,10 +3,12 @@
 import { useState } from "react";
 import { ChannelList, ChatWindow, BulkMessageModal } from "@/components/chat";
 import type { ChatChannel } from "@/hooks/use-chat-channels";
+import { useManagerPermissions } from "@/hooks/use-manager-permissions";
 
 export default function MessagesPage() {
   const [selectedChannel, setSelectedChannel] = useState<ChatChannel | null>(null);
   const [bulkMessageOpen, setBulkMessageOpen] = useState(false);
+  const { canEdit } = useManagerPermissions();
 
   const handleSelectChannel = (channel: ChatChannel) => {
     setSelectedChannel(channel);
@@ -21,7 +23,7 @@ export default function MessagesPage() {
           <ChannelList
             selectedChannelId={selectedChannel?.id || null}
             onSelectChannel={handleSelectChannel}
-            onBulkMessage={() => setBulkMessageOpen(true)}
+            onBulkMessage={canEdit('messages') ? () => setBulkMessageOpen(true) : undefined}
           />
         </div>
 

@@ -17,6 +17,7 @@ import {
   Loader2,
   Settings,
   RotateCcw,
+  Eye,
 } from "lucide-react";
 import {
   AlertDialog,
@@ -33,6 +34,7 @@ import { SiteSettingsEditor } from "@/components/website-content/site-settings-e
 import { VersionHistoryDialog } from "@/components/website-content/version-history-dialog";
 import type { LogoContent, SiteContactContent, SocialLinksContent, FooterContent } from "@/types/cms";
 import { CMS_DEFAULTS } from "@/constants/website-content";
+import { useManagerPermissions } from "@/hooks/use-manager-permissions";
 
 export default function CMSSiteSettingsEditor() {
   const router = useRouter();
@@ -41,6 +43,7 @@ export default function CMSSiteSettingsEditor() {
   const { updateSection, isUpdating } = useCMSPageSections("site-settings");
   const [versionHistoryOpen, setVersionHistoryOpen] = useState(false);
   const [isResetting, setIsResetting] = useState(false);
+  const { canEdit } = useManagerPermissions();
 
   const handleResetToDefaults = async () => {
     setIsResetting(true);
@@ -154,43 +157,54 @@ export default function CMSSiteSettingsEditor() {
           </div>
         </div>
         <div className="flex items-center gap-2">
-          <AlertDialog>
-            <AlertDialogTrigger asChild>
-              <Button variant="outline" disabled={isResetting}>
-                {isResetting ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <RotateCcw className="h-4 w-4 mr-2" />}
-                Set to Default
-              </Button>
-            </AlertDialogTrigger>
-            <AlertDialogContent>
-              <AlertDialogHeader>
-                <AlertDialogTitle>Reset to Default Content?</AlertDialogTitle>
-                <AlertDialogDescription>
-                  This will replace all Site Settings with Drive 247 default content.
-                  This action cannot be undone, but you can restore previous versions from the History.
-                </AlertDialogDescription>
-              </AlertDialogHeader>
-              <AlertDialogFooter>
-                <AlertDialogCancel>Cancel</AlertDialogCancel>
-                <AlertDialogAction onClick={handleResetToDefaults}>
-                  Reset to Defaults
-                </AlertDialogAction>
-              </AlertDialogFooter>
-            </AlertDialogContent>
-          </AlertDialog>
+          {canEdit('cms') && (
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <Button variant="outline" disabled={isResetting}>
+                  {isResetting ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <RotateCcw className="h-4 w-4 mr-2" />}
+                  Set to Default
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Reset to Default Content?</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    This will replace all Site Settings with Drive 247 default content.
+                    This action cannot be undone, but you can restore previous versions from the History.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                  <AlertDialogAction onClick={handleResetToDefaults}>
+                    Reset to Defaults
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+          )}
           <Button variant="outline" onClick={() => setVersionHistoryOpen(true)}>
             <History className="h-4 w-4 mr-2" />
             History
           </Button>
-          <Button onClick={handlePublish} disabled={isPublishing || page.status === "published"}>
-            {isPublishing ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Upload className="h-4 w-4 mr-2" />}
-            {page.status === "published" ? "Published" : "Publish"}
-          </Button>
+          {canEdit('cms') && (
+            <Button onClick={handlePublish} disabled={isPublishing || page.status === "published"}>
+              {isPublishing ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Upload className="h-4 w-4 mr-2" />}
+              {page.status === "published" ? "Published" : "Publish"}
+            </Button>
+          )}
         </div>
       </div>
 
       {/* Editor */}
       <Card>
         <CardContent className="pt-6">
+          {!canEdit('cms') && (
+            <div className="mb-4 p-3 bg-muted/50 border rounded-lg flex items-center gap-2 text-sm text-muted-foreground">
+              <Eye className="h-4 w-4 shrink-0" />
+              You have view-only access to website content.
+            </div>
+          )}
+          <div className={!canEdit('cms') ? "pointer-events-none select-none" : ""}>
           <SiteSettingsEditor
             logo={logoContent}
             contact={contactContent}
@@ -202,6 +216,7 @@ export default function CMSSiteSettingsEditor() {
             onSaveFooter={(content) => updateSection({ sectionKey: "footer", content })}
             isSaving={isUpdating}
           />
+          </div>
         </CardContent>
       </Card>
 

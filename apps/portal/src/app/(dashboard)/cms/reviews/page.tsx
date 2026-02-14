@@ -21,12 +21,14 @@ import {
   Search,
   Star,
   Plus,
+  Eye,
 } from "lucide-react";
 import { HeroSectionEditor } from "@/components/website-content/hero-section-editor";
 import { FeedbackCTAEditor } from "@/components/website-content/feedback-cta-editor";
 import { SEOEditor } from "@/components/website-content/seo-editor";
 import { VersionHistoryDialog } from "@/components/website-content/version-history-dialog";
 import { TestimonialsManager, TestimonialsManagerRef } from "@/components/testimonials/testimonials-manager";
+import { useManagerPermissions } from "@/hooks/use-manager-permissions";
 import type {
   HeroContent,
   FeedbackCTAContent,
@@ -41,6 +43,7 @@ export default function CMSReviewsEditor() {
   const [activeTab, setActiveTab] = useState("hero");
   const [versionHistoryOpen, setVersionHistoryOpen] = useState(false);
   const testimonialsRef = useRef<TestimonialsManagerRef>(null);
+  const { canEdit } = useManagerPermissions();
 
   if (isLoading) {
     return (
@@ -136,23 +139,31 @@ export default function CMSReviewsEditor() {
             <History className="h-4 w-4 mr-2" />
             History
           </Button>
-          <Button
-            onClick={handlePublish}
-            disabled={isPublishing || page.status === "published"}
-          >
-            {isPublishing ? (
-              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-            ) : (
-              <Upload className="h-4 w-4 mr-2" />
-            )}
-            {page.status === "published" ? "Published" : "Publish"}
-          </Button>
+          {canEdit('cms') && (
+            <Button
+              onClick={handlePublish}
+              disabled={isPublishing || page.status === "published"}
+            >
+              {isPublishing ? (
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+              ) : (
+                <Upload className="h-4 w-4 mr-2" />
+              )}
+              {page.status === "published" ? "Published" : "Publish"}
+            </Button>
+          )}
         </div>
       </div>
 
       {/* Editor Tabs */}
       <Card>
         <CardContent className="pt-6">
+          {!canEdit('cms') && (
+            <div className="mb-4 p-3 bg-muted/50 border rounded-lg flex items-center gap-2 text-sm text-muted-foreground">
+              <Eye className="h-4 w-4 shrink-0" />
+              You have view-only access to website content.
+            </div>
+          )}
           <Tabs value={activeTab} onValueChange={setActiveTab}>
             <TabsList className="grid w-full grid-cols-4">
               <TabsTrigger value="hero" className="flex items-center gap-2">
@@ -173,6 +184,7 @@ export default function CMSReviewsEditor() {
               </TabsTrigger>
             </TabsList>
 
+            <div className={!canEdit('cms') ? "pointer-events-none select-none" : ""}>
             <div className="mt-6">
               <TabsContent value="hero" className="mt-0">
                 <HeroSectionEditor
@@ -218,6 +230,7 @@ export default function CMSReviewsEditor() {
                   <TestimonialsManager ref={testimonialsRef} />
                 </div>
               </TabsContent>
+            </div>
             </div>
           </Tabs>
         </CardContent>

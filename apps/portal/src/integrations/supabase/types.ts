@@ -2925,6 +2925,41 @@ export type Database = {
           },
         ]
       }
+      manager_permissions: {
+        Row: {
+          id: string
+          app_user_id: string
+          tab_key: string
+          access_level: string
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          app_user_id: string
+          tab_key: string
+          access_level?: string
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          app_user_id?: string
+          tab_key?: string
+          access_level?: string
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "manager_permissions_app_user_id_fkey"
+            columns: ["app_user_id"]
+            isOneToOne: false
+            referencedRelation: "app_users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       maintenance_runs: {
         Row: {
           completed_at: string | null

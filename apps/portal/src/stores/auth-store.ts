@@ -9,7 +9,7 @@ export interface AppUser {
   auth_user_id: string;
   email: string;
   name: string | null;
-  role: 'head_admin' | 'admin' | 'ops' | 'viewer';
+  role: 'head_admin' | 'admin' | 'manager' | 'ops' | 'viewer';
   is_active: boolean;
   must_change_password: boolean;
   is_super_admin?: boolean;

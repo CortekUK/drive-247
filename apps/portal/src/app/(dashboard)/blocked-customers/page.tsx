@@ -31,6 +31,7 @@ import { useCustomerBlockingActions, useBlockedIdentities } from "@/hooks/use-cu
 import { format } from "date-fns";
 import { useToast } from "@/hooks/use-toast";
 import { useTenant } from "@/contexts/TenantContext";
+import { useManagerPermissions } from "@/hooks/use-manager-permissions";
 
 interface BlockedCustomer {
   id: string;
@@ -66,6 +67,7 @@ const BlockedCustomers = () => {
   const [customerComboboxOpen, setCustomerComboboxOpen] = useState(false);
 
   const { unblockCustomer, addBlockedIdentity, removeBlockedIdentity, isLoading } = useCustomerBlockingActions();
+  const { canEdit } = useManagerPermissions();
 
   // Fetch all customers for combobox (with license/ID for pre-fill)
   const { data: allCustomers = [] } = useQuery({
@@ -235,10 +237,12 @@ const BlockedCustomers = () => {
             Manage blocked customers and identity blacklist
           </p>
         </div>
-        <Button onClick={() => setAddIdentityDialogOpen(true)} className="w-full sm:w-auto">
-          <Plus className="h-4 w-4 mr-2" />
-          Add to Blocklist
-        </Button>
+        {canEdit('blocked_customers') && (
+          <Button onClick={() => setAddIdentityDialogOpen(true)} className="w-full sm:w-auto">
+            <Plus className="h-4 w-4 mr-2" />
+            Add to Blocklist
+          </Button>
+        )}
       </div>
 
       {/* Stats Cards */}
@@ -347,16 +351,18 @@ const BlockedCustomers = () => {
                             <Eye className="h-4 w-4 mr-1" />
                             View
                           </Button>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            className="flex-1 text-green-600 border-green-600 hover:bg-green-50"
-                            onClick={() => setUnblockCustomerDialog({ open: true, id: customer.id, name: customer.name })}
-                            disabled={isLoading}
-                          >
-                            <CheckCircle className="h-4 w-4 mr-1" />
-                            Unblock
-                          </Button>
+                          {canEdit('blocked_customers') && (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="flex-1 text-green-600 border-green-600 hover:bg-green-50"
+                              onClick={() => setUnblockCustomerDialog({ open: true, id: customer.id, name: customer.name })}
+                              disabled={isLoading}
+                            >
+                              <CheckCircle className="h-4 w-4 mr-1" />
+                              Unblock
+                            </Button>
+                          )}
                         </div>
                       </div>
                     ))}
@@ -425,16 +431,18 @@ const BlockedCustomers = () => {
                                 <Eye className="h-4 w-4 mr-1" />
                                 View
                               </Button>
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={() => setUnblockCustomerDialog({ open: true, id: customer.id, name: customer.name })}
-                                disabled={isLoading}
-                                className="text-green-600 border-green-600 hover:bg-green-50"
-                              >
-                                <CheckCircle className="h-4 w-4 mr-1" />
-                                Unblock
-                              </Button>
+                              {canEdit('blocked_customers') && (
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => setUnblockCustomerDialog({ open: true, id: customer.id, name: customer.name })}
+                                  disabled={isLoading}
+                                  className="text-green-600 border-green-600 hover:bg-green-50"
+                                >
+                                  <CheckCircle className="h-4 w-4 mr-1" />
+                                  Unblock
+                                </Button>
+                              )}
                             </div>
                           </TableCell>
                         </TableRow>
@@ -485,14 +493,16 @@ const BlockedCustomers = () => {
             <div className="text-center py-8">
               <CreditCard className="h-12 w-12 mx-auto text-muted-foreground/30 mb-4" />
               <p className="text-muted-foreground">No blocked identities found</p>
-              <Button
-                variant="outline"
-                className="mt-4"
-                onClick={() => setAddIdentityDialogOpen(true)}
-              >
-                <Plus className="h-4 w-4 mr-2" />
-                Add First Identity
-              </Button>
+              {canEdit('blocked_customers') && (
+                <Button
+                  variant="outline"
+                  className="mt-4"
+                  onClick={() => setAddIdentityDialogOpen(true)}
+                >
+                  <Plus className="h-4 w-4 mr-2" />
+                  Add First Identity
+                </Button>
+              )}
             </div>
           ) : (
             <>
@@ -524,16 +534,18 @@ const BlockedCustomers = () => {
                         <div className="text-sm">
                           <span className="text-muted-foreground">Added:</span> {format(new Date(identity.created_at), "MMM dd, yyyy")}
                         </div>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          className="w-full text-destructive border-destructive hover:bg-destructive/10"
-                          onClick={() => setRemoveIdentityDialog({ open: true, id: identity.id, number: identity.identity_number })}
-                          disabled={isLoading}
-                        >
-                          <Trash2 className="h-4 w-4 mr-1" />
-                          Remove from Blocklist
-                        </Button>
+                        {canEdit('blocked_customers') && (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="w-full text-destructive border-destructive hover:bg-destructive/10"
+                            onClick={() => setRemoveIdentityDialog({ open: true, id: identity.id, number: identity.identity_number })}
+                            disabled={isLoading}
+                          >
+                            <Trash2 className="h-4 w-4 mr-1" />
+                            Remove from Blocklist
+                          </Button>
+                        )}
                       </div>
                     ))}
                   </div>
@@ -581,16 +593,18 @@ const BlockedCustomers = () => {
                             {format(new Date(identity.created_at), "MMM dd, yyyy")}
                           </TableCell>
                           <TableCell className="text-right">
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => setRemoveIdentityDialog({ open: true, id: identity.id, number: identity.identity_number })}
-                              disabled={isLoading}
-                              className="text-destructive border-destructive hover:bg-destructive/10"
-                            >
-                              <Trash2 className="h-4 w-4 mr-1" />
-                              Remove
-                            </Button>
+                            {canEdit('blocked_customers') && (
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => setRemoveIdentityDialog({ open: true, id: identity.id, number: identity.identity_number })}
+                                disabled={isLoading}
+                                className="text-destructive border-destructive hover:bg-destructive/10"
+                              >
+                                <Trash2 className="h-4 w-4 mr-1" />
+                                Remove
+                              </Button>
+                            )}
                           </TableCell>
                         </TableRow>
                       ))}
