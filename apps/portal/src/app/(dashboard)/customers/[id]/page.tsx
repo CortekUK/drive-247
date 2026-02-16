@@ -15,7 +15,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { ArrowLeft, CreditCard, FileText, Plus, Upload, Car, AlertTriangle, Eye, Download, Edit, Trash2, User, Mail, Phone, CalendarPlus, DollarSign, FolderOpen, Receipt, CreditCard as PaymentIcon, Ban, CheckCircle, Users } from "lucide-react";
+import { ArrowLeft, CreditCard, FileText, Plus, Upload, Car, AlertTriangle, Eye, Download, Edit, Trash2, User, Mail, Phone, CalendarPlus, DollarSign, FolderOpen, Receipt, CreditCard as PaymentIcon, Ban, CheckCircle, Users, ShieldCheck } from "lucide-react";
 import { MetricItem, MetricDivider } from "@/components/vehicles/metric-card";
 import { useCustomerBlockingActions } from "@/hooks/use-customer-blocking";
 import { TruncatedCell } from "@/components/shared/data-display/truncated-cell";
@@ -283,69 +283,65 @@ const CustomerDetail = () => {
 
       {/* Customer Details */}
       <Card className="shadow-card rounded-lg">
-        <CardHeader className="pb-3">
-          <CardTitle className="text-lg font-semibold flex items-center gap-2">
-            <User className="h-5 w-5" />
-            Customer Details
-          </CardTitle>
-          <CardDescription>Basic customer information and account status</CardDescription>
+        <CardHeader className="pb-2 pt-4 px-5">
+          <div className="flex items-center justify-between">
+            <CardTitle className="text-base font-semibold flex items-center gap-2">
+              <User className="h-4 w-4" />
+              Customer Details
+            </CardTitle>
+            <Badge variant="outline" className="text-[10px] font-medium text-foreground border-foreground/20 bg-foreground/5 px-1.5 py-0.5">
+              <ShieldCheck className="h-3 w-3 mr-1 text-green-500" />
+              Sourced from ID verification
+            </Badge>
+          </div>
         </CardHeader>
-        <CardContent className="pt-6">
-          <div className="space-y-6">
+        <CardContent className="pt-3 pb-4 px-5">
+          <div className="space-y-3">
             {/* Contact Information */}
-            <div>
-              <h3 className="text-sm font-semibold text-muted-foreground mb-3 flex items-center gap-2">
-                <User className="h-4 w-4" />
-                Contact Information
-              </h3>
-              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-x-8 gap-y-3">
-                <MetricItem label="Name" value={customer.name} />
-                {customer.email && <MetricItem label="Email" value={customer.email} />}
-                {customer.phone && <MetricItem label="Phone" value={customer.phone} />}
-                <MetricItem label="Type" value={customer.customer_type} />
-                {customer.license_number && <MetricItem label="License Number" value={customer.license_number} />}
-                {customer.id_number && <MetricItem label="ID Number" value={customer.id_number} />}
-                {customer.whatsapp_opt_in && (
-                  <div className="flex flex-col">
-                    <span className="text-xs text-muted-foreground mb-1">WhatsApp Opt-in</span>
-                    <Badge variant="outline" className="w-fit">
-                      <CheckCircle className="h-3 w-3 mr-1" />
-                      Yes
-                    </Badge>
-                  </div>
-                )}
-              </div>
+            <div className="grid grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-x-6 gap-y-2">
+              <MetricItem label="Name" value={customer.name} />
+              {customer.email && <MetricItem label="Email" value={customer.email} />}
+              {customer.phone && <MetricItem label="Phone" value={customer.phone} />}
+              <MetricItem label="Type" value={customer.customer_type} />
+              {customer.license_number && <MetricItem label="License No." value={customer.license_number} />}
+              {customer.id_number && <MetricItem label="ID Number" value={customer.id_number} />}
+              {customer.whatsapp_opt_in && (
+                <div className="flex flex-col">
+                  <span className="text-xs text-muted-foreground mb-0.5">WhatsApp</span>
+                  <Badge variant="outline" className="w-fit text-[10px] px-1.5 py-0">
+                    <CheckCircle className="h-2.5 w-2.5 mr-0.5" />
+                    Yes
+                  </Badge>
+                </div>
+              )}
             </div>
 
             {/* Account & Statistics */}
             <MetricDivider />
-            <div>
-              <h3 className="text-sm font-semibold text-muted-foreground mb-3">Account & Statistics</h3>
-              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-x-8 gap-y-3">
-                <div className="flex flex-col">
-                  <span className="text-xs text-muted-foreground mb-1">Account Status</span>
-                  {customerBalanceData ? (
-                    <CustomerBalanceChip
-                      balance={customerBalanceData.balance}
-                      status={customerBalanceData.status}
-                      totalCharges={customerBalanceData.totalCharges}
-                      totalPayments={customerBalanceData.totalPayments}
-                    />
-                  ) : (
-                    <Badge variant="secondary">Loading...</Badge>
-                  )}
-                </div>
-                <MetricItem label="Active Rentals" value={activeRentalsCount || 0} />
-                <MetricItem label="Total Payments" value={paymentStats?.paymentCount || 0} />
-                {paymentStats?.totalPayments != null && paymentStats.totalPayments > 0 && (
-                  <MetricItem label="Payment Amount" value={paymentStats.totalPayments} isAmount />
+            <div className="grid grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-x-6 gap-y-2">
+              <div className="flex flex-col">
+                <span className="text-xs text-muted-foreground mb-0.5">Balance</span>
+                {customerBalanceData ? (
+                  <CustomerBalanceChip
+                    balance={customerBalanceData.balance}
+                    status={customerBalanceData.status}
+                    totalCharges={customerBalanceData.totalCharges}
+                    totalPayments={customerBalanceData.totalPayments}
+                  />
+                ) : (
+                  <Badge variant="secondary">Loading...</Badge>
                 )}
-                <MetricItem label="Open Fines" value={fineStats?.openFines || 0} />
-                {fineStats?.openFineAmount != null && fineStats.openFineAmount > 0 && (
-                  <MetricItem label="Fine Amount" value={fineStats.openFineAmount} isAmount />
-                )}
-                <MetricItem label="Documents" value={documents?.length || 0} />
               </div>
+              <MetricItem label="Active Rentals" value={activeRentalsCount || 0} />
+              <MetricItem label="Payments" value={paymentStats?.paymentCount || 0} />
+              {paymentStats?.totalPayments != null && paymentStats.totalPayments > 0 && (
+                <MetricItem label="Paid Amount" value={paymentStats.totalPayments} isAmount />
+              )}
+              <MetricItem label="Open Fines" value={fineStats?.openFines || 0} />
+              {fineStats?.openFineAmount != null && fineStats.openFineAmount > 0 && (
+                <MetricItem label="Fine Amount" value={fineStats.openFineAmount} isAmount />
+              )}
+              <MetricItem label="Documents" value={documents?.length || 0} />
             </div>
 
             {/* Next of Kin Information */}
@@ -353,18 +349,18 @@ const CustomerDetail = () => {
               <>
                 <MetricDivider />
                 <div>
-                  <h3 className="text-sm font-semibold text-muted-foreground mb-3 flex items-center gap-2">
-                    <Users className="h-4 w-4" />
-                    Next of Kin Information
+                  <h3 className="text-xs font-semibold text-muted-foreground mb-2 flex items-center gap-1.5">
+                    <Users className="h-3.5 w-3.5" />
+                    Next of Kin
                   </h3>
-                  <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-x-8 gap-y-3">
+                  <div className="grid grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-x-6 gap-y-2">
                     {customer.nok_full_name && <MetricItem label="Name" value={customer.nok_full_name} />}
                     {customer.nok_relationship && <MetricItem label="Relationship" value={customer.nok_relationship} />}
                     {customer.nok_phone && <MetricItem label="Phone" value={customer.nok_phone} />}
                     {customer.nok_email && <MetricItem label="Email" value={customer.nok_email} />}
                     {customer.nok_address && (
                       <div className="col-span-2 flex flex-col">
-                        <span className="text-xs text-muted-foreground mb-1">Address</span>
+                        <span className="text-xs text-muted-foreground mb-0.5">Address</span>
                         <span className="text-sm font-semibold">{customer.nok_address}</span>
                       </div>
                     )}

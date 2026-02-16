@@ -3008,8 +3008,15 @@ const MultiStepBookingWidget = () => {
               displayStep,
               label,
               fullLabel
-            }, index, arr) => <div key={step} className="flex flex-col items-center flex-1 relative z-10">
-                <div className={cn("bk-step__node flex items-center justify-center w-10 h-10 sm:w-12 sm:h-12 md:w-14 md:h-14 rounded-full border-2 transition-all", currentStep >= step ? 'bg-primary border-primary shadow-glow' : 'border-border bg-muted', currentStep === step && 'bk-step__node--active shadow-glow')} aria-label={`Step ${displayStep} of ${arr.length}: ${fullLabel}`} aria-current={currentStep === step ? "step" : undefined}>
+            }, index, arr) => {
+              const isCompleted = currentStep > step;
+              const isClickable = currentStep !== step;
+              return <div
+                key={step}
+                className={cn("flex flex-col items-center flex-1 relative z-10", isClickable && "cursor-pointer group")}
+                onClick={() => { if (isClickable) setCurrentStep(step); }}
+              >
+                <div className={cn("bk-step__node flex items-center justify-center w-10 h-10 sm:w-12 sm:h-12 md:w-14 md:h-14 rounded-full border-2 transition-all", currentStep >= step ? 'bg-primary border-primary shadow-glow' : 'border-border bg-muted', currentStep === step && 'bk-step__node--active shadow-glow', isClickable && 'group-hover:opacity-80')} aria-label={`Step ${displayStep} of ${arr.length}: ${fullLabel}`} aria-current={currentStep === step ? "step" : undefined}>
                   {currentStep > step ? <Check className="w-4 h-4 sm:w-5 sm:h-5 md:w-6 md:h-6 text-primary-foreground" /> : <span className={cn("text-base sm:text-lg md:text-xl font-bold", currentStep === step ? "text-primary-foreground" : "text-muted-foreground")}>
                     {displayStep}
                   </span>}
@@ -3019,7 +3026,8 @@ const MultiStepBookingWidget = () => {
                   <span className="sm:hidden">{label}</span>
                 </span>
                 {index < arr.length - 1 && <div className={cn("bk-step__line absolute top-5 sm:top-6 md:top-7 left-[calc(50%+20px)] sm:left-[calc(50%+24px)] md:left-[calc(50%+28px)] w-[calc(100%-40px)] sm:w-[calc(100%-48px)] md:w-[calc(100%-56px)] h-0.5", currentStep > step ? 'bg-primary' : 'bg-border')} />}
-              </div>)}
+              </div>;
+            })}
           </div>
         </div>
 

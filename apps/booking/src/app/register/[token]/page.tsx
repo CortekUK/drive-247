@@ -33,7 +33,7 @@ const registrationSchema = z.object({
 
 type RegistrationFormData = z.infer<typeof registrationSchema>;
 
-type PageStep = 'loading' | 'error' | 'form' | 'verification' | 'submitting' | 'success';
+type PageStep = 'loading' | 'error' | 'form' | 'submitting' | 'success';
 
 interface TenantInfo {
   tenantId: string;
@@ -52,11 +52,11 @@ export default function RegisterPage() {
   const [error, setError] = useState('');
   const [tenantInfo, setTenantInfo] = useState<TenantInfo | null>(null);
   const [verificationSessionId, setVerificationSessionId] = useState<string | null>(null);
-  const [formData, setFormData] = useState<RegistrationFormData | null>(null);
   const [creatingSession, setCreatingSession] = useState(false);
   const [aiSessionData, setAiSessionData] = useState<{ sessionId: string; qrUrl: string; expiresAt: Date } | null>(null);
   const [timeRemaining, setTimeRemaining] = useState(0);
   const [isPolling, setIsPolling] = useState(false);
+  const [verificationDone, setVerificationDone] = useState(false);
   const pollIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
   const form = useForm<RegistrationFormData>({
@@ -93,13 +93,16 @@ export default function RegisterPage() {
     }
   };
 
-  const onFormSubmit = (data: RegistrationFormData) => {
-    setFormData(data);
-    setPageStep('verification');
-  };
-
   const handleStartVerification = async () => {
-    if (!formData || !tenantInfo) return;
+    // Validate form first
+    const isValid = await form.trigger();
+    if (!isValid) {
+      toast.error('Please fill in all required fields first');
+      return;
+    }
+
+    const formData = form.getValues();
+    if (!tenantInfo) return;
     setCreatingSession(true);
     try {
       const { data, error } = await supabase.functions.invoke('create-ai-verification-session', {
@@ -155,6 +158,7 @@ export default function RegisterPage() {
       if (data.status === 'completed') {
         setIsPolling(false);
         setVerificationSessionId(aiSessionData.sessionId);
+        setVerificationDone(true);
         if (data.review_result === 'GREEN') {
           toast.success('Identity verified successfully!');
         } else if (data.review_result === 'RED') {
@@ -162,11 +166,9 @@ export default function RegisterPage() {
         } else {
           toast.info('Verification needs manual review');
         }
-        // Auto-submit registration
-        setTimeout(() => submitRegistration(formData!, aiSessionData.sessionId), 1500);
       }
     } catch {}
-  }, [aiSessionData, isPolling, formData]);
+  }, [aiSessionData, isPolling]);
 
   useEffect(() => {
     if (isPolling && aiSessionData) {
@@ -185,14 +187,7 @@ export default function RegisterPage() {
     return `${mins}:${secs.toString().padStart(2, '0')}`;
   };
 
-  const handleVerificationSkip = () => {
-    setIsPolling(false);
-    if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
-    setAiSessionData(null);
-    submitRegistration(formData!, null);
-  };
-
-  const submitRegistration = async (data: RegistrationFormData, vSessionId: string | null) => {
+  const handleSubmitRegistration = async (data: RegistrationFormData) => {
     setPageStep('submitting');
     try {
       const { data: result, error } = await supabase.functions.invoke('submit-customer-registration', {
@@ -201,7 +196,7 @@ export default function RegisterPage() {
           name: data.name,
           email: data.email,
           phone: data.phone,
-          verificationSessionId: vSessionId || undefined,
+          verificationSessionId: verificationSessionId || undefined,
         },
       });
 
@@ -279,140 +274,7 @@ export default function RegisterPage() {
     );
   }
 
-  // Verification step
-  if (pageStep === 'verification' && formData && tenantInfo) {
-    return (
-      <div className="min-h-screen bg-background">
-        <div className="container max-w-lg mx-auto px-4 py-8">
-          {/* Header */}
-          <div className="flex items-center justify-center gap-3 mb-6">
-            {tenantInfo.tenantLogo && (
-              <img src={tenantInfo.tenantLogo} alt="" className="h-8 object-contain" />
-            )}
-            <h1 className="text-lg font-semibold">{tenantInfo.tenantName}</h1>
-          </div>
-
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-lg">
-                <Shield className="h-5 w-5 text-primary" />
-                ID Verification
-              </CardTitle>
-              <CardDescription>Step 2 of 2 — Verify your identity using your phone</CardDescription>
-            </CardHeader>
-            <CardContent>
-              {!aiSessionData ? (
-                <div className="text-center space-y-4 py-6">
-                  <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center mx-auto">
-                    <Smartphone className="h-8 w-8 text-primary" />
-                  </div>
-                  <div>
-                    <h3 className="text-base font-semibold">Scan a QR Code to Verify</h3>
-                    <p className="text-sm text-muted-foreground mt-1">
-                      We'll generate a QR code you can scan with your phone to take photos of your ID and a selfie. This is optional but recommended.
-                    </p>
-                  </div>
-                  <div className="flex gap-3 justify-center">
-                    <Button variant="outline" onClick={handleVerificationSkip}>
-                      Skip
-                    </Button>
-                    <Button onClick={handleStartVerification} disabled={creatingSession}>
-                      {creatingSession ? (
-                        <>
-                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                          Generating...
-                        </>
-                      ) : (
-                        <>
-                          <Shield className="h-4 w-4 mr-2" />
-                          Start Verification
-                        </>
-                      )}
-                    </Button>
-                  </div>
-                </div>
-              ) : (
-                <div className="flex flex-col items-center space-y-6 py-4">
-                  {/* QR Code */}
-                  <div
-                    className="rounded-xl shadow-lg border-2 border-gray-200"
-                    style={{
-                      backgroundColor: '#FFFFFF',
-                      padding: '16px',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                    }}
-                  >
-                    <img
-                      src={`https://quickchart.io/qr?text=${encodeURIComponent(aiSessionData.qrUrl)}&size=280&margin=3&dark=000000&light=ffffff&ecLevel=M&format=png`}
-                      alt="Scan QR code to verify identity"
-                      width={280}
-                      height={280}
-                      style={{ display: 'block', imageRendering: 'pixelated' }}
-                    />
-                  </div>
-
-                  {/* Timer */}
-                  <div className="w-full space-y-2">
-                    <div className="flex items-center justify-between text-sm">
-                      <span className="text-muted-foreground flex items-center gap-1">
-                        <Clock className="h-4 w-4" />
-                        Time remaining
-                      </span>
-                      <span className={`font-mono font-medium ${timeRemaining < 60 ? 'text-destructive' : 'text-foreground'}`}>
-                        {formatTime(timeRemaining)}
-                      </span>
-                    </div>
-                    <Progress value={(timeRemaining / 900) * 100} className="h-2" />
-                  </div>
-
-                  {/* Waiting indicator */}
-                  <div className="flex items-center gap-2 px-4 py-2 bg-blue-50 text-blue-700 rounded-full text-sm dark:bg-blue-950 dark:text-blue-300">
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                    <span>Waiting for verification to complete...</span>
-                  </div>
-
-                  {/* Manual URL */}
-                  <div className="w-full space-y-2">
-                    <p className="text-xs text-center text-muted-foreground">
-                      Can't scan? Open this link on your phone:
-                    </p>
-                    <div className="flex items-center gap-2 p-2 bg-muted rounded-lg">
-                      <input
-                        type="text"
-                        readOnly
-                        value={aiSessionData.qrUrl}
-                        className="flex-1 bg-transparent text-xs truncate border-none focus:outline-none"
-                      />
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="shrink-0"
-                        onClick={() => {
-                          navigator.clipboard.writeText(aiSessionData.qrUrl);
-                          toast.success('Link copied to clipboard');
-                        }}
-                      >
-                        <Copy className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  </div>
-
-                  {/* Skip button */}
-                  <Button variant="outline" onClick={handleVerificationSkip}>
-                    Skip verification
-                  </Button>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        </div>
-      </div>
-    );
-  }
-
-  // Form step
+  // Single-page form + verification
   return (
     <div className="min-h-screen bg-background">
       <div className="container max-w-lg mx-auto px-4 py-8">
@@ -431,11 +293,11 @@ export default function RegisterPage() {
               Customer Registration
             </CardTitle>
             <CardDescription>
-              Fill out the form below to complete your registration. Step 1 of 2.
+              Fill out the form below and optionally verify your identity.
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <form onSubmit={form.handleSubmit(onFormSubmit)} className="space-y-4">
+            <form onSubmit={form.handleSubmit(handleSubmitRegistration)} className="space-y-4">
               {/* Name */}
               <div className="space-y-2">
                 <Label htmlFor="name">
@@ -493,10 +355,130 @@ export default function RegisterPage() {
                 </div>
               </div>
 
+              {/* ID Verification Section */}
+              <div className="border-t pt-4 mt-2">
+                <h3 className="text-sm font-semibold flex items-center gap-2 mb-3">
+                  <Shield className="h-4 w-4 text-primary" />
+                  ID Verification
+                  <span className="text-xs font-normal text-muted-foreground">(Optional)</span>
+                </h3>
+
+                {verificationDone ? (
+                  /* Verification complete */
+                  <div className="flex items-center gap-2 px-4 py-3 bg-green-500/10 border border-green-500/20 rounded-lg text-sm text-green-600 dark:text-green-400">
+                    <CheckCircle className="h-4 w-4 shrink-0" />
+                    <span>Identity verification completed</span>
+                  </div>
+                ) : !aiSessionData ? (
+                  /* Not started */
+                  <div className="flex items-center gap-3 p-4 rounded-lg border border-dashed border-muted-foreground/25">
+                    <div className="p-2 bg-primary/10 rounded-full shrink-0">
+                      <Smartphone className="h-5 w-5 text-primary" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium">Verify with your phone</p>
+                      <p className="text-xs text-muted-foreground">Scan a QR code to take photos of your ID and a selfie.</p>
+                    </div>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={handleStartVerification}
+                      disabled={creatingSession}
+                    >
+                      {creatingSession ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        'Verify'
+                      )}
+                    </Button>
+                  </div>
+                ) : (
+                  /* QR code active */
+                  <div className="space-y-4">
+                    <div className="flex flex-col items-center gap-4 p-4 rounded-lg border border-muted-foreground/20">
+                      {/* QR Code */}
+                      <div
+                        className="rounded-xl shadow-lg border-2 border-gray-200"
+                        style={{
+                          backgroundColor: '#FFFFFF',
+                          padding: '12px',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                        }}
+                      >
+                        <img
+                          src={`https://quickchart.io/qr?text=${encodeURIComponent(aiSessionData.qrUrl)}&size=220&margin=3&dark=000000&light=ffffff&ecLevel=M&format=png`}
+                          alt="Scan QR code to verify identity"
+                          width={220}
+                          height={220}
+                          style={{ display: 'block', imageRendering: 'pixelated' }}
+                        />
+                      </div>
+
+                      {/* Timer */}
+                      <div className="w-full space-y-1.5">
+                        <div className="flex items-center justify-between text-xs">
+                          <span className="text-muted-foreground flex items-center gap-1">
+                            <Clock className="h-3.5 w-3.5" />
+                            Time remaining
+                          </span>
+                          <span className={`font-mono font-medium ${timeRemaining < 60 ? 'text-destructive' : 'text-foreground'}`}>
+                            {formatTime(timeRemaining)}
+                          </span>
+                        </div>
+                        <Progress value={(timeRemaining / 900) * 100} className="h-1.5" />
+                      </div>
+
+                      {/* Waiting indicator */}
+                      <div className="flex items-center gap-2 px-3 py-1.5 bg-blue-50 text-blue-700 rounded-full text-xs dark:bg-blue-950 dark:text-blue-300">
+                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                        <span>Waiting for verification...</span>
+                      </div>
+
+                      {/* Manual URL */}
+                      <div className="w-full space-y-1">
+                        <p className="text-[10px] text-center text-muted-foreground">
+                          Can't scan? Open this link on your phone:
+                        </p>
+                        <div className="flex items-center gap-2 p-1.5 bg-muted rounded-lg">
+                          <input
+                            type="text"
+                            readOnly
+                            value={aiSessionData.qrUrl}
+                            className="flex-1 bg-transparent text-xs truncate border-none focus:outline-none"
+                          />
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            className="shrink-0 h-7 w-7 p-0"
+                            onClick={() => {
+                              navigator.clipboard.writeText(aiSessionData.qrUrl);
+                              toast.success('Link copied to clipboard');
+                            }}
+                          >
+                            <Copy className="h-3.5 w-3.5" />
+                          </Button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+
               {/* Submit */}
               <div className="pt-2">
-                <Button type="submit" className="w-full">
-                  Continue to ID Verification
+                <Button type="submit" className="w-full" disabled={isPolling}>
+                  {isPolling ? (
+                    <>
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      Verification in progress...
+                    </>
+                  ) : (
+                    'Complete Registration'
+                  )}
                 </Button>
               </div>
             </form>

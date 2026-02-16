@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation";
 import { Car, Users, FileText, CreditCard, LayoutDashboard, Bell, BarChart3, AlertCircle, TrendingUp, Settings, CalendarDays, Receipt, FolderOpen, UserX, Globe, History, Clock, UsersRound, MessageSquare, ChevronRight, Layers, Timer, Zap } from "lucide-react";
 import { Sidebar, SidebarContent, SidebarGroup, SidebarGroupContent, SidebarHeader, SidebarMenu, SidebarMenuButton, SidebarMenuItem, SidebarFooter, useSidebar } from "@/components/ui/sidebar";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { useReminderStats } from "@/hooks/use-reminders";
 import { useOrgSettings } from "@/hooks/use-org-settings";
 import { useTenantBranding } from "@/hooks/use-tenant-branding";
@@ -272,40 +273,84 @@ export function AppSidebar() {
 
           return (
             <SidebarGroup key={group.label} className="p-1.5 pb-0">
-              <Collapsible open={collapsed ? false : isOpen} onOpenChange={() => !collapsed && toggleGroup(group.label)}>
-                <SidebarMenu>
-                  <SidebarMenuItem>
-                    <CollapsibleTrigger asChild>
-                      <SidebarMenuButton
-                        tooltip={collapsed ? group.label : undefined}
-                        className={`h-8 w-full transition-all duration-200 ease-in-out ${
-                          hasActive && !isOpen ? "text-primary" : ""
-                        }`}
-                      >
-                        <group.icon className={`h-4 w-4 shrink-0 ${hasActive ? "text-primary" : ""}`} />
-                        <span className={`flex-1 text-left text-[13.5px] font-semibold transition-all duration-200 ease-in-out ${collapsed ? "sr-only opacity-0 w-0" : "opacity-100"}`}>
-                          {group.label}
+              {collapsed ? (
+                /* Collapsed: popover flyout with sub-items */
+                <Popover>
+                  <SidebarMenu>
+                    <SidebarMenuItem className="relative">
+                      <PopoverTrigger asChild>
+                        <SidebarMenuButton
+                          className={`h-8 w-full transition-all duration-200 ease-in-out ${hasActive ? "text-primary" : ""}`}
+                        >
+                          <group.icon className={`h-4 w-4 shrink-0 ${hasActive ? "text-primary" : ""}`} />
+                        </SidebarMenuButton>
+                      </PopoverTrigger>
+                      {totalBadge > 0 && (
+                        <span className="absolute -top-1 -right-1 inline-flex items-center justify-center w-4 h-4 text-[10px] font-bold leading-none text-white bg-destructive rounded-full">
+                          {totalBadge > 9 ? '9+' : totalBadge}
                         </span>
-                        {!collapsed && totalBadge > 0 && !isOpen && (
-                          <span className="inline-flex items-center justify-center px-1.5 py-0.5 text-[10px] font-semibold leading-none text-white bg-destructive rounded-full shrink-0">
-                            {totalBadge > 9 ? '9+' : totalBadge}
+                      )}
+                    </SidebarMenuItem>
+                  </SidebarMenu>
+                  <PopoverContent side="right" align="start" sideOffset={8} className="w-52 p-1.5">
+                    <p className="px-2 py-1.5 text-xs font-semibold text-muted-foreground">{group.label}</p>
+                    <div className="space-y-0.5">
+                      {group.items.map(item => (
+                        <Link
+                          key={item.href}
+                          href={item.href}
+                          className={`flex items-center justify-between gap-2 px-2 py-1.5 text-sm rounded-md transition-colors hover:bg-accent ${
+                            isActive(item.href) ? "bg-accent text-accent-foreground font-medium" : "text-foreground"
+                          }`}
+                        >
+                          <div className="flex items-center gap-2 min-w-0">
+                            <item.icon className="h-3.5 w-3.5 shrink-0" />
+                            <span className="truncate">{item.name}</span>
+                          </div>
+                          {item.badge !== undefined && item.badge > 0 && (
+                            <span className="inline-flex items-center justify-center px-1.5 py-0.5 text-[10px] font-semibold leading-none text-white bg-destructive rounded-full shrink-0">
+                              {item.badge}
+                            </span>
+                          )}
+                        </Link>
+                      ))}
+                    </div>
+                  </PopoverContent>
+                </Popover>
+              ) : (
+                /* Expanded: collapsible groups */
+                <Collapsible open={isOpen} onOpenChange={() => toggleGroup(group.label)}>
+                  <SidebarMenu>
+                    <SidebarMenuItem>
+                      <CollapsibleTrigger asChild>
+                        <SidebarMenuButton
+                          className={`h-8 w-full transition-all duration-200 ease-in-out ${
+                            hasActive && !isOpen ? "text-primary" : ""
+                          }`}
+                        >
+                          <group.icon className={`h-4 w-4 shrink-0 ${hasActive ? "text-primary" : ""}`} />
+                          <span className="flex-1 text-left text-[13.5px] font-semibold">
+                            {group.label}
                           </span>
-                        )}
-                        {!collapsed && (
+                          {totalBadge > 0 && !isOpen && (
+                            <span className="inline-flex items-center justify-center px-1.5 py-0.5 text-[10px] font-semibold leading-none text-white bg-destructive rounded-full shrink-0">
+                              {totalBadge > 9 ? '9+' : totalBadge}
+                            </span>
+                          )}
                           <ChevronRight className={`h-3.5 w-3.5 shrink-0 text-muted-foreground/50 transition-transform duration-200 ${isOpen ? "rotate-90" : ""}`} />
-                        )}
-                      </SidebarMenuButton>
-                    </CollapsibleTrigger>
-                  </SidebarMenuItem>
-                </SidebarMenu>
-                <CollapsibleContent>
-                  <SidebarGroupContent>
-                    <SidebarMenu className="relative ml-1">
-                      {group.items.map((item, i) => renderNavItem(item, i, group.items))}
-                    </SidebarMenu>
-                  </SidebarGroupContent>
-                </CollapsibleContent>
-              </Collapsible>
+                        </SidebarMenuButton>
+                      </CollapsibleTrigger>
+                    </SidebarMenuItem>
+                  </SidebarMenu>
+                  <CollapsibleContent>
+                    <SidebarGroupContent>
+                      <SidebarMenu className="relative ml-1">
+                        {group.items.map((item, i) => renderNavItem(item, i, group.items))}
+                      </SidebarMenu>
+                    </SidebarGroupContent>
+                  </CollapsibleContent>
+                </Collapsible>
+              )}
             </SidebarGroup>
           );
         })}

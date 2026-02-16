@@ -208,6 +208,10 @@ export const ActionItems = () => {
   const hasData = performanceData && (performanceData.totalRevenue > 0 || performanceData.totalExpenses > 0);
   const chartData = performanceData?.chartData || [];
 
+  // Card colors should reflect the trend, not just the metric category
+  const revenueIsGood = (performanceData?.revenueChange ?? 0) >= 0;
+  const expenseIsGood = (performanceData?.expenseChange ?? 0) <= 0;
+
   return (
     <div className="space-y-4">
       {/* Performance Overview */}
@@ -227,7 +231,7 @@ export const ActionItems = () => {
         <CardContent>
           {/* Summary Stats */}
           <div className="grid grid-cols-3 gap-4 mb-6">
-            <div className="p-4 rounded-lg bg-green-500/10 border border-green-500/20">
+            <div className={`p-4 rounded-lg ${revenueIsGood ? 'bg-green-500/10 border border-green-500/20' : 'bg-red-500/10 border border-red-500/20'}`}>
               <div className="flex items-center justify-between mb-2">
                 <span className="text-sm text-muted-foreground">Revenue</span>
                 {performanceData?.revenueChange !== 0 && (
@@ -237,11 +241,11 @@ export const ActionItems = () => {
                   </Badge>
                 )}
               </div>
-              <p className="text-2xl font-bold text-green-500">
+              <p className={`text-2xl font-bold ${revenueIsGood ? 'text-green-500' : 'text-red-500'}`}>
                 {formatCurrency(performanceData?.totalRevenue || 0, currencyCode)}
               </p>
             </div>
-            <div className="p-4 rounded-lg bg-red-500/10 border border-red-500/20">
+            <div className={`p-4 rounded-lg ${expenseIsGood ? 'bg-green-500/10 border border-green-500/20' : 'bg-red-500/10 border border-red-500/20'}`}>
               <div className="flex items-center justify-between mb-2">
                 <span className="text-sm text-muted-foreground">Expenses</span>
                 {performanceData?.expenseChange !== 0 && (
@@ -251,7 +255,7 @@ export const ActionItems = () => {
                   </Badge>
                 )}
               </div>
-              <p className="text-2xl font-bold text-red-500">
+              <p className={`text-2xl font-bold ${expenseIsGood ? 'text-green-500' : 'text-red-500'}`}>
                 {formatCurrency(performanceData?.totalExpenses || 0, currencyCode)}
               </p>
             </div>

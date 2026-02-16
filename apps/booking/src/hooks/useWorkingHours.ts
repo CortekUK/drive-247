@@ -184,7 +184,7 @@ export function useWorkingHours(forDate?: Date): WorkingHoursStatus {
     const openTime = todaySchedule.open;
     const closeTime = todaySchedule.close;
 
-    const isAlwaysOpen = tenant?.working_hours_always_open ?? false;
+    const isAlwaysOpen = tenant?.working_hours_always_open ?? true;
     const isWorkingHoursEnabled = tenant?.working_hours_enabled ?? true;
 
     // If always open or feature disabled, business is always open
@@ -313,7 +313,7 @@ export function getWorkingHoursForDate(
   // Get day of week from the calendar date itself, not timezone-converted
   const dayKey = getDayKeyFromCalendarDate(date);
 
-  const isAlwaysOpen = tenant?.working_hours_always_open ?? false;
+  const isAlwaysOpen = tenant?.working_hours_always_open ?? true;
   const isWorkingHoursEnabled = tenant?.working_hours_enabled ?? true;
 
   const daySchedules = buildWeeklySchedule(tenant);
@@ -352,7 +352,7 @@ export function isTimeWithinWorkingHours(
   tenant: TenantWorkingHoursConfig | null
 ): { isValid: boolean; reason?: string; schedule: DaySchedule } {
   const timezone = tenant?.timezone || 'America/Chicago';
-  const isAlwaysOpen = tenant?.working_hours_always_open ?? false;
+  const isAlwaysOpen = tenant?.working_hours_always_open ?? true;
   const isWorkingHoursEnabled = tenant?.working_hours_enabled ?? true;
 
   // Convert the requested time to tenant's timezone to get correct hours
