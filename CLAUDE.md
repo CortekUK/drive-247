@@ -83,7 +83,7 @@ Key difference: Booking's TenantContext (~470 lines) has extensive branding/oper
 - `(auth)/` route group — login page, unauthenticated
 - `(dashboard)/` route group — protected admin pages, requires `useAuth()` from `stores/auth-store.ts`
 - Auth check in `(dashboard)/layout.tsx` redirects to `/login` if no user/appUser
-- RBAC roles: `head_admin`, `admin`, `ops`, `viewer`
+- RBAC roles: `head_admin`, `admin`, `manager`, `ops`, `viewer`
 - Stores: `auth-store.ts` (Zustand with `initialize()` method), `settings-store.ts`
 - Contexts: `TenantContext`, `RealtimeChatContext`
 - Provider chain: `QueryClientProvider → TenantProvider → RealtimeChatProvider → AuthInitializer → ThemeProvider`
@@ -182,6 +182,14 @@ Tenants can operate in `test` or `live` mode. Use helpers from `_shared/stripe-c
 
 In test mode, all tenants share a single Connect account (`STRIPE_TEST_CONNECT_ACCOUNT_ID`). In live mode, each tenant uses their own Connect account after completing onboarding.
 
+### Manager Permissions
+The `manager` role has granular per-tab access control, unlike other roles which get fixed access levels. Each manager gets a set of `manager_permissions` rows (in the `manager_permissions` table) mapping `tab_key` → `access_level` (`viewer` or `editor`). Settings has nested sub-tabs (e.g., `settings.general`, `settings.branding`).
+
+- **Permission constants**: `src/lib/permissions.ts` — single source of truth for tab keys, groups, route mappings, and dashboard widget requirements
+- **Hook**: `src/hooks/use-manager-permissions.ts` — fetches and caches the logged-in manager's permissions
+- **UI**: `src/components/users/manager-permissions-selector.tsx` — grouped checkbox UI for assigning permissions when creating/editing a manager user
+- Sidebar items and dashboard widgets are filtered based on granted tabs. Read-only mode is enforced on pages when `access_level === 'viewer'`.
+
 ### Tenant-Specific Business Logic
 `apps/booking/src/config/tenant-config.ts` contains per-tenant overrides (e.g., insurance exemptions, enquiry-based booking). Check this file when adding tenant-conditional behavior.
 
@@ -241,6 +249,8 @@ Required variables (see `.env.example`):
 Migrations in `supabase/migrations/` (naming: `YYYYMMDDHHMMSS_description.sql`). Full schema reference in `docs/DATABASE_SCHEMA.md` including RLS policies. Stripe Connect details in `docs/STRIPE_CONNECT_PRODUCTION.md` and `docs/STRIPE_CONNECT_TESTING.md`.
 
 Key RLS helper functions: `get_user_tenant_id()`, `is_super_admin()`, `is_primary_super_admin()`, `is_global_master_admin()`. Super admins must have `tenant_id = NULL` in `app_users`.
+
+Notable tables: `manager_permissions` stores per-tab access for manager-role users (`app_user_id`, `tab_key`, `access_level`). RLS allows users to read their own; head admins read their tenant's; service_role manages mutations.
 
 ## Tenant Subscription System
 

@@ -1,0 +1,2 @@
+-- Migration already applied to remote database
+-- Stub file to keep local migrations in sync
