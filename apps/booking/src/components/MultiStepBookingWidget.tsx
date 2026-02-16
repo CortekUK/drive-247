@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useMemo } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { Input } from "@/components/ui/input";
 import { PhoneInput } from "@/components/ui/phone-input";
 import { Label } from "@/components/ui/label";
@@ -21,7 +22,6 @@ import { cn } from "@/lib/utils";
 import BookingConfirmation from "./BookingConfirmation";
 import LocationPicker from "./LocationPicker";
 import BookingCheckoutStep from "./BookingCheckoutStep";
-import { useDeliveryLocations } from "@/hooks/useDeliveryLocations";
 import ExtrasSelector from "./booking/extras-selector";
 import { useRentalExtras } from "@/hooks/use-rental-extras";
 import InsuranceUploadDialog from "./insurance-upload-dialog";
@@ -96,8 +96,13 @@ const MultiStepBookingWidget = () => {
   const distanceUnit = (tenant?.distance_unit || 'miles') as DistanceUnit;
   const workingHours = useWorkingHours();
   const skipInsurance = isInsuranceExemptTenant(tenant?.id);
-  const { updateContext: updateBookingContext } = useBookingStore();
-  const { locations: allDeliveryLocations } = useDeliveryLocations();
+  const {
+    updateContext: updateBookingContext,
+    formData, setFormData,
+    currentStep, setCurrentStep,
+    selectedExtras, setSelectedExtras,
+    clearBooking,
+  } = useBookingStore();
 
   // Customer authentication state
   const { customerUser, session, loading: authLoading, initialized: authInitialized } = useCustomerAuthStore();
@@ -124,10 +129,10 @@ const MultiStepBookingWidget = () => {
     ? new Date(customerVerification.document_expiry_date) < new Date()
     : false;
 
-  const [currentStep, setCurrentStep] = useState(1);
+  // currentStep comes from useBookingStore
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
   const [extras, setExtras] = useState<PricingExtra[]>([]);
-  const [selectedExtras, setSelectedExtras] = useState<Record<string, number>>({});
+  // selectedExtras comes from useBookingStore
   const [loading, setLoading] = useState(false);
   const [showConfirmation, setShowConfirmation] = useState(false);
   const [bookingReference, setBookingReference] = useState("");
@@ -162,34 +167,7 @@ const MultiStepBookingWidget = () => {
   const searchDebounceTimer = useRef<NodeJS.Timeout>();
   const [expandedDescriptions, setExpandedDescriptions] = useState<Set<string>>(new Set());
   const [vehicleImageIndex, setVehicleImageIndex] = useState<Record<string, number>>({});
-  const [formData, setFormData] = useState({
-    pickupLocation: "",
-    dropoffLocation: "",
-    pickupLocationId: "",
-    returnLocationId: "",
-    pickupDeliveryFee: 0,
-    returnDeliveryFee: 0,
-    pickupDate: "",
-    dropoffDate: "",
-    pickupTime: "",
-    dropoffTime: "",
-    specialRequests: "",
-    vehicleId: "",
-    driverDOB: "",
-    promoCode: "",
-    customerName: "",
-    customerEmail: "",
-    customerPhone: "",
-    customerType: "",
-    licenseNumber: "",
-    licenseState: "",
-    addressStreet: "",
-    addressCity: "",
-    addressState: "",
-    addressZip: "",
-    verificationSessionId: "",
-    customerTimezone: "", // Will be set from tenant timezone or detected browser timezone
-  });
+  // formData comes from useBookingStore (persisted to sessionStorage)
 
   // Fetch rental extras for the selected vehicle
   const { extras: availableExtras, isLoading: extrasLoading } = useRentalExtras(formData.vehicleId || null);
@@ -656,83 +634,8 @@ const MultiStepBookingWidget = () => {
     }
   }, [tenant?.id]);
 
-  // Restore form data from sessionStorage on mount (preserves data when navigating away)
-  // For authenticated users, we DO NOT restore customer personal data (name, email)
-  // because that will be handled by the auth auto-populate effect with their actual account data
-  useEffect(() => {
-    const savedFormData = sessionStorage.getItem('booking_form_data');
-    if (savedFormData) {
-      try {
-        const parsed = JSON.parse(savedFormData);
-
-        // For authenticated users, ALWAYS clear customer personal fields from sessionStorage
-        // Their actual data will come from the auth auto-populate effect
-        // This ensures we never show stale data from a previous verification or different session
-        if (isAuthenticated && customerUser?.customer) {
-          console.log('🔐 Authenticated user detected - clearing sessionStorage customer data to use account data');
-          delete parsed.customerName;
-          delete parsed.customerEmail;
-          // Keep phone and customerType as they might be editable
-          // delete parsed.licenseNumber; // Keep license from verification
-          // delete parsed.verificationSessionId; // Keep verification session
-        }
-
-        // Merge with existing formData to preserve verification data and trip details
-        setFormData(prev => ({ ...prev, ...parsed }));
-        console.log('✅ Restored form data from sessionStorage (customer data excluded for auth users)');
-      } catch (e) {
-        console.error('Failed to restore form data:', e);
-      }
-    }
-
-    // Also restore step if available
-    const savedStep = sessionStorage.getItem('booking_current_step');
-    if (savedStep) {
-      const stepNum = parseInt(savedStep, 10);
-      if (stepNum >= 1 && stepNum <= 5) {
-        setCurrentStep(stepNum);
-      }
-    }
-
-    // Restore selected extras
-    const savedExtras = sessionStorage.getItem('booking_selected_extras');
-    if (savedExtras) {
-      try {
-        setSelectedExtras(JSON.parse(savedExtras));
-      } catch (e) {
-        console.error('Failed to restore extras:', e);
-      }
-    }
-  }, [isAuthenticated, customerUser?.customer?.email]);
-
-  // Persist form data to sessionStorage on every change
-  useEffect(() => {
-    // Don't save empty initial state
-    const hasData = formData.pickupLocation || formData.customerName || formData.vehicleId;
-    if (hasData) {
-      sessionStorage.setItem('booking_form_data', JSON.stringify(formData));
-    }
-  }, [formData]);
-
-  // Persist current step
-  useEffect(() => {
-    sessionStorage.setItem('booking_current_step', String(currentStep));
-  }, [currentStep]);
-
-  // Persist selected extras
-  useEffect(() => {
-    if (Object.keys(selectedExtras).length > 0) {
-      sessionStorage.setItem('booking_selected_extras', JSON.stringify(selectedExtras));
-    } else {
-      sessionStorage.removeItem('booking_selected_extras');
-    }
-  }, [selectedExtras]);
-
-  // Reset selected extras when vehicle changes
-  useEffect(() => {
-    setSelectedExtras({});
-    sessionStorage.removeItem('booking_selected_extras');
-  }, [formData.vehicleId]);
+  // formData, currentStep, selectedExtras live directly in Zustand store
+  // (persisted to sessionStorage) — no sync/restore needed.
 
   // Auto-populate DOB from customer profile on Step 1 (when authenticated)
   useEffect(() => {
@@ -1887,17 +1790,83 @@ const MultiStepBookingWidget = () => {
     });
     setPromoDetails(null);
     setPromoError(null);
-    // Clear promo localStorage after successful booking
-    localStorage.removeItem('appliedPromoCode');
-    localStorage.removeItem('appliedPromoDetails');
-    setSelectedExtras({});
+    setSelectedExtras([]);
     setCalculatedDistance(null);
     setDistanceOverride(false);
 
-    // Clear persisted form data after successful booking
-    sessionStorage.removeItem('booking_form_data');
-    sessionStorage.removeItem('booking_current_step');
-    sessionStorage.removeItem('booking_selected_extras');
+    // Clear all persisted booking data (store + legacy storage keys)
+    clearBooking();
+  };
+
+  const handleClearForm = () => {
+    // Reset all widget-local state
+    setFormData({
+      pickupLocation: "",
+      dropoffLocation: "",
+      pickupLocationId: "",
+      returnLocationId: "",
+      pickupDeliveryFee: 0,
+      returnDeliveryFee: 0,
+      pickupDate: "",
+      dropoffDate: "",
+      pickupTime: "",
+      dropoffTime: "",
+      specialRequests: "",
+      vehicleId: "",
+      driverDOB: "",
+      promoCode: "",
+      customerName: "",
+      customerEmail: "",
+      customerPhone: "",
+      customerType: "",
+      licenseNumber: "",
+      licenseState: "",
+      addressStreet: "",
+      addressCity: "",
+      addressState: "",
+      addressZip: "",
+      verificationSessionId: "",
+      customerTimezone: "",
+    });
+    setCurrentStep(1);
+    setSelectedExtras([]);
+
+    // Reset insurance state
+    setHasInsurance(null);
+    setUploadedDocumentId(null);
+    setBonzahCoverage({ cdw: false, rcli: false, sli: false, pai: false });
+    setBonzahPremium(0);
+    setBonzahPolicyId(null);
+
+    // Reset verification state
+    setVerificationStatus('init');
+    setVerificationSessionId(null);
+
+    // Reset promo state
+    setPromoDetails(null);
+    setPromoError(null);
+
+    // Reset distance state
+    setCalculatedDistance(null);
+    setDistanceOverride(false);
+
+    // Clear store + legacy storage keys
+    clearBooking();
+
+    // Clear localStorage verification keys
+    const verificationKeys = [
+      'verificationSessionId',
+      'verificationStatus',
+      'verificationTimestamp',
+      'verifiedCustomerName',
+      'verifiedLicenseNumber',
+      'verificationToken',
+      'verificationVendorData',
+      'verificationMode',
+    ];
+    verificationKeys.forEach(key => localStorage.removeItem(key));
+
+    toast.success("Booking form cleared");
   };
 
   // Calculate distance using Haversine formula (great-circle distance)
@@ -2584,22 +2553,6 @@ const MultiStepBookingWidget = () => {
       }
     }
 
-    // Validate booking lead time (minimum advance notice)
-    if (formData.pickupDate && formData.pickupTime) {
-      const leadTimeHours = tenant?.booking_lead_time_hours ?? 24;
-      if (leadTimeHours > 0) {
-        const pickupDateTime = new Date(`${formData.pickupDate}T${formData.pickupTime}`);
-        const now = new Date();
-        const hoursUntilPickup = (pickupDateTime.getTime() - now.getTime()) / (1000 * 60 * 60);
-        if (hoursUntilPickup < leadTimeHours) {
-          const displayValue = leadTimeHours >= 24 && leadTimeHours % 24 === 0
-            ? `${leadTimeHours / 24} day${leadTimeHours / 24 !== 1 ? 's' : ''}`
-            : `${leadTimeHours} hour${leadTimeHours !== 1 ? 's' : ''}`;
-          newErrors.pickupDate = `Bookings must be made at least ${displayValue} in advance.`;
-        }
-      }
-    }
-
     // DOB validation moved to Step 4 (Customer Details)
 
     setErrors(newErrors);
@@ -3010,6 +2963,31 @@ const MultiStepBookingWidget = () => {
           </div>
         </div>
 
+        {/* Start over button */}
+        <div className="flex justify-end -mt-2 mb-2">
+          <AlertDialog>
+            <AlertDialogTrigger asChild>
+              <Button variant="ghost" size="sm" className="text-muted-foreground hover:text-destructive text-xs gap-1.5 h-7">
+                <X className="w-3 h-3" /> Start over
+              </Button>
+            </AlertDialogTrigger>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Start a new booking?</AlertDialogTitle>
+                <AlertDialogDescription>
+                  This will clear all your booking details across all steps. This action cannot be undone.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                <AlertDialogAction onClick={handleClearForm} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+                  Clear form
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
+        </div>
+
         {/* Step 1: Rental Details */}
         {currentStep === 1 && <div className="space-y-8 animate-fade-in">
           {/* Header with underline */}
@@ -3145,13 +3123,7 @@ const MultiStepBookingWidget = () => {
                         oneYearFromNow.setFullYear(oneYearFromNow.getFullYear() + 1);
                         const dayWorkingHours = getWorkingHoursForDate(date, tenant);
                         const isClosedDay = !dayWorkingHours.enabled;
-                        // Disable dates that fall entirely within the lead time window
-                        const leadTimeHours = tenant?.booking_lead_time_hours ?? 24;
-                        const leadTimeCutoff = new Date(Date.now() + leadTimeHours * 60 * 60 * 1000);
-                        const endOfDay = new Date(date);
-                        endOfDay.setHours(23, 59, 59, 999);
-                        const isWithinLeadTime = leadTimeHours >= 24 && endOfDay < leadTimeCutoff;
-                        return date < today || date > oneYearFromNow || blockedDates.includes(dateStr) || isClosedDay || isWithinLeadTime;
+                        return date < today || date > oneYearFromNow || blockedDates.includes(dateStr) || isClosedDay;
                       }} initialFocus className="pointer-events-auto" />
                     </PopoverContent>
                   </Popover>
@@ -3982,10 +3954,6 @@ const MultiStepBookingWidget = () => {
                   <div>
                     <p className="text-muted-foreground text-xs uppercase tracking-wide mb-1">Pickup Location</p>
                     <p className="font-medium text-xs">{formData.pickupLocation.split(',').slice(0, 2).join(',') || "—"}</p>
-                    {formData.pickupLocationId && (() => {
-                      const loc = allDeliveryLocations.find(l => l.id === formData.pickupLocationId);
-                      return loc?.description ? <p className="text-xs text-muted-foreground/70 mt-0.5">{loc.description}</p> : null;
-                    })()}
                     {formData.pickupDeliveryFee > 0 && (
                       <p className="text-xs text-amber-500">+{formatCurrency(formData.pickupDeliveryFee, currencyCode, { minimumFractionDigits: 0, maximumFractionDigits: 0 })} delivery</p>
                     )}
@@ -3994,10 +3962,6 @@ const MultiStepBookingWidget = () => {
                   <div>
                     <p className="text-muted-foreground text-xs uppercase tracking-wide mb-1">Return Location</p>
                     <p className="font-medium text-xs">{formData.dropoffLocation.split(',').slice(0, 2).join(',') || "—"}</p>
-                    {formData.returnLocationId && (() => {
-                      const loc = allDeliveryLocations.find(l => l.id === formData.returnLocationId);
-                      return loc?.description ? <p className="text-xs text-muted-foreground/70 mt-0.5">{loc.description}</p> : null;
-                    })()}
                     {formData.returnDeliveryFee > 0 && (
                       <p className="text-xs text-amber-500">+{formatCurrency(formData.returnDeliveryFee, currencyCode, { minimumFractionDigits: 0, maximumFractionDigits: 0 })} collection</p>
                     )}
@@ -4084,14 +4048,6 @@ const MultiStepBookingWidget = () => {
                         </div>
                       )}
                     </div>
-                  )}
-
-                  {/* Lockbox info note */}
-                  {tenant?.lockbox_enabled && formData.pickupDeliveryFee > 0 && (
-                    <p className="text-[11px] text-muted-foreground/80 flex items-center gap-1">
-                      <Shield className="w-3 h-3 flex-shrink-0" />
-                      Keys via secure lockbox
-                    </p>
                   )}
 
                   <p className="text-xs text-muted-foreground">

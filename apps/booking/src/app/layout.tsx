@@ -14,6 +14,7 @@ import GDPRConsent from '@/components/GDPRConsent';
 import ScrollToTopOnNavigate from '@/components/ScrollToTopOnNavigate';
 import { TenantProvider } from '@/contexts/TenantContext';
 import { CustomerAuthProvider } from '@/providers/CustomerAuthProvider';
+import { BookingPersistenceGuard } from '@/components/BookingPersistenceGuard';
 import DevJumpPanel from '@/components/DevJumpPanel';
 
 const inter = Inter({ subsets: ['latin'] });
@@ -93,6 +94,7 @@ export default function RootLayout({
         <QueryClientProvider>
           <TenantProvider>
             <CustomerAuthProvider>
+              <BookingPersistenceGuard>
               <ThemeProvider
               attribute="class"
               defaultTheme="dark"
@@ -111,6 +113,7 @@ export default function RootLayout({
                 </TooltipProvider>
               </ThemeInitializer>
               </ThemeProvider>
+              </BookingPersistenceGuard>
             </CustomerAuthProvider>
           </TenantProvider>
         </QueryClientProvider>

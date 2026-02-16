@@ -326,6 +326,10 @@ export const useCustomerAuthStore = create<CustomerAuthState>()((set, get) => ({
     try {
       await supabase.auth.signOut();
       set({ user: null, session: null, customerUser: null });
+
+      // Clear booking data on sign-out (dynamic import avoids circular dependency)
+      const { useBookingStore } = await import('./booking-store');
+      useBookingStore.getState().clearBooking();
     } catch (error) {
       console.error('Sign out error:', error);
     }
