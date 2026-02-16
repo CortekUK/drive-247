@@ -67,6 +67,30 @@ const BookingPendingContent = () => {
           });
         }
 
+        // Confirm Bonzah insurance if applicable
+        // Bonzah uses tenant CD balance (not customer card), so it can be confirmed for preauth bookings
+        if (rental?.bonzah_policy_id) {
+          try {
+            console.log('🛡️ Confirming Bonzah insurance policy...');
+            const { data: bonzahResult, error: bonzahError } = await supabase.functions.invoke('bonzah-confirm-payment', {
+              body: {
+                policy_record_id: rental.bonzah_policy_id,
+                stripe_payment_intent_id: `booking-preauth-${rentalId}`,
+              },
+            });
+
+            if (bonzahError) {
+              console.error('❌ Failed to confirm Bonzah insurance:', bonzahError);
+            } else if (bonzahResult?.already_processed) {
+              console.log('✅ Bonzah insurance already confirmed:', bonzahResult.policy_no);
+            } else {
+              console.log('✅ Bonzah insurance confirmed:', bonzahResult);
+            }
+          } catch (bonzahErr) {
+            console.error('❌ Error confirming Bonzah insurance:', bonzahErr);
+          }
+        }
+
         // Clear localStorage
         localStorage.removeItem('pendingPaymentDetails');
       } catch (error) {

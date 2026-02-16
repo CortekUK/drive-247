@@ -98,6 +98,7 @@ serve(async (req) => {
         const rentalId = session.client_reference_id || session.metadata?.rental_id;
         const isPreAuth = session.metadata?.preauth_mode === "true";
         const isExtension = session.metadata?.type === "extension";
+        const isExcessMileage = session.metadata?.type === "excess_mileage";
 
         if (!rentalId) {
           console.log("No rental ID in session, skipping");
@@ -151,6 +152,58 @@ serve(async (req) => {
             }
           } else {
             console.error("No extension payment found for session:", session.id, extPaymentError?.message);
+          }
+
+          break;
+        }
+
+        // Handle excess mileage payment
+        if (isExcessMileage) {
+          console.log("[LIVE MODE] Excess mileage payment completed for rental:", rentalId);
+
+          // Find payment by stripe_checkout_session_id and update status
+          const { data: excessPayment } = await supabase
+            .from("payments")
+            .select("id")
+            .eq("stripe_checkout_session_id", session.id)
+            .single();
+
+          if (excessPayment) {
+            await supabase
+              .from("payments")
+              .update({
+                status: "Completed",
+                capture_status: "captured",
+                stripe_payment_intent_id: session.payment_intent as string,
+                updated_at: new Date().toISOString(),
+              })
+              .eq("id", excessPayment.id);
+
+            console.log("[LIVE MODE] Updated excess mileage payment to Completed:", excessPayment.id);
+          }
+
+          // Find the Excess Mileage charge and mark it as paid
+          const excessRentalId = session.metadata?.rental_id || rentalId;
+          if (excessRentalId) {
+            const { data: excessCharge } = await supabase
+              .from("ledger_entries")
+              .select("id, remaining_amount")
+              .eq("rental_id", excessRentalId)
+              .eq("type", "Charge")
+              .eq("category", "Excess Mileage")
+              .single();
+
+            if (excessCharge) {
+              const paidAmount = session.amount_total ? session.amount_total / 100 : excessCharge.remaining_amount;
+              const newRemaining = Math.max(0, excessCharge.remaining_amount - paidAmount);
+
+              await supabase
+                .from("ledger_entries")
+                .update({ remaining_amount: newRemaining })
+                .eq("id", excessCharge.id);
+
+              console.log("[LIVE MODE] Excess mileage charge updated:", excessCharge.id, "remaining:", newRemaining);
+            }
           }
 
           break;
@@ -254,36 +307,57 @@ serve(async (req) => {
             // Don't fail the webhook for notification errors
           }
         } else {
-          // Auto mode: Payment was captured, but rental stays Pending until admin approves
-          // Rental status = Pending (approval_status=pending, payment_status=fulfilled)
-          console.log("Auto checkout completed, updating payment_status to fulfilled:", rentalId);
+          // Auto mode: Payment was captured
+          const isPortalPayment = session.metadata?.source === 'portal';
+          console.log("Auto checkout completed:", rentalId, isPortalPayment ? "(portal-initiated)" : "(booking flow)");
 
-          // Update rental payment_status to fulfilled (approval_status stays pending)
-          // Rental will only go Active when admin clicks Approve (approval_status = approved)
-          const { error: rentalUpdateError } = await supabase
-            .from("rentals")
-            .update({
-              payment_status: "fulfilled",
-              updated_at: new Date().toISOString(),
-            })
-            .eq("id", rentalId);
+          // For booking flow payments, update rental payment_status
+          if (!isPortalPayment) {
+            const { error: rentalUpdateError } = await supabase
+              .from("rentals")
+              .update({
+                payment_status: "fulfilled",
+                updated_at: new Date().toISOString(),
+              })
+              .eq("id", rentalId);
 
-          if (rentalUpdateError) {
-            console.error("Failed to update rental payment_status:", rentalUpdateError);
-          } else {
-            console.log("Rental payment_status updated to fulfilled");
+            if (rentalUpdateError) {
+              console.error("Failed to update rental payment_status:", rentalUpdateError);
+            } else {
+              console.log("Rental payment_status updated to fulfilled");
+            }
           }
 
-          // Create payment record if it doesn't exist
+          // Find existing payment (created by create-checkout-session with Pending status)
           const { data: existingPayment } = await supabase
             .from("payments")
             .select("id")
-            .eq("rental_id", rentalId)
             .eq("stripe_checkout_session_id", session.id)
             .single();
 
-          if (!existingPayment) {
-            // Get rental details
+          let finalPaymentId: string | null = null;
+
+          if (existingPayment) {
+            // Update existing Pending payment to Completed
+            const { error: updateError } = await supabase
+              .from("payments")
+              .update({
+                status: "Completed",
+                capture_status: "captured",
+                verification_status: "auto_approved",
+                stripe_payment_intent_id: session.payment_intent as string,
+                updated_at: new Date().toISOString(),
+              })
+              .eq("id", existingPayment.id);
+
+            if (updateError) {
+              console.error("Failed to update payment to Completed:", updateError);
+            } else {
+              console.log("Payment updated to Completed:", existingPayment.id);
+            }
+            finalPaymentId = existingPayment.id;
+          } else {
+            // No existing payment — create one (legacy booking flow)
             const { data: rental } = await supabase
               .from("rentals")
               .select("customer_id, vehicle_id, monthly_amount, tenant_id")
@@ -305,14 +379,13 @@ serve(async (req) => {
                 payment_type: "Payment",
                 status: "Completed",
                 remaining_amount: paymentAmount,
-                verification_status: "auto_approved", // Stripe verified payment
+                verification_status: "auto_approved",
                 stripe_checkout_session_id: session.id,
                 stripe_payment_intent_id: session.payment_intent as string,
                 capture_status: "captured",
                 booking_source: "website",
               };
 
-              // Add tenant_id if rental has it
               if (rental.tenant_id) {
                 paymentData.tenant_id = rental.tenant_id;
               }
@@ -327,71 +400,107 @@ serve(async (req) => {
                 console.error("Failed to create payment record:", paymentError);
               } else {
                 console.log("Payment record created from webhook:", newPayment.id);
+                finalPaymentId = newPayment.id;
+              }
+            }
+          }
 
-                // Send booking pending notification for auto mode (same as manual mode)
-                try {
-                  const { data: rentalWithDetails } = await supabase
-                    .from("rentals")
-                    .select(`
-                      id,
-                      start_date,
-                      end_date,
-                      monthly_amount,
-                      tenant_id,
-                      customer:customers(id, name, email, phone),
-                      vehicle:vehicles(id, make, model, reg)
-                    `)
-                    .eq("id", rentalId)
-                    .single();
+          // Trigger FIFO allocation via apply-payment
+          if (finalPaymentId) {
+            try {
+              const targetCategories = session.metadata?.target_categories
+                ? JSON.parse(session.metadata.target_categories)
+                : undefined;
 
-                  if (rentalWithDetails && rentalWithDetails.customer && rentalWithDetails.vehicle) {
-                    const vehicleName = rentalWithDetails.vehicle.make && rentalWithDetails.vehicle.model
-                      ? `${rentalWithDetails.vehicle.make} ${rentalWithDetails.vehicle.model}`
-                      : rentalWithDetails.vehicle.reg;
+              console.log("Triggering apply-payment for:", finalPaymentId, targetCategories ? `categories: ${targetCategories.join(', ')}` : "(universal FIFO)");
 
-                    const notificationData = {
-                      paymentId: newPayment.id,
-                      rentalId: rentalId,
-                      tenantId: rentalWithDetails.tenant_id, // Required for tenant-specific templates and admin email
-                      customerId: rentalWithDetails.customer.id,
-                      customerName: rentalWithDetails.customer.name,
-                      customerEmail: rentalWithDetails.customer.email,
-                      customerPhone: rentalWithDetails.customer.phone,
-                      vehicleName: vehicleName,
-                      vehicleMake: rentalWithDetails.vehicle.make,
-                      vehicleModel: rentalWithDetails.vehicle.model,
-                      vehicleReg: rentalWithDetails.vehicle.reg,
-                      pickupDate: new Date(rentalWithDetails.start_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
-                      returnDate: new Date(rentalWithDetails.end_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
-                      amount: rentalWithDetails.monthly_amount || paymentAmount,
-                      bookingRef: rentalId.substring(0, 8).toUpperCase(),
-                      paymentMode: 'auto', // Indicate this is auto mode
-                    };
+              const applyResponse = await fetch(
+                `${Deno.env.get("SUPABASE_URL")}/functions/v1/apply-payment`,
+                {
+                  method: "POST",
+                  headers: {
+                    "Content-Type": "application/json",
+                    Authorization: `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`,
+                  },
+                  body: JSON.stringify({
+                    paymentId: finalPaymentId,
+                    ...(targetCategories ? { targetCategories } : {}),
+                  }),
+                }
+              );
+              if (applyResponse.ok) {
+                console.log("Payment FIFO allocation completed");
+              } else {
+                console.error("FIFO allocation failed:", await applyResponse.text());
+              }
+            } catch (applyError) {
+              console.error("Error applying payment:", applyError);
+            }
+          }
 
-                    console.log("Sending booking pending notification for auto mode:", notificationData.bookingRef);
+          // Send booking pending notification for booking flow (not portal)
+          if (!isPortalPayment && finalPaymentId) {
+            try {
+              const { data: rentalWithDetails } = await supabase
+                .from("rentals")
+                .select(`
+                  id,
+                  start_date,
+                  end_date,
+                  monthly_amount,
+                  tenant_id,
+                  customer:customers(id, name, email, phone),
+                  vehicle:vehicles(id, make, model, reg)
+                `)
+                .eq("id", rentalId)
+                .single();
 
-                    const notifyResponse = await fetch(
-                      `${Deno.env.get("SUPABASE_URL")}/functions/v1/notify-booking-pending`,
-                      {
-                        method: "POST",
-                        headers: {
-                          "Content-Type": "application/json",
-                          Authorization: `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`,
-                        },
-                        body: JSON.stringify(notificationData),
-                      }
-                    );
+              if (rentalWithDetails && rentalWithDetails.customer && rentalWithDetails.vehicle) {
+                const vehicleName = rentalWithDetails.vehicle.make && rentalWithDetails.vehicle.model
+                  ? `${rentalWithDetails.vehicle.make} ${rentalWithDetails.vehicle.model}`
+                  : rentalWithDetails.vehicle.reg;
 
-                    if (notifyResponse.ok) {
-                      console.log("Booking notification sent successfully");
-                    } else {
-                      console.error("Failed to send booking notification:", await notifyResponse.text());
-                    }
+                const notificationData = {
+                  paymentId: finalPaymentId,
+                  rentalId: rentalId,
+                  tenantId: rentalWithDetails.tenant_id,
+                  customerId: rentalWithDetails.customer.id,
+                  customerName: rentalWithDetails.customer.name,
+                  customerEmail: rentalWithDetails.customer.email,
+                  customerPhone: rentalWithDetails.customer.phone,
+                  vehicleName: vehicleName,
+                  vehicleMake: rentalWithDetails.vehicle.make,
+                  vehicleModel: rentalWithDetails.vehicle.model,
+                  vehicleReg: rentalWithDetails.vehicle.reg,
+                  pickupDate: new Date(rentalWithDetails.start_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
+                  returnDate: new Date(rentalWithDetails.end_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
+                  amount: rentalWithDetails.monthly_amount || (session.amount_total ? session.amount_total / 100 : 0),
+                  bookingRef: rentalId.substring(0, 8).toUpperCase(),
+                  paymentMode: 'auto',
+                };
+
+                console.log("Sending booking pending notification for auto mode:", notificationData.bookingRef);
+
+                const notifyResponse = await fetch(
+                  `${Deno.env.get("SUPABASE_URL")}/functions/v1/notify-booking-pending`,
+                  {
+                    method: "POST",
+                    headers: {
+                      "Content-Type": "application/json",
+                      Authorization: `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`,
+                    },
+                    body: JSON.stringify(notificationData),
                   }
-                } catch (notifyError) {
-                  console.error("Error sending booking notification:", notifyError);
+                );
+
+                if (notifyResponse.ok) {
+                  console.log("Booking notification sent successfully");
+                } else {
+                  console.error("Failed to send booking notification:", await notifyResponse.text());
                 }
               }
+            } catch (notifyError) {
+              console.error("Error sending booking notification:", notifyError);
             }
           }
         }

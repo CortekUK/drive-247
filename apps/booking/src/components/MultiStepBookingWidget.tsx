@@ -26,6 +26,8 @@ import ExtrasSelector from "./booking/extras-selector";
 import { useRentalExtras } from "@/hooks/use-rental-extras";
 import InsuranceUploadDialog from "./insurance-upload-dialog";
 import BonzahInsuranceSelector from "./BonzahInsuranceSelector";
+import BonzahDetailsForm from "./BonzahDetailsForm";
+import type { BonzahDetailsValues } from "./BonzahDetailsForm";
 import type { CoverageOptions } from "@/hooks/useBonzahPremium";
 import AIScanProgress from "./ai-scan-progress";
 import AIVerificationQR from "./AIVerificationQR";
@@ -226,6 +228,7 @@ const MultiStepBookingWidget = () => {
   });
   const [bonzahPremium, setBonzahPremium] = useState<number>(0);
   const [bonzahPolicyId, setBonzahPolicyId] = useState<string | null>(null);
+  const [bonzahDetailsCompleted, setBonzahDetailsCompleted] = useState(false);
 
   // Identity verification state
   const [verificationSessionId, setVerificationSessionId] = useState<string | null>(null);
@@ -377,6 +380,7 @@ const MultiStepBookingWidget = () => {
         } else {
           setHasInsurance(null);
           setUploadedDocumentId(null);
+          setBonzahDetailsCompleted(false);
         }
       };
 
@@ -678,6 +682,13 @@ const MultiStepBookingWidget = () => {
         if (customer.date_of_birth) {
           updates.driverDOB = customer.date_of_birth;
         }
+        // Populate address/license fields from customer profile
+        if (customer.address_street) updates.addressStreet = customer.address_street;
+        if (customer.address_city) updates.addressCity = customer.address_city;
+        if (customer.address_state) updates.addressState = customer.address_state;
+        if (customer.address_zip) updates.addressZip = customer.address_zip;
+        if (customer.license_number) updates.licenseNumber = customer.license_number;
+        if (customer.license_state) updates.licenseState = customer.license_state;
 
         // For authenticated users, ALWAYS clear localStorage verification data
         // Their verification status comes from their account, not localStorage
@@ -764,6 +775,13 @@ const MultiStepBookingWidget = () => {
         if (customer.customer_type) {
           updates.customerType = customer.customer_type;
         }
+        // Populate address/license fields from customer profile
+        if (customer.address_street) updates.addressStreet = customer.address_street;
+        if (customer.address_city) updates.addressCity = customer.address_city;
+        if (customer.address_state) updates.addressState = customer.address_state;
+        if (customer.address_zip) updates.addressZip = customer.address_zip;
+        if (customer.license_number) updates.licenseNumber = customer.license_number;
+        if (customer.license_state) updates.licenseState = customer.license_state;
 
         // For authenticated users, ALWAYS clear localStorage verification data
         // Their verification status comes from their account, not localStorage
@@ -2061,11 +2079,13 @@ const MultiStepBookingWidget = () => {
       }
     };
 
+    const minDays = tenant?.min_rental_days ?? 1;
+    const maxDays = tenant?.max_rental_days ?? 90;
     return {
       hours,
       days,
       remainingHours,
-      isValid: hours >= 24 && days <= 365,
+      isValid: hours >= minDays * 24 && days <= maxDays,
       formatted: formatDuration()
     };
   };
@@ -2541,14 +2561,18 @@ const MultiStepBookingWidget = () => {
       newErrors.dropoffTime = "Please choose pickup and return date & time.";
     }
 
-    // Validate rental duration: min 24 hours, max 1 year (365 days)
+    // Validate rental duration using tenant settings
     if (formData.pickupDate && formData.dropoffDate && formData.pickupTime && formData.dropoffTime) {
       const duration = calculateRentalDuration();
-      if (duration && !duration.isValid) {
-        if (duration.hours < 24) {
-          newErrors.dropoffDate = "Return must be at least 24 hours after pickup.";
-        } else if (duration.days > 365) {
-          newErrors.dropoffDate = "Maximum rental period is 1 year.";
+      const minDays = tenant?.min_rental_days ?? 1;
+      const maxDays = tenant?.max_rental_days ?? 90;
+      if (duration) {
+        if (duration.hours < minDays * 24) {
+          newErrors.dropoffDate = minDays === 1
+            ? "Return must be at least 24 hours after pickup."
+            : `Minimum rental period is ${minDays} day${minDays !== 1 ? 's' : ''}.`;
+        } else if (duration.days > maxDays) {
+          newErrors.dropoffDate = `Maximum rental period is ${maxDays} day${maxDays !== 1 ? 's' : ''}.`;
         }
       }
     }
@@ -2780,6 +2804,42 @@ const MultiStepBookingWidget = () => {
   const handleBonzahCoverageChange = (coverage: CoverageOptions, premium: number) => {
     setBonzahCoverage(coverage);
     setBonzahPremium(premium);
+  };
+
+  // Handle Bonzah details form submission (address, license, DOB)
+  const handleBonzahDetailsSubmit = async (values: BonzahDetailsValues) => {
+    // Sync data to formData so Step 4 and checkout get it
+    setFormData(prev => ({
+      ...prev,
+      addressStreet: values.addressStreet,
+      addressCity: values.addressCity,
+      addressState: values.addressState,
+      addressZip: values.addressZip,
+      licenseNumber: values.licenseNumber,
+      licenseState: values.licenseState,
+      driverDOB: values.driverDOB,
+    }));
+
+    // For auth users: save to customers table (fire-and-forget)
+    if (isAuthenticated && customerUser?.customer?.id) {
+      supabase
+        .from('customers')
+        .update({
+          address_street: values.addressStreet,
+          address_city: values.addressCity,
+          address_state: values.addressState,
+          address_zip: values.addressZip,
+          license_number: values.licenseNumber,
+          license_state: values.licenseState,
+          date_of_birth: values.driverDOB,
+        })
+        .eq('id', customerUser.customer.id)
+        .then(({ error }) => {
+          if (error) console.error('Error saving Bonzah details to customer profile:', error);
+        });
+    }
+
+    setBonzahDetailsCompleted(true);
   };
 
   // Handle skip insurance from BonzahInsuranceSelector
@@ -4245,6 +4305,13 @@ const MultiStepBookingWidget = () => {
                   </div>
                 </div>
               </Card>
+
+              {/* Back Button */}
+              <div className="flex justify-center mt-6">
+                <Button onClick={() => setCurrentStep(2)} variant="outline" size="lg">
+                  <ChevronLeft className="mr-2 w-5 h-5" /> Back to Vehicles
+                </Button>
+              </div>
             </div>
           )}
 
@@ -4366,13 +4433,42 @@ const MultiStepBookingWidget = () => {
             </div>
           )}
 
-          {/* NO Path - Inline Bonzah Insurance Selector */}
-          {hasInsurance === false && (
+          {/* NO Path - Bonzah Details Form then Coverage Selector */}
+          {hasInsurance === false && !bonzahDetailsCompleted && (
+            <BonzahDetailsForm
+              initialValues={{
+                addressStreet: formData.addressStreet,
+                addressCity: formData.addressCity,
+                addressState: formData.addressState,
+                addressZip: formData.addressZip,
+                licenseNumber: formData.licenseNumber,
+                licenseState: formData.licenseState,
+                driverDOB: formData.driverDOB,
+              }}
+              isAuthenticated={isAuthenticated}
+              onSubmit={handleBonzahDetailsSubmit}
+              onBack={() => setHasInsurance(null)}
+            />
+          )}
+
+          {hasInsurance === false && bonzahDetailsCompleted && (
             <div className="max-w-4xl mx-auto space-y-6">
+              {/* Edit Details link */}
+              <div className="flex justify-end">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setBonzahDetailsCompleted(false)}
+                  className="text-muted-foreground hover:text-foreground"
+                >
+                  Edit Details
+                </Button>
+              </div>
+
               <BonzahInsuranceSelector
                 tripStartDate={formData.pickupDate || null}
                 tripEndDate={formData.dropoffDate || null}
-                pickupState="FL" // Default to Florida - TODO: extract from pickup location
+                pickupState={formData.addressState || "FL"}
                 onCoverageChange={handleBonzahCoverageChange}
                 onSkipInsurance={handleBonzahSkipInsurance}
                 initialCoverage={bonzahCoverage}
@@ -4381,7 +4477,7 @@ const MultiStepBookingWidget = () => {
               {/* Navigation for Bonzah flow */}
               <div className="flex flex-col sm:flex-row gap-4 pt-4">
                 <Button
-                  onClick={() => setHasInsurance(null)}
+                  onClick={() => setBonzahDetailsCompleted(false)}
                   variant="outline"
                   className="w-full sm:flex-1"
                   size="lg"

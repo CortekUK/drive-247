@@ -8,6 +8,9 @@ export interface RentalInvoiceBreakdown {
   taxAmount: number;
   serviceFee: number;
   securityDeposit: number;
+  insurancePremium: number;
+  deliveryFee: number;
+  extrasTotal: number;
   totalAmount: number;
   status: string | null;
 }
@@ -29,9 +32,13 @@ export const useRentalInvoice = (rentalId: string | undefined) => {
         .select(`
           id,
           rental_fee,
+          subtotal,
           tax_amount,
           service_fee,
           security_deposit,
+          insurance_premium,
+          delivery_fee,
+          extras_total,
           total_amount,
           status
         `)
@@ -54,10 +61,13 @@ export const useRentalInvoice = (rentalId: string | undefined) => {
 
       return {
         id: data.id,
-        rentalFee: data.rental_fee || 0,
+        rentalFee: data.rental_fee || data.subtotal || 0,
         taxAmount: data.tax_amount || 0,
         serviceFee: data.service_fee || 0,
         securityDeposit: data.security_deposit || 0,
+        insurancePremium: data.insurance_premium || 0,
+        deliveryFee: data.delivery_fee || 0,
+        extrasTotal: data.extras_total || 0,
         totalAmount: data.total_amount || 0,
         status: data.status,
       };

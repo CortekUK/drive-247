@@ -86,6 +86,7 @@ export const createInvoice = async (data: InvoiceData): Promise<Invoice> => {
       invoice_date: format(data.invoice_date, 'yyyy-MM-dd'),
       due_date: data.due_date ? format(data.due_date, 'yyyy-MM-dd') : null,
       subtotal: data.subtotal,
+      rental_fee: data.subtotal,
       tax_amount: data.tax_amount || 0,
       service_fee: data.service_fee || 0,
       security_deposit: data.security_deposit || 0,

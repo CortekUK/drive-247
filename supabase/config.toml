@@ -20,3 +20,9 @@ verify_jwt = false
 
 [functions.subscription-webhook]
 verify_jwt = false
+
+[functions.stripe-webhook-test]
+verify_jwt = false
+
+[functions.stripe-webhook-live]
+verify_jwt = false

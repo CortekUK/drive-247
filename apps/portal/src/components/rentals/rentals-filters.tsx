@@ -1,11 +1,9 @@
 import { useState, useEffect } from "react";
-import { Search, Filter, Calendar, X, Clock, AlertCircle } from "lucide-react";
+import { Search, X, Calendar, ArrowRightLeft, ChevronDown, Ban } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar as CalendarComponent } from "@/components/ui/calendar";
-import { format } from "date-fns";
 import { cn } from "@/lib/utils";
 import { RentalFilters } from "@/hooks/use-enhanced-rentals";
 
@@ -16,18 +14,14 @@ interface RentalsFiltersProps {
 }
 
 export const RentalsFilters = ({ filters, onFiltersChange, onClearFilters }: RentalsFiltersProps) => {
-  const [startDateOpen, setStartDateOpen] = useState(false);
-  const [endDateOpen, setEndDateOpen] = useState(false);
   const [localSearch, setLocalSearch] = useState(filters.search || "");
-  const [localDurationMin, setLocalDurationMin] = useState(filters.durationMin?.toString() || "");
-  const [localDurationMax, setLocalDurationMax] = useState(filters.durationMax?.toString() || "");
+  const [dateOpen, setDateOpen] = useState(false);
+  const [statusOpen, setStatusOpen] = useState(false);
 
   // Sync local state when filters are cleared externally
   useEffect(() => {
     setLocalSearch(filters.search || "");
-    setLocalDurationMin(filters.durationMin?.toString() || "");
-    setLocalDurationMax(filters.durationMax?.toString() || "");
-  }, [filters.search, filters.durationMin, filters.durationMax]);
+  }, [filters.search]);
 
   // Debounce search filter updates
   useEffect(() => {
@@ -39,217 +33,207 @@ export const RentalsFilters = ({ filters, onFiltersChange, onClearFilters }: Ren
     return () => clearTimeout(timer);
   }, [localSearch]);
 
-  // Debounce duration filter updates
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      const minValue = localDurationMin ? parseInt(localDurationMin) : undefined;
-      const maxValue = localDurationMax ? parseInt(localDurationMax) : undefined;
-
-      if (minValue !== filters.durationMin || maxValue !== filters.durationMax) {
-        onFiltersChange({ ...filters, durationMin: minValue, durationMax: maxValue, duration: "all", page: 1 });
-      }
-    }, 500);
-
-    return () => clearTimeout(timer);
-  }, [localDurationMin, localDurationMax]);
-
   const updateFilter = (key: keyof RentalFilters, value: any) => {
     onFiltersChange({ ...filters, [key]: value, page: 1 });
   };
 
-  // Helper to fix timezone issues with date picker
   const normalizeDate = (date: Date | undefined) => {
     if (!date) return undefined;
     return new Date(date.getFullYear(), date.getMonth(), date.getDate(), 12, 0, 0);
   };
 
-  const hasActiveFilters = Object.values(filters).some(value => 
-    value && value !== "all" && value !== "" && value !== 1
-  );
+  const hasActiveFilters =
+    (filters.status && filters.status !== "all") ||
+    filters.bonzahStatus ||
+    filters.extensionRequested ||
+    filters.cancellationRequested ||
+    filters.startDateFrom ||
+    filters.startDateTo ||
+    filters.search;
+
+  const hasDateFilter = filters.startDateFrom || filters.startDateTo;
+
+  const statusOptions = [
+    { value: 'active', label: 'Active', color: '#22c55e' },
+    { value: 'upcoming', label: 'Upcoming', color: '#3b82f6' },
+    { value: 'pending', label: 'Pending', color: '#eab308' },
+    { value: 'closed', label: 'Completed', color: '#a855f7' },
+    { value: 'cancelled', label: 'Cancelled', color: '#ef4444' },
+  ] as const;
+
+  const activeStatusOption = statusOptions.find(s => s.value === filters.status?.toLowerCase());
 
   return (
-    <div className="space-y-4">
-      {/* Quick Filter Buttons */}
-      <div className="flex gap-2 mb-4 flex-wrap">
-        <Button
-          variant={filters.status === 'Pending' ? 'default' : 'outline'}
-          size="sm"
-          onClick={() => updateFilter('status', filters.status === 'Pending' ? 'all' : 'Pending')}
-          className="whitespace-nowrap"
-        >
-          <Clock className="mr-2 h-4 w-4 flex-shrink-0" />
-          <span className="hidden xs:inline">New Bookings</span>
-          <span className="xs:hidden">New</span>
-          {filters.status === 'Pending' && <X className="ml-2 h-3 w-3 flex-shrink-0" />}
-        </Button>
-        <Button
-          variant={filters.captureStatus === 'requires_capture' ? 'default' : 'outline'}
-          size="sm"
-          onClick={() => updateFilter('captureStatus', filters.captureStatus === 'requires_capture' ? undefined : 'requires_capture')}
-          className="whitespace-nowrap"
-        >
-          <AlertCircle className="mr-2 h-4 w-4 flex-shrink-0" />
-          <span className="hidden xs:inline">Pending Approval</span>
-          <span className="xs:hidden">Pending</span>
-          {filters.captureStatus === 'requires_capture' && <X className="ml-2 h-3 w-3 flex-shrink-0" />}
-        </Button>
-      </div>
-
-      {/* Search and main filters */}
-      <div className="flex flex-wrap gap-4 items-center">
-        <div className="relative flex-1 min-w-[200px] sm:min-w-[300px]">
+    <div>
+      <div className="flex flex-wrap gap-3 items-center">
+        <div className="relative w-[280px] sm:w-[320px]">
           <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
           <Input
-            placeholder="Search by customer, vehicle reg, or rental #..."
+            placeholder="Search customer, reg, rental #..."
             value={localSearch}
             onChange={(e) => setLocalSearch(e.target.value)}
-            className="pl-10"
-          />
-        </div>
-        
-        <Select value={filters.status || "all"} onValueChange={(value) => updateFilter("status", value)}>
-          <SelectTrigger className="w-full sm:w-[150px]">
-            <SelectValue placeholder="Status" />
-          </SelectTrigger>
-          <SelectContent className="max-w-[calc(100vw-2rem)]">
-            <SelectItem value="all">All Status</SelectItem>
-            <SelectItem value="pending">Pending</SelectItem>
-            <SelectItem value="active">Active</SelectItem>
-            <SelectItem value="closed">Closed</SelectItem>
-            <SelectItem value="upcoming">Upcoming</SelectItem>
-          </SelectContent>
-        </Select>
-
-        <Select value={filters.customerType || "all"} onValueChange={(value) => updateFilter("customerType", value)}>
-          <SelectTrigger className="w-full sm:w-[150px]">
-            <SelectValue placeholder="Customer Type" />
-          </SelectTrigger>
-          <SelectContent className="max-w-[calc(100vw-2rem)]">
-            <SelectItem value="all">All Types</SelectItem>
-            <SelectItem value="Individual">Individual</SelectItem>
-            <SelectItem value="Company">Company</SelectItem>
-          </SelectContent>
-        </Select>
-
-        <div className="flex gap-2 items-center flex-wrap w-full sm:w-auto">
-          <span className="text-sm text-muted-foreground whitespace-nowrap">Duration (mo):</span>
-          <Input
-            type="number"
-            placeholder="Min"
-            value={localDurationMin}
-            onChange={(e) => setLocalDurationMin(e.target.value)}
-            className="w-[70px] sm:w-[80px]"
-            min="0"
-          />
-          <span className="text-muted-foreground">–</span>
-          <Input
-            type="number"
-            placeholder="Max"
-            value={localDurationMax}
-            onChange={(e) => setLocalDurationMax(e.target.value)}
-            className="w-[70px] sm:w-[80px]"
-            min="0"
+            className="pl-10 h-8 text-sm"
           />
         </div>
 
-        <Select value={filters.initialPayment || "all"} onValueChange={(value) => updateFilter("initialPayment", value)}>
-          <SelectTrigger className="w-[180px]">
-            <SelectValue placeholder="Initial Payment" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All Rentals</SelectItem>
-            <SelectItem value="set">Initial Fee Paid</SelectItem>
-            <SelectItem value="missing">Initial Fee Pending</SelectItem>
-          </SelectContent>
-        </Select>
-      </div>
-
-      {/* Advanced filters */}
-      <div className="flex flex-wrap gap-4 items-center">
-        <div className="flex gap-2 items-center">
-          <span className="text-sm text-muted-foreground">Start Date:</span>
-          
-          <Popover open={startDateOpen} onOpenChange={setStartDateOpen}>
+        {/* Status + Date grouped */}
+        <div className="flex items-center">
+          <Popover open={statusOpen} onOpenChange={setStatusOpen}>
             <PopoverTrigger asChild>
               <Button
                 variant="outline"
-                className={cn(
-                  "w-[120px] justify-start text-left font-normal",
-                  !filters.startDateFrom && "text-muted-foreground"
-                )}
+                size="sm"
+                className={cn("gap-1.5 rounded-r-none border-r-0", activeStatusOption && "border-primary")}
               >
-                <Calendar className="mr-2 h-4 w-4" />
-                {filters.startDateFrom ? format(filters.startDateFrom, "MMM dd") : "From"}
+                {activeStatusOption ? (
+                  <>
+                    <span className="h-2 w-2 rounded-full" style={{ backgroundColor: activeStatusOption.color }} />
+                    <span style={{ color: activeStatusOption.color }}>{activeStatusOption.label}</span>
+                  </>
+                ) : (
+                  "Status"
+                )}
+                <ChevronDown className="h-3 w-3 text-muted-foreground" />
               </Button>
             </PopoverTrigger>
-            <PopoverContent className="w-auto p-0" align="start">
-              <CalendarComponent
-                mode="single"
-                selected={filters.startDateFrom}
-                onSelect={(date) => {
-                  updateFilter("startDateFrom", normalizeDate(date));
-                  setStartDateOpen(false);
-                }}
-                initialFocus
-                className="p-3 pointer-events-auto"
-              />
+            <PopoverContent className="w-auto p-2" align="start">
+              <div className="flex flex-col gap-1">
+                {statusOptions.map(({ value, label, color }) => {
+                  const isActive = filters.status?.toLowerCase() === value;
+                  return (
+                    <button
+                      key={value}
+                      onClick={() => {
+                        updateFilter('status', isActive ? 'all' : value);
+                        setStatusOpen(false);
+                      }}
+                      className="inline-flex items-center gap-2 rounded-md px-3 py-1.5 text-sm font-medium transition-colors text-left"
+                      style={{
+                        backgroundColor: isActive ? `${color}25` : 'transparent',
+                        color: color,
+                      }}
+                    >
+                      <span className="h-2 w-2 rounded-full" style={{ backgroundColor: color }} />
+                      {label}
+                    </button>
+                  );
+                })}
+              </div>
             </PopoverContent>
           </Popover>
 
-          <Popover open={endDateOpen} onOpenChange={setEndDateOpen}>
+          <Popover open={dateOpen} onOpenChange={setDateOpen}>
             <PopoverTrigger asChild>
               <Button
                 variant="outline"
-                className={cn(
-                  "w-[120px] justify-start text-left font-normal",
-                  !filters.startDateTo && "text-muted-foreground"
-                )}
+                size="sm"
+                className={cn("rounded-l-none px-2", hasDateFilter && "border-primary text-primary")}
               >
-                <Calendar className="mr-2 h-4 w-4" />
-                {filters.startDateTo ? format(filters.startDateTo, "MMM dd") : "To"}
+                <Calendar className="h-4 w-4" />
               </Button>
             </PopoverTrigger>
-            <PopoverContent className="w-auto p-0" align="start">
-              <CalendarComponent
-                mode="single"
-                selected={filters.startDateTo}
-                onSelect={(date) => {
-                  updateFilter("startDateTo", normalizeDate(date));
-                  setEndDateOpen(false);
-                }}
-                initialFocus
-                className="p-3 pointer-events-auto"
-              />
+            <PopoverContent className="w-auto p-3" align="end">
+            <div className="flex gap-4">
+              <div className="space-y-1">
+                <p className="text-xs font-medium text-muted-foreground">From</p>
+                <CalendarComponent
+                  mode="single"
+                  selected={filters.startDateFrom}
+                  onSelect={(date) => updateFilter("startDateFrom", normalizeDate(date))}
+                  className="p-0 pointer-events-auto"
+                />
+              </div>
+              <div className="space-y-1 border-l pl-4">
+                <p className="text-xs font-medium text-muted-foreground">To</p>
+                <CalendarComponent
+                  mode="single"
+                  selected={filters.startDateTo}
+                  onSelect={(date) => updateFilter("startDateTo", normalizeDate(date))}
+                  className="p-0 pointer-events-auto"
+                />
+              </div>
+            </div>
+              {hasDateFilter && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="w-full text-xs"
+                  onClick={() => {
+                    onFiltersChange({ ...filters, startDateFrom: undefined, startDateTo: undefined, page: 1 });
+                  }}
+                >
+                  Clear dates
+                </Button>
+              )}
             </PopoverContent>
           </Popover>
         </div>
 
-        <Select value={filters.sortBy || "start_date"} onValueChange={(value) => updateFilter("sortBy", value)}>
-          <SelectTrigger className="w-[150px]">
-            <SelectValue placeholder="Sort by" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="start_date">Start Date</SelectItem>
-            <SelectItem value="end_date">End Date</SelectItem>
-            <SelectItem value="monthly_amount">Monthly Amount</SelectItem>
-            <SelectItem value="rental_number">Rental #</SelectItem>
-          </SelectContent>
-        </Select>
+        {/* Requests + Ins. Quoted pushed right */}
+        <div className="flex gap-3 items-center ml-auto">
 
-        <Select value={filters.sortOrder || "desc"} onValueChange={(value) => updateFilter("sortOrder", value)}>
-          <SelectTrigger className="w-[100px]">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="desc">Desc</SelectItem>
-            <SelectItem value="asc">Asc</SelectItem>
-          </SelectContent>
-        </Select>
+        {/* Requests group */}
+        <div className="flex items-center border rounded-md overflow-hidden">
+          <span className="text-xs text-muted-foreground px-2.5 shrink-0">Requests</span>
+          <div className="h-5 w-px bg-border" />
+          {(() => {
+            const isActive = !!filters.extensionRequested;
+            const color = '#f97316';
+            return (
+              <button
+                onClick={() => updateFilter('extensionRequested', isActive ? undefined : true)}
+                className="inline-flex items-center gap-1.5 px-2.5 h-8 text-xs font-medium whitespace-nowrap transition-colors"
+                style={{
+                  backgroundColor: isActive ? `${color}25` : 'transparent',
+                  color: color,
+                }}
+              >
+                <ArrowRightLeft className="h-3 w-3" />
+                Extension
+                {isActive && <X className="ml-1 h-3 w-3" />}
+              </button>
+            );
+          })()}
+          <div className="h-5 w-px bg-border" />
+          {(() => {
+            const isActive = !!filters.cancellationRequested;
+            const color = '#ef4444';
+            return (
+              <button
+                onClick={() => updateFilter('cancellationRequested', isActive ? undefined : true)}
+                className="inline-flex items-center gap-1.5 px-2.5 h-8 text-xs font-medium whitespace-nowrap transition-colors"
+                style={{
+                  backgroundColor: isActive ? `${color}25` : 'transparent',
+                  color: color,
+                }}
+              >
+                <Ban className="h-3 w-3" />
+                Cancellation
+                {isActive && <X className="ml-1 h-3 w-3" />}
+              </button>
+            );
+          })()}
+        </div>
 
+        {/* Ins. Quoted */}
+        <Button
+          variant={filters.bonzahStatus === 'ins_quoted' ? 'default' : 'outline'}
+          size="sm"
+          onClick={() => updateFilter('bonzahStatus', filters.bonzahStatus === 'ins_quoted' ? undefined : 'ins_quoted')}
+          className={`whitespace-nowrap ${filters.bonzahStatus === 'ins_quoted' ? 'bg-[#CC004A] hover:bg-[#CC004A]/90 text-white border-[#CC004A]' : 'border-[#CC004A]/30 text-[#CC004A] bg-[#CC004A]/10 hover:bg-[#CC004A]/20'}`}
+        >
+          <img src="/bonzah-logo.svg" alt="" className={`mr-2 h-4 w-auto flex-shrink-0 dark:hidden ${filters.bonzahStatus === 'ins_quoted' ? 'brightness-0 invert' : ''}`} />
+          <img src="/bonzah-logo-dark.svg" alt="" className={`mr-2 h-4 w-auto flex-shrink-0 hidden dark:block ${filters.bonzahStatus === 'ins_quoted' ? 'brightness-0 invert' : ''}`} />
+          Ins. Quoted
+          {filters.bonzahStatus === 'ins_quoted' && <X className="ml-2 h-3 w-3 flex-shrink-0" />}
+        </Button>
+        </div>
+
+        {/* Clear All */}
         {hasActiveFilters && (
-          <Button variant="outline" onClick={onClearFilters} className="gap-2">
-            <X className="h-4 w-4" />
-            Clear Filters
+          <Button variant="ghost" size="sm" onClick={onClearFilters} className="h-8 gap-1 text-muted-foreground hover:text-foreground">
+            <X className="h-3.5 w-3.5" />
+            Clear
           </Button>
         )}
       </div>

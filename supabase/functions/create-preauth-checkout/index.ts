@@ -164,7 +164,7 @@ serve(async (req) => {
         preauth_mode: 'true',
         stripe_account_id: stripeAccountId || '',
         stripe_mode: stripeMode, // Track which mode was used
-        bonzah_policy_id: body.bonzahPolicyId || '', // Track Bonzah policy for webhook
+        ...(body.bonzahPolicyId ? { bonzah_policy_id: body.bonzahPolicyId } : {}),
       },
     }, stripeOptions)
 

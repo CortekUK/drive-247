@@ -116,6 +116,8 @@ const Settings = () => {
     };
     booking_lead_time_value: number;
     booking_lead_time_unit: 'hours' | 'days';
+    min_rental_days: number;
+    max_rental_days: number;
     lockbox_enabled: boolean;
     lockbox_code_length: number | null;
     lockbox_notification_methods: string[];
@@ -156,6 +158,9 @@ const Settings = () => {
     // Booking lead time
     booking_lead_time_value: 24,
     booking_lead_time_unit: 'hours' as 'hours' | 'days',
+    // Rental duration limits
+    min_rental_days: 1,
+    max_rental_days: 90,
     // Lockbox settings
     lockbox_enabled: false,
     lockbox_code_length: null as number | null,
@@ -194,6 +199,9 @@ const Settings = () => {
         booking_lead_time_value: (rentalSettings.booking_lead_time_unit === 'days' && rentalSettings.booking_lead_time_hours)
           ? rentalSettings.booking_lead_time_hours / 24
           : rentalSettings.booking_lead_time_hours ?? 24,
+        // Rental duration limits
+        min_rental_days: rentalSettings.min_rental_days ?? 1,
+        max_rental_days: rentalSettings.max_rental_days ?? 90,
         // Lockbox settings
         lockbox_enabled: rentalSettings.lockbox_enabled ?? false,
         lockbox_code_length: rentalSettings.lockbox_code_length ?? null,
@@ -1874,12 +1882,13 @@ const Settings = () => {
             <CardContent className="space-y-4">
               <div className="flex items-center gap-3">
                 <Input
-                  type="number"
-                  min={0}
+                  type="text"
+                  inputMode="numeric"
                   value={rentalForm.booking_lead_time_value || ''}
                   onChange={(e) => {
-                    const val = e.target.value === '' ? 0 : parseInt(e.target.value) || 0;
-                    setRentalForm(prev => ({ ...prev, booking_lead_time_value: Math.max(0, val) }));
+                    const raw = e.target.value.replace(/[^0-9]/g, '');
+                    const val = raw === '' ? 0 : parseInt(raw);
+                    setRentalForm(prev => ({ ...prev, booking_lead_time_value: val }));
                   }}
                   placeholder={rentalForm.booking_lead_time_unit === 'days' ? 'e.g. 2' : 'e.g. 24'}
                   className="w-24"
@@ -1940,6 +1949,95 @@ const Settings = () => {
                   Save
                 </Button>
               )}
+            </CardContent>
+          </Card>
+
+          {/* Minimum Rental Duration Card */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Car className="h-5 w-5 text-primary" />
+                Rental Duration Limits
+              </CardTitle>
+              <CardDescription>
+                Set minimum and maximum rental duration for bookings
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="space-y-3">
+                <div className="flex items-center gap-3">
+                  <Label className="w-24 text-sm">Minimum</Label>
+                  <Input
+                    type="text"
+                    inputMode="numeric"
+                    value={rentalForm.min_rental_days || ''}
+                    onChange={(e) => {
+                      const raw = e.target.value.replace(/[^0-9]/g, '');
+                      setRentalForm(prev => ({ ...prev, min_rental_days: raw === '' ? 0 : parseInt(raw) }));
+                    }}
+                    placeholder="e.g. 1"
+                    className="w-24"
+                  />
+                  <span className="text-sm text-muted-foreground">days</span>
+                </div>
+                <div className="flex items-center gap-3">
+                  <Label className="w-24 text-sm">Maximum</Label>
+                  <Input
+                    type="text"
+                    inputMode="numeric"
+                    value={rentalForm.max_rental_days || ''}
+                    onChange={(e) => {
+                      const raw = e.target.value.replace(/[^0-9]/g, '');
+                      setRentalForm(prev => ({ ...prev, max_rental_days: raw === '' ? 0 : parseInt(raw) }));
+                    }}
+                    placeholder="e.g. 90"
+                    className="w-24"
+                  />
+                  <span className="text-sm text-muted-foreground">days</span>
+                </div>
+              </div>
+              {rentalForm.min_rental_days > 0 && rentalForm.max_rental_days > 0 && (
+                <p className="text-sm text-muted-foreground">
+                  Customers can book rentals between {rentalForm.min_rental_days} and {rentalForm.max_rental_days} days.
+                </p>
+              )}
+              {rentalForm.min_rental_days > 0 && rentalForm.max_rental_days > 0 && rentalForm.min_rental_days > rentalForm.max_rental_days && (
+                <p className="text-sm text-destructive">
+                  Minimum days cannot exceed maximum days.
+                </p>
+              )}
+              <Button
+                onClick={async () => {
+                  const minDays = rentalForm.min_rental_days || 1;
+                  const maxDays = rentalForm.max_rental_days || 90;
+                  if (minDays > maxDays) {
+                    toast({
+                      title: "Invalid Configuration",
+                      description: "Minimum rental days cannot exceed maximum rental days.",
+                      variant: "destructive",
+                    });
+                    return;
+                  }
+                  try {
+                    await updateRentalSettings({
+                      min_rental_days: minDays,
+                      max_rental_days: maxDays,
+                    });
+                    setRentalForm(prev => ({ ...prev, min_rental_days: minDays, max_rental_days: maxDays }));
+                  } catch (error) {
+                    console.error('Failed to update rental duration settings:', error);
+                  }
+                }}
+                disabled={isUpdatingRentalSettings || (rentalForm.min_rental_days > 0 && rentalForm.max_rental_days > 0 && rentalForm.min_rental_days > rentalForm.max_rental_days)}
+                className="flex items-center gap-2"
+              >
+                {isUpdatingRentalSettings ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Save className="h-4 w-4" />
+                )}
+                Save
+              </Button>
             </CardContent>
           </Card>
 

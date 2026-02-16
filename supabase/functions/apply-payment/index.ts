@@ -19,7 +19,7 @@ interface PaymentProcessingResult {
   status?: string;
 }
 
-async function applyPayment(supabase: any, paymentId: string): Promise<PaymentProcessingResult> {
+async function applyPayment(supabase: any, paymentId: string, targetCategories?: string[]): Promise<PaymentProcessingResult> {
   try {
     console.log('Processing payment:', paymentId);
 
@@ -230,13 +230,25 @@ async function applyPayment(supabase: any, paymentId: string): Promise<PaymentPr
       let totalAllocated = 0;
 
       // Universal FIFO allocation order: Initial Fees → Extension → Rentals → Fines → Other
-      const allocationOrder = [
+      const defaultAllocationOrder = [
         { category: 'Initial Fees', description: 'initial fees' },
         { category: 'Extension', description: 'extension charges' },
         { category: 'Rental', description: 'rental charges' },
         { category: 'Fines', description: 'fine charges' },
         { category: 'Other', description: 'other charges' }
       ];
+
+      // If targetCategories is provided, use those categories directly (supports any ledger category)
+      let allocationOrder: { category: string; description: string }[];
+      if (targetCategories && targetCategories.length > 0) {
+        allocationOrder = targetCategories.map(cat => ({
+          category: cat,
+          description: `${cat.toLowerCase()} charges`
+        }));
+        console.log(`Targeted allocation to categories: ${targetCategories.join(', ')}`);
+      } else {
+        allocationOrder = defaultAllocationOrder;
+      }
 
       for (const { category, description } of allocationOrder) {
         if (remainingAmount <= 0) break;
@@ -430,10 +442,10 @@ serve(async (req) => {
       });
     }
     
-    const { paymentId } = body;
-    
+    const { paymentId, targetCategories } = body;
+
     if (!paymentId) {
-      return new Response(JSON.stringify({ 
+      return new Response(JSON.stringify({
         error: 'Payment ID is required',
         detail: 'paymentId field must be provided in request body'
       }), {
@@ -442,8 +454,8 @@ serve(async (req) => {
       });
     }
 
-    // Apply payment using universal FIFO allocation
-    const result = await applyPayment(supabase, paymentId);
+    // Apply payment using universal FIFO allocation (optionally targeted to specific categories)
+    const result = await applyPayment(supabase, paymentId, targetCategories);
 
     if (!result.ok) {
       return new Response(JSON.stringify(result), {

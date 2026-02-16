@@ -21,6 +21,7 @@ import { AIInsightsPanel } from "@/components/rentals/calendar/ai-insights-panel
 import { SetupHub } from "@/components/dashboard/setup-hub";
 import { GoLiveBanner } from "@/components/dashboard/go-live-banner";
 import { BonzahBalanceWidget } from "@/components/dashboard/bonzah-balance-widget";
+import { BonzahPendingAlert } from "@/components/dashboard/bonzah-pending-alert";
 import { useCalendarRentals } from "@/hooks/use-calendar-rentals";
 import { useDashboardKPIs } from "@/hooks/use-dashboard-kpis";
 import { useAuth } from "@/stores/auth-store";
@@ -173,6 +174,7 @@ export default function DashboardPage() {
       <SetupHub />
       <GoLiveBanner />
       {canView('payments') && <BonzahBalanceWidget />}
+      {canView('payments') && <BonzahPendingAlert />}
 
       {/* AI Insights Marquee */}
       {canView('rentals') && <AIInsightsPanel grouped={todayCalendar?.grouped || []} />}

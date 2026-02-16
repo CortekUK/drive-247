@@ -1377,6 +1377,10 @@ export type Database = {
       }
       customers: {
         Row: {
+          address_city: string | null
+          address_state: string | null
+          address_street: string | null
+          address_zip: string | null
           blocked_at: string | null
           blocked_reason: string | null
           created_at: string | null
@@ -1389,6 +1393,7 @@ export type Database = {
           identity_verification_status: string | null
           is_blocked: boolean | null
           license_number: string | null
+          license_state: string | null
           name: string
           nok_address: string | null
           nok_email: string | null
@@ -1409,6 +1414,10 @@ export type Database = {
           whatsapp_opt_in: boolean | null
         }
         Insert: {
+          address_city?: string | null
+          address_state?: string | null
+          address_street?: string | null
+          address_zip?: string | null
           blocked_at?: string | null
           blocked_reason?: string | null
           created_at?: string | null
@@ -1421,6 +1430,7 @@ export type Database = {
           identity_verification_status?: string | null
           is_blocked?: boolean | null
           license_number?: string | null
+          license_state?: string | null
           name: string
           nok_address?: string | null
           nok_email?: string | null
@@ -1441,6 +1451,10 @@ export type Database = {
           whatsapp_opt_in?: boolean | null
         }
         Update: {
+          address_city?: string | null
+          address_state?: string | null
+          address_street?: string | null
+          address_zip?: string | null
           blocked_at?: string | null
           blocked_reason?: string | null
           created_at?: string | null
@@ -1453,6 +1467,7 @@ export type Database = {
           identity_verification_status?: string | null
           is_blocked?: boolean | null
           license_number?: string | null
+          license_state?: string | null
           name?: string
           nok_address?: string | null
           nok_email?: string | null
@@ -3009,6 +3024,41 @@ export type Database = {
             columns: ["tenant_id"]
             isOneToOne: false
             referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      manager_permissions: {
+        Row: {
+          access_level: string
+          app_user_id: string
+          created_at: string
+          id: string
+          tab_key: string
+          updated_at: string
+        }
+        Insert: {
+          access_level?: string
+          app_user_id: string
+          created_at?: string
+          id?: string
+          tab_key: string
+          updated_at?: string
+        }
+        Update: {
+          access_level?: string
+          app_user_id?: string
+          created_at?: string
+          id?: string
+          tab_key?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "manager_permissions_app_user_id_fkey"
+            columns: ["app_user_id"]
+            isOneToOne: false
+            referencedRelation: "app_users"
             referencedColumns: ["id"]
           },
         ]
@@ -6412,6 +6462,7 @@ export type Database = {
           disposal_buyer: string | null
           disposal_date: string | null
           disposal_notes: string | null
+          excess_mileage_rate: number | null
           finance_start_date: string | null
           fuel_type: string | null
           has_logbook: boolean
@@ -6464,6 +6515,7 @@ export type Database = {
           disposal_buyer?: string | null
           disposal_date?: string | null
           disposal_notes?: string | null
+          excess_mileage_rate?: number | null
           finance_start_date?: string | null
           fuel_type?: string | null
           has_logbook?: boolean
@@ -6516,6 +6568,7 @@ export type Database = {
           disposal_buyer?: string | null
           disposal_date?: string | null
           disposal_notes?: string | null
+          excess_mileage_rate?: number | null
           finance_start_date?: string | null
           fuel_type?: string | null
           has_logbook?: boolean

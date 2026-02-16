@@ -1,7 +1,7 @@
 'use client';
 
-import { useState } from 'react';
-import { Loader2, Shield, ShieldCheck, ArrowLeft, ArrowRight } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { Loader2, Shield, ShieldCheck, ArrowLeft, ArrowRight, AlertTriangle } from 'lucide-react';
 import { useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useTenant } from '@/contexts/TenantContext';
@@ -9,6 +9,7 @@ import { useToast } from '@/hooks/use-toast';
 import { type CoverageOptions } from '@/hooks/use-bonzah-premium';
 import { formatCurrency } from '@/lib/format-utils';
 import BonzahInsuranceSelector from '@/components/rentals/bonzah-insurance-selector';
+import { useBonzahBalance } from '@/hooks/use-bonzah-balance';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -48,11 +49,26 @@ export function BuyInsuranceDialog({
   const { tenant } = useTenant();
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const { balanceNumber: bonzahCdBalance } = useBonzahBalance();
 
   const [step, setStep] = useState<1 | 2>(1);
   const [coverage, setCoverage] = useState<CoverageOptions>(DEFAULT_COVERAGE);
   const [premium, setPremium] = useState(0);
   const [purchasing, setPurchasing] = useState(false);
+  const [customerState, setCustomerState] = useState('FL');
+
+  // Load customer's state when dialog opens (for accurate premium calculation)
+  useEffect(() => {
+    if (!open || !rental.customers?.id) return;
+    supabase
+      .from('customers')
+      .select('address_state')
+      .eq('id', rental.customers.id)
+      .single()
+      .then(({ data }) => {
+        if (data?.address_state) setCustomerState(data.address_state);
+      });
+  }, [open, rental.customers?.id]);
 
   const hasCoverage = coverage.cdw || coverage.rcli || coverage.sli || coverage.pai;
 
@@ -78,10 +94,10 @@ export function BuyInsuranceDialog({
 
     setPurchasing(true);
     try {
-      // 1. Fetch customer details
+      // 1. Fetch customer details (including address fields)
       const { data: customer, error: customerError } = await supabase
         .from('customers')
-        .select('id, name, email, phone, license_number, date_of_birth')
+        .select('id, name, email, phone, license_number, license_state, date_of_birth, address_street, address_city, address_state, address_zip')
         .eq('id', rental.customers.id)
         .single();
 
@@ -103,7 +119,6 @@ export function BuyInsuranceDialog({
       const firstName = verification?.first_name || nameParts[0] || 'N/A';
       const lastName = verification?.last_name || nameParts.slice(1).join(' ') || 'N/A';
       const dob = verification?.date_of_birth || customer.date_of_birth;
-      const address = verification?.address as string | null;
 
       if (!dob) {
         toast({
@@ -115,15 +130,23 @@ export function BuyInsuranceDialog({
         return;
       }
 
-      // Parse address if available, otherwise use defaults
-      let street = '123 Main St';
-      let zip = '33101';
-      if (address) {
-        street = address;
-        // Try to extract zip from address string
-        const zipMatch = address.match(/\b(\d{5})\b/);
+      // Resolve address: use customer profile fields, fall back to verification address string
+      const verificationAddress = verification?.address as string | null;
+      let street = customer.address_street || '';
+      let city = customer.address_city || '';
+      let state = customer.address_state || '';
+      let zip = customer.address_zip || '';
+
+      // If customer profile address is empty, try to parse from verification address
+      if (!street && verificationAddress) {
+        street = verificationAddress;
+        const zipMatch = verificationAddress.match(/\b(\d{5})\b/);
         if (zipMatch) zip = zipMatch[1];
       }
+
+      const licenseNumber = customer.license_number || '';
+      const licenseStateVal = customer.license_state || state || '';
+      const pickupState = state || 'FL';
 
       // 4. Call bonzah-create-quote
       const { data: quoteResult, error: quoteError } = await supabase.functions.invoke('bonzah-create-quote', {
@@ -135,7 +158,7 @@ export function BuyInsuranceDialog({
             start: rental.start_date.split('T')[0],
             end: rental.end_date.split('T')[0],
           },
-          pickup_state: 'FL',
+          pickup_state: pickupState,
           coverage,
           renter: {
             first_name: firstName,
@@ -145,13 +168,13 @@ export function BuyInsuranceDialog({
             phone: customer.phone || '',
             address: {
               street,
-              city: 'Miami',
-              state: 'FL',
+              city,
+              state: pickupState,
               zip,
             },
             license: {
-              number: customer.license_number || 'N/A',
-              state: 'FL',
+              number: licenseNumber,
+              state: licenseStateVal || pickupState,
             },
           },
         },
@@ -285,7 +308,7 @@ export function BuyInsuranceDialog({
             <BonzahInsuranceSelector
               tripStartDate={rental.start_date}
               tripEndDate={rental.end_date}
-              pickupState="FL"
+              pickupState={customerState}
               onCoverageChange={handleCoverageChange}
               onSkipInsurance={handleSkipInsurance}
               hidePremiumSummary
@@ -350,6 +373,15 @@ export function BuyInsuranceDialog({
                 </span>
               </div>
             </div>
+
+            {bonzahCdBalance != null && premium > bonzahCdBalance && (
+              <div className="rounded-lg border border-[#CC004A]/30 bg-[#CC004A]/5 p-3 flex items-start gap-2">
+                <AlertTriangle className="h-4 w-4 text-[#CC004A] mt-0.5 flex-shrink-0" />
+                <p className="text-sm text-muted-foreground">
+                  Insurance premium (<span className="font-medium text-[#CC004A]">${premium.toFixed(2)}</span>) exceeds your current Bonzah balance (<span className="font-medium">${bonzahCdBalance.toFixed(2)}</span>). The policy will be created but won't activate until you top up.
+                </p>
+              </div>
+            )}
 
             <p className="text-xs text-muted-foreground">
               Purchasing will create a Bonzah insurance policy and add an insurance charge to the rental ledger.

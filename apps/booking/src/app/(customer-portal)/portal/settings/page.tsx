@@ -20,6 +20,7 @@ import {
   AlertCircle,
   Shield,
   Globe,
+  MapPin,
 } from 'lucide-react';
 import {
   Select,
@@ -29,6 +30,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { getTimezonesByRegion, findTimezone } from '@/lib/timezones';
+import { US_STATES } from '@/lib/us-states';
 import {
   Dialog,
   DialogContent,
@@ -52,6 +54,12 @@ export default function SettingsPage() {
   const [phone, setPhone] = useState(customerUser?.customer?.phone || '');
   const [dateOfBirth, setDateOfBirth] = useState(customerUser?.customer?.date_of_birth || '');
   const [timezone, setTimezone] = useState(customerUser?.customer?.timezone || '');
+  const [addressStreet, setAddressStreet] = useState(customerUser?.customer?.address_street || '');
+  const [addressCity, setAddressCity] = useState(customerUser?.customer?.address_city || '');
+  const [addressState, setAddressState] = useState(customerUser?.customer?.address_state || '');
+  const [addressZip, setAddressZip] = useState(customerUser?.customer?.address_zip || '');
+  const [licenseNumber, setLicenseNumber] = useState(customerUser?.customer?.license_number || '');
+  const [licenseState, setLicenseState] = useState(customerUser?.customer?.license_state || '');
   const [isUpdatingProfile, setIsUpdatingProfile] = useState(false);
   const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
 
@@ -158,6 +166,12 @@ export default function SettingsPage() {
           phone: phone.trim() || null,
           date_of_birth: dateOfBirth || null,
           timezone: timezone || null,
+          address_street: addressStreet.trim() || null,
+          address_city: addressCity.trim() || null,
+          address_state: addressState || null,
+          address_zip: addressZip.trim() || null,
+          license_number: licenseNumber.trim() || null,
+          license_state: licenseState || null,
         })
         .eq('id', customerUser?.customer_id);
 
@@ -421,6 +435,105 @@ export default function SettingsPage() {
               Your timezone will be used to show booking times in your local time
             </p>
           </div>
+
+          <Button onClick={handleUpdateProfile} disabled={isUpdatingProfile}>
+            {isUpdatingProfile && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+            Save Changes
+          </Button>
+        </CardContent>
+      </Card>
+
+      {/* Address & License Section */}
+      <Card>
+        <CardHeader>
+          <div className="flex items-center gap-3">
+            <div className="p-2 rounded-full bg-primary/10">
+              <MapPin className="h-5 w-5 text-primary" />
+            </div>
+            <div>
+              <CardTitle>Address & License</CardTitle>
+              <CardDescription>
+                Your address and license details used for insurance quotes
+              </CardDescription>
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="space-y-2">
+            <Label htmlFor="addressStreet">Street Address</Label>
+            <Input
+              id="addressStreet"
+              value={addressStreet}
+              onChange={(e) => setAddressStreet(e.target.value)}
+              placeholder="123 Main Street"
+            />
+          </div>
+
+          <div className="grid gap-4 sm:grid-cols-3">
+            <div className="space-y-2">
+              <Label htmlFor="addressCity">City</Label>
+              <Input
+                id="addressCity"
+                value={addressCity}
+                onChange={(e) => setAddressCity(e.target.value)}
+                placeholder="Miami"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>State</Label>
+              <Select value={addressState} onValueChange={setAddressState}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select state" />
+                </SelectTrigger>
+                <SelectContent>
+                  {US_STATES.map((s) => (
+                    <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="addressZip">ZIP Code</Label>
+              <Input
+                id="addressZip"
+                value={addressZip}
+                onChange={(e) => setAddressZip(e.target.value)}
+                placeholder="33101"
+                maxLength={10}
+              />
+            </div>
+          </div>
+
+          <Separator />
+
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div className="space-y-2">
+              <Label htmlFor="licenseNumber">Driver's License Number</Label>
+              <Input
+                id="licenseNumber"
+                value={licenseNumber}
+                onChange={(e) => setLicenseNumber(e.target.value)}
+                placeholder="License number"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>License State</Label>
+              <Select value={licenseState} onValueChange={setLicenseState}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select state" />
+                </SelectTrigger>
+                <SelectContent>
+                  {US_STATES.map((s) => (
+                    <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+
+          <p className="text-xs text-muted-foreground">
+            These details will be used to auto-fill insurance forms during booking
+          </p>
 
           <Button onClick={handleUpdateProfile} disabled={isUpdatingProfile}>
             {isUpdatingProfile && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}

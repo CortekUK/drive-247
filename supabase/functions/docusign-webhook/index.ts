@@ -402,14 +402,33 @@ serve(async (req) => {
       }
     );
 
-    const event = await req.json() as DocuSignEvent;
+    // Try to parse as JSON; DocuSign Connect may send XML which we can't handle
+    let event: DocuSignEvent;
+    const rawBody = await req.text();
+    try {
+      event = JSON.parse(rawBody) as DocuSignEvent;
+    } catch {
+      console.error('Failed to parse webhook body as JSON. Body starts with:', rawBody.substring(0, 200));
+      return new Response(
+        JSON.stringify({ ok: false, error: 'Invalid JSON payload' }),
+        { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
 
     // Log webhook event
     console.log('Received DocuSign webhook event:', {
       event: event.event,
-      envelopeId: event.data.envelopeId,
-      status: event.data.envelopeSummary?.status
+      envelopeId: event.data?.envelopeId,
+      status: event.data?.envelopeSummary?.status
     });
+
+    if (!event.data?.envelopeId) {
+      console.error('No envelope ID in webhook payload:', JSON.stringify(event).substring(0, 500));
+      return new Response(
+        JSON.stringify({ ok: false, error: 'No envelope ID in payload' }),
+        { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
 
     const result = await handleDocuSignWebhook(supabaseClient, event);
 

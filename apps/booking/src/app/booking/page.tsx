@@ -31,8 +31,6 @@ import { formatCurrency, kmToDisplayUnit, getDistanceUnitShort } from "@/lib/for
 import type { DistanceUnit } from "@/lib/format-utils";
 
 const TIMEZONE = "America/Los_Angeles";
-const MIN_RENTAL_DAYS = 30;
-const MAX_RENTAL_DAYS = 90;
 
 // Helper to calculate age from DOB
 const calculateAge = (dob: Date): number => {
@@ -46,7 +44,7 @@ const calculateAge = (dob: Date): number => {
 };
 
 // Create form schema with dynamic minimum age and booking lead time
-const createRentalDetailsSchema = (minimumAge: number = 18, leadTimeHours: number = 24) => z.object({
+const createRentalDetailsSchema = (minimumAge: number = 18, leadTimeHours: number = 24, minRentalDays: number = 1, maxRentalDays: number = 90) => z.object({
   pickupLocation: z.string().min(5, "Please enter a valid pickup location"),
   returnLocation: z.string().min(5, "Please enter a valid return location"),
   sameAsPickup: z.boolean(),
@@ -74,17 +72,19 @@ const createRentalDetailsSchema = (minimumAge: number = 18, leadTimeHours: numbe
   const pickup = new Date(`${format(data.pickupDate, "yyyy-MM-dd")}T${data.pickupTime}`);
   const returnDt = new Date(`${format(data.returnDate, "yyyy-MM-dd")}T${data.returnTime}`);
   const daysDiff = differenceInDays(returnDt, pickup);
-  return daysDiff >= MIN_RENTAL_DAYS;
+  return daysDiff >= minRentalDays;
 }, {
-  message: `Minimum rental period is ${MIN_RENTAL_DAYS} days (1 month)`,
+  message: minRentalDays === 1
+    ? `Return must be at least 24 hours after pickup`
+    : `Minimum rental period is ${minRentalDays} day${minRentalDays !== 1 ? 's' : ''}`,
   path: ["returnDate"]
 }).refine((data) => {
   const pickup = new Date(`${format(data.pickupDate, "yyyy-MM-dd")}T${data.pickupTime}`);
   const returnDt = new Date(`${format(data.returnDate, "yyyy-MM-dd")}T${data.returnTime}`);
   const daysDiff = differenceInDays(returnDt, pickup);
-  return daysDiff <= MAX_RENTAL_DAYS;
+  return daysDiff <= maxRentalDays;
 }, {
-  message: `Maximum rental period is ${MAX_RENTAL_DAYS} days`,
+  message: `Maximum rental period is ${maxRentalDays} day${maxRentalDays !== 1 ? 's' : ''}`,
   path: ["returnDate"]
 }).refine((data) => {
   if (leadTimeHours <= 0) return true;
@@ -121,10 +121,12 @@ export default function Booking() {
   const [requestCollection, setRequestCollection] = useState(false);
   const [collectionLocationId, setCollectionLocationId] = useState<string | null>(null);
 
-  // Create schema with tenant's minimum age and lead time
+  // Create schema with tenant's minimum age, lead time, and rental duration limits
   const minimumAge = tenant?.minimum_rental_age || 18;
   const leadTimeHours = tenant?.booking_lead_time_hours ?? 24;
-  const rentalDetailsSchema = createRentalDetailsSchema(minimumAge, leadTimeHours);
+  const minRentalDays = tenant?.min_rental_days ?? 1;
+  const maxRentalDays = tenant?.max_rental_days ?? 90;
+  const rentalDetailsSchema = createRentalDetailsSchema(minimumAge, leadTimeHours, minRentalDays, maxRentalDays);
 
   const form = useForm<RentalDetailsForm>({
     resolver: zodResolver(rentalDetailsSchema),
@@ -318,11 +320,11 @@ export default function Booking() {
       const returnDt = new Date(`${format(returnDate, "yyyy-MM-dd")}T${returnTime}`);
       const days = differenceInDays(returnDt, pickup);
 
-      if (days < MIN_RENTAL_DAYS) {
-        return { valid: false, text: `Min ${MIN_RENTAL_DAYS} days required`, days };
+      if (days < minRentalDays) {
+        return { valid: false, text: `Min ${minRentalDays} day${minRentalDays !== 1 ? 's' : ''} required`, days };
       }
-      if (days > MAX_RENTAL_DAYS) {
-        return { valid: false, text: `Max ${MAX_RENTAL_DAYS} days`, days };
+      if (days > maxRentalDays) {
+        return { valid: false, text: `Max ${maxRentalDays} day${maxRentalDays !== 1 ? 's' : ''}`, days };
       }
 
       return {

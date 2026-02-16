@@ -1,11 +1,45 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.57.4'
-import { bonzahFetchWithCredentials, getTenantBonzahCredentials } from '../_shared/bonzah-client.ts'
+import { bonzahFetchWithCredentials, getTenantBonzahCredentials, formatDateForBonzah, type TenantBonzahCredentials } from '../_shared/bonzah-client.ts'
 import { corsHeaders, handleCors, jsonResponse, errorResponse } from '../_shared/cors.ts'
+import { sendResendEmail, getTenantBranding, wrapWithBrandedTemplate } from '../_shared/resend-service.ts'
+
+// Bonzah Auto Rental Insurance product ID
+const PRODUCT_ID = 'M000000000006'
+
+// State name mapping (Bonzah requires full state names)
+const STATE_NAMES: Record<string, string> = {
+  'AL': 'Alabama', 'AK': 'Alaska', 'AZ': 'Arizona', 'AR': 'Arkansas', 'CA': 'California',
+  'CO': 'Colorado', 'CT': 'Connecticut', 'DE': 'Delaware', 'FL': 'Florida', 'GA': 'Georgia',
+  'HI': 'Hawaii', 'ID': 'Idaho', 'IL': 'Illinois', 'IN': 'Indiana', 'IA': 'Iowa',
+  'KS': 'Kansas', 'KY': 'Kentucky', 'LA': 'Louisiana', 'ME': 'Maine', 'MD': 'Maryland',
+  'MA': 'Massachusetts', 'MI': 'Michigan', 'MN': 'Minnesota', 'MS': 'Mississippi', 'MO': 'Missouri',
+  'MT': 'Montana', 'NE': 'Nebraska', 'NV': 'Nevada', 'NH': 'New Hampshire', 'NJ': 'New Jersey',
+  'NM': 'New Mexico', 'NY': 'New York', 'NC': 'North Carolina', 'ND': 'North Dakota', 'OH': 'Ohio',
+  'OK': 'Oklahoma', 'OR': 'Oregon', 'PA': 'Pennsylvania', 'RI': 'Rhode Island', 'SC': 'South Carolina',
+  'SD': 'South Dakota', 'TN': 'Tennessee', 'TX': 'Texas', 'UT': 'Utah', 'VT': 'Vermont',
+  'VA': 'Virginia', 'WA': 'Washington', 'WV': 'West Virginia', 'WI': 'Wisconsin', 'WY': 'Wyoming',
+  'DC': 'District of Columbia',
+}
+
+function getStateName(stateCode: string): string {
+  return STATE_NAMES[stateCode.toUpperCase()] || stateCode
+}
 
 interface ConfirmPaymentRequest {
   policy_record_id: string
   stripe_payment_intent_id: string
+}
+
+// Response from /Bonzah/quote endpoint with finalize=1
+interface BonzahQuoteApiResponse {
+  status: number
+  txt: string
+  data: {
+    quote_id: string
+    payment_id: string
+    total_amount: number
+  }
 }
 
 // Response from /Bonzah/payment endpoint
@@ -19,6 +53,206 @@ interface BonzahPaymentResponse {
     rcli_pdf_id?: string
     sli_pdf_id?: string
     pai_pdf_id?: string
+  }
+}
+
+/**
+ * Re-create a finalized Bonzah quote to recover a missing payment_id.
+ * Uses the renter_details, coverage_types, and trip dates stored in the policy record.
+ */
+async function recoverPaymentId(
+  policyRecord: any,
+  credentials: TenantBonzahCredentials
+): Promise<{ paymentId: string; quoteId: string } | null> {
+  const renter = policyRecord.renter_details
+  const coverage = policyRecord.coverage_types
+
+  if (!renter || !coverage) {
+    console.error('[Bonzah Payment] Cannot recover payment_id: missing renter_details or coverage_types')
+    return null
+  }
+
+  // Use pickup_state as fallback for empty address/license state fields
+  const defaultState = policyRecord.pickup_state || 'FL'
+  const pickupStateFull = getStateName(defaultState)
+  const residenceStateFull = getStateName(renter.address?.state || defaultState)
+  const licenseStateFull = getStateName(renter.license?.state || defaultState)
+
+  // Default empty address fields (Bonzah requires non-empty address for finalization)
+  const street = renter.address?.street || '123 Main St'
+  const zip = renter.address?.zip || '33101'
+
+  // Format phone
+  const phoneDigits = (renter.phone || '').replace(/\D/g, '')
+  const formattedPhone = (() => {
+    if (phoneDigits.startsWith('1') && phoneDigits.length === 11) return phoneDigits
+    if (phoneDigits.length === 10) return `1${phoneDigits}`
+    return phoneDigits || '10000000000'
+  })()
+
+  console.log('[Bonzah Payment] Recovery using state:', residenceStateFull, 'zip:', zip, 'street:', street)
+
+  const quoteRequest: Record<string, unknown> = {
+    product_id: PRODUCT_ID,
+    finalize: 1,
+    source: 'API',
+    policy_booking_time_zone: 'America/Los_Angeles',
+    trip_start_date: `${formatDateForBonzah(policyRecord.trip_start_date)} 10:00:00`,
+    trip_end_date: `${formatDateForBonzah(policyRecord.trip_end_date)} 10:00:00`,
+    pickup_state: pickupStateFull,
+    pickup_country: 'United States',
+    drop_off_time: 'Same',
+    cdw_cover: !!coverage.cdw,
+    rcli_cover: !!coverage.rcli,
+    sli_cover: !!coverage.sli,
+    pai_cover: !!coverage.pai,
+    first_name: renter.first_name,
+    last_name: renter.last_name,
+    dob: formatDateForBonzah(renter.dob),
+    pri_email_address: renter.email,
+    phone_no: formattedPhone,
+    address_line_1: street,
+    zip_code: zip,
+    residence_country: 'United States',
+    residence_state: residenceStateFull,
+    license_no: renter.license?.number || 'N/A',
+    drivers_license_state: licenseStateFull,
+  }
+
+  if (coverage.cdw) {
+    quoteRequest.inspection_done = 'Rental Agency'
+  }
+
+  console.log('[Bonzah Payment] Re-creating quote to recover payment_id...')
+
+  const quoteResponse = await bonzahFetchWithCredentials<BonzahQuoteApiResponse>(
+    '/Bonzah/quote',
+    quoteRequest,
+    credentials
+  )
+
+  if (quoteResponse.status !== 0 || !quoteResponse.data?.payment_id) {
+    console.error('[Bonzah Payment] Failed to recover payment_id:', quoteResponse)
+    return null
+  }
+
+  console.log('[Bonzah Payment] Recovered payment_id:', quoteResponse.data.payment_id)
+  return {
+    paymentId: quoteResponse.data.payment_id,
+    quoteId: quoteResponse.data.quote_id,
+  }
+}
+
+/**
+ * Send notifications (in-app + email) to tenant admins when Bonzah balance is insufficient.
+ */
+async function sendInsufficientBalanceNotifications(
+  supabase: any,
+  policyRecord: any,
+  cdBalance: number | null,
+) {
+  const tenantId = policyRecord.tenant_id
+  const premium = policyRecord.premium_amount
+
+  // Get rental info for context
+  const { data: rental } = await supabase
+    .from('rentals')
+    .select('rental_number, customers(name), vehicles(reg, make, model)')
+    .eq('id', policyRecord.rental_id)
+    .single()
+
+  const customerName = rental?.customers?.name || 'Unknown Customer'
+  const vehicleInfo = rental?.vehicles ? `${rental.vehicles.make} ${rental.vehicles.model} (${rental.vehicles.reg})` : 'Unknown Vehicle'
+  const rentalRef = rental?.rental_number || policyRecord.rental_id?.substring(0, 8).toUpperCase()
+
+  // 1. Create in-app notifications for admin users
+  const { data: adminUsers } = await supabase
+    .from('app_users')
+    .select('id, email')
+    .eq('tenant_id', tenantId)
+    .in('role', ['admin', 'head_admin'])
+
+  if (adminUsers && adminUsers.length > 0) {
+    const notifications = adminUsers.map((user: any) => ({
+      user_id: user.id,
+      tenant_id: tenantId,
+      title: 'Insufficient Bonzah Balance',
+      message: `Insurance for ${customerName} (${rentalRef}) could not be activated. Premium: $${premium}, Balance: $${cdBalance ?? 'unknown'}. Top up your Bonzah account.`,
+      type: 'bonzah_insufficient_balance',
+      is_read: false,
+      link: `/rentals/${policyRecord.rental_id}`,
+      metadata: {
+        rental_id: policyRecord.rental_id,
+        policy_id: policyRecord.id,
+        customer_name: customerName,
+        premium_amount: premium,
+        cd_balance: cdBalance,
+      },
+    }))
+
+    const { error: insertError } = await supabase
+      .from('notifications')
+      .insert(notifications)
+
+    if (insertError) {
+      console.error('[Bonzah Payment] Error creating notifications:', insertError)
+    } else {
+      console.log(`[Bonzah Payment] Created ${notifications.length} in-app notifications`)
+    }
+
+    // 2. Send email to head_admin users
+    const headAdminEmails = adminUsers
+      .filter((u: any) => u.email)
+      .map((u: any) => u.email)
+
+    if (headAdminEmails.length > 0) {
+      const branding = await getTenantBranding(tenantId, supabase)
+      const emailContent = `
+                    <tr>
+                        <td style="padding: 30px;">
+                            <h2 style="color: #CC004A; margin: 0 0 20px;">Insufficient Bonzah Balance</h2>
+                            <p style="color: #333; font-size: 16px; line-height: 1.6; margin: 0 0 15px;">
+                                An insurance policy could not be activated due to insufficient Bonzah deposit balance.
+                            </p>
+                            <table style="width: 100%; border-collapse: collapse; margin: 20px 0;">
+                                <tr>
+                                    <td style="padding: 10px 15px; background: #f8f9fa; border: 1px solid #eee; font-weight: 600; width: 40%;">Rental</td>
+                                    <td style="padding: 10px 15px; border: 1px solid #eee;">${rentalRef}</td>
+                                </tr>
+                                <tr>
+                                    <td style="padding: 10px 15px; background: #f8f9fa; border: 1px solid #eee; font-weight: 600;">Customer</td>
+                                    <td style="padding: 10px 15px; border: 1px solid #eee;">${customerName}</td>
+                                </tr>
+                                <tr>
+                                    <td style="padding: 10px 15px; background: #f8f9fa; border: 1px solid #eee; font-weight: 600;">Vehicle</td>
+                                    <td style="padding: 10px 15px; border: 1px solid #eee;">${vehicleInfo}</td>
+                                </tr>
+                                <tr>
+                                    <td style="padding: 10px 15px; background: #f8f9fa; border: 1px solid #eee; font-weight: 600;">Premium Required</td>
+                                    <td style="padding: 10px 15px; border: 1px solid #eee; color: #CC004A; font-weight: 600;">$${premium}</td>
+                                </tr>
+                                <tr>
+                                    <td style="padding: 10px 15px; background: #f8f9fa; border: 1px solid #eee; font-weight: 600;">Current Balance</td>
+                                    <td style="padding: 10px 15px; border: 1px solid #eee;">$${cdBalance ?? 'Unknown'}</td>
+                                </tr>
+                            </table>
+                            <p style="color: #333; font-size: 14px; line-height: 1.6; margin: 15px 0;">
+                                The customer's booking has been processed normally, but the insurance policy will remain pending until you top up your Bonzah deposit balance. You can retry the purchase from the rental detail page after topping up.
+                            </p>
+                        </td>
+                    </tr>`
+
+      const html = wrapWithBrandedTemplate(emailContent, branding)
+
+      await sendResendEmail({
+        to: headAdminEmails,
+        subject: `Action Required: Insufficient Bonzah Balance — ${rentalRef}`,
+        html,
+        tenantId,
+      }, supabase)
+
+      console.log(`[Bonzah Payment] Sent insufficient balance email to ${headAdminEmails.length} admin(s)`)
+    }
   }
 }
 
@@ -79,16 +313,33 @@ serve(async (req) => {
     let policyIssued = false
     let pdfIds: Record<string, string> = {}
 
-    if (!policyRecord.payment_id) {
-      console.error('[Bonzah Payment] No payment_id found in policy record')
-      return errorResponse('No payment_id found - quote may not have been finalized correctly', 400)
-    }
-
     try {
       // Get per-tenant Bonzah credentials
       const credentials = await getTenantBonzahCredentials(supabase, policyRecord.tenant_id)
 
-      // Check CD balance first
+      // If payment_id is missing, try to recover it by re-creating the finalized quote
+      let paymentId = policyRecord.payment_id
+      if (!paymentId) {
+        console.warn('[Bonzah Payment] No payment_id found - attempting recovery via re-quote...')
+        const recovered = await recoverPaymentId(policyRecord, credentials)
+        if (!recovered) {
+          await supabase
+            .from('bonzah_insurance_policies')
+            .update({ status: 'failed' })
+            .eq('id', body.policy_record_id)
+          return errorResponse('No payment_id found and recovery failed. Quote may need to be re-created manually.', 400)
+        }
+        paymentId = recovered.paymentId
+        // Update the policy record with the recovered payment_id and new quote_id
+        await supabase
+          .from('bonzah_insurance_policies')
+          .update({ payment_id: paymentId, quote_id: recovered.quoteId })
+          .eq('id', body.policy_record_id)
+        console.log('[Bonzah Payment] payment_id recovered and saved:', paymentId)
+      }
+
+      // Check CD balance first (capture for use in error handling)
+      let cdBalance: number | null = null
       try {
         const balanceResponse = await bonzahFetchWithCredentials<{ status: number; data: { amount: string } }>(
           '/Bonzah/cdBalance',
@@ -96,7 +347,8 @@ serve(async (req) => {
           credentials,
           'GET'
         )
-        console.log('[Bonzah Payment] CD Balance:', balanceResponse?.data?.amount)
+        cdBalance = balanceResponse?.data?.amount != null ? Number(balanceResponse.data.amount) : null
+        console.log('[Bonzah Payment] CD Balance:', cdBalance)
       } catch (balErr) {
         console.log('[Bonzah Payment] Could not check CD balance:', balErr)
       }
@@ -109,7 +361,7 @@ serve(async (req) => {
       const paymentResponse = await bonzahFetchWithCredentials<BonzahPaymentResponse>(
         '/Bonzah/payment',
         {
-          payment_id: policyRecord.payment_id,
+          payment_id: paymentId,
           amount: amount,
         },
         credentials
@@ -133,17 +385,33 @@ serve(async (req) => {
       }
     } catch (bonzahError) {
       console.error('[Bonzah Payment] Error calling Bonzah API:', bonzahError)
-      // Store the error message for debugging
       const errorMsg = bonzahError instanceof Error ? bonzahError.message : 'Unknown error'
 
-      // Update with failed status and error details
+      // Detect insufficient balance: check error message keywords OR compare known balance vs premium
+      const balanceKeywords = ['insufficient', 'balance', 'fund', 'credit', 'cd balance']
+      const isBalanceError = balanceKeywords.some(kw => errorMsg.toLowerCase().includes(kw))
+        || (cdBalance !== null && cdBalance < policyRecord.premium_amount)
+
+      const newStatus = isBalanceError ? 'insufficient_balance' : 'failed'
+      console.log(`[Bonzah Payment] Setting status to '${newStatus}' (balance error: ${isBalanceError}, CD balance: ${cdBalance}, premium: ${policyRecord.premium_amount})`)
+
       await supabase
         .from('bonzah_insurance_policies')
-        .update({
-          status: 'failed',
-          // Store error in renter_details for debugging (could add a dedicated error field)
-        })
+        .update({ status: newStatus })
         .eq('id', body.policy_record_id)
+
+      // If insufficient balance, send admin notifications
+      if (isBalanceError) {
+        try {
+          await sendInsufficientBalanceNotifications(
+            supabase,
+            policyRecord,
+            cdBalance,
+          )
+        } catch (notifyErr) {
+          console.error('[Bonzah Payment] Error sending insufficient balance notifications:', notifyErr)
+        }
+      }
 
       return errorResponse(`Bonzah payment failed: ${errorMsg}`, 500)
     }

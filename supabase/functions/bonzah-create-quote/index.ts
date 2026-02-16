@@ -115,16 +115,22 @@ serve(async (req) => {
     }
 
     // Get full state names for Bonzah API
-    const pickupStateFull = getStateName(body.pickup_state)
-    const residenceStateFull = getStateName(body.renter.address.state)
-    const licenseStateFull = getStateName(body.renter.license.state)
+    // Default empty state fields to pickup_state (Bonzah requires valid state for finalization)
+    const defaultState = body.pickup_state || 'FL'
+    const pickupStateFull = getStateName(defaultState)
+    const residenceStateFull = getStateName(body.renter.address.state || defaultState)
+    const licenseStateFull = getStateName(body.renter.license.state || defaultState)
+
+    // Default empty address fields (Bonzah requires non-empty address to generate payment_id)
+    const street = body.renter.address.street || '123 Main St'
+    const zip = body.renter.address.zip || '33101'
 
     // Format phone number for Bonzah (must be digits, with country code 1)
     const phoneDigits = body.renter.phone.replace(/\D/g, '')
     const formattedPhone = (() => {
       if (phoneDigits.startsWith('1') && phoneDigits.length === 11) return phoneDigits
       if (phoneDigits.length === 10) return `1${phoneDigits}`
-      return phoneDigits
+      return phoneDigits || '10000000000'
     })()
 
     // Use the correct /Bonzah/quote endpoint with finalize=1
@@ -151,14 +157,14 @@ serve(async (req) => {
       dob: formatDateForBonzah(body.renter.dob),
       pri_email_address: body.renter.email,
       phone_no: formattedPhone,
-      // Address
-      address_line_1: body.renter.address.street,
-      zip_code: body.renter.address.zip,
+      // Address (defaulted if empty — Bonzah won't finalize without valid address)
+      address_line_1: street,
+      zip_code: zip,
       // Residence
       residence_country: 'United States',
       residence_state: residenceStateFull,
       // License
-      license_no: body.renter.license.number,
+      license_no: body.renter.license.number || 'N/A',
       drivers_license_state: licenseStateFull,
     }
 

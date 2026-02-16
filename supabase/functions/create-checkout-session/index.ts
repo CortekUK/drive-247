@@ -16,7 +16,7 @@ serve(async (req) => {
   }
 
   try {
-    const { bookingId, rentalId, customerEmail, customerName, totalAmount, tenantSlug, tenantId: bodyTenantId, bonzahPolicyId, successUrl, cancelUrl } = await req.json()
+    const { bookingId, rentalId, customerEmail, customerName, totalAmount, tenantSlug, tenantId: bodyTenantId, bonzahPolicyId, successUrl, cancelUrl, targetCategories, source } = await req.json()
 
     // Get tenant slug from header or body
     const slug = tenantSlug || req.headers.get('x-tenant-slug')
@@ -140,6 +140,8 @@ serve(async (req) => {
         tenant_slug: slug,
         stripe_mode: stripeMode, // Track which mode was used
         ...(bonzahPolicyId ? { bonzah_policy_id: bonzahPolicyId } : {}),
+        ...(source ? { source } : {}),
+        ...(targetCategories && targetCategories.length > 0 ? { target_categories: JSON.stringify(targetCategories) } : {}),
       },
     }
 
@@ -197,11 +199,12 @@ serve(async (req) => {
               payment_date: today,
               method: 'Card',
               payment_type: 'Payment',
-              status: 'Applied',
-              verification_status: 'auto_approved', // Stripe verified payment
+              status: 'Pending',
+              remaining_amount: paymentAmount,
+              verification_status: 'pending',
               stripe_checkout_session_id: session.id,
               capture_status: 'requires_capture',
-              booking_source: 'website',
+              booking_source: source === 'portal' ? 'admin' : 'website',
               created_at: new Date().toISOString(),
               updated_at: new Date().toISOString(),
             })

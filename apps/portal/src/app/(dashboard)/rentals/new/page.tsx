@@ -24,6 +24,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useTenant } from "@/contexts/TenantContext";
 import BonzahInsuranceSelector from "@/components/rentals/bonzah-insurance-selector";
 import type { CoverageOptions } from "@/hooks/use-bonzah-premium";
+import { useBonzahBalance } from "@/hooks/use-bonzah-balance";
 import { useCustomerActiveRentals } from "@/hooks/use-customer-active-rentals";
 import { PAYMENT_TYPES } from "@/constants";
 import { ContractSummary } from "@/components/rentals/contract-summary";
@@ -97,6 +98,7 @@ const CreateRental = () => {
   const { toast } = useToast();
   const { tenant } = useTenant();
   const skipInsurance = !tenant?.integration_bonzah;
+  const { balanceNumber: bonzahCdBalance } = useBonzahBalance();
   const queryClient = useQueryClient();
   const { isManager, canEdit } = useManagerPermissions();
   const [loading, setLoading] = useState(false);
@@ -463,12 +465,12 @@ const CreateRental = () => {
       if (!selectedCustomerId || !tenant?.id) return null;
       const { data, error } = await (supabase as any)
         .from("customers")
-        .select("id, name, email, phone, date_of_birth, identity_verification_status")
+        .select("id, name, email, phone, date_of_birth, identity_verification_status, address_street, address_city, address_state, address_zip, license_number, license_state")
         .eq("id", selectedCustomerId)
         .eq("tenant_id", tenant.id)
         .single();
       if (error) throw error;
-      return data as { id: string; name: string; email?: string; phone?: string; date_of_birth?: string; identity_verification_status?: string } | null;
+      return data as { id: string; name: string; email?: string; phone?: string; date_of_birth?: string; identity_verification_status?: string; address_street?: string; address_city?: string; address_state?: string; address_zip?: string; license_number?: string; license_state?: string } | null;
     },
     enabled: !!selectedCustomerId && !!tenant?.id,
   });
@@ -862,6 +864,7 @@ const CreateRental = () => {
           const nameParts = (customer?.name || 'N/A').split(' ');
           const firstName = nameParts[0] || 'N/A';
           const lastName = nameParts.slice(1).join(' ') || 'N/A';
+          const custState = customer?.address_state || 'FL';
           const { error: quoteError } = await supabase.functions.invoke('bonzah-create-quote', {
             body: {
               rental_id: rental.id,
@@ -871,7 +874,7 @@ const CreateRental = () => {
                 start: data.start_date.toISOString().split('T')[0],
                 end: data.end_date.toISOString().split('T')[0],
               },
-              pickup_state: 'FL',
+              pickup_state: custState,
               coverage: bonzahCoverage,
               renter: {
                 first_name: firstName,
@@ -880,14 +883,14 @@ const CreateRental = () => {
                 email: customer?.email || '',
                 phone: customer?.phone || '',
                 address: {
-                  street: '123 Main St',
-                  city: 'Miami',
-                  state: 'FL',
-                  zip: '33101',
+                  street: customer?.address_street || '',
+                  city: customer?.address_city || '',
+                  state: custState,
+                  zip: customer?.address_zip || '',
                 },
                 license: {
-                  number: 'N/A',
-                  state: 'FL',
+                  number: customer?.license_number || '',
+                  state: customer?.license_state || custState,
                 },
               },
             },
@@ -1040,14 +1043,6 @@ const CreateRental = () => {
         // If invoice fails, still continue with the flow - skip invoice and go to DocuSign
       }
 
-      // Store rental data for dialogs
-      setCreatedRentalData({
-        rental,
-        customer: selectedCustomer,
-        vehicle: selectedVehicle,
-        formData: data,
-      });
-
       // Send booking notification emails
       try {
         await sendBookingNotification({
@@ -1077,17 +1072,24 @@ const CreateRental = () => {
       queryClient.invalidateQueries({ queryKey: ["reminders"] });
       queryClient.invalidateQueries({ queryKey: ["reminder-stats"] });
 
-      // Auto-trigger DocuSign (required for rental to become Active)
+      // Auto-trigger DocuSign via portal API route (uses Node.js crypto, same as booking app)
       let docuSignSuccess = false;
       try {
-        const { data: docuSignData, error: docuSignError } = await supabase.functions.invoke("create-docusign-envelope", {
-          body: {
+        const docuSignResponse = await fetch("/api/docusign", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
             rentalId: rental.id,
-          },
+            customerEmail: selectedCustomer?.email || "",
+            customerName: selectedCustomer?.name || customerName,
+            tenantId: tenant?.id,
+          }),
         });
 
-        if (docuSignError || !docuSignData?.ok) {
-          console.error("DocuSign error:", docuSignError || docuSignData);
+        const docuSignData = await docuSignResponse.json();
+
+        if (!docuSignResponse.ok || !docuSignData?.ok) {
+          console.error("DocuSign error:", docuSignData);
           toast({
             title: "Rental Created - DocuSign Pending",
             description: `Rental created but DocuSign failed to send. You can retry from the rental details page.`,
@@ -1095,16 +1097,7 @@ const CreateRental = () => {
           });
         } else {
           docuSignSuccess = true;
-          // Update rental with envelope ID
-          await supabase
-            .from("rentals")
-            .update({
-              docusign_envelope_id: docuSignData.envelopeId,
-              document_status: "sent",
-              envelope_sent_at: new Date().toISOString(),
-            })
-            .eq("id", rental.id);
-
+          // The API route already updates the rental with envelope ID
           toast({
             title: "Rental Created - Agreement Sent",
             description: `Rental created for ${customerName} • ${vehicleReg}. DocuSign agreement sent to customer.`,
@@ -1750,7 +1743,7 @@ const CreateRental = () => {
                       <BonzahInsuranceSelector
                         tripStartDate={watchedStartDate ? watchedStartDate.toISOString().split('T')[0] : null}
                         tripEndDate={watchedEndDate ? watchedEndDate.toISOString().split('T')[0] : null}
-                        pickupState="FL"
+                        pickupState={customerDetails?.address_state || "FL"}
                         onCoverageChange={(coverage, premium) => {
                           setBonzahCoverage(coverage);
                           setBonzahPremium(premium);
@@ -1761,6 +1754,14 @@ const CreateRental = () => {
                         }}
                         initialCoverage={bonzahCoverage}
                       />
+                      {bonzahPremium > 0 && bonzahCdBalance != null && bonzahPremium > bonzahCdBalance && (
+                        <div className="rounded-lg border border-[#CC004A]/30 bg-[#CC004A]/5 p-3 flex items-start gap-2">
+                          <AlertTriangle className="h-4 w-4 text-[#CC004A] mt-0.5 flex-shrink-0" />
+                          <p className="text-sm text-muted-foreground">
+                            Insurance premium (<span className="font-medium text-[#CC004A]">${bonzahPremium.toFixed(2)}</span>) exceeds your current Bonzah balance (<span className="font-medium">${bonzahCdBalance.toFixed(2)}</span>). The rental can still be created, but the policy won't activate until you top up.
+                          </p>
+                        </div>
+                      )}
                     </div>
                   )}
 
@@ -2026,26 +2027,24 @@ const CreateRental = () => {
         </div>
       </div>
 
-      {/* Post-Creation Payment Dialog */}
-      {createdRentalData && (
-        <AddPaymentDialog
-          open={showPaymentDialog}
-          onOpenChange={(open) => {
-            if (!open) {
-              setShowPaymentDialog(false);
-              // After payment dialog closes, show invoice dialog if available, otherwise navigate
-              if (generatedInvoice) {
-                setShowInvoiceDialog(true);
-              } else if (createdRentalData?.rental?.id) {
-                router.push(`/rentals/${createdRentalData.rental.id}`);
-              }
+      {/* Post-Creation Payment Dialog — always mounted so Radix Dialog transitions correctly */}
+      <AddPaymentDialog
+        open={showPaymentDialog}
+        onOpenChange={(open) => {
+          if (!open) {
+            setShowPaymentDialog(false);
+            // After payment dialog closes, show invoice dialog if available, otherwise navigate
+            if (generatedInvoice) {
+              setShowInvoiceDialog(true);
+            } else if (createdRentalData?.rental?.id) {
+              router.push(`/rentals/${createdRentalData.rental.id}`);
             }
-          }}
-          customer_id={createdRentalData.rental?.customer_id || createdRentalData.formData?.customer_id}
-          vehicle_id={createdRentalData.rental?.vehicle_id || createdRentalData.formData?.vehicle_id}
-          rental_id={createdRentalData.rental?.id}
-        />
-      )}
+          }
+        }}
+        customer_id={createdRentalData?.rental?.customer_id || createdRentalData?.formData?.customer_id}
+        vehicle_id={createdRentalData?.rental?.vehicle_id || createdRentalData?.formData?.vehicle_id}
+        rental_id={createdRentalData?.rental?.id}
+      />
 
       {/* Invoice Dialog */}
       {generatedInvoice && createdRentalData && (

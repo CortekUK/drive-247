@@ -27,6 +27,7 @@ import {
   XCircle,
   List,
   CalendarDays,
+  ShieldAlert,
 } from "lucide-react";
 import { useEnhancedRentals, RentalFilters, EnhancedRental } from "@/hooks/use-enhanced-rentals";
 import { RentalsFilters } from "@/components/rentals/rentals-filters";
@@ -79,6 +80,7 @@ const RentalsList = () => {
       sortBy: searchParams.get("sortBy") || "created_at",
       sortOrder: (searchParams.get("sortOrder") as "asc" | "desc") || "desc",
       page: parseInt(searchParams.get("page") || "1"),
+      bonzahStatus: searchParams.get("bonzahStatus") || undefined,
     }),
     [searchParams]
   );
@@ -311,7 +313,7 @@ const RentalsList = () => {
                     {rentals.map((rental) => (
                       <TableRow
                         key={rental.id}
-                        className={`hover:bg-muted/50 cursor-pointer ${rental.is_extended ? 'bg-amber-500/10 border-l-4 border-l-amber-500' : rental.cancellation_requested ? 'bg-red-500/10 border-l-4 border-l-red-500' : ''}`}
+                        className={`hover:bg-muted/50 cursor-pointer ${rental.is_extended ? 'bg-amber-500/10 border-l-4 border-l-amber-500' : rental.cancellation_requested ? 'bg-red-500/10 border-l-4 border-l-red-500' : (!filters.bonzahStatus && (rental.bonzah_status === 'insufficient_balance' || rental.bonzah_status === 'quoted')) ? 'bg-[#CC004A]/5 border-l-4 border-l-[#CC004A]' : ''}`}
                         onClick={() => router.push(`/rentals/${rental.id}`)}
                       >
                         <TableCell className="font-medium">
@@ -336,6 +338,15 @@ const RentalsList = () => {
                               <span className="text-xs text-red-600 font-medium flex items-center gap-1 mt-0.5">
                                 <XCircle className="h-3 w-3" />
                                 Cancellation Requested
+                              </span>
+                            </div>
+                          ) : (!filters.bonzahStatus && (rental.bonzah_status === 'insufficient_balance' || rental.bonzah_status === 'quoted')) ? (
+                            <div className="flex flex-col">
+                              <span>{rental.rental_number}</span>
+                              <span className="text-xs text-[#CC004A] font-medium flex items-center gap-1 mt-0.5">
+                                <img src="/bonzah-logo.svg" alt="" className="h-3 w-auto dark:hidden" />
+                                <img src="/bonzah-logo-dark.svg" alt="" className="h-3 w-auto hidden dark:block" />
+                                Ins. Quoted
                               </span>
                             </div>
                           ) : (

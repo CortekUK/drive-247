@@ -196,36 +196,6 @@ export function RentalCard({ rental, insuranceReuploadRequired }: RentalCardProp
                     <Pencil className="h-3.5 w-3.5" />
                   </Button>
                 )}
-                {canCancel && (
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-7 w-7 text-red-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30"
-                    onClick={(e) => {
-                      e.preventDefault();
-                      e.stopPropagation();
-                      setShowCancelDialog(true);
-                    }}
-                    title="Cancel Booking"
-                  >
-                    <XCircle className="h-3.5 w-3.5" />
-                  </Button>
-                )}
-                {canExtend && (
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-7 w-7"
-                    onClick={(e) => {
-                      e.preventDefault();
-                      e.stopPropagation();
-                      setShowExtendDialog(true);
-                    }}
-                    title="Extend Rental"
-                  >
-                    <CalendarPlus className="h-3.5 w-3.5" />
-                  </Button>
-                )}
                 {canRenew && (
                   <Button
                     variant="ghost"
@@ -409,6 +379,43 @@ export function RentalCard({ rental, insuranceReuploadRequired }: RentalCardProp
                   <span className="font-semibold text-lg">
                     {formatCurrency(rental.monthly_amount || 0, currencyCode)}
                   </span>
+                </div>
+              )}
+
+              {/* Requests section */}
+              {(canExtend || canCancel) && (
+                <div className="pt-2 border-t mt-2 flex items-center gap-2">
+                  <span className="text-xs text-muted-foreground shrink-0">Requests:</span>
+                  {canExtend && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="h-7 text-xs px-2.5"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        setShowExtendDialog(true);
+                      }}
+                    >
+                      <RefreshCw className="h-3 w-3 mr-1" />
+                      Extension
+                    </Button>
+                  )}
+                  {canCancel && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="h-7 text-xs px-2.5 border-red-300 text-red-600 hover:bg-red-50 dark:border-red-800 dark:text-red-400 dark:hover:bg-red-950/30"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        setShowCancelDialog(true);
+                      }}
+                    >
+                      <XCircle className="h-3 w-3 mr-1" />
+                      Cancellation
+                    </Button>
+                  )}
                 </div>
               )}
 

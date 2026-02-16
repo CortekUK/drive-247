@@ -369,7 +369,7 @@ export function useKeyHandover(rentalId: string | undefined) {
             .eq("id", rental.vehicle_id);
         }
 
-        // Auto-refund security deposit
+        // Auto-refund security deposit (minus any excess mileage charge)
         // First, check if there's a security deposit that was paid
         const { data: invoice } = await supabase
           .from("invoices")
@@ -381,32 +381,74 @@ export function useKeyHandover(rentalId: string | undefined) {
 
         const securityDeposit = invoice?.security_deposit || 0;
 
+        // Check for excess mileage charge
+        let excessMileageAmount = 0;
+        let excessMileageChargeId: string | null = null;
+        const { data: excessCharge } = await supabase
+          .from("ledger_entries")
+          .select("id, amount, remaining_amount")
+          .eq("rental_id", rentalId)
+          .eq("type", "Charge")
+          .eq("category", "Excess Mileage")
+          .maybeSingle();
+
+        if (excessCharge && excessCharge.remaining_amount > 0) {
+          excessMileageAmount = excessCharge.remaining_amount;
+          excessMileageChargeId = excessCharge.id;
+        }
+
         if (securityDeposit > 0) {
-          console.log(`[KEY-HANDOVER] Auto-refunding security deposit: ${formatCurrency(securityDeposit, tenant?.currency_code || 'GBP')} for rental ${rentalId}`);
+          const depositToRefund = Math.max(0, securityDeposit - excessMileageAmount);
+          const depositToDeduct = Math.min(securityDeposit, excessMileageAmount);
 
-          try {
-            // Call the process-refund edge function
-            const { data: refundResult, error: refundError } = await supabase.functions.invoke('process-refund', {
-              body: {
-                rentalId,
-                refundType: 'full',
-                refundAmount: securityDeposit,
-                category: 'Security Deposit',
-                reason: 'Automatic refund - keys returned and rental closed',
-                processedBy: 'system',
-                tenantId: rental?.tenant_id || tenant?.id,
+          console.log(`[KEY-HANDOVER] Security deposit: ${formatCurrency(securityDeposit, tenant?.currency_code || 'GBP')}, Excess mileage: ${formatCurrency(excessMileageAmount, tenant?.currency_code || 'GBP')}, Refunding: ${formatCurrency(depositToRefund, tenant?.currency_code || 'GBP')}, Deducting: ${formatCurrency(depositToDeduct, tenant?.currency_code || 'GBP')}`);
+
+          // Deduct from deposit for excess mileage first (if applicable)
+          if (depositToDeduct > 0 && excessMileageChargeId) {
+            try {
+              const { data: deductResult, error: deductError } = await supabase.functions.invoke('deduct-from-deposit', {
+                body: {
+                  rentalId,
+                  amount: depositToDeduct,
+                  tenantId: rental?.tenant_id || tenant?.id,
+                }
+              });
+
+              if (deductError) {
+                console.error('[KEY-HANDOVER] Deposit deduction for excess mileage failed:', deductError);
+              } else {
+                console.log('[KEY-HANDOVER] Deposit deducted for excess mileage:', deductResult);
               }
-            });
-
-            if (refundError) {
-              console.error('[KEY-HANDOVER] Security deposit refund failed:', refundError);
-              // Don't throw - rental closure is more important than refund
-            } else {
-              console.log('[KEY-HANDOVER] Security deposit refunded successfully:', refundResult);
+            } catch (deductErr) {
+              console.error('[KEY-HANDOVER] Error deducting deposit:', deductErr);
             }
-          } catch (refundErr) {
-            console.error('[KEY-HANDOVER] Error processing security deposit refund:', refundErr);
-            // Don't throw - rental closure is more important
+          }
+
+          // Refund the remaining deposit (after excess mileage deduction)
+          if (depositToRefund > 0) {
+            try {
+              const { data: refundResult, error: refundError } = await supabase.functions.invoke('process-refund', {
+                body: {
+                  rentalId,
+                  refundType: depositToRefund < securityDeposit ? 'partial' : 'full',
+                  refundAmount: depositToRefund,
+                  category: 'Security Deposit',
+                  reason: depositToDeduct > 0
+                    ? `Automatic refund - keys returned (${formatCurrency(depositToDeduct, tenant?.currency_code || 'GBP')} deducted for excess mileage)`
+                    : 'Automatic refund - keys returned and rental closed',
+                  processedBy: 'system',
+                  tenantId: rental?.tenant_id || tenant?.id,
+                }
+              });
+
+              if (refundError) {
+                console.error('[KEY-HANDOVER] Security deposit refund failed:', refundError);
+              } else {
+                console.log('[KEY-HANDOVER] Security deposit refunded successfully:', refundResult);
+              }
+            } catch (refundErr) {
+              console.error('[KEY-HANDOVER] Error processing security deposit refund:', refundErr);
+            }
           }
         }
 
@@ -427,6 +469,9 @@ export function useKeyHandover(rentalId: string | undefined) {
       queryClient.invalidateQueries({ queryKey: ["rental-invoice"] });
       queryClient.invalidateQueries({ queryKey: ["rental-payments"] });
       queryClient.invalidateQueries({ queryKey: ["payments-data"] });
+      queryClient.invalidateQueries({ queryKey: ["rental-charges"] });
+      queryClient.invalidateQueries({ queryKey: ["key-handovers-mileage", rentalId] });
+      queryClient.invalidateQueries({ queryKey: ["excess-mileage-charge", rentalId] });
 
       if (type === "giving") {
         toast({
@@ -579,11 +624,29 @@ export function useKeyHandover(rentalId: string | undefined) {
             .update({ current_mileage: mileage })
             .eq("id", rental.vehicle_id);
         }
+
+        // Auto-calculate excess mileage charge
+        try {
+          const { error: calcError } = await supabase.functions.invoke('calculate-excess-mileage', {
+            body: { rentalId, tenantId: tenant?.id },
+          });
+          if (calcError) {
+            console.error('[MILEAGE] Excess mileage calculation error:', calcError);
+          }
+        } catch (calcErr) {
+          console.error('[MILEAGE] Error calling calculate-excess-mileage:', calcErr);
+        }
       }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["key-handovers", rentalId] });
+      queryClient.invalidateQueries({ queryKey: ["key-handovers-mileage", rentalId] });
       queryClient.invalidateQueries({ queryKey: ["vehicles-list"] });
+      queryClient.invalidateQueries({ queryKey: ["vehicle-mileage"] });
+      queryClient.invalidateQueries({ queryKey: ["rental-charges"] });
+      queryClient.invalidateQueries({ queryKey: ["rental-totals"] });
+      queryClient.invalidateQueries({ queryKey: ["rental-invoice"] });
+      queryClient.invalidateQueries({ queryKey: ["excess-mileage-charge", rentalId] });
       toast({
         title: "Mileage Updated",
         description: "Odometer reading has been recorded.",

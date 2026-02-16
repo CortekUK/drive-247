@@ -60,6 +60,7 @@ interface Vehicle {
   description?: string | null;
   security_deposit?: number | null;
   allowed_mileage?: number | null;
+  excess_mileage_rate?: number | null;
   lockbox_code?: string | null;
   lockbox_instructions?: string | null;
 }
@@ -126,6 +127,7 @@ export const EditVehicleDialogEnhanced = ({ vehicle, open, onOpenChange }: EditV
       description: vehicle.description || "",
       security_deposit: vehicle.security_deposit ?? undefined,
       allowed_mileage: vehicle.allowed_mileage ?? undefined,
+      excess_mileage_rate: vehicle.excess_mileage_rate ?? undefined,
     },
   });
 
@@ -175,6 +177,7 @@ export const EditVehicleDialogEnhanced = ({ vehicle, open, onOpenChange }: EditV
         security_notes: data.security_notes || null,
         security_deposit: data.security_deposit || null,
         allowed_mileage: data.allowed_mileage || null,
+        excess_mileage_rate: data.excess_mileage_rate || null,
         lockbox_code: lockboxCode || null,
         lockbox_instructions: lockboxInstructions || null,
       };
@@ -568,7 +571,7 @@ export const EditVehicleDialogEnhanced = ({ vehicle, open, onOpenChange }: EditV
                 <h3 className="font-semibold text-sm">Rental Rates</h3>
               </div>
 
-              <div className="grid grid-cols-2 md:grid-cols-5 gap-4 items-start">
+              <div className="grid grid-cols-2 md:grid-cols-6 gap-4 items-start">
                 <FormField
                   control={form.control}
                   name="daily_rent"
@@ -694,7 +697,7 @@ export const EditVehicleDialogEnhanced = ({ vehicle, open, onOpenChange }: EditV
                   name="allowed_mileage"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel className="whitespace-nowrap">Mileage/mo</FormLabel>
+                      <FormLabel className="whitespace-nowrap">Mileage Allowance</FormLabel>
                       <FormControl>
                         <Input
                           type="number"
@@ -708,6 +711,36 @@ export const EditVehicleDialogEnhanced = ({ vehicle, open, onOpenChange }: EditV
                           }}
                           onKeyDown={(e) => {
                             if (e.key === '-' || e.key === 'e' || e.key === 'E' || e.key === '.') {
+                              e.preventDefault();
+                            }
+                          }}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="excess_mileage_rate"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel className="whitespace-nowrap">Excess Mileage Rate</FormLabel>
+                      <FormControl>
+                        <Input
+                          type="number"
+                          min="0.01"
+                          step="0.01"
+                          placeholder={`${currencySymbol} per mile`}
+                          {...field}
+                          value={field.value ?? ''}
+                          onChange={(e) => {
+                            const value = e.target.value;
+                            field.onChange(value === '' ? undefined : parseFloat(value));
+                          }}
+                          onKeyDown={(e) => {
+                            if (e.key === '-' || e.key === 'e' || e.key === 'E') {
                               e.preventDefault();
                             }
                           }}

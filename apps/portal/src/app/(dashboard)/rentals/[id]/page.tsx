@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { useState, useEffect, useMemo } from "react";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -12,7 +12,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { FileText, ArrowLeft, DollarSign, Plus, X, Send, Download, Ban, Check, AlertTriangle, Loader2, Shield, ShieldCheck, CheckCircle, XCircle, ExternalLink, UserCheck, IdCard, Camera, FileSignature, Clock, Mail, RefreshCw, Trash2, Receipt, Percent, Car, Undo2, Truck, MapPin, Key, KeyRound, CalendarPlus, Package, Banknote, CreditCard, Calendar, Info, Copy } from "lucide-react";
+import { FileText, ArrowLeft, DollarSign, Plus, X, Send, Download, Ban, Check, AlertTriangle, Loader2, Shield, ShieldCheck, CheckCircle, XCircle, ExternalLink, UserCheck, IdCard, Camera, FileSignature, Clock, Mail, RefreshCw, Trash2, Receipt, Percent, Car, Undo2, Truck, MapPin, Key, KeyRound, CalendarPlus, Package, Banknote, CreditCard, Calendar, Info, Copy, Gauge } from "lucide-react";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Progress } from "@/components/ui/progress";
 import { AddPaymentDialog } from "@/components/shared/dialogs/add-payment-dialog";
@@ -33,6 +33,8 @@ import { AdminExtendRentalDialog } from "@/components/rentals/AdminExtendRentalD
 import InstallmentPlanCard from "@/components/rentals/InstallmentPlanCard";
 import { useInstallmentPlan } from "@/hooks/use-installment-plan";
 import { BuyInsuranceDialog } from "@/components/rentals/buy-insurance-dialog";
+import { useBonzahBalance } from "@/hooks/use-bonzah-balance";
+import { Checkbox } from "@/components/ui/checkbox";
 import { formatCurrency } from "@/lib/formatters";
 import { formatCurrency as formatCurrencyUtil } from "@/lib/format-utils";
 import { usePickupLocations } from "@/hooks/use-pickup-locations";
@@ -199,10 +201,12 @@ const RentalDetail = () => {
   const params = useParams();
   const id = params?.id as string;
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const { tenant } = useTenant();
   const { canEdit } = useManagerPermissions();
+  const { balanceNumber: bonzahCdBalance, isBonzahConnected } = useBonzahBalance();
   // skipInsurance removed — insurance doc upload is always visible; only Bonzah selector is gated on integration_bonzah
   const [downloadingPdf, setDownloadingPdf] = useState<string | null>(null);
   const [refreshingPolicy, setRefreshingPolicy] = useState(false);
@@ -240,6 +244,15 @@ const RentalDetail = () => {
   const [insurancePaymentMode, setInsurancePaymentMode] = useState(false);
   const [insurancePaymentAmount, setInsurancePaymentAmount] = useState<number | undefined>();
 
+  // Targeted payment selection state
+  const [selectedCategories, setSelectedCategories] = useState<Set<string>>(new Set());
+  const [showTargetedPayment, setShowTargetedPayment] = useState(false);
+
+  // Excess mileage deduction dialog state
+  const [showDeductFromDepositDialog, setShowDeductFromDepositDialog] = useState(false);
+  const [isDeductingDeposit, setIsDeductingDeposit] = useState(false);
+  const [isSendingPaymentLink, setIsSendingPaymentLink] = useState(false);
+
   // Installment sheet state
   const [showInstallmentSheet, setShowInstallmentSheet] = useState(false);
   const { plan: installmentPlan, hasInstallmentPlan, retryPayment, isRetrying, markPaid, isMarkingPaid } = useInstallmentPlan(id);
@@ -274,6 +287,142 @@ const RentalDetail = () => {
   const { data: invoiceBreakdown } = useRentalInvoice(id);
   const { data: paymentBreakdown } = useRentalPaymentBreakdown(id);
   const { data: refundBreakdown } = useRentalRefundBreakdown(id);
+
+  // Map of category → remaining unpaid amount (combines ledger charges + invoice fallback)
+  const categoryRemainingAmounts = useMemo(() => {
+    const amounts: Record<string, number> = {};
+
+    // First, populate from ledger payment breakdown (most accurate)
+    if (paymentBreakdown) {
+      for (const [cat, data] of Object.entries(paymentBreakdown)) {
+        if (data.remaining > 0) {
+          amounts[cat] = data.remaining;
+        }
+      }
+    }
+
+    // Then, fill in from invoice breakdown for categories without ledger entries
+    if (invoiceBreakdown) {
+      const insuranceCharge = (rentalCharges || []).find((c: any) => c.category === 'Insurance');
+      const invoiceCategoryMap: Record<string, number> = {
+        'Rental': invoiceBreakdown.rentalFee,
+        'Tax': invoiceBreakdown.taxAmount,
+        'Insurance': insuranceCharge?.amount ?? invoiceBreakdown.insurancePremium ?? 0,
+        'Service Fee': invoiceBreakdown.serviceFee,
+        'Security Deposit': invoiceBreakdown.securityDeposit,
+        'Delivery Fee': invoiceBreakdown.deliveryFee || rental?.delivery_fee || 0,
+        'Collection Fee': rental?.collection_fee ?? 0,
+        'Extras': invoiceBreakdown.extrasTotal ?? 0,
+      };
+
+      for (const [cat, invoiceAmount] of Object.entries(invoiceCategoryMap)) {
+        if (amounts[cat] !== undefined) continue; // already have ledger data
+        if (invoiceAmount <= 0) continue;
+        const refunded = refundBreakdown?.[cat] ?? 0;
+        const remaining = invoiceAmount - refunded;
+        if (remaining > 0) {
+          amounts[cat] = remaining;
+        }
+      }
+    }
+
+    return amounts;
+  }, [paymentBreakdown, invoiceBreakdown, rentalCharges, rental, refundBreakdown]);
+
+  // Handle ?payment=success — process Stripe payment when redirected back from checkout
+  const [paymentProcessed, setPaymentProcessed] = useState(false);
+  useEffect(() => {
+    const paymentStatus = searchParams?.get('payment');
+    if (paymentStatus !== 'success' || !id || !tenant?.id || paymentProcessed) return;
+
+    setPaymentProcessed(true);
+
+    const processStripePayment = async () => {
+      try {
+        // Find the Pending payment with a stripe_checkout_session_id for this rental
+        const { data: pendingPayment } = await supabase
+          .from('payments')
+          .select('id, stripe_checkout_session_id, stripe_payment_intent_id, status')
+          .eq('rental_id', id)
+          .eq('status', 'Pending')
+          .not('stripe_checkout_session_id', 'is', null)
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+
+        if (!pendingPayment) {
+          // Check if payment was already processed (by webhook)
+          const { data: completedPayment } = await supabase
+            .from('payments')
+            .select('id')
+            .eq('rental_id', id)
+            .in('status', ['Completed', 'Applied'])
+            .not('stripe_checkout_session_id', 'is', null)
+            .limit(1)
+            .maybeSingle();
+
+          if (completedPayment) {
+            // Webhook already handled it — just refresh
+            queryClient.invalidateQueries({ queryKey: ['rental-totals'] });
+            queryClient.invalidateQueries({ queryKey: ['rental-payment-breakdown'] });
+            queryClient.invalidateQueries({ queryKey: ['rental-charges'] });
+            toast({ title: 'Payment Confirmed', description: 'Payment has been processed successfully.' });
+          }
+          // Clean URL
+          router.replace(`/rentals/${id}`);
+          return;
+        }
+
+        // Sync payment_intent_id from Stripe if missing
+        if (!pendingPayment.stripe_payment_intent_id && pendingPayment.stripe_checkout_session_id) {
+          await supabase.functions.invoke('sync-payment-intent', {
+            body: {
+              paymentId: pendingPayment.id,
+              checkoutSessionId: pendingPayment.stripe_checkout_session_id,
+              tenantId: tenant.id,
+            },
+          });
+        }
+
+        // Update payment to Completed
+        await supabase
+          .from('payments')
+          .update({
+            status: 'Completed',
+            capture_status: 'captured',
+            verification_status: 'auto_approved',
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', pendingPayment.id);
+
+        // Apply payment via FIFO allocation
+        const { error: applyError } = await supabase.functions.invoke('apply-payment', {
+          body: { paymentId: pendingPayment.id },
+        });
+
+        if (applyError) {
+          console.error('Error applying payment:', applyError);
+        }
+
+        // Refresh all payment-related queries
+        queryClient.invalidateQueries({ queryKey: ['rental-totals'] });
+        queryClient.invalidateQueries({ queryKey: ['rental-payment-breakdown'] });
+        queryClient.invalidateQueries({ queryKey: ['rental-charges'] });
+        queryClient.invalidateQueries({ queryKey: ['rental-refund-breakdown'] });
+        queryClient.invalidateQueries({ queryKey: ['rental-invoice'] });
+
+        toast({ title: 'Payment Confirmed', description: 'Stripe payment has been processed and applied.' });
+      } catch (err: any) {
+        console.error('Error processing Stripe payment:', err);
+        toast({ title: 'Payment Processing', description: 'Payment received. Refreshing data...', variant: 'default' });
+      }
+
+      // Clean URL
+      router.replace(`/rentals/${id}`);
+    };
+
+    processStripePayment();
+  }, [searchParams, id, tenant?.id, paymentProcessed, queryClient, toast, router]);
 
   // Fetch extras details for this rental
   const { data: extrasDetails } = useQuery({
@@ -845,6 +994,20 @@ const RentalDetail = () => {
     },
   });
 
+  // Outstanding includes both ledger charges and invoice-only charges (e.g. Bonzah Insurance)
+  // Must be above early returns to maintain hook order
+  const outstandingBalance = useMemo(() => {
+    const ledgerOutstanding = rentalTotals?.outstanding || 0;
+    let invoiceOnlyOutstanding = 0;
+    for (const [cat, remaining] of Object.entries(categoryRemainingAmounts)) {
+      const hasLedgerCharge = paymentBreakdown?.[cat] !== undefined;
+      if (!hasLedgerCharge && remaining > 0) {
+        invoiceOnlyOutstanding += remaining;
+      }
+    }
+    return ledgerOutstanding + invoiceOnlyOutstanding;
+  }, [rentalTotals, categoryRemainingAmounts, paymentBreakdown]);
+
   if (isLoading) {
     return <div>Loading rental details...</div>;
   }
@@ -864,7 +1027,6 @@ const RentalDetail = () => {
   // Use the new totals from allocation-based calculations
   const totalCharges = rentalTotals?.totalCharges || 0;
   const totalPayments = rentalTotals?.totalPayments || 0;
-  const outstandingBalance = rentalTotals?.outstanding || 0;
 
   // Filter extension charges for the Extensions section
   const extensionCharges = (rentalCharges || [])
@@ -1058,9 +1220,13 @@ const RentalDetail = () => {
           </div>
         </div>
         <div className="flex gap-2">
-          {/* Pending Rental - Show Approve, Reject, Delete buttons */}
+          {/* Pending Rental - Show Add Payment, Approve, Reject, Delete buttons */}
           {canEdit('rentals') && displayStatus === 'Pending' && (
             <>
+              <Button variant="outline" onClick={() => setShowAddPayment(true)}>
+                <Plus className="h-4 w-4 mr-2" />
+                Add Payment
+              </Button>
               <Button
                 variant="default"
                 className="bg-green-600 hover:bg-green-700"
@@ -1213,27 +1379,32 @@ const RentalDetail = () => {
       {/* Payment Breakdown Table */}
       {invoiceBreakdown && (() => {
         const canRefund = totalPayments > 0 && rental.status !== 'Cancelled' && rental.status !== 'Closed';
+        // Determine insurance amount: prefer ledger charge, fall back to invoice
+        const insuranceCharge = (rentalCharges || []).find(c => c.category === 'Insurance');
+        const insuranceAmount = insuranceCharge?.amount ?? invoiceBreakdown.insurancePremium ?? 0;
+
         const rows: { label: string; category: string; amount: number; detail: string; icon: any; color: string; bg: string; nonRefundable?: boolean; onClick?: () => void }[] = [
           { label: 'Rental', category: 'Rental', amount: invoiceBreakdown.rentalFee, detail: rental.rental_period_type || 'Monthly', icon: Car, color: 'text-green-500', bg: 'bg-green-500/10' },
           { label: 'Tax', category: 'Tax', amount: invoiceBreakdown.taxAmount, detail: invoiceBreakdown.taxAmount > 0 && invoiceBreakdown.rentalFee > 0 ? `${((invoiceBreakdown.taxAmount / invoiceBreakdown.rentalFee) * 100).toFixed(1)}% rate` : 'Tax on rental', icon: Percent, color: 'text-blue-500', bg: 'bg-blue-500/10' },
+          { label: 'Bonzah Insurance', category: 'Insurance', amount: insuranceAmount, detail: bonzahPolicy ? 'Bonzah Insurance' : 'Insurance coverage', icon: ShieldCheck, color: 'text-teal-500', bg: 'bg-teal-500/10' },
           { label: 'Service Fee', category: 'Service Fee', amount: invoiceBreakdown.serviceFee, detail: 'Platform fee', icon: Receipt, color: 'text-purple-500', bg: 'bg-purple-500/10' },
           { label: 'Security Deposit', category: 'Security Deposit', amount: invoiceBreakdown.securityDeposit, detail: invoiceBreakdown.securityDeposit > 0 ? (rental.status === 'Closed' ? 'Eligible for refund' : 'Held') : '', icon: Shield, color: 'text-amber-500', bg: 'bg-amber-500/10' },
-          { label: 'Delivery Fee', category: 'Delivery Fee', amount: rental.delivery_fee ?? 0, detail: 'Vehicle delivery', icon: Truck, color: 'text-cyan-500', bg: 'bg-cyan-500/10' },
+          { label: 'Delivery Fee', category: 'Delivery Fee', amount: invoiceBreakdown.deliveryFee || rental.delivery_fee || 0, detail: 'Vehicle delivery', icon: Truck, color: 'text-cyan-500', bg: 'bg-cyan-500/10' },
           { label: 'Collection Fee', category: 'Collection Fee', amount: rental.collection_fee ?? 0, detail: 'Vehicle collection', icon: MapPin, color: 'text-rose-500', bg: 'bg-rose-500/10' },
           { label: 'Extras', category: 'Extras', amount: extrasTotal, detail: (extrasDetails?.length || 0) > 0 ? `${extrasDetails!.length} item${extrasDetails!.length > 1 ? 's' : ''}` : 'Add-ons', icon: Package, color: 'text-indigo-500', bg: 'bg-indigo-500/10', nonRefundable: true, onClick: extrasTotal > 0 ? () => setShowExtrasDialog(true) : undefined },
         ];
 
-        // Add insurance row if an insurance charge exists in the ledger
-        const insuranceCharge = (rentalCharges || []).find(c => c.category === 'Insurance');
-        if (insuranceCharge) {
+        // Add excess mileage row if charge exists in the ledger
+        const excessMileageCharge = (rentalCharges || []).find(c => c.category === 'Excess Mileage');
+        if (excessMileageCharge) {
           rows.push({
-            label: 'Insurance',
-            category: 'Insurance',
-            amount: insuranceCharge.amount,
-            detail: bonzahPolicy ? 'Bonzah Insurance' : 'Insurance',
-            icon: Shield,
-            color: 'text-green-500',
-            bg: 'bg-green-500/10',
+            label: 'Excess Mileage',
+            category: 'Excess Mileage',
+            amount: excessMileageCharge.amount,
+            detail: excessMileageCharge.reference || 'Over mileage allowance',
+            icon: Gauge,
+            color: 'text-red-500',
+            bg: 'bg-red-500/10',
           });
         }
 
@@ -1252,6 +1423,44 @@ const RentalDetail = () => {
           });
         }
 
+        // Compute which rows have unpaid charges (selectable for targeted payment)
+        const selectableCategories = rows
+          .filter(({ category, amount }) => {
+            if (amount <= 0) return false;
+            const refunded = refundBreakdown?.[category] ?? 0;
+            if (refunded >= amount) return false;
+            // Selectable if there's a remaining amount (from ledger or invoice)
+            return (categoryRemainingAmounts[category] ?? 0) > 0;
+          })
+          .map(r => r.category);
+
+        const allUnpaidSelected = selectableCategories.length > 0 && selectableCategories.every(c => selectedCategories.has(c));
+        const someUnpaidSelected = selectableCategories.some(c => selectedCategories.has(c));
+
+        const selectedTotal = selectableCategories
+          .filter(c => selectedCategories.has(c))
+          .reduce((sum, c) => sum + (categoryRemainingAmounts[c] ?? 0), 0);
+
+        const toggleCategory = (category: string) => {
+          setSelectedCategories(prev => {
+            const next = new Set(prev);
+            if (next.has(category)) {
+              next.delete(category);
+            } else {
+              next.add(category);
+            }
+            return next;
+          });
+        };
+
+        const toggleAllUnpaid = () => {
+          if (allUnpaidSelected) {
+            setSelectedCategories(new Set());
+          } else {
+            setSelectedCategories(new Set(selectableCategories));
+          }
+        };
+
         return (
           <Card>
             <CardHeader className="pb-4">
@@ -1261,7 +1470,16 @@ const RentalDetail = () => {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead className="pl-6">Category</TableHead>
+                    {selectableCategories.length > 0 && (
+                      <TableHead className="pl-6 w-10">
+                        <Checkbox
+                          checked={allUnpaidSelected ? true : someUnpaidSelected ? "indeterminate" : false}
+                          onCheckedChange={toggleAllUnpaid}
+                          aria-label="Select all unpaid"
+                        />
+                      </TableHead>
+                    )}
+                    <TableHead className={selectableCategories.length > 0 ? "" : "pl-6"}>Category</TableHead>
                     <TableHead>Status</TableHead>
                     <TableHead className="text-right">Amount</TableHead>
                     <TableHead className="text-right">Refunded</TableHead>
@@ -1276,10 +1494,26 @@ const RentalDetail = () => {
                     const net = amount - refunded;
                     // Check if insurance charge is unpaid
                     const isInsuranceUnpaid = category === 'Insurance' && insuranceCharge && insuranceCharge.remaining_amount > 0;
+                    // Check if excess mileage charge is unpaid
+                    const isExcessMileageUnpaid = category === 'Excess Mileage' && excessMileageCharge && excessMileageCharge.remaining_amount > 0;
+                    const isSelectable = selectableCategories.includes(category);
+                    const isSelected = selectedCategories.has(category);
 
                     return (
                       <TableRow key={category} className={`${!applied ? 'opacity-40' : ''} ${onClick ? 'cursor-pointer hover:bg-muted/30' : ''}`} onClick={onClick}>
-                        <TableCell className="pl-6">
+                        {selectableCategories.length > 0 && (
+                          <TableCell className="pl-6 w-10">
+                            {isSelectable ? (
+                              <Checkbox
+                                checked={isSelected}
+                                onCheckedChange={() => toggleCategory(category)}
+                                onClick={(e) => e.stopPropagation()}
+                                aria-label={`Select ${label}`}
+                              />
+                            ) : null}
+                          </TableCell>
+                        )}
+                        <TableCell className={selectableCategories.length > 0 ? "" : "pl-6"}>
                           <div className="flex items-center gap-3">
                             <div className={`h-7 w-7 rounded-full flex items-center justify-center ${applied ? bg : 'bg-muted/30'}`}>
                               <Icon className={`h-3.5 w-3.5 ${applied ? color : 'text-muted-foreground/50'}`} />
@@ -1294,19 +1528,33 @@ const RentalDetail = () => {
                           </div>
                         </TableCell>
                         <TableCell>
-                          {!applied ? (
-                            <Badge variant="outline" className="text-muted-foreground/60 border-muted-foreground/20 text-[11px]">N/A</Badge>
-                          ) : isInsuranceUnpaid ? (
-                            <Badge variant="outline" className="text-red-500 border-red-500/30 bg-red-500/10 text-[11px]">Unpaid</Badge>
-                          ) : nonRefundable ? (
-                            <Badge variant="outline" className="text-muted-foreground border-muted-foreground/30 text-[11px]">Non-refundable</Badge>
-                          ) : fullyRefunded ? (
-                            <Badge variant="outline" className="text-green-500 border-green-500/30 bg-green-500/10 text-[11px]">Fully Refunded</Badge>
-                          ) : refunded > 0 ? (
-                            <Badge variant="outline" className="text-amber-500 border-amber-500/30 bg-amber-500/10 text-[11px]">Partial Refund</Badge>
-                          ) : (
-                            <Badge variant="outline" className="text-emerald-500 border-emerald-500/30 text-[11px]">Charged</Badge>
-                          )}
+                          {(() => {
+                            if (!applied) {
+                              return <Badge variant="outline" className="text-muted-foreground/60 border-muted-foreground/20 text-[11px]">Not Applied</Badge>;
+                            }
+                            if (fullyRefunded) {
+                              return <Badge variant="outline" className="text-green-500 border-green-500/30 bg-green-500/10 text-[11px]">Refunded</Badge>;
+                            }
+                            if (refunded > 0) {
+                              return <Badge variant="outline" className="text-amber-500 border-amber-500/30 bg-amber-500/10 text-[11px]">Partial Refund</Badge>;
+                            }
+                            // Check payment status from ledger breakdown
+                            const catPayment = paymentBreakdown?.[category];
+                            if (catPayment) {
+                              if (catPayment.remaining <= 0) {
+                                return <Badge variant="outline" className="text-emerald-500 border-emerald-500/30 bg-emerald-500/10 text-[11px]">Paid</Badge>;
+                              }
+                              if (catPayment.paid > 0) {
+                                return <Badge variant="outline" className="text-amber-500 border-amber-500/30 bg-amber-500/10 text-[11px]">Partially Paid</Badge>;
+                              }
+                              return <Badge variant="outline" className="text-red-500 border-red-500/30 bg-red-500/10 text-[11px]">Not Paid</Badge>;
+                            }
+                            // No ledger entry for this category — check overall payment status
+                            if (totalPayments >= (invoiceBreakdown?.totalAmount || 0) && totalPayments > 0) {
+                              return <Badge variant="outline" className="text-emerald-500 border-emerald-500/30 bg-emerald-500/10 text-[11px]">Paid</Badge>;
+                            }
+                            return <Badge variant="outline" className="text-red-500 border-red-500/30 bg-red-500/10 text-[11px]">Not Paid</Badge>;
+                          })()}
                         </TableCell>
                         <TableCell className="text-right">
                           <span className={`text-sm font-semibold ${!applied ? 'text-muted-foreground/50' : ''}`}>
@@ -1321,7 +1569,43 @@ const RentalDetail = () => {
                           )}
                         </TableCell>
                         <TableCell className="text-right pr-6">
-                          {isInsuranceUnpaid ? (
+                          {isExcessMileageUnpaid && excessMileageCharge ? (
+                            <div className="flex items-center gap-2 justify-end">
+                              {invoiceBreakdown && invoiceBreakdown.securityDeposit > 0 && (
+                                <button
+                                  className="text-xs text-amber-500 hover:text-amber-400 hover:underline font-medium"
+                                  disabled={isDeductingDeposit}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setShowDeductFromDepositDialog(true);
+                                  }}
+                                >
+                                  {isDeductingDeposit ? 'Deducting...' : 'Deduct Deposit'}
+                                </button>
+                              )}
+                              <button
+                                className="text-xs text-blue-500 hover:text-blue-400 hover:underline font-medium"
+                                disabled={isSendingPaymentLink}
+                                onClick={async (e) => {
+                                  e.stopPropagation();
+                                  setIsSendingPaymentLink(true);
+                                  try {
+                                    const { data: result, error } = await supabase.functions.invoke('send-excess-mileage-payment-link', {
+                                      body: { rentalId: rental.id, amount: excessMileageCharge.remaining_amount, tenantId: tenant?.id },
+                                    });
+                                    if (error) throw error;
+                                    toast({ title: 'Payment Link Sent', description: 'The customer has been emailed a payment link.' });
+                                  } catch (err: any) {
+                                    toast({ title: 'Failed to send payment link', description: err.message, variant: 'destructive' });
+                                  } finally {
+                                    setIsSendingPaymentLink(false);
+                                  }
+                                }}
+                              >
+                                {isSendingPaymentLink ? 'Sending...' : 'Send Pay Link'}
+                              </button>
+                            </div>
+                          ) : isInsuranceUnpaid ? (
                             <button
                               className="text-xs text-blue-500 hover:text-blue-400 hover:underline font-medium"
                               onClick={(e) => {
@@ -1334,7 +1618,12 @@ const RentalDetail = () => {
                             </button>
                           ) : nonRefundable && applied ? (
                             <span className="text-xs text-muted-foreground/50">-</span>
-                          ) : applied && !fullyRefunded && canRefund ? (
+                          ) : (() => {
+                            // Only show Refund if category has actually been paid
+                            const catPayment = paymentBreakdown?.[category];
+                            const categoryHasBeenPaid = catPayment ? catPayment.paid > 0 : false;
+                            return applied && !fullyRefunded && canRefund && categoryHasBeenPaid;
+                          })() ? (
                             <button
                               className="text-xs text-orange-500 hover:text-orange-400 hover:underline font-medium"
                               onClick={(e) => {
@@ -1350,6 +1639,17 @@ const RentalDetail = () => {
                             </button>
                           ) : applied && fullyRefunded ? (
                             <Check className="h-4 w-4 text-green-500 inline-block" />
+                          ) : isSelectable ? (
+                            <button
+                              className="text-xs text-blue-500 hover:text-blue-400 hover:underline font-medium"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setSelectedCategories(new Set([category]));
+                                setShowTargetedPayment(true);
+                              }}
+                            >
+                              Pay
+                            </button>
                           ) : (
                             <span className="text-muted-foreground/30">-</span>
                           )}
@@ -1359,6 +1659,23 @@ const RentalDetail = () => {
                   })}
                 </TableBody>
               </Table>
+
+              {/* Selection footer for targeted payment */}
+              {selectedCategories.size > 0 && (
+                <div className="sticky bottom-0 border-t bg-muted/50 px-6 py-3 flex items-center justify-between">
+                  <p className="text-sm text-muted-foreground">
+                    {selectedCategories.size} item{selectedCategories.size > 1 ? 's' : ''} selected &mdash;{' '}
+                    <span className="font-semibold text-foreground">{formatCurrencyUtil(selectedTotal, tenant?.currency_code || 'USD')}</span>
+                  </p>
+                  <Button
+                    size="sm"
+                    onClick={() => setShowTargetedPayment(true)}
+                  >
+                    <DollarSign className="h-3.5 w-3.5 mr-1.5" />
+                    Pay Selected
+                  </Button>
+                </div>
+              )}
             </CardContent>
           </Card>
         );
@@ -2110,21 +2427,47 @@ const RentalDetail = () => {
                   bonzahPolicy.status === 'active' ? 'bg-emerald-400 text-black font-semibold hover:bg-emerald-400 shadow-[0_0_12px_rgba(52,211,153,0.6)]' :
                   bonzahPolicy.status === 'quoted' ? 'bg-amber-400 text-black font-semibold hover:bg-amber-400 shadow-[0_0_12px_rgba(251,191,36,0.6)]' :
                   bonzahPolicy.status === 'failed' ? 'bg-red-400 text-black font-semibold hover:bg-red-400 shadow-[0_0_12px_rgba(248,113,113,0.6)]' :
+                  bonzahPolicy.status === 'insufficient_balance' ? 'bg-[#CC004A] text-white font-semibold hover:bg-[#CC004A] shadow-[0_0_12px_rgba(204,0,74,0.6)]' :
                   'bg-sky-400 text-black font-semibold hover:bg-sky-400 shadow-[0_0_12px_rgba(56,189,248,0.6)]'
                 }
               >
-                {bonzahPolicy.status === 'active' ? 'Active' : bonzahPolicy.status === 'quoted' ? 'Quoted' : bonzahPolicy.status === 'payment_confirmed' ? 'Payment Confirmed' : bonzahPolicy.status === 'failed' ? 'Failed' : bonzahPolicy.status}
+                {bonzahPolicy.status === 'active' ? 'Active' : bonzahPolicy.status === 'quoted' ? 'Quoted' : bonzahPolicy.status === 'payment_confirmed' ? 'Payment Confirmed' : bonzahPolicy.status === 'failed' ? 'Failed' : bonzahPolicy.status === 'insufficient_balance' ? 'Insufficient Balance' : bonzahPolicy.status}
               </Badge>
             </div>
           </CardHeader>
-          <CardContent className="space-y-5">
+          <CardContent className="space-y-4">
+            {/* Bonzah CD Balance */}
+            {isBonzahConnected && bonzahCdBalance != null && (
+              <div className={`flex items-center justify-between rounded-md px-4 py-2.5 ${bonzahCdBalance < bonzahPolicy.premium_amount ? 'bg-[#CC004A]/10 border border-[#CC004A]/20' : 'bg-muted/50 border border-border'}`}>
+                <span className="text-sm font-medium text-muted-foreground">Bonzah CD Balance</span>
+                <span className={`text-base font-bold tabular-nums ${bonzahCdBalance < bonzahPolicy.premium_amount ? 'text-[#CC004A]' : 'text-foreground'}`}>
+                  ${bonzahCdBalance.toFixed(2)}
+                </span>
+              </div>
+            )}
+
+            {/* Insufficient balance warning */}
+            {bonzahPolicy.status === 'insufficient_balance' && (
+              <div className="rounded-lg border border-[#CC004A]/30 bg-[#CC004A]/5 p-4 space-y-2">
+                <div className="flex items-start gap-2">
+                  <AlertTriangle className="h-4 w-4 text-[#CC004A] mt-0.5 flex-shrink-0" />
+                  <div className="text-sm">
+                    <p className="font-medium text-[#CC004A]">Insufficient Bonzah deposit balance</p>
+                    <p className="text-muted-foreground mt-1">
+                      Your Bonzah balance {bonzahCdBalance != null ? `($${bonzahCdBalance.toFixed(2)})` : ''} is insufficient to cover the premium (${bonzahPolicy.premium_amount}). Please top up your balance, then retry.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
+
             {/* Action buttons if needed */}
-            {canEdit('rentals') && (bonzahPolicy.status === 'quoted' || bonzahPolicy.status === 'failed' || bonzahPolicy.policy_id) && (
+            {canEdit('rentals') && (bonzahPolicy.status === 'quoted' || bonzahPolicy.status === 'failed' || bonzahPolicy.status === 'insufficient_balance' || bonzahPolicy.policy_id) && (
             <div className="flex items-center gap-2">
-              {(bonzahPolicy.status === 'quoted' || bonzahPolicy.status === 'failed') && (
+              {(bonzahPolicy.status === 'quoted' || bonzahPolicy.status === 'failed' || bonzahPolicy.status === 'insufficient_balance') && (
                 <Button
                   size="sm"
-                  disabled={issuingPolicy}
+                  disabled={issuingPolicy || (bonzahPolicy.status === 'insufficient_balance' && bonzahCdBalance != null && bonzahCdBalance < bonzahPolicy.premium_amount)}
                   className="bg-green-600 hover:bg-green-700 text-white"
                   onClick={async () => {
                     setIssuingPolicy(true);
@@ -2150,7 +2493,7 @@ const RentalDetail = () => {
                   ) : (
                     <ShieldCheck className="h-4 w-4 mr-1.5" />
                   )}
-                  {bonzahPolicy.status === 'failed' ? 'Retry Purchase' : 'Complete Purchase'}
+                  {bonzahPolicy.status === 'failed' || bonzahPolicy.status === 'insufficient_balance' ? 'Retry Purchase' : 'Complete Purchase'}
                 </Button>
               )}
             </div>
@@ -2309,7 +2652,8 @@ const RentalDetail = () => {
         );
       })()}
 
-      {/* Insurance Verification Card - Always shown for customer-uploaded documents */}
+      {/* Insurance Verification Card - Compact when no documents, full when documents exist */}
+      {insuranceDocuments && insuranceDocuments.length > 0 ? (
       <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
@@ -2820,15 +3164,83 @@ const RentalDetail = () => {
                 );
               })}
             </div>
-          ) : (
-            <div className="text-center py-8 text-muted-foreground">
-              <Shield className="h-12 w-12 mx-auto mb-3 opacity-50" />
-              <p className="font-medium">No insurance documents uploaded</p>
-              <p className="text-sm">The customer hasn't uploaded insurance documents for this rental yet.</p>
-            </div>
-          )}
+          ) : null}
         </CardContent>
         </Card>
+      ) : (
+        /* Compact empty state — single-row card */
+        <Card className="px-5 py-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <Shield className="h-4 w-4 text-muted-foreground" />
+              <span className="text-sm font-medium">Insurance Verification</span>
+              <span className="text-xs text-muted-foreground">No documents uploaded</span>
+            </div>
+            <div className="flex items-center gap-2">
+              {!bonzahPolicy && tenant?.bonzah_username && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="h-7 text-xs border-[#CC004A]/30 text-[#CC004A] hover:bg-[#CC004A]/10"
+                  onClick={() => setShowBuyInsurance(true)}
+                >
+                  <ShieldCheck className="h-3 w-3 mr-1" />
+                  Get Insurance
+                </Button>
+              )}
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-7 text-xs"
+                onClick={() => {
+                  const input = document.createElement('input');
+                  input.type = 'file';
+                  input.accept = 'image/*,.pdf';
+                  input.onchange = async (e) => {
+                    const file = (e.target as HTMLInputElement).files?.[0];
+                    if (!file) return;
+                    try {
+                      toast({ title: "Uploading...", description: "Uploading insurance document" });
+                      const fileName = `${rental.customer_id}/${Date.now()}_${file.name}`;
+                      const { error: uploadError } = await supabase.storage
+                        .from('customer-documents')
+                        .upload(fileName, file);
+                      if (uploadError) throw uploadError;
+                      const { data: docData, error: docError } = await supabase
+                        .from('customer_documents')
+                        .insert({
+                          customer_id: rental.customer_id,
+                          rental_id: id,
+                          document_type: 'Insurance Certificate',
+                          document_name: file.name,
+                          file_name: file.name,
+                          file_url: fileName,
+                          status: 'Pending',
+                          ai_scan_status: 'pending',
+                          tenant_id: tenant?.id,
+                        })
+                        .select()
+                        .single();
+                      if (docError) throw docError;
+                      supabase.functions.invoke('scan-insurance-document', {
+                        body: { documentId: docData.id, fileUrl: fileName }
+                      });
+                      toast({ title: "Success", description: "Insurance document uploaded and AI scan initiated" });
+                      queryClient.invalidateQueries({ queryKey: ["rental-insurance-docs", id] });
+                    } catch (error: any) {
+                      toast({ title: "Upload Failed", description: error.message || "Failed to upload document", variant: "destructive" });
+                    }
+                  };
+                  input.click();
+                }}
+              >
+                <Plus className="h-3 w-3 mr-1" />
+                Upload
+              </Button>
+            </div>
+          </div>
+        </Card>
+      )}
 
       {/* Identity Verification Section - Always show */}
       <Card>
@@ -3158,6 +3570,25 @@ const RentalDetail = () => {
         />
       )}
 
+      {/* Targeted Payment Dialog (Pay Selected categories) */}
+      {rental && (
+        <AddPaymentDialog
+          open={showTargetedPayment}
+          onOpenChange={(open) => {
+            setShowTargetedPayment(open);
+            if (!open) setSelectedCategories(new Set());
+          }}
+          customer_id={rental.customers?.id}
+          vehicle_id={rental.vehicles?.id}
+          rental_id={rental.id}
+          defaultAmount={(() => {
+            if (selectedCategories.size === 0) return undefined;
+            return Array.from(selectedCategories).reduce((sum, c) => sum + (categoryRemainingAmounts[c] ?? 0), 0);
+          })()}
+          targetCategories={Array.from(selectedCategories)}
+        />
+      )}
+
       {/* Extension Payment Dialog */}
       {rental && (
         <AddPaymentDialog
@@ -3221,6 +3652,79 @@ const RentalDetail = () => {
           paidAmount={refundPaidAmount}
         />
       )}
+
+      {/* Deduct from Deposit Confirmation Dialog */}
+      {rental && (() => {
+        const excessCharge = (rentalCharges || []).find(c => c.category === 'Excess Mileage');
+        const depositAmount = invoiceBreakdown?.securityDeposit || 0;
+        const depositRefunded = refundBreakdown?.['Security Deposit'] ?? 0;
+        const depositAvailable = Math.max(0, depositAmount - depositRefunded);
+        const excessRemaining = excessCharge?.remaining_amount || 0;
+        const deductAmount = Math.min(depositAvailable, excessRemaining);
+
+        return (
+          <AlertDialog open={showDeductFromDepositDialog} onOpenChange={setShowDeductFromDepositDialog}>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Deduct from Security Deposit</AlertDialogTitle>
+                <AlertDialogDescription asChild>
+                  <div className="space-y-3">
+                    <p>Deduct excess mileage charge from the customer&apos;s security deposit:</p>
+                    <div className="space-y-1 text-sm">
+                      <div className="flex justify-between">
+                        <span>Deposit Available:</span>
+                        <span className="font-medium">{formatCurrencyUtil(depositAvailable, tenant?.currency_code || 'GBP')}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span>Excess Mileage Owed:</span>
+                        <span className="font-medium">{formatCurrencyUtil(excessRemaining, tenant?.currency_code || 'GBP')}</span>
+                      </div>
+                      <div className="flex justify-between border-t pt-1 font-semibold">
+                        <span>Amount to Deduct:</span>
+                        <span>{formatCurrencyUtil(deductAmount, tenant?.currency_code || 'GBP')}</span>
+                      </div>
+                      {excessRemaining > depositAvailable && (
+                        <p className="text-xs text-amber-600 mt-2">
+                          The deposit does not fully cover the charge. The remaining {formatCurrencyUtil(excessRemaining - depositAvailable, tenant?.currency_code || 'GBP')} can be collected via a payment link.
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel disabled={isDeductingDeposit}>Cancel</AlertDialogCancel>
+                <AlertDialogAction
+                  disabled={isDeductingDeposit || deductAmount <= 0}
+                  onClick={async (e) => {
+                    e.preventDefault();
+                    setIsDeductingDeposit(true);
+                    try {
+                      const { data: result, error } = await supabase.functions.invoke('deduct-from-deposit', {
+                        body: { rentalId: rental.id, amount: deductAmount, tenantId: tenant?.id },
+                      });
+                      if (error) throw error;
+                      toast({ title: 'Deposit Deducted', description: `${formatCurrencyUtil(deductAmount, tenant?.currency_code || 'GBP')} deducted from security deposit for excess mileage.` });
+                      queryClient.invalidateQueries({ queryKey: ["rental-charges"] });
+                      queryClient.invalidateQueries({ queryKey: ["rental-totals"] });
+                      queryClient.invalidateQueries({ queryKey: ["rental-invoice"] });
+                      queryClient.invalidateQueries({ queryKey: ["rental-payments"] });
+                      queryClient.invalidateQueries({ queryKey: ["payments-data"] });
+                      setShowDeductFromDepositDialog(false);
+                    } catch (err: any) {
+                      toast({ title: 'Deduction Failed', description: err.message, variant: 'destructive' });
+                    } finally {
+                      setIsDeductingDeposit(false);
+                    }
+                  }}
+                >
+                  {isDeductingDeposit ? 'Processing...' : `Deduct ${formatCurrencyUtil(deductAmount, tenant?.currency_code || 'GBP')}`}
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
+        );
+      })()}
 
       {/* Extras Breakdown Dialog */}
       <Dialog open={showExtrasDialog} onOpenChange={setShowExtrasDialog}>

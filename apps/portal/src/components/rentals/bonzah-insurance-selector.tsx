@@ -122,7 +122,7 @@ export default function BonzahInsuranceSelector({
               <p className="text-xs text-muted-foreground">No insurance coverage selected (optional)</p>
             </div>
           </div>
-          <Button variant="outline" size="sm" onClick={handleAddInsurance}>
+          <Button type="button" variant="outline" size="sm" onClick={handleAddInsurance}>
             Add Insurance
           </Button>
         </div>
@@ -138,6 +138,7 @@ export default function BonzahInsuranceSelector({
           <h3 className="font-medium">Bonzah Insurance</h3>
         </div>
         <Button
+          type="button"
           variant="ghost"
           size="sm"
           className="text-muted-foreground hover:text-foreground text-xs"
@@ -301,6 +302,7 @@ export default function BonzahInsuranceSelector({
 
                 <CollapsibleTrigger asChild>
                   <Button
+                    type="button"
                     variant="ghost"
                     size="sm"
                     className="w-full mt-1.5 text-[11px] text-muted-foreground hover:text-foreground h-6 px-1"

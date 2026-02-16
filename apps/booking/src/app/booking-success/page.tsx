@@ -244,7 +244,36 @@ const BookingSuccessContent = () => {
             }
           }
 
-          // Step 2: Fetch rental details with customer and vehicle info
+          // Step 3: Confirm Bonzah insurance if applicable
+          try {
+            const { data: rentalForBonzah } = await supabase
+              .from("rentals")
+              .select("bonzah_policy_id")
+              .eq("id", rentalId)
+              .single();
+
+            if (rentalForBonzah?.bonzah_policy_id) {
+              console.log('🛡️ Confirming Bonzah insurance policy...');
+              const { data: bonzahResult, error: bonzahError } = await supabase.functions.invoke('bonzah-confirm-payment', {
+                body: {
+                  policy_record_id: rentalForBonzah.bonzah_policy_id,
+                  stripe_payment_intent_id: `booking-auto-${rentalId}`,
+                },
+              });
+
+              if (bonzahError) {
+                console.error('❌ Failed to confirm Bonzah insurance:', bonzahError);
+              } else if (bonzahResult?.already_processed) {
+                console.log('✅ Bonzah insurance already confirmed:', bonzahResult.policy_no);
+              } else {
+                console.log('✅ Bonzah insurance confirmed:', bonzahResult);
+              }
+            }
+          } catch (bonzahErr) {
+            console.error('❌ Error confirming Bonzah insurance:', bonzahErr);
+          }
+
+          // Step 4: Fetch rental details with customer and vehicle info
           const { data: rental, error: fetchError } = await supabase
             .from("rentals")
             .select(`

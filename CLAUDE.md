@@ -151,7 +151,8 @@ Uses Supabase Realtime channels (replaced Socket.io):
 - **Stripe Connect**: `create-connected-account`, `get-connect-onboarding-link`, `sync-stripe-account`
 - **Notifications**: `aws-ses-email`, `aws-sns-sms`, `send-booking-email`, 15+ `notify-*` functions
 - **Verification**: `create-veriff-session`, `create-ai-verification-session`, `ai-document-ocr`, `ai-face-match`
-- **Insurance**: `bonzah-calculate-premium`, `bonzah-create-quote`, `bonzah-confirm-payment`, `bonzah-download-pdf`, `bonzah-verify-credentials`, `bonzah-view-policy`
+- **Insurance**: `bonzah-calculate-premium`, `bonzah-create-quote`, `bonzah-confirm-payment`, `bonzah-download-pdf`, `bonzah-verify-credentials`, `bonzah-view-policy`, `bonzah-get-balance`, `bonzah-probe-pdf`
+- **Lockbox**: `notify-lockbox-code` — sends lockbox code to customers via email/SMS using per-tenant templates from `lockbox_templates` table
 - **Admin**: `admin-create-user`, `admin-update-role`, `admin-deactivate-user`, `emergency-bootstrap`
 - **RAG chatbot**: `chat`, `rag-init`, `rag-sync`
 - **Subscriptions**: `create-subscription-checkout`, `create-subscription-portal-session`, `get-subscription-details`, `subscription-webhook`
@@ -210,6 +211,7 @@ Tests use Vitest + jsdom + Testing Library. Only portal currently has test files
 `scripts/` contains operational utilities:
 - `deploy-functions.sh` — deploy edge functions
 - `seed-vehicles.mjs` / `seed-vehicles.ts` — seed vehicle data
+- `seed-bonzah-demo.mjs` — seed demo data for Bonzah tenant (branding, customers, vehicles, plans)
 - `add-vehicle-photos.mjs` / `update-vehicle-images.mjs` — vehicle image management
 - `wipe-all-data.mjs` — wipe tenant data (destructive)
 - `bulk-update-branding.js` / `update-cms-content.js` — bulk content updates
@@ -348,6 +350,27 @@ One shared Stripe Product ("Drive247 Platform Subscription") with separate Strip
 - **Separate Stripe account** — subscription billing is NOT on Stripe Connect; uses platform's own Stripe keys
 - **Webhook as source of truth** — frontend never writes subscription state directly; all mutations come through Stripe webhooks
 - **Plan info in Stripe metadata** — `plan_id` and `plan_name` are stored in checkout session and subscription metadata for webhook resolution
+
+## Lockbox Feature
+
+Self-service key handover system where customers retrieve keys from a lockbox instead of in-person.
+
+- **Tenant settings**: `lockbox_enabled`, `lockbox_code_length`, `lockbox_notification_methods` (jsonb array of `["email", "sms"]`) on `tenants` table
+- **Vehicle fields**: `lockbox_code` (text), `lockbox_instructions` (text, e.g., "rear left wheel arch") on `vehicles` table
+- **Rental tracking**: `delivery_method` (enum: `lockbox`, `in_person`, NULL) on `rentals` table
+- **Templates**: `lockbox_templates` table stores per-tenant customizable email/SMS templates with `{{variable}}` placeholders (`{{customer_name}}`, `{{vehicle_reg}}`, `{{lockbox_code}}`, `{{booking_ref}}`, `{{delivery_address}}`, `{{lockbox_instructions}}`)
+- **Notification**: `notify-lockbox-code` edge function sends via Resend (email) and AWS SNS (SMS), falls back to default templates if no custom template exists
+- **Portal UI**: Key handover section on rental detail page supports lockbox delivery; lockbox template editor in settings (only visible when `lockbox_enabled = true`)
+
+## Setup Hub & Go-Live System
+
+Tenant onboarding progress tracking during trial period:
+
+- **`setup_completed_at`** (timestamptz on `tenants`) — set when all setup items are complete
+- **Setup items tracked**: Stripe Connect account active + Bonzah Insurance configured
+- **Portal hook**: `use-setup-status.ts` — computes `progressPercent`, `allComplete`, `isTrialing`, `justWentLive` (completed within 24 hours)
+- **Dashboard components**: `setup-hub.tsx` (countdown timer + progress bar during trial), `go-live-banner.tsx` (dismissible "You're Live!" banner after completion)
+- **Bonzah balance monitoring**: `use-bonzah-balance.ts` polls `bonzah-get-balance` every 60s; `use-bonzah-alert-config.ts` manages low-balance thresholds via `reminder_config` table; creates reminders with warning/critical severity levels
 
 ## Reserved Subdomains
 

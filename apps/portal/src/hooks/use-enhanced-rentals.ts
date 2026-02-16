@@ -19,6 +19,9 @@ export interface RentalFilters {
   sortOrder?: 'asc' | 'desc';
   page?: number;
   pageSize?: number;
+  bonzahStatus?: string;
+  extensionRequested?: boolean;
+  cancellationRequested?: boolean;
 }
 
 export interface EnhancedRental {
@@ -41,6 +44,7 @@ export interface EnhancedRental {
   is_extended?: boolean;
   previous_end_date?: string | null;
   cancellation_requested?: boolean;
+  bonzah_status?: string | null;
   customer: {
     id: string;
     name: string;
@@ -81,7 +85,10 @@ export const useEnhancedRentals = (filters: RentalFilters = {}) => {
     sortOrder = "desc",
     page = 1,
     pageSize = ITEMS_PER_PAGE,
-    captureStatus
+    captureStatus,
+    bonzahStatus,
+    extensionRequested,
+    cancellationRequested
   } = filters;
 
   // Create a stable query key by serializing Date objects to strings
@@ -102,7 +109,10 @@ export const useEnhancedRentals = (filters: RentalFilters = {}) => {
     sortOrder,
     page,
     pageSize,
-    captureStatus
+    captureStatus,
+    bonzahStatus,
+    extensionRequested,
+    cancellationRequested
   ];
 
   return useQuery({
@@ -157,17 +167,29 @@ export const useEnhancedRentals = (filters: RentalFilters = {}) => {
 
       if (error) throw error;
 
-      // Get initial payments for these rentals
+      // Get initial payments and bonzah policies for these rentals
       const rentalIds = rentalsData?.map((r: any) => r.id) || [];
-      const { data: initialPayments } = await supabase
-        .from("payments")
-        .select("rental_id, amount, capture_status")
-        .eq("tenant_id", tenant.id)
-        .in("rental_id", rentalIds)
-        .eq("payment_type", "InitialFee");
+
+      const [{ data: initialPayments }, { data: bonzahPolicies }] = await Promise.all([
+        supabase
+          .from("payments")
+          .select("rental_id, amount, capture_status")
+          .eq("tenant_id", tenant.id)
+          .in("rental_id", rentalIds)
+          .eq("payment_type", "InitialFee"),
+        supabase
+          .from("bonzah_insurance_policies")
+          .select("rental_id, status")
+          .eq("tenant_id", tenant.id)
+          .in("rental_id", rentalIds),
+      ]);
 
       const initialPaymentMap = new Map(
         initialPayments?.map(p => [p.rental_id, { amount: p.amount, capture_status: p.capture_status }]) || []
+      );
+
+      const bonzahPolicyMap = new Map(
+        bonzahPolicies?.map((p: any) => [p.rental_id, p.status]) || []
       );
 
       // Transform and filter data - skip rentals with missing customer or vehicle
@@ -204,6 +226,7 @@ export const useEnhancedRentals = (filters: RentalFilters = {}) => {
             is_extended: rental.is_extended,
             previous_end_date: rental.previous_end_date,
             cancellation_requested: rental.cancellation_requested,
+            bonzah_status: bonzahPolicyMap.get(rental.id) || null,
             customer: rental.customers as any,
             vehicle: rental.vehicles as any,
           };
@@ -261,6 +284,25 @@ export const useEnhancedRentals = (filters: RentalFilters = {}) => {
             if (captureStatus === "requires_capture" && (rental as any).payment_capture_status !== "requires_capture") {
               return false;
             }
+          }
+
+          // Apply Bonzah status filter
+          if (bonzahStatus) {
+            if (bonzahStatus === 'ins_quoted') {
+              if (rental.bonzah_status !== 'quoted' && rental.bonzah_status !== 'insufficient_balance') return false;
+            } else {
+              if (rental.bonzah_status !== bonzahStatus) return false;
+            }
+          }
+
+          // Apply extension requested filter
+          if (extensionRequested) {
+            if (!rental.is_extended) return false;
+          }
+
+          // Apply cancellation requested filter
+          if (cancellationRequested) {
+            if (!rental.cancellation_requested) return false;
           }
 
           return true;

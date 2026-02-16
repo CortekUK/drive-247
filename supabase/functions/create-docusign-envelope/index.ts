@@ -376,13 +376,13 @@ async function getAccessToken(
   userId: string,
   privateKey: string,
   baseUrl: string
-): Promise<string | null> {
+): Promise<{ token: string | null; error?: string }> {
   try {
     const isDemo = baseUrl.includes('demo');
     const authServer = isDemo ? 'account-d.docusign.com' : 'account.docusign.com';
 
     const jwt = await createJWT(integrationKey, userId, privateKey, authServer);
-    if (!jwt) return null;
+    if (!jwt) return { token: null, error: 'JWT creation failed' };
 
     const response = await fetch(`https://${authServer}/oauth/token`, {
       method: 'POST',
@@ -393,15 +393,49 @@ async function getAccessToken(
     const responseText = await response.text();
     if (!response.ok) {
       console.error('Token exchange failed:', responseText);
-      return null;
+      return { token: null, error: `Token exchange failed (${response.status}): ${responseText}` };
     }
 
     const data = JSON.parse(responseText);
     console.log('Access token obtained!');
-    return data.access_token;
+    return { token: data.access_token };
 
   } catch (error) {
     console.error('getAccessToken error:', error);
+    return { token: null, error: `getAccessToken exception: ${String(error)}` };
+  }
+}
+
+// Dynamic account discovery (like booking app)
+async function getUserInfo(accessToken: string, baseUrl: string): Promise<{ accountId: string; apiBaseUrl: string } | null> {
+  try {
+    const isDemo = baseUrl.includes('demo');
+    const authServer = isDemo ? 'account-d.docusign.com' : 'account.docusign.com';
+
+    const response = await fetch(`https://${authServer}/oauth/userinfo`, {
+      headers: { 'Authorization': `Bearer ${accessToken}` }
+    });
+
+    if (!response.ok) {
+      console.error('UserInfo failed:', response.status);
+      return null;
+    }
+
+    const data = await response.json();
+    const account = data.accounts?.find((a: any) => a.is_default) || data.accounts?.[0];
+
+    if (!account) {
+      console.error('No accounts found in userinfo');
+      return null;
+    }
+
+    console.log('Discovered account:', account.account_name, `(${account.account_id})`);
+    return {
+      accountId: account.account_id,
+      apiBaseUrl: `${account.base_uri}/restapi`
+    };
+  } catch (error) {
+    console.error('getUserInfo error:', error);
     return null;
   }
 }
@@ -421,6 +455,11 @@ async function sendEnvelope(
 ): Promise<{ envelopeId: string } | null> {
   try {
     console.log('Creating DocuSign envelope...');
+
+    // Webhook URL for envelope events
+    const supabaseUrl = Deno.env.get('SUPABASE_URL') ?? '';
+    const webhookUrl = `${supabaseUrl}/functions/v1/docusign-webhook`;
+    console.log('Webhook URL:', webhookUrl);
 
     const envelope = {
       emailSubject: `Rental Agreement - Ref: ${rentalId.substring(0, 8).toUpperCase()}`,
@@ -452,7 +491,26 @@ async function sendEnvelope(
           }
         }]
       },
-      status: 'sent'
+      status: 'sent',
+      // Envelope-level webhook notification (matches booking app)
+      eventNotification: {
+        url: webhookUrl,
+        loggingEnabled: true,
+        requireAcknowledgment: true,
+        envelopeEvents: [
+          { envelopeEventStatusCode: 'sent' },
+          { envelopeEventStatusCode: 'delivered' },
+          { envelopeEventStatusCode: 'completed' },
+          { envelopeEventStatusCode: 'declined' },
+          { envelopeEventStatusCode: 'voided' }
+        ],
+        recipientEvents: [
+          { recipientEventStatusCode: 'Sent' },
+          { recipientEventStatusCode: 'Delivered' },
+          { recipientEventStatusCode: 'Completed' },
+          { recipientEventStatusCode: 'Declined' }
+        ]
+      }
     };
 
     const response = await fetch(
@@ -582,22 +640,42 @@ serve(async (req) => {
     }
 
     // Get access token
-    const accessToken = await getAccessToken(INTEGRATION_KEY, USER_ID, PRIVATE_KEY, BASE_URL);
+    const authResult = await getAccessToken(INTEGRATION_KEY, USER_ID, PRIVATE_KEY, BASE_URL);
 
-    if (!accessToken) {
-      const consentUrl = `https://account-d.docusign.com/oauth/auth?response_type=code&scope=signature%20impersonation&client_id=${INTEGRATION_KEY}&redirect_uri=https://developers.docusign.com/platform/auth/consent`;
+    if (!authResult.token) {
+      const isDemo = BASE_URL.includes('demo');
+      const consentUrl = isDemo
+        ? `https://account-d.docusign.com/oauth/auth?response_type=code&scope=signature%20impersonation&client_id=${INTEGRATION_KEY}&redirect_uri=https://developers.docusign.com/platform/auth/consent`
+        : `https://account.docusign.com/oauth/auth?response_type=code&scope=signature%20impersonation&client_id=${INTEGRATION_KEY}&redirect_uri=https://developers.docusign.com/platform/auth/consent`;
+      console.error('Auth failed:', authResult.error);
       return new Response(
         JSON.stringify({
           ok: false,
           error: 'DocuSign authentication failed',
-          detail: `JWT consent may not be granted. Visit: ${consentUrl}`
+          detail: authResult.error || 'Unknown auth error',
+          consentUrl,
         }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
+    const accessToken = authResult.token;
+
+    // Dynamic account discovery (like booking app) with fallback to env var
+    let envelopeAccountId = ACCOUNT_ID;
+    let envelopeBaseUrl = BASE_URL;
+
+    const userInfo = await getUserInfo(accessToken, BASE_URL);
+    if (userInfo) {
+      envelopeAccountId = userInfo.accountId;
+      envelopeBaseUrl = userInfo.apiBaseUrl;
+      console.log('Using discovered account:', envelopeAccountId, 'at', envelopeBaseUrl);
+    } else {
+      console.log('Using env var account ID:', ACCOUNT_ID);
+    }
+
     // Send envelope
-    const result = await sendEnvelope(accessToken, ACCOUNT_ID, BASE_URL, doc, email, name, rentalId);
+    const result = await sendEnvelope(accessToken, envelopeAccountId, envelopeBaseUrl, doc, email, name, rentalId);
 
     if (!result) {
       return new Response(

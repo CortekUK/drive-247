@@ -2,9 +2,10 @@ import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Gauge, TrendingUp, TrendingDown, Minus, Car } from "lucide-react";
+import { Gauge, TrendingUp, TrendingDown, Minus, Car, DollarSign } from "lucide-react";
 import { useTenant } from "@/contexts/TenantContext";
 import { formatDistance, formatDistanceLong, getDistanceUnitShort } from "@/lib/format-utils";
+import { formatCurrency } from "@/lib/format-utils";
 import type { DistanceUnit } from "@/lib/format-utils";
 
 interface MileageSummaryCardProps {
@@ -23,11 +24,19 @@ interface Vehicle {
   id: string;
   allowed_mileage: number | null;
   current_mileage: number | null;
+  excess_mileage_rate: number | null;
+}
+
+interface ExcessMileageCharge {
+  id: string;
+  amount: number;
+  remaining_amount: number;
 }
 
 export function MileageSummaryCard({ rentalId, vehicleId }: MileageSummaryCardProps) {
   const { tenant } = useTenant();
   const distanceUnit = (tenant?.distance_unit || 'miles') as DistanceUnit;
+  const currencyCode = tenant?.currency_code || 'GBP';
 
   // Fetch key handovers for this rental
   const { data: handovers } = useQuery({
@@ -44,13 +53,13 @@ export function MileageSummaryCard({ rentalId, vehicleId }: MileageSummaryCardPr
     enabled: !!rentalId,
   });
 
-  // Fetch vehicle details for allowed_mileage and current_mileage
+  // Fetch vehicle details for allowed_mileage, current_mileage, and excess_mileage_rate
   const { data: vehicle } = useQuery({
     queryKey: ["vehicle-mileage", vehicleId],
     queryFn: async () => {
       let query = supabase
         .from("vehicles")
-        .select("id, allowed_mileage, current_mileage")
+        .select("id, allowed_mileage, current_mileage, excess_mileage_rate")
         .eq("id", vehicleId);
 
       if (tenant?.id) {
@@ -62,6 +71,24 @@ export function MileageSummaryCard({ rentalId, vehicleId }: MileageSummaryCardPr
       return data as Vehicle;
     },
     enabled: !!vehicleId,
+  });
+
+  // Fetch excess mileage charge from ledger
+  const { data: excessCharge } = useQuery({
+    queryKey: ["excess-mileage-charge", rentalId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("ledger_entries")
+        .select("id, amount, remaining_amount")
+        .eq("rental_id", rentalId)
+        .eq("type", "Charge")
+        .eq("category", "Excess Mileage")
+        .maybeSingle();
+
+      if (error) throw error;
+      return data as ExcessMileageCharge | null;
+    },
+    enabled: !!rentalId,
   });
 
   const givingHandover = handovers?.find((h) => h.handover_type === "giving");
@@ -80,6 +107,16 @@ export function MileageSummaryCard({ rentalId, vehicleId }: MileageSummaryCardPr
   if (!pickupMileage && !returnMileage && !currentVehicleMileage) {
     return null;
   }
+
+  // Determine charge status
+  const getChargeStatus = () => {
+    if (!excessCharge) return null;
+    if (excessCharge.remaining_amount <= 0) return 'Paid';
+    if (excessCharge.remaining_amount < excessCharge.amount) return 'Partially Paid';
+    return 'Unpaid';
+  };
+
+  const chargeStatus = getChargeStatus();
 
   return (
     <Card>
@@ -155,6 +192,30 @@ export function MileageSummaryCard({ rentalId, vehicleId }: MileageSummaryCardPr
             )}
           </div>
         </div>
+
+        {/* Excess Mileage Charge Info */}
+        {mileageDifference !== null && mileageDifference > 0 && excessCharge && (
+          <div className="mt-4 pt-4 border-t">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2 text-sm">
+                <DollarSign className="h-4 w-4 text-red-500" />
+                <span className="font-medium">
+                  Excess Mileage Charge: {formatCurrency(excessCharge.amount, currencyCode)}
+                </span>
+                <span className="text-muted-foreground">
+                  ({mileageDifference.toLocaleString()} excess {getDistanceUnitShort(distanceUnit)} × {formatCurrency(vehicle?.excess_mileage_rate || 0, currencyCode)}/{distanceUnit === 'miles' ? 'mile' : 'km'})
+                </span>
+              </div>
+              {chargeStatus === 'Paid' ? (
+                <Badge className="bg-green-100 text-green-700 text-xs">Paid</Badge>
+              ) : chargeStatus === 'Partially Paid' ? (
+                <Badge className="bg-amber-100 text-amber-700 text-xs">Partially Paid</Badge>
+              ) : (
+                <Badge variant="destructive" className="text-xs">Unpaid</Badge>
+              )}
+            </div>
+          </div>
+        )}
 
         {/* Vehicle Current Mileage */}
         {currentVehicleMileage && (
