@@ -49,11 +49,13 @@ import {
 import { usePendingBookings, PendingBooking } from "@/hooks/use-pending-bookings";
 import { useApproveBooking, useRejectBooking } from "@/hooks/use-booking-approval";
 import { CancelRentalDialog } from "@/components/shared/dialogs/cancel-rental-dialog";
+import { useManagerPermissions } from "@/hooks/use-manager-permissions";
 
 const PendingBookings = () => {
   const { data: bookings, isLoading, error, refetch } = usePendingBookings();
   const approveBooking = useApproveBooking();
   const rejectBooking = useRejectBooking();
+  const { canEdit } = useManagerPermissions();
 
   const [selectedBooking, setSelectedBooking] = useState<PendingBooking | null>(
     null
@@ -292,35 +294,39 @@ const PendingBookings = () => {
                     </TableCell>
                     <TableCell className="text-right">
                       <div className="flex items-center justify-end gap-2">
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          className="text-red-600 hover:text-red-700 hover:bg-red-50"
-                          onClick={() => {
-                            setSelectedBooking(booking);
-                            setShowRejectDialog(true);
-                          }}
-                          disabled={
-                            approveBooking.isPending || rejectBooking.isPending
-                          }
-                        >
-                          <XCircle className="h-4 w-4 mr-1" />
-                          Reject
-                        </Button>
-                        <Button
-                          size="sm"
-                          className="bg-green-600 hover:bg-green-700"
-                          onClick={() => {
-                            setSelectedBooking(booking);
-                            setShowApproveDialog(true);
-                          }}
-                          disabled={
-                            approveBooking.isPending || rejectBooking.isPending
-                          }
-                        >
-                          <CheckCircle className="h-4 w-4 mr-1" />
-                          Approve
-                        </Button>
+                        {canEdit('pending_bookings') && (
+                          <>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                              onClick={() => {
+                                setSelectedBooking(booking);
+                                setShowRejectDialog(true);
+                              }}
+                              disabled={
+                                approveBooking.isPending || rejectBooking.isPending
+                              }
+                            >
+                              <XCircle className="h-4 w-4 mr-1" />
+                              Reject
+                            </Button>
+                            <Button
+                              size="sm"
+                              className="bg-green-600 hover:bg-green-700"
+                              onClick={() => {
+                                setSelectedBooking(booking);
+                                setShowApproveDialog(true);
+                              }}
+                              disabled={
+                                approveBooking.isPending || rejectBooking.isPending
+                              }
+                            >
+                              <CheckCircle className="h-4 w-4 mr-1" />
+                              Approve
+                            </Button>
+                          </>
+                        )}
                       </div>
                     </TableCell>
                   </TableRow>

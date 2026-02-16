@@ -20,7 +20,7 @@ import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { format } from 'date-fns';
-import { Calendar as CalendarIcon, Settings as SettingsIcon, Building2, Bell, Zap, Upload, Save, Loader2, Database, AlertTriangle, Trash2, CreditCard, Palette, Link2, CheckCircle2, AlertCircle, ExternalLink, MapPin, FileText, Car, Mail, ShieldX, FilePenLine, Receipt, Banknote, Shield, Copy, Check, Clock, Crown, Package, Lock, RefreshCw } from 'lucide-react';
+import { Calendar as CalendarIcon, Settings as SettingsIcon, Building2, Bell, Zap, Upload, Save, Loader2, Database, AlertTriangle, Trash2, CreditCard, Palette, Link2, CheckCircle2, AlertCircle, ExternalLink, MapPin, FileText, Car, Mail, ShieldX, FilePenLine, Receipt, Banknote, Shield, Copy, Check, Clock, Crown, Package, Lock, RefreshCw, Eye } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
 import { useOrgSettings } from '@/hooks/use-org-settings';
 import { useTenantBranding } from '@/hooks/use-tenant-branding';
@@ -40,12 +40,18 @@ import { BonzahSettings } from '@/components/settings/bonzah-settings';
 import { SubscriptionSettings } from '@/components/settings/subscription-settings';
 import { LockboxTemplatesSection } from '@/components/settings/lockbox-templates-section';
 import { formatCurrency } from '@/lib/format-utils';
+import { useManagerPermissions } from '@/hooks/use-manager-permissions';
 
 const Settings = () => {
   const queryClient = useQueryClient();
   const searchParams = useSearchParams();
   const router = useRouter();
-  const [activeTab, setActiveTab] = useState('general');
+  const { isManager, canViewSettings, canEditSettings } = useManagerPermissions();
+
+  // All settings tab values
+  const allSettingsTabs = ['general', 'locations', 'branding', 'rental', 'extras', 'payments', 'reminders', 'templates', 'integrations', 'subscription'];
+  const visibleTabs = allSettingsTabs.filter(t => canViewSettings(t));
+  const [activeTab, setActiveTab] = useState(visibleTabs[0] || 'general');
   const [isBackfilling, setIsBackfilling] = useState(false);
   const [showDataCleanupDialog, setShowDataCleanupDialog] = useState(false);
   const [generalForm, setGeneralForm] = useState({
@@ -833,7 +839,7 @@ const Settings = () => {
                 { value: 'templates', icon: FileText, label: 'Templates' },
                 { value: 'integrations', icon: Shield, label: 'Integrations' },
                 { value: 'subscription', icon: Crown, label: 'Subscription' },
-              ] as const).map(item => (
+              ] as const).filter(item => canViewSettings(item.value)).map(item => (
                 <TabsTrigger key={item.value} value={item.value} className="flex items-center gap-1.5 whitespace-nowrap text-xs px-3">
                   <item.icon className="h-3.5 w-3.5" />{item.label}
                 </TabsTrigger>
@@ -850,7 +856,7 @@ const Settings = () => {
                 { value: 'general', icon: Building2, label: 'General' },
                 { value: 'locations', icon: MapPin, label: 'Locations' },
                 { value: 'branding', icon: Palette, label: 'Branding' },
-              ] as const).map(item => (
+              ] as const).filter(item => canViewSettings(item.value)).map(item => (
                 <button
                   key={item.value}
                   onClick={() => setActiveTab(item.value)}
@@ -875,7 +881,7 @@ const Settings = () => {
                 { value: 'payments', icon: CreditCard, label: 'Payments & Stripe' },
                 { value: 'reminders', icon: Bell, label: 'Notifications' },
                 { value: 'templates', icon: FileText, label: 'Templates' },
-              ] as const).map(item => (
+              ] as const).filter(item => canViewSettings(item.value)).map(item => (
                 <button
                   key={item.value}
                   onClick={() => setActiveTab(item.value)}
@@ -896,7 +902,7 @@ const Settings = () => {
               {([
                 { value: 'integrations', icon: Shield, label: 'Integrations' },
                 { value: 'subscription', icon: Crown, label: 'Subscription' },
-              ] as const).map(item => (
+              ] as const).filter(item => canViewSettings(item.value)).map(item => (
                 <button
                   key={item.value}
                   onClick={() => setActiveTab(item.value)}
@@ -915,6 +921,13 @@ const Settings = () => {
 
           {/* Tab Content Area */}
           <div className="flex-1 min-w-0 space-y-6">
+            {!canEditSettings(activeTab) && (
+              <div className="p-3 bg-muted/50 border rounded-lg flex items-center gap-2 text-sm text-muted-foreground">
+                <Eye className="h-4 w-4 shrink-0" />
+                You have view-only access to this settings tab.
+              </div>
+            )}
+            <div className={!canEditSettings(activeTab) ? "pointer-events-none select-none" : ""}>
 
         {/* General Tab */}
         <TabsContent value="general" className="space-y-6">
@@ -973,25 +986,27 @@ const Settings = () => {
           </Card>
 
           {/* Save Button */}
-          <div className="flex justify-end">
-            <Button
-              onClick={handleSaveGeneralSettings}
-              disabled={isSavingGeneral}
-              className="min-w-[120px]"
-            >
-              {isSavingGeneral ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Saving...
-                </>
-              ) : (
-                <>
-                  <Save className="mr-2 h-4 w-4" />
-                  Save Changes
-                </>
-              )}
-            </Button>
-          </div>
+          {canEditSettings('general') && (
+            <div className="flex justify-end">
+              <Button
+                onClick={handleSaveGeneralSettings}
+                disabled={isSavingGeneral}
+                className="min-w-[120px]"
+              >
+                {isSavingGeneral ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Saving...
+                  </>
+                ) : (
+                  <>
+                    <Save className="mr-2 h-4 w-4" />
+                    Save Changes
+                  </>
+                )}
+              </Button>
+            </div>
+          )}
         </TabsContent>
 
         {/* Branding Tab */}
@@ -1409,94 +1424,96 @@ const Settings = () => {
           </Card>
 
           {/* Save Button */}
-          <div className="flex flex-col sm:flex-row justify-between items-stretch sm:items-center gap-3">
-            <AlertDialog>
-              <AlertDialogTrigger asChild>
-                <Button variant="outline" className="text-destructive border-destructive hover:bg-destructive/10 w-full sm:w-auto">
-                  Reset All to Defaults
-                </Button>
-              </AlertDialogTrigger>
-              <AlertDialogContent>
-                <AlertDialogHeader>
-                  <AlertDialogTitle>Reset Branding to Defaults?</AlertDialogTitle>
-                  <div className="text-sm text-muted-foreground">
-                    This will reset all branding settings to their original values:
-                    <ul className="mt-2 text-sm list-disc list-inside space-y-1">
-                      <li>App Name: "Drive 917"</li>
-                      <li>Primary Color: Gold (#C6A256)</li>
-                      <li>Secondary & Accent: Gold (#C6A256)</li>
-                      <li>Background Colors: Theme defaults</li>
-                      <li>SEO settings: Default values</li>
-                    </ul>
-                  </div>
-                </AlertDialogHeader>
-                <AlertDialogFooter>
-                  <AlertDialogCancel>Cancel</AlertDialogCancel>
-                  <AlertDialogAction
-                    onClick={async () => {
-                      setIsSavingBranding(true);
-                      try {
-                        const defaultBranding = {
-                          app_name: 'Drive 917',
-                          primary_color: '#C6A256',
-                          secondary_color: '#C6A256',
-                          accent_color: '#C6A256',
-                          light_primary_color: null,
-                          light_secondary_color: null,
-                          light_accent_color: null,
-                          dark_primary_color: null,
-                          dark_secondary_color: null,
-                          dark_accent_color: null,
-                          light_background_color: null,
-                          dark_background_color: null,
-                          meta_title: 'Drive 917 - Portal',
-                          meta_description: 'Fleet management portal',
-                          og_image_url: '',
-                          favicon_url: null,
-                        };
-                        // Update tenant branding (for useDynamicTheme)
-                        await updateTenantBranding(defaultBranding);
-                        // Update org settings for backward compatibility
-                        await updateOrgBranding(defaultBranding);
-                        toast({
-                          title: "Branding Reset",
-                          description: "All branding settings have been restored to defaults.",
-                        });
-                      } catch (error: any) {
-                        toast({
-                          title: "Error",
-                          description: error.message || "Failed to reset branding",
-                          variant: "destructive",
-                        });
-                      } finally {
-                        setIsSavingBranding(false);
-                      }
-                    }}
-                  >
-                    Reset to Defaults
-                  </AlertDialogAction>
-                </AlertDialogFooter>
-              </AlertDialogContent>
-            </AlertDialog>
+          {canEditSettings('branding') && (
+            <div className="flex flex-col sm:flex-row justify-between items-stretch sm:items-center gap-3">
+              <AlertDialog>
+                <AlertDialogTrigger asChild>
+                  <Button variant="outline" className="text-destructive border-destructive hover:bg-destructive/10 w-full sm:w-auto">
+                    Reset All to Defaults
+                  </Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>Reset Branding to Defaults?</AlertDialogTitle>
+                    <div className="text-sm text-muted-foreground">
+                      This will reset all branding settings to their original values:
+                      <ul className="mt-2 text-sm list-disc list-inside space-y-1">
+                        <li>App Name: "Drive 917"</li>
+                        <li>Primary Color: Gold (#C6A256)</li>
+                        <li>Secondary & Accent: Gold (#C6A256)</li>
+                        <li>Background Colors: Theme defaults</li>
+                        <li>SEO settings: Default values</li>
+                      </ul>
+                    </div>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>Cancel</AlertDialogCancel>
+                    <AlertDialogAction
+                      onClick={async () => {
+                        setIsSavingBranding(true);
+                        try {
+                          const defaultBranding = {
+                            app_name: 'Drive 917',
+                            primary_color: '#C6A256',
+                            secondary_color: '#C6A256',
+                            accent_color: '#C6A256',
+                            light_primary_color: null,
+                            light_secondary_color: null,
+                            light_accent_color: null,
+                            dark_primary_color: null,
+                            dark_secondary_color: null,
+                            dark_accent_color: null,
+                            light_background_color: null,
+                            dark_background_color: null,
+                            meta_title: 'Drive 917 - Portal',
+                            meta_description: 'Fleet management portal',
+                            og_image_url: '',
+                            favicon_url: null,
+                          };
+                          // Update tenant branding (for useDynamicTheme)
+                          await updateTenantBranding(defaultBranding);
+                          // Update org settings for backward compatibility
+                          await updateOrgBranding(defaultBranding);
+                          toast({
+                            title: "Branding Reset",
+                            description: "All branding settings have been restored to defaults.",
+                          });
+                        } catch (error: any) {
+                          toast({
+                            title: "Error",
+                            description: error.message || "Failed to reset branding",
+                            variant: "destructive",
+                          });
+                        } finally {
+                          setIsSavingBranding(false);
+                        }
+                      }}
+                    >
+                      Reset to Defaults
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
 
-            <Button
-              onClick={handleSaveBranding}
-              disabled={isSavingBranding}
-              className="min-w-[120px] w-full sm:w-auto"
-            >
-              {isSavingBranding ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Saving...
-                </>
-              ) : (
-                <>
-                  <Save className="mr-2 h-4 w-4" />
-                  Save Changes
-                </>
-              )}
-            </Button>
-          </div>
+              <Button
+                onClick={handleSaveBranding}
+                disabled={isSavingBranding}
+                className="min-w-[120px] w-full sm:w-auto"
+              >
+                {isSavingBranding ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Saving...
+                  </>
+                ) : (
+                  <>
+                    <Save className="mr-2 h-4 w-4" />
+                    Save Changes
+                  </>
+                )}
+              </Button>
+            </div>
+          )}
         </TabsContent>
 
         {/* Reminders Tab */}
@@ -1818,26 +1835,28 @@ const Settings = () => {
 
 
               {/* Save Button */}
-              <Button
-                onClick={async () => {
-                  try {
-                    await updateRentalSettings({
-                      minimum_rental_age: rentalForm.minimum_rental_age || null,
-                    });
-                  } catch (error) {
-                    console.error('Failed to update rental settings:', error);
-                  }
-                }}
-                disabled={isUpdatingRentalSettings}
-                className="flex items-center gap-2"
-              >
-                {isUpdatingRentalSettings ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  <Save className="h-4 w-4" />
-                )}
-                Save
-              </Button>
+              {canEditSettings('rental') && (
+                <Button
+                  onClick={async () => {
+                    try {
+                      await updateRentalSettings({
+                        minimum_rental_age: rentalForm.minimum_rental_age || null,
+                      });
+                    } catch (error) {
+                      console.error('Failed to update rental settings:', error);
+                    }
+                  }}
+                  disabled={isUpdatingRentalSettings}
+                  className="flex items-center gap-2"
+                >
+                  {isUpdatingRentalSettings ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Save className="h-4 w-4" />
+                  )}
+                  Save
+                </Button>
+              )}
             </CardContent>
           </Card>
 
@@ -1895,30 +1914,32 @@ const Settings = () => {
                   <> ({rentalForm.booking_lead_time_value * 24} hours)</>
                 )}
               </p>
-              <Button
-                onClick={async () => {
-                  try {
-                    const hours = rentalForm.booking_lead_time_unit === 'days'
-                      ? rentalForm.booking_lead_time_value * 24
-                      : rentalForm.booking_lead_time_value;
-                    await updateRentalSettings({
-                      booking_lead_time_hours: hours,
-                      booking_lead_time_unit: rentalForm.booking_lead_time_unit,
-                    });
-                  } catch (error) {
-                    console.error('Failed to update booking notice settings:', error);
-                  }
-                }}
-                disabled={isUpdatingRentalSettings}
-                className="flex items-center gap-2"
-              >
-                {isUpdatingRentalSettings ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  <Save className="h-4 w-4" />
-                )}
-                Save
-              </Button>
+              {canEditSettings('rental') && (
+                <Button
+                  onClick={async () => {
+                    try {
+                      const hours = rentalForm.booking_lead_time_unit === 'days'
+                        ? rentalForm.booking_lead_time_value * 24
+                        : rentalForm.booking_lead_time_value;
+                      await updateRentalSettings({
+                        booking_lead_time_hours: hours,
+                        booking_lead_time_unit: rentalForm.booking_lead_time_unit,
+                      });
+                    } catch (error) {
+                      console.error('Failed to update booking notice settings:', error);
+                    }
+                  }}
+                  disabled={isUpdatingRentalSettings}
+                  className="flex items-center gap-2"
+                >
+                  {isUpdatingRentalSettings ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Save className="h-4 w-4" />
+                  )}
+                  Save
+                </Button>
+              )}
             </CardContent>
           </Card>
 
@@ -1981,27 +2002,29 @@ const Settings = () => {
                 </div>
               )}
 
-              <Button
-                onClick={async () => {
-                  try {
-                    await updateRentalSettings({
-                      tax_enabled: rentalForm.tax_enabled,
-                      tax_percentage: rentalForm.tax_percentage,
-                    });
-                  } catch (error) {
-                    console.error('Failed to update tax settings:', error);
-                  }
-                }}
-                disabled={isUpdatingRentalSettings}
-                className="flex items-center gap-2"
-              >
-                {isUpdatingRentalSettings ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  <Save className="h-4 w-4" />
-                )}
-                Save Tax Settings
-              </Button>
+              {canEditSettings('rental') && (
+                <Button
+                  onClick={async () => {
+                    try {
+                      await updateRentalSettings({
+                        tax_enabled: rentalForm.tax_enabled,
+                        tax_percentage: rentalForm.tax_percentage,
+                      });
+                    } catch (error) {
+                      console.error('Failed to update tax settings:', error);
+                    }
+                  }}
+                  disabled={isUpdatingRentalSettings}
+                  className="flex items-center gap-2"
+                >
+                  {isUpdatingRentalSettings ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Save className="h-4 w-4" />
+                  )}
+                  Save Tax Settings
+                </Button>
+              )}
             </CardContent>
           </Card>
 
@@ -2110,29 +2133,31 @@ const Settings = () => {
                 </div>
               )}
 
-              <Button
-                onClick={async () => {
-                  try {
-                    await updateRentalSettings({
-                      service_fee_enabled: rentalForm.service_fee_enabled,
-                      service_fee_amount: rentalForm.service_fee_value,
-                      service_fee_type: rentalForm.service_fee_type,
-                      service_fee_value: rentalForm.service_fee_value,
-                    });
-                  } catch (error) {
-                    console.error('Failed to update service fee settings:', error);
-                  }
-                }}
-                disabled={isUpdatingRentalSettings}
-                className="flex items-center gap-2"
-              >
-                {isUpdatingRentalSettings ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  <Save className="h-4 w-4" />
-                )}
-                Save Service Fee Settings
-              </Button>
+              {canEditSettings('rental') && (
+                <Button
+                  onClick={async () => {
+                    try {
+                      await updateRentalSettings({
+                        service_fee_enabled: rentalForm.service_fee_enabled,
+                        service_fee_amount: rentalForm.service_fee_value,
+                        service_fee_type: rentalForm.service_fee_type,
+                        service_fee_value: rentalForm.service_fee_value,
+                      });
+                    } catch (error) {
+                      console.error('Failed to update service fee settings:', error);
+                    }
+                  }}
+                  disabled={isUpdatingRentalSettings}
+                  className="flex items-center gap-2"
+                >
+                  {isUpdatingRentalSettings ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Save className="h-4 w-4" />
+                  )}
+                  Save Service Fee Settings
+                </Button>
+              )}
             </CardContent>
           </Card>
 
@@ -2221,27 +2246,29 @@ const Settings = () => {
                 </Alert>
               )}
 
-              <Button
-                onClick={async () => {
-                  try {
-                    await updateRentalSettings({
-                      deposit_mode: rentalForm.deposit_mode,
-                      global_deposit_amount: rentalForm.global_deposit_amount,
-                    });
-                  } catch (error) {
-                    console.error('Failed to update deposit settings:', error);
-                  }
-                }}
-                disabled={isUpdatingRentalSettings}
-                className="flex items-center gap-2"
-              >
-                {isUpdatingRentalSettings ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  <Save className="h-4 w-4" />
-                )}
-                Save Deposit Settings
-              </Button>
+              {canEditSettings('rental') && (
+                <Button
+                  onClick={async () => {
+                    try {
+                      await updateRentalSettings({
+                        deposit_mode: rentalForm.deposit_mode,
+                        global_deposit_amount: rentalForm.global_deposit_amount,
+                      });
+                    } catch (error) {
+                      console.error('Failed to update deposit settings:', error);
+                    }
+                  }}
+                  disabled={isUpdatingRentalSettings}
+                  className="flex items-center gap-2"
+                >
+                  {isUpdatingRentalSettings ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Save className="h-4 w-4" />
+                  )}
+                  Save Deposit Settings
+                </Button>
+              )}
             </CardContent>
           </Card>
 
@@ -2541,27 +2568,29 @@ const Settings = () => {
                 </div>
               )}
 
-              <Button
-                onClick={async () => {
-                  try {
-                    await updateRentalSettings({
-                      installments_enabled: rentalForm.installments_enabled,
-                      installment_config: rentalForm.installment_config,
-                    });
-                  } catch (error) {
-                    console.error('Failed to update installment settings:', error);
-                  }
-                }}
-                disabled={isUpdatingRentalSettings}
-                className="flex items-center gap-2"
-              >
-                {isUpdatingRentalSettings ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  <Save className="h-4 w-4" />
-                )}
-                Save Installment Settings
-              </Button>
+              {canEditSettings('rental') && (
+                <Button
+                  onClick={async () => {
+                    try {
+                      await updateRentalSettings({
+                        installments_enabled: rentalForm.installments_enabled,
+                        installment_config: rentalForm.installment_config,
+                      });
+                    } catch (error) {
+                      console.error('Failed to update installment settings:', error);
+                    }
+                  }}
+                  disabled={isUpdatingRentalSettings}
+                  className="flex items-center gap-2"
+                >
+                  {isUpdatingRentalSettings ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Save className="h-4 w-4" />
+                  )}
+                  Save Installment Settings
+                </Button>
+              )}
             </CardContent>
           </Card>
 
@@ -2708,25 +2737,27 @@ const Settings = () => {
               </div>
 
               {/* Add Button */}
-              <div className="pt-2">
-                <Button
-                  onClick={handleCreatePromo}
-                  disabled={createPromoMutation.isPending}
-                  className="w-full md:w-auto"
-                >
-                  {createPromoMutation.isPending ? (
-                    <>
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      Creating...
-                    </>
-                  ) : (
-                    <>
-                      <Save className="mr-2 h-4 w-4" />
-                      Add Promo Code
-                    </>
-                  )}
-                </Button>
-              </div>
+              {canEditSettings('rental') && (
+                <div className="pt-2">
+                  <Button
+                    onClick={handleCreatePromo}
+                    disabled={createPromoMutation.isPending}
+                    className="w-full md:w-auto"
+                  >
+                    {createPromoMutation.isPending ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        Creating...
+                      </>
+                    ) : (
+                      <>
+                        <Save className="mr-2 h-4 w-4" />
+                        Add Promo Code
+                      </>
+                    )}
+                  </Button>
+                </div>
+              )}
 
               <Separator className="my-6" />
 
@@ -3056,28 +3087,30 @@ const Settings = () => {
               )}
 
               {/* Save Button */}
-              <Button
-                onClick={async () => {
-                  try {
-                    await updateRentalSettings({
-                      lockbox_enabled: rentalForm.lockbox_enabled,
-                      lockbox_code_length: rentalForm.lockbox_code_length,
-                      lockbox_notification_methods: rentalForm.lockbox_notification_methods as any,
-                    });
-                  } catch (error) {
-                    console.error('Failed to update lockbox settings:', error);
-                  }
-                }}
-                disabled={isUpdatingRentalSettings}
-                className="flex items-center gap-2"
-              >
-                {isUpdatingRentalSettings ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  <Save className="h-4 w-4" />
-                )}
-                Save
-              </Button>
+              {canEditSettings('rental') && (
+                <Button
+                  onClick={async () => {
+                    try {
+                      await updateRentalSettings({
+                        lockbox_enabled: rentalForm.lockbox_enabled,
+                        lockbox_code_length: rentalForm.lockbox_code_length,
+                        lockbox_notification_methods: rentalForm.lockbox_notification_methods as any,
+                      });
+                    } catch (error) {
+                      console.error('Failed to update lockbox settings:', error);
+                    }
+                  }}
+                  disabled={isUpdatingRentalSettings}
+                  className="flex items-center gap-2"
+                >
+                  {isUpdatingRentalSettings ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Save className="h-4 w-4" />
+                  )}
+                  Save
+                </Button>
+              )}
             </CardContent>
           </Card>
 
@@ -3158,6 +3191,7 @@ const Settings = () => {
           <SubscriptionSettings />
         </TabsContent>
 
+            </div>
           </div>{/* end Tab Content Area */}
         </div>{/* end flex layout */}
       </Tabs>

@@ -75,7 +75,7 @@ function LoginPageContent() {
 
   // Role-based redirect logic
   const getRedirectPath = (): string => {
-    if (appUser?.role === "head_admin" || appUser?.role === "admin") {
+    if (appUser?.role === "head_admin" || appUser?.role === "admin" || appUser?.role === "manager") {
       return "/";
     }
     if (appUser?.role === "ops") {

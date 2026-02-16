@@ -7,7 +7,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Globe, FileText, Edit, Clock, CheckCircle } from "lucide-react";
+import { Globe, FileText, Edit, Eye, Clock, CheckCircle } from "lucide-react";
+import { useManagerPermissions } from "@/hooks/use-manager-permissions";
 import { formatDistanceToNow } from "date-fns";
 
 // Order pages to match website navigation
@@ -16,6 +17,8 @@ const PAGE_ORDER = ["home", "about", "fleet", "reviews", "promotions", "contact"
 export default function CMS() {
   const router = useRouter();
   const { pages, isLoading, error, tenant } = useCMSPages();
+  const { canEdit } = useManagerPermissions();
+  const hasEditAccess = canEdit('cms');
 
   // Debug logging
   console.log("CMS Debug:", { tenant: tenant?.slug, tenantId: tenant?.id, pagesCount: pages.length, error });
@@ -105,8 +108,11 @@ export default function CMS() {
                 )}
               </div>
               <Button variant="outline" className="w-full mt-auto pt-3">
-                <Edit className="h-4 w-4 mr-2" />
-                Edit Content
+                {hasEditAccess ? (
+                  <><Edit className="h-4 w-4 mr-2" />Edit Content</>
+                ) : (
+                  <><Eye className="h-4 w-4 mr-2" />View Content</>
+                )}
               </Button>
             </CardContent>
           </Card>

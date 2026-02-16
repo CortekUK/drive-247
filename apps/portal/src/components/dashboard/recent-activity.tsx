@@ -36,8 +36,8 @@ const StatusBadge = ({ status }: { status: string }) => {
   );
 };
 
-export const RecentActivity = () => {
-  const { data: activities = [], isLoading } = useRecentActivity();
+export const RecentActivity = ({ allowedTypes }: { allowedTypes?: string[] }) => {
+  const { data: activities = [], isLoading } = useRecentActivity(allowedTypes);
   const { tenant } = useTenant();
   const currencyCode = tenant?.currency_code || 'GBP';
 

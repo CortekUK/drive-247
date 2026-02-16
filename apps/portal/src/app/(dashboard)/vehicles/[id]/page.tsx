@@ -46,6 +46,7 @@ import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { useAuditLog } from "@/hooks/use-audit-log";
+import { useManagerPermissions } from "@/hooks/use-manager-permissions";
 
 interface Vehicle {
   id: string;
@@ -143,6 +144,7 @@ export default function VehicleDetail() {
   const { tenant } = useTenant();
   const queryClient = useQueryClient();
   const { settings: rentalSettings } = useRentalSettings();
+  const { canEdit } = useManagerPermissions();
   const distanceUnit = (tenant?.distance_unit || 'miles') as DistanceUnit;
   const currencyCode = tenant?.currency_code || 'GBP';
   const [showAddFineDialog, setShowAddFineDialog] = useState(false);
@@ -457,8 +459,8 @@ export default function VehicleDetail() {
           {rentalSettings?.lockbox_enabled && (
             <div className="relative">
               <div className={`flex items-center h-10 rounded-xl overflow-hidden shadow-sm transition-opacity ${lockboxCode ? '' : 'opacity-40'}`} title={lockboxCode ? `Lockbox Code: ${lockboxCode}` : 'Lockbox Code — not set'}>
-                <div className="flex items-center gap-2.5 px-3.5 h-full bg-amber-500/15 border border-amber-500/30 rounded-l-xl">
-                  {lockboxEditing ? (
+                <div className={`flex items-center gap-2.5 px-3.5 h-full bg-amber-500/15 border border-amber-500/30 ${canEdit('vehicles') ? 'rounded-l-xl' : 'rounded-xl'}`}>
+                  {lockboxEditing && canEdit('vehicles') ? (
                     <input
                       value={lockboxCode}
                       onChange={(e) => {
@@ -491,90 +493,100 @@ export default function VehicleDetail() {
                     </span>
                   )}
                 </div>
-                {lockboxEditing ? (
-                  <button
-                    onClick={saveLockboxCode}
-                    disabled={lockboxSaving}
-                    className="flex items-center justify-center h-full w-10 bg-emerald-500/15 border-y border-emerald-500/30 hover:bg-emerald-500/25 transition-colors"
-                    title="Save"
-                  >
-                    <Check className="h-4 w-4 text-emerald-400" />
-                  </button>
-                ) : (
-                  <button
-                    onClick={() => setLockboxEditing(true)}
-                    className="flex items-center justify-center h-full w-10 border-y border-border hover:bg-muted/60 transition-colors"
-                    title="Edit code"
-                  >
-                    <Pencil className="h-3.5 w-3.5 text-muted-foreground" />
-                  </button>
+                {canEdit('vehicles') && (
+                  <>
+                    {lockboxEditing ? (
+                      <button
+                        onClick={saveLockboxCode}
+                        disabled={lockboxSaving}
+                        className="flex items-center justify-center h-full w-10 bg-emerald-500/15 border-y border-emerald-500/30 hover:bg-emerald-500/25 transition-colors"
+                        title="Save"
+                      >
+                        <Check className="h-4 w-4 text-emerald-400" />
+                      </button>
+                    ) : (
+                      <button
+                        onClick={() => setLockboxEditing(true)}
+                        className="flex items-center justify-center h-full w-10 border-y border-border hover:bg-muted/60 transition-colors"
+                        title="Edit code"
+                      >
+                        <Pencil className="h-3.5 w-3.5 text-muted-foreground" />
+                      </button>
+                    )}
+                    <button
+                      onClick={generateLockboxCode}
+                      className="flex items-center justify-center h-full w-10 border border-border rounded-r-xl hover:bg-muted/60 transition-colors"
+                      title="Generate new code"
+                    >
+                      <RefreshCw className="h-3.5 w-3.5 text-muted-foreground" />
+                    </button>
+                  </>
                 )}
-                <button
-                  onClick={generateLockboxCode}
-                  className="flex items-center justify-center h-full w-10 border border-border rounded-r-xl hover:bg-muted/60 transition-colors"
-                  title="Generate new code"
-                >
-                  <RefreshCw className="h-3.5 w-3.5 text-muted-foreground" />
-                </button>
               </div>
               <span className="absolute -bottom-5 left-0 text-[10px] font-medium px-1 whitespace-nowrap text-white/70">
                 {lockboxCode ? 'Lockbox enabled' : 'No lockbox code'}
               </span>
             </div>
           )}
-          <TooltipProvider>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  variant="outline"
-                  size="icon"
-                  onClick={() => setShowEditDialog(true)}
-                >
-                  <Pencil className="h-4 w-4" />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>
-                <p>Edit Vehicle</p>
-              </TooltipContent>
-            </Tooltip>
-          </TooltipProvider>
+          {canEdit('vehicles') && (
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    onClick={() => setShowEditDialog(true)}
+                  >
+                    <Pencil className="h-4 w-4" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>Edit Vehicle</p>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+          )}
 
           {!vehicle.is_disposed && (
             <>
-              <TooltipProvider>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button
-                      variant="outline"
-                      size="icon"
-                      onClick={() => setShowDisposeDialog(true)}
-                    >
-                      <Ban className="h-4 w-4" />
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent>
-                    <p>Dispose Vehicle</p>
-                  </TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
+              {canEdit('vehicles') && (
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        variant="outline"
+                        size="icon"
+                        onClick={() => setShowDisposeDialog(true)}
+                      >
+                        <Ban className="h-4 w-4" />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <p>Dispose Vehicle</p>
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+              )}
 
-              <TooltipProvider>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button
-                      variant="outline"
-                      size="icon"
-                      onClick={() => setShowDeleteDialog(true)}
-                      disabled={rentals && rentals.some(r => r.status === 'Active')}
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent>
-                    <p>{rentals && rentals.some(r => r.status === 'Active') ? 'Cannot delete (active rentals)' : 'Delete Vehicle'}</p>
-                  </TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
+              {canEdit('vehicles') && (
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        variant="outline"
+                        size="icon"
+                        onClick={() => setShowDeleteDialog(true)}
+                        disabled={rentals && rentals.some(r => r.status === 'Active')}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <p>{rentals && rentals.some(r => r.status === 'Active') ? 'Cannot delete (active rentals)' : 'Delete Vehicle'}</p>
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+              )}
             </>
           )}
         </div>
@@ -749,10 +761,12 @@ export default function VehicleDetail() {
                     </CardTitle>
                     <CardDescription>Maintenance and service records</CardDescription>
                   </div>
-                  <AddServiceRecordDialog
-                    onSubmit={addService}
-                    isLoading={isAddingService}
-                  />
+                  {canEdit('vehicles') && (
+                    <AddServiceRecordDialog
+                      onSubmit={addService}
+                      isLoading={isAddingService}
+                    />
+                  )}
                 </div>
               </CardHeader>
               <CardContent>
@@ -831,15 +845,17 @@ export default function VehicleDetail() {
                     </CardTitle>
                     <CardDescription>Upload and manage documents</CardDescription>
                   </div>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => fileInputRef.current?.click()}
-                    disabled={isUploadingFile}
-                  >
-                    <Upload className="h-4 w-4 mr-2" />
-                    Upload
-                  </Button>
+                  {canEdit('vehicles') && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => fileInputRef.current?.click()}
+                      disabled={isUploadingFile}
+                    >
+                      <Upload className="h-4 w-4 mr-2" />
+                      Upload
+                    </Button>
+                  )}
                 </div>
               </CardHeader>
               <CardContent>

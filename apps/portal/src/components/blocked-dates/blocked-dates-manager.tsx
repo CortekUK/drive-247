@@ -14,6 +14,7 @@ import { format } from "date-fns";
 import { cn } from "@/lib/utils";
 import { useBlockedDates } from "@/hooks/use-blocked-dates";
 import { EmptyState } from "@/components/shared/data-display/empty-state";
+import { useManagerPermissions } from "@/hooks/use-manager-permissions";
 
 interface BlockedDatesManagerProps {
   vehicle_id?: string;
@@ -26,6 +27,8 @@ export const BlockedDatesManager = ({ vehicle_id }: BlockedDatesManagerProps) =>
   const [reason, setReason] = useState("");
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [itemToDelete, setItemToDelete] = useState<{ id: string; startDate: string; endDate: string } | null>(null);
+
+  const { canEdit } = useManagerPermissions();
 
   const { blockedDates, isLoading, addBlockedDate, deleteBlockedDate, isAdding, isDeleting } =
     useBlockedDates(vehicle_id);
@@ -81,12 +84,14 @@ export const BlockedDatesManager = ({ vehicle_id }: BlockedDatesManagerProps) =>
       <CardHeader className="flex flex-row items-center justify-between space-y-0">
         <div />
         <Dialog open={isOpen} onOpenChange={setIsOpen}>
-          <DialogTrigger asChild>
-            <Button size="sm" className="flex items-center gap-2">
-              <Plus className="h-4 w-4" />
-              Block Dates
-            </Button>
-          </DialogTrigger>
+          {canEdit('availability') && (
+            <DialogTrigger asChild>
+              <Button size="sm" className="flex items-center gap-2">
+                <Plus className="h-4 w-4" />
+                Block Dates
+              </Button>
+            </DialogTrigger>
+          )}
           <DialogContent>
             <DialogHeader>
               <DialogTitle>Block Date Range</DialogTitle>
@@ -236,14 +241,16 @@ export const BlockedDatesManager = ({ vehicle_id }: BlockedDatesManagerProps) =>
                         )}
                       </TableCell>
                       <TableCell>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => handleDeleteClick(blockedDate.id, blockedDate.start_date, blockedDate.end_date)}
-                          disabled={isDeleting}
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
+                        {canEdit('availability') && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleDeleteClick(blockedDate.id, blockedDate.start_date, blockedDate.end_date)}
+                            disabled={isDeleting}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        )}
                       </TableCell>
                     </TableRow>
                   );
