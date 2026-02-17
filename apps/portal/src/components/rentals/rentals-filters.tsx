@@ -239,6 +239,17 @@ export const RentalsFilters = ({ filters, onFiltersChange, onClearFilters }: Ren
           Ins. Active
           {filters.bonzahStatus === 'active' && <X className="ml-2 h-3 w-3 flex-shrink-0" />}
         </Button>
+        <Button
+          variant={filters.bonzahStatus === 'failed' ? 'default' : 'outline'}
+          size="sm"
+          onClick={() => updateFilter('bonzahStatus', filters.bonzahStatus === 'failed' ? undefined : 'failed')}
+          className={`whitespace-nowrap ${filters.bonzahStatus === 'failed' ? 'bg-[#CC004A] hover:bg-[#CC004A]/90 text-white border-[#CC004A]' : 'border-[#CC004A]/30 text-[#CC004A] bg-[#CC004A]/10 hover:bg-[#CC004A]/20'}`}
+        >
+          <img src="/bonzah-logo.svg" alt="" className={`mr-2 h-4 w-auto flex-shrink-0 dark:hidden ${filters.bonzahStatus === 'failed' ? 'brightness-0 invert' : ''}`} />
+          <img src="/bonzah-logo-dark.svg" alt="" className={`mr-2 h-4 w-auto flex-shrink-0 hidden dark:block ${filters.bonzahStatus === 'failed' ? 'brightness-0 invert' : ''}`} />
+          Ins. Failed
+          {filters.bonzahStatus === 'failed' && <X className="ml-2 h-3 w-3 flex-shrink-0" />}
+        </Button>
         </div>
         </div>
 
