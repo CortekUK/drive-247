@@ -1680,7 +1680,7 @@ const RentalDetail = () => {
                                 setShowTargetedPayment(true);
                               }}
                             >
-                              Record Payment
+                              Add Payment
                             </button>
                           ) : (
                             <span className="text-muted-foreground/30">-</span>
@@ -1694,7 +1694,7 @@ const RentalDetail = () => {
 
               {/* Selection footer for targeted payment */}
               {selectedCategories.size > 0 && (
-                <div className="sticky bottom-0 border-t bg-muted/50 px-6 py-3 flex items-center justify-between">
+                <div className="sticky bottom-0 border-t bg-primary/20 border-primary/40 px-6 py-3 flex items-center justify-between">
                   <p className="text-sm text-muted-foreground">
                     {selectedCategories.size} item{selectedCategories.size > 1 ? 's' : ''} selected &mdash;{' '}
                     <span className="font-semibold text-foreground">{formatCurrencyUtil(selectedTotal, tenant?.currency_code || 'USD')}</span>
@@ -1704,7 +1704,7 @@ const RentalDetail = () => {
                     onClick={() => setShowTargetedPayment(true)}
                   >
                     <DollarSign className="h-3.5 w-3.5 mr-1.5" />
-                    Record Payment
+                    Add Payment
                   </Button>
                 </div>
               )}
@@ -1783,7 +1783,7 @@ const RentalDetail = () => {
                                 setShowExtensionPayment(true);
                               }}
                             >
-                              Record Payment
+                              Add Payment
                             </button>
                           ) : isPaid && !fullyRefunded && canRefund ? (
                             <button

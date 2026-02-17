@@ -8,7 +8,6 @@ import EnhancedServiceHighlights from '@/components/EnhancedServiceHighlights';
 import EnhancedTestimonials from '@/components/EnhancedTestimonials';
 import Footer from '@/components/Footer';
 import SEO from '@/components/SEO';
-import MobileActions from '@/components/MobileActions';
 import { TraxChatWidget } from '@/components/customer-portal/trax-chat';
 import { CustomerRealtimeChatProvider } from '@/contexts/CustomerRealtimeChatContext';
 import ContactCard from '@/components/ContactCard';
@@ -239,7 +238,6 @@ export default function Home() {
 
       <ContactCard />
       <Footer />
-      <MobileActions />
       <CustomerRealtimeChatProvider>
         <TraxChatWidget />
       </CustomerRealtimeChatProvider>

@@ -268,7 +268,7 @@ function LoginPageContent() {
       <Card className="w-full max-w-md border-primary">
         <CardHeader className="text-center space-y-4">
           <div className="flex justify-center py-4">
-            <div className="bg-[hsl(159,21%,30%)] dark:bg-[hsl(159,21%,15%)]/30 rounded-2xl p-6 border border-primary/20 transition-all duration-300 hover:border-primary/40 hover:shadow-[0_0_20px_rgba(198,162,86,0.15)]">
+            <div className="bg-white dark:bg-[hsl(159,21%,15%)]/30 rounded-2xl p-6 border border-primary/40 transition-all duration-300 hover:border-primary/60 hover:shadow-[0_0_20px_rgba(198,162,86,0.15)]">
               {logoUrl && logoUrl !== "/logo.png" ? (
                 <img
                   src={logoUrl}

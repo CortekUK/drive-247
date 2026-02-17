@@ -68,7 +68,7 @@ const DEFAULT_RENTAL_SETTINGS: RentalSettings = {
   working_hours_enabled: true,
   working_hours_open: '09:00',
   working_hours_close: '17:00',
-  working_hours_always_open: false,
+  working_hours_always_open: true,
   // Installment defaults
   installments_enabled: false,
   installment_config: {

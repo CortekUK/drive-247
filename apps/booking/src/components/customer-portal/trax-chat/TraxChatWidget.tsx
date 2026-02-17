@@ -3,9 +3,14 @@
 import { useState } from 'react';
 import { TraxChatButton } from './TraxChatButton';
 import { TraxChatPopup } from './TraxChatPopup';
+import { useCustomerAuthStore } from '@/stores/customer-auth-store';
 
 export function TraxChatWidget() {
   const [isOpen, setIsOpen] = useState(false);
+  const { customerUser } = useCustomerAuthStore();
+
+  // Only show chat widget to logged-in customers
+  if (!customerUser) return null;
 
   return (
     <>

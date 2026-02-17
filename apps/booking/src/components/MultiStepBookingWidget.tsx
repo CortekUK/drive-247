@@ -4124,7 +4124,7 @@ const MultiStepBookingWidget = () => {
                 </div>}
 
                 <Button onClick={handleStep2Continue} disabled={!selectedVehicle} className="w-full h-11 bg-primary hover:bg-primary/90 text-primary-foreground font-semibold shadow-md hover:shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed" size="lg">
-                  Review & Pay <ChevronRight className="ml-2 w-5 h-5" />
+                  Next <ChevronRight className="ml-2 w-5 h-5" />
                 </Button>
               </Card>
             </div>
