@@ -15,7 +15,10 @@ import {
   Lock,
   Loader2,
   User,
+  Mail,
+  MessageCircle,
 } from "lucide-react";
+import { Checkbox } from "@/components/ui/checkbox";
 import { cn } from "@/lib/utils";
 import { useKeyHandover, HandoverType } from "@/hooks/use-key-handover";
 import { KeyHandoverPhotos } from "@/components/rentals/key-handover-photos";
@@ -101,8 +104,14 @@ export const KeyHandoverSection = ({
   );
   const [isSendingLockbox, setIsSendingLockbox] = useState(false);
 
-  const showLockboxOption = isDeliveryRental && !!vehicleLockboxCode;
-  const showNoLockboxWarning = isDeliveryRental && !vehicleLockboxCode && tenant?.lockbox_enabled;
+  // Notification method state
+  const [sendEmail, setSendEmail] = useState(true);
+  const [sendWhatsApp, setSendWhatsApp] = useState(false);
+  const [whatsAppPhone, setWhatsAppPhone] = useState(customerPhone || '');
+  const [isSendingWhatsApp, setIsSendingWhatsApp] = useState(false);
+
+  const showLockboxOption = !!vehicleLockboxCode;
+  const showNoLockboxWarning = !vehicleLockboxCode && tenant?.lockbox_enabled;
 
   // Sync local state with server data
   useEffect(() => {
@@ -192,6 +201,48 @@ export const KeyHandoverSection = ({
         .from("rentals")
         .update({ delivery_method: 'in_person' })
         .eq("id", rentalId);
+    }
+
+    // Send WhatsApp notification if selected (applies to ALL collection types)
+    if (confirmHandover === "giving" && sendWhatsApp && whatsAppPhone) {
+      setIsSendingWhatsApp(true);
+      try {
+        const photoUrls = (givingHandover?.photos || []).map((p) => p.file_url);
+        const { error } = await supabase.functions.invoke("send-collection-whatsapp", {
+          body: {
+            customerName,
+            customerPhone: whatsAppPhone,
+            vehicleName,
+            vehicleReg,
+            bookingRef,
+            lockboxCode: vehicleLockboxCode || null,
+            lockboxInstructions: vehicleLockboxInstructions || null,
+            deliveryAddress: deliveryAddress || null,
+            odometerReading: givingMileage || null,
+            notes: givingNotes || null,
+            photoUrls,
+            tenantId: tenant?.id,
+          },
+        });
+
+        if (error) {
+          console.error("Failed to send WhatsApp notification:", error);
+          toast({
+            title: "Warning",
+            description: "WhatsApp notification failed to send. You may need to contact the customer manually.",
+            variant: "destructive",
+          });
+        } else {
+          toast({
+            title: "WhatsApp Sent",
+            description: `Collection details sent via WhatsApp to ${whatsAppPhone}`,
+          });
+        }
+      } catch (err) {
+        console.error("WhatsApp notification error:", err);
+      } finally {
+        setIsSendingWhatsApp(false);
+      }
     }
 
     markKeyHanded.mutate(confirmHandover);
@@ -374,6 +425,56 @@ export const KeyHandoverSection = ({
               />
             </div>
 
+            {/* Notification Method Selector */}
+            {!givingCompleted && !isClosed && (
+              <div className="p-3 border rounded-lg bg-muted/20 space-y-3">
+                <Label className="text-sm font-medium">Notify customer on collection</Label>
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2">
+                    <Checkbox
+                      id="notify-email"
+                      checked={sendEmail}
+                      onCheckedChange={(checked) => setSendEmail(!!checked)}
+                    />
+                    <Label htmlFor="notify-email" className="text-sm cursor-pointer flex items-center gap-1.5">
+                      <Mail className="h-3.5 w-3.5" />
+                      Email
+                    </Label>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Checkbox
+                      id="notify-whatsapp"
+                      checked={sendWhatsApp}
+                      onCheckedChange={(checked) => setSendWhatsApp(!!checked)}
+                    />
+                    <Label htmlFor="notify-whatsapp" className="text-sm cursor-pointer flex items-center gap-1.5">
+                      <MessageCircle className="h-3.5 w-3.5" />
+                      WhatsApp
+                    </Label>
+                  </div>
+                </div>
+
+                {/* WhatsApp phone input */}
+                {sendWhatsApp && (
+                  <div className="space-y-1.5 pl-6">
+                    <Label htmlFor="whatsapp-phone" className="text-xs text-muted-foreground">
+                      WhatsApp number
+                    </Label>
+                    <Input
+                      id="whatsapp-phone"
+                      type="tel"
+                      value={whatsAppPhone}
+                      onChange={(e) => setWhatsAppPhone(e.target.value)}
+                      placeholder="+44 7XXX XXXXXX"
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      Please enter the number with WhatsApp on it
+                    </p>
+                  </div>
+                )}
+              </div>
+            )}
+
             {/* Handed timestamp */}
             {givingCompleted && givingHandover?.handed_at && (
               <p className="text-sm text-muted-foreground">
@@ -385,24 +486,26 @@ export const KeyHandoverSection = ({
             {!isClosed && (
               <Button
                 onClick={() => givingCompleted ? setConfirmUndo("giving") : handleRequestHandover("giving")}
-                disabled={isMarkingHanded || isUnmarkingHanded || isSendingLockbox}
+                disabled={isMarkingHanded || isUnmarkingHanded || isSendingLockbox || isSendingWhatsApp}
                 variant={givingCompleted ? "outline" : "default"}
                 className="w-full"
               >
-                {isSendingLockbox ? (
+                {(isSendingLockbox || isSendingWhatsApp) ? (
                   <Loader2 className="h-4 w-4 mr-2 animate-spin" />
                 ) : (
                   <KeyRound className="h-4 w-4 mr-2" />
                 )}
                 {isSendingLockbox
                   ? "Sending lockbox code..."
-                  : isMarkingHanded || isUnmarkingHanded
-                    ? "Processing..."
-                    : givingCompleted
-                      ? "Undo Collection"
-                      : showLockboxOption && deliveryMethodChoice === 'lockbox'
-                        ? "Confirm Collection & Send Code"
-                        : "Confirm Collection"}
+                  : isSendingWhatsApp
+                    ? "Sending WhatsApp..."
+                    : isMarkingHanded || isUnmarkingHanded
+                      ? "Processing..."
+                      : givingCompleted
+                        ? "Undo Collection"
+                        : showLockboxOption && deliveryMethodChoice === 'lockbox'
+                          ? "Confirm Collection & Send Code"
+                          : "Confirm Collection"}
               </Button>
             )}
 
@@ -547,6 +650,15 @@ export const KeyHandoverSection = ({
                         <span className="flex items-center gap-1.5 text-primary font-medium">
                           <Lock className="h-3.5 w-3.5" />
                           The lockbox code will be sent to the customer via {customerEmail ? 'email' : 'notification'}.
+                        </span>
+                      </>
+                    )}
+                    {sendWhatsApp && whatsAppPhone && (
+                      <>
+                        <br /><br />
+                        <span className="flex items-center gap-1.5 text-green-600 font-medium">
+                          <MessageCircle className="h-3.5 w-3.5" />
+                          A WhatsApp message with collection details will be sent to {whatsAppPhone}.
                         </span>
                       </>
                     )}

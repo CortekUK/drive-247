@@ -7,7 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
-import { Lock, Mail, MessageSquare, Save, Loader2, Info } from 'lucide-react';
+import { Lock, Mail, MessageSquare, MessageCircle, Save, Loader2, Info } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
 import { useLockboxTemplates } from '@/hooks/use-lockbox-templates';
 import { useRentalSettings } from '@/hooks/use-rental-settings';
@@ -20,28 +20,39 @@ const AVAILABLE_VARIABLES = [
   { key: '{{lockbox_instructions}}', desc: 'Lockbox instructions' },
   { key: '{{delivery_address}}', desc: 'Delivery address' },
   { key: '{{booking_ref}}', desc: 'Booking reference' },
+  { key: '{{odometer}}', desc: 'Odometer reading' },
+  { key: '{{notes}}', desc: 'Collection notes' },
 ];
 
 export function LockboxTemplatesSection() {
   const { settings: rentalSettings } = useRentalSettings();
-  const { getEmailTemplate, getSmsTemplate, saveTemplate } = useLockboxTemplates();
+  const { templates, isLoading, getEmailTemplate, getSmsTemplate, getWhatsAppTemplate, saveTemplate } = useLockboxTemplates();
   const lockboxEnabled = rentalSettings?.lockbox_enabled ?? false;
 
   const [emailSubject, setEmailSubject] = useState('');
   const [emailBody, setEmailBody] = useState('');
   const [smsBody, setSmsBody] = useState('');
+  const [whatsappBody, setWhatsappBody] = useState('');
   const [savingEmail, setSavingEmail] = useState(false);
   const [savingSms, setSavingSms] = useState(false);
+  const [savingWhatsapp, setSavingWhatsapp] = useState(false);
+  const [initialized, setInitialized] = useState(false);
 
-  // Load templates
+  // Load templates once when data is ready
   useEffect(() => {
+    if (initialized || isLoading) return;
+
     const email = getEmailTemplate();
     setEmailSubject(email.subject);
     setEmailBody(email.body);
 
     const sms = getSmsTemplate();
     setSmsBody(sms.body);
-  }, [getEmailTemplate, getSmsTemplate]);
+
+    const whatsapp = getWhatsAppTemplate();
+    setWhatsappBody(whatsapp.body);
+    setInitialized(true);
+  }, [templates, isLoading]);
 
   const handleSaveEmail = async () => {
     setSavingEmail(true);
@@ -71,6 +82,21 @@ export function LockboxTemplatesSection() {
       toast({ title: 'Failed to save SMS template', variant: 'destructive' });
     } finally {
       setSavingSms(false);
+    }
+  };
+
+  const handleSaveWhatsapp = async () => {
+    setSavingWhatsapp(true);
+    try {
+      await saveTemplate.mutateAsync({
+        channel: 'whatsapp',
+        body: whatsappBody,
+      });
+      toast({ title: 'WhatsApp template saved' });
+    } catch (err) {
+      toast({ title: 'Failed to save WhatsApp template', variant: 'destructive' });
+    } finally {
+      setSavingWhatsapp(false);
     }
   };
 
@@ -192,6 +218,38 @@ export function LockboxTemplatesSection() {
           >
             {savingSms ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Save className="h-4 w-4 mr-2" />}
             Save SMS Template
+          </Button>
+        </div>
+
+        <div className="border-t" />
+
+        {/* WhatsApp Template */}
+        <div className="space-y-3">
+          <div className="flex items-center gap-2">
+            <MessageCircle className="h-4 w-4 text-primary" />
+            <h4 className="font-medium text-sm">WhatsApp Template</h4>
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="whatsapp-body" className="text-xs text-muted-foreground">Message</Label>
+            <Textarea
+              id="whatsapp-body"
+              value={whatsappBody}
+              onChange={(e) => setWhatsappBody(e.target.value)}
+              rows={8}
+              className="font-mono text-sm"
+              placeholder="WhatsApp message with {{variable}} placeholders..."
+            />
+            <p className="text-xs text-muted-foreground">
+              Use *text* for bold formatting. Photos, odometer reading, and notes are appended automatically when sent from the Key Handover section.
+            </p>
+          </div>
+          <Button
+            onClick={handleSaveWhatsapp}
+            disabled={savingWhatsapp}
+            size="sm"
+          >
+            {savingWhatsapp ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Save className="h-4 w-4 mr-2" />}
+            Save WhatsApp Template
           </Button>
         </div>
       </CardContent>
