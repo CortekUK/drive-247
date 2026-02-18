@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -9,11 +10,12 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
-import { Shield, CheckCircle2, AlertCircle, ExternalLink, Loader2, TestTube2, Zap, Unplug, Lock, Wallet, RefreshCw, Bell } from 'lucide-react';
+import { Shield, CheckCircle2, AlertCircle, ExternalLink, Loader2, TestTube2, Zap, Unplug, Lock, Wallet, RefreshCw, Bell, ShieldAlert, ArrowRight } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
 import { useTenant } from '@/contexts/TenantContext';
 import { useBonzahBalance } from '@/hooks/use-bonzah-balance';
 import { useBonzahAlertConfig } from '@/hooks/use-bonzah-alert-config';
+import { useBonzahRetryAll } from '@/hooks/use-bonzah-retry-all';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -42,6 +44,7 @@ interface BonzahStatus {
 
 export function BonzahSettings() {
   const queryClient = useQueryClient();
+  const router = useRouter();
   const { tenant: tenantContext, refetchTenant } = useTenant();
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
@@ -49,10 +52,29 @@ export function BonzahSettings() {
   const [showDisconnectWarning, setShowDisconnectWarning] = useState(false);
 
   // Shared balance hook
-  const { balanceNumber, refetch: refetchBalance, isFetching: isRefreshingBalance } = useBonzahBalance();
+  const { balanceNumber, refetch: refetchBalance, isFetching: isRefreshingBalance, portalUrl } = useBonzahBalance();
 
   // Alert config hook
   const { config: alertConfig, updateConfig } = useBonzahAlertConfig();
+
+  // Retry all hook
+  const { retryAll, progress: retryProgress } = useBonzahRetryAll();
+
+  // Pending policies query
+  const { data: pendingPolicies } = useQuery({
+    queryKey: ['bonzah-pending-policies', tenantContext?.id],
+    queryFn: async () => {
+      if (!tenantContext?.id) throw new Error('No tenant');
+      const { data, error } = await supabase
+        .from('bonzah_insurance_policies')
+        .select('id, rental_id, premium_amount, status')
+        .eq('tenant_id', tenantContext.id)
+        .eq('status', 'insufficient_balance');
+      if (error) throw error;
+      return data || [];
+    },
+    enabled: !!tenantContext?.id,
+  });
 
   // Alert dialog state
   const [showAlertDialog, setShowAlertDialog] = useState(false);
@@ -67,7 +89,7 @@ export function BonzahSettings() {
     }
   }, [showAlertDialog, alertConfig]);
 
-  // Fetch current Bonzah status
+  // Fetch current Bonzah status — staleTime: 0 so mode changes from admin are picked up on mount
   const { data: bonzahStatus, isLoading } = useQuery({
     queryKey: ['tenant-bonzah-status', tenantContext?.id],
     queryFn: async () => {
@@ -88,6 +110,7 @@ export function BonzahSettings() {
       return data as BonzahStatus;
     },
     enabled: !!tenantContext?.id,
+    staleTime: 0,
   });
 
   // Verify & connect mutation
@@ -96,11 +119,9 @@ export function BonzahSettings() {
 
     setIsVerifying(true);
     try {
-      const mode = bonzahStatus?.bonzah_mode || 'test';
-
-      // Call verify-credentials edge function
+      // Mode is resolved server-side from the DB via tenantId
       const { data, error } = await supabase.functions.invoke('bonzah-verify-credentials', {
-        body: { username, password, mode },
+        body: { username, password, tenantId: tenantContext.id },
       });
 
       if (error) throw error;
@@ -222,10 +243,9 @@ export function BonzahSettings() {
   }
 
   const isConnected = bonzahStatus?.integration_bonzah && !!bonzahStatus?.bonzah_username;
-  const currentMode = bonzahStatus?.bonzah_mode || 'test';
-  const portalUrl = currentMode === 'live'
-    ? 'https://bonzah.insillion.com/bb1/'
-    : 'https://bonzah.sb.insillion.com/bb1/';
+  const currentMode = tenantContext?.bonzah_mode || bonzahStatus?.bonzah_mode || 'test';
+  const pendingCount = pendingPolicies?.length || 0;
+  const pendingTotal = pendingPolicies?.reduce((sum, p) => sum + (p.premium_amount || 0), 0) || 0;
 
   return (
     <div className="space-y-6">
@@ -394,19 +414,79 @@ export function BonzahSettings() {
                     </p>
                   </div>
                 </div>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={() => refetchBalance()}
-                  disabled={isRefreshingBalance}
-                  className="text-amber-700 hover:text-amber-900 hover:bg-amber-100 dark:text-amber-400 dark:hover:bg-amber-900/50"
-                >
-                  <RefreshCw className={`h-4 w-4 ${isRefreshingBalance ? 'animate-spin' : ''}`} />
-                </Button>
+                <div className="flex items-center gap-1">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    asChild
+                    className="text-amber-700 hover:text-amber-900 hover:bg-amber-100 dark:text-amber-400 dark:hover:bg-amber-900/50"
+                  >
+                    <a href={portalUrl} target="_blank" rel="noopener noreferrer">
+                      <ExternalLink className="h-4 w-4 mr-1.5" />
+                      Top Up
+                    </a>
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => refetchBalance()}
+                    disabled={isRefreshingBalance}
+                    className="text-amber-700 hover:text-amber-900 hover:bg-amber-100 dark:text-amber-400 dark:hover:bg-amber-900/50"
+                  >
+                    <RefreshCw className={`h-4 w-4 ${isRefreshingBalance ? 'animate-spin' : ''}`} />
+                  </Button>
+                </div>
               </div>
               <p className="text-xs text-amber-600 dark:text-amber-500 mt-2">
-                This is your pre-paid credit balance with Bonzah. Policies are issued from this balance.
+                This is the broker-level CD balance. Policies are issued from your <strong>allocated</strong> balance — allocate funds in the Bonzah portal to activate pending policies.
               </p>
+
+              {/* Pending policies context */}
+              {pendingCount > 0 && (
+                <div className="mt-3 pt-3 border-t border-amber-200 dark:border-amber-800">
+                  <div className="flex items-start gap-2">
+                    <ShieldAlert className="h-4 w-4 text-[#CC004A] mt-0.5 flex-shrink-0" />
+                    <div className="flex-1">
+                      <p className="text-sm font-medium text-[#CC004A]">
+                        {pendingCount} {pendingCount === 1 ? 'policy' : 'policies'} quoted — ${pendingTotal.toFixed(2)} needed to activate
+                      </p>
+                      <p className="text-xs text-muted-foreground mt-0.5">
+                        Allocate at least ${pendingTotal.toFixed(2)} from your CD balance in the Bonzah portal, then retry.
+                      </p>
+                      {retryProgress.isRetrying && (
+                        <p className="text-xs text-muted-foreground mt-0.5">
+                          Retrying... {retryProgress.completed + retryProgress.failed} of {retryProgress.total}
+                        </p>
+                      )}
+                      <div className="flex flex-wrap gap-2 mt-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="h-7 text-xs border-[#CC004A]/30 text-[#CC004A] hover:bg-[#CC004A]/10"
+                          disabled={retryProgress.isRetrying}
+                          onClick={() => pendingPolicies && retryAll(pendingPolicies)}
+                        >
+                          {retryProgress.isRetrying ? (
+                            <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+                          ) : (
+                            <RefreshCw className="h-3 w-3 mr-1" />
+                          )}
+                          Retry All
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="h-7 text-xs border-[#CC004A]/30 text-[#CC004A] hover:bg-[#CC004A]/10"
+                          onClick={() => router.push('/rentals?bonzahStatus=ins_pending')}
+                        >
+                          View Rentals
+                          <ArrowRight className="h-3 w-3 ml-1" />
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
           )}
 

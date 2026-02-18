@@ -176,8 +176,8 @@ async function sendInsufficientBalanceNotifications(
     const notifications = adminUsers.map((user: any) => ({
       user_id: user.id,
       tenant_id: tenantId,
-      title: 'Insufficient Bonzah Balance',
-      message: `Insurance for ${customerName} (${rentalRef}) could not be activated. Premium: $${premium}, Balance: $${cdBalance ?? 'unknown'}. Top up your Bonzah account.`,
+      title: 'Insurance Pending — Insufficient Allocated Balance',
+      message: `Insurance for ${customerName} (${rentalRef}) is quoted but could not be activated — your Bonzah allocated balance is too low. Premium: $${premium}, CD Balance: $${cdBalance ?? 'unknown'}. Please allocate more funds in your Bonzah portal.`,
       type: 'bonzah_insufficient_balance',
       is_read: false,
       link: `/rentals/${policyRecord.rental_id}`,
@@ -210,9 +210,9 @@ async function sendInsufficientBalanceNotifications(
       const emailContent = `
                     <tr>
                         <td style="padding: 30px;">
-                            <h2 style="color: #CC004A; margin: 0 0 20px;">Insufficient Bonzah Balance</h2>
+                            <h2 style="color: #CC004A; margin: 0 0 20px;">Insurance Pending — Insufficient Allocated Balance</h2>
                             <p style="color: #333; font-size: 16px; line-height: 1.6; margin: 0 0 15px;">
-                                An insurance policy could not be activated due to insufficient Bonzah deposit balance.
+                                An insurance policy has been quoted but could not be activated because your Bonzah <strong>allocated balance</strong> is too low.
                             </p>
                             <table style="width: 100%; border-collapse: collapse; margin: 20px 0;">
                                 <tr>
@@ -232,12 +232,12 @@ async function sendInsufficientBalanceNotifications(
                                     <td style="padding: 10px 15px; border: 1px solid #eee; color: #CC004A; font-weight: 600;">$${premium}</td>
                                 </tr>
                                 <tr>
-                                    <td style="padding: 10px 15px; background: #f8f9fa; border: 1px solid #eee; font-weight: 600;">Current Balance</td>
+                                    <td style="padding: 10px 15px; background: #f8f9fa; border: 1px solid #eee; font-weight: 600;">CD Balance (Broker Total)</td>
                                     <td style="padding: 10px 15px; border: 1px solid #eee;">$${cdBalance ?? 'Unknown'}</td>
                                 </tr>
                             </table>
                             <p style="color: #333; font-size: 14px; line-height: 1.6; margin: 15px 0;">
-                                The customer's booking has been processed normally, but the insurance policy will remain pending until you top up your Bonzah deposit balance. You can retry the purchase from the rental detail page after topping up.
+                                <strong>What to do:</strong> Log in to your Bonzah portal and allocate more funds from your CD balance. Once allocated, you can retry the purchase from the rental detail page. The customer's booking is not affected — it has been processed normally.
                             </p>
                         </td>
                     </tr>`
@@ -246,7 +246,7 @@ async function sendInsufficientBalanceNotifications(
 
       await sendResendEmail({
         to: headAdminEmails,
-        subject: `Action Required: Insufficient Bonzah Balance — ${rentalRef}`,
+        subject: `Action Required: Insurance Pending — Allocate Bonzah Funds — ${rentalRef}`,
         html,
         tenantId,
       }, supabase)
@@ -312,6 +312,7 @@ serve(async (req) => {
     let policyId: string | null = null
     let policyIssued = false
     let pdfIds: Record<string, string> = {}
+    let cdBalance: number | null = null
 
     try {
       // Get per-tenant Bonzah credentials
@@ -338,8 +339,7 @@ serve(async (req) => {
         console.log('[Bonzah Payment] payment_id recovered and saved:', paymentId)
       }
 
-      // Check CD balance first (capture for use in error handling)
-      let cdBalance: number | null = null
+      // Check CD balance first (captured in outer scope for error handling)
       try {
         const balanceResponse = await bonzahFetchWithCredentials<{ status: number; data: { amount: string } }>(
           '/Bonzah/cdBalance',
@@ -382,15 +382,50 @@ serve(async (req) => {
 
         console.log('[Bonzah Payment] Policy issued:', policyNo)
         console.log('[Bonzah Payment] PDF IDs:', pdfIds)
+      } else if (paymentResponse.status !== 0) {
+        // Non-zero status indicates a Bonzah-side error (e.g. insufficient balance)
+        const errorMsg = paymentResponse.txt || `Bonzah payment returned status ${paymentResponse.status}`
+        console.error('[Bonzah Payment] Non-zero payment status:', paymentResponse.status, errorMsg)
+
+        // Detect balance errors by keyword only — CD balance is broker-level, not allocated
+        const balanceKeywords = ['insufficient', 'balance', 'fund', 'credit', 'cd balance', 'allocat']
+        const isBalanceError = balanceKeywords.some(kw => errorMsg.toLowerCase().includes(kw))
+
+        const newStatus = isBalanceError ? 'insufficient_balance' : 'failed'
+
+        await supabase
+          .from('bonzah_insurance_policies')
+          .update({ status: newStatus })
+          .eq('id', body.policy_record_id)
+
+        // Only send notifications on first insufficient_balance detection (not retries)
+        if (isBalanceError && policyRecord.status !== 'insufficient_balance') {
+          try {
+            await sendInsufficientBalanceNotifications(supabase, policyRecord, cdBalance)
+          } catch (notifyErr) {
+            console.error('[Bonzah Payment] Error sending insufficient balance notifications:', notifyErr)
+          }
+        }
+
+        if (isBalanceError) {
+          return jsonResponse({
+            success: false,
+            error: 'insufficient_balance',
+            cd_balance: cdBalance,
+            premium: policyRecord.premium_amount,
+            message: errorMsg,
+          }, 422)
+        }
+
+        return errorResponse(`Bonzah payment failed: ${errorMsg}`, 500)
       }
     } catch (bonzahError) {
       console.error('[Bonzah Payment] Error calling Bonzah API:', bonzahError)
       const errorMsg = bonzahError instanceof Error ? bonzahError.message : 'Unknown error'
 
-      // Detect insufficient balance: check error message keywords OR compare known balance vs premium
-      const balanceKeywords = ['insufficient', 'balance', 'fund', 'credit', 'cd balance']
+      // Detect balance errors by keyword only — CD balance is broker-level, not allocated
+      const balanceKeywords = ['insufficient', 'balance', 'fund', 'credit', 'cd balance', 'allocat']
       const isBalanceError = balanceKeywords.some(kw => errorMsg.toLowerCase().includes(kw))
-        || (cdBalance !== null && cdBalance < policyRecord.premium_amount)
 
       const newStatus = isBalanceError ? 'insufficient_balance' : 'failed'
       console.log(`[Bonzah Payment] Setting status to '${newStatus}' (balance error: ${isBalanceError}, CD balance: ${cdBalance}, premium: ${policyRecord.premium_amount})`)
@@ -400,8 +435,8 @@ serve(async (req) => {
         .update({ status: newStatus })
         .eq('id', body.policy_record_id)
 
-      // If insufficient balance, send admin notifications
-      if (isBalanceError) {
+      // Only send notifications on first insufficient_balance detection (not retries)
+      if (isBalanceError && policyRecord.status !== 'insufficient_balance') {
         try {
           await sendInsufficientBalanceNotifications(
             supabase,
@@ -411,6 +446,16 @@ serve(async (req) => {
         } catch (notifyErr) {
           console.error('[Bonzah Payment] Error sending insufficient balance notifications:', notifyErr)
         }
+      }
+
+      if (isBalanceError) {
+        return jsonResponse({
+          success: false,
+          error: 'insufficient_balance',
+          cd_balance: cdBalance,
+          premium: policyRecord.premium_amount,
+          message: errorMsg,
+        }, 422)
       }
 
       return errorResponse(`Bonzah payment failed: ${errorMsg}`, 500)

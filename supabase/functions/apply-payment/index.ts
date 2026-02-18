@@ -38,6 +38,12 @@ async function applyPayment(supabase: any, paymentId: string, targetCategories?:
       };
     }
 
+    // If targetCategories not provided by caller, read from payment record (stored by create-checkout-session)
+    if (!targetCategories && payment.target_categories) {
+      targetCategories = payment.target_categories;
+      console.log(`Read targetCategories from payment record: ${targetCategories.join(', ')}`);
+    }
+
     // Get tenant currency code
     let currencyCode = 'GBP';
     if (payment.tenant_id) {
@@ -68,14 +74,20 @@ async function applyPayment(supabase: any, paymentId: string, targetCategories?:
       }
     };
 
-    const ledgerCategory = getLedgerCategory(payment.payment_type);
+    const defaultLedgerCategory = getLedgerCategory(payment.payment_type);
+    // If targeting a single category, use that for the payment ledger entry
+    const ledgerCategory = (targetCategories && targetCategories.length === 1)
+      ? targetCategories[0]
+      : defaultLedgerCategory;
 
     // Determine entry date
     const entryDate = payment.payment_date || payment.paid_at || payment.created_at || new Date().toISOString().split('T')[0];
 
     console.log(`Payment ${paymentId}: ${payment.payment_type}, ${entryDate}, ${formatCurrency(payment.amount, currencyCode)}`);
-    
-    // Insert/Update Ledger entry (idempotent)
+
+    // Insert payment ledger entry — the DB unique index (idx_ledger_payment_unique) on
+    // ledger_entries(payment_id) WHERE type='Payment' acts as a lock:
+    // only the FIRST caller succeeds; subsequent callers get a duplicate key error and wait.
     console.log(`Creating ledger entry for payment ${paymentId}: amount=${payment.amount}, category=${ledgerCategory}`);
 
     const ledgerData: any = {
@@ -100,7 +112,23 @@ async function applyPayment(supabase: any, paymentId: string, targetCategories?:
       .from('ledger_entries')
       .insert([ledgerData]);
 
-    if (ledgerError && !ledgerError.message.includes('duplicate key')) {
+    if (ledgerError) {
+      if (ledgerError.message.includes('duplicate key') || ledgerError.message.includes('idx_ledger_payment_unique')) {
+        // Another call already inserted the ledger entry — it owns allocation.
+        // Wait for it to finish, then return the final state.
+        console.log(`Payment ${paymentId} already being processed by another call (duplicate ledger entry). Waiting...`);
+        await new Promise(r => setTimeout(r, 3000));
+        const { data: fresh } = await supabase.from('payments').select('status, remaining_amount, amount').eq('id', paymentId).single();
+        return {
+          ok: true,
+          paymentId,
+          category: 'Payment',
+          entryDate,
+          allocated: fresh ? fresh.amount - (fresh.remaining_amount || 0) : 0,
+          remaining: fresh?.remaining_amount || 0,
+          status: fresh?.status || 'Applied'
+        };
+      }
       console.error('CRITICAL: Ledger insert failed:', ledgerError);
       return {
         ok: false,
@@ -226,8 +254,26 @@ async function applyPayment(supabase: any, paymentId: string, targetCategories?:
     if (isCustomerPayment) {
       console.log('Processing customer payment - applying Universal FIFO allocation');
 
-      let remainingAmount = payment.amount;
-      let totalAllocated = 0;
+      // Idempotency: check how much has already been allocated for this payment
+      const { data: existingApps } = await supabase
+        .from('payment_applications')
+        .select('amount_applied')
+        .eq('payment_id', paymentId);
+      const alreadyAllocated = (existingApps || []).reduce((sum: number, app: any) => sum + Number(app.amount_applied), 0);
+
+      if (alreadyAllocated >= payment.amount) {
+        console.log(`Payment ${paymentId} already fully allocated (${formatCurrency(alreadyAllocated, currencyCode)}), skipping`);
+        if (payment.status !== 'Applied') {
+          await supabase.from('payments').update({ status: 'Applied', remaining_amount: 0 }).eq('id', paymentId);
+        }
+        return { ok: true, paymentId, category: 'Payment', entryDate, allocated: alreadyAllocated, remaining: 0, status: 'Applied' };
+      }
+
+      let remainingAmount = payment.amount - alreadyAllocated;
+      let totalAllocated = alreadyAllocated;
+      if (alreadyAllocated > 0) {
+        console.log(`Payment ${paymentId} partially allocated: ${formatCurrency(alreadyAllocated, currencyCode)} already applied, ${formatCurrency(remainingAmount, currencyCode)} remaining`);
+      }
 
       // Universal FIFO allocation order: Initial Fees → Extension → Rentals → Fines → Other
       const defaultAllocationOrder = [
@@ -270,10 +316,62 @@ async function applyPayment(supabase: any, paymentId: string, targetCategories?:
           console.log(`Filtering to rental ${payment.rental_id}`);
         }
 
-        const { data: outstandingCharges, error: chargesError } = await query
+        let { data: outstandingCharges, error: chargesError } = await query
           .order('due_date', { ascending: true })
           .order('entry_date', { ascending: true })
           .order('id', { ascending: true });
+
+        // Auto-create ledger charge from invoice if targeted category has no charge
+        if (targetCategories && (!outstandingCharges || outstandingCharges.length === 0) && payment.rental_id) {
+          const invoiceCategoryMap: Record<string, string> = {
+            'Insurance': 'insurance_premium',
+            'Service Fee': 'service_fee',
+            'Security Deposit': 'security_deposit',
+            'Delivery Fee': 'delivery_fee',
+            'Tax': 'tax_amount',
+            'Extras': 'extras_total',
+          };
+          const invoiceField = invoiceCategoryMap[category];
+          if (invoiceField) {
+            const { data: invoice } = await supabase
+              .from('invoices')
+              .select('*')
+              .eq('rental_id', payment.rental_id)
+              .order('created_at', { ascending: false })
+              .limit(1)
+              .maybeSingle();
+
+            const invoiceAmount = invoice?.[invoiceField] || 0;
+            if (invoiceAmount > 0) {
+              console.log(`Auto-creating ${category} ledger charge from invoice: ${formatCurrency(invoiceAmount, currencyCode)}`);
+              const chargeData: any = {
+                customer_id: payment.customer_id,
+                rental_id: payment.rental_id,
+                vehicle_id: payment.vehicle_id,
+                entry_date: invoice?.invoice_date || entryDate,
+                type: 'Charge',
+                category: category,
+                amount: invoiceAmount,
+                remaining_amount: invoiceAmount,
+                due_date: invoice?.invoice_date || entryDate,
+              };
+              if (payment.tenant_id) chargeData.tenant_id = payment.tenant_id;
+
+              const { data: newCharge, error: chargeCreateError } = await supabase
+                .from('ledger_entries')
+                .insert(chargeData)
+                .select()
+                .single();
+
+              if (chargeCreateError) {
+                console.error(`Failed to create ${category} ledger charge:`, chargeCreateError);
+              } else {
+                console.log(`Created ${category} charge: ${newCharge.id}`);
+                outstandingCharges = [newCharge];
+              }
+            }
+          }
+        }
 
         if (chargesError) {
           console.error(`Error fetching ${description}:`, chargesError);

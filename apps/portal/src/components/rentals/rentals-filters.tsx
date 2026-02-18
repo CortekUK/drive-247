@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Search, X, Calendar, ArrowRightLeft, ChevronDown, Ban } from "lucide-react";
+import { Search, X, Calendar, ArrowRightLeft, ChevronDown, Ban, AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -215,18 +215,50 @@ export const RentalsFilters = ({ filters, onFiltersChange, onClearFilters }: Ren
           })()}
         </div>
 
-        {/* Ins. Quoted */}
-        <Button
-          variant={filters.bonzahStatus === 'ins_quoted' ? 'default' : 'outline'}
-          size="sm"
-          onClick={() => updateFilter('bonzahStatus', filters.bonzahStatus === 'ins_quoted' ? undefined : 'ins_quoted')}
-          className={`whitespace-nowrap ${filters.bonzahStatus === 'ins_quoted' ? 'bg-[#CC004A] hover:bg-[#CC004A]/90 text-white border-[#CC004A]' : 'border-[#CC004A]/30 text-[#CC004A] bg-[#CC004A]/10 hover:bg-[#CC004A]/20'}`}
-        >
-          <img src="/bonzah-logo.svg" alt="" className={`mr-2 h-4 w-auto flex-shrink-0 dark:hidden ${filters.bonzahStatus === 'ins_quoted' ? 'brightness-0 invert' : ''}`} />
-          <img src="/bonzah-logo-dark.svg" alt="" className={`mr-2 h-4 w-auto flex-shrink-0 hidden dark:block ${filters.bonzahStatus === 'ins_quoted' ? 'brightness-0 invert' : ''}`} />
-          Ins. Quoted
-          {filters.bonzahStatus === 'ins_quoted' && <X className="ml-2 h-3 w-3 flex-shrink-0" />}
-        </Button>
+        {/* Bonzah filters group */}
+        <div className="flex items-center border rounded-md overflow-hidden">
+          <span className="text-xs text-muted-foreground px-2.5 shrink-0">
+            <img src="/bonzah-logo.svg" alt="Bonzah" className="h-3.5 w-auto dark:hidden" />
+            <img src="/bonzah-logo-dark.svg" alt="Bonzah" className="h-3.5 w-auto hidden dark:block" />
+          </span>
+          <div className="h-5 w-px bg-border" />
+          {(() => {
+            const isActive = filters.bonzahStatus === 'ins_quoted';
+            const color = '#CC004A';
+            return (
+              <button
+                onClick={() => updateFilter('bonzahStatus', isActive ? undefined : 'ins_quoted')}
+                className="inline-flex items-center gap-1.5 px-2.5 h-8 text-xs font-medium whitespace-nowrap transition-colors"
+                style={{
+                  backgroundColor: isActive ? `${color}25` : 'transparent',
+                  color: color,
+                }}
+              >
+                Quoted
+                {isActive && <X className="ml-1 h-3 w-3" />}
+              </button>
+            );
+          })()}
+          <div className="h-5 w-px bg-border" />
+          {(() => {
+            const isActive = filters.bonzahStatus === 'ins_pending';
+            const color = '#CC004A';
+            return (
+              <button
+                onClick={() => updateFilter('bonzahStatus', isActive ? undefined : 'ins_pending')}
+                className="inline-flex items-center gap-1.5 px-2.5 h-8 text-xs font-medium whitespace-nowrap transition-colors"
+                style={{
+                  backgroundColor: isActive ? `${color}25` : 'transparent',
+                  color: color,
+                }}
+              >
+                <AlertTriangle className="h-3 w-3" />
+                Pending
+                {isActive && <X className="ml-1 h-3 w-3" />}
+              </button>
+            );
+          })()}
+        </div>
         </div>
 
         {/* Clear All */}

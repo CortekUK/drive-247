@@ -313,7 +313,7 @@ const RentalsList = () => {
                     {rentals.map((rental) => (
                       <TableRow
                         key={rental.id}
-                        className={`hover:bg-muted/50 cursor-pointer ${rental.is_extended ? 'bg-amber-500/10 border-l-4 border-l-amber-500' : rental.cancellation_requested ? 'bg-red-500/10 border-l-4 border-l-red-500' : (!filters.bonzahStatus && (rental.bonzah_status === 'insufficient_balance' || rental.bonzah_status === 'quoted')) ? 'bg-[#CC004A]/5 border-l-4 border-l-[#CC004A]' : ''}`}
+                        className={`hover:bg-muted/50 cursor-pointer ${rental.is_extended ? 'bg-amber-500/10 border-l-4 border-l-amber-500' : rental.cancellation_requested ? 'bg-red-500/10 border-l-4 border-l-red-500' : (!filters.bonzahStatus && rental.bonzah_status === 'insufficient_balance') ? 'bg-[#CC004A]/5 border-l-4 border-l-[#CC004A]' : (!filters.bonzahStatus && rental.bonzah_status === 'quoted') ? 'bg-[#CC004A]/5 border-l-4 border-l-[#CC004A]' : ''}`}
                         onClick={() => router.push(`/rentals/${rental.id}`)}
                       >
                         <TableCell className="font-medium">
@@ -340,7 +340,15 @@ const RentalsList = () => {
                                 Cancellation Requested
                               </span>
                             </div>
-                          ) : (!filters.bonzahStatus && (rental.bonzah_status === 'insufficient_balance' || rental.bonzah_status === 'quoted')) ? (
+                          ) : (!filters.bonzahStatus && rental.bonzah_status === 'insufficient_balance') ? (
+                            <div className="flex flex-col">
+                              <span>{rental.rental_number}</span>
+                              <span className="text-xs text-[#CC004A] font-medium flex items-center gap-1 mt-0.5">
+                                <ShieldAlert className="h-3 w-3" />
+                                Balance Required
+                              </span>
+                            </div>
+                          ) : (!filters.bonzahStatus && rental.bonzah_status === 'quoted') ? (
                             <div className="flex flex-col">
                               <span>{rental.rental_number}</span>
                               <span className="text-xs text-[#CC004A] font-medium flex items-center gap-1 mt-0.5">

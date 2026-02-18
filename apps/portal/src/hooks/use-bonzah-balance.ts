@@ -6,8 +6,16 @@ interface BonzahBalanceData {
   balance: string;
 }
 
+export function getBonzahPortalUrl(mode: 'test' | 'live' | null | undefined): string {
+  return mode === 'live'
+    ? 'https://bonzah.insillion.com/bb1/'
+    : 'https://bonzah.sb.insillion.com/bb1/';
+}
+
 export function useBonzahBalance() {
   const { tenant } = useTenant();
+
+  const bonzahMode = tenant?.bonzah_mode ?? 'test';
 
   // Fetch Bonzah connection status
   const { data: bonzahStatus } = useQuery({
@@ -47,11 +55,14 @@ export function useBonzahBalance() {
   });
 
   const balanceNumber = balanceData?.balance != null ? Number(balanceData.balance) : null;
+  const portalUrl = getBonzahPortalUrl(bonzahMode);
 
   return {
     balanceNumber,
     isBonzahConnected,
     refetch,
     isFetching,
+    bonzahMode,
+    portalUrl,
   };
 }

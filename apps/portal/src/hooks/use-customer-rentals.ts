@@ -8,6 +8,7 @@ export interface CustomerRental {
   end_date: string | null;
   monthly_amount: number;
   status: string;
+  approval_status: string | null;
   schedule: string;
   created_at: string;
   vehicle: {
@@ -34,6 +35,7 @@ export const useCustomerRentals = (customerId: string) => {
           end_date,
           monthly_amount,
           status,
+          approval_status,
           schedule,
           created_at,
           vehicles!rentals_vehicle_id_fkey(id, reg, make, model)

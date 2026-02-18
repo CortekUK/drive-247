@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Loader2, Shield, ShieldCheck, ArrowLeft, ArrowRight, AlertTriangle } from 'lucide-react';
+import { Loader2, Shield, ShieldCheck, ArrowLeft, ArrowRight, AlertTriangle, ExternalLink, Info } from 'lucide-react';
 import { useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useTenant } from '@/contexts/TenantContext';
@@ -49,7 +49,7 @@ export function BuyInsuranceDialog({
   const { tenant } = useTenant();
   const { toast } = useToast();
   const queryClient = useQueryClient();
-  const { balanceNumber: bonzahCdBalance } = useBonzahBalance();
+  const { balanceNumber: bonzahCdBalance, portalUrl: bonzahPortalUrl } = useBonzahBalance();
 
   const [step, setStep] = useState<1 | 2>(1);
   const [coverage, setCoverage] = useState<CoverageOptions>(DEFAULT_COVERAGE);
@@ -374,12 +374,24 @@ export function BuyInsuranceDialog({
               </div>
             </div>
 
-            {bonzahCdBalance != null && premium > bonzahCdBalance && (
-              <div className="rounded-lg border border-[#CC004A]/30 bg-[#CC004A]/5 p-3 flex items-start gap-2">
-                <AlertTriangle className="h-4 w-4 text-[#CC004A] mt-0.5 flex-shrink-0" />
-                <p className="text-sm text-muted-foreground">
-                  Insurance premium (<span className="font-medium text-[#CC004A]">${premium.toFixed(2)}</span>) exceeds your current Bonzah balance (<span className="font-medium">${bonzahCdBalance.toFixed(2)}</span>). The policy will be created but won't activate until you top up.
-                </p>
+            {premium > 0 && (
+              <div className="rounded-lg border border-blue-200 bg-blue-50 dark:bg-blue-950/30 dark:border-blue-800 p-3 space-y-2">
+                <div className="flex items-start gap-2">
+                  <Info className="h-4 w-4 text-blue-600 dark:text-blue-400 mt-0.5 flex-shrink-0" />
+                  <p className="text-sm text-muted-foreground">
+                    {bonzahCdBalance != null && <>CD Balance: <span className="font-medium">${bonzahCdBalance.toFixed(2)}</span>. </>}
+                    The policy will only activate if your Bonzah <strong>allocated balance</strong> is sufficient. If not, the policy will be quoted and you can retry after allocating more funds.
+                  </p>
+                </div>
+                <a
+                  href={bonzahPortalUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1.5 text-xs font-medium text-blue-600 dark:text-blue-400 hover:underline ml-6"
+                >
+                  <ExternalLink className="h-3 w-3" />
+                  Check Allocated Balance
+                </a>
               </div>
             )}
 

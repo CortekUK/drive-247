@@ -14,7 +14,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage, FormDescription } from "@/components/ui/form";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
-import { ArrowLeft, FileText, Save, AlertTriangle, MapPin, Clock, Shield, Upload, CheckCircle2, XCircle, Loader2, RefreshCw, QrCode, Smartphone, Copy, Check, Plus, Minus, Receipt, ImageIcon } from "lucide-react";
+import { ArrowLeft, FileText, Save, AlertTriangle, MapPin, Clock, Shield, Upload, CheckCircle2, XCircle, Loader2, RefreshCw, QrCode, Smartphone, Copy, Check, Plus, Minus, Receipt, ImageIcon, ExternalLink, Info, CalendarDays, StickyNote } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Input } from "@/components/ui/input";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
@@ -98,7 +98,7 @@ const CreateRental = () => {
   const { toast } = useToast();
   const { tenant } = useTenant();
   const skipInsurance = !tenant?.integration_bonzah;
-  const { balanceNumber: bonzahCdBalance } = useBonzahBalance();
+  const { balanceNumber: bonzahCdBalance, portalUrl: bonzahPortalUrl } = useBonzahBalance();
   const queryClient = useQueryClient();
   const { isManager, canEdit } = useManagerPermissions();
   const [loading, setLoading] = useState(false);
@@ -1167,30 +1167,30 @@ const CreateRental = () => {
   if (isManager && !canEdit('rentals')) return null;
 
   return (
-    <div className="container mx-auto p-4 md:p-6 space-y-6 min-h-screen">
+    <div className="container mx-auto px-4 py-6 md:px-6 md:py-8 min-h-screen">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
-        <Button 
-          variant="outline" 
-          onClick={() => router.push("/rentals")} 
-          className="w-fit border-primary/20 hover:border-primary/40 hover:bg-primary/5 transition-all duration-200"
+      <div className="flex items-center gap-4 mb-2">
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={() => router.push("/rentals")}
+          className="shrink-0 rounded-xl h-10 w-10"
         >
-          <ArrowLeft className="h-4 w-4 mr-2" />
-          Back to Rentals
+          <ArrowLeft className="h-4 w-4" />
         </Button>
-        <div>
-          <h1 className="text-2xl sm:text-3xl font-bold">
-            {renewalSource ? "Renew Rental" : "Create New Rental"}
+        <div className="flex-1 min-w-0">
+          <h1 className="text-2xl font-semibold tracking-tight">
+            {renewalSource ? "Renew Rental" : "New Rental Agreement"}
           </h1>
-          <p className="text-sm sm:text-base text-muted-foreground">
-            {renewalSource ? "Create a new rental from a completed one" : "Set up a new rental agreement"}
+          <p className="text-sm text-muted-foreground mt-0.5">
+            {renewalSource ? "Continue from a previous rental" : "Set up a new rental agreement for a customer"}
           </p>
         </div>
       </div>
 
       {/* Renewal Banner */}
       {renewalSource && (
-        <Alert className="border-blue-200 bg-blue-50 dark:border-blue-800 dark:bg-blue-950/30">
+        <Alert className="mb-2 border-blue-200 bg-blue-50 dark:border-blue-800 dark:bg-blue-950/30">
           <RefreshCw className="h-4 w-4 text-blue-600 dark:text-blue-400" />
           <AlertDescription className="text-blue-700 dark:text-blue-400">
             Renewing from rental for <strong>{renewalSource.customers?.name}</strong> — {renewalSource.vehicles?.make} {renewalSource.vehicles?.model} ({renewalSource.vehicles?.reg})
@@ -1199,31 +1199,27 @@ const CreateRental = () => {
       )}
 
       {/* Two-column layout: Form + Contract Summary */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Form */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        {/* Form Column */}
         <div className="lg:col-span-2">
-          <Card className="h-fit">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-lg sm:text-xl">
-                <FileText className="h-5 w-5 text-primary flex-shrink-0" />
-                Rental Agreement Details
-              </CardTitle>
-              <CardDescription className="text-sm">
-                Fill in the details to create a new rental agreement. Monthly charges will be automatically generated.
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              {/* Submit Error Alert */}
-              {submitError && (
-                <Alert variant="destructive" className="mb-6">
-                  <AlertTriangle className="h-4 w-4" />
-                  <AlertDescription>{submitError}</AlertDescription>
-                </Alert>
-              )}
+          {/* Submit Error Alert */}
+          {submitError && (
+            <Alert variant="destructive" className="mb-6">
+              <AlertTriangle className="h-4 w-4" />
+              <AlertDescription>{submitError}</AlertDescription>
+            </Alert>
+          )}
 
-              <Form {...form}>
-                <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
-                  {/* Customer and Vehicle Selection */}
+          <Form {...form}>
+            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+
+              {/* ── Section 1: Customer & Vehicle ─────────────────── */}
+              <div className="rounded-xl border bg-card shadow-sm">
+                <div className="flex items-center gap-3 px-5 py-3.5 border-b bg-muted/40">
+                  <div className="flex items-center justify-center h-6 w-6 rounded-md bg-primary/10 text-primary"><FileText className="h-3.5 w-3.5" /></div>
+                  <h2 className="font-semibold text-sm">Customer & Vehicle</h2>
+                </div>
+                <div className="p-5 space-y-5">
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <FormField
                       control={form.control}
@@ -1388,8 +1384,16 @@ const CreateRental = () => {
                       )}
                     </div>
                   )}
+                </div>
+              </div>
 
-                  {/* Rental Period Type */}
+              {/* ── Section 2: Rental Period & Pricing ────────────── */}
+              <div className="rounded-xl border bg-card shadow-sm">
+                <div className="flex items-center gap-3 px-5 py-3.5 border-b bg-muted/40">
+                  <div className="flex items-center justify-center h-6 w-6 rounded-md bg-primary/10 text-primary"><CalendarDays className="h-3.5 w-3.5" /></div>
+                  <h2 className="font-semibold text-sm">Rental Period & Pricing</h2>
+                </div>
+                <div className="p-5 space-y-5">
                   <div className="grid grid-cols-1 gap-4">
                     <FormField
                       control={form.control}
@@ -1580,14 +1584,17 @@ const CreateRental = () => {
                     />
 
                   </div>
+                </div>
+              </div>
 
-                  {/* Pickup/Return Locations */}
-                  <div className="space-y-4 pt-4 border-t">
-                    <div className="flex items-center gap-2">
-                      <MapPin className="h-4 w-4 text-muted-foreground" />
-                      <h3 className="font-medium">Pickup & Return Locations</h3>
-                    </div>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {/* ── Section 3: Pickup & Return ────────────────────── */}
+              <div className="rounded-xl border bg-card shadow-sm">
+                <div className="flex items-center gap-3 px-5 py-3.5 border-b bg-muted/40">
+                  <div className="flex items-center justify-center h-6 w-6 rounded-md bg-primary/10 text-primary"><MapPin className="h-3.5 w-3.5" /></div>
+                  <h2 className="font-semibold text-sm">Pickup & Return</h2>
+                </div>
+                <div className="p-5 space-y-5">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <FormField
                         control={form.control}
                         name="pickup_location"
@@ -1660,14 +1667,10 @@ const CreateRental = () => {
                         )}
                       />
                     </div>
-                  </div>
 
-                  {/* Pickup/Return Times */}
-                  <div className="space-y-4 pt-4 border-t">
-                    <div className="flex items-center gap-2">
-                      <Clock className="h-4 w-4 text-muted-foreground" />
-                      <h3 className="font-medium">Pickup & Return Times</h3>
-                    </div>
+                  {/* Times */}
+                  <div className="space-y-4 pt-2">
+                    <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Times</p>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <FormField
                         control={form.control}
@@ -1708,70 +1711,89 @@ const CreateRental = () => {
                     </div>
                   </div>
 
-                  {/* Insurance Verification - Hidden for insurance-exempt tenants like Kedic Services */}
-                  {!skipInsurance && (
-                    <div className="space-y-4 pt-4 border-t">
-                      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-                        <div className="flex items-center gap-2">
-                          <Shield className="h-4 w-4 text-muted-foreground flex-shrink-0" />
-                          <h3 className="font-medium">Insurance Verification</h3>
-                        </div>
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <Button
-                            type="button"
-                            variant="outline"
-                            size="sm"
-                            onClick={() => setShowInsuranceUpload(true)}
-                            className="whitespace-nowrap"
-                          >
-                            <Upload className="h-4 w-4 mr-2" />
-                            <span className="hidden sm:inline">{insuranceDocId ? "Certificate Uploaded" : "Upload Certificate"}</span>
-                            <span className="sm:hidden">{insuranceDocId ? "Uploaded" : "Upload"}</span>
-                          </Button>
-                          {insuranceDocId && (
-                            <span className="text-sm text-green-600 whitespace-nowrap">✓ Uploaded</span>
-                          )}
-                        </div>
-                      </div>
-                      <p className="text-sm text-muted-foreground">Upload customer's insurance certificate for verification</p>
-                    </div>
-                  )}
+                </div>
+              </div>
 
-                  {/* Bonzah Insurance Selection */}
-                  {!skipInsurance && watchedStartDate && watchedEndDate && (
-                    <div className="space-y-4 pt-4 border-t">
-                      <BonzahInsuranceSelector
-                        tripStartDate={watchedStartDate ? watchedStartDate.toISOString().split('T')[0] : null}
-                        tripEndDate={watchedEndDate ? watchedEndDate.toISOString().split('T')[0] : null}
-                        pickupState={customerDetails?.address_state || "FL"}
-                        onCoverageChange={(coverage, premium) => {
-                          setBonzahCoverage(coverage);
-                          setBonzahPremium(premium);
-                        }}
-                        onSkipInsurance={() => {
-                          setBonzahCoverage({ cdw: false, rcli: false, sli: false, pai: false });
-                          setBonzahPremium(0);
-                        }}
-                        initialCoverage={bonzahCoverage}
-                      />
-                      {bonzahPremium > 0 && bonzahCdBalance != null && bonzahPremium > bonzahCdBalance && (
-                        <div className="rounded-lg border border-[#CC004A]/30 bg-[#CC004A]/5 p-3 flex items-start gap-2">
-                          <AlertTriangle className="h-4 w-4 text-[#CC004A] mt-0.5 flex-shrink-0" />
-                          <p className="text-sm text-muted-foreground">
-                            Insurance premium (<span className="font-medium text-[#CC004A]">${bonzahPremium.toFixed(2)}</span>) exceeds your current Bonzah balance (<span className="font-medium">${bonzahCdBalance.toFixed(2)}</span>). The rental can still be created, but the policy won't activate until you top up.
-                          </p>
-                        </div>
-                      )}
-                    </div>
-                  )}
-
-                  {/* Rental Extras */}
-                  {activeExtras.length > 0 && (
-                    <div className="space-y-4 pt-4 border-t">
-                      <div className="flex items-center gap-2">
-                        <Receipt className="h-4 w-4 text-muted-foreground" />
-                        <h3 className="font-medium">Optional Extras</h3>
+              {/* ── Section 4: Insurance ──────────────────────────── */}
+              {!skipInsurance && (
+                <div className="rounded-xl border bg-card shadow-sm">
+                  <div className="flex items-center gap-3 px-5 py-3.5 border-b bg-muted/40">
+                    <div className="flex items-center justify-center h-6 w-6 rounded-md bg-primary/10 text-primary"><Shield className="h-3.5 w-3.5" /></div>
+                    <h2 className="font-semibold text-sm">Insurance</h2>
+                  </div>
+                  <div className="p-5 space-y-5">
+                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                      <p className="text-sm text-muted-foreground">Upload customer&apos;s insurance certificate for verification</p>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setShowInsuranceUpload(true)}
+                          className="whitespace-nowrap"
+                        >
+                          <Upload className="h-4 w-4 mr-2" />
+                          <span className="hidden sm:inline">{insuranceDocId ? "Certificate Uploaded" : "Upload Certificate"}</span>
+                          <span className="sm:hidden">{insuranceDocId ? "Uploaded" : "Upload"}</span>
+                        </Button>
+                        {insuranceDocId && (
+                          <span className="text-sm text-green-600 whitespace-nowrap">✓ Uploaded</span>
+                        )}
                       </div>
+                    </div>
+
+                    {/* Bonzah Insurance Selection */}
+                    {watchedStartDate && watchedEndDate && (
+                      <div className="space-y-4">
+                        <BonzahInsuranceSelector
+                          tripStartDate={watchedStartDate ? watchedStartDate.toISOString().split('T')[0] : null}
+                          tripEndDate={watchedEndDate ? watchedEndDate.toISOString().split('T')[0] : null}
+                          pickupState={customerDetails?.address_state || "FL"}
+                          onCoverageChange={(coverage, premium) => {
+                            setBonzahCoverage(coverage);
+                            setBonzahPremium(premium);
+                          }}
+                          onSkipInsurance={() => {
+                            setBonzahCoverage({ cdw: false, rcli: false, sli: false, pai: false });
+                            setBonzahPremium(0);
+                          }}
+                          initialCoverage={bonzahCoverage}
+                        />
+                        {bonzahPremium > 0 && (
+                          <div className="rounded-lg border border-blue-200 bg-blue-50 dark:bg-blue-950/30 dark:border-blue-800 p-3 space-y-2">
+                            <div className="flex items-start gap-2">
+                              <Info className="h-4 w-4 text-blue-600 dark:text-blue-400 mt-0.5 flex-shrink-0" />
+                              <p className="text-sm text-muted-foreground">
+                                Insurance premium: <span className="font-medium">${bonzahPremium.toFixed(2)}</span>.
+                                {bonzahCdBalance != null && <> CD Balance: <span className="font-medium">${bonzahCdBalance.toFixed(2)}</span>.</>}
+                                {' '}The policy will only activate if your Bonzah <strong>allocated balance</strong> is sufficient. If not, the policy will be quoted and you can retry after allocating more funds.
+                              </p>
+                            </div>
+                            <a
+                              href={bonzahPortalUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center gap-1.5 text-xs font-medium text-blue-600 dark:text-blue-400 hover:underline ml-6"
+                            >
+                              <ExternalLink className="h-3 w-3" />
+                              Check Allocated Balance
+                            </a>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* ── Section 5: Optional Extras ────────────────────── */}
+              {activeExtras.length > 0 && (
+                <div className="rounded-xl border bg-card shadow-sm">
+                  <div className="flex items-center gap-3 px-5 py-3.5 border-b bg-muted/40">
+                    <div className="flex items-center justify-center h-6 w-6 rounded-md bg-primary/10 text-primary"><Receipt className="h-3.5 w-3.5" /></div>
+                    <h2 className="font-semibold text-sm">Optional Extras</h2>
+                  </div>
+                  <div className="p-5 space-y-4">
                       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
                         {activeExtras.map((extra) => {
                           const isSelected = !!selectedExtras[extra.id];
@@ -1888,12 +1910,17 @@ const CreateRental = () => {
                           }, 0), tenant?.currency_code || 'USD')}
                         </div>
                       )}
-                    </div>
-                  )}
+                  </div>
+                </div>
+              )}
 
-                  {/* Optional Details */}
-                  <div className="space-y-4 pt-4 border-t">
-                    <h3 className="font-medium text-muted-foreground">Optional Details</h3>
+              {/* ── Section 6: Additional Details ─────────────────── */}
+              <div className="rounded-xl border bg-card shadow-sm">
+                <div className="flex items-center gap-3 px-5 py-3.5 border-b bg-muted/40">
+                  <div className="flex items-center justify-center h-6 w-6 rounded-md bg-primary/10 text-primary"><StickyNote className="h-3.5 w-3.5" /></div>
+                  <h2 className="font-semibold text-sm">Additional Details</h2>
+                </div>
+                <div className="p-5 space-y-4">
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <FormField
                         control={form.control}
@@ -1977,39 +2004,38 @@ const CreateRental = () => {
                         </FormItem>
                       )}
                     />
-                  </div>
+                </div>
+              </div>
 
-                  {/* Helper Info */}
-                  <div className="bg-muted/50 p-4 rounded-lg">
-                    <p className="text-sm text-muted-foreground">
-                      <strong>Note:</strong> Rental will start as &quot;Pending&quot;. It becomes &quot;Active&quot; once approved and key handover is completed.
-                      The vehicle will be marked as &quot;Rented&quot; immediately.
-                    </p>
-                  </div>
+              {/* Helper Info */}
+              <div className="rounded-lg bg-muted/50 border border-dashed p-4">
+                <p className="text-sm text-muted-foreground">
+                  <strong>Note:</strong> Rental will start as &quot;Pending&quot;. It becomes &quot;Active&quot; once approved and key handover is completed.
+                  The vehicle will be marked as &quot;Rented&quot; immediately.
+                </p>
+              </div>
 
-                  {/* Submit */}
-                  <div className="flex justify-end gap-2 pt-4">
-                    <Button 
-                      type="button" 
-                      variant="outline" 
-                      onClick={() => router.push("/rentals")}
-                      className="border-muted-foreground/20 hover:border-muted-foreground/40 hover:bg-muted/50 transition-all duration-200"
-                    >
-                      Cancel
-                    </Button>
-                    <Button
-                      type="submit"
-                      disabled={loading || !isFormValid}
-                      className="bg-gradient-primary text-white hover:opacity-90 transition-all duration-200 shadow-md hover:shadow-lg"
-                    >
-                      <Save className="h-4 w-4 mr-2" />
-                      {loading ? "Creating..." : !isCustomerVerified ? "Verification Required" : "Create Rental"}
-                    </Button>
-                  </div>
-                </form>
-              </Form>
-            </CardContent>
-          </Card>
+              {/* Submit */}
+              <div className="flex justify-end gap-3 pt-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => router.push("/rentals")}
+                  className="px-6"
+                >
+                  Cancel
+                </Button>
+                <Button
+                  type="submit"
+                  disabled={loading || !isFormValid}
+                  className="bg-gradient-primary text-white hover:opacity-90 transition-all duration-200 shadow-md hover:shadow-lg px-8"
+                >
+                  <Save className="h-4 w-4 mr-2" />
+                  {loading ? "Creating..." : !isCustomerVerified ? "Verification Required" : "Create Rental"}
+                </Button>
+              </div>
+            </form>
+          </Form>
         </div>
 
         {/* Contract Summary Panel */}

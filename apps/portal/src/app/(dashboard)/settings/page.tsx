@@ -2041,6 +2041,95 @@ const Settings = () => {
             </CardContent>
           </Card>
 
+          {/* Minimum Rental Duration Card */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Car className="h-5 w-5 text-primary" />
+                Rental Duration Limits
+              </CardTitle>
+              <CardDescription>
+                Set minimum and maximum rental duration for bookings
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="space-y-3">
+                <div className="flex items-center gap-3">
+                  <Label className="w-24 text-sm">Minimum</Label>
+                  <Input
+                    type="text"
+                    inputMode="numeric"
+                    value={rentalForm.min_rental_days || ''}
+                    onChange={(e) => {
+                      const raw = e.target.value.replace(/[^0-9]/g, '');
+                      setRentalForm(prev => ({ ...prev, min_rental_days: raw === '' ? 0 : parseInt(raw) }));
+                    }}
+                    placeholder="e.g. 1"
+                    className="w-24"
+                  />
+                  <span className="text-sm text-muted-foreground">days</span>
+                </div>
+                <div className="flex items-center gap-3">
+                  <Label className="w-24 text-sm">Maximum</Label>
+                  <Input
+                    type="text"
+                    inputMode="numeric"
+                    value={rentalForm.max_rental_days || ''}
+                    onChange={(e) => {
+                      const raw = e.target.value.replace(/[^0-9]/g, '');
+                      setRentalForm(prev => ({ ...prev, max_rental_days: raw === '' ? 0 : parseInt(raw) }));
+                    }}
+                    placeholder="e.g. 90"
+                    className="w-24"
+                  />
+                  <span className="text-sm text-muted-foreground">days</span>
+                </div>
+              </div>
+              {rentalForm.min_rental_days > 0 && rentalForm.max_rental_days > 0 && (
+                <p className="text-sm text-muted-foreground">
+                  Customers can book rentals between {rentalForm.min_rental_days} and {rentalForm.max_rental_days} days.
+                </p>
+              )}
+              {rentalForm.min_rental_days > 0 && rentalForm.max_rental_days > 0 && rentalForm.min_rental_days > rentalForm.max_rental_days && (
+                <p className="text-sm text-destructive">
+                  Minimum days cannot exceed maximum days.
+                </p>
+              )}
+              <Button
+                onClick={async () => {
+                  const minDays = rentalForm.min_rental_days || 1;
+                  const maxDays = rentalForm.max_rental_days || 90;
+                  if (minDays > maxDays) {
+                    toast({
+                      title: "Invalid Configuration",
+                      description: "Minimum rental days cannot exceed maximum rental days.",
+                      variant: "destructive",
+                    });
+                    return;
+                  }
+                  try {
+                    await updateRentalSettings({
+                      min_rental_days: minDays,
+                      max_rental_days: maxDays,
+                    });
+                    setRentalForm(prev => ({ ...prev, min_rental_days: minDays, max_rental_days: maxDays }));
+                  } catch (error) {
+                    console.error('Failed to update rental duration settings:', error);
+                  }
+                }}
+                disabled={isUpdatingRentalSettings || (rentalForm.min_rental_days > 0 && rentalForm.max_rental_days > 0 && rentalForm.min_rental_days > rentalForm.max_rental_days)}
+                className="flex items-center gap-2"
+              >
+                {isUpdatingRentalSettings ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Save className="h-4 w-4" />
+                )}
+                Save
+              </Button>
+            </CardContent>
+          </Card>
+
           {/* Tax Configuration Card */}
           <Card>
             <CardHeader>

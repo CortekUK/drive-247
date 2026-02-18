@@ -158,17 +158,31 @@ const CustomersList = () => {
 
   // Fetch customer balances using remaining_amount from ledger entries
   const customerBalanceQueries = useQuery({
-    queryKey: ["customer-balances-enhanced"],
+    queryKey: ["customer-balances-enhanced", tenant?.id],
     queryFn: async () => {
       if (!customers?.length) return {};
 
       const balanceMap: Record<string, any> = {};
+      const customerIds = customers.map(c => c.id);
+
+      // Batch-fetch cancelled/rejected rental IDs across all customers
+      let excludedRentalsQuery = supabase
+        .from("rentals")
+        .select("id, customer_id")
+        .in("customer_id", customerIds)
+        .or("status.eq.Cancelled,approval_status.eq.rejected");
+
+      if (tenant?.id) {
+        excludedRentalsQuery = excludedRentalsQuery.eq("tenant_id", tenant.id);
+      }
+
+      const { data: excludedRentals } = await excludedRentalsQuery;
+      const excludedRentalIds = new Set(excludedRentals?.map(r => r.id) || []);
 
       // Get all ledger entries for all customers at once for efficiency
-      const customerIds = customers.map(c => c.id);
       let ledgerQuery = supabase
         .from("ledger_entries")
-        .select("customer_id, type, amount, remaining_amount, due_date, category")
+        .select("customer_id, type, amount, remaining_amount, due_date, category, rental_id")
         .in("customer_id", customerIds);
 
       if (tenant?.id) {
@@ -201,6 +215,9 @@ const CustomersList = () => {
 
         entries.forEach(entry => {
           if (entry.type === 'Charge') {
+            // Skip charges from cancelled/rejected rentals
+            if (entry.rental_id && excludedRentalIds.has(entry.rental_id)) return;
+
             totalCharges += entry.amount;
 
             // For rental charges, only include remaining if currently due

@@ -159,12 +159,17 @@ serve(async (req) => {
     // This allows the webhook to find and update the payment when checkout completes
     if (referenceId) {
       // First try to update existing payment record (portal flow)
+      const updateData: any = {
+        stripe_checkout_session_id: session.id,
+        updated_at: new Date().toISOString(),
+      }
+      // Persist targetCategories on the payment record for reliable retrieval by webhook/fallback
+      if (targetCategories && targetCategories.length > 0) {
+        updateData.target_categories = targetCategories
+      }
       const { data: updatedPayment, error: updateError } = await supabaseClient
         .from('payments')
-        .update({
-          stripe_checkout_session_id: session.id,
-          updated_at: new Date().toISOString(),
-        })
+        .update(updateData)
         .eq('rental_id', referenceId)
         .is('stripe_checkout_session_id', null)
         .select('id')
@@ -188,9 +193,7 @@ serve(async (req) => {
           const paymentAmount = Math.round(totalAmount * 100) / 100 // From checkout session
           const today = new Date().toISOString().split('T')[0]
 
-          const { data: createdPayment, error: createError } = await supabaseClient
-            .from('payments')
-            .insert({
+          const insertData: any = {
               rental_id: referenceId,
               customer_id: rental.customer_id,
               vehicle_id: rental.vehicle_id,
@@ -207,7 +210,13 @@ serve(async (req) => {
               booking_source: source === 'portal' ? 'admin' : 'website',
               created_at: new Date().toISOString(),
               updated_at: new Date().toISOString(),
-            })
+          }
+          if (targetCategories && targetCategories.length > 0) {
+            insertData.target_categories = targetCategories
+          }
+          const { data: createdPayment, error: createError } = await supabaseClient
+            .from('payments')
+            .insert(insertData)
             .select('id')
             .single()
 

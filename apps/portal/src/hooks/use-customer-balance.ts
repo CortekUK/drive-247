@@ -16,18 +16,31 @@ export const useCustomerBalance = (customerId: string | undefined) => {
       if (!tenant) throw new Error("No tenant context available");
       if (!customerId) return null;
 
+      // Get IDs of cancelled/rejected rentals to exclude from balance
+      const { data: excludedRentals, error: rentalsError } = await supabase
+        .from("rentals")
+        .select("id")
+        .eq("customer_id", customerId)
+        .eq("tenant_id", tenant.id)
+        .or("status.eq.Cancelled,approval_status.eq.rejected");
+
+      if (rentalsError) throw rentalsError;
+      const excludedRentalIds = new Set(excludedRentals?.map(r => r.id) || []);
+
       // Get all charge entries for this customer
       const { data, error } = await supabase
         .from("ledger_entries")
-        .select("remaining_amount, type, due_date, category")
+        .select("remaining_amount, type, due_date, category, rental_id")
         .eq("tenant_id", tenant.id)
         .eq("customer_id", customerId)
         .eq("type", "Charge");
 
       if (error) throw error;
 
-      // Sum remaining_amount for charges that are currently due
+      // Sum remaining_amount for charges that are currently due, excluding cancelled/rejected rentals
       const balance = data.reduce((sum, entry) => {
+        // Skip charges from cancelled/rejected rentals
+        if (entry.rental_id && excludedRentalIds.has(entry.rental_id)) return sum;
         // For rental charges, only include if currently due (due_date <= today)
         if (entry.category === 'Rental' && entry.due_date && new Date(entry.due_date) > new Date()) {
           return sum;
@@ -53,10 +66,21 @@ export const useCustomerBalanceWithStatus = (customerId: string | undefined) => 
       if (!tenant) throw new Error("No tenant context available");
       if (!customerId) return null;
 
+      // Get IDs of cancelled/rejected rentals to exclude from balance
+      const { data: excludedRentals, error: rentalsError } = await supabase
+        .from("rentals")
+        .select("id")
+        .eq("customer_id", customerId)
+        .eq("tenant_id", tenant.id)
+        .or("status.eq.Cancelled,approval_status.eq.rejected");
+
+      if (rentalsError) throw rentalsError;
+      const excludedRentalIds = new Set(excludedRentals?.map(r => r.id) || []);
+
       // Get all entries for this customer
       const { data: ledgerData, error: ledgerError } = await supabase
         .from("ledger_entries")
-        .select("type, amount, remaining_amount, due_date, category")
+        .select("type, amount, remaining_amount, due_date, category, rental_id")
         .eq("tenant_id", tenant.id)
         .eq("customer_id", customerId);
 
@@ -71,7 +95,7 @@ export const useCustomerBalanceWithStatus = (customerId: string | undefined) => 
 
       if (paymentsError) throw paymentsError;
 
-      // Calculate totals
+      // Calculate totals, excluding charges from cancelled/rejected rentals
       let totalCharges = 0;
       let totalPayments = 0;
       let outstandingDebt = 0; // Sum of remaining_amount on due charges
@@ -79,6 +103,9 @@ export const useCustomerBalanceWithStatus = (customerId: string | undefined) => 
 
       ledgerData.forEach(entry => {
         if (entry.type === 'Charge') {
+          // Skip charges from cancelled/rejected rentals
+          if (entry.rental_id && excludedRentalIds.has(entry.rental_id)) return;
+
           totalCharges += entry.amount;
 
           // For rental charges, only include remaining if currently due

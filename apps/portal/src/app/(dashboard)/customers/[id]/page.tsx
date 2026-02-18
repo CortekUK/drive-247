@@ -140,6 +140,34 @@ const CustomerDetail = () => {
   const deleteDocument = useDeleteCustomerDocument();
   const downloadDocument = useDownloadDocument();
 
+  // Fetch per-rental outstanding amounts from ledger entries
+  const { data: rentalOutstandings } = useQuery({
+    queryKey: ["customer-rental-outstandings", tenant?.id, id],
+    queryFn: async () => {
+      if (!tenant) throw new Error("No tenant context available");
+
+      const { data, error } = await supabase
+        .from("ledger_entries")
+        .select("rental_id, remaining_amount")
+        .eq("tenant_id", tenant.id)
+        .eq("customer_id", id)
+        .eq("type", "Charge");
+
+      if (error) throw error;
+
+      // Group by rental_id and sum remaining_amount
+      const map: Record<string, number> = {};
+      data?.forEach(entry => {
+        const key = entry.rental_id || "__no_rental__";
+        map[key] = (map[key] || 0) + (entry.remaining_amount || 0);
+      });
+      return map;
+    },
+    enabled: !!tenant && !!id,
+    staleTime: 0,
+    gcTime: 0,
+  });
+
   // Fetch rentals with DocuSign status for documents tab
   const { data: rentalAgreements } = useQuery({
     queryKey: ["customer-rental-agreements", id],
@@ -436,12 +464,17 @@ const CustomerDetail = () => {
                         <TableHead className="font-semibold">Start Date</TableHead>
                         <TableHead className="font-semibold">End Date</TableHead>
                         <TableHead className="font-semibold text-right">Monthly Amount</TableHead>
+                        <TableHead className="font-semibold text-right">Outstanding</TableHead>
                         <TableHead className="font-semibold">Status</TableHead>
                         <TableHead className="font-semibold">Actions</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {rentals.map((rental) => (
+                      {rentals.map((rental) => {
+                        const isCancelledOrRejected = rental.status === 'Cancelled' || rental.approval_status === 'rejected';
+                        const outstanding = rentalOutstandings?.[rental.id] ?? null;
+
+                        return (
                         <TableRow key={rental.id} className="hover:bg-muted/50 transition-colors">
                           <TableCell className="font-medium">
                             <div>
@@ -462,6 +495,17 @@ const CustomerDetail = () => {
                           <TableCell className="text-right font-medium">
                             {formatCurrency(rental.monthly_amount, currencyCode)}
                           </TableCell>
+                          <TableCell className="text-right">
+                            {isCancelledOrRejected ? (
+                              <span className="text-muted-foreground text-sm">Cancelled</span>
+                            ) : outstanding === null ? (
+                              <span className="text-muted-foreground text-sm">-</span>
+                            ) : outstanding > 0.01 ? (
+                              <span className="text-red-600 font-medium">{formatCurrency(outstanding, currencyCode)}</span>
+                            ) : (
+                              <span className="text-green-600 font-medium">Settled</span>
+                            )}
+                          </TableCell>
                           <TableCell>
                             <Badge variant={rental.status === 'Active' ? 'default' : 'secondary'}>
                               {rental.status}
@@ -479,7 +523,8 @@ const CustomerDetail = () => {
                             </Button>
                           </TableCell>
                         </TableRow>
-                      ))}
+                        );
+                      })}
                     </TableBody>
                   </Table>
                 </div>

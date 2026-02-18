@@ -5,7 +5,7 @@ import { handleCors, jsonResponse, errorResponse } from '../_shared/cors.ts'
 interface VerifyCredentialsRequest {
   username: string
   password: string
-  mode: 'test' | 'live'
+  tenantId: string
 }
 
 Deno.serve(async (req) => {
@@ -19,13 +19,30 @@ Deno.serve(async (req) => {
       return errorResponse('Missing username or password')
     }
 
-    if (!body.mode || !['test', 'live'].includes(body.mode)) {
-      return errorResponse('Invalid mode. Must be "test" or "live"')
+    if (!body.tenantId) {
+      return errorResponse('Missing tenantId')
     }
 
-    const apiUrl = getBonzahApiUrl(body.mode)
+    // Fetch the tenant's bonzah_mode from the DB (source of truth)
+    const serviceClient = createClient(
+      Deno.env.get('SUPABASE_URL')!,
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
+    )
 
-    console.log('[Bonzah Verify] Verifying credentials against', body.mode, 'API for:', body.username)
+    const { data: tenant, error: tenantError } = await serviceClient
+      .from('tenants')
+      .select('bonzah_mode')
+      .eq('id', body.tenantId)
+      .single()
+
+    if (tenantError || !tenant) {
+      return errorResponse('Could not fetch tenant settings')
+    }
+
+    const mode = tenant.bonzah_mode || 'test'
+    const apiUrl = getBonzahApiUrl(mode)
+
+    console.log('[Bonzah Verify] Verifying credentials against', mode, 'API for:', body.username)
 
     try {
       const token = await getBonzahTokenForCredentials(body.username, body.password, apiUrl)
@@ -33,6 +50,7 @@ Deno.serve(async (req) => {
       return jsonResponse({
         valid: true,
         email: body.username,
+        mode,
       })
     } catch (authError) {
       console.log('[Bonzah Verify] Credentials invalid:', authError)

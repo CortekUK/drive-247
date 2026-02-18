@@ -289,7 +289,11 @@ export const useEnhancedRentals = (filters: RentalFilters = {}) => {
           // Apply Bonzah status filter
           if (bonzahStatus) {
             if (bonzahStatus === 'ins_quoted') {
-              if (rental.bonzah_status !== 'quoted' && rental.bonzah_status !== 'insufficient_balance') return false;
+              if (rental.bonzah_status !== 'quoted') return false;
+            } else if (bonzahStatus === 'ins_pending') {
+              if (rental.bonzah_status !== 'insufficient_balance') return false;
+            } else if (bonzahStatus === 'insufficient_balance') {
+              if (rental.bonzah_status !== 'insufficient_balance') return false;
             } else {
               if (rental.bonzah_status !== bonzahStatus) return false;
             }

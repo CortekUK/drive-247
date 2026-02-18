@@ -3,15 +3,10 @@
 import { useState, useEffect } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Calendar } from "@/components/ui/calendar";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { supabase } from "@/integrations/supabase/client";
@@ -21,16 +16,15 @@ import { useTenant } from "@/contexts/TenantContext";
 import {
   Loader2,
   AlertTriangle,
-  Calendar as CalendarIcon,
   Mail,
   Eye,
   ChevronRight,
   ChevronLeft,
   XCircle,
-  RefreshCw
+  CreditCard,
+  Banknote,
 } from "lucide-react";
 import { format } from "date-fns";
-import { cn } from "@/lib/utils";
 import { formatCurrency } from "@/lib/format-utils";
 
 interface RejectionDialogProps {
@@ -61,86 +55,63 @@ interface RejectionDialogProps {
   };
 }
 
+interface RentalPayment {
+  id: string;
+  amount: number;
+  status: string;
+  capture_status?: string;
+  stripe_payment_intent_id?: string;
+  stripe_checkout_session_id?: string;
+  payment_type?: string;
+  target_categories?: string[];
+  created_at: string;
+}
+
 export default function RejectionDialog({
   open,
   onOpenChange,
   rental,
-  payment,
 }: RejectionDialogProps) {
   const queryClient = useQueryClient();
   const { tenant } = useTenant();
   const [activeTab, setActiveTab] = useState("reason");
   const [rejectionReason, setRejectionReason] = useState("");
-  const [refundTiming, setRefundTiming] = useState<"now" | "scheduled" | "manual">("now");
-  const [scheduledDate, setScheduledDate] = useState<Date>();
-  const [manualRefundConfirmed, setManualRefundConfirmed] = useState(false);
-  const [manualPaymentIntentId, setManualPaymentIntentId] = useState("");
   const [selectedTemplateId, setSelectedTemplateId] = useState<string>("");
   const [renderedEmail, setRenderedEmail] = useState<{ subject: string; html: string } | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [renderingEmail, setRenderingEmail] = useState(false);
-  const [fetchedPaymentIntentId, setFetchedPaymentIntentId] = useState<string | null>(null);
-  const [isFetchingPaymentIntent, setIsFetchingPaymentIntent] = useState(false);
 
-  const isPaymentCaptured = payment?.capture_status === 'captured';
-  const isPreAuth = payment?.capture_status === 'requires_capture';
-  // Use either the original payment intent from props OR the one we fetched
-  const effectivePaymentIntentId = payment?.stripe_payment_intent_id || fetchedPaymentIntentId;
-  const hasStripePaymentIntent = !!effectivePaymentIntentId;
-  const canProcessStripeRefund = isPaymentCaptured && hasStripePaymentIntent;
-  // Show refund tab for captured payments OR pre-authorized payments (to show release info)
-  const showRefundTab = isPaymentCaptured || isPreAuth;
-  const refundAmount = payment?.amount || 0;
-  const currencyCode = tenant?.currency_code || 'GBP';
+  const currencyCode = (tenant as any)?.currency_code || 'GBP';
 
-  // Auto-fetch payment intent ID when dialog opens and it's missing
-  useEffect(() => {
-    const fetchPaymentIntent = async () => {
-      if (!open || !payment?.id) return;
-      if (payment?.stripe_payment_intent_id) return; // Already have it
-      if (fetchedPaymentIntentId) return; // Already fetched it
-      if (isFetchingPaymentIntent) return; // Already fetching
+  // Fetch ALL payments for this rental
+  const { data: allPayments, isLoading: loadingPayments } = useQuery({
+    queryKey: ["rental-all-payments", rental.id, tenant?.id],
+    queryFn: async () => {
+      if (!tenant?.id) return [];
 
-      console.log('Auto-fetching payment intent for payment:', payment.id);
-      setIsFetchingPaymentIntent(true);
+      const { data, error } = await supabase
+        .from("payments")
+        .select("*")
+        .eq("tenant_id", tenant.id)
+        .eq("rental_id", rental.id)
+        .not("status", "in", '("Refunded","Cancelled","Reversed")')
+        .order("created_at", { ascending: true });
 
-      try {
-        const { data, error } = await supabase.functions.invoke('fetch-payment-intent', {
-          body: {
-            paymentId: payment.id,
-            tenantId: tenant?.id,
-          },
-        });
-
-        if (error) {
-          console.error('Error fetching payment intent:', error);
-          return;
-        }
-
-        if (data?.success && data?.paymentIntentId) {
-          console.log('Successfully fetched payment intent:', data.paymentIntentId);
-          setFetchedPaymentIntentId(data.paymentIntentId);
-          // Invalidate payment queries so the payment record is refreshed
-          queryClient.invalidateQueries({ queryKey: ['rental', rental.id] });
-        } else if (data?.error) {
-          console.warn('Could not fetch payment intent:', data.error);
-        }
-      } catch (err) {
-        console.error('Failed to fetch payment intent:', err);
-      } finally {
-        setIsFetchingPaymentIntent(false);
+      if (error) {
+        console.error("Error fetching rental payments:", error);
+        return [];
       }
-    };
+      return (data || []) as RentalPayment[];
+    },
+    enabled: open && !!rental.id && !!tenant?.id,
+  });
 
-    fetchPaymentIntent();
-  }, [open, payment?.id, payment?.stripe_payment_intent_id, fetchedPaymentIntentId, tenant?.id]);
-
-  // Reset fetched payment intent when dialog closes
-  useEffect(() => {
-    if (!open) {
-      setFetchedPaymentIntentId(null);
-    }
-  }, [open]);
+  const totalRefundAmount = (allPayments || []).reduce((sum, p) => sum + (p.amount || 0), 0);
+  const capturedPayments = (allPayments || []).filter(p => p.capture_status === 'captured');
+  const preAuthPayments = (allPayments || []).filter(p => p.capture_status === 'requires_capture');
+  const manualPayments = (allPayments || []).filter(
+    p => p.capture_status !== 'captured' && p.capture_status !== 'requires_capture' && (p.amount || 0) > 0
+  );
 
   // Fetch rejection email templates for this tenant
   const { data: templates } = useQuery({
@@ -148,7 +119,6 @@ export default function RejectionDialog({
     queryFn: async () => {
       if (!tenant?.id) return [];
 
-      // Try to fetch custom template for this tenant
       const { data, error } = await supabase
         .from('email_templates')
         .select('*')
@@ -157,28 +127,7 @@ export default function RejectionDialog({
         .eq('tenant_id', tenant.id)
         .order('template_name', { ascending: true });
 
-      if (error) {
-        console.error('[RejectionDialog] Error fetching templates:', error);
-        // Return default template if fetch fails
-        return [{
-          id: 'default-rejection',
-          tenant_id: tenant.id,
-          template_key: 'booking_rejected',
-          template_name: 'Default Rejection Email',
-          subject: 'Booking Update - {{rental_number}}',
-          template_content: `<p>Dear {{customer_name}},</p>
-<p>We regret to inform you that your booking request ({{rental_number}}) for {{vehicle_make}} {{vehicle_model}} has been declined.</p>
-<p><strong>Reason:</strong> {{rejection_reason}}</p>
-<p>If you have any questions, please contact us at {{company_email}} or {{company_phone}}.</p>
-<p>Best regards,<br/>The {{company_name}} Team</p>`,
-          is_active: true,
-          created_at: null,
-          updated_at: null,
-        }];
-      }
-
-      // If no custom templates, return a default one
-      if (!data || data.length === 0) {
+      if (error || !data || data.length === 0) {
         return [{
           id: 'default-rejection',
           tenant_id: tenant.id,
@@ -208,16 +157,16 @@ export default function RejectionDialog({
     }
   }, [templates, selectedTemplateId]);
 
-  // Clear rendered email when leaving preview tab (ensures fresh render on return)
+  // Clear rendered email when leaving email tab
   useEffect(() => {
-    if (activeTab !== 'preview') {
+    if (activeTab !== 'email') {
       setRenderedEmail(null);
     }
   }, [activeTab]);
 
-  // Render email preview when entering preview tab or when dependencies change
+  // Render email preview when entering email tab
   useEffect(() => {
-    if (activeTab === 'preview' && selectedTemplateId) {
+    if (activeTab === 'email' && selectedTemplateId) {
       renderEmailPreview();
     }
   }, [activeTab, selectedTemplateId, rejectionReason]);
@@ -228,21 +177,17 @@ export default function RejectionDialog({
     setRenderingEmail(true);
     try {
       const template = templates?.find(t => t.id === selectedTemplateId);
-      if (!template) {
-        throw new Error('Template not found');
-      }
+      if (!template) throw new Error('Template not found');
 
-      // Get template content and subject
       const templateContent = template.template_content || '';
       const templateSubject = template.subject || 'Booking Update';
 
-      // Build variables for replacement - using template format {{variable_name}}
       const variables: Record<string, string> = {
         customer_name: rental.customer?.name || 'Customer',
         customer_email: rental.customer?.email || '',
         rental_number: rental.id.substring(0, 8).toUpperCase(),
         rejection_reason: rejectionReason || 'We were unable to verify all required information.',
-        refund_amount: formatCurrency(refundAmount, currencyCode),
+        refund_amount: formatCurrency(totalRefundAmount, currencyCode),
         vehicle_make: rental.vehicle?.make || '',
         vehicle_model: rental.vehicle?.model || '',
         vehicle_reg: rental.vehicle?.reg || '',
@@ -254,7 +199,6 @@ export default function RejectionDialog({
         company_phone: (tenant as any)?.phone || '',
       };
 
-      // Render template by replacing variables
       let renderedContent = templateContent;
       let renderedSubject = templateSubject;
 
@@ -264,10 +208,7 @@ export default function RejectionDialog({
         renderedSubject = renderedSubject.replace(new RegExp(placeholder.replace(/[{}]/g, '\\$&'), 'g'), value);
       }
 
-      setRenderedEmail({
-        subject: renderedSubject,
-        html: renderedContent,
-      });
+      setRenderedEmail({ subject: renderedSubject, html: renderedContent });
     } catch (error: any) {
       console.error('Email render error:', error);
       toast({
@@ -281,134 +222,21 @@ export default function RejectionDialog({
   };
 
   const handleSubmit = async () => {
-    if (!selectedTemplateId) {
-      toast({
-        title: "Validation Error",
-        description: "Please select an email template",
-        variant: "destructive",
-      });
-      return;
-    }
-
     setIsSubmitting(true);
     try {
-      // Step 1: Handle payment/refund
-      if (isPreAuth) {
-        // Cancel pre-authorization
-        const { data: cancelData, error: cancelError } = await supabase.functions.invoke('cancel-booking-preauth', {
-          body: {
-            paymentId: payment?.id,
-            tenantId: tenant?.id,
-            reason: rejectionReason || 'Booking rejected by admin',
-          }
-        });
+      // Call the reject-rental edge function (handles all refunds server-side)
+      const { data, error } = await supabase.functions.invoke('reject-rental', {
+        body: {
+          rentalId: rental.id,
+          reason: rejectionReason || undefined,
+          tenantId: tenant?.id,
+        },
+      });
 
-        if (cancelError) throw cancelError;
-        if (cancelData && !cancelData.success) throw new Error(cancelData.error || 'Failed to cancel pre-authorization');
-      } else if ((canProcessStripeRefund || manualPaymentIntentId.startsWith('pi_')) && refundAmount > 0 && refundTiming === 'now') {
-        // Process Stripe refund - either from existing payment intent, fetched one, or manually entered one
-        const paymentIntentId = hasStripePaymentIntent ? effectivePaymentIntentId : manualPaymentIntentId;
+      if (error) throw error;
+      if (data && !data.success) throw new Error(data.error || 'Failed to reject rental');
 
-        // If using manual payment intent, first save it to the payment record
-        if (!hasStripePaymentIntent && manualPaymentIntentId && payment?.id) {
-          await supabase
-            .from('payments')
-            .update({
-              stripe_payment_intent_id: manualPaymentIntentId,
-              updated_at: new Date().toISOString(),
-            })
-            .eq('id', payment.id);
-        }
-
-        // Process immediate refund
-        const { data: refundData, error: refundError } = await supabase.functions.invoke('process-scheduled-refund', {
-          body: {
-            paymentId: payment?.id,
-            paymentIntentId: paymentIntentId, // Pass the payment intent directly
-            amount: refundAmount,
-            reason: rejectionReason || 'Booking rejected by admin',
-            tenantId: tenant?.id,
-          }
-        });
-
-        if (refundError) throw refundError;
-        if (refundData && !refundData.success) throw new Error(refundData.error || 'Refund failed');
-      } else if (canProcessStripeRefund && refundAmount > 0 && refundTiming === 'scheduled' && scheduledDate) {
-        // Schedule refund via schedule-refund function
-        const { data: scheduleData, error: scheduleError } = await supabase.functions.invoke('schedule-refund', {
-          body: {
-            paymentId: payment?.id,
-            refundAmount,
-            scheduledDate: scheduledDate.toISOString(),
-            reason: rejectionReason || 'Booking rejected by admin',
-            tenantId: tenant?.id,
-          }
-        });
-
-        if (scheduleError) throw scheduleError;
-        if (scheduleData && !scheduleData.success) throw new Error(scheduleData.error || 'Failed to schedule refund');
-      } else if (isPaymentCaptured && !hasStripePaymentIntent && refundTiming === 'manual') {
-        // Payment captured but no Stripe payment intent - mark as pending manual refund
-        console.log('Payment captured without Stripe payment intent - marked for manual refund');
-        if (payment?.id) {
-          await supabase
-            .from('payments')
-            .update({
-              refund_status: 'pending_manual',
-              refund_reason: rejectionReason || 'Booking rejected - manual refund required',
-              refund_amount: refundAmount,
-              updated_at: new Date().toISOString(),
-            })
-            .eq('id', payment.id);
-        }
-      }
-
-      // Step 2: Update rental status - using new status fields
-      // approval_status -> rejected, status -> Cancelled, payment_status -> refunded (if applicable)
-      const rentalUpdateData: any = {
-        status: 'Cancelled',
-        approval_status: 'rejected',
-        cancellation_reason: rejectionReason || 'rejected_by_admin',
-        cancellation_requested: false,
-        updated_at: new Date().toISOString(),
-      };
-
-      // Set payment_status based on refund action
-      if (isPaymentCaptured && refundAmount > 0) {
-        rentalUpdateData.payment_status = 'refunded';
-      } else if (isPreAuth) {
-        // Pre-auth was released, not a refund
-        rentalUpdateData.payment_status = 'refunded';
-      }
-
-      let rentalQuery = supabase
-        .from('rentals')
-        .update(rentalUpdateData)
-        .eq('id', rental.id);
-
-      if (tenant?.id) {
-        rentalQuery = rentalQuery.eq('tenant_id', tenant.id);
-      }
-
-      const { error: rentalError } = await rentalQuery;
-
-      if (rentalError) throw rentalError;
-
-      // Step 3: Mark vehicle as available
-      if (rental.vehicle?.id) {
-        let vehicleQuery = supabase
-          .from('vehicles')
-          .update({ status: 'Available' })
-          .eq('id', rental.vehicle.id);
-
-        if (tenant?.id) {
-          vehicleQuery = vehicleQuery.eq('tenant_id', tenant.id);
-        }
-
-        await vehicleQuery;
-      }
-
-      // Step 4: Send rejection email (use already-rendered email from preview)
+      // Send rejection email
       if (rental.customer?.email && renderedEmail) {
         await supabase.functions.invoke('notify-booking-rejected', {
           body: {
@@ -417,7 +245,7 @@ export default function RejectionDialog({
             vehicleName: `${rental.vehicle?.make} ${rental.vehicle?.model}`,
             bookingRef: rental.id.substring(0, 8).toUpperCase(),
             rejectionReason: rejectionReason || 'We were unable to verify all required information.',
-            refundAmount: refundAmount,
+            refundAmount: totalRefundAmount,
             emailSubject: renderedEmail.subject,
             emailBody: renderedEmail.html,
             tenantId: tenant?.id,
@@ -427,26 +255,36 @@ export default function RejectionDialog({
         });
       }
 
-      // Success!
-      let successDescription = 'Booking has been rejected.';
-      if (refundTiming === 'scheduled') {
-        successDescription = 'Booking has been rejected and refund scheduled.';
-      } else if (refundTiming === 'manual') {
-        successDescription = 'Booking has been rejected. Manual refund of ' + formatCurrency(refundAmount, currencyCode) + ' is pending.';
-      } else if (canProcessStripeRefund && refundTiming === 'now') {
-        successDescription = 'Booking has been rejected and refund processed.';
+      // Build success message
+      const paymentsProcessed = data?.paymentsProcessed || 0;
+      const totalRefunded = data?.totalRefunded || 0;
+      const manualRequired = data?.manualRefundsRequired || 0;
+
+      let description = 'Booking has been rejected.';
+      if (paymentsProcessed > 0) {
+        description = `Booking rejected. ${paymentsProcessed} payment(s) processed`;
+        if (totalRefunded > 0) {
+          description += ` — ${formatCurrency(totalRefunded, currencyCode)} refunded/released`;
+        }
+        if (manualRequired > 0) {
+          description += `. ${manualRequired} require manual refund`;
+        }
+        description += '.';
       }
 
-      toast({
-        title: "Booking Rejected",
-        description: successDescription,
-      });
+      toast({ title: "Booking Rejected", description });
 
-      // Invalidate queries
+      // Invalidate all relevant queries
       queryClient.invalidateQueries({ queryKey: ['rentals-list'] });
       queryClient.invalidateQueries({ queryKey: ['rental', rental.id] });
+      queryClient.invalidateQueries({ queryKey: ['rental-payment', rental.id] });
+      queryClient.invalidateQueries({ queryKey: ['rental-all-payments', rental.id] });
+      queryClient.invalidateQueries({ queryKey: ['rental-payment-breakdown'] });
+      queryClient.invalidateQueries({ queryKey: ['rental-refund-breakdown'] });
+      queryClient.invalidateQueries({ queryKey: ['rental-ledger'] });
+      queryClient.invalidateQueries({ queryKey: ['rental-charges'] });
+      queryClient.invalidateQueries({ queryKey: ['rental-totals'] });
 
-      // Close dialog and reset
       handleClose();
     } catch (error: any) {
       console.error('Rejection error:', error);
@@ -463,54 +301,16 @@ export default function RejectionDialog({
   const handleClose = () => {
     setActiveTab("reason");
     setRejectionReason("");
-    setRefundTiming("now");
-    setScheduledDate(undefined);
-    setManualRefundConfirmed(false);
-    setManualPaymentIntentId("");
     setSelectedTemplateId("");
     setRenderedEmail(null);
     onOpenChange(false);
   };
 
-  const canProceedToNextTab = () => {
-    if (activeTab === "reason") return true; // Reason is optional
-    if (activeTab === "refund") {
-      if (refundTiming === "scheduled" && !scheduledDate) return false;
-      if (refundTiming === "manual" && !manualRefundConfirmed) return false;
-      // For non-Stripe payments wanting automatic refund, require payment intent ID
-      if (!hasStripePaymentIntent && refundTiming === "now" && !manualPaymentIntentId.startsWith("pi_")) return false;
-      return true;
-    }
-    if (activeTab === "template") return !!selectedTemplateId;
-    return true;
-  };
-
-  const goToNextTab = () => {
-    if (activeTab === "reason") {
-      if (showRefundTab) {
-        setActiveTab("refund");
-      } else {
-        setActiveTab("template");
-      }
-    } else if (activeTab === "refund") {
-      setActiveTab("template");
-    } else if (activeTab === "template") {
-      setActiveTab("preview");
-    }
-  };
-
-  const goToPreviousTab = () => {
-    if (activeTab === "preview") {
-      setActiveTab("template");
-    } else if (activeTab === "template") {
-      if (showRefundTab) {
-        setActiveTab("refund");
-      } else {
-        setActiveTab("reason");
-      }
-    } else if (activeTab === "refund") {
-      setActiveTab("reason");
-    }
+  const getPaymentLabel = (p: RentalPayment) => {
+    const categories = p.target_categories;
+    if (categories && categories.length > 0) return categories.join(', ');
+    if (p.payment_type) return p.payment_type;
+    return 'Payment';
   };
 
   return (
@@ -527,26 +327,16 @@ export default function RejectionDialog({
         </DialogHeader>
 
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-          <TabsList className="grid w-full grid-cols-4">
+          <TabsList className="grid w-full grid-cols-2">
             <TabsTrigger value="reason" className="text-xs">
-              1. Reason
+              1. Reason & Refunds
             </TabsTrigger>
-            <TabsTrigger
-              value="refund"
-              disabled={!showRefundTab}
-              className="text-xs"
-            >
-              2. Refund
-            </TabsTrigger>
-            <TabsTrigger value="template" className="text-xs">
-              3. Email
-            </TabsTrigger>
-            <TabsTrigger value="preview" className="text-xs">
-              4. Preview
+            <TabsTrigger value="email" className="text-xs">
+              2. Email & Confirm
             </TabsTrigger>
           </TabsList>
 
-          {/* Tab 1: Rejection Reason */}
+          {/* Tab 1: Rejection Reason + Payment Summary */}
           <TabsContent value="reason" className="space-y-4 py-4">
             <div className="space-y-2">
               <Label htmlFor="reason">Rejection Reason (Optional)</Label>
@@ -555,7 +345,7 @@ export default function RejectionDialog({
                 value={rejectionReason}
                 onChange={(e) => setRejectionReason(e.target.value)}
                 placeholder="Provide a reason for rejecting this booking (optional). This will be included in the email to the customer."
-                rows={5}
+                rows={4}
                 className="resize-none"
               />
               <p className="text-xs text-muted-foreground">
@@ -563,411 +353,166 @@ export default function RejectionDialog({
               </p>
             </div>
 
-            {/* Payment Status Info */}
-            <Alert>
-              <AlertTriangle className="h-4 w-4" />
-              <AlertDescription>
-                {isPreAuth ? (
-                  <p>
-                    This booking has a <strong>pre-authorized payment</strong> of <strong>{formatCurrency(refundAmount, currencyCode)}</strong>.
-                    The hold will be released automatically when you reject this booking.
-                  </p>
-                ) : isPaymentCaptured ? (
-                  <p>
-                    This booking has a <strong>captured payment</strong> of <strong>{formatCurrency(refundAmount, currencyCode)}</strong>.
-                    You'll configure the refund in the next step.
-                  </p>
-                ) : (
-                  <p>
-                    This booking has <strong>no payment captured</strong>. You can proceed directly to email selection.
-                  </p>
-                )}
-              </AlertDescription>
-            </Alert>
-          </TabsContent>
-
-          {/* Tab 2: Refund Timing */}
-          <TabsContent value="refund" className="space-y-4 py-4">
-            <div className="space-y-4">
-              <div>
-                <h3 className="font-semibold mb-2">{isPreAuth ? 'Pre-Authorization Release' : 'Refund Configuration'}</h3>
-                <p className="text-sm text-muted-foreground mb-4">
-                  {isPreAuth ? 'Hold' : 'Refund'} amount: <strong>{formatCurrency(refundAmount, currencyCode)}</strong>
-                </p>
+            {/* Payment Summary */}
+            {loadingPayments ? (
+              <div className="flex items-center gap-2 text-sm text-muted-foreground py-4">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Loading payments...
               </div>
-
-              {isPreAuth ? (
-                /* Pre-authorized payment - show release info */
-                <>
-                  <Alert className="border-blue-200 bg-blue-50 dark:bg-blue-950/30">
-                    <AlertTriangle className="h-4 w-4 text-blue-600" />
-                    <AlertDescription className="text-blue-800 dark:text-blue-200">
-                      <p className="font-medium mb-1">Pre-Authorization Hold</p>
-                      <p className="text-sm">
-                        This booking has a pre-authorized hold of <strong>{formatCurrency(refundAmount, currencyCode)}</strong> on the customer's card.
-                        The hold will be <strong>automatically released</strong> when you reject this booking.
-                      </p>
-                    </AlertDescription>
-                  </Alert>
-
-                  <Alert>
-                    <AlertDescription className="text-sm">
-                      <p>
-                        No funds have been captured yet. The hold will be released and the customer's available credit will be restored.
-                      </p>
-                    </AlertDescription>
-                  </Alert>
-                </>
-              ) : canProcessStripeRefund ? (
-                /* Stripe-linked payment - show automatic refund options */
-                <>
-                  {/* Show the synced payment intent ID */}
-                  <Alert className="border-green-200 bg-green-50 dark:bg-green-950/30">
-                    <AlertDescription className="text-green-800 dark:text-green-200">
-                      <div className="flex items-center gap-2">
-                        <Badge variant="outline" className="border-green-500 text-green-700">Stripe Linked</Badge>
-                        <span className="text-sm">Payment Intent: <code className="bg-green-100 dark:bg-green-900 px-1 rounded text-xs">{effectivePaymentIntentId}</code></span>
+            ) : (allPayments || []).length > 0 ? (
+              <div className="space-y-3">
+                <h3 className="font-semibold text-sm">Payments to be refunded</h3>
+                <div className="border rounded-lg divide-y">
+                  {(allPayments || []).map((p) => (
+                    <div key={p.id} className="flex items-center justify-between px-4 py-3">
+                      <div className="flex items-center gap-3">
+                        {p.capture_status === 'requires_capture' ? (
+                          <Badge variant="outline" className="text-blue-600 border-blue-300">Hold</Badge>
+                        ) : p.capture_status === 'captured' ? (
+                          <Badge variant="outline" className="text-green-600 border-green-300">
+                            <CreditCard className="h-3 w-3 mr-1" />
+                            Stripe
+                          </Badge>
+                        ) : (
+                          <Badge variant="outline" className="text-amber-600 border-amber-300">
+                            <Banknote className="h-3 w-3 mr-1" />
+                            Manual
+                          </Badge>
+                        )}
+                        <span className="text-sm">{getPaymentLabel(p)}</span>
                       </div>
-                    </AlertDescription>
-                  </Alert>
-
-                  <RadioGroup
-                    value={refundTiming}
-                    onValueChange={(value) => setRefundTiming(value as "now" | "scheduled" | "manual")}
-                  >
-                    <div className="flex items-center space-x-2 border rounded-lg p-4 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800">
-                      <RadioGroupItem value="now" id="now" />
-                      <Label htmlFor="now" className="cursor-pointer flex-1">
-                        <div className="font-medium">Refund Now</div>
-                        <div className="text-sm text-muted-foreground">
-                          Process the refund immediately via Stripe
-                        </div>
-                      </Label>
-                    </div>
-
-                    <div className="flex items-center space-x-2 border rounded-lg p-4 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800">
-                      <RadioGroupItem value="scheduled" id="scheduled" />
-                      <Label htmlFor="scheduled" className="cursor-pointer flex-1">
-                        <div className="font-medium">Schedule Refund</div>
-                        <div className="text-sm text-muted-foreground">
-                          Schedule the refund for a future date
-                        </div>
-                      </Label>
-                    </div>
-                  </RadioGroup>
-
-                  {refundTiming === "scheduled" && (
-                    <div className="space-y-2 pl-6">
-                      <Label>Refund Date</Label>
-                      <Popover modal={true}>
-                        <PopoverTrigger asChild>
-                          <Button
-                            variant="outline"
-                            className={cn(
-                              "w-full justify-start text-left font-normal",
-                              !scheduledDate && "text-muted-foreground"
-                            )}
-                          >
-                            <CalendarIcon className="mr-2 h-4 w-4" />
-                            {scheduledDate ? format(scheduledDate, "PPP") : "Pick a date"}
-                          </Button>
-                        </PopoverTrigger>
-                        <PopoverContent className="w-auto p-0" align="start">
-                          <Calendar
-                            mode="single"
-                            selected={scheduledDate}
-                            onSelect={setScheduledDate}
-                            disabled={(date) => date < new Date()}
-                            initialFocus
-                          />
-                        </PopoverContent>
-                      </Popover>
-                      {!scheduledDate && (
-                        <p className="text-xs text-red-500">
-                          Please select a refund date to continue
-                        </p>
-                      )}
-                    </div>
-                  )}
-
-                  <Alert>
-                    <AlertDescription className="text-sm">
-                      {refundTiming === "now" ? (
-                        <p>The refund will be processed immediately and typically appears in the customer's account within 5-10 business days.</p>
-                      ) : (
-                        <p>The refund will be scheduled and processed automatically on the selected date.</p>
-                      )}
-                    </AlertDescription>
-                  </Alert>
-                </>
-              ) : (
-                /* Non-Stripe payment - need to link payment intent */
-                <>
-                  {isFetchingPaymentIntent ? (
-                    <Alert className="border-yellow-200 bg-yellow-50 dark:bg-yellow-950/30">
-                      <Loader2 className="h-4 w-4 text-yellow-600 animate-spin" />
-                      <AlertDescription className="text-yellow-800 dark:text-yellow-200">
-                        <p className="font-medium mb-1">Syncing with Stripe...</p>
-                        <p className="text-sm">
-                          Automatically fetching Payment Intent ID from Stripe checkout session.
-                        </p>
-                      </AlertDescription>
-                    </Alert>
-                  ) : (
-                    <Alert className="border-blue-200 bg-blue-50 dark:bg-blue-950/30">
-                      <AlertTriangle className="h-4 w-4 text-blue-600" />
-                      <AlertDescription className="text-blue-800 dark:text-blue-200">
-                        <p className="font-medium mb-1">Link Stripe Payment for Automatic Refund</p>
-                        <p className="text-sm mb-2">
-                          This payment record is not linked to Stripe. To process an automatic refund,
-                          enter the Payment Intent ID from your Stripe Dashboard.
-                        </p>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          className="text-blue-700 border-blue-300 hover:bg-blue-100"
-                          onClick={async () => {
-                            setIsFetchingPaymentIntent(true);
-                            try {
-                              const { data, error } = await supabase.functions.invoke('fetch-payment-intent', {
-                                body: { paymentId: payment?.id, tenantId: tenant?.id }
-                              });
-                              if (data?.success && data?.paymentIntentId) {
-                                setFetchedPaymentIntentId(data.paymentIntentId);
-                                toast({ title: "Synced", description: "Payment Intent ID fetched successfully!" });
-                              } else {
-                                toast({ title: "Could not sync", description: data?.error || "Please enter ID manually", variant: "destructive" });
-                              }
-                            } catch (err) {
-                              toast({ title: "Sync failed", description: "Please enter Payment Intent ID manually", variant: "destructive" });
-                            } finally {
-                              setIsFetchingPaymentIntent(false);
-                            }
-                          }}
-                        >
-                          <RefreshCw className="h-3 w-3 mr-1" />
-                          Try Auto-Sync from Stripe
-                        </Button>
-                      </AlertDescription>
-                    </Alert>
-                  )}
-
-                  <RadioGroup
-                    value={refundTiming}
-                    onValueChange={(value) => {
-                      setRefundTiming(value as "now" | "scheduled" | "manual");
-                      if (value !== "manual") setManualRefundConfirmed(false);
-                    }}
-                  >
-                    <div className="flex items-center space-x-2 border rounded-lg p-4 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800">
-                      <RadioGroupItem value="now" id="link-refund" />
-                      <Label htmlFor="link-refund" className="cursor-pointer flex-1">
-                        <div className="font-medium">Refund via Stripe</div>
-                        <div className="text-sm text-muted-foreground">
-                          Enter the Payment Intent ID from Stripe to process automatic refund
-                        </div>
-                      </Label>
-                    </div>
-
-                    <div className="flex items-center space-x-2 border rounded-lg p-4 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800">
-                      <RadioGroupItem value="manual" id="manual" />
-                      <Label htmlFor="manual" className="cursor-pointer flex-1">
-                        <div className="font-medium">I will process the refund manually</div>
-                        <div className="text-sm text-muted-foreground">
-                          Handle the refund outside this system (bank transfer, cash, etc.)
-                        </div>
-                      </Label>
-                    </div>
-                  </RadioGroup>
-
-                  {refundTiming === "now" && (
-                    <div className="space-y-3 pl-6 border-l-2 border-blue-400 ml-2">
-                      <div className="space-y-2">
-                        <Label htmlFor="payment-intent-id">Stripe Payment Intent ID</Label>
-                        <Input
-                          id="payment-intent-id"
-                          value={manualPaymentIntentId}
-                          onChange={(e) => setManualPaymentIntentId(e.target.value.trim())}
-                          placeholder="pi_xxxxxxxxxxxxxxxx"
-                          className="font-mono"
-                        />
+                      <div className="text-right">
+                        <span className="font-medium">{formatCurrency(p.amount || 0, currencyCode)}</span>
                         <p className="text-xs text-muted-foreground">
-                          Find this in Stripe Dashboard → Payments → Click on the payment → Copy the Payment Intent ID (starts with "pi_")
+                          {p.capture_status === 'requires_capture'
+                            ? 'Hold will be released'
+                            : p.capture_status === 'captured'
+                              ? 'Will be refunded via Stripe'
+                              : 'Will need manual refund'}
                         </p>
                       </div>
-                      {manualPaymentIntentId && !manualPaymentIntentId.startsWith("pi_") && (
-                        <p className="text-xs text-red-500">
-                          Payment Intent ID must start with "pi_"
-                        </p>
-                      )}
-                      {manualPaymentIntentId.startsWith("pi_") && (
-                        <Alert className="border-green-200 bg-green-50 dark:bg-green-950/30">
-                          <AlertDescription className="text-green-800 dark:text-green-200 text-sm">
-                            Refund of <strong>{formatCurrency(refundAmount, currencyCode)}</strong> will be processed automatically via Stripe.
-                          </AlertDescription>
-                        </Alert>
-                      )}
                     </div>
-                  )}
+                  ))}
+                </div>
 
-                  {refundTiming === "manual" && (
-                    <div className="space-y-3 pl-6 border-l-2 border-amber-400 ml-2">
-                      <div className="flex items-start space-x-3">
-                        <Checkbox
-                          id="manual-confirm"
-                          checked={manualRefundConfirmed}
-                          onCheckedChange={(checked) => setManualRefundConfirmed(checked === true)}
-                        />
-                        <Label htmlFor="manual-confirm" className="text-sm cursor-pointer">
-                          I confirm that I will process the refund of <strong>{formatCurrency(refundAmount, currencyCode)}</strong> manually.
-                        </Label>
-                      </div>
-                      {!manualRefundConfirmed && (
-                        <p className="text-xs text-red-500">
-                          Please confirm to continue
-                        </p>
-                      )}
-                    </div>
-                  )}
-                </>
-              )}
-            </div>
-          </TabsContent>
+                {/* Totals */}
+                <div className="flex items-center justify-between px-4 py-2 bg-muted/50 rounded-lg">
+                  <span className="font-semibold text-sm">Total</span>
+                  <span className="font-bold">{formatCurrency(totalRefundAmount, currencyCode)}</span>
+                </div>
 
-          {/* Tab 3: Email Template Selection */}
-          <TabsContent value="template" className="space-y-4 py-4">
-            <div className="space-y-4">
-              <div>
-                <Label htmlFor="template">Email Template</Label>
-                <p className="text-xs text-muted-foreground mb-2">
-                  Select a rejection email template to send to the customer
-                </p>
-                <Select
-                  value={selectedTemplateId}
-                  onValueChange={setSelectedTemplateId}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select a template..." />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {templates?.map((template) => (
-                      <SelectItem key={template.id} value={template.id}>
-                        {template.template_name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                {/* Summary badges */}
+                <div className="flex flex-wrap gap-2">
+                  {capturedPayments.length > 0 && (
+                    <Badge variant="secondary" className="text-xs">
+                      {capturedPayments.length} Stripe refund{capturedPayments.length > 1 ? 's' : ''}
+                    </Badge>
+                  )}
+                  {preAuthPayments.length > 0 && (
+                    <Badge variant="secondary" className="text-xs">
+                      {preAuthPayments.length} hold{preAuthPayments.length > 1 ? 's' : ''} to release
+                    </Badge>
+                  )}
+                  {manualPayments.length > 0 && (
+                    <Badge variant="secondary" className="text-xs text-amber-700">
+                      {manualPayments.length} manual refund{manualPayments.length > 1 ? 's' : ''} needed
+                    </Badge>
+                  )}
+                </div>
               </div>
-
-              {selectedTemplateId && templates && (
-                <div className="border rounded-lg p-4 bg-muted/30">
-                  <h4 className="font-semibold text-sm mb-2">Template Details</h4>
-                  {(() => {
-                    const template = templates.find(t => t.id === selectedTemplateId);
-                    if (!template) return null;
-                    return (
-                      <div className="space-y-2 text-sm">
-                        <div>
-                          <span className="text-muted-foreground">Name:</span>{' '}
-                          <span className="font-medium">{template.template_name}</span>
-                        </div>
-                        <div>
-                          <span className="text-muted-foreground">Subject:</span>{' '}
-                          <span className="font-medium">{template.subject}</span>
-                        </div>
-                        <div>
-                          <span className="text-muted-foreground">Type:</span>{' '}
-                          <Badge variant="secondary">{template.template_key}</Badge>
-                        </div>
-                      </div>
-                    );
-                  })()}
-                </div>
-              )}
-
-              {/* Show rejection reason preview */}
-              {rejectionReason && (
-                <div className="border rounded-lg p-4 bg-amber-50 border-amber-200">
-                  <h4 className="font-semibold text-sm mb-2 text-amber-800">Rejection Reason (will be included in email)</h4>
-                  <p className="text-sm text-amber-900">{rejectionReason}</p>
-                </div>
-              )}
-
+            ) : (
               <Alert>
-                <Mail className="h-4 w-4" />
+                <AlertTriangle className="h-4 w-4" />
                 <AlertDescription>
-                  The email will be sent to <strong>{rental.customer?.email || 'customer email'}</strong>
-                  {rejectionReason ? ' with the rejection reason shown above.' : ' with a default rejection message.'}
+                  This booking has <strong>no active payments</strong>. It will be cancelled without any refunds.
                 </AlertDescription>
               </Alert>
-            </div>
+            )}
           </TabsContent>
 
-          {/* Tab 4: Email Preview */}
-          <TabsContent value="preview" className="space-y-4 py-4">
+          {/* Tab 2: Email Template + Preview + Confirm */}
+          <TabsContent value="email" className="space-y-4 py-4">
+            {/* Template Selection */}
+            <div className="space-y-2">
+              <Label htmlFor="template">Email Template</Label>
+              <Select
+                value={selectedTemplateId}
+                onValueChange={setSelectedTemplateId}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select a template..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {templates?.map((template) => (
+                    <SelectItem key={template.id} value={template.id}>
+                      {template.template_name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Email Preview */}
             {renderingEmail ? (
-              <div className="flex items-center justify-center py-12">
-                <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+              <div className="flex items-center justify-center py-8">
+                <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
               </div>
             ) : renderedEmail ? (
-              <div className="space-y-4">
-                {/* Show what rejection reason is being used */}
-                <div className="border rounded-lg p-3 bg-amber-50 border-amber-200">
-                  <div className="flex items-start gap-2">
-                    <AlertTriangle className="h-4 w-4 text-amber-600 mt-0.5 flex-shrink-0" />
-                    <div className="text-sm">
-                      <span className="font-medium text-amber-800">Rejection Reason:</span>{' '}
-                      <span className="text-amber-900">
-                        {rejectionReason || 'We were unable to verify all required information. (default)'}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-
+              <div className="space-y-3">
                 <div>
-                  <Label className="text-sm text-muted-foreground">Subject Line</Label>
-                  <div className="border rounded-lg p-3 bg-muted/30 font-medium">
+                  <Label className="text-xs text-muted-foreground">Subject</Label>
+                  <div className="border rounded-lg p-2 bg-muted/30 text-sm font-medium">
                     {renderedEmail.subject}
                   </div>
                 </div>
 
                 <div>
-                  <Label className="text-sm text-muted-foreground mb-2 block">Email Body Preview</Label>
+                  <Label className="text-xs text-muted-foreground mb-1 block">Body</Label>
                   <div className="border rounded-lg overflow-hidden">
                     <iframe
                       srcDoc={renderedEmail.html}
-                      className="w-full h-[400px] bg-white"
+                      className="w-full h-[300px] bg-white"
                       title="Email Preview"
                     />
                   </div>
                 </div>
-
-                <Alert>
-                  <Eye className="h-4 w-4" />
-                  <AlertDescription>
-                    Review the email carefully before submitting. Once sent, this cannot be undone.
-                  </AlertDescription>
-                </Alert>
               </div>
             ) : (
-              <div className="text-center py-12 text-muted-foreground">
-                <p>No preview available. Please go back and select a template.</p>
+              <div className="text-center py-8 text-muted-foreground text-sm">
+                Select a template to preview the email.
               </div>
             )}
+
+            {/* Confirmation info */}
+            <Alert>
+              <Eye className="h-4 w-4" />
+              <AlertDescription className="text-sm">
+                {rental.customer?.email ? (
+                  <>Email will be sent to <strong>{rental.customer.email}</strong>. </>
+                ) : (
+                  <>No customer email on file. </>
+                )}
+                {(allPayments || []).length > 0 ? (
+                  <>All {(allPayments || []).length} payment(s) totalling <strong>{formatCurrency(totalRefundAmount, currencyCode)}</strong> will be refunded automatically.</>
+                ) : (
+                  <>No payments to refund.</>
+                )}
+              </AlertDescription>
+            </Alert>
           </TabsContent>
         </Tabs>
 
-        {/* Footer with Navigation */}
+        {/* Footer */}
         <DialogFooter className="flex items-center justify-between sm:justify-between border-t pt-4">
           <div className="flex gap-2">
-            {activeTab !== "reason" && (
+            {activeTab === "email" && (
               <Button
                 variant="outline"
-                onClick={goToPreviousTab}
+                onClick={() => setActiveTab("reason")}
                 disabled={isSubmitting}
               >
                 <ChevronLeft className="h-4 w-4 mr-1" />
-                Previous
+                Back
               </Button>
             )}
           </div>
@@ -981,28 +526,27 @@ export default function RejectionDialog({
               Cancel
             </Button>
 
-            {activeTab === "preview" ? (
+            {activeTab === "email" ? (
               <Button
                 variant="destructive"
                 onClick={handleSubmit}
-                disabled={isSubmitting || !selectedTemplateId}
+                disabled={isSubmitting}
               >
                 {isSubmitting ? (
                   <>
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Processing...
+                    Rejecting...
                   </>
                 ) : (
                   <>
                     <XCircle className="mr-2 h-4 w-4" />
-                    Confirm Rejection
+                    Reject & Refund
                   </>
                 )}
               </Button>
             ) : (
               <Button
-                onClick={goToNextTab}
-                disabled={!canProceedToNextTab() || isSubmitting}
+                onClick={() => setActiveTab("email")}
               >
                 Next
                 <ChevronRight className="h-4 w-4 ml-1" />

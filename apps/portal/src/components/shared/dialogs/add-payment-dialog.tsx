@@ -325,6 +325,11 @@ export const AddPaymentDialog = ({
       if (error) throw new Error(error.message || 'Failed to create checkout session');
       if (!data?.url) throw new Error('No checkout URL returned');
 
+      // Store targetCategories in localStorage so the fallback handler can use them
+      if (targetCategories && targetCategories.length > 0 && rentalId) {
+        localStorage.setItem(`payment_target_categories_${rentalId}`, JSON.stringify(targetCategories));
+      }
+
       window.open(data.url, '_blank');
 
       toast({ title: "Stripe Checkout Opened", description: "Payment link opened in a new tab. Payment will be recorded automatically when the customer completes checkout." });

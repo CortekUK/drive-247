@@ -158,7 +158,7 @@ Uses Supabase Realtime channels (replaced Socket.io):
 - **Subscriptions**: `create-subscription-checkout`, `create-subscription-portal-session`, `get-subscription-details`, `subscription-webhook`
 - **Shared utilities** in `supabase/functions/_shared/`: `cors.ts`, `stripe-client.ts`, `aws-config.ts`, `email-template-service.ts`, `openai.ts`, `bonzah-client.ts`, `resend-service.ts`, `document-loaders.ts`
 
-6 functions have `verify_jwt = false` in `supabase/config.toml`: `docusign-webhook`, `veriff-webhook`, `customer-chat`, `validate-customer-invite`, `submit-customer-registration`, `subscription-webhook`. Stripe webhook functions handle their own signature verification. All other functions require JWT auth by default.
+9 functions have `verify_jwt = false` in `supabase/config.toml`: `docusign-webhook`, `veriff-webhook`, `customer-chat`, `validate-customer-invite`, `submit-customer-registration`, `custom-auth-email`, `subscription-webhook`, `stripe-webhook-test`, `stripe-webhook-live`. Stripe webhook functions handle their own signature verification. All other functions require JWT auth by default.
 
 Edge function pattern:
 ```typescript

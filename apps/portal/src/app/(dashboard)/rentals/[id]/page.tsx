@@ -206,7 +206,7 @@ const RentalDetail = () => {
   const queryClient = useQueryClient();
   const { tenant } = useTenant();
   const { canEdit } = useManagerPermissions();
-  const { balanceNumber: bonzahCdBalance, isBonzahConnected } = useBonzahBalance();
+  const { balanceNumber: bonzahCdBalance, isBonzahConnected, portalUrl: bonzahPortalUrl } = useBonzahBalance();
   // skipInsurance removed — insurance doc upload is always visible; only Bonzah selector is gated on integration_bonzah
   const [downloadingPdf, setDownloadingPdf] = useState<string | null>(null);
   const [refreshingPolicy, setRefreshingPolicy] = useState(false);
@@ -329,87 +329,123 @@ const RentalDetail = () => {
     return amounts;
   }, [paymentBreakdown, invoiceBreakdown, rentalCharges, rental, refundBreakdown]);
 
-  // Handle ?payment=success — process Stripe payment when redirected back from checkout
-  const [paymentProcessed, setPaymentProcessed] = useState(false);
+  // Auto-refresh payment data when tab regains focus (e.g. after Stripe checkout in new tab)
   useEffect(() => {
-    const paymentStatus = searchParams?.get('payment');
-    if (paymentStatus !== 'success' || !id || !tenant?.id || paymentProcessed) return;
-
-    setPaymentProcessed(true);
-
-    const processStripePayment = async () => {
-      try {
-        // Find the Pending payment with a stripe_checkout_session_id for this rental
-        const { data: pendingPayment } = await supabase
-          .from('payments')
-          .select('id, stripe_checkout_session_id, stripe_payment_intent_id, status')
-          .eq('rental_id', id)
-          .eq('status', 'Pending')
-          .not('stripe_checkout_session_id', 'is', null)
-          .order('created_at', { ascending: false })
-          .limit(1)
-          .maybeSingle();
-
-        if (!pendingPayment) {
-          // Check if payment was already processed (by webhook)
-          const { data: completedPayment } = await supabase
-            .from('payments')
-            .select('id')
-            .eq('rental_id', id)
-            .in('status', ['Completed', 'Applied'])
-            .not('stripe_checkout_session_id', 'is', null)
-            .limit(1)
-            .maybeSingle();
-
-          if (completedPayment) {
-            // Webhook already handled it — just refresh
-            queryClient.invalidateQueries({ queryKey: ['rental-totals'] });
-            queryClient.invalidateQueries({ queryKey: ['rental-payment-breakdown'] });
-            queryClient.invalidateQueries({ queryKey: ['rental-charges'] });
-            toast({ title: 'Payment Confirmed', description: 'Payment has been processed successfully.' });
-          }
-          // Clean URL
-          router.replace(`/rentals/${id}`);
-          return;
-        }
-
-        // Sync payment_intent_id from Stripe if missing
-        if (!pendingPayment.stripe_payment_intent_id && pendingPayment.stripe_checkout_session_id) {
-          await supabase.functions.invoke('sync-payment-intent', {
-            body: {
-              paymentId: pendingPayment.id,
-              checkoutSessionId: pendingPayment.stripe_checkout_session_id,
-              tenantId: tenant.id,
-            },
-          });
-        }
-
-        // Update payment to Completed
-        await supabase
-          .from('payments')
-          .update({
-            status: 'Completed',
-            capture_status: 'captured',
-            verification_status: 'auto_approved',
-            updated_at: new Date().toISOString(),
-          })
-          .eq('id', pendingPayment.id);
-
-        // Apply payment via FIFO allocation
-        const { error: applyError } = await supabase.functions.invoke('apply-payment', {
-          body: { paymentId: pendingPayment.id },
-        });
-
-        if (applyError) {
-          console.error('Error applying payment:', applyError);
-        }
-
-        // Refresh all payment-related queries
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible' && id) {
         queryClient.invalidateQueries({ queryKey: ['rental-totals'] });
         queryClient.invalidateQueries({ queryKey: ['rental-payment-breakdown'] });
         queryClient.invalidateQueries({ queryKey: ['rental-charges'] });
         queryClient.invalidateQueries({ queryKey: ['rental-refund-breakdown'] });
         queryClient.invalidateQueries({ queryKey: ['rental-invoice'] });
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+  }, [id, queryClient]);
+
+  // Handle ?payment=success — ensure Stripe payment is allocated after checkout
+  const [paymentProcessed, setPaymentProcessed] = useState(false);
+  const [isProcessingPayment, setIsProcessingPayment] = useState(() => {
+    // Initialize from URL so the banner shows immediately on page load
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      return params.get('payment') === 'success';
+    }
+    return false;
+  });
+  useEffect(() => {
+    const paymentStatus = searchParams?.get('payment');
+    if (paymentStatus !== 'success' || !id || !tenant?.id || paymentProcessed) return;
+
+    setPaymentProcessed(true);
+    setIsProcessingPayment(true);
+
+    const processStripePayment = async () => {
+      try {
+        // Read targetCategories: try localStorage first, then fall back to payment record
+        const storedCategories = localStorage.getItem(`payment_target_categories_${id}`);
+        let targetCategories = storedCategories ? JSON.parse(storedCategories) : undefined;
+        localStorage.removeItem(`payment_target_categories_${id}`);
+
+        // Find the most recent Stripe payment for this rental (any status — webhook may have already updated it)
+        const { data: stripePayment } = await supabase
+          .from('payments')
+          .select('id, stripe_checkout_session_id, stripe_payment_intent_id, status, remaining_amount, amount, target_categories')
+          .eq('rental_id', id)
+          .not('stripe_checkout_session_id', 'is', null)
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+
+        if (!stripePayment) {
+          setIsProcessingPayment(false);
+          router.replace(`/rentals/${id}`);
+          return;
+        }
+
+        // If localStorage didn't have targetCategories, read from payment record
+        if (!targetCategories && stripePayment.target_categories) {
+          targetCategories = stripePayment.target_categories as string[];
+        }
+
+        // If still Pending, update to Completed (webhook hasn't fired yet)
+        if (stripePayment.status === 'Pending') {
+          if (!stripePayment.stripe_payment_intent_id && stripePayment.stripe_checkout_session_id) {
+            await supabase.functions.invoke('sync-payment-intent', {
+              body: {
+                paymentId: stripePayment.id,
+                checkoutSessionId: stripePayment.stripe_checkout_session_id,
+                tenantId: tenant.id,
+              },
+            });
+          }
+
+          await supabase
+            .from('payments')
+            .update({
+              status: 'Completed',
+              capture_status: 'captured',
+              verification_status: 'auto_approved',
+              updated_at: new Date().toISOString(),
+            })
+            .eq('id', stripePayment.id);
+        }
+
+        // Wait for webhook to process the payment allocation (3 attempts, 2s each)
+        let allocated = false;
+        for (let i = 0; i < 3; i++) {
+          await new Promise(r => setTimeout(r, 2000));
+          const { data: apps } = await supabase
+            .from('payment_applications')
+            .select('id')
+            .eq('payment_id', stripePayment.id)
+            .limit(1);
+          if (apps && apps.length > 0) {
+            allocated = true;
+            break;
+          }
+        }
+
+        // If webhook didn't allocate, call apply-payment as fallback
+        // apply-payment uses a DB unique index on payment ledger entries to prevent double-processing
+        if (!allocated) {
+          await supabase.functions.invoke('apply-payment', {
+            body: {
+              paymentId: stripePayment.id,
+              ...(targetCategories && targetCategories.length > 0 ? { targetCategories } : {}),
+            },
+          });
+        }
+
+        // Refresh all payment-related queries and wait for them to settle
+        await Promise.all([
+          queryClient.invalidateQueries({ queryKey: ['rental-totals'] }),
+          queryClient.invalidateQueries({ queryKey: ['rental-payment-breakdown'] }),
+          queryClient.invalidateQueries({ queryKey: ['rental-charges'] }),
+          queryClient.invalidateQueries({ queryKey: ['rental-refund-breakdown'] }),
+          queryClient.invalidateQueries({ queryKey: ['rental-invoice'] }),
+        ]);
 
         toast({ title: 'Payment Confirmed', description: 'Stripe payment has been processed and applied.' });
       } catch (err: any) {
@@ -417,7 +453,7 @@ const RentalDetail = () => {
         toast({ title: 'Payment Processing', description: 'Payment received. Refreshing data...', variant: 'default' });
       }
 
-      // Clean URL
+      setIsProcessingPayment(false);
       router.replace(`/rentals/${id}`);
     };
 
@@ -1351,8 +1387,18 @@ const RentalDetail = () => {
         </Alert>
       )}
 
+      {/* Processing Payment Banner */}
+      {isProcessingPayment && (
+        <Alert className="border-blue-500/30 bg-blue-500/10">
+          <Loader2 className="h-4 w-4 animate-spin text-blue-500" />
+          <AlertDescription className="text-blue-500 font-medium">
+            Processing your Stripe payment... This may take a few seconds.
+          </AlertDescription>
+        </Alert>
+      )}
+
       {/* Rental Summary */}
-      <div className="grid gap-6 md:grid-cols-2">
+      <div className={`grid gap-6 md:grid-cols-2 ${isProcessingPayment ? 'opacity-50 pointer-events-none' : ''}`}>
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-lg">Total Paid</CardTitle>
@@ -1424,7 +1470,9 @@ const RentalDetail = () => {
         }
 
         // Compute which rows have unpaid charges (selectable for targeted payment)
-        const selectableCategories = rows
+        // Don't allow payments on cancelled/rejected rentals
+        const isCancelledOrRejected = rental.status === 'Cancelled' || rental.approval_status === 'rejected';
+        const selectableCategories = isCancelledOrRejected ? [] : rows
           .filter(({ category, amount }) => {
             if (amount <= 0) return false;
             const refunded = refundBreakdown?.[category] ?? 0;
@@ -1462,7 +1510,7 @@ const RentalDetail = () => {
         };
 
         return (
-          <Card>
+          <Card className={isProcessingPayment ? 'opacity-50 pointer-events-none' : ''}>
             <CardHeader className="pb-4">
               <CardTitle className="text-base font-medium">Payment Breakdown</CardTitle>
             </CardHeader>
@@ -1547,18 +1595,26 @@ const RentalDetail = () => {
                               if (catPayment.paid > 0) {
                                 return <Badge variant="outline" className="text-amber-500 border-amber-500/30 bg-amber-500/10 text-[11px]">Partially Paid</Badge>;
                               }
+                              // On cancelled/rejected rental, show "Cancelled" instead of "Not Paid"
+                              if (isCancelledOrRejected) {
+                                return <Badge variant="outline" className="text-muted-foreground border-muted-foreground/30 text-[11px]">Cancelled</Badge>;
+                              }
                               return <Badge variant="outline" className="text-red-500 border-red-500/30 bg-red-500/10 text-[11px]">Not Paid</Badge>;
                             }
                             // No ledger entry for this category — check overall payment status
                             if (totalPayments >= (invoiceBreakdown?.totalAmount || 0) && totalPayments > 0) {
                               return <Badge variant="outline" className="text-emerald-500 border-emerald-500/30 bg-emerald-500/10 text-[11px]">Paid</Badge>;
                             }
+                            // On cancelled/rejected rental, show "Cancelled" instead of "Not Paid"
+                            if (isCancelledOrRejected) {
+                              return <Badge variant="outline" className="text-muted-foreground border-muted-foreground/30 text-[11px]">Cancelled</Badge>;
+                            }
                             return <Badge variant="outline" className="text-red-500 border-red-500/30 bg-red-500/10 text-[11px]">Not Paid</Badge>;
                           })()}
                         </TableCell>
                         <TableCell className="text-right">
                           <span className={`text-sm font-semibold ${!applied ? 'text-muted-foreground/50' : ''}`}>
-                            {formatCurrencyUtil(net, tenant?.currency_code || 'USD')}
+                            {formatCurrencyUtil(amount, tenant?.currency_code || 'USD')}
                           </span>
                         </TableCell>
                         <TableCell className="text-right">
@@ -1605,17 +1661,6 @@ const RentalDetail = () => {
                                 {isSendingPaymentLink ? 'Sending...' : 'Send Pay Link'}
                               </button>
                             </div>
-                          ) : isInsuranceUnpaid ? (
-                            <button
-                              className="text-xs text-blue-500 hover:text-blue-400 hover:underline font-medium"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setInsurancePaymentAmount(insuranceCharge.remaining_amount);
-                                setInsurancePaymentMode(true);
-                              }}
-                            >
-                              Mark Paid
-                            </button>
                           ) : nonRefundable && applied ? (
                             <span className="text-xs text-muted-foreground/50">-</span>
                           ) : (() => {
@@ -2431,33 +2476,47 @@ const RentalDetail = () => {
                   'bg-sky-400 text-black font-semibold hover:bg-sky-400 shadow-[0_0_12px_rgba(56,189,248,0.6)]'
                 }
               >
-                {bonzahPolicy.status === 'active' ? 'Active' : bonzahPolicy.status === 'quoted' ? 'Quoted' : bonzahPolicy.status === 'payment_confirmed' ? 'Payment Confirmed' : bonzahPolicy.status === 'failed' ? 'Failed' : bonzahPolicy.status === 'insufficient_balance' ? 'Insufficient Balance' : bonzahPolicy.status}
+                {bonzahPolicy.status === 'active' ? 'Active' : bonzahPolicy.status === 'quoted' ? 'Quoted' : bonzahPolicy.status === 'payment_confirmed' ? 'Payment Confirmed' : bonzahPolicy.status === 'failed' ? 'Failed' : bonzahPolicy.status === 'insufficient_balance' ? 'Quoted — Pending Allocation' : bonzahPolicy.status}
               </Badge>
             </div>
           </CardHeader>
           <CardContent className="space-y-4">
             {/* Bonzah CD Balance */}
             {isBonzahConnected && bonzahCdBalance != null && (
-              <div className={`flex items-center justify-between rounded-md px-4 py-2.5 ${bonzahCdBalance < bonzahPolicy.premium_amount ? 'bg-[#CC004A]/10 border border-[#CC004A]/20' : 'bg-muted/50 border border-border'}`}>
-                <span className="text-sm font-medium text-muted-foreground">Bonzah CD Balance</span>
-                <span className={`text-base font-bold tabular-nums ${bonzahCdBalance < bonzahPolicy.premium_amount ? 'text-[#CC004A]' : 'text-foreground'}`}>
+              <div className="flex items-center justify-between rounded-md px-4 py-2.5 bg-muted/50 border border-border">
+                <span className="text-sm font-medium text-muted-foreground">CD Balance (Broker Total)</span>
+                <span className="text-base font-bold tabular-nums text-foreground">
                   ${bonzahCdBalance.toFixed(2)}
                 </span>
               </div>
             )}
 
-            {/* Insufficient balance warning */}
+            {/* Insufficient allocated balance warning */}
             {bonzahPolicy.status === 'insufficient_balance' && (
-              <div className="rounded-lg border border-[#CC004A]/30 bg-[#CC004A]/5 p-4 space-y-2">
+              <div className="rounded-lg border border-[#CC004A]/30 bg-[#CC004A]/5 p-4 space-y-3">
                 <div className="flex items-start gap-2">
                   <AlertTriangle className="h-4 w-4 text-[#CC004A] mt-0.5 flex-shrink-0" />
-                  <div className="text-sm">
-                    <p className="font-medium text-[#CC004A]">Insufficient Bonzah deposit balance</p>
-                    <p className="text-muted-foreground mt-1">
-                      Your Bonzah balance {bonzahCdBalance != null ? `($${bonzahCdBalance.toFixed(2)})` : ''} is insufficient to cover the premium (${bonzahPolicy.premium_amount}). Please top up your balance, then retry.
+                  <div className="text-sm space-y-2">
+                    <p className="font-medium text-[#CC004A]">Insurance quoted — insufficient allocated balance</p>
+                    <p className="text-muted-foreground">
+                      This insurance has been quoted but could not be activated because your Bonzah <strong>allocated balance</strong> is too low.
+                      {bonzahCdBalance != null && <> Your CD balance is <strong>${bonzahCdBalance.toFixed(2)}</strong>.</>}
+                      {' '}Please allocate at least <strong>${bonzahPolicy.premium_amount}</strong> more to activate this policy.
+                    </p>
+                    <p className="text-muted-foreground">
+                      The customer is not affected — their booking is confirmed normally.
                     </p>
                   </div>
                 </div>
+                <a
+                  href={bonzahPortalUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1.5 text-sm font-medium text-[#CC004A] hover:underline ml-6"
+                >
+                  <ExternalLink className="h-3.5 w-3.5" />
+                  Allocate Funds on Bonzah Portal
+                </a>
               </div>
             )}
 
@@ -2467,7 +2526,7 @@ const RentalDetail = () => {
               {(bonzahPolicy.status === 'quoted' || bonzahPolicy.status === 'failed' || bonzahPolicy.status === 'insufficient_balance') && (
                 <Button
                   size="sm"
-                  disabled={issuingPolicy || (bonzahPolicy.status === 'insufficient_balance' && bonzahCdBalance != null && bonzahCdBalance < bonzahPolicy.premium_amount)}
+                  disabled={issuingPolicy}
                   className="bg-green-600 hover:bg-green-700 text-white"
                   onClick={async () => {
                     setIssuingPolicy(true);
@@ -2479,10 +2538,22 @@ const RentalDetail = () => {
                         },
                       });
                       if (error) throw error;
-                      await queryClient.invalidateQueries({ queryKey: ['rental-bonzah-policy', id] });
-                      toast({ title: "Policy Issued", description: `Bonzah policy ${data?.policy_no || ''} has been issued successfully.` });
+                      if (data?.error === 'insufficient_balance') {
+                        toast({ title: "Allocated balance still insufficient", description: `Your Bonzah allocated balance is still too low (premium: $${data.premium}). Allocate more funds in the Bonzah portal and retry.`, variant: "destructive" });
+                      } else {
+                        await Promise.all([
+                          queryClient.invalidateQueries({ queryKey: ['rental-bonzah-policy', id] }),
+                          queryClient.invalidateQueries({ queryKey: ['bonzah-balance'] }),
+                          queryClient.invalidateQueries({ queryKey: ['bonzah-insufficient-balance-count'] }),
+                          queryClient.invalidateQueries({ queryKey: ['bonzah-pending-policies'] }),
+                        ]);
+                        toast({ title: "Policy Issued", description: `Bonzah policy ${data?.policy_no || ''} has been issued successfully.` });
+                      }
                     } catch (err: any) {
-                      toast({ title: "Error", description: err.message || "Failed to issue policy. Please try again.", variant: "destructive" });
+                      const msg = err.message?.includes('insufficient') || err.message?.includes('balance')
+                        ? 'Allocated balance still insufficient. Allocate more funds in the Bonzah portal and retry.'
+                        : err.message || "Failed to issue policy. Please try again.";
+                      toast({ title: "Error", description: msg, variant: "destructive" });
                     } finally {
                       setIssuingPolicy(false);
                     }
@@ -3789,6 +3860,7 @@ const RentalDetail = () => {
               email: rental.customers?.email,
             },
             vehicle: {
+              id: rental.vehicles?.id,
               make: rental.vehicles?.make,
               model: rental.vehicles?.model,
               reg: rental.vehicles?.reg,
@@ -3797,7 +3869,6 @@ const RentalDetail = () => {
             start_date: rental.start_date,
             end_date: rental.end_date,
           }}
-          payment={payment || undefined}
         />
       )}
 

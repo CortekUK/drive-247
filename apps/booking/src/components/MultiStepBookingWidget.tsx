@@ -2577,6 +2577,22 @@ const MultiStepBookingWidget = () => {
       }
     }
 
+    // Validate booking lead time (minimum advance notice)
+    if (formData.pickupDate && formData.pickupTime) {
+      const leadTimeHours = tenant?.booking_lead_time_hours ?? 24;
+      if (leadTimeHours > 0) {
+        const pickupDateTime = new Date(`${formData.pickupDate}T${formData.pickupTime}`);
+        const now = new Date();
+        const hoursUntilPickup = (pickupDateTime.getTime() - now.getTime()) / (1000 * 60 * 60);
+        if (hoursUntilPickup < leadTimeHours) {
+          const displayValue = leadTimeHours >= 24 && leadTimeHours % 24 === 0
+            ? `${leadTimeHours / 24} day${leadTimeHours / 24 !== 1 ? 's' : ''}`
+            : `${leadTimeHours} hour${leadTimeHours !== 1 ? 's' : ''}`;
+          newErrors.pickupDate = `Bookings must be made at least ${displayValue} in advance.`;
+        }
+      }
+    }
+
     // DOB validation moved to Step 4 (Customer Details)
 
     setErrors(newErrors);
