@@ -142,6 +142,10 @@ export interface Tenant {
 
   // Lockbox settings
   lockbox_enabled: boolean | null;
+
+  // Dynamic pricing
+  weekend_surcharge_percent: number | null;
+  weekend_days: number[] | null;
 }
 
 interface TenantContextType {
@@ -294,7 +298,8 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
                 pickup_multiple_locations_enabled, return_multiple_locations_enabled,
                 pickup_area_enabled, return_area_enabled,
                 installments_enabled, installment_config,
-                lockbox_enabled
+                lockbox_enabled,
+                weekend_surcharge_percent, weekend_days
               `)
               .eq('slug', defaultSlug)
               .eq('status', 'active')
@@ -426,7 +431,9 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
           return_area_enabled,
           installments_enabled,
           installment_config,
-          lockbox_enabled
+          lockbox_enabled,
+          weekend_surcharge_percent,
+          weekend_days
         `)
         .eq('slug', slug)
         .eq('status', 'active')

@@ -29,6 +29,7 @@ import BonzahInsuranceSelector from "./BonzahInsuranceSelector";
 import BonzahDetailsForm from "./BonzahDetailsForm";
 import type { BonzahDetailsValues } from "./BonzahDetailsForm";
 import type { CoverageOptions } from "@/hooks/useBonzahPremium";
+import { useBonzahVehicleEligibility } from "@/hooks/useBonzahVehicleEligibility";
 import AIScanProgress from "./ai-scan-progress";
 import AIVerificationQR from "./AIVerificationQR";
 import { stripePromise } from "@/config/stripe";
@@ -46,6 +47,8 @@ import { getTimezonesByRegion, findTimezone, getDetectedTimezone } from "@/lib/t
 import { useCustomerDocuments, getDocumentStatus } from "@/hooks/use-customer-documents";
 import { formatCurrency, getEarthRadius, metersToUnit, getPerMonthLabel, getUnlimitedLabel, getDistanceUnitLong } from "@/lib/format-utils";
 import type { DistanceUnit } from "@/lib/format-utils";
+import { useDynamicPricing } from "@/hooks/use-dynamic-pricing";
+import { calculateRentalPriceBreakdown, parseDateString as parseDateStringSafe } from "@/lib/calculate-rental-price";
 interface VehiclePhoto {
   photo_url: string;
 }
@@ -105,6 +108,9 @@ const MultiStepBookingWidget = () => {
     selectedExtras, setSelectedExtras,
     clearBooking,
   } = useBookingStore();
+
+  // Dynamic pricing data
+  const { holidays, vehicleOverrides } = useDynamicPricing(formData.vehicleId || undefined);
 
   // Customer authentication state
   const { customerUser, session, loading: authLoading, initialized: authInitialized } = useCustomerAuthStore();
@@ -173,6 +179,18 @@ const MultiStepBookingWidget = () => {
 
   // Fetch rental extras for the selected vehicle
   const { extras: availableExtras, isLoading: extrasLoading } = useRentalExtras(formData.vehicleId || null);
+
+  // Bonzah vehicle eligibility check
+  const eligibilityVehicle = vehicles.find(v => v.id === formData.vehicleId);
+  const {
+    isEligible: isBonzahEligible,
+    isLoading: isBonzahEligibilityLoading,
+    reason: bonzahIneligibilityReason,
+  } = useBonzahVehicleEligibility({
+    vehicleMake: eligibilityVehicle?.make || null,
+    vehicleModel: eligibilityVehicle?.model || null,
+    enabled: !skipInsurance && !!formData.vehicleId,
+  });
 
   // Calculate working hours for the selected pickup date (per-day hours)
   const pickupDateWorkingHours = useMemo(() => {
@@ -1449,35 +1467,32 @@ const MultiStepBookingWidget = () => {
     const selectedVehicle = vehicles.find(v => v.id === formData.vehicleId);
     if (!selectedVehicle) return null;
 
-    // Calculate rental duration in days
+    // Calculate rental price using shared utility (supports dynamic pricing for daily tier)
     let rentalPrice = 0;
     let rentalDays = 0;
+    let dayBreakdown: import("@/lib/calculate-rental-price").DayBreakdown[] = [];
     if (formData.pickupDate && formData.dropoffDate) {
-      const pickup = parseDateString(formData.pickupDate);
-      const dropoff = parseDateString(formData.dropoffDate);
-      rentalDays = Math.max(1, Math.ceil((dropoff.getTime() - pickup.getTime()) / (1000 * 60 * 60 * 24)));
+      const weekendConfig = (tenant?.weekend_surcharge_percent && tenant.weekend_surcharge_percent > 0)
+        ? { weekend_surcharge_percent: tenant.weekend_surcharge_percent, weekend_days: tenant.weekend_days || [6, 0] }
+        : null;
 
-      const dailyRent = selectedVehicle.daily_rent || 0;
-      const weeklyRent = selectedVehicle.weekly_rent || 0;
-      const monthlyRent = selectedVehicle.monthly_rent || 0;
+      const result = calculateRentalPriceBreakdown(
+        formData.pickupDate,
+        formData.dropoffDate,
+        {
+          daily_rent: selectedVehicle.daily_rent || 0,
+          weekly_rent: selectedVehicle.weekly_rent || 0,
+          monthly_rent: selectedVehicle.monthly_rent || 0,
+        },
+        weekendConfig,
+        holidays,
+        vehicleOverrides,
+        selectedVehicle.id
+      );
 
-      // Pricing tiers (pro-rata):
-      // > 30 days: monthly rate (days/30 × monthly_rent)
-      // 7-30 days: weekly rate (days/7 × weekly_rent)
-      // < 7 days: daily rate (days × daily_rent)
-      if (rentalDays > 30 && monthlyRent > 0) {
-        rentalPrice = (rentalDays / 30) * monthlyRent;
-      } else if (rentalDays >= 7 && rentalDays <= 30 && weeklyRent > 0) {
-        rentalPrice = (rentalDays / 7) * weeklyRent;
-      } else if (dailyRent > 0) {
-        rentalPrice = rentalDays * dailyRent;
-      } else if (weeklyRent > 0) {
-        // Fallback: estimate from weekly if no daily
-        rentalPrice = (rentalDays / 7) * weeklyRent;
-      } else if (monthlyRent > 0) {
-        // Fallback: estimate from monthly if no daily/weekly
-        rentalPrice = (rentalDays / 30) * monthlyRent;
-      }
+      rentalPrice = result.rentalPrice;
+      rentalDays = result.rentalDays;
+      dayBreakdown = result.dayBreakdown;
     }
     const extrasTotal = Object.entries(selectedExtras).reduce((sum, [extraId, qty]) => {
       const extra = availableExtras.find(e => e.id === extraId);
@@ -2094,28 +2109,27 @@ const MultiStepBookingWidget = () => {
     const duration = calculateRentalDuration();
     if (!duration) return null;
     const days = duration.days;
-    let vehicleTotal = 0;
-    const dailyRent = vehicle.daily_rent || 0;
-    const weeklyRent = vehicle.weekly_rent || 0;
-    const monthlyRent = vehicle.monthly_rent || 0;
 
-    // Pricing tiers (pro-rata):
-    // > 30 days: monthly rate (days/30 × monthly_rent)
-    // 7-30 days: weekly rate (days/7 × weekly_rent)
-    // < 7 days: daily rate (days × daily_rent)
-    if (days > 30 && monthlyRent > 0) {
-      vehicleTotal = (days / 30) * monthlyRent;
-    } else if (days >= 7 && days <= 30 && weeklyRent > 0) {
-      vehicleTotal = (days / 7) * weeklyRent;
-    } else if (dailyRent > 0) {
-      vehicleTotal = days * dailyRent;
-    } else if (weeklyRent > 0) {
-      // Fallback: estimate from weekly if no daily
-      vehicleTotal = (days / 7) * weeklyRent;
-    } else if (monthlyRent > 0) {
-      // Fallback: estimate from monthly if no daily/weekly
-      vehicleTotal = (days / 30) * monthlyRent;
-    }
+    // Use shared utility with dynamic pricing for daily tier
+    const weekendConfig = (tenant?.weekend_surcharge_percent && tenant.weekend_surcharge_percent > 0)
+      ? { weekend_surcharge_percent: tenant.weekend_surcharge_percent, weekend_days: tenant.weekend_days || [6, 0] }
+      : null;
+
+    const result = calculateRentalPriceBreakdown(
+      formData.pickupDate,
+      formData.dropoffDate,
+      {
+        daily_rent: vehicle.daily_rent || 0,
+        weekly_rent: vehicle.weekly_rent || 0,
+        monthly_rent: vehicle.monthly_rent || 0,
+      },
+      weekendConfig,
+      holidays,
+      vehicleOverrides,
+      vehicle.id
+    );
+
+    const vehicleTotal = result.rentalPrice;
 
     // Add delivery fees
     const deliveryFees = (formData.pickupDeliveryFee || 0) + (formData.returnDeliveryFee || 0);
@@ -2131,6 +2145,7 @@ const MultiStepBookingWidget = () => {
 
   // Get the appropriate price display based on rental duration
   // Pricing tiers: > 30 days = monthly, 7-30 days = weekly, < 7 days = daily
+  // For daily tier, applies dynamic pricing (weekend/holiday surcharges) and shows average effective rate
   const getDynamicPriceDisplay = (vehicle: Vehicle): { price: number; label: string; secondaryPrices: string[] } => {
     const duration = calculateRentalDuration();
     const days = duration?.days || 0;
@@ -2153,11 +2168,31 @@ const MultiStepBookingWidget = () => {
       if (monthlyRent > 0) secondaryPrices.push(`${formatCurrency(monthlyRent, currencyCode, { minimumFractionDigits: 0, maximumFractionDigits: 0 })} / month`);
       return { price: weeklyRent, label: '/ week', secondaryPrices };
     } else if (dailyRent > 0) {
-      // Daily rental - show daily price as primary
+      // Daily rental - apply dynamic pricing to show effective average daily rate
+      let effectiveDailyRate = dailyRent;
+      if (formData.pickupDate && formData.dropoffDate) {
+        const weekendConfig = (tenant?.weekend_surcharge_percent && tenant.weekend_surcharge_percent > 0)
+          ? { weekend_surcharge_percent: tenant.weekend_surcharge_percent, weekend_days: tenant.weekend_days || [6, 0] }
+          : null;
+        if (weekendConfig || holidays.length > 0) {
+          const result = calculateRentalPriceBreakdown(
+            formData.pickupDate,
+            formData.dropoffDate,
+            { daily_rent: dailyRent, weekly_rent: weeklyRent, monthly_rent: monthlyRent },
+            weekendConfig,
+            holidays,
+            vehicle.id === formData.vehicleId ? vehicleOverrides : [],
+            vehicle.id
+          );
+          if (result.pricingTier === 'daily' && result.rentalDays > 0) {
+            effectiveDailyRate = Math.round((result.rentalPrice / result.rentalDays) * 100) / 100;
+          }
+        }
+      }
       const secondaryPrices: string[] = [];
       if (weeklyRent > 0) secondaryPrices.push(`${formatCurrency(weeklyRent, currencyCode, { minimumFractionDigits: 0, maximumFractionDigits: 0 })} / week`);
       if (monthlyRent > 0) secondaryPrices.push(`${formatCurrency(monthlyRent, currencyCode, { minimumFractionDigits: 0, maximumFractionDigits: 0 })} / month`);
-      return { price: dailyRent, label: '/ day', secondaryPrices };
+      return { price: effectiveDailyRate, label: '/ day', secondaryPrices };
     } else {
       // Fallback to monthly or whatever is available
       const primaryPrice = monthlyRent || weeklyRent || dailyRent || 0;
@@ -2256,6 +2291,18 @@ const MultiStepBookingWidget = () => {
   // Filter and sort vehicles
   const getFilteredAndSortedVehicles = () => {
     let filtered = [...vehicles];
+
+    // Filter by availability based on rental duration
+    if (formData.pickupDate && formData.dropoffDate) {
+      const pickup = parseDateString(formData.pickupDate);
+      const dropoff = parseDateString(formData.dropoffDate);
+      const days = Math.max(1, Math.ceil((dropoff.getTime() - pickup.getTime()) / (1000 * 60 * 60 * 24)));
+      filtered = filtered.filter(v => {
+        if (days >= 28) return (v as any).available_monthly !== false;
+        if (days >= 7) return (v as any).available_weekly !== false;
+        return (v as any).available_daily !== false;
+      });
+    }
 
     // Search filter - search in make, model, reg, and color
     if (searchTerm.trim()) {
@@ -3024,8 +3071,15 @@ const MultiStepBookingWidget = () => {
               displayStep,
               label,
               fullLabel
-            }, index, arr) => <div key={step} className="flex flex-col items-center flex-1 relative z-10">
-                <div className={cn("bk-step__node flex items-center justify-center w-10 h-10 sm:w-12 sm:h-12 md:w-14 md:h-14 rounded-full border-2 transition-all", currentStep >= step ? 'bg-primary border-primary shadow-glow' : 'border-border bg-muted', currentStep === step && 'bk-step__node--active shadow-glow')} aria-label={`Step ${displayStep} of ${arr.length}: ${fullLabel}`} aria-current={currentStep === step ? "step" : undefined}>
+            }, index, arr) => {
+              const isCompleted = currentStep > step;
+              const isClickable = currentStep !== step;
+              return <div
+                key={step}
+                className={cn("flex flex-col items-center flex-1 relative z-10", isClickable && "cursor-pointer group")}
+                onClick={() => { if (isClickable) setCurrentStep(step); }}
+              >
+                <div className={cn("bk-step__node flex items-center justify-center w-10 h-10 sm:w-12 sm:h-12 md:w-14 md:h-14 rounded-full border-2 transition-all", currentStep >= step ? 'bg-primary border-primary shadow-glow' : 'border-border bg-muted', currentStep === step && 'bk-step__node--active shadow-glow', isClickable && 'group-hover:opacity-80')} aria-label={`Step ${displayStep} of ${arr.length}: ${fullLabel}`} aria-current={currentStep === step ? "step" : undefined}>
                   {currentStep > step ? <Check className="w-4 h-4 sm:w-5 sm:h-5 md:w-6 md:h-6 text-primary-foreground" /> : <span className={cn("text-base sm:text-lg md:text-xl font-bold", currentStep === step ? "text-primary-foreground" : "text-muted-foreground")}>
                     {displayStep}
                   </span>}
@@ -3035,7 +3089,8 @@ const MultiStepBookingWidget = () => {
                   <span className="sm:hidden">{label}</span>
                 </span>
                 {index < arr.length - 1 && <div className={cn("bk-step__line absolute top-5 sm:top-6 md:top-7 left-[calc(50%+20px)] sm:left-[calc(50%+24px)] md:left-[calc(50%+28px)] w-[calc(100%-40px)] sm:w-[calc(100%-48px)] md:w-[calc(100%-56px)] h-0.5", currentStep > step ? 'bg-primary' : 'bg-border')} />}
-              </div>)}
+              </div>;
+            })}
           </div>
         </div>
 
@@ -4289,33 +4344,78 @@ const MultiStepBookingWidget = () => {
 
                     {/* NO Option */}
                     <Card
-                      className="group relative overflow-hidden border-2 border-border hover:border-accent hover:shadow-lg transition-all cursor-pointer bg-gradient-to-br from-accent/5 to-transparent"
-                      onClick={() => setHasInsurance(false)}
+                      className={cn(
+                        "group relative overflow-hidden border-2 transition-all bg-gradient-to-br from-accent/5 to-transparent",
+                        isBonzahEligibilityLoading || !isBonzahEligible
+                          ? "border-border opacity-60 cursor-not-allowed"
+                          : "border-border hover:border-accent hover:shadow-lg cursor-pointer"
+                      )}
+                      onClick={() => {
+                        if (!isBonzahEligibilityLoading && isBonzahEligible) {
+                          setHasInsurance(false);
+                        }
+                      }}
                     >
                       <div className="p-8 text-center space-y-4">
-                        <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-accent/10 mb-2">
-                          <Shield className="w-8 h-8 text-accent" />
+                        <div className="flex justify-center mb-2">
+                          <img src="/bonzah-logo.svg" alt="Bonzah" className="h-8 w-auto dark:hidden" />
+                          <img src="/bonzah-logo-dark.svg" alt="Bonzah" className="h-8 w-auto hidden dark:block" />
                         </div>
                         <div>
                           <h5 className="text-lg font-semibold mb-2">No, I Need Insurance</h5>
-                          <p className="text-sm text-muted-foreground">
-                            Get instant coverage through our trusted partner Bonzah
-                          </p>
+                          {isBonzahEligibilityLoading ? (
+                            <div className="flex items-center justify-center gap-2">
+                              <Loader2 className="w-4 h-4 animate-spin text-[#CC004A]" />
+                              <p className="text-sm text-muted-foreground">
+                                Checking vehicle eligibility...
+                              </p>
+                            </div>
+                          ) : !isBonzahEligible ? (
+                            <div className="space-y-3">
+                              <div className="rounded-lg border border-[#CC004A]/30 bg-[#CC004A]/5 p-3 text-left">
+                                <div className="flex items-start gap-2">
+                                  <AlertCircle className="w-4 h-4 text-[#CC004A] mt-0.5 flex-shrink-0" />
+                                  <div className="space-y-1">
+                                    <p className="text-xs font-medium text-[#CC004A]">Not covered by Bonzah</p>
+                                    <p className="text-xs text-muted-foreground">
+                                      <span className="font-medium">{eligibilityVehicle?.make} {eligibilityVehicle?.model}</span> is not eligible for Bonzah insurance coverage.
+                                      {bonzahIneligibilityReason && <> {bonzahIneligibilityReason}</>}
+                                    </p>
+                                  </div>
+                                </div>
+                              </div>
+                              <a
+                                href="https://bonzah.com/included-and-restricted-vehicle-types"
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-xs text-[#CC004A]/70 hover:text-[#CC004A] underline"
+                              >
+                                View Bonzah vehicle restrictions
+                              </a>
+                            </div>
+                          ) : (
+                            <p className="text-sm text-muted-foreground">
+                              Get instant coverage through our trusted partner Bonzah
+                            </p>
+                          )}
                         </div>
                         <Button
                           className="w-full bg-accent hover:bg-accent/90"
                           size="lg"
+                          disabled={isBonzahEligibilityLoading || !isBonzahEligible}
                         >
                           <Shield className="mr-2 h-5 w-5" />
                           Get Insurance Now
                         </Button>
-                        <div className="pt-4 border-t border-border/50">
-                          <p className="text-xs text-muted-foreground">
-                            ✓ Instant online quotes<br />
-                            ✓ Affordable rates<br />
-                            ✓ Quick 5-minute setup
-                          </p>
-                        </div>
+                        {isBonzahEligible && !isBonzahEligibilityLoading && (
+                          <div className="pt-4 border-t border-border/50">
+                            <p className="text-xs text-muted-foreground">
+                              ✓ Instant online quotes<br />
+                              ✓ Affordable rates<br />
+                              ✓ Quick 5-minute setup
+                            </p>
+                          </div>
+                        )}
                       </div>
                     </Card>
                   </div>

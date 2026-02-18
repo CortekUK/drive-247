@@ -56,7 +56,7 @@ interface Customer {
   user_type?: "Authenticated" | "Guest";
 }
 
-type SortField = 'name' | 'status' | 'type' | 'balance';
+type SortField = 'name' | 'type' | 'balance';
 type SortOrder = 'asc' | 'desc';
 
 const CustomersList = () => {
@@ -296,10 +296,6 @@ const CustomersList = () => {
           case 'name':
             aValue = a.name.toLowerCase();
             bValue = b.name.toLowerCase();
-            break;
-          case 'status':
-            aValue = a.status;
-            bValue = b.status;
             break;
           case 'type':
             aValue = a.user_type || 'Guest';
@@ -644,15 +640,6 @@ const CustomersList = () => {
                     <TableHead>Contact</TableHead>
                     <TableHead
                       className="cursor-pointer hover:bg-muted/50"
-                      onClick={() => handleSort('status')}
-                    >
-                      <div className="flex items-center gap-2">
-                        Status
-                        <SortIcon field="status" />
-                      </div>
-                    </TableHead>
-                    <TableHead
-                      className="cursor-pointer hover:bg-muted/50"
                       onClick={() => handleSort('balance')}
                     >
                       <div className="flex items-center gap-2">
@@ -714,20 +701,6 @@ const CustomersList = () => {
                               </div>
                             )}
                           </div>
-                        </TableCell>
-                        <TableCell>
-                          <Badge
-                            variant={customer.status === 'Active' ? 'default' : 'secondary'}
-                            className={
-                              customer.status === 'Active'
-                                ? 'bg-pink-100 text-pink-800'
-                                : customer.status === 'Rejected'
-                                  ? 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200'
-                                  : 'bg-gray-100 text-gray-800'
-                            }
-                          >
-                            {customer.status}
-                          </Badge>
                         </TableCell>
                         <TableCell>
                           {balanceData ? (

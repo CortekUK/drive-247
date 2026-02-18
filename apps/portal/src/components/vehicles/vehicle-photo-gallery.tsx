@@ -46,9 +46,10 @@ interface SortablePhotoProps {
   vehicleReg: string;
   onDelete: (photo: VehiclePhoto) => void;
   isDeleting: boolean;
+  isLastPhoto: boolean;
 }
 
-const SortablePhoto = ({ photo, index, vehicleReg, onDelete, isDeleting }: SortablePhotoProps) => {
+const SortablePhoto = ({ photo, index, vehicleReg, onDelete, isDeleting, isLastPhoto }: SortablePhotoProps) => {
   const {
     attributes,
     listeners,
@@ -105,20 +106,22 @@ const SortablePhoto = ({ photo, index, vehicleReg, onDelete, isDeleting }: Sorta
       </div>
 
       {/* Delete button */}
-      <Button
-        type="button"
-        variant="destructive"
-        size="sm"
-        className="absolute top-1 right-1 h-7 w-7 p-0 opacity-0 group-hover:opacity-100 transition-opacity"
-        onClick={() => onDelete(photo)}
-        disabled={isDeleting}
-      >
-        {isDeleting ? (
-          <RotateCcw className="h-3 w-3 animate-spin" />
-        ) : (
-          <X className="h-3 w-3" />
-        )}
-      </Button>
+      {!isLastPhoto && (
+        <Button
+          type="button"
+          variant="destructive"
+          size="sm"
+          className="absolute top-1 right-1 h-7 w-7 p-0 opacity-0 group-hover:opacity-100 transition-opacity"
+          onClick={() => onDelete(photo)}
+          disabled={isDeleting}
+        >
+          {isDeleting ? (
+            <RotateCcw className="h-3 w-3 animate-spin" />
+          ) : (
+            <X className="h-3 w-3" />
+          )}
+        </Button>
+      )}
     </div>
   );
 };
@@ -380,6 +383,14 @@ export const VehiclePhotoGallery = ({
   };
 
   const handleDeletePhoto = (photo: VehiclePhoto) => {
+    if (photos.length <= 1) {
+      toast({
+        title: "Cannot Delete",
+        description: "At least one photo is required. Upload a new photo before removing this one.",
+        variant: "destructive",
+      });
+      return;
+    }
     deletePhotoMutation.mutate(photo);
   };
 
@@ -413,6 +424,7 @@ export const VehiclePhotoGallery = ({
                     vehicleReg={vehicleReg}
                     onDelete={handleDeletePhoto}
                     isDeleting={isDeleting}
+                    isLastPhoto={photos.length === 1}
                   />
                 ))}
               </div>
@@ -449,6 +461,13 @@ export const VehiclePhotoGallery = ({
           <p className="text-xs text-muted-foreground text-center">
             <GripVertical className="h-3 w-3 inline-block mr-1" />
             Drag photos to reorder. First photo is used as the banner.
+          </p>
+        )}
+
+        {/* Last photo hint */}
+        {photos.length === 1 && (
+          <p className="text-xs text-muted-foreground text-center">
+            At least one photo is required. Upload a new photo before removing this one.
           </p>
         )}
 

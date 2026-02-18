@@ -87,7 +87,7 @@ export function WorkingHoursCard() {
 
   // Working hours form state
   const [form, setForm] = useState<WorkingHoursForm>({
-    working_hours_always_open: false,
+    working_hours_always_open: true,
     timezone: 'America/Chicago',
     schedule: { ...DEFAULT_SCHEDULE },
   });
@@ -96,7 +96,7 @@ export function WorkingHoursCard() {
   useEffect(() => {
     if (workingHoursData) {
       setForm({
-        working_hours_always_open: workingHoursData.working_hours_always_open ?? false,
+        working_hours_always_open: workingHoursData.working_hours_always_open ?? true,
         timezone: tenant?.timezone ?? 'America/Chicago',
         schedule: {
           monday: {

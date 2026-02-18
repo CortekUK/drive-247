@@ -36,20 +36,20 @@ export const KeyHandoverActionBanner = ({
     <div
       className={cn(
         "sticky top-0 z-40 w-full",
-        "bg-gradient-to-r from-amber-500 to-amber-600",
-        "text-white shadow-lg",
+        "bg-gradient-to-r from-amber-500/15 to-amber-600/10 border-b border-amber-500/20",
+        "text-foreground shadow-lg backdrop-blur-sm",
         "animate-in slide-in-from-top duration-300"
       )}
     >
       <div className="px-4 py-3">
         <div className="flex items-center justify-between gap-4">
           <div className="flex items-center gap-3">
-            <div className="flex-shrink-0 p-2 bg-white/20 rounded-full">
-              <Key className="h-5 w-5" />
+            <div className="flex-shrink-0 p-2 bg-amber-500/20 rounded-full">
+              <Key className="h-5 w-5 text-amber-500" />
             </div>
             <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-2">
               <span className="font-semibold">Next Step: Complete Key Handover</span>
-              <span className="text-amber-100 text-sm hidden sm:inline">
+              <span className="text-muted-foreground text-sm hidden sm:inline">
                 {customerName && vehicleInfo
                   ? `for ${customerName} • ${vehicleInfo}`
                   : 'to activate this rental'
@@ -63,7 +63,7 @@ export const KeyHandoverActionBanner = ({
               variant="secondary"
               size="sm"
               onClick={handleScrollToSection}
-              className="bg-white/20 hover:bg-white/30 text-white border-0"
+              className="bg-amber-500/15 hover:bg-amber-500/25 text-amber-500 border border-amber-500/20"
             >
               <ChevronDown className="h-4 w-4 mr-1" />
               Go to Section
@@ -72,7 +72,7 @@ export const KeyHandoverActionBanner = ({
               variant="ghost"
               size="icon"
               onClick={() => setDismissed(true)}
-              className="text-white/80 hover:text-white hover:bg-white/20 h-8 w-8"
+              className="text-muted-foreground hover:text-foreground hover:bg-amber-500/15 h-8 w-8"
             >
               <X className="h-4 w-4" />
               <span className="sr-only">Dismiss</span>

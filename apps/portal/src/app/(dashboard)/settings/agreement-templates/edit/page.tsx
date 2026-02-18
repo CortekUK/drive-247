@@ -23,7 +23,9 @@ import {
   Eye,
   Edit3,
   RotateCcw,
+  Lock,
 } from 'lucide-react';
+
 import {
   useTemplateSelection,
   type TemplateType,
@@ -37,6 +39,8 @@ import {
 } from '@/lib/template-variables';
 import { toast } from '@/hooks/use-toast';
 import { TipTapEditor } from '@/components/settings/tiptap-editor';
+
+const PLATFORM_DISCLAIMER_HTML = `<hr style="margin: 24px 0; border-color: #e5e7eb;" /><p><strong>Platform Disclaimer</strong></p><p>The parties acknowledge that Drive247 is a software platform operated by Cortek Systems Ltd, which provides technology services solely to facilitate booking, documentation, and administrative processes for vehicle rental companies.</p><p>Drive247 and Cortek Systems Ltd are not a party to this Rental Agreement and do not own, lease, manage, insure, or control any vehicles listed on the platform.</p><p>All contractual obligations, responsibilities, and liabilities relating to the rental transaction, including vehicle condition, insurance coverage, payment collection, disputes, and claims, exist solely between the Rental Company and the Renter.</p><p>Drive247 and Cortek Systems Ltd shall have no liability for any losses, damages, claims, disputes, or obligations arising from or relating to this rental transaction, the performance of either party, or any third-party services integrated into the platform.</p>`;
 
 export default function EditAgreementTemplatePage() {
   const router = useRouter();
@@ -211,12 +215,29 @@ export default function EditAgreementTemplatePage() {
             <Edit3 className="h-4 w-4 text-muted-foreground" />
             <span className="text-sm font-medium">Editor</span>
           </div>
-          <div className="flex-1 overflow-hidden">
-            <TipTapEditor
-              content={templateContent}
-              onChange={handleContentChange}
-              placeholder="Start typing your agreement template..."
-            />
+          <div className="flex-1 overflow-auto flex flex-col min-h-0">
+            <div className="flex-1 overflow-hidden">
+              <TipTapEditor
+                content={templateContent}
+                onChange={handleContentChange}
+                placeholder="Start typing your agreement template..."
+              />
+            </div>
+            {/* Fixed platform disclaimer — read-only, cannot be deleted */}
+            <div className="border-t bg-muted/20 px-4 py-3">
+              <div className="flex items-center gap-1.5 mb-2">
+                <Lock className="h-3.5 w-3.5 text-muted-foreground" />
+                <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                  Platform Disclaimer · Fixed
+                </span>
+              </div>
+              <div className="text-xs text-muted-foreground space-y-1.5 select-none">
+                <p>The parties acknowledge that Drive247 is a software platform operated by Cortek Systems Ltd, which provides technology services solely to facilitate booking, documentation, and administrative processes for vehicle rental companies.</p>
+                <p>Drive247 and Cortek Systems Ltd are not a party to this Rental Agreement and do not own, lease, manage, insure, or control any vehicles listed on the platform.</p>
+                <p>All contractual obligations, responsibilities, and liabilities relating to the rental transaction, including vehicle condition, insurance coverage, payment collection, disputes, and claims, exist solely between the Rental Company and the Renter.</p>
+                <p>Drive247 and Cortek Systems Ltd shall have no liability for any losses, damages, claims, disputes, or obligations arising from or relating to this rental transaction, the performance of either party, or any third-party services integrated into the platform.</p>
+              </div>
+            </div>
           </div>
         </div>
 
@@ -237,6 +258,11 @@ export default function EditAgreementTemplatePage() {
               ) : (
                 <p className="text-muted-foreground italic">Start typing to see preview...</p>
               )}
+              {/* Fixed platform disclaimer always visible in preview */}
+              <div
+                className="prose prose-sm max-w-none dark:prose-invert mt-0"
+                dangerouslySetInnerHTML={{ __html: PLATFORM_DISCLAIMER_HTML }}
+              />
             </div>
           </ScrollArea>
         </div>

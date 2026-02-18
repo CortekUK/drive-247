@@ -63,6 +63,9 @@ interface Vehicle {
   excess_mileage_rate?: number | null;
   lockbox_code?: string | null;
   lockbox_instructions?: string | null;
+  available_daily?: boolean;
+  available_weekly?: boolean;
+  available_monthly?: boolean;
 }
 
 interface EditVehicleDialogProps {
@@ -128,6 +131,9 @@ export const EditVehicleDialogEnhanced = ({ vehicle, open, onOpenChange }: EditV
       security_deposit: vehicle.security_deposit ?? undefined,
       allowed_mileage: vehicle.allowed_mileage ?? undefined,
       excess_mileage_rate: vehicle.excess_mileage_rate ?? undefined,
+      available_daily: vehicle.available_daily ?? true,
+      available_weekly: vehicle.available_weekly ?? true,
+      available_monthly: vehicle.available_monthly ?? true,
     },
   });
 
@@ -180,6 +186,9 @@ export const EditVehicleDialogEnhanced = ({ vehicle, open, onOpenChange }: EditV
         excess_mileage_rate: data.excess_mileage_rate || null,
         lockbox_code: lockboxCode || null,
         lockbox_instructions: lockboxInstructions || null,
+        available_daily: data.available_daily,
+        available_weekly: data.available_weekly,
+        available_monthly: data.available_monthly,
       };
 
       // Add type-specific fields
@@ -747,6 +756,45 @@ export const EditVehicleDialogEnhanced = ({ vehicle, open, onOpenChange }: EditV
                         />
                       </FormControl>
                       <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+
+              <div className="grid grid-cols-3 gap-4">
+                <FormField
+                  control={form.control}
+                  name="available_daily"
+                  render={({ field }) => (
+                    <FormItem className="flex items-center justify-between rounded-lg border p-3">
+                      <FormLabel className="text-sm font-medium">Daily Booking</FormLabel>
+                      <FormControl>
+                        <Switch checked={field.value} onCheckedChange={field.onChange} />
+                      </FormControl>
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="available_weekly"
+                  render={({ field }) => (
+                    <FormItem className="flex items-center justify-between rounded-lg border p-3">
+                      <FormLabel className="text-sm font-medium">Weekly Booking</FormLabel>
+                      <FormControl>
+                        <Switch checked={field.value} onCheckedChange={field.onChange} />
+                      </FormControl>
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="available_monthly"
+                  render={({ field }) => (
+                    <FormItem className="flex items-center justify-between rounded-lg border p-3">
+                      <FormLabel className="text-sm font-medium">Monthly Booking</FormLabel>
+                      <FormControl>
+                        <Switch checked={field.value} onCheckedChange={field.onChange} />
+                      </FormControl>
                     </FormItem>
                   )}
                 />

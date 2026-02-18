@@ -7,6 +7,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useTenant } from '@/contexts/TenantContext';
 import { useToast } from '@/hooks/use-toast';
 import { type CoverageOptions } from '@/hooks/use-bonzah-premium';
+import { useBonzahVehicleEligibility } from '@/hooks/use-bonzah-vehicle-eligibility';
 import { formatCurrency } from '@/lib/format-utils';
 import BonzahInsuranceSelector from '@/components/rentals/bonzah-insurance-selector';
 import { useBonzahBalance } from '@/hooks/use-bonzah-balance';
@@ -50,6 +51,14 @@ export function BuyInsuranceDialog({
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const { balanceNumber: bonzahCdBalance, portalUrl: bonzahPortalUrl } = useBonzahBalance();
+  const {
+    isEligible: isBonzahEligible,
+    isLoading: isBonzahEligibilityLoading,
+  } = useBonzahVehicleEligibility({
+    vehicleMake: rental.vehicles.make,
+    vehicleModel: rental.vehicles.model,
+    enabled: open,
+  });
 
   const [step, setStep] = useState<1 | 2>(1);
   const [coverage, setCoverage] = useState<CoverageOptions>(DEFAULT_COVERAGE);
@@ -284,48 +293,85 @@ export function BuyInsuranceDialog({
 
         {step === 1 && (
           <div className="space-y-4">
-            {/* Premium bar at top */}
-            <div className="flex items-center justify-between p-3 rounded-lg bg-primary/5 border border-primary/20">
-              <div className="flex items-center gap-2">
-                <ShieldCheck className="w-4 h-4 text-primary" />
-                <span className="text-sm font-medium">Insurance Premium</span>
-                {hasCoverage && (
-                  <span className="text-xs text-muted-foreground">
-                    ({[
-                      coverage.cdw && 'CDW',
-                      coverage.rcli && 'RCLI',
-                      coverage.sli && 'SLI',
-                      coverage.pai && 'PAI',
-                    ].filter(Boolean).join(', ')})
-                  </span>
-                )}
+            {isBonzahEligibilityLoading ? (
+              <div className="flex flex-col items-center justify-center py-8 space-y-3">
+                <Loader2 className="w-6 h-6 animate-spin text-[#CC004A]" />
+                <p className="text-sm text-muted-foreground">Checking insurance eligibility...</p>
               </div>
-              <span className="text-lg font-bold text-primary">
-                {formatCurrency(premium, tenant?.currency_code || 'USD')}
-              </span>
-            </div>
+            ) : !isBonzahEligible ? (
+              <div className="rounded-lg border border-[#CC004A]/30 bg-[#CC004A]/5 p-5 space-y-4">
+                <div className="flex items-start gap-3">
+                  <div className="flex-shrink-0 mt-0.5">
+                    <img src="/bonzah-logo.svg" alt="Bonzah" className="h-5 w-auto dark:hidden" />
+                    <img src="/bonzah-logo-dark.svg" alt="Bonzah" className="h-5 w-auto hidden dark:block" />
+                  </div>
+                  <div className="space-y-1">
+                    <h3 className="font-medium text-[#CC004A]">
+                      Vehicle Not Covered
+                    </h3>
+                    <p className="text-sm text-muted-foreground">
+                      <span className="font-medium">{rental.vehicles.make} {rental.vehicles.model}</span> is not eligible for Bonzah insurance. This vehicle type is excluded from their coverage program.
+                    </p>
+                    <a
+                      href="https://bonzah.com/included-and-restricted-vehicle-types"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-xs text-[#CC004A]/70 hover:text-[#CC004A] underline inline-block pt-1"
+                    >
+                      View Bonzah vehicle restrictions
+                    </a>
+                  </div>
+                </div>
+                <div className="flex justify-end pt-1">
+                  <Button variant="outline" onClick={handleClose}>Close</Button>
+                </div>
+              </div>
+            ) : (
+              <>
+                {/* Premium bar at top */}
+                <div className="flex items-center justify-between p-3 rounded-lg bg-primary/5 border border-primary/20">
+                  <div className="flex items-center gap-2">
+                    <ShieldCheck className="w-4 h-4 text-primary" />
+                    <span className="text-sm font-medium">Insurance Premium</span>
+                    {hasCoverage && (
+                      <span className="text-xs text-muted-foreground">
+                        ({[
+                          coverage.cdw && 'CDW',
+                          coverage.rcli && 'RCLI',
+                          coverage.sli && 'SLI',
+                          coverage.pai && 'PAI',
+                        ].filter(Boolean).join(', ')})
+                      </span>
+                    )}
+                  </div>
+                  <span className="text-lg font-bold text-primary">
+                    {formatCurrency(premium, tenant?.currency_code || 'USD')}
+                  </span>
+                </div>
 
-            <BonzahInsuranceSelector
-              tripStartDate={rental.start_date}
-              tripEndDate={rental.end_date}
-              pickupState={customerState}
-              onCoverageChange={handleCoverageChange}
-              onSkipInsurance={handleSkipInsurance}
-              hidePremiumSummary
-            />
+                <BonzahInsuranceSelector
+                  tripStartDate={rental.start_date}
+                  tripEndDate={rental.end_date}
+                  pickupState={customerState}
+                  onCoverageChange={handleCoverageChange}
+                  onSkipInsurance={handleSkipInsurance}
+                  hidePremiumSummary
+                />
 
-            <div className="flex justify-end gap-2 pt-2">
-              <Button variant="outline" onClick={handleClose}>
-                Cancel
-              </Button>
-              <Button
-                disabled={!hasCoverage || premium <= 0}
-                onClick={() => setStep(2)}
-              >
-                Continue
-                <ArrowRight className="w-4 h-4 ml-1.5" />
-              </Button>
-            </div>
+                <div className="flex justify-end gap-2 pt-2">
+                  <Button variant="outline" onClick={handleClose}>
+                    Cancel
+                  </Button>
+                  <Button
+                    disabled={!hasCoverage || premium <= 0}
+                    onClick={() => setStep(2)}
+                  >
+                    Continue
+                    <ArrowRight className="w-4 h-4 ml-1.5" />
+                  </Button>
+                </div>
+              </>
+            )}
           </div>
         )}
 

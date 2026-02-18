@@ -473,20 +473,30 @@ const Pricing = () => {
                         {/* Pricing & Actions */}
                         <div className="flex flex-col items-end gap-2">
                           <div className="flex items-center gap-3 text-right">
-                            <div>
-                              <div className="text-lg font-bold text-gradient-metal">{formatCurrency(vehicle.daily_rent, tenant?.currency_code || 'GBP')}</div>
-                              <div className="text-[10px] text-muted-foreground">/day</div>
-                            </div>
-                            <div className="h-6 w-px bg-accent/20" />
-                            <div>
-                              <div className="text-sm font-semibold text-accent">{formatCurrency(vehicle.weekly_rent, tenant?.currency_code || 'GBP')}</div>
-                              <div className="text-[10px] text-muted-foreground">/week</div>
-                            </div>
-                            <div className="h-6 w-px bg-accent/20" />
-                            <div>
-                              <div className="text-sm font-semibold text-accent/80">{formatCurrency(vehicle.monthly_rent, tenant?.currency_code || 'GBP')}</div>
-                              <div className="text-[10px] text-muted-foreground">/month</div>
-                            </div>
+                            {vehicle.available_daily !== false && (
+                              <div>
+                                <div className="text-lg font-bold text-gradient-metal">{formatCurrency(vehicle.daily_rent, tenant?.currency_code || 'GBP')}</div>
+                                <div className="text-[10px] text-muted-foreground">/day</div>
+                              </div>
+                            )}
+                            {vehicle.available_daily !== false && vehicle.available_weekly !== false && (
+                              <div className="h-6 w-px bg-accent/20" />
+                            )}
+                            {vehicle.available_weekly !== false && (
+                              <div>
+                                <div className="text-sm font-semibold text-accent">{formatCurrency(vehicle.weekly_rent, tenant?.currency_code || 'GBP')}</div>
+                                <div className="text-[10px] text-muted-foreground">/week</div>
+                              </div>
+                            )}
+                            {vehicle.available_weekly !== false && vehicle.available_monthly !== false && (
+                              <div className="h-6 w-px bg-accent/20" />
+                            )}
+                            {vehicle.available_monthly !== false && (
+                              <div>
+                                <div className="text-sm font-semibold text-accent/80">{formatCurrency(vehicle.monthly_rent, tenant?.currency_code || 'GBP')}</div>
+                                <div className="text-[10px] text-muted-foreground">/month</div>
+                              </div>
+                            )}
                           </div>
                         </div>
                       </div>

@@ -26,6 +26,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useTenant } from "@/contexts/TenantContext";
 import BonzahInsuranceSelector from "@/components/rentals/bonzah-insurance-selector";
 import type { CoverageOptions } from "@/hooks/use-bonzah-premium";
+import { useBonzahVehicleEligibility } from "@/hooks/use-bonzah-vehicle-eligibility";
 import { useBonzahBalance } from "@/hooks/use-bonzah-balance";
 import { useCustomerActiveRentals } from "@/hooks/use-customer-active-rentals";
 import { PAYMENT_TYPES } from "@/constants";
@@ -51,6 +52,9 @@ import { toast as sonnerToast } from "sonner";
 import { useRentalExtras, type RentalExtra } from "@/hooks/use-rental-extras";
 import { formatCurrency } from "@/lib/format-utils";
 import { useManagerPermissions } from "@/hooks/use-manager-permissions";
+import { useWeekendPricing } from "@/hooks/use-weekend-pricing";
+import { useTenantHolidays } from "@/hooks/use-tenant-holidays";
+import { useVehiclePricingOverrides } from "@/hooks/use-vehicle-pricing-overrides";
 
 const rentalSchema = z.object({
   customer_id: z.string().min(1, "Customer is required"),
@@ -147,6 +151,10 @@ const CreateRental = () => {
 
   // Get rental settings for tax configuration
   const { settings: rentalSettings } = useRentalSettings();
+
+  // Dynamic pricing hooks
+  const { settings: weekendPricingSettings } = useWeekendPricing();
+  const { holidays: tenantHolidays } = useTenantHolidays();
 
   // Tax calculation helper
   const calculateTaxAmount = (amount: number): number => {
@@ -379,6 +387,9 @@ const CreateRental = () => {
   const watchedInsuranceStatus = form.watch("insurance_status");
   const watchedDriverAgeRange = form.watch("driver_age_range");
 
+  // Dynamic pricing: vehicle-specific overrides
+  const { overrides: vehiclePricingOverrides } = useVehiclePricingOverrides(selectedVehicleId || undefined);
+
   // Fetch source rental for renewal
   const { data: renewalSource } = useQuery({
     queryKey: ["renewal-source", renewFromId, tenant?.id],
@@ -521,7 +532,27 @@ const CreateRental = () => {
     enabled: !!tenant,
   });
 
+  // Bonzah vehicle eligibility check
+  const eligibilityVehicle = vehicles?.find(v => v.id === selectedVehicleId);
+  const {
+    isEligible: isBonzahEligible,
+    isLoading: isBonzahEligibilityLoading,
+  } = useBonzahVehicleEligibility({
+    vehicleMake: eligibilityVehicle?.make || null,
+    vehicleModel: eligibilityVehicle?.model || null,
+    enabled: !skipInsurance && !!selectedVehicleId,
+  });
+
+  // Reset Bonzah state when vehicle is ineligible
+  useEffect(() => {
+    if (!isBonzahEligible && !isBonzahEligibilityLoading) {
+      setBonzahCoverage({ cdw: false, rcli: false, sli: false, pai: false });
+      setBonzahPremium(0);
+    }
+  }, [isBonzahEligible, isBonzahEligibilityLoading]);
+
   // Auto-populate rental amount based on selected vehicle and period type
+  // For Daily rentals with dates, applies dynamic pricing (weekend/holiday surcharges)
   useEffect(() => {
     if (selectedVehicleId && vehicles) {
       const vehicle = vehicles.find(v => v.id === selectedVehicleId);
@@ -530,19 +561,88 @@ const CreateRental = () => {
         let amount: number | undefined;
 
         if (periodType === "Daily" && vehicle.daily_rent) {
-          amount = vehicle.daily_rent;
+          // Apply dynamic pricing for daily rentals when dates are available
+          if (watchedStartDate && watchedEndDate) {
+            const startStr = format(watchedStartDate, 'yyyy-MM-dd');
+            const endStr = format(watchedEndDate, 'yyyy-MM-dd');
+            const days = Math.max(1, differenceInDays(watchedEndDate, watchedStartDate));
+            const baseDaily = vehicle.daily_rent;
+
+            // Only apply dynamic pricing for < 7 days (daily tier)
+            if (days < 7) {
+              const weekendConfig = weekendPricingSettings.weekend_surcharge_percent > 0
+                ? weekendPricingSettings : null;
+              let total = 0;
+
+              for (let i = 0; i < days; i++) {
+                const currentDate = addDays(watchedStartDate, i);
+                const dayOfWeek = currentDate.getDay();
+                let dayRate = baseDaily;
+
+                // 1. Check holiday match (priority over weekend)
+                const holiday = tenantHolidays.find(h => {
+                  const dateStr = format(currentDate, 'yyyy-MM-dd');
+                  if (h.excluded_vehicle_ids?.includes(selectedVehicleId)) return false;
+                  if (h.recurs_annually) {
+                    const hStart = new Date(h.start_date + 'T00:00:00');
+                    const hEnd = new Date(h.end_date + 'T00:00:00');
+                    const m = currentDate.getMonth(), d = currentDate.getDate();
+                    return (m === hStart.getMonth() && d >= hStart.getDate() && (hStart.getMonth() === hEnd.getMonth() ? d <= hEnd.getDate() : true))
+                      || (m === hEnd.getMonth() && d <= hEnd.getDate() && hStart.getMonth() !== hEnd.getMonth())
+                      || (m > hStart.getMonth() && m < hEnd.getMonth());
+                  }
+                  return dateStr >= h.start_date && dateStr <= h.end_date;
+                });
+
+                if (holiday) {
+                  const override = vehiclePricingOverrides.find(
+                    o => o.rule_type === 'holiday' && o.holiday_id === holiday.id
+                  );
+                  if (override?.override_type === 'excluded') {
+                    dayRate = baseDaily;
+                  } else if (override?.override_type === 'fixed_price' && override.fixed_price != null) {
+                    dayRate = override.fixed_price;
+                  } else if (override?.override_type === 'custom_percent' && override.custom_percent != null) {
+                    dayRate = baseDaily * (1 + override.custom_percent / 100);
+                  } else {
+                    dayRate = baseDaily * (1 + holiday.surcharge_percent / 100);
+                  }
+                } else if (weekendConfig && weekendConfig.weekend_days?.includes(dayOfWeek)) {
+                  // 2. Weekend match
+                  const override = vehiclePricingOverrides.find(o => o.rule_type === 'weekend');
+                  if (override?.override_type === 'excluded') {
+                    dayRate = baseDaily;
+                  } else if (override?.override_type === 'fixed_price' && override.fixed_price != null) {
+                    dayRate = override.fixed_price;
+                  } else if (override?.override_type === 'custom_percent' && override.custom_percent != null) {
+                    dayRate = baseDaily * (1 + override.custom_percent / 100);
+                  } else {
+                    dayRate = baseDaily * (1 + weekendConfig.weekend_surcharge_percent / 100);
+                  }
+                }
+
+                total += dayRate;
+              }
+              amount = Math.round(total * 100) / 100;
+            } else {
+              amount = vehicle.daily_rent;
+            }
+          } else {
+            amount = vehicle.daily_rent;
+          }
         } else if (periodType === "Weekly" && vehicle.weekly_rent) {
           amount = vehicle.weekly_rent;
         } else if (periodType === "Monthly" && vehicle.monthly_rent) {
           amount = vehicle.monthly_rent;
         }
 
-        if (amount !== undefined) {
+        if (amount !== undefined && amount !== watchedMonthlyAmount) {
           form.setValue("monthly_amount", amount);
         }
       }
     }
-  }, [selectedVehicleId, watchedRentalPeriodType, vehicles, form]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedVehicleId, watchedRentalPeriodType, watchedStartDate?.getTime(), watchedEndDate?.getTime(), vehicles, weekendPricingSettings.weekend_surcharge_percent, tenantHolidays.length, vehiclePricingOverrides.length]);
 
   // DEV MODE: Listen for dev panel fill events (only in development)
   useEffect(() => {
@@ -1790,40 +1890,67 @@ const CreateRental = () => {
                     {/* Bonzah Insurance Selection */}
                     {watchedStartDate && watchedEndDate && (
                       <div className="space-y-4">
-                        <BonzahInsuranceSelector
-                          tripStartDate={watchedStartDate ? watchedStartDate.toISOString().split('T')[0] : null}
-                          tripEndDate={watchedEndDate ? watchedEndDate.toISOString().split('T')[0] : null}
-                          pickupState={customerDetails?.address_state || "FL"}
-                          onCoverageChange={(coverage, premium) => {
-                            setBonzahCoverage(coverage);
-                            setBonzahPremium(premium);
-                          }}
-                          onSkipInsurance={() => {
-                            setBonzahCoverage({ cdw: false, rcli: false, sli: false, pai: false });
-                            setBonzahPremium(0);
-                          }}
-                          initialCoverage={bonzahCoverage}
-                        />
-                        {bonzahPremium > 0 && (
-                          <div className="rounded-lg border border-blue-200 bg-blue-50 dark:bg-blue-950/30 dark:border-blue-800 p-3 space-y-2">
+                        {isBonzahEligibilityLoading ? (
+                          <div className="flex items-center gap-2 py-3">
+                            <Loader2 className="h-4 w-4 animate-spin text-[#CC004A]" />
+                            <span className="text-sm text-muted-foreground">Checking Bonzah insurance eligibility...</span>
+                          </div>
+                        ) : !isBonzahEligible ? (
+                          <div className="rounded-lg border border-[#CC004A]/30 bg-[#CC004A]/5 p-3 space-y-2">
                             <div className="flex items-start gap-2">
-                              <Info className="h-4 w-4 text-blue-600 dark:text-blue-400 mt-0.5 flex-shrink-0" />
+                              <img src="/bonzah-logo.svg" alt="Bonzah" className="h-4 w-auto mt-0.5 flex-shrink-0 dark:hidden" />
+                              <img src="/bonzah-logo-dark.svg" alt="Bonzah" className="h-4 w-auto mt-0.5 flex-shrink-0 hidden dark:block" />
                               <p className="text-sm text-muted-foreground">
-                                Insurance premium: <span className="font-medium">${bonzahPremium.toFixed(2)}</span>.
-                                {bonzahCdBalance != null && <> CD Balance: <span className="font-medium">${bonzahCdBalance.toFixed(2)}</span>.</>}
-                                {' '}The policy will only activate if your Bonzah <strong>allocated balance</strong> is sufficient. If not, the policy will be quoted and you can retry after allocating more funds.
+                                <span className="font-medium">{eligibilityVehicle?.make} {eligibilityVehicle?.model}</span> is not covered by Bonzah&apos;s insurance program. This vehicle type is excluded from their coverage.
                               </p>
                             </div>
                             <a
-                              href={bonzahPortalUrl}
+                              href="https://bonzah.com/included-and-restricted-vehicle-types"
                               target="_blank"
                               rel="noopener noreferrer"
-                              className="inline-flex items-center gap-1.5 text-xs font-medium text-blue-600 dark:text-blue-400 hover:underline ml-6"
+                              className="text-xs text-[#CC004A]/70 hover:text-[#CC004A] underline ml-6"
                             >
-                              <ExternalLink className="h-3 w-3" />
-                              Check Allocated Balance
+                              View Bonzah vehicle restrictions
                             </a>
                           </div>
+                        ) : (
+                          <>
+                            <BonzahInsuranceSelector
+                              tripStartDate={watchedStartDate ? watchedStartDate.toISOString().split('T')[0] : null}
+                              tripEndDate={watchedEndDate ? watchedEndDate.toISOString().split('T')[0] : null}
+                              pickupState={customerDetails?.address_state || "FL"}
+                              onCoverageChange={(coverage, premium) => {
+                                setBonzahCoverage(coverage);
+                                setBonzahPremium(premium);
+                              }}
+                              onSkipInsurance={() => {
+                                setBonzahCoverage({ cdw: false, rcli: false, sli: false, pai: false });
+                                setBonzahPremium(0);
+                              }}
+                              initialCoverage={bonzahCoverage}
+                            />
+                            {bonzahPremium > 0 && (
+                              <div className="rounded-lg border border-blue-200 bg-blue-50 dark:bg-blue-950/30 dark:border-blue-800 p-3 space-y-2">
+                                <div className="flex items-start gap-2">
+                                  <Info className="h-4 w-4 text-blue-600 dark:text-blue-400 mt-0.5 flex-shrink-0" />
+                                  <p className="text-sm text-muted-foreground">
+                                    Insurance premium: <span className="font-medium">${bonzahPremium.toFixed(2)}</span>.
+                                    {bonzahCdBalance != null && <> CD Balance: <span className="font-medium">${bonzahCdBalance.toFixed(2)}</span>.</>}
+                                    {' '}The policy will only activate if your Bonzah <strong>allocated balance</strong> is sufficient. If not, the policy will be quoted and you can retry after allocating more funds.
+                                  </p>
+                                </div>
+                                <a
+                                  href={bonzahPortalUrl}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="inline-flex items-center gap-1.5 text-xs font-medium text-blue-600 dark:text-blue-400 hover:underline ml-6"
+                                >
+                                  <ExternalLink className="h-3 w-3" />
+                                  Check Allocated Balance
+                                </a>
+                              </div>
+                            )}
+                          </>
                         )}
                       </div>
                     )}

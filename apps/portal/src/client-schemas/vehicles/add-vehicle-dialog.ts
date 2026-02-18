@@ -46,6 +46,9 @@ export const addVehicleDialogSchema = z.object({
   has_tracker: z.boolean().default(false),
   has_remote_immobiliser: z.boolean().default(false),
   security_notes: z.string().optional(),
+  available_daily: z.boolean().default(true),
+  available_weekly: z.boolean().default(true),
+  available_monthly: z.boolean().default(true),
   description: z.string().optional(),
   photo_file: z.instanceof(File).optional(),
 }).superRefine((data, ctx) => {

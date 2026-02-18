@@ -67,6 +67,9 @@ const BookingVehiclesContent = () => {
   const loadVehicles = async () => {
     setLoading(true);
     try {
+      // Determine rental period type based on booking duration
+      const days = calculateRentalDays();
+
       // Fetch only vehicles with status "Available" (not rented, not in maintenance)
       let query = supabase
         .from("vehicles")
@@ -78,6 +81,15 @@ const BookingVehiclesContent = () => {
           )
         `)
         .eq("status", "Available");
+
+      // Filter by availability based on rental duration
+      if (days >= 28) {
+        query = query.eq("available_monthly", true);
+      } else if (days >= 7) {
+        query = query.eq("available_weekly", true);
+      } else {
+        query = query.eq("available_daily", true);
+      }
 
       if (tenant?.id) {
         query = query.eq("tenant_id", tenant.id);
