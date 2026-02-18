@@ -600,6 +600,39 @@ const RentalDetail = () => {
     syncStatusToActive();
   }, [rental?.id, rental?.status, rental?.approval_status, rental?.payment_status, isKeyHandoverCompleted, tenant?.id]);
 
+  // Realtime subscription for DocuSign status updates
+  useEffect(() => {
+    const shouldSubscribe =
+      !!id &&
+      !!rental?.docusign_envelope_id &&
+      rental?.document_status !== 'signed' &&
+      rental?.document_status !== 'completed' &&
+      !rental?.signed_document_id;
+
+    if (!shouldSubscribe) return;
+
+    const channel = supabase
+      .channel(`rental-docusign-${id}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'rentals',
+          filter: `id=eq.${id}`,
+        },
+        () => {
+          queryClient.invalidateQueries({ queryKey: ["rental", id, tenant?.id] });
+          queryClient.invalidateQueries({ queryKey: ["signed-document"] });
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [id, rental?.docusign_envelope_id, rental?.document_status, rental?.signed_document_id, tenant?.id, queryClient]);
+
   // Fetch signed document if available
   const { data: signedDocument } = useQuery({
     queryKey: ["signed-document", rental?.signed_document_id],

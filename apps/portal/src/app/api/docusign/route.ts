@@ -288,7 +288,25 @@ async function createEnvelope(
                     }
                 }]
             },
-            status: 'sent'
+            status: 'sent',
+            eventNotification: {
+                url: `${supabaseUrl}/functions/v1/docusign-webhook`,
+                loggingEnabled: true,
+                requireAcknowledgment: true,
+                envelopeEvents: [
+                    { envelopeEventStatusCode: 'sent' },
+                    { envelopeEventStatusCode: 'delivered' },
+                    { envelopeEventStatusCode: 'completed' },
+                    { envelopeEventStatusCode: 'declined' },
+                    { envelopeEventStatusCode: 'voided' }
+                ],
+                recipientEvents: [
+                    { recipientEventStatusCode: 'Sent' },
+                    { recipientEventStatusCode: 'Delivered' },
+                    { recipientEventStatusCode: 'Completed' },
+                    { recipientEventStatusCode: 'Declined' }
+                ]
+            }
         };
 
         const response = await fetch(
