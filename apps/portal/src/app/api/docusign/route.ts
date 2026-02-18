@@ -109,6 +109,21 @@ function processTemplate(template: string, rental: any, customer: any, vehicle: 
     return result;
 }
 
+// Remove fields with empty values from the processed HTML
+function removeEmptyFields(html: string): string {
+    return html
+        // Remove table rows where the value cell is empty: <tr><td>Label</td><td></td></tr>
+        .replace(/<tr>\s*<td>.*?<\/td>\s*<td>\s*<\/td>\s*<\/tr>/gi, '')
+        // Remove paragraphs with label but no value: <p><strong>Label:</strong> </p>
+        .replace(/<p>\s*<strong>[^<]*:<\/strong>\s*<\/p>/gi, '')
+        // Remove paragraphs with label but only whitespace/nbsp after colon: <p><strong>Label:</strong>&nbsp;</p>
+        .replace(/<p>\s*<strong>[^<]*:<\/strong>(\s|&nbsp;)*<\/p>/gi, '')
+        // Remove paragraphs that are just empty after variable replacement: <p> </p> or <p></p>
+        .replace(/<p>\s*<\/p>/gi, '')
+        // Remove table rows where value cell has only whitespace or currency with zero: <tr><td>Label</td><td> </td></tr>
+        .replace(/<tr>\s*<td>.*?<\/td>\s*<td>\s+<\/td>\s*<\/tr>/gi, '');
+}
+
 // HTML to text
 function htmlToText(html: string): string {
     return html
@@ -132,6 +147,10 @@ function htmlToText(html: string): string {
 // Default agreement
 function generateDefaultAgreement(rental: any, customer: any, vehicle: any, tenant: any, currencyCode: string = 'GBP'): string {
     const companyName = tenant?.company_name || 'Drive 247';
+    // Helper to conditionally include a line only when value exists
+    const line = (label: string, value: string | null | undefined) => value ? `${label}: ${value}` : '';
+    const lines = (...parts: string[]) => parts.filter(Boolean).join('\n');
+
     return `
 RENTAL AGREEMENT
 ${'='.repeat(70)}
@@ -142,27 +161,33 @@ Reference: ${rental?.id?.substring(0, 8)?.toUpperCase() || 'N/A'}
 ${'='.repeat(70)}
 
 LANDLORD: ${companyName}
-${tenant?.contact_email || ''} | ${tenant?.contact_phone || ''}
+${lines(tenant?.contact_email, tenant?.contact_phone)}
 
 ${'='.repeat(70)}
 
 CUSTOMER:
-Name: ${customer?.name || 'Customer'}
-Email: ${customer?.email || 'N/A'}
-Phone: ${customer?.phone || ''}
+${lines(
+    line('Name', customer?.name),
+    line('Email', customer?.email),
+    line('Phone', customer?.phone)
+)}
 
 ${'='.repeat(70)}
 
 VEHICLE:
-Registration: ${vehicle?.reg || 'N/A'}
-Make & Model: ${vehicle?.make || ''} ${vehicle?.model || ''}
+${lines(
+    line('Registration', vehicle?.reg),
+    (vehicle?.make || vehicle?.model) ? `Make & Model: ${[vehicle?.make, vehicle?.model].filter(Boolean).join(' ')}` : ''
+)}
 
 ${'='.repeat(70)}
 
 RENTAL TERMS:
-Start Date: ${formatDate(rental?.start_date)}
-End Date: ${rental?.end_date ? formatDate(rental.end_date) : 'Ongoing'}
-Amount: ${formatCurrency(rental?.monthly_amount, currencyCode)}
+${lines(
+    line('Start Date', formatDate(rental?.start_date)),
+    line('End Date', rental?.end_date ? formatDate(rental.end_date) : 'Ongoing'),
+    line('Amount', formatCurrency(rental?.monthly_amount, currencyCode))
+)}
 
 ${'='.repeat(70)}
 
@@ -288,7 +313,25 @@ async function createEnvelope(
                     }
                 }]
             },
-            status: 'sent'
+            status: 'sent',
+            eventNotification: {
+                url: `${supabaseUrl}/functions/v1/docusign-webhook`,
+                loggingEnabled: true,
+                requireAcknowledgment: true,
+                envelopeEvents: [
+                    { envelopeEventStatusCode: 'sent' },
+                    { envelopeEventStatusCode: 'delivered' },
+                    { envelopeEventStatusCode: 'completed' },
+                    { envelopeEventStatusCode: 'declined' },
+                    { envelopeEventStatusCode: 'voided' }
+                ],
+                recipientEvents: [
+                    { recipientEventStatusCode: 'Sent' },
+                    { recipientEventStatusCode: 'Delivered' },
+                    { recipientEventStatusCode: 'Completed' },
+                    { recipientEventStatusCode: 'Declined' }
+                ]
+            }
         };
 
         const response = await fetch(
@@ -366,7 +409,7 @@ export async function POST(request: NextRequest) {
 
             if (templateData?.template_content) {
                 console.log('Using admin template');
-                documentContent = htmlToText(processTemplate(templateData.template_content, rental, customer, vehicle, tenant, currencyCode));
+                documentContent = htmlToText(removeEmptyFields(processTemplate(templateData.template_content, rental, customer, vehicle, tenant, currencyCode)));
             } else {
                 console.log('Using default template');
                 documentContent = generateDefaultAgreement(rental, customer, vehicle, tenant, currencyCode);

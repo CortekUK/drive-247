@@ -281,6 +281,16 @@ const RentalDetail = () => {
       return data as Rental;
     },
     enabled: !!id && !!tenant?.id,
+    // Poll every 5s while DocuSign is pending (sent but not yet signed)
+    refetchInterval: (query) => {
+      const d = query.state.data as Rental | undefined;
+      const isPending =
+        !!d?.docusign_envelope_id &&
+        d?.document_status !== 'signed' &&
+        d?.document_status !== 'completed' &&
+        !d?.signed_document_id;
+      return isPending ? 5000 : false;
+    },
   });
 
   const { data: rentalTotals } = useRentalTotals(id);
