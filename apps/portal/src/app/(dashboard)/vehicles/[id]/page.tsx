@@ -40,6 +40,7 @@ import { PLBreadcrumb } from "@/components/shared/data-display/pl-breadcrumb";
 import { VehiclePhotoGallery } from "@/components/vehicles/vehicle-photo-gallery";
 import { BlockedDatesManager } from "@/components/blocked-dates/blocked-dates-manager";
 import { VehicleExtrasManager } from "@/components/vehicles/vehicle-extras-manager";
+import { VehicleDynamicPricing } from "@/components/vehicles/vehicle-dynamic-pricing";
 import { Package } from "lucide-react";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { Switch } from "@/components/ui/switch";
@@ -640,6 +641,42 @@ export default function VehicleDetail() {
                   <span className="text-xs text-muted-foreground">Acquisition:</span>
                   <AcquisitionBadge acquisitionType={vehicle.acquisition_type} />
                 </div>
+                <div className="col-span-full flex items-center gap-4 pt-1">
+                  <span className="text-xs text-muted-foreground">Availability:</span>
+                  <div className="flex items-center gap-1.5">
+                    <Switch
+                      id="avail-daily"
+                      checked={vehicle.available_daily !== false}
+                      onCheckedChange={async (checked) => {
+                        await supabase.from("vehicles").update({ available_daily: checked }).eq("id", vehicle.id);
+                        queryClient.invalidateQueries({ queryKey: ["vehicle", id] });
+                      }}
+                    />
+                    <label htmlFor="avail-daily" className="text-xs font-medium">Daily</label>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <Switch
+                      id="avail-weekly"
+                      checked={vehicle.available_weekly !== false}
+                      onCheckedChange={async (checked) => {
+                        await supabase.from("vehicles").update({ available_weekly: checked }).eq("id", vehicle.id);
+                        queryClient.invalidateQueries({ queryKey: ["vehicle", id] });
+                      }}
+                    />
+                    <label htmlFor="avail-weekly" className="text-xs font-medium">Weekly</label>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <Switch
+                      id="avail-monthly"
+                      checked={vehicle.available_monthly !== false}
+                      onCheckedChange={async (checked) => {
+                        await supabase.from("vehicles").update({ available_monthly: checked }).eq("id", vehicle.id);
+                        queryClient.invalidateQueries({ queryKey: ["vehicle", id] });
+                      }}
+                    />
+                    <label htmlFor="avail-monthly" className="text-xs font-medium">Monthly</label>
+                  </div>
+                </div>
               </div>
               {vehicle.description && (
                 <div className="col-span-full">
@@ -912,6 +949,26 @@ export default function VehicleDetail() {
               </CardHeader>
               <CardContent>
                 <VehicleExtrasManager vehicleId={id} />
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Dynamic Pricing Section */}
+          <div className="mt-8">
+            <Card className="shadow-card rounded-lg">
+              <CardHeader className="pb-3">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <CardTitle className="text-lg font-semibold flex items-center gap-2">
+                      <TrendingUp className="h-5 w-5" />
+                      Dynamic Pricing
+                    </CardTitle>
+                    <CardDescription>Weekend and holiday surcharge overrides for this vehicle</CardDescription>
+                  </div>
+                </div>
+              </CardHeader>
+              <CardContent>
+                <VehicleDynamicPricing vehicleId={id} dailyRent={vehicle?.daily_rent || 0} />
               </CardContent>
             </Card>
           </div>

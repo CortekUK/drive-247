@@ -21,6 +21,9 @@ verify_jwt = false
 [functions.subscription-webhook]
 verify_jwt = false
 
+[functions.check-policy-acceptance]
+verify_jwt = false
+
 [functions.stripe-webhook-test]
 verify_jwt = false
 

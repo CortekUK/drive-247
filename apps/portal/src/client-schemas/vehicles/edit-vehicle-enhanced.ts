@@ -44,6 +44,10 @@ export const editVehicleEnhancedSchema = z.object({
   has_tracker: z.boolean().default(false),
   has_remote_immobiliser: z.boolean().default(false),
   security_notes: z.string().optional(),
+  // Availability toggles
+  available_daily: z.boolean().default(true),
+  available_weekly: z.boolean().default(true),
+  available_monthly: z.boolean().default(true),
   // Description
   description: z.string().optional(),
 }).superRefine((data, ctx) => {

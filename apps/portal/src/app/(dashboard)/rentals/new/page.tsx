@@ -49,6 +49,9 @@ import { toast as sonnerToast } from "sonner";
 import { useRentalExtras, type RentalExtra } from "@/hooks/use-rental-extras";
 import { formatCurrency } from "@/lib/format-utils";
 import { useManagerPermissions } from "@/hooks/use-manager-permissions";
+import { useWeekendPricing } from "@/hooks/use-weekend-pricing";
+import { useTenantHolidays } from "@/hooks/use-tenant-holidays";
+import { useVehiclePricingOverrides } from "@/hooks/use-vehicle-pricing-overrides";
 
 const rentalSchema = z.object({
   customer_id: z.string().min(1, "Customer is required"),
@@ -144,6 +147,10 @@ const CreateRental = () => {
 
   // Get rental settings for tax configuration
   const { settings: rentalSettings } = useRentalSettings();
+
+  // Dynamic pricing hooks
+  const { settings: weekendPricingSettings } = useWeekendPricing();
+  const { holidays: tenantHolidays } = useTenantHolidays();
 
   // Tax calculation helper
   const calculateTaxAmount = (amount: number): number => {
@@ -376,6 +383,9 @@ const CreateRental = () => {
   const watchedInsuranceStatus = form.watch("insurance_status");
   const watchedDriverAgeRange = form.watch("driver_age_range");
 
+  // Dynamic pricing: vehicle-specific overrides
+  const { overrides: vehiclePricingOverrides } = useVehiclePricingOverrides(selectedVehicleId || undefined);
+
   // Fetch source rental for renewal
   const { data: renewalSource } = useQuery({
     queryKey: ["renewal-source", renewFromId, tenant?.id],
@@ -519,6 +529,7 @@ const CreateRental = () => {
   });
 
   // Auto-populate rental amount based on selected vehicle and period type
+  // For Daily rentals with dates, applies dynamic pricing (weekend/holiday surcharges)
   useEffect(() => {
     if (selectedVehicleId && vehicles) {
       const vehicle = vehicles.find(v => v.id === selectedVehicleId);
@@ -527,19 +538,88 @@ const CreateRental = () => {
         let amount: number | undefined;
 
         if (periodType === "Daily" && vehicle.daily_rent) {
-          amount = vehicle.daily_rent;
+          // Apply dynamic pricing for daily rentals when dates are available
+          if (watchedStartDate && watchedEndDate) {
+            const startStr = format(watchedStartDate, 'yyyy-MM-dd');
+            const endStr = format(watchedEndDate, 'yyyy-MM-dd');
+            const days = Math.max(1, differenceInDays(watchedEndDate, watchedStartDate));
+            const baseDaily = vehicle.daily_rent;
+
+            // Only apply dynamic pricing for < 7 days (daily tier)
+            if (days < 7) {
+              const weekendConfig = weekendPricingSettings.weekend_surcharge_percent > 0
+                ? weekendPricingSettings : null;
+              let total = 0;
+
+              for (let i = 0; i < days; i++) {
+                const currentDate = addDays(watchedStartDate, i);
+                const dayOfWeek = currentDate.getDay();
+                let dayRate = baseDaily;
+
+                // 1. Check holiday match (priority over weekend)
+                const holiday = tenantHolidays.find(h => {
+                  const dateStr = format(currentDate, 'yyyy-MM-dd');
+                  if (h.excluded_vehicle_ids?.includes(selectedVehicleId)) return false;
+                  if (h.recurs_annually) {
+                    const hStart = new Date(h.start_date + 'T00:00:00');
+                    const hEnd = new Date(h.end_date + 'T00:00:00');
+                    const m = currentDate.getMonth(), d = currentDate.getDate();
+                    return (m === hStart.getMonth() && d >= hStart.getDate() && (hStart.getMonth() === hEnd.getMonth() ? d <= hEnd.getDate() : true))
+                      || (m === hEnd.getMonth() && d <= hEnd.getDate() && hStart.getMonth() !== hEnd.getMonth())
+                      || (m > hStart.getMonth() && m < hEnd.getMonth());
+                  }
+                  return dateStr >= h.start_date && dateStr <= h.end_date;
+                });
+
+                if (holiday) {
+                  const override = vehiclePricingOverrides.find(
+                    o => o.rule_type === 'holiday' && o.holiday_id === holiday.id
+                  );
+                  if (override?.override_type === 'excluded') {
+                    dayRate = baseDaily;
+                  } else if (override?.override_type === 'fixed_price' && override.fixed_price != null) {
+                    dayRate = override.fixed_price;
+                  } else if (override?.override_type === 'custom_percent' && override.custom_percent != null) {
+                    dayRate = baseDaily * (1 + override.custom_percent / 100);
+                  } else {
+                    dayRate = baseDaily * (1 + holiday.surcharge_percent / 100);
+                  }
+                } else if (weekendConfig && weekendConfig.weekend_days?.includes(dayOfWeek)) {
+                  // 2. Weekend match
+                  const override = vehiclePricingOverrides.find(o => o.rule_type === 'weekend');
+                  if (override?.override_type === 'excluded') {
+                    dayRate = baseDaily;
+                  } else if (override?.override_type === 'fixed_price' && override.fixed_price != null) {
+                    dayRate = override.fixed_price;
+                  } else if (override?.override_type === 'custom_percent' && override.custom_percent != null) {
+                    dayRate = baseDaily * (1 + override.custom_percent / 100);
+                  } else {
+                    dayRate = baseDaily * (1 + weekendConfig.weekend_surcharge_percent / 100);
+                  }
+                }
+
+                total += dayRate;
+              }
+              amount = Math.round(total * 100) / 100;
+            } else {
+              amount = vehicle.daily_rent;
+            }
+          } else {
+            amount = vehicle.daily_rent;
+          }
         } else if (periodType === "Weekly" && vehicle.weekly_rent) {
           amount = vehicle.weekly_rent;
         } else if (periodType === "Monthly" && vehicle.monthly_rent) {
           amount = vehicle.monthly_rent;
         }
 
-        if (amount !== undefined) {
+        if (amount !== undefined && amount !== watchedMonthlyAmount) {
           form.setValue("monthly_amount", amount);
         }
       }
     }
-  }, [selectedVehicleId, watchedRentalPeriodType, vehicles, form]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedVehicleId, watchedRentalPeriodType, watchedStartDate?.getTime(), watchedEndDate?.getTime(), vehicles, weekendPricingSettings.weekend_surcharge_percent, tenantHolidays.length, vehiclePricingOverrides.length]);
 
   // DEV MODE: Listen for dev panel fill events (only in development)
   useEffect(() => {

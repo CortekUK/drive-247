@@ -32,12 +32,17 @@ import { useRateLimiting } from "@/hooks/use-rate-limiting";
 import { supabase } from "@/integrations/supabase/client";
 import { ThemeToggle } from "@/components/shared/layout/theme-toggle";
 import { useTenantBranding } from "@/hooks/use-tenant-branding";
+import { useTenant } from "@/contexts/TenantContext";
 import { useTheme } from "next-themes";
+
+const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || "https://hviqoaokxvlancmftwuo.supabase.co";
+const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imh2aXFvYW9reHZsYW5jbWZ0d3VvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjIzNjM2NTcsImV4cCI6MjA3NzkzOTY1N30.jwpdtizfTxl3MeCNDu-mrLI7GNK4PYWYg5gsIZy0T_Q";
 
 const loginSchema = z.object({
   email: z.string().min(1, "Email is required").email("Please enter a valid email address"),
   password: z.string().min(1, "Password is required"),
   rememberMe: z.boolean().default(false),
+  acceptPolicies: z.boolean().default(false),
 });
 
 type LoginFormValues = z.infer<typeof loginSchema>;
@@ -47,6 +52,7 @@ function LoginPageContent() {
   const searchParams = useSearchParams();
   const { user, signIn, loading, appUser } = useAuth();
   const { branding } = useTenantBranding();
+  const { tenant } = useTenant();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState("");
   const [showForgotPassword, setShowForgotPassword] = useState(false);
@@ -57,6 +63,7 @@ function LoginPageContent() {
       email: "",
       password: "",
       rememberMe: false,
+      acceptPolicies: false,
     },
   });
 
@@ -67,6 +74,9 @@ function LoginPageContent() {
     getRateLimitMessage,
     isLocked,
   } = useRateLimiting();
+
+  // Show policy checkbox if tenant has policy versions configured AND hasn't accepted yet
+  const requiresPolicyAcceptance = !!(tenant?.privacy_policy_version || tenant?.terms_version) && !tenant?.policies_accepted_at;
 
   // Get logo from tenant branding or use default
   const { resolvedTheme } = useTheme();
@@ -191,6 +201,24 @@ function LoginPageContent() {
       } else {
         // Record successful attempt
         await recordLoginAttempt(data.email, true);
+
+        // Record policy acceptance via edge function (captures IP server-side)
+        if (requiresPolicyAcceptance && data.acceptPolicies && tenant?.id) {
+          try {
+            await fetch(`${SUPABASE_URL}/functions/v1/check-policy-acceptance`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json", apikey: SUPABASE_ANON_KEY },
+              body: JSON.stringify({
+                action: "record",
+                email: data.email.trim(),
+                tenant_id: tenant.id,
+                user_agent: navigator.userAgent,
+              }),
+            });
+          } catch (e) {
+            console.error("Policy acceptance recording failed:", e);
+          }
+        }
 
         // Log successful login
         try {
@@ -402,10 +430,40 @@ function LoginPageContent() {
                   </Button>
                 </div>
 
+                {requiresPolicyAcceptance && (
+                  <FormField
+                    control={form.control}
+                    name="acceptPolicies"
+                    render={({ field }) => (
+                      <FormItem className="flex flex-row items-start space-x-2 space-y-0 rounded-md border p-4">
+                        <FormControl>
+                          <Checkbox
+                            checked={field.value}
+                            onCheckedChange={field.onChange}
+                            disabled={isSubmitting || isLocked}
+                          />
+                        </FormControl>
+                        <div className="space-y-1 leading-none">
+                          <FormLabel className="text-sm font-normal cursor-pointer">
+                            I accept the{" "}
+                            <a href="/privacy-policy" target="_blank" className="text-primary underline hover:text-primary/80">
+                              Privacy Policy
+                            </a>{" "}
+                            and{" "}
+                            <a href="/terms" target="_blank" className="text-primary underline hover:text-primary/80">
+                              Terms &amp; Conditions
+                            </a>
+                          </FormLabel>
+                        </div>
+                      </FormItem>
+                    )}
+                  />
+                )}
+
                 <Button
                   type="submit"
                   className="w-full"
-                  disabled={isSubmitting || !form.formState.isValid}
+                  disabled={isSubmitting || !form.formState.isValid || (requiresPolicyAcceptance && !form.watch("acceptPolicies"))}
                 >
                   {isSubmitting ? (
                     <>

@@ -20,7 +20,7 @@ import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { format } from 'date-fns';
-import { Calendar as CalendarIcon, Settings as SettingsIcon, Building2, Bell, Zap, Upload, Save, Loader2, Database, AlertTriangle, Trash2, CreditCard, Palette, Link2, CheckCircle2, AlertCircle, ExternalLink, MapPin, FileText, Car, Mail, ShieldX, FilePenLine, Receipt, Banknote, Shield, Copy, Check, Clock, Crown, Package, Lock, RefreshCw, Eye } from 'lucide-react';
+import { Calendar as CalendarIcon, Settings as SettingsIcon, Building2, Bell, Zap, Upload, Save, Loader2, Database, AlertTriangle, Trash2, CreditCard, Palette, Link2, CheckCircle2, AlertCircle, ExternalLink, MapPin, FileText, Car, Mail, ShieldX, FilePenLine, Receipt, Banknote, Shield, Copy, Check, Clock, Crown, Package, Lock, RefreshCw, Eye, TrendingUp } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
 import { useOrgSettings } from '@/hooks/use-org-settings';
 import { useTenantBranding } from '@/hooks/use-tenant-branding';
@@ -39,6 +39,7 @@ import { ExtrasSettings } from '@/components/settings/extras-settings';
 import { BonzahSettings } from '@/components/settings/bonzah-settings';
 import { SubscriptionSettings } from '@/components/settings/subscription-settings';
 import { LockboxTemplatesSection } from '@/components/settings/lockbox-templates-section';
+import { PricingRulesSettings } from '@/components/settings/pricing-rules-settings';
 import { formatCurrency } from '@/lib/format-utils';
 import { useManagerPermissions } from '@/hooks/use-manager-permissions';
 
@@ -49,7 +50,7 @@ const Settings = () => {
   const { isManager, canViewSettings, canEditSettings } = useManagerPermissions();
 
   // All settings tab values
-  const allSettingsTabs = ['general', 'locations', 'branding', 'rental', 'extras', 'payments', 'reminders', 'templates', 'integrations', 'subscription'];
+  const allSettingsTabs = ['general', 'locations', 'branding', 'rental', 'pricing', 'extras', 'payments', 'reminders', 'templates', 'integrations', 'subscription'];
   const visibleTabs = allSettingsTabs.filter(t => canViewSettings(t));
   const [activeTab, setActiveTab] = useState(visibleTabs[0] || 'general');
   const [isBackfilling, setIsBackfilling] = useState(false);
@@ -57,6 +58,8 @@ const Settings = () => {
   const [generalForm, setGeneralForm] = useState({
     currency_code: 'USD',
     distance_unit: 'miles' as 'km' | 'miles',
+    privacy_policy_version: '1.0',
+    terms_version: '1.0',
   });
   const [isSavingGeneral, setIsSavingGeneral] = useState(false);
 
@@ -223,6 +226,8 @@ const Settings = () => {
     setGeneralForm({
       currency_code: settings?.currency_code || tenant?.currency_code || 'USD',
       distance_unit: (settings?.distance_unit as 'km' | 'miles') || (tenant?.distance_unit as 'km' | 'miles') || 'miles',
+      privacy_policy_version: tenant?.privacy_policy_version || '1.0',
+      terms_version: tenant?.terms_version || '1.0',
     });
   }, [settings, tenant]);
 
@@ -614,11 +619,22 @@ const Settings = () => {
         distance_unit: generalForm.distance_unit,
       });
 
-      // Also update distance_unit on the tenants table (primary source for tenant context)
+      // Also update distance_unit and policy versions on the tenants table (primary source for tenant context)
       if (tenant?.id) {
+        // Reset tenant-level acceptance if policy versions changed
+        const policyVersionChanged =
+          generalForm.privacy_policy_version !== (tenant?.privacy_policy_version || '1.0') ||
+          generalForm.terms_version !== (tenant?.terms_version || '1.0');
+
         const { error: tenantError } = await supabase
           .from('tenants')
-          .update({ distance_unit: generalForm.distance_unit, currency_code: generalForm.currency_code })
+          .update({
+            distance_unit: generalForm.distance_unit,
+            currency_code: generalForm.currency_code,
+            privacy_policy_version: generalForm.privacy_policy_version,
+            terms_version: generalForm.terms_version,
+            ...(policyVersionChanged ? { policies_accepted_at: null } : {}),
+          })
           .eq('id', tenant.id);
 
         if (tenantError) {
@@ -841,6 +857,7 @@ const Settings = () => {
                 { value: 'locations', icon: MapPin, label: 'Locations' },
                 { value: 'branding', icon: Palette, label: 'Branding' },
                 { value: 'rental', icon: Car, label: 'Bookings' },
+                { value: 'pricing', icon: TrendingUp, label: 'Pricing' },
                 { value: 'extras', icon: Package, label: 'Extras' },
                 { value: 'payments', icon: CreditCard, label: 'Payments' },
                 { value: 'reminders', icon: Bell, label: 'Notifications' },
@@ -885,6 +902,7 @@ const Settings = () => {
               <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground/50 px-2.5 pt-0.5 pb-0.5">Operations</p>
               {([
                 { value: 'rental', icon: Car, label: 'Bookings' },
+                { value: 'pricing', icon: TrendingUp, label: 'Dynamic Pricing' },
                 { value: 'extras', icon: Package, label: 'Extras' },
                 { value: 'payments', icon: CreditCard, label: 'Payments & Stripe' },
                 { value: 'reminders', icon: Bell, label: 'Notifications' },
@@ -990,6 +1008,47 @@ const Settings = () => {
                   Unit of measurement for vehicle mileage and distance tracking
                 </p>
               </div>
+            </CardContent>
+          </Card>
+
+          {/* Policy & Terms Versioning */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Shield className="h-5 w-5 text-primary" />
+                Policy &amp; Terms Versioning
+              </CardTitle>
+              <CardDescription>
+                When you update a version, all users must re-accept on next login.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="privacy_policy_version">Privacy Policy Version</Label>
+                  <Input
+                    id="privacy_policy_version"
+                    value={generalForm.privacy_policy_version}
+                    onChange={(e) => setGeneralForm(prev => ({ ...prev, privacy_policy_version: e.target.value }))}
+                    placeholder="e.g. 1.0"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="terms_version">Terms &amp; Conditions Version</Label>
+                  <Input
+                    id="terms_version"
+                    value={generalForm.terms_version}
+                    onChange={(e) => setGeneralForm(prev => ({ ...prev, terms_version: e.target.value }))}
+                    placeholder="e.g. 1.0"
+                  />
+                </div>
+              </div>
+              <Alert>
+                <AlertTriangle className="h-4 w-4" />
+                <AlertDescription>
+                  Changing a version number will require all portal users to re-accept on their next login.
+                </AlertDescription>
+              </Alert>
             </CardContent>
           </Card>
 
@@ -3212,6 +3271,11 @@ const Settings = () => {
             </CardContent>
           </Card>
 
+        </TabsContent>
+
+        {/* Dynamic Pricing Tab */}
+        <TabsContent value="pricing" className="space-y-6">
+          <PricingRulesSettings />
         </TabsContent>
 
         {/* Extras Tab */}

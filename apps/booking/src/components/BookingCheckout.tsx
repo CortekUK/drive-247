@@ -18,6 +18,8 @@ import SEO from "@/components/SEO";
 import { z } from "zod";
 import BookingConfirmation from "@/components/BookingConfirmation";
 import { formatCurrency } from "@/lib/format-utils";
+import { useDynamicPricing } from "@/hooks/use-dynamic-pricing";
+import { calculateRentalPriceBreakdown } from "@/lib/calculate-rental-price";
 
 const checkoutSchema = z.object({
   customerName: z.string().min(2, "Name must be at least 2 characters"),
@@ -66,6 +68,9 @@ const BookingCheckout = () => {
   const promoCode = searchParams?.get("promo") || "";
   const vehicleId = searchParams?.get("vehicle") || "";
 
+  // Dynamic pricing
+  const { holidays, vehicleOverrides } = useDynamicPricing(vehicleId || undefined);
+
   useEffect(() => {
     if (!vehicleId || !pickupDate || !returnDate) {
       toast.error("Missing booking details. Redirecting...");
@@ -106,10 +111,23 @@ const BookingCheckout = () => {
 
   const calculateVehiclePrice = () => {
     if (!vehicleDetails) return 0;
-    const days = calculateRentalDays();
-    if (days >= 28) return vehicleDetails.monthly_rent;
-    if (days >= 7) return Math.floor((days / 7) * vehicleDetails.weekly_rent);
-    return days * vehicleDetails.daily_rent;
+    const weekendConfig = (tenant?.weekend_surcharge_percent && tenant.weekend_surcharge_percent > 0)
+      ? { weekend_surcharge_percent: tenant.weekend_surcharge_percent, weekend_days: tenant.weekend_days || [6, 0] }
+      : null;
+    const result = calculateRentalPriceBreakdown(
+      pickupDate,
+      returnDate,
+      {
+        daily_rent: vehicleDetails.daily_rent || 0,
+        weekly_rent: vehicleDetails.weekly_rent || 0,
+        monthly_rent: vehicleDetails.monthly_rent || 0,
+      },
+      weekendConfig,
+      holidays,
+      vehicleOverrides,
+      vehicleId
+    );
+    return result.rentalPrice;
   };
 
   const calculateExtrasTotal = () => {

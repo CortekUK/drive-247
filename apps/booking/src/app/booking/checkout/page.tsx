@@ -19,6 +19,8 @@ import { useTenant } from "@/contexts/TenantContext";
 import InstallmentSelector, { InstallmentOption, InstallmentConfig } from "@/components/InstallmentSelector";
 import { useBookingStore } from "@/stores/booking-store";
 import { formatCurrency as formatCurrencyUtil } from "@/lib/format-utils";
+import { useDynamicPricing } from "@/hooks/use-dynamic-pricing";
+import { calculateRentalPriceBreakdown } from "@/lib/calculate-rental-price";
 const checkoutSchema = z.object({
   customerName: z.string().min(2, "Name must be at least 2 characters"),
   customerEmail: z.string().email("Invalid email address"),
@@ -72,6 +74,10 @@ const BookingCheckoutContent = () => {
     collectionLocationId: null,
     collectionLocation: null,
   });
+
+  // Dynamic pricing
+  const vehicleIdParam = searchParams?.get("vehicle") || "";
+  const { holidays, vehicleOverrides } = useDynamicPricing(vehicleIdParam || undefined);
 
   // Installment state - read from tenant context
   const [selectedInstallmentPlan, setSelectedInstallmentPlan] = useState<InstallmentOption | null>(null);
@@ -164,10 +170,23 @@ const BookingCheckoutContent = () => {
 
   const calculateVehiclePrice = () => {
     if (!vehicleDetails) return 0;
-    const days = calculateRentalDays();
-    if (days >= 28) return vehicleDetails.monthly_rent || 0;
-    if (days >= 7) return Math.floor((days / 7) * (vehicleDetails.weekly_rent || 0));
-    return days * (vehicleDetails.daily_rent || 50); // Fallback to $50/day
+    const weekendConfig = (tenant?.weekend_surcharge_percent && tenant.weekend_surcharge_percent > 0)
+      ? { weekend_surcharge_percent: tenant.weekend_surcharge_percent, weekend_days: tenant.weekend_days || [6, 0] }
+      : null;
+    const result = calculateRentalPriceBreakdown(
+      pickupDate,
+      returnDate,
+      {
+        daily_rent: vehicleDetails.daily_rent || 0,
+        weekly_rent: vehicleDetails.weekly_rent || 0,
+        monthly_rent: vehicleDetails.monthly_rent || 0,
+      },
+      weekendConfig,
+      holidays,
+      vehicleOverrides,
+      vehicleIdParam
+    );
+    return result.rentalPrice;
   };
 
   const calculateTotal = () => {

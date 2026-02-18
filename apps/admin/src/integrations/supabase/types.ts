@@ -3329,6 +3329,7 @@ export type Database = {
           stripe_checkout_session_id: string | null
           stripe_payment_intent_id: string | null
           stripe_refund_id: string | null
+          target_categories: Json | null
           tenant_id: string | null
           updated_at: string
           vehicle_id: string | null
@@ -3363,6 +3364,7 @@ export type Database = {
           stripe_checkout_session_id?: string | null
           stripe_payment_intent_id?: string | null
           stripe_refund_id?: string | null
+          target_categories?: Json | null
           tenant_id?: string | null
           updated_at?: string
           vehicle_id?: string | null
@@ -3397,6 +3399,7 @@ export type Database = {
           stripe_checkout_session_id?: string | null
           stripe_payment_intent_id?: string | null
           stripe_refund_id?: string | null
+          target_categories?: Json | null
           tenant_id?: string | null
           updated_at?: string
           vehicle_id?: string | null
@@ -3754,6 +3757,57 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "view_pl_by_vehicle"
             referencedColumns: ["vehicle_id"]
+          },
+        ]
+      }
+      policy_acceptances: {
+        Row: {
+          accepted_at: string
+          app_user_id: string
+          created_at: string
+          id: string
+          ip_address: unknown
+          policy_type: string
+          tenant_id: string
+          user_agent: string | null
+          version: string
+        }
+        Insert: {
+          accepted_at?: string
+          app_user_id: string
+          created_at?: string
+          id?: string
+          ip_address?: unknown
+          policy_type: string
+          tenant_id: string
+          user_agent?: string | null
+          version: string
+        }
+        Update: {
+          accepted_at?: string
+          app_user_id?: string
+          created_at?: string
+          id?: string
+          ip_address?: unknown
+          policy_type?: string
+          tenant_id?: string
+          user_agent?: string | null
+          version?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "policy_acceptances_app_user_id_fkey"
+            columns: ["app_user_id"]
+            isOneToOne: false
+            referencedRelation: "app_users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "policy_acceptances_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
           },
         ]
       }
@@ -5525,6 +5579,53 @@ export type Database = {
           },
         ]
       }
+      tenant_holidays: {
+        Row: {
+          created_at: string | null
+          end_date: string
+          excluded_vehicle_ids: string[] | null
+          id: string
+          name: string
+          recurs_annually: boolean | null
+          start_date: string
+          surcharge_percent: number
+          tenant_id: string
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          end_date: string
+          excluded_vehicle_ids?: string[] | null
+          id?: string
+          name: string
+          recurs_annually?: boolean | null
+          start_date: string
+          surcharge_percent?: number
+          tenant_id: string
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          end_date?: string
+          excluded_vehicle_ids?: string[] | null
+          id?: string
+          name?: string
+          recurs_annually?: boolean | null
+          start_date?: string
+          surcharge_percent?: number
+          tenant_id?: string
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tenant_holidays_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       tenant_subscription_invoices: {
         Row: {
           amount_due: number
@@ -5770,6 +5871,7 @@ export type Database = {
           pickup_location_mode: string | null
           pickup_multiple_locations_enabled: boolean | null
           primary_color: string | null
+          privacy_policy_version: string | null
           require_identity_verification: boolean | null
           require_insurance_upload: boolean | null
           return_area_enabled: boolean | null
@@ -5801,6 +5903,7 @@ export type Database = {
           tax_enabled: boolean | null
           tax_percentage: number | null
           tenant_type: string | null
+          terms_version: string | null
           thursday_close: string | null
           thursday_enabled: boolean | null
           thursday_open: string | null
@@ -5814,6 +5917,8 @@ export type Database = {
           wednesday_close: string | null
           wednesday_enabled: boolean | null
           wednesday_open: string | null
+          weekend_days: Json | null
+          weekend_surcharge_percent: number | null
           working_hours_always_open: boolean | null
           working_hours_close: string | null
           working_hours_enabled: boolean | null
@@ -5898,6 +6003,7 @@ export type Database = {
           pickup_location_mode?: string | null
           pickup_multiple_locations_enabled?: boolean | null
           primary_color?: string | null
+          privacy_policy_version?: string | null
           require_identity_verification?: boolean | null
           require_insurance_upload?: boolean | null
           return_area_enabled?: boolean | null
@@ -5929,6 +6035,7 @@ export type Database = {
           tax_enabled?: boolean | null
           tax_percentage?: number | null
           tenant_type?: string | null
+          terms_version?: string | null
           thursday_close?: string | null
           thursday_enabled?: boolean | null
           thursday_open?: string | null
@@ -5942,6 +6049,8 @@ export type Database = {
           wednesday_close?: string | null
           wednesday_enabled?: boolean | null
           wednesday_open?: string | null
+          weekend_days?: Json | null
+          weekend_surcharge_percent?: number | null
           working_hours_always_open?: boolean | null
           working_hours_close?: string | null
           working_hours_enabled?: boolean | null
@@ -6026,6 +6135,7 @@ export type Database = {
           pickup_location_mode?: string | null
           pickup_multiple_locations_enabled?: boolean | null
           primary_color?: string | null
+          privacy_policy_version?: string | null
           require_identity_verification?: boolean | null
           require_insurance_upload?: boolean | null
           return_area_enabled?: boolean | null
@@ -6057,6 +6167,7 @@ export type Database = {
           tax_enabled?: boolean | null
           tax_percentage?: number | null
           tenant_type?: string | null
+          terms_version?: string | null
           thursday_close?: string | null
           thursday_enabled?: boolean | null
           thursday_open?: string | null
@@ -6070,6 +6181,8 @@ export type Database = {
           wednesday_close?: string | null
           wednesday_enabled?: boolean | null
           wednesday_open?: string | null
+          weekend_days?: Json | null
+          weekend_surcharge_percent?: number | null
           working_hours_always_open?: boolean | null
           working_hours_close?: string | null
           working_hours_enabled?: boolean | null
@@ -6412,11 +6525,86 @@ export type Database = {
           },
         ]
       }
+      vehicle_pricing_overrides: {
+        Row: {
+          created_at: string | null
+          custom_percent: number | null
+          fixed_price: number | null
+          holiday_id: string | null
+          id: string
+          override_type: string
+          rule_type: string
+          updated_at: string | null
+          vehicle_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          custom_percent?: number | null
+          fixed_price?: number | null
+          holiday_id?: string | null
+          id?: string
+          override_type: string
+          rule_type: string
+          updated_at?: string | null
+          vehicle_id: string
+        }
+        Update: {
+          created_at?: string | null
+          custom_percent?: number | null
+          fixed_price?: number | null
+          holiday_id?: string | null
+          id?: string
+          override_type?: string
+          rule_type?: string
+          updated_at?: string | null
+          vehicle_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "vehicle_pricing_overrides_holiday_id_fkey"
+            columns: ["holiday_id"]
+            isOneToOne: false
+            referencedRelation: "tenant_holidays"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "vehicle_pricing_overrides_vehicle_id_fkey"
+            columns: ["vehicle_id"]
+            isOneToOne: false
+            referencedRelation: "vehicle_pnl_rollup"
+            referencedColumns: ["vehicle_id"]
+          },
+          {
+            foreignKeyName: "vehicle_pricing_overrides_vehicle_id_fkey"
+            columns: ["vehicle_id"]
+            isOneToOne: false
+            referencedRelation: "vehicles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "vehicle_pricing_overrides_vehicle_id_fkey"
+            columns: ["vehicle_id"]
+            isOneToOne: false
+            referencedRelation: "view_fines_export"
+            referencedColumns: ["vehicle_id"]
+          },
+          {
+            foreignKeyName: "vehicle_pricing_overrides_vehicle_id_fkey"
+            columns: ["vehicle_id"]
+            isOneToOne: false
+            referencedRelation: "view_pl_by_vehicle"
+            referencedColumns: ["vehicle_id"]
+          },
+        ]
+      }
       vehicles: {
         Row: {
           acquisition_date: string | null
           acquisition_type: string | null
           allowed_mileage: number | null
+          available_daily: boolean
+          available_monthly: boolean
+          available_weekly: boolean
           balloon: number | null
           color: string | null
           colour: string | null
@@ -6470,6 +6658,9 @@ export type Database = {
           acquisition_date?: string | null
           acquisition_type?: string | null
           allowed_mileage?: number | null
+          available_daily?: boolean
+          available_monthly?: boolean
+          available_weekly?: boolean
           balloon?: number | null
           color?: string | null
           colour?: string | null
@@ -6523,6 +6714,9 @@ export type Database = {
           acquisition_date?: string | null
           acquisition_type?: string | null
           allowed_mileage?: number | null
+          available_daily?: boolean
+          available_monthly?: boolean
+          available_weekly?: boolean
           balloon?: number | null
           color?: string | null
           colour?: string | null
@@ -7809,3 +8003,4 @@ export const Constants = {
     },
   },
 } as const
+
