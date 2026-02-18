@@ -218,6 +218,7 @@ const RentalDetail = () => {
   const [showRejectionDialog, setShowRejectionDialog] = useState(false);
   const [showApproveDialog, setShowApproveDialog] = useState(false);
   const [showDocuSignWarning, setShowDocuSignWarning] = useState(false);
+  const [showInsuranceWarning, setShowInsuranceWarning] = useState(false);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [showCloseDialog, setShowCloseDialog] = useState(false);
   const [isApproving, setIsApproving] = useState(false);
@@ -1094,13 +1095,22 @@ const RentalDetail = () => {
   const hasDocuSign = !!rental?.docusign_envelope_id;
 
   // Handle Approve button click - check DocuSign first
+  const proceedToApproveAfterChecks = () => {
+    const insuranceStatus = bonzahPolicy?.status;
+    if (!bonzahPolicy || insuranceStatus === 'quoted' || insuranceStatus === 'failed' || insuranceStatus === 'insufficient_balance') {
+      setShowInsuranceWarning(true);
+    } else {
+      setShowApproveDialog(true);
+    }
+  };
+
   const handleApproveClick = () => {
     if (hasDocuSign && !isDocuSignSigned) {
       // DocuSign sent but not signed - show warning
       setShowDocuSignWarning(true);
     } else {
-      // No DocuSign or already signed - proceed to approval
-      setShowApproveDialog(true);
+      // No DocuSign or already signed - check insurance next
+      proceedToApproveAfterChecks();
     }
   };
 
@@ -1252,6 +1262,28 @@ const RentalDetail = () => {
                   {isKeyReturnCompleted ? 'Keys Returned' : 'Return Pending'}
                 </Badge>
               )}
+              <Badge
+                variant="outline"
+                className={
+                  !bonzahPolicy
+                    ? 'bg-gray-500/10 text-gray-400 border-gray-500'
+                    : bonzahPolicy.status === 'active'
+                    ? 'bg-green-500/10 text-green-600 border-green-500'
+                    : bonzahPolicy.status === 'quoted' || bonzahPolicy.status === 'insufficient_balance'
+                    ? 'bg-amber-600/10 text-amber-600 border-amber-600'
+                    : bonzahPolicy.status === 'failed'
+                    ? 'bg-red-500/10 text-red-500 border-red-500'
+                    : 'bg-muted text-muted-foreground border-border'
+                }
+              >
+                <ShieldCheck className="h-3 w-3 mr-1" />
+                {!bonzahPolicy ? 'No Insurance'
+                  : bonzahPolicy.status === 'active' ? 'Insurance Active'
+                  : bonzahPolicy.status === 'quoted' ? 'Insurance Quoted'
+                  : bonzahPolicy.status === 'failed' ? 'Insurance Failed'
+                  : bonzahPolicy.status === 'insufficient_balance' ? 'Insurance Insufficient Balance'
+                  : `Insurance ${bonzahPolicy.status}`}
+              </Badge>
             </div>
           </div>
         </div>
@@ -1693,7 +1725,7 @@ const RentalDetail = () => {
                                 setShowTargetedPayment(true);
                               }}
                             >
-                              Pay
+                              Add Payment
                             </button>
                           ) : (
                             <span className="text-muted-foreground/30">-</span>
@@ -1707,7 +1739,7 @@ const RentalDetail = () => {
 
               {/* Selection footer for targeted payment */}
               {selectedCategories.size > 0 && (
-                <div className="sticky bottom-0 border-t bg-muted/50 px-6 py-3 flex items-center justify-between">
+                <div className="sticky bottom-0 border-t bg-primary/20 border-primary/40 px-6 py-3 flex items-center justify-between">
                   <p className="text-sm text-muted-foreground">
                     {selectedCategories.size} item{selectedCategories.size > 1 ? 's' : ''} selected &mdash;{' '}
                     <span className="font-semibold text-foreground">{formatCurrencyUtil(selectedTotal, tenant?.currency_code || 'USD')}</span>
@@ -1717,7 +1749,7 @@ const RentalDetail = () => {
                     onClick={() => setShowTargetedPayment(true)}
                   >
                     <DollarSign className="h-3.5 w-3.5 mr-1.5" />
-                    Pay Selected
+                    Add Payment
                   </Button>
                 </div>
               )}
@@ -1796,7 +1828,7 @@ const RentalDetail = () => {
                                 setShowExtensionPayment(true);
                               }}
                             >
-                              Pay
+                              Add Payment
                             </button>
                           ) : isPaid && !fullyRefunded && canRefund ? (
                             <button
@@ -3930,6 +3962,48 @@ const RentalDetail = () => {
               className="bg-amber-600 hover:bg-amber-700"
               onClick={() => {
                 setShowDocuSignWarning(false);
+                proceedToApproveAfterChecks();
+              }}
+            >
+              Yes, Approve Anyway
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Insurance Warning Dialog */}
+      <AlertDialog open={showInsuranceWarning} onOpenChange={setShowInsuranceWarning}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2 text-amber-600">
+              <AlertTriangle className="h-5 w-5" />
+              {!bonzahPolicy
+                ? 'No Insurance Policy'
+                : bonzahPolicy.status === 'quoted'
+                ? 'Insurance Not Confirmed'
+                : bonzahPolicy.status === 'failed'
+                ? 'Insurance Failed'
+                : 'Insurance Insufficient Balance'}
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              {!bonzahPolicy
+                ? 'This rental agreement does not have an insurance policy attached.'
+                : bonzahPolicy.status === 'quoted'
+                ? 'The insurance policy has been quoted but has not been confirmed or paid yet.'
+                : bonzahPolicy.status === 'failed'
+                ? 'The insurance policy purchase has failed.'
+                : 'The insurance policy could not be purchased due to insufficient Bonzah account balance.'}
+              <span className="block mt-2 font-medium">
+                Do you still want to approve this booking without active insurance?
+              </span>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>No, Go Back</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-amber-600 hover:bg-amber-700"
+              onClick={() => {
+                setShowInsuranceWarning(false);
                 setShowApproveDialog(true);
               }}
             >

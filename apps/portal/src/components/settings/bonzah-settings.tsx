@@ -249,7 +249,46 @@ export function BonzahSettings() {
 
   return (
     <div className="space-y-6">
-      {/* Card 1: How Bonzah Insurance Works */}
+      {/* Card 1: API Mode */}
+      <Card>
+        <CardHeader>
+          <CardTitle>API Mode</CardTitle>
+          <CardDescription>
+            Current Bonzah API environment
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="p-4 rounded-lg border bg-gradient-to-r from-blue-50 to-purple-50 border-blue-200 dark:from-blue-950/30 dark:to-purple-950/30 dark:border-blue-800">
+            <div className="flex items-center justify-between">
+              <div className="flex-1">
+                <h4 className="font-medium flex items-center gap-2">
+                  {currentMode === 'live' ? (
+                    <>
+                      <Zap className="h-4 w-4 text-green-600 dark:text-green-400" />
+                      <span className="dark:text-white">Live Mode</span>
+                    </>
+                  ) : (
+                    <>
+                      <TestTube2 className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+                      <span className="dark:text-white">Test Mode (Setup Phase)</span>
+                    </>
+                  )}
+                </h4>
+                <p className="text-sm text-muted-foreground mt-1 dark:text-gray-300">
+                  Live mode is enabled by Drive247
+                </p>
+              </div>
+              {currentMode === 'live' ? (
+                <Badge className="bg-green-600 hover:bg-green-700 dark:bg-green-500 dark:hover:bg-green-600 shrink-0">LIVE</Badge>
+              ) : (
+                <Badge className="bg-blue-600 hover:bg-blue-700 dark:bg-blue-500 dark:hover:bg-blue-600 shrink-0">TEST</Badge>
+              )}
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Card 2: How Bonzah Insurance Works */}
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
@@ -303,46 +342,38 @@ export function BonzahSettings() {
         </CardContent>
       </Card>
 
-      {/* Card 2: API Mode */}
+      {/* Card 3: Onboarding */}
       <Card>
         <CardHeader>
-          <CardTitle>API Mode</CardTitle>
+          <CardTitle>Bonzah Onboarding</CardTitle>
           <CardDescription>
-            Current Bonzah API environment
+            Complete this form to register your rental company with Bonzah and get your credentials
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="p-4 rounded-lg border bg-gradient-to-r from-blue-50 to-purple-50 border-blue-200 dark:from-blue-950/30 dark:to-purple-950/30 dark:border-blue-800">
-            <div className="flex items-center justify-between">
-              <div className="flex-1">
-                <h4 className="font-medium flex items-center gap-2">
-                  {currentMode === 'live' ? (
-                    <>
-                      <Zap className="h-4 w-4 text-green-600 dark:text-green-400" />
-                      <span className="dark:text-white">Live Mode</span>
-                    </>
-                  ) : (
-                    <>
-                      <TestTube2 className="h-4 w-4 text-blue-600 dark:text-blue-400" />
-                      <span className="dark:text-white">Test Mode (Setup Phase)</span>
-                    </>
-                  )}
-                </h4>
-                <p className="text-sm text-muted-foreground mt-1 dark:text-gray-300">
-                  Live mode is enabled by Drive247
-                </p>
-              </div>
-              {currentMode === 'live' ? (
-                <Badge className="bg-green-600 hover:bg-green-700 dark:bg-green-500 dark:hover:bg-green-600 shrink-0">LIVE</Badge>
-              ) : (
-                <Badge className="bg-blue-600 hover:bg-blue-700 dark:bg-blue-500 dark:hover:bg-blue-600 shrink-0">TEST</Badge>
-              )}
-            </div>
+          <div className="rounded-lg overflow-hidden border">
+            <iframe
+              src="https://api.leadconnectorhq.com/widget/form/3nsZvu171vvOOj7A58WX"
+              style={{ width: '100%', height: '800px', border: 'none' }}
+              title="Bonzah Onboarding Form"
+              allow="clipboard-write"
+            />
           </div>
+          <p className="text-sm text-muted-foreground mt-3">
+            Having trouble with the form?{' '}
+            <a
+              href="https://api.leadconnectorhq.com/widget/form/3nsZvu171vvOOj7A58WX"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-blue-600 hover:underline dark:text-blue-400"
+            >
+              Open in a new tab
+            </a>
+          </p>
         </CardContent>
       </Card>
 
-      {/* Card 3: Credentials */}
+      {/* Card 4: Credentials */}
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
@@ -575,37 +606,6 @@ export function BonzahSettings() {
               </Button>
             )}
           </div>
-        </CardContent>
-      </Card>
-
-      {/* Card 4: Onboarding */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Bonzah Onboarding</CardTitle>
-          <CardDescription>
-            Complete this form to register your rental company with Bonzah and get your credentials
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="rounded-lg overflow-hidden border">
-            <iframe
-              src="https://api.leadconnectorhq.com/widget/form/3nsZvu171vvOOj7A58WX"
-              style={{ width: '100%', height: '800px', border: 'none' }}
-              title="Bonzah Onboarding Form"
-              allow="clipboard-write"
-            />
-          </div>
-          <p className="text-sm text-muted-foreground mt-3">
-            Having trouble with the form?{' '}
-            <a
-              href="https://api.leadconnectorhq.com/widget/form/3nsZvu171vvOOj7A58WX"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-blue-600 hover:underline dark:text-blue-400"
-            >
-              Open in a new tab
-            </a>
-          </p>
         </CardContent>
       </Card>
 

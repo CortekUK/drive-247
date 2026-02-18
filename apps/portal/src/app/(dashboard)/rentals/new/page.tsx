@@ -14,8 +14,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage, FormDescription } from "@/components/ui/form";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
-import { ArrowLeft, FileText, Save, AlertTriangle, MapPin, Clock, Shield, Upload, CheckCircle2, XCircle, Loader2, RefreshCw, QrCode, Smartphone, Copy, Check, Plus, Minus, Receipt, ImageIcon, ExternalLink, Info, CalendarDays, StickyNote } from "lucide-react";
+import { ArrowLeft, FileText, Save, AlertTriangle, MapPin, Clock, Shield, Upload, CheckCircle2, XCircle, Loader2, RefreshCw, QrCode, Smartphone, Copy, Check, Plus, Minus, Receipt, ImageIcon, ExternalLink, Info, CalendarDays, StickyNote, ChevronsUpDown } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { Input } from "@/components/ui/input";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from "@/components/ui/label";
@@ -102,6 +104,7 @@ const CreateRental = () => {
   const queryClient = useQueryClient();
   const { isManager, canEdit } = useManagerPermissions();
   const [loading, setLoading] = useState(false);
+  const [vehicleOpen, setVehicleOpen] = useState(false);
 
   // Bonzah insurance state
   const [bonzahCoverage, setBonzahCoverage] = useState<CoverageOptions>({
@@ -1256,32 +1259,74 @@ const CreateRental = () => {
                     <FormField
                       control={form.control}
                       name="vehicle_id"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Vehicle <span className="text-red-500">*</span></FormLabel>
-                          <Select onValueChange={field.onChange} value={field.value}>
-                            <FormControl>
-                              <SelectTrigger className={form.formState.errors.vehicle_id ? "border-destructive" : ""}>
-                                <SelectValue placeholder="Select vehicle" />
-                              </SelectTrigger>
-                            </FormControl>
-                            <SelectContent className="max-w-[calc(100vw-2rem)]">
-                              {vehicles?.map((vehicle) => (
-                                <SelectItem key={vehicle.id} value={vehicle.id} className="whitespace-normal break-words">
-                                  <div className="flex flex-col gap-0.5">
-                                    <span className="font-medium">{vehicle.reg}</span>
-                                    <span className="text-xs text-muted-foreground">{vehicle.make} {vehicle.model}</span>
-                                  </div>
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                          <FormMessage />
-                          <FormDescription>
-                            Only available vehicles are shown
-                          </FormDescription>
-                        </FormItem>
-                      )}
+                      render={({ field }) => {
+                        const selectedVehicleOption = vehicles?.find((v: any) => v.id === field.value);
+                        return (
+                          <FormItem className="flex flex-col">
+                            <FormLabel>Vehicle <span className="text-red-500">*</span></FormLabel>
+                            <Popover open={vehicleOpen} onOpenChange={setVehicleOpen}>
+                              <PopoverTrigger asChild>
+                                <FormControl>
+                                  <Button
+                                    variant="outline"
+                                    role="combobox"
+                                    aria-expanded={vehicleOpen}
+                                    className={cn(
+                                      "w-full justify-between font-normal",
+                                      !field.value && "text-muted-foreground",
+                                      form.formState.errors.vehicle_id && "border-destructive"
+                                    )}
+                                  >
+                                    {selectedVehicleOption ? (
+                                      <span className="truncate">
+                                        {selectedVehicleOption.reg} — {selectedVehicleOption.make} {selectedVehicleOption.model}
+                                      </span>
+                                    ) : (
+                                      "Select vehicle"
+                                    )}
+                                    <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                                  </Button>
+                                </FormControl>
+                              </PopoverTrigger>
+                              <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
+                                <Command>
+                                  <CommandInput placeholder="Search by make or model..." />
+                                  <CommandList>
+                                    <CommandEmpty>No vehicle found.</CommandEmpty>
+                                    <CommandGroup>
+                                      {vehicles?.map((vehicle: any) => (
+                                        <CommandItem
+                                          key={vehicle.id}
+                                          value={`${vehicle.make} ${vehicle.model}`}
+                                          onSelect={() => {
+                                            field.onChange(vehicle.id);
+                                            setVehicleOpen(false);
+                                          }}
+                                        >
+                                          <Check
+                                            className={cn(
+                                              "mr-2 h-4 w-4",
+                                              field.value === vehicle.id ? "opacity-100" : "opacity-0"
+                                            )}
+                                          />
+                                          <div className="flex flex-col gap-0.5">
+                                            <span className="font-medium">{vehicle.reg}</span>
+                                            <span className="text-xs text-muted-foreground">{vehicle.make} {vehicle.model}</span>
+                                          </div>
+                                        </CommandItem>
+                                      ))}
+                                    </CommandGroup>
+                                  </CommandList>
+                                </Command>
+                              </PopoverContent>
+                            </Popover>
+                            <FormMessage />
+                            <FormDescription>
+                              Only available vehicles are shown
+                            </FormDescription>
+                          </FormItem>
+                        );
+                      }}
                     />
                   </div>
 
