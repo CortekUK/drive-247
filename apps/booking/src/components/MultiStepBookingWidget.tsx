@@ -29,6 +29,7 @@ import BonzahInsuranceSelector from "./BonzahInsuranceSelector";
 import BonzahDetailsForm from "./BonzahDetailsForm";
 import type { BonzahDetailsValues } from "./BonzahDetailsForm";
 import type { CoverageOptions } from "@/hooks/useBonzahPremium";
+import { useBonzahVehicleEligibility } from "@/hooks/useBonzahVehicleEligibility";
 import AIScanProgress from "./ai-scan-progress";
 import AIVerificationQR from "./AIVerificationQR";
 import { stripePromise } from "@/config/stripe";
@@ -178,6 +179,18 @@ const MultiStepBookingWidget = () => {
 
   // Fetch rental extras for the selected vehicle
   const { extras: availableExtras, isLoading: extrasLoading } = useRentalExtras(formData.vehicleId || null);
+
+  // Bonzah vehicle eligibility check
+  const eligibilityVehicle = vehicles.find(v => v.id === formData.vehicleId);
+  const {
+    isEligible: isBonzahEligible,
+    isLoading: isBonzahEligibilityLoading,
+    reason: bonzahIneligibilityReason,
+  } = useBonzahVehicleEligibility({
+    vehicleMake: eligibilityVehicle?.make || null,
+    vehicleModel: eligibilityVehicle?.model || null,
+    enabled: !skipInsurance && !!formData.vehicleId,
+  });
 
   // Calculate working hours for the selected pickup date (per-day hours)
   const pickupDateWorkingHours = useMemo(() => {
@@ -4315,33 +4328,78 @@ const MultiStepBookingWidget = () => {
 
                     {/* NO Option */}
                     <Card
-                      className="group relative overflow-hidden border-2 border-border hover:border-accent hover:shadow-lg transition-all cursor-pointer bg-gradient-to-br from-accent/5 to-transparent"
-                      onClick={() => setHasInsurance(false)}
+                      className={cn(
+                        "group relative overflow-hidden border-2 transition-all bg-gradient-to-br from-accent/5 to-transparent",
+                        isBonzahEligibilityLoading || !isBonzahEligible
+                          ? "border-border opacity-60 cursor-not-allowed"
+                          : "border-border hover:border-accent hover:shadow-lg cursor-pointer"
+                      )}
+                      onClick={() => {
+                        if (!isBonzahEligibilityLoading && isBonzahEligible) {
+                          setHasInsurance(false);
+                        }
+                      }}
                     >
                       <div className="p-8 text-center space-y-4">
-                        <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-accent/10 mb-2">
-                          <Shield className="w-8 h-8 text-accent" />
+                        <div className="flex justify-center mb-2">
+                          <img src="/bonzah-logo.svg" alt="Bonzah" className="h-8 w-auto dark:hidden" />
+                          <img src="/bonzah-logo-dark.svg" alt="Bonzah" className="h-8 w-auto hidden dark:block" />
                         </div>
                         <div>
                           <h5 className="text-lg font-semibold mb-2">No, I Need Insurance</h5>
-                          <p className="text-sm text-muted-foreground">
-                            Get instant coverage through our trusted partner Bonzah
-                          </p>
+                          {isBonzahEligibilityLoading ? (
+                            <div className="flex items-center justify-center gap-2">
+                              <Loader2 className="w-4 h-4 animate-spin text-[#CC004A]" />
+                              <p className="text-sm text-muted-foreground">
+                                Checking vehicle eligibility...
+                              </p>
+                            </div>
+                          ) : !isBonzahEligible ? (
+                            <div className="space-y-3">
+                              <div className="rounded-lg border border-[#CC004A]/30 bg-[#CC004A]/5 p-3 text-left">
+                                <div className="flex items-start gap-2">
+                                  <AlertCircle className="w-4 h-4 text-[#CC004A] mt-0.5 flex-shrink-0" />
+                                  <div className="space-y-1">
+                                    <p className="text-xs font-medium text-[#CC004A]">Not covered by Bonzah</p>
+                                    <p className="text-xs text-muted-foreground">
+                                      <span className="font-medium">{eligibilityVehicle?.make} {eligibilityVehicle?.model}</span> is not eligible for Bonzah insurance coverage.
+                                      {bonzahIneligibilityReason && <> {bonzahIneligibilityReason}</>}
+                                    </p>
+                                  </div>
+                                </div>
+                              </div>
+                              <a
+                                href="https://bonzah.com/included-and-restricted-vehicle-types"
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-xs text-[#CC004A]/70 hover:text-[#CC004A] underline"
+                              >
+                                View Bonzah vehicle restrictions
+                              </a>
+                            </div>
+                          ) : (
+                            <p className="text-sm text-muted-foreground">
+                              Get instant coverage through our trusted partner Bonzah
+                            </p>
+                          )}
                         </div>
                         <Button
                           className="w-full bg-accent hover:bg-accent/90"
                           size="lg"
+                          disabled={isBonzahEligibilityLoading || !isBonzahEligible}
                         >
                           <Shield className="mr-2 h-5 w-5" />
                           Get Insurance Now
                         </Button>
-                        <div className="pt-4 border-t border-border/50">
-                          <p className="text-xs text-muted-foreground">
-                            ✓ Instant online quotes<br />
-                            ✓ Affordable rates<br />
-                            ✓ Quick 5-minute setup
-                          </p>
-                        </div>
+                        {isBonzahEligible && !isBonzahEligibilityLoading && (
+                          <div className="pt-4 border-t border-border/50">
+                            <p className="text-xs text-muted-foreground">
+                              ✓ Instant online quotes<br />
+                              ✓ Affordable rates<br />
+                              ✓ Quick 5-minute setup
+                            </p>
+                          </div>
+                        )}
                       </div>
                     </Card>
                   </div>

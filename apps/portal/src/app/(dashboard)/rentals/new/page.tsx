@@ -24,6 +24,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useTenant } from "@/contexts/TenantContext";
 import BonzahInsuranceSelector from "@/components/rentals/bonzah-insurance-selector";
 import type { CoverageOptions } from "@/hooks/use-bonzah-premium";
+import { useBonzahVehicleEligibility } from "@/hooks/use-bonzah-vehicle-eligibility";
 import { useBonzahBalance } from "@/hooks/use-bonzah-balance";
 import { useCustomerActiveRentals } from "@/hooks/use-customer-active-rentals";
 import { PAYMENT_TYPES } from "@/constants";
@@ -527,6 +528,25 @@ const CreateRental = () => {
     },
     enabled: !!tenant,
   });
+
+  // Bonzah vehicle eligibility check
+  const eligibilityVehicle = vehicles?.find(v => v.id === selectedVehicleId);
+  const {
+    isEligible: isBonzahEligible,
+    isLoading: isBonzahEligibilityLoading,
+  } = useBonzahVehicleEligibility({
+    vehicleMake: eligibilityVehicle?.make || null,
+    vehicleModel: eligibilityVehicle?.model || null,
+    enabled: !skipInsurance && !!selectedVehicleId,
+  });
+
+  // Reset Bonzah state when vehicle is ineligible
+  useEffect(() => {
+    if (!isBonzahEligible && !isBonzahEligibilityLoading) {
+      setBonzahCoverage({ cdw: false, rcli: false, sli: false, pai: false });
+      setBonzahPremium(0);
+    }
+  }, [isBonzahEligible, isBonzahEligibilityLoading]);
 
   // Auto-populate rental amount based on selected vehicle and period type
   // For Daily rentals with dates, applies dynamic pricing (weekend/holiday surcharges)
@@ -1820,27 +1840,54 @@ const CreateRental = () => {
                   {/* Bonzah Insurance Selection */}
                   {!skipInsurance && watchedStartDate && watchedEndDate && (
                     <div className="space-y-4 pt-4 border-t">
-                      <BonzahInsuranceSelector
-                        tripStartDate={watchedStartDate ? watchedStartDate.toISOString().split('T')[0] : null}
-                        tripEndDate={watchedEndDate ? watchedEndDate.toISOString().split('T')[0] : null}
-                        pickupState={customerDetails?.address_state || "FL"}
-                        onCoverageChange={(coverage, premium) => {
-                          setBonzahCoverage(coverage);
-                          setBonzahPremium(premium);
-                        }}
-                        onSkipInsurance={() => {
-                          setBonzahCoverage({ cdw: false, rcli: false, sli: false, pai: false });
-                          setBonzahPremium(0);
-                        }}
-                        initialCoverage={bonzahCoverage}
-                      />
-                      {bonzahPremium > 0 && bonzahCdBalance != null && bonzahPremium > bonzahCdBalance && (
-                        <div className="rounded-lg border border-[#CC004A]/30 bg-[#CC004A]/5 p-3 flex items-start gap-2">
-                          <AlertTriangle className="h-4 w-4 text-[#CC004A] mt-0.5 flex-shrink-0" />
-                          <p className="text-sm text-muted-foreground">
-                            Insurance premium (<span className="font-medium text-[#CC004A]">${bonzahPremium.toFixed(2)}</span>) exceeds your current Bonzah balance (<span className="font-medium">${bonzahCdBalance.toFixed(2)}</span>). The rental can still be created, but the policy won't activate until you top up.
-                          </p>
+                      {isBonzahEligibilityLoading ? (
+                        <div className="flex items-center gap-2 py-3">
+                          <Loader2 className="h-4 w-4 animate-spin text-[#CC004A]" />
+                          <span className="text-sm text-muted-foreground">Checking Bonzah insurance eligibility...</span>
                         </div>
+                      ) : !isBonzahEligible ? (
+                        <div className="rounded-lg border border-[#CC004A]/30 bg-[#CC004A]/5 p-3 space-y-2">
+                          <div className="flex items-start gap-2">
+                            <img src="/bonzah-logo.svg" alt="Bonzah" className="h-4 w-auto mt-0.5 flex-shrink-0 dark:hidden" />
+                            <img src="/bonzah-logo-dark.svg" alt="Bonzah" className="h-4 w-auto mt-0.5 flex-shrink-0 hidden dark:block" />
+                            <p className="text-sm text-muted-foreground">
+                              <span className="font-medium">{eligibilityVehicle?.make} {eligibilityVehicle?.model}</span> is not covered by Bonzah&apos;s insurance program. This vehicle type is excluded from their coverage.
+                            </p>
+                          </div>
+                          <a
+                            href="https://bonzah.com/included-and-restricted-vehicle-types"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-xs text-[#CC004A]/70 hover:text-[#CC004A] underline ml-6"
+                          >
+                            View Bonzah vehicle restrictions
+                          </a>
+                        </div>
+                      ) : (
+                        <>
+                          <BonzahInsuranceSelector
+                            tripStartDate={watchedStartDate ? watchedStartDate.toISOString().split('T')[0] : null}
+                            tripEndDate={watchedEndDate ? watchedEndDate.toISOString().split('T')[0] : null}
+                            pickupState={customerDetails?.address_state || "FL"}
+                            onCoverageChange={(coverage, premium) => {
+                              setBonzahCoverage(coverage);
+                              setBonzahPremium(premium);
+                            }}
+                            onSkipInsurance={() => {
+                              setBonzahCoverage({ cdw: false, rcli: false, sli: false, pai: false });
+                              setBonzahPremium(0);
+                            }}
+                            initialCoverage={bonzahCoverage}
+                          />
+                          {bonzahPremium > 0 && bonzahCdBalance != null && bonzahPremium > bonzahCdBalance && (
+                            <div className="rounded-lg border border-[#CC004A]/30 bg-[#CC004A]/5 p-3 flex items-start gap-2">
+                              <AlertTriangle className="h-4 w-4 text-[#CC004A] mt-0.5 flex-shrink-0" />
+                              <p className="text-sm text-muted-foreground">
+                                Insurance premium (<span className="font-medium text-[#CC004A]">${bonzahPremium.toFixed(2)}</span>) exceeds your current Bonzah balance (<span className="font-medium">${bonzahCdBalance.toFixed(2)}</span>). The rental can still be created, but the policy won't activate until you top up.
+                              </p>
+                            </div>
+                          )}
+                        </>
                       )}
                     </div>
                   )}
