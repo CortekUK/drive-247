@@ -15,6 +15,7 @@ interface ESignRequest {
     customerEmail: string;
     customerName: string;
     tenantId: string;
+    deliveryMode?: 'Email' | 'SMS' | 'EmailAndSMS' | 'WhatsApp';
 }
 
 // Format helpers
@@ -363,6 +364,22 @@ export async function POST(request: NextRequest) {
         formData.append('Signers[0][Name]', body.customerName);
         formData.append('Signers[0][EmailAddress]', body.customerEmail);
         formData.append('Signers[0][SignerType]', 'Signer');
+
+        // Set delivery mode (Email, SMS, EmailAndSMS, WhatsApp)
+        const deliveryMode = body.deliveryMode || 'Email';
+        if (deliveryMode !== 'Email') {
+            formData.append('Signers[0][DeliveryMode]', deliveryMode);
+            // Add phone number for SMS/WhatsApp delivery
+            const phone = (customer as any)?.phone || '';
+            if (phone && (deliveryMode === 'SMS' || deliveryMode === 'EmailAndSMS' || deliveryMode === 'WhatsApp')) {
+                // Extract country code and number (assume format like +44... or 44...)
+                const cleaned = phone.replace(/\s+/g, '').replace(/^(\+)/, '');
+                const countryCode = cleaned.substring(0, 2);
+                const number = cleaned.substring(2);
+                formData.append('Signers[0][PhoneNumber][CountryCode]', `+${countryCode}`);
+                formData.append('Signers[0][PhoneNumber][Number]', number);
+            }
+        }
         formData.append('Signers[0][FormFields][0][FieldType]', 'Signature');
         formData.append('Signers[0][FormFields][0][PageNumber]', String(pdfDoc.getPageCount()));
         formData.append('Signers[0][FormFields][0][Bounds][X]', '50');
