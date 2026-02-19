@@ -286,6 +286,8 @@ export async function POST(request: NextRequest) {
         const lines = documentContent.split('\n');
         let page = pdfDoc.addPage([pageWidth, pageHeight]);
         let y = pageHeight - margin;
+        let signatureLineY = -1;
+        let signaturePageNum = -1;
 
         for (const line of lines) {
             // Wrap long lines
@@ -314,6 +316,11 @@ export async function POST(request: NextRequest) {
             if (currentLine) {
                 const isHeader = currentLine.startsWith('=') || (currentLine === currentLine.toUpperCase() && currentLine.length > 3 && !currentLine.startsWith('{{'));
                 page.drawText(currentLine, { x: margin, y, size: fontSize, font: isHeader ? boldFont : font, color: rgb(0, 0, 0) });
+                // Track where "Customer Signature:" line is drawn
+                if (currentLine.toLowerCase().includes('customer signature')) {
+                    signatureLineY = y;
+                    signaturePageNum = pdfDoc.getPageCount();
+                }
             }
             y -= lineHeight;
         }
@@ -386,10 +393,21 @@ export async function POST(request: NextRequest) {
         formData.append('Signers[0][Name]', body.customerName);
         formData.append('Signers[0][EmailAddress]', body.customerEmail);
         formData.append('Signers[0][SignerType]', 'Signer');
+        // Place signature field at the "Customer Signature:" line if found, otherwise below content
+        // Convert pdf-lib bottom-up Y to BoldSign top-down Y coordinate: BoldSign_Y = pageHeight - pdflib_Y
+        let sigFieldPage: number;
+        let sigFieldY: number;
+        if (signatureLineY > 0 && signaturePageNum > 0) {
+            sigFieldPage = signaturePageNum;
+            sigFieldY = pageHeight - signatureLineY + lineHeight;
+        } else {
+            sigFieldPage = pdfDoc.getPageCount();
+            sigFieldY = Math.min(pageHeight - y + 20, pageHeight - 100);
+        }
         formData.append('Signers[0][FormFields][0][FieldType]', 'Signature');
-        formData.append('Signers[0][FormFields][0][PageNumber]', String(pdfDoc.getPageCount()));
-        formData.append('Signers[0][FormFields][0][Bounds][X]', '50');
-        formData.append('Signers[0][FormFields][0][Bounds][Y]', String(Math.max(y - 60, 50)));
+        formData.append('Signers[0][FormFields][0][PageNumber]', String(sigFieldPage));
+        formData.append('Signers[0][FormFields][0][Bounds][X]', '200');
+        formData.append('Signers[0][FormFields][0][Bounds][Y]', String(sigFieldY));
         formData.append('Signers[0][FormFields][0][Bounds][Width]', '250');
         formData.append('Signers[0][FormFields][0][Bounds][Height]', '50');
         formData.append('Signers[0][FormFields][0][IsRequired]', 'true');

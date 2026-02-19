@@ -226,6 +226,24 @@ async function sendBoldSignDocument(
     const encoder = new TextEncoder();
     const fileBytes = encoder.encode(documentText);
 
+    // Estimate signature position: BoldSign renders txt at ~12pt, ~50 lines/page on A4
+    const textLines = documentText.split('\n');
+    const linesPerPage = 50;
+    const estimatedPages = Math.max(1, Math.ceil(textLines.length / linesPerPage));
+    // Find "Customer Signature:" line to place field there
+    let sigLineIdx = textLines.findIndex(l => l.toLowerCase().includes('customer signature'));
+    let sigPage: number;
+    let sigY: number;
+    if (sigLineIdx >= 0) {
+      sigPage = Math.floor(sigLineIdx / linesPerPage) + 1;
+      const lineOnPage = sigLineIdx % linesPerPage;
+      sigY = Math.round((lineOnPage / linesPerPage) * 780) + 30; // ~780pt usable area + top margin
+    } else {
+      sigPage = estimatedPages;
+      const remainingLines = textLines.length % linesPerPage || linesPerPage;
+      sigY = Math.round((remainingLines / linesPerPage) * 780) + 30;
+    }
+
     // Build multipart form data
     const formData = new FormData();
     formData.append('Title', `Rental Agreement - Ref: ${rentalId.substring(0, 8).toUpperCase()}`);
@@ -237,9 +255,9 @@ async function sendBoldSignDocument(
     formData.append('Signers[0][EmailAddress]', customerEmail);
     formData.append('Signers[0][SignerType]', 'Signer');
     formData.append('Signers[0][FormFields][0][FieldType]', 'Signature');
-    formData.append('Signers[0][FormFields][0][PageNumber]', '1');
-    formData.append('Signers[0][FormFields][0][Bounds][X]', '50');
-    formData.append('Signers[0][FormFields][0][Bounds][Y]', '200');
+    formData.append('Signers[0][FormFields][0][PageNumber]', String(sigPage));
+    formData.append('Signers[0][FormFields][0][Bounds][X]', '200');
+    formData.append('Signers[0][FormFields][0][Bounds][Y]', String(sigY));
     formData.append('Signers[0][FormFields][0][Bounds][Width]', '250');
     formData.append('Signers[0][FormFields][0][Bounds][Height]', '50');
     formData.append('Signers[0][FormFields][0][IsRequired]', 'true');
