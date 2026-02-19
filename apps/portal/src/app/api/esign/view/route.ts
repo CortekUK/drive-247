@@ -42,13 +42,17 @@ export async function POST(request: NextRequest) {
                     .single();
 
                 if (doc?.file_url) {
-                    const { data: urlData } = supabase.storage
-                        .from('customer-documents')
-                        .getPublicUrl(doc.file_url);
+                    let documentUrl = doc.file_url;
+                    if (!documentUrl.startsWith('http')) {
+                        const { data: urlData } = supabase.storage
+                            .from('customer-documents')
+                            .getPublicUrl(doc.file_url);
+                        documentUrl = urlData.publicUrl;
+                    }
 
                     return NextResponse.json({
                         ok: true,
-                        documentUrl: urlData.publicUrl,
+                        documentUrl,
                         status: 'completed',
                         source: 'stored'
                     });
