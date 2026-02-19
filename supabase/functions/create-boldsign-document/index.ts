@@ -241,6 +241,7 @@ async function sendBoldSignDocument(
     formData.append('Signers[0][FormFields][0][IsRequired]', 'true');
     formData.append('EnableSigningOrder', 'false');
     formData.append('EnableEmbeddedSigning', 'true');
+    formData.append('DisableEmails', 'false');
 
     const blob = new Blob([fileBytes], { type: 'text/plain' });
     formData.append('Files', blob, 'Rental-Agreement.txt');
