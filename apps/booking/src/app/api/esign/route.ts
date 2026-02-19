@@ -237,7 +237,7 @@ export async function POST(request: NextRequest) {
         if (tenantId) {
             const { data: tenantData } = await supabase
                 .from('tenants')
-                .select('company_name, contact_email, contact_phone, phone, address, admin_name, admin_email, currency_code')
+                .select('company_name, contact_email, contact_phone, phone, address, admin_name, admin_email, currency_code, logo_url, boldsign_brand_id')
                 .eq('id', tenantId)
                 .single();
             tenant = tenantData;
@@ -320,10 +320,58 @@ export async function POST(request: NextRequest) {
 
         const pdfBytes = await pdfDoc.save();
 
+        // Get or create BoldSign brand for this tenant
+        let brandId = tenant?.boldsign_brand_id || '';
+        if (!brandId && tenantId && tenant?.company_name) {
+            try {
+                const brandForm = new FormData();
+                brandForm.append('BrandName', tenant.company_name);
+                brandForm.append('EmailDisplayName', `${tenant.company_name} via {SenderName}`);
+
+                if (tenant.logo_url) {
+                    try {
+                        const logoResponse = await fetch(tenant.logo_url);
+                        if (logoResponse.ok) {
+                            const logoBuffer = await logoResponse.arrayBuffer();
+                            const contentType = logoResponse.headers.get('content-type') || 'image/png';
+                            const ext = contentType.includes('svg') ? 'svg' : contentType.includes('jpeg') || contentType.includes('jpg') ? 'jpg' : 'png';
+                            const logoBlob = new Blob([logoBuffer], { type: contentType });
+                            brandForm.append('BrandLogo', logoBlob, `logo.${ext}`);
+                        }
+                    } catch (e) {
+                        console.warn('Could not fetch tenant logo for brand:', e);
+                    }
+                }
+
+                const brandResponse = await fetch(`${BOLDSIGN_BASE_URL}/v1/brand/create`, {
+                    method: 'POST',
+                    headers: { 'X-API-KEY': BOLDSIGN_API_KEY },
+                    body: brandForm,
+                });
+
+                if (brandResponse.ok) {
+                    const brandResult = await brandResponse.json();
+                    brandId = brandResult.brandId;
+                    await supabase
+                        .from('tenants')
+                        .update({ boldsign_brand_id: brandId })
+                        .eq('id', tenantId);
+                    console.log('Created BoldSign brand:', brandId);
+                } else {
+                    console.warn('Failed to create BoldSign brand:', await brandResponse.text());
+                }
+            } catch (e) {
+                console.warn('Error creating BoldSign brand:', e);
+            }
+        }
+
         // Build BoldSign request
         const formData = new FormData();
         formData.append('Title', `Rental Agreement - Ref: ${body.rentalId.substring(0, 8).toUpperCase()}`);
         formData.append('Message', 'Please review and sign the rental agreement.');
+        if (brandId) {
+            formData.append('BrandId', brandId);
+        }
         formData.append('Signers[0][Name]', body.customerName);
         formData.append('Signers[0][EmailAddress]', body.customerEmail);
         formData.append('Signers[0][SignerType]', 'Signer');

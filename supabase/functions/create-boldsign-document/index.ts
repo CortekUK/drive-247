@@ -216,7 +216,8 @@ async function sendBoldSignDocument(
   documentText: string,
   customerEmail: string,
   customerName: string,
-  rentalId: string
+  rentalId: string,
+  brandId?: string
 ): Promise<{ documentId: string } | null> {
   try {
     console.log('Creating BoldSign document...');
@@ -229,6 +230,9 @@ async function sendBoldSignDocument(
     const formData = new FormData();
     formData.append('Title', `Rental Agreement - Ref: ${rentalId.substring(0, 8).toUpperCase()}`);
     formData.append('Message', 'Please review and sign the rental agreement.');
+    if (brandId) {
+      formData.append('BrandId', brandId);
+    }
     formData.append('Signers[0][Name]', customerName);
     formData.append('Signers[0][EmailAddress]', customerEmail);
     formData.append('Signers[0][SignerType]', 'Signer');
@@ -334,14 +338,16 @@ Deno.serve(async (req) => {
     console.log('Vehicle:', vehicle?.make, vehicle?.model, vehicle?.reg);
     console.log('Tenant ID:', tenantId);
 
-    // Get tenant currency code
+    // Get tenant currency code and brand info
+    let tenantBrandId: string | undefined;
     if (tenantId) {
-      const { data: tenantCurrency } = await supabase
+      const { data: tenantInfo } = await supabase
         .from('tenants')
-        .select('currency_code')
+        .select('currency_code, boldsign_brand_id')
         .eq('id', tenantId)
         .single();
-      if (tenantCurrency?.currency_code) _currencyCode = tenantCurrency.currency_code;
+      if (tenantInfo?.currency_code) _currencyCode = tenantInfo.currency_code;
+      if (tenantInfo?.boldsign_brand_id) tenantBrandId = tenantInfo.boldsign_brand_id;
     }
 
     // Generate document content
@@ -359,7 +365,8 @@ Deno.serve(async (req) => {
       doc,
       email,
       name,
-      rentalId
+      rentalId,
+      tenantBrandId
     );
 
     if (!result) {
