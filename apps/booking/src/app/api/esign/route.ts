@@ -169,9 +169,9 @@ ${'='.repeat(70)}
 
 SIGNATURE:
 
-{{sign|1|*|Customer Signature|customer_sig}}
+Customer Signature: _________________________
 
-Date: {{text|1||Date|date_field}}
+Date: ______________
 
 ${'='.repeat(70)}
 ${companyName} - Generated: ${new Date().toISOString()}
@@ -279,9 +279,15 @@ export async function POST(request: NextRequest) {
         formData.append('Signers[0][Name]', body.customerName);
         formData.append('Signers[0][EmailAddress]', body.customerEmail);
         formData.append('Signers[0][SignerType]', 'Signer');
+        formData.append('Signers[0][FormFields][0][FieldType]', 'Signature');
+        formData.append('Signers[0][FormFields][0][PageNumber]', String(pdfDoc.getPageCount()));
+        formData.append('Signers[0][FormFields][0][Bounds][X]', '50');
+        formData.append('Signers[0][FormFields][0][Bounds][Y]', String(Math.max(y - 60, 50)));
+        formData.append('Signers[0][FormFields][0][Bounds][Width]', '250');
+        formData.append('Signers[0][FormFields][0][Bounds][Height]', '50');
+        formData.append('Signers[0][FormFields][0][IsRequired]', 'true');
         formData.append('EnableSigningOrder', 'false');
         formData.append('EnableEmbeddedSigning', 'true');
-        formData.append('UseTextTags', 'true');
 
         // Generate PDF from text content
         const pdfDoc = await PDFDocument.create();
