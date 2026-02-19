@@ -201,6 +201,14 @@ const BookingCheckout = () => {
 
       if (existingCustomer) {
         customer = existingCustomer;
+        // Sync phone if it changed (e.g. updated in portal settings or booking form)
+        if (customerPhone && customerPhone !== existingCustomer.phone) {
+          await supabase
+            .from("customers")
+            .update({ phone: customerPhone })
+            .eq("id", existingCustomer.id);
+          customer = { ...existingCustomer, phone: customerPhone };
+        }
         toast.info("Welcome back! Using your existing account.");
       } else {
         // Create new customer

@@ -7,17 +7,27 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
-import { Lock, Mail, MessageSquare, MessageCircle, Save, Loader2, Info } from 'lucide-react';
+import { Lock, Mail, MessageSquare, MessageCircle, Save, Loader2, Info, FileText } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
 import { useLockboxTemplates } from '@/hooks/use-lockbox-templates';
 import { useRentalSettings } from '@/hooks/use-rental-settings';
+
+const DEFAULT_LOCKBOX_INSTRUCTIONS = `1. Go to the vehicle location
+2. Locate the lockbox (check the vehicle-specific instructions if provided)
+3. Enter the lockbox code to unlock
+4. Retrieve the vehicle keys from inside
+5. Close and lock the lockbox after retrieving the keys
+6. Do not share the lockbox code with anyone
+
+If you have any issues accessing the lockbox, please contact us immediately.`;
 
 const AVAILABLE_VARIABLES = [
   { key: '{{customer_name}}', desc: 'Customer full name' },
   { key: '{{vehicle_name}}', desc: 'Vehicle make & model' },
   { key: '{{vehicle_reg}}', desc: 'Vehicle registration' },
   { key: '{{lockbox_code}}', desc: 'Lockbox access code' },
-  { key: '{{lockbox_instructions}}', desc: 'Lockbox instructions' },
+  { key: '{{lockbox_instructions}}', desc: 'Vehicle-specific lockbox location' },
+  { key: '{{default_instructions}}', desc: 'Default lockbox instructions (from above)' },
   { key: '{{delivery_address}}', desc: 'Delivery address' },
   { key: '{{booking_ref}}', desc: 'Booking reference' },
   { key: '{{odometer}}', desc: 'Odometer reading' },
@@ -25,10 +35,12 @@ const AVAILABLE_VARIABLES = [
 ];
 
 export function LockboxTemplatesSection() {
-  const { settings: rentalSettings } = useRentalSettings();
+  const { settings: rentalSettings, updateSettings } = useRentalSettings();
   const { templates, isLoading, getEmailTemplate, getSmsTemplate, getWhatsAppTemplate, saveTemplate } = useLockboxTemplates();
   const lockboxEnabled = rentalSettings?.lockbox_enabled ?? false;
 
+  const [instructions, setInstructions] = useState('');
+  const [savingInstructions, setSavingInstructions] = useState(false);
   const [emailSubject, setEmailSubject] = useState('');
   const [emailBody, setEmailBody] = useState('');
   const [smsBody, setSmsBody] = useState('');
@@ -37,6 +49,13 @@ export function LockboxTemplatesSection() {
   const [savingSms, setSavingSms] = useState(false);
   const [savingWhatsapp, setSavingWhatsapp] = useState(false);
   const [initialized, setInitialized] = useState(false);
+
+  // Load instructions from rental settings
+  useEffect(() => {
+    if (rentalSettings?.lockbox_default_instructions !== undefined) {
+      setInstructions(rentalSettings.lockbox_default_instructions || DEFAULT_LOCKBOX_INSTRUCTIONS);
+    }
+  }, [rentalSettings?.lockbox_default_instructions]);
 
   // Load templates once when data is ready
   useEffect(() => {
@@ -53,6 +72,17 @@ export function LockboxTemplatesSection() {
     setWhatsappBody(whatsapp.body);
     setInitialized(true);
   }, [templates, isLoading]);
+
+  const handleSaveInstructions = async () => {
+    setSavingInstructions(true);
+    try {
+      await updateSettings({ lockbox_default_instructions: instructions });
+    } catch (err) {
+      toast({ title: 'Failed to save instructions', variant: 'destructive' });
+    } finally {
+      setSavingInstructions(false);
+    }
+  };
 
   const handleSaveEmail = async () => {
     setSavingEmail(true);
@@ -147,6 +177,37 @@ export function LockboxTemplatesSection() {
             ))}
           </div>
         </div>
+
+        {/* Default Lockbox Instructions */}
+        <div className="space-y-3">
+          <div className="flex items-center gap-2">
+            <FileText className="h-4 w-4 text-primary" />
+            <h4 className="font-medium text-sm">Default Lockbox Instructions</h4>
+          </div>
+          <p className="text-xs text-muted-foreground">
+            These instructions are included in every lockbox notification (email, SMS, WhatsApp) to guide customers on how to use the lockbox.
+          </p>
+          <div className="space-y-2">
+            <Textarea
+              id="lockbox-instructions"
+              value={instructions}
+              onChange={(e) => setInstructions(e.target.value)}
+              rows={8}
+              className="text-sm"
+              placeholder="Enter default lockbox instructions..."
+            />
+          </div>
+          <Button
+            onClick={handleSaveInstructions}
+            disabled={savingInstructions}
+            size="sm"
+          >
+            {savingInstructions ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Save className="h-4 w-4 mr-2" />}
+            Save Instructions
+          </Button>
+        </div>
+
+        <div className="border-t" />
 
         {/* Email Template */}
         <div className="space-y-3">

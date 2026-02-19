@@ -47,6 +47,7 @@ export interface RentalSettings {
   lockbox_enabled: boolean | null;
   lockbox_code_length: number | null;
   lockbox_notification_methods: string[] | null;
+  lockbox_default_instructions: string | null;
 }
 
 const DEFAULT_RENTAL_SETTINGS: RentalSettings = {
@@ -89,6 +90,7 @@ const DEFAULT_RENTAL_SETTINGS: RentalSettings = {
   lockbox_enabled: false,
   lockbox_code_length: null,
   lockbox_notification_methods: ['email'],
+  lockbox_default_instructions: null,
 };
 
 /**
@@ -143,7 +145,8 @@ export const useRentalSettings = () => {
           installment_config,
           lockbox_enabled,
           lockbox_code_length,
-          lockbox_notification_methods
+          lockbox_notification_methods,
+          lockbox_default_instructions
         `)
         .eq('id', tenant.id)
         .single();
@@ -208,7 +211,8 @@ export const useRentalSettings = () => {
           installment_config,
           lockbox_enabled,
           lockbox_code_length,
-          lockbox_notification_methods
+          lockbox_notification_methods,
+          lockbox_default_instructions
         `);
 
       if (error) {

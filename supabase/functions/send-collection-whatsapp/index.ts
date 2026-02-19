@@ -14,6 +14,7 @@ interface CollectionWhatsAppRequest {
   notes?: string | null;
   photoUrls?: string[];
   tenantId?: string;
+  defaultInstructions?: string | null;
 }
 
 function replaceVars(template: string, data: CollectionWhatsAppRequest): string {
@@ -26,7 +27,8 @@ function replaceVars(template: string, data: CollectionWhatsAppRequest): string 
     .replace(/\{\{delivery_address\}\}/g, data.deliveryAddress || '')
     .replace(/\{\{booking_ref\}\}/g, data.bookingRef || '')
     .replace(/\{\{odometer\}\}/g, data.odometerReading || '')
-    .replace(/\{\{notes\}\}/g, data.notes || '');
+    .replace(/\{\{notes\}\}/g, data.notes || '')
+    .replace(/\{\{default_instructions\}\}/g, data.defaultInstructions || '');
 }
 
 function buildDynamicSections(data: CollectionWhatsAppRequest): string {
@@ -35,6 +37,10 @@ function buildDynamicSections(data: CollectionWhatsAppRequest): string {
   if (data.lockboxCode) {
     sections += `\n\n🔑 *Lockbox Code:* ${data.lockboxCode}`;
     if (data.lockboxInstructions) sections += `\n${data.lockboxInstructions}`;
+  }
+
+  if (data.defaultInstructions) {
+    sections += `\n\n📋 *Instructions:*\n${data.defaultInstructions}`;
   }
 
   if (data.deliveryAddress) {

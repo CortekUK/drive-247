@@ -20,15 +20,69 @@ interface NotifyRequest {
   deliveryAddress: string;
   bookingRef: string;
   tenantId?: string;
+  odometerReading?: string | null;
+  notes?: string | null;
+  photoUrls?: string[];
+  defaultInstructions?: string | null;
 }
 
-const getEmailHtml = (data: NotifyRequest) => {
+interface TenantBranding {
+  tenantName: string;
+  contactEmail: string;
+  primaryColor: string;
+  accentColor: string;
+  logoUrl: string;
+}
+
+const getEmailHtml = (data: NotifyRequest, branding: TenantBranding) => {
+  const { tenantName, contactEmail, primaryColor, accentColor, logoUrl } = branding;
+  const deliveryRow = data.deliveryAddress ? `
+                                            <tr>
+                                                <td style="padding: 8px 0; color: #666; font-size: 14px;">Delivery Address:</td>
+                                                <td style="padding: 8px 0; color: #1a1a1a; font-weight: 600; font-size: 14px; text-align: right;">${data.deliveryAddress}</td>
+                                            </tr>` : '';
+
+  const instructionsRow = data.lockboxInstructions ? `
+                                            <tr>
+                                                <td style="padding: 8px 0; color: #666; font-size: 14px;">Instructions:</td>
+                                                <td style="padding: 8px 0; color: #1a1a1a; font-weight: 600; font-size: 14px; text-align: right;">${data.lockboxInstructions}</td>
+                                            </tr>` : '';
+
+  const odometerRow = data.odometerReading ? `
+                                            <tr>
+                                                <td style="padding: 8px 0; color: #666; font-size: 14px;">Odometer Reading:</td>
+                                                <td style="padding: 8px 0; color: #1a1a1a; font-weight: 600; font-size: 14px; text-align: right;">${data.odometerReading}</td>
+                                            </tr>` : '';
+
+  const notesRow = data.notes ? `
+                                            <tr>
+                                                <td style="padding: 8px 0; color: #666; font-size: 14px;" colspan="2">
+                                                    <strong>Notes:</strong>
+                                                    <p style="margin: 5px 0 0; color: #1a1a1a; font-size: 14px;">${data.notes}</p>
+                                                </td>
+                                            </tr>` : '';
+
+  const photosSection = data.photoUrls && data.photoUrls.length > 0 ? `
+                            <table role="presentation" style="width: 100%; border-collapse: collapse; margin-bottom: 25px;">
+                                <tr>
+                                    <td style="padding: 0;">
+                                        <h3 style="margin: 0 0 15px; color: #1a1a1a; font-size: 16px;">Vehicle Photos</h3>
+                                        ${data.photoUrls.map(url => `<img src="${url}" alt="Vehicle photo" style="width: 100%; max-width: 560px; border-radius: 8px; margin-bottom: 10px; display: block;">`).join('\n                                        ')}
+                                    </td>
+                                </tr>
+                            </table>` : '';
+
+  const headerContent = logoUrl
+    ? `<img src="${logoUrl}" alt="${tenantName}" style="max-height: 50px; max-width: 200px; margin-bottom: 10px; display: block; margin-left: auto; margin-right: auto;">
+                            <h1 style="margin: 0; color: ${primaryColor}; font-size: 22px; letter-spacing: 2px;">${tenantName.toUpperCase()}</h1>`
+    : `<h1 style="margin: 0; color: ${primaryColor}; font-size: 28px; letter-spacing: 2px;">${tenantName.toUpperCase()}</h1>`;
+
   return `
 <!DOCTYPE html>
 <html>
 <head>
     <meta charset="utf-8">
-    <title>Lockbox Code - DRIVE 247</title>
+    <title>Vehicle Keys - ${tenantName}</title>
 </head>
 <body style="margin: 0; padding: 0; font-family: 'Segoe UI', Arial, sans-serif; background-color: #f5f5f5;">
     <table role="presentation" style="width: 100%; border-collapse: collapse;">
@@ -36,8 +90,8 @@ const getEmailHtml = (data: NotifyRequest) => {
             <td align="center" style="padding: 40px 0;">
                 <table role="presentation" style="width: 600px; max-width: 100%; border-collapse: collapse; background: white; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.1);">
                     <tr>
-                        <td style="background: linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 100%); padding: 30px; border-radius: 12px 12px 0 0; text-align: center;">
-                            <h1 style="margin: 0; color: #C5A572; font-size: 28px; letter-spacing: 2px;">DRIVE 247</h1>
+                        <td style="background: ${accentColor}; padding: 30px; border-radius: 12px 12px 0 0; text-align: center;">
+                            ${headerContent}
                         </td>
                     </tr>
                     <tr>
@@ -51,12 +105,12 @@ const getEmailHtml = (data: NotifyRequest) => {
                         <td style="padding: 30px;">
                             <h2 style="margin: 0 0 20px; color: #1a1a1a; font-size: 22px;">Hello ${data.customerName},</h2>
                             <p style="margin: 0 0 20px; color: #444; line-height: 1.6; font-size: 16px;">
-                                Your vehicle is ready for collection! Please use the lockbox code below to retrieve the keys at the delivery address.
+                                Your vehicle is ready for collection! Please use the lockbox code below to retrieve the keys.
                             </p>
-                            <table role="presentation" style="width: 100%; border-collapse: collapse; background: linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 100%); border-radius: 8px; margin-bottom: 25px;">
+                            <table role="presentation" style="width: 100%; border-collapse: collapse; background: ${accentColor}; border-radius: 8px; margin-bottom: 25px;">
                                 <tr>
                                     <td style="padding: 25px; text-align: center;">
-                                        <p style="margin: 0 0 5px; color: #C5A572; font-size: 14px; text-transform: uppercase; letter-spacing: 1px;">Your Lockbox Code</p>
+                                        <p style="margin: 0 0 5px; color: ${primaryColor}; font-size: 14px; text-transform: uppercase; letter-spacing: 1px;">Your Lockbox Code</p>
                                         <p style="margin: 0; color: white; font-size: 42px; font-weight: 700; letter-spacing: 8px;">${data.lockboxCode}</p>
                                     </td>
                                 </tr>
@@ -73,31 +127,28 @@ const getEmailHtml = (data: NotifyRequest) => {
                                                 <td style="padding: 8px 0; color: #666; font-size: 14px;">Vehicle:</td>
                                                 <td style="padding: 8px 0; color: #1a1a1a; font-weight: 600; font-size: 14px; text-align: right;">${data.vehicleName} (${data.vehicleReg})</td>
                                             </tr>
-                                            <tr>
-                                                <td style="padding: 8px 0; color: #666; font-size: 14px;">Delivery Address:</td>
-                                                <td style="padding: 8px 0; color: #1a1a1a; font-weight: 600; font-size: 14px; text-align: right;">${data.deliveryAddress}</td>
-                                            </tr>
-                                            ${data.lockboxInstructions ? `
-                                            <tr>
-                                                <td style="padding: 8px 0; color: #666; font-size: 14px;">Instructions:</td>
-                                                <td style="padding: 8px 0; color: #1a1a1a; font-weight: 600; font-size: 14px; text-align: right;">${data.lockboxInstructions}</td>
-                                            </tr>
-                                            ` : ''}
+                                            ${deliveryRow}
+                                            ${instructionsRow}
+                                            ${odometerRow}
+                                            ${notesRow}
                                         </table>
                                     </td>
                                 </tr>
                             </table>
+                            ${photosSection}
                             <table role="presentation" style="width: 100%; border-collapse: collapse; background: #f0f9ff; border-left: 4px solid #0ea5e9; border-radius: 0 8px 8px 0; margin-bottom: 25px;">
                                 <tr>
                                     <td style="padding: 20px;">
                                         <h3 style="margin: 0 0 10px; color: #0369a1; font-size: 14px;">How To Use The Lockbox</h3>
-                                        <ul style="margin: 0; padding-left: 20px; color: #0369a1; font-size: 14px; line-height: 1.8;">
-                                            <li>Go to the delivery address shown above</li>
+                                        ${data.defaultInstructions
+                                          ? `<p style="margin: 0; color: #0369a1; font-size: 14px; line-height: 1.8; white-space: pre-line;">${data.defaultInstructions}</p>`
+                                          : `<ul style="margin: 0; padding-left: 20px; color: #0369a1; font-size: 14px; line-height: 1.8;">
+                                            ${data.deliveryAddress ? '<li>Go to the delivery address shown above</li>' : ''}
                                             <li>Locate the lockbox near the vehicle</li>
                                             <li>Enter the code <strong>${data.lockboxCode}</strong> to open the lockbox</li>
                                             <li>Retrieve the vehicle keys from inside</li>
                                             <li>Close the lockbox after retrieving the keys</li>
-                                        </ul>
+                                        </ul>`}
                                     </td>
                                 </tr>
                             </table>
@@ -113,12 +164,12 @@ const getEmailHtml = (data: NotifyRequest) => {
                                 </tr>
                             </table>
                             <p style="margin: 0 0 20px; color: #444; line-height: 1.6; font-size: 16px;">
-                                Thank you for choosing DRIVE 247. We hope you have a wonderful experience!
+                                Thank you for choosing ${tenantName}. We hope you have a wonderful experience!
                             </p>
                             <table role="presentation" style="width: 100%; border-collapse: collapse;">
                                 <tr>
                                     <td style="text-align: center; padding: 20px 0;">
-                                        <a href="mailto:support@drive-247.com" style="display: inline-block; background: #C5A572; color: white; padding: 14px 35px; border-radius: 6px; text-decoration: none; font-weight: 600; font-size: 16px;">Contact Support</a>
+                                        <a href="mailto:${contactEmail}" style="display: inline-block; background: ${primaryColor}; color: white; padding: 14px 35px; border-radius: 6px; text-decoration: none; font-weight: 600; font-size: 16px;">Contact Support</a>
                                     </td>
                                 </tr>
                             </table>
@@ -127,9 +178,9 @@ const getEmailHtml = (data: NotifyRequest) => {
                     <tr>
                         <td style="background: #f8f9fa; padding: 25px 30px; border-radius: 0 0 12px 12px; text-align: center;">
                             <p style="margin: 0 0 10px; color: #666; font-size: 14px;">
-                                Questions? Email us at <a href="mailto:support@drive-247.com" style="color: #C5A572; text-decoration: none;">support@drive-247.com</a>
+                                Questions? Email us at <a href="mailto:${contactEmail}" style="color: ${primaryColor}; text-decoration: none;">${contactEmail}</a>
                             </p>
-                            <p style="margin: 0; color: #999; font-size: 12px;">&copy; 2024 DRIVE 247. All rights reserved.</p>
+                            <p style="margin: 0; color: #999; font-size: 12px;">&copy; ${new Date().getFullYear()} ${tenantName}. All rights reserved.</p>
                         </td>
                     </tr>
                 </table>
@@ -203,21 +254,55 @@ serve(async (req) => {
         .replace(/\{\{vehicle_reg\}\}/g, data.vehicleReg)
         .replace(/\{\{lockbox_code\}\}/g, data.lockboxCode)
         .replace(/\{\{lockbox_instructions\}\}/g, data.lockboxInstructions || '')
-        .replace(/\{\{delivery_address\}\}/g, data.deliveryAddress)
-        .replace(/\{\{booking_ref\}\}/g, data.bookingRef);
+        .replace(/\{\{delivery_address\}\}/g, data.deliveryAddress || '')
+        .replace(/\{\{booking_ref\}\}/g, data.bookingRef)
+        .replace(/\{\{odometer\}\}/g, data.odometerReading || '')
+        .replace(/\{\{notes\}\}/g, data.notes || '')
+        .replace(/\{\{default_instructions\}\}/g, data.defaultInstructions || '');
     };
 
-    // Build customer email using lockbox_templates or fallback
-    let customerSubject = `Your Lockbox Code - ${data.vehicleName} | DRIVE 247`;
-    let customerHtml = getEmailHtml(data);
-    let smsMessage = `DRIVE 247: Your lockbox code is ${data.lockboxCode}. Vehicle: ${data.vehicleName} (${data.vehicleReg}). Address: ${data.deliveryAddress}. Do not share this code.`;
+    // Tenant info defaults
+    let tenantName = 'DRIVE 247';
+    let contactEmail = 'support@drive-247.com';
+    let primaryColor = '#C5A572';
+    let accentColor = '#1a1a1a';
+    let logoUrl = '';
+    let supabase: any = null;
 
+    // Create supabase client if tenantId provided
     if (data.tenantId) {
-      try {
-        const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
-        const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-        const supabase = createClient(supabaseUrl, supabaseServiceKey);
+      const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+      const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+      supabase = createClient(supabaseUrl, supabaseServiceKey);
 
+      // Fetch tenant info for branding
+      try {
+        const { data: tenantData } = await supabase
+          .from('tenants')
+          .select('company_name, app_name, contact_email, slug, primary_color, accent_color, logo_url')
+          .eq('id', data.tenantId)
+          .single();
+
+        if (tenantData) {
+          tenantName = tenantData.app_name || tenantData.company_name || tenantName;
+          contactEmail = tenantData.contact_email || contactEmail;
+          primaryColor = tenantData.primary_color || primaryColor;
+          accentColor = tenantData.accent_color || accentColor;
+          logoUrl = tenantData.logo_url || '';
+        }
+      } catch (e) {
+        console.warn('Error fetching tenant info:', e);
+      }
+    }
+
+    // Build customer email using lockbox_templates or fallback
+    let customerSubject = `Your Vehicle Keys - ${tenantName}`;
+    const branding: TenantBranding = { tenantName, contactEmail, primaryColor, accentColor, logoUrl };
+    let customerHtml = getEmailHtml(data, branding);
+    let smsMessage = `${tenantName}: Your lockbox code is ${data.lockboxCode}. Vehicle: ${data.vehicleName} (${data.vehicleReg}).${data.deliveryAddress ? ` Address: ${data.deliveryAddress}.` : ''} Do not share this code.`;
+
+    if (data.tenantId && supabase) {
+      try {
         // Check lockbox_templates table for custom templates
         const { data: templates } = await supabase
           .from('lockbox_templates')
@@ -232,10 +317,150 @@ serve(async (req) => {
           // Use custom lockbox email template
           customerSubject = replaceVars(emailTemplate.subject || customerSubject);
           const bodyText = replaceVars(emailTemplate.body);
-          // Wrap plain text in simple HTML
-          customerHtml = `<div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
-            ${bodyText.split('\n').map(line => line.trim() ? `<p style="margin: 0 0 10px; color: #333; line-height: 1.6;">${line}</p>` : '<br/>').join('\n')}
-          </div>`;
+
+          // Convert plain text body — first non-empty line is the greeting, rest are body paragraphs
+          const lines = bodyText.split('\n');
+          const firstLine = lines.find(l => l.trim());
+          const restLines = lines.slice(lines.indexOf(firstLine!) + 1);
+          const greetingHtml = firstLine ? `<p style="margin: 0 0 15px; color: #1a1a1a; font-size: 16px; font-weight: 600;">${firstLine.trim()}</p>` : '';
+          const bodyParagraphs = restLines.map(line =>
+            line.trim() ? `<p style="margin: 0 0 6px; color: #555; line-height: 1.5; font-size: 14px;">${line}</p>` : ''
+          ).filter(Boolean).join('\n                                ');
+          const bodyHtml = `<table role="presentation" style="width: 100%; border-collapse: collapse; background: #fafafa; border-radius: 8px; margin-bottom: 20px;">
+                                <tr>
+                                    <td style="padding: 20px;">
+                                        ${greetingHtml}
+                                        ${bodyParagraphs}
+                                    </td>
+                                </tr>
+                            </table>`;
+
+          // Build optional detail rows
+          const detailRows: string[] = [];
+          if (data.deliveryAddress) detailRows.push(`<tr><td style="padding: 8px 0; color: #666; font-size: 14px;">Delivery Address:</td><td style="padding: 8px 0; color: #1a1a1a; font-weight: 600; font-size: 14px; text-align: right;">${data.deliveryAddress}</td></tr>`);
+          if (data.lockboxInstructions) detailRows.push(`<tr><td style="padding: 8px 0; color: #666; font-size: 14px;">Lockbox Location:</td><td style="padding: 8px 0; color: #1a1a1a; font-weight: 600; font-size: 14px; text-align: right;">${data.lockboxInstructions}</td></tr>`);
+          if (data.odometerReading) detailRows.push(`<tr><td style="padding: 8px 0; color: #666; font-size: 14px;">Odometer Reading:</td><td style="padding: 8px 0; color: #1a1a1a; font-weight: 600; font-size: 14px; text-align: right;">${data.odometerReading}</td></tr>`);
+          if (data.notes) detailRows.push(`<tr><td style="padding: 8px 0; color: #666; font-size: 14px;" colspan="2"><strong>Notes:</strong><p style="margin: 5px 0 0; color: #1a1a1a; font-size: 14px;">${data.notes}</p></td></tr>`);
+
+          // Build instructions section
+          let instructionsHtml = '';
+          if (data.defaultInstructions && !emailTemplate.body.includes('{{default_instructions}}')) {
+            instructionsHtml = `
+                            <table role="presentation" style="width: 100%; border-collapse: collapse; background: #f0f9ff; border-left: 4px solid #0ea5e9; border-radius: 0 8px 8px 0; margin-bottom: 25px;">
+                                <tr>
+                                    <td style="padding: 20px;">
+                                        <h3 style="margin: 0 0 10px; color: #0369a1; font-size: 14px;">How To Use The Lockbox</h3>
+                                        <p style="margin: 0; color: #0369a1; font-size: 14px; line-height: 1.8; white-space: pre-line;">${data.defaultInstructions}</p>
+                                    </td>
+                                </tr>
+                            </table>`;
+          }
+
+          // Build photos section
+          let photosHtml = '';
+          if (data.photoUrls && data.photoUrls.length > 0) {
+            photosHtml = `
+                            <table role="presentation" style="width: 100%; border-collapse: collapse; margin-bottom: 25px;">
+                                <tr>
+                                    <td style="padding: 0;">
+                                        <h3 style="margin: 0 0 15px; color: #1a1a1a; font-size: 16px;">Vehicle Photos</h3>
+                                        ${data.photoUrls.map(url => `<img src="${url}" alt="Vehicle photo" style="width: 100%; max-width: 560px; border-radius: 8px; margin-bottom: 10px; display: block;">`).join('\n                                        ')}
+                                    </td>
+                                </tr>
+                            </table>`;
+          }
+
+          // Build header content with logo or text
+          const customHeaderContent = logoUrl
+            ? `<img src="${logoUrl}" alt="${tenantName}" style="max-height: 50px; max-width: 200px; margin-bottom: 10px; display: block; margin-left: auto; margin-right: auto;">
+                            <h1 style="margin: 0; color: ${primaryColor}; font-size: 22px; letter-spacing: 2px;">${tenantName.toUpperCase()}</h1>`
+            : `<h1 style="margin: 0; color: ${primaryColor}; font-size: 28px; letter-spacing: 2px;">${tenantName.toUpperCase()}</h1>`;
+
+          // Wrap in professional email shell
+          customerHtml = `<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"><title>${customerSubject}</title></head>
+<body style="margin: 0; padding: 0; font-family: 'Segoe UI', Arial, sans-serif; background-color: #f5f5f5;">
+    <table role="presentation" style="width: 100%; border-collapse: collapse;">
+        <tr>
+            <td align="center" style="padding: 40px 0;">
+                <table role="presentation" style="width: 600px; max-width: 100%; border-collapse: collapse; background: white; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.1);">
+                    <tr>
+                        <td style="background: ${accentColor}; padding: 30px; border-radius: 12px 12px 0 0; text-align: center;">
+                            ${customHeaderContent}
+                        </td>
+                    </tr>
+                    <tr>
+                        <td style="padding: 30px 30px 0; text-align: center;">
+                            <span style="display: inline-block; background: #ecfdf5; color: #10b981; padding: 8px 20px; border-radius: 20px; font-weight: 600; font-size: 14px;">
+                                LOCKBOX CODE
+                            </span>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td style="padding: 30px;">
+                            ${bodyHtml}
+                            <table role="presentation" style="width: 100%; border-collapse: collapse; background: ${accentColor}; border-radius: 8px; margin: 25px 0;">
+                                <tr>
+                                    <td style="padding: 25px; text-align: center;">
+                                        <p style="margin: 0 0 5px; color: ${primaryColor}; font-size: 14px; text-transform: uppercase; letter-spacing: 1px;">Your Lockbox Code</p>
+                                        <p style="margin: 0; color: white; font-size: 42px; font-weight: 700; letter-spacing: 8px;">${data.lockboxCode}</p>
+                                    </td>
+                                </tr>
+                            </table>
+                            <table role="presentation" style="width: 100%; border-collapse: collapse; background: #f8f9fa; border-radius: 8px; margin-bottom: 25px;">
+                                <tr>
+                                    <td style="padding: 20px;">
+                                        <table role="presentation" style="width: 100%; border-collapse: collapse;">
+                                            <tr>
+                                                <td style="padding: 8px 0; color: #666; font-size: 14px;">Booking Reference:</td>
+                                                <td style="padding: 8px 0; color: #1a1a1a; font-weight: 600; font-size: 14px; text-align: right;">${data.bookingRef}</td>
+                                            </tr>
+                                            <tr>
+                                                <td style="padding: 8px 0; color: #666; font-size: 14px;">Vehicle:</td>
+                                                <td style="padding: 8px 0; color: #1a1a1a; font-weight: 600; font-size: 14px; text-align: right;">${data.vehicleName} (${data.vehicleReg})</td>
+                                            </tr>
+                                            ${detailRows.join('\n                                            ')}
+                                        </table>
+                                    </td>
+                                </tr>
+                            </table>
+                            ${photosHtml}
+                            ${instructionsHtml}
+                            <table role="presentation" style="width: 100%; border-collapse: collapse; background: #fef2f2; border-left: 4px solid #dc2626; border-radius: 0 8px 8px 0; margin-bottom: 25px;">
+                                <tr>
+                                    <td style="padding: 20px;">
+                                        <h3 style="margin: 0 0 10px; color: #991b1b; font-size: 14px;">Important</h3>
+                                        <p style="margin: 0; color: #991b1b; font-size: 14px; line-height: 1.6;">
+                                            Please do not share this lockbox code with anyone. This code is for your use only.
+                                            If you have any issues accessing the lockbox, please contact us immediately.
+                                        </p>
+                                    </td>
+                                </tr>
+                            </table>
+                            <table role="presentation" style="width: 100%; border-collapse: collapse;">
+                                <tr>
+                                    <td style="text-align: center; padding: 20px 0;">
+                                        <a href="mailto:${contactEmail}" style="display: inline-block; background: ${primaryColor}; color: white; padding: 14px 35px; border-radius: 6px; text-decoration: none; font-weight: 600; font-size: 16px;">Contact Support</a>
+                                    </td>
+                                </tr>
+                            </table>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td style="background: #f8f9fa; padding: 25px 30px; border-radius: 0 0 12px 12px; text-align: center;">
+                            <p style="margin: 0 0 10px; color: #666; font-size: 14px;">
+                                Questions? Email us at <a href="mailto:${contactEmail}" style="color: ${primaryColor}; text-decoration: none;">${contactEmail}</a>
+                            </p>
+                            <p style="margin: 0; color: #999; font-size: 12px;">&copy; ${new Date().getFullYear()} ${tenantName}. All rights reserved.</p>
+                        </td>
+                    </tr>
+                </table>
+            </td>
+        </tr>
+    </table>
+</body>
+</html>`;
           console.log('Using custom lockbox email template');
         } else {
           // Fallback to email template service
@@ -267,11 +492,13 @@ serve(async (req) => {
       }
     }
 
-    // Send customer email
+    // Send customer email (pass supabase + tenantId for tenant-specific sender)
     results.customerEmail = await sendEmail(
       data.customerEmail,
       customerSubject,
-      customerHtml
+      customerHtml,
+      supabase,
+      data.tenantId
     );
     console.log('Customer email result:', results.customerEmail);
 

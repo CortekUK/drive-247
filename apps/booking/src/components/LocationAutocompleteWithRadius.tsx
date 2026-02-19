@@ -101,7 +101,6 @@ const LocationAutocompleteWithRadius = ({
       const request: google.maps.places.AutocompleteRequest = {
         input: inputValue,
         sessionToken: sessionManager.current.getToken(),
-        includedRegionCodes: ["us"],
       };
 
       // Add location bias if we have center coordinates

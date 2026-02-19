@@ -18,7 +18,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useAuditLog } from "@/hooks/use-audit-log";
 import { useTenant } from "@/contexts/TenantContext";
 import { useCustomerVehicleRental } from "@/hooks/use-customer-vehicle-rental";
-import { useCustomerBalanceWithStatus } from "@/hooks/use-customer-balance";
+import { useCustomerBalanceWithStatus, useRentalChargesAndPayments } from "@/hooks/use-customer-balance";
 import { createInvoice } from "@/lib/invoice-utils";
 import { cn } from "@/lib/utils";
 import { formatCurrency, getCurrencySymbol } from "@/lib/format-utils";
@@ -116,9 +116,20 @@ export const AddPaymentDialog = ({
   const { data: inferredRentalId } = useCustomerVehicleRental(selectedCustomerId, selectedVehicleId);
   const rentalId = propRentalId || inferredRentalId;
 
-  // Get outstanding balance
+  // Get outstanding balance — use rental-specific when rental_id is available, fall back to customer-wide
   const { data: customerBalanceData } = useCustomerBalanceWithStatus(selectedCustomerId);
-  const outstandingBalance = customerBalanceData?.status === 'In Debt' ? customerBalanceData.balance : 0;
+  const { data: rentalChargesData } = useRentalChargesAndPayments(rentalId);
+  const customerOutstanding = customerBalanceData?.status === 'In Debt' ? customerBalanceData.balance : 0;
+  const rentalOutstanding = rentalChargesData?.outstanding || 0;
+  // Use the higher of rental-specific or customer-wide outstanding (rental charges may have future due dates filtered out in customer balance)
+  const outstandingBalance = rentalId ? Math.max(rentalOutstanding, customerOutstanding) : customerOutstanding;
+
+  // Auto-fill amount with outstanding balance when it loads (and no defaultAmount was provided)
+  useEffect(() => {
+    if (open && outstandingBalance > 0 && !defaultAmount && !form.getValues("amount")) {
+      form.setValue("amount", outstandingBalance);
+    }
+  }, [open, outstandingBalance, defaultAmount]);
 
   // Vehicle lookup for selected customer
   const { data: activeRentals } = useQuery({
