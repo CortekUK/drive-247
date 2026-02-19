@@ -474,6 +474,16 @@ export default function AgreementsPage() {
                   Review and sign your rental agreement below
                 </p>
               </div>
+              {signingUrl && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => window.open(signingUrl, '_blank')}
+                >
+                  <ExternalLink className="h-4 w-4 mr-1" />
+                  Open in New Tab
+                </Button>
+              )}
             </div>
           </DialogHeader>
           <div className="flex-1 overflow-hidden">
