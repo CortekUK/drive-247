@@ -437,7 +437,7 @@ export function BonzahSettings() {
                     <Wallet className="h-5 w-5 text-amber-600 dark:text-amber-400" />
                   </div>
                   <div>
-                    <p className="text-xs text-amber-700 dark:text-amber-400 font-medium">CD Balance</p>
+                    <p className="text-xs text-amber-700 dark:text-amber-400 font-medium">Bonzah Balance</p>
                     <p className="text-2xl font-bold text-amber-900 dark:text-amber-200">
                       {balanceNumber != null
                         ? `$${balanceNumber.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
@@ -469,7 +469,7 @@ export function BonzahSettings() {
                 </div>
               </div>
               <p className="text-xs text-amber-600 dark:text-amber-500 mt-2">
-                This is the broker-level CD balance. Policies are issued from your <strong>allocated</strong> balance — allocate funds in the Bonzah portal to activate pending policies.
+                This is the broker-level Bonzah balance. Policies are issued from your <strong>allocated</strong> balance — allocate funds in the Bonzah portal to activate pending policies.
               </p>
 
               {/* Pending policies context */}
@@ -482,7 +482,7 @@ export function BonzahSettings() {
                         {pendingCount} {pendingCount === 1 ? 'policy' : 'policies'} quoted — ${pendingTotal.toFixed(2)} needed to activate
                       </p>
                       <p className="text-xs text-muted-foreground mt-0.5">
-                        Allocate at least ${pendingTotal.toFixed(2)} from your CD balance in the Bonzah portal, then retry.
+                        Allocate at least ${pendingTotal.toFixed(2)} from your Bonzah balance in the Bonzah portal, then retry.
                       </p>
                       {retryProgress.isRetrying && (
                         <p className="text-xs text-muted-foreground mt-0.5">
@@ -643,7 +643,7 @@ export function BonzahSettings() {
               Low Balance Alert
             </DialogTitle>
             <DialogDescription>
-              Get notified when your Bonzah CD balance drops below a threshold.
+              Get notified when your Bonzah balance drops below a threshold.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-2">

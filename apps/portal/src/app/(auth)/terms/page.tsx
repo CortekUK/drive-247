@@ -71,7 +71,7 @@ export default function TermsPage() {
             <ul className="list-disc pl-6 text-sm text-muted-foreground space-y-1">
               <li>Payment processors (e.g., Stripe);</li>
               <li>Insurance providers (e.g., Bonzah);</li>
-              <li>Electronic signature services (e.g., DocuSign);</li>
+              <li>Electronic signature services (e.g., BoldSign);</li>
               <li>Identity verification services; and</li>
               <li>Other external integrations.</li>
             </ul>

@@ -81,7 +81,7 @@ export function useBonzahAlertConfig() {
             object_type: 'Integration',
             object_id: tenant.id,
             title: `Bonzah Low Balance Alert — Below ${formattedThreshold}`,
-            message: `Monitoring your Bonzah CD balance. You will be notified when it drops below ${formattedThreshold}.`,
+            message: `Monitoring your Bonzah balance. You will be notified when it drops below ${formattedThreshold}.`,
             due_on: today,
             remind_on: today,
             severity: 'info',
@@ -95,7 +95,7 @@ export function useBonzahAlertConfig() {
             .from('reminders')
             .update({
               title: `Bonzah Low Balance Alert — Below ${formattedThreshold}`,
-              message: `Monitoring your Bonzah CD balance. You will be notified when it drops below ${formattedThreshold}.`,
+              message: `Monitoring your Bonzah balance. You will be notified when it drops below ${formattedThreshold}.`,
               context: { threshold: newConfig.threshold },
               updated_at: new Date().toISOString(),
             })

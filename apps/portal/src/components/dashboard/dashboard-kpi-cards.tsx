@@ -84,7 +84,7 @@ const KPICard = ({
             </TooltipProvider>
           )}
           {badge && (
-            <Badge variant="secondary" className="h-4 text-xs px-1">
+            <Badge variant="secondary" className="text-[10px] leading-tight px-1.5 py-0.5 whitespace-nowrap">
               {badge}
             </Badge>
           )}

@@ -75,7 +75,7 @@ function generateCustomerEmailContent(data: BookingNotificationRequest, branding
                                 </tr>
                             </table>
                             <p style="margin: 0 0 15px; color: #444; line-height: 1.6; font-size: 16px;">
-                                You will receive the rental agreement via DocuSign shortly. Please review and sign the document to complete your booking.
+                                You will receive the rental agreement shortly via email. Please review and sign the document electronically to complete your booking.
                             </p>
                             <p style="margin: 0 0 15px; color: #444; line-height: 1.6; font-size: 16px;">
                                 If you have any questions, please don't hesitate to contact us.

@@ -1,11 +1,8 @@
 {
   "$schema": "https://turbo.build/schema.json",
   "globalEnv": [
-    "DOCUSIGN_INTEGRATION_KEY",
-    "DOCUSIGN_USER_ID",
-    "DOCUSIGN_PRIVATE_KEY",
-    "DOCUSIGN_BASE_URL",
-    "DOCUSIGN_ACCOUNT_ID",
+    "BOLDSIGN_API_KEY",
+    "BOLDSIGN_BASE_URL",
     "SUPABASE_SERVICE_ROLE_KEY",
     "NEXT_PUBLIC_SUPABASE_URL",
     "NEXT_PUBLIC_SUPABASE_ANON_KEY"

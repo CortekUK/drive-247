@@ -25,6 +25,7 @@ import { KeyHandoverPhotos } from "@/components/rentals/key-handover-photos";
 import { supabase } from "@/integrations/supabase/client";
 import { useTenant } from "@/contexts/TenantContext";
 import { useToast } from "@/hooks/use-toast";
+import { useRentalSettings } from "@/hooks/use-rental-settings";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -43,6 +44,7 @@ interface KeyHandoverSectionProps {
   needsAction?: boolean;
   /** Lockbox delivery props */
   isDeliveryRental?: boolean;
+  vehicleId?: string;
   vehicleLockboxCode?: string | null;
   vehicleLockboxInstructions?: string | null;
   deliveryMethod?: string | null;
@@ -60,6 +62,7 @@ export const KeyHandoverSection = ({
   rentalStatus,
   needsAction = false,
   isDeliveryRental = false,
+  vehicleId,
   vehicleLockboxCode = null,
   vehicleLockboxInstructions = null,
   deliveryMethod: savedDeliveryMethod = null,
@@ -89,6 +92,7 @@ export const KeyHandoverSection = ({
 
   const { tenant } = useTenant();
   const { toast } = useToast();
+  const { settings: rentalSettings } = useRentalSettings();
 
   const [confirmHandover, setConfirmHandover] = useState<HandoverType | null>(null);
   const [confirmUndo, setConfirmUndo] = useState<HandoverType | null>(null);
@@ -110,8 +114,15 @@ export const KeyHandoverSection = ({
   const [whatsAppPhone, setWhatsAppPhone] = useState(customerPhone || '');
   const [isSendingWhatsApp, setIsSendingWhatsApp] = useState(false);
 
-  const showLockboxOption = !!vehicleLockboxCode;
-  const showNoLockboxWarning = !vehicleLockboxCode && tenant?.lockbox_enabled;
+  // Show lockbox option when feature is enabled in tenant settings (not dependent on vehicle having a code)
+  const showLockboxOption = !!rentalSettings?.lockbox_enabled;
+
+  // Helper to generate a lockbox code using the tenant's configured length
+  const generateLockboxCode = (): string => {
+    const length = rentalSettings?.lockbox_code_length || 4;
+    const max = Math.pow(10, length);
+    return Math.floor(Math.random() * max).toString().padStart(length, '0');
+  };
 
   // Sync local state with server data
   useEffect(() => {
@@ -151,10 +162,37 @@ export const KeyHandoverSection = ({
   const handleConfirmHandover = async () => {
     if (!confirmHandover) return;
 
+    // Track the resolved lockbox code (existing or auto-generated) for use across notifications
+    let resolvedLockboxCode = vehicleLockboxCode;
+
     // If giving handover with lockbox delivery method, send notification and save delivery_method
     if (confirmHandover === "giving" && showLockboxOption && deliveryMethodChoice === "lockbox") {
       setIsSendingLockbox(true);
       try {
+        // Use existing code or auto-generate one
+        let lockboxCode = resolvedLockboxCode;
+        if (!lockboxCode && vehicleId) {
+          lockboxCode = generateLockboxCode();
+          resolvedLockboxCode = lockboxCode;
+          // Save the generated code to the vehicle
+          const { error: vehicleUpdateError } = await supabase
+            .from("vehicles")
+            .update({ lockbox_code: lockboxCode })
+            .eq("id", vehicleId);
+
+          if (vehicleUpdateError) {
+            console.error("Failed to save auto-generated lockbox code:", vehicleUpdateError);
+            toast({
+              title: "Error",
+              description: "Failed to generate lockbox code. Please try again.",
+              variant: "destructive",
+            });
+            setIsSendingLockbox(false);
+            setConfirmHandover(null);
+            return;
+          }
+        }
+
         // Save delivery_method on the rental
         await supabase
           .from("rentals")
@@ -169,7 +207,7 @@ export const KeyHandoverSection = ({
             customerPhone,
             vehicleName,
             vehicleReg,
-            lockboxCode: vehicleLockboxCode,
+            lockboxCode,
             lockboxInstructions: vehicleLockboxInstructions || '',
             deliveryAddress: deliveryAddress || '',
             bookingRef,
@@ -215,7 +253,7 @@ export const KeyHandoverSection = ({
             vehicleName,
             vehicleReg,
             bookingRef,
-            lockboxCode: vehicleLockboxCode || null,
+            lockboxCode: resolvedLockboxCode || null,
             lockboxInstructions: vehicleLockboxInstructions || null,
             deliveryAddress: deliveryAddress || null,
             odometerReading: givingMileage || null,
@@ -346,11 +384,11 @@ export const KeyHandoverSection = ({
               </div>
             )}
 
-            {/* Warning if delivery rental but no lockbox code on vehicle */}
-            {showNoLockboxWarning && !givingCompleted && !isClosed && (
+            {/* Info: code will be auto-generated if vehicle doesn't have one */}
+            {showLockboxOption && !vehicleLockboxCode && deliveryMethodChoice === 'lockbox' && !givingCompleted && !isClosed && (
               <div className="flex items-center gap-2 text-muted-foreground text-xs p-2 border rounded-md bg-muted/30">
-                <AlertCircle className="h-3.5 w-3.5 flex-shrink-0" />
-                <span>This vehicle has no lockbox code configured. Only in-person handoff is available.</span>
+                <Lock className="h-3.5 w-3.5 flex-shrink-0" />
+                <span>A lockbox code will be auto-generated for this vehicle when you confirm collection.</span>
               </div>
             )}
 

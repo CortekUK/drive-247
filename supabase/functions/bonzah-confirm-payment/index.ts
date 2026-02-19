@@ -177,7 +177,7 @@ async function sendInsufficientBalanceNotifications(
       user_id: user.id,
       tenant_id: tenantId,
       title: 'Insurance Pending — Insufficient Allocated Balance',
-      message: `Insurance for ${customerName} (${rentalRef}) is quoted but could not be activated — your Bonzah allocated balance is too low. Premium: $${premium}, CD Balance: $${cdBalance ?? 'unknown'}. Please allocate more funds in your Bonzah portal.`,
+      message: `Insurance for ${customerName} (${rentalRef}) is quoted but could not be activated — your Bonzah allocated balance is too low. Premium: $${premium}, Bonzah Balance: $${cdBalance ?? 'unknown'}. Please allocate more funds in your Bonzah portal.`,
       type: 'bonzah_insufficient_balance',
       is_read: false,
       link: `/rentals/${policyRecord.rental_id}`,
@@ -232,12 +232,12 @@ async function sendInsufficientBalanceNotifications(
                                     <td style="padding: 10px 15px; border: 1px solid #eee; color: #CC004A; font-weight: 600;">$${premium}</td>
                                 </tr>
                                 <tr>
-                                    <td style="padding: 10px 15px; background: #f8f9fa; border: 1px solid #eee; font-weight: 600;">CD Balance (Broker Total)</td>
+                                    <td style="padding: 10px 15px; background: #f8f9fa; border: 1px solid #eee; font-weight: 600;">Bonzah Balance (Broker Total)</td>
                                     <td style="padding: 10px 15px; border: 1px solid #eee;">$${cdBalance ?? 'Unknown'}</td>
                                 </tr>
                             </table>
                             <p style="color: #333; font-size: 14px; line-height: 1.6; margin: 15px 0;">
-                                <strong>What to do:</strong> Log in to your Bonzah portal and allocate more funds from your CD balance. Once allocated, you can retry the purchase from the rental detail page. The customer's booking is not affected — it has been processed normally.
+                                <strong>What to do:</strong> Log in to your Bonzah portal and allocate more funds from your Bonzah balance. Once allocated, you can retry the purchase from the rental detail page. The customer's booking is not affected — it has been processed normally.
                             </p>
                         </td>
                     </tr>`
@@ -313,10 +313,12 @@ serve(async (req) => {
     let policyIssued = false
     let pdfIds: Record<string, string> = {}
     let cdBalance: number | null = null
+    let bonzahMode: 'test' | 'live' = 'test'
 
     try {
       // Get per-tenant Bonzah credentials
       const credentials = await getTenantBonzahCredentials(supabase, policyRecord.tenant_id)
+      bonzahMode = credentials.mode
 
       // If payment_id is missing, try to recover it by re-creating the finalized quote
       let paymentId = policyRecord.payment_id
@@ -339,7 +341,7 @@ serve(async (req) => {
         console.log('[Bonzah Payment] payment_id recovered and saved:', paymentId)
       }
 
-      // Check CD balance first (captured in outer scope for error handling)
+      // Check Bonzah balance first (captured in outer scope for error handling)
       try {
         const balanceResponse = await bonzahFetchWithCredentials<{ status: number; data: { amount: string } }>(
           '/Bonzah/cdBalance',
@@ -348,9 +350,9 @@ serve(async (req) => {
           'GET'
         )
         cdBalance = balanceResponse?.data?.amount != null ? Number(balanceResponse.data.amount) : null
-        console.log('[Bonzah Payment] CD Balance:', cdBalance)
+        console.log('[Bonzah Payment] Bonzah Balance:', cdBalance)
       } catch (balErr) {
-        console.log('[Bonzah Payment] Could not check CD balance:', balErr)
+        console.log('[Bonzah Payment] Could not check Bonzah balance:', balErr)
       }
 
       // Call the /Bonzah/payment endpoint to complete payment and issue policy
@@ -387,8 +389,8 @@ serve(async (req) => {
         const errorMsg = paymentResponse.txt || `Bonzah payment returned status ${paymentResponse.status}`
         console.error('[Bonzah Payment] Non-zero payment status:', paymentResponse.status, errorMsg)
 
-        // Detect balance errors by keyword only — CD balance is broker-level, not allocated
-        const balanceKeywords = ['insufficient', 'balance', 'fund', 'credit', 'cd balance', 'allocat']
+        // Detect balance errors by keyword only — Bonzah balance is broker-level, not allocated
+        const balanceKeywords = ['insufficient', 'balance', 'fund', 'credit', 'bonzah balance', 'allocat']
         const isBalanceError = balanceKeywords.some(kw => errorMsg.toLowerCase().includes(kw))
 
         const newStatus = isBalanceError ? 'insufficient_balance' : 'failed'
@@ -414,6 +416,7 @@ serve(async (req) => {
             cd_balance: cdBalance,
             premium: policyRecord.premium_amount,
             message: errorMsg,
+            bonzah_mode: bonzahMode,
           }, 422)
         }
 
@@ -423,12 +426,12 @@ serve(async (req) => {
       console.error('[Bonzah Payment] Error calling Bonzah API:', bonzahError)
       const errorMsg = bonzahError instanceof Error ? bonzahError.message : 'Unknown error'
 
-      // Detect balance errors by keyword only — CD balance is broker-level, not allocated
-      const balanceKeywords = ['insufficient', 'balance', 'fund', 'credit', 'cd balance', 'allocat']
+      // Detect balance errors by keyword only — Bonzah balance is broker-level, not allocated
+      const balanceKeywords = ['insufficient', 'balance', 'fund', 'credit', 'bonzah balance', 'allocat']
       const isBalanceError = balanceKeywords.some(kw => errorMsg.toLowerCase().includes(kw))
 
       const newStatus = isBalanceError ? 'insufficient_balance' : 'failed'
-      console.log(`[Bonzah Payment] Setting status to '${newStatus}' (balance error: ${isBalanceError}, CD balance: ${cdBalance}, premium: ${policyRecord.premium_amount})`)
+      console.log(`[Bonzah Payment] Setting status to '${newStatus}' (balance error: ${isBalanceError}, Bonzah balance: ${cdBalance}, premium: ${policyRecord.premium_amount})`)
 
       await supabase
         .from('bonzah_insurance_policies')
@@ -455,6 +458,7 @@ serve(async (req) => {
           cd_balance: cdBalance,
           premium: policyRecord.premium_amount,
           message: errorMsg,
+          bonzah_mode: bonzahMode,
         }, 422)
       }
 
@@ -500,6 +504,7 @@ serve(async (req) => {
       policy_issued: policyIssued,
       pdf_ids: pdfIds,
       status: policyIssued ? 'active' : 'payment_confirmed',
+      bonzah_mode: bonzahMode,
     })
 
   } catch (error) {

@@ -527,8 +527,8 @@ export default function BookingCheckoutStep({
       console.log('Customer Email:', formData.customerEmail);
       console.log('Customer Name:', formData.customerName);
 
-      // Use local API route instead of Supabase Edge Function
-      const response = await fetch('/api/docusign', {
+      // Send agreement for signing via BoldSign
+      const response = await fetch('/api/esign', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -550,14 +550,14 @@ export default function BookingCheckoutStep({
       console.log('Data:', JSON.stringify(data, null, 2));
 
       if (error) {
-        console.error("DocuSign call failed:", error);
-        toast.error("DocuSign unavailable. Agreement will be sent later.");
+        console.error("eSign call failed:", error);
+        toast.error("Agreement signing unavailable. Agreement will be sent later.");
       } else if (data?.ok) {
-        console.log('✅ DocuSign envelope created!');
+        console.log('eSign document created!');
         toast.success("Agreement sent to your email!", { duration: 4000 });
       } else {
-        console.warn("DocuSign returned error:", data);
-        toast.error(data?.error || "DocuSign failed. Agreement will be sent later.");
+        console.warn("eSign returned error:", data);
+        toast.error(data?.error || "Agreement failed to send. Will be sent later.");
       }
 
       // Proceed based on payable amount
@@ -597,8 +597,8 @@ export default function BookingCheckoutStep({
       }, 1500);
 
     } catch (err: any) {
-      console.error("DocuSign exception:", err);
-      toast.error("DocuSign error. Proceeding...");
+      console.error("eSign exception:", err);
+      toast.error("Agreement error. Proceeding...");
       setSendingDocuSign(false);
 
       setTimeout(async () => {

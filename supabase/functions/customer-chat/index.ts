@@ -180,7 +180,7 @@ ${payments.slice(0, 5).map((p, i) => `${i + 1}. ${formatCurrencyLocal(Number(p.a
 Rental Agreements:
 ${agreements.map((a, i) => `${i + 1}. Rental #${a.rental_number || 'N/A'}
    - Status: ${a.status || 'N/A'}
-   - DocuSign Status: ${a.docusign_status || 'N/A'}
+   - Agreement Status: ${a.docusign_status || 'N/A'}
    - Signed: ${a.signed_at ? 'Yes' : 'No'}`).join('\n')}` : '';
 
   const installmentsInfo = installments.length > 0 ? `

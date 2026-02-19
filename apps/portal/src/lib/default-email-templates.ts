@@ -60,7 +60,7 @@ export const DEFAULT_EMAIL_TEMPLATES: DefaultEmailTemplate[] = [
 <ol>
   <li>Our team will review your booking details and verify availability</li>
   <li>You will receive a confirmation email once approved</li>
-  <li>A rental agreement will be sent via DocuSign for your signature</li>
+  <li>A rental agreement will be sent for your electronic signature</li>
   <li>Bring your valid driving licence and booking confirmation on pickup day</li>
 </ol>
 
@@ -130,7 +130,7 @@ export const DEFAULT_EMAIL_TEMPLATES: DefaultEmailTemplate[] = [
 <p>Please ensure you complete the following before collecting your vehicle:</p>
 
 <ol>
-  <li><strong>Sign Your Rental Agreement</strong> - You will receive a separate email from DocuSign with your rental agreement. Please review and sign it electronically before pickup.</li>
+  <li><strong>Sign Your Rental Agreement</strong> - You will receive a separate email with your rental agreement. Please review and sign it electronically before pickup.</li>
   <li><strong>Prepare Your Documents</strong> - Bring a valid driving licence (held for minimum 1 year) and a secondary form of ID.</li>
   <li><strong>Payment Card</strong> - Bring the same card used for booking for verification purposes.</li>
 </ol>

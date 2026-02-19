@@ -35,7 +35,7 @@ export function useBonzahBalance() {
 
   const isBonzahConnected = !!bonzahStatus?.integration_bonzah && !!bonzahStatus?.bonzah_username;
 
-  // Fetch CD balance (auto-refresh every 60s when connected)
+  // Fetch Bonzah balance (auto-refresh every 60s when connected)
   const {
     data: balanceData,
     refetch,

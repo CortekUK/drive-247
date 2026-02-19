@@ -178,7 +178,7 @@ const BookingPending = () => {
                     </li>
                     <li className="flex items-start gap-3">
                       <span className="bg-accent text-background w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0">3</span>
-                      <span>Your rental agreement will be sent via DocuSign for signature</span>
+                      <span>Your rental agreement will be sent for electronic signature</span>
                     </li>
                     <li className="flex items-start gap-3">
                       <span className="bg-accent text-background w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0">4</span>

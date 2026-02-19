@@ -146,7 +146,7 @@ Uses Supabase Realtime channels (replaced Socket.io):
 
 ### Edge Functions
 100+ Supabase Edge Functions in `supabase/functions/`. Major categories:
-- **Webhooks**: Stripe (`stripe-webhook-test`, `stripe-webhook-live`, `stripe-connect-webhook`), DocuSign, Veriff
+- **Webhooks**: Stripe (`stripe-webhook-test`, `stripe-webhook-live`, `stripe-connect-webhook`), BoldSign (`boldsign-webhook`), Veriff
 - **Payments**: `create-checkout-session`, `create-preauth-checkout`, `capture-booking-payment`, `process-refund`, `schedule-refund`, installment handling
 - **Stripe Connect**: `create-connected-account`, `get-connect-onboarding-link`, `sync-stripe-account`
 - **Notifications**: `aws-ses-email`, `aws-sns-sms`, `send-booking-email`, 15+ `notify-*` functions
@@ -158,7 +158,7 @@ Uses Supabase Realtime channels (replaced Socket.io):
 - **Subscriptions**: `create-subscription-checkout`, `create-subscription-portal-session`, `get-subscription-details`, `subscription-webhook`
 - **Shared utilities** in `supabase/functions/_shared/`: `cors.ts`, `stripe-client.ts`, `aws-config.ts`, `email-template-service.ts`, `openai.ts`, `bonzah-client.ts`, `resend-service.ts`, `document-loaders.ts`
 
-9 functions have `verify_jwt = false` in `supabase/config.toml`: `docusign-webhook`, `veriff-webhook`, `customer-chat`, `validate-customer-invite`, `submit-customer-registration`, `custom-auth-email`, `subscription-webhook`, `stripe-webhook-test`, `stripe-webhook-live`. Stripe webhook functions handle their own signature verification. All other functions require JWT auth by default.
+10 functions have `verify_jwt = false` in `supabase/config.toml`: `boldsign-webhook`, `veriff-webhook`, `customer-chat`, `validate-customer-invite`, `submit-customer-registration`, `custom-auth-email`, `subscription-webhook`, `check-policy-acceptance`, `stripe-webhook-test`, `stripe-webhook-live`. Stripe webhook functions handle their own signature verification. All other functions require JWT auth by default.
 
 Edge function pattern:
 ```typescript
@@ -226,7 +226,7 @@ Required variables (see `.env.example`):
 - `STRIPE_TEST_PUBLISHABLE_KEY`, `STRIPE_LIVE_PUBLISHABLE_KEY`
 - `STRIPE_SUBSCRIPTION_SECRET_KEY`, `STRIPE_SUBSCRIPTION_PRICE_ID`, `STRIPE_SUBSCRIPTION_WEBHOOK_SECRET` (platform subscription billing)
 - `NEXT_PUBLIC_VERIFF_API_KEY` (booking)
-- DocuSign credentials (portal)
+- BoldSign API key (`BOLDSIGN_API_KEY`, `BOLDSIGN_BASE_URL`)
 - AWS SES/SNS credentials for emails and SMS
 
 ## Build Notes
@@ -245,6 +245,7 @@ Required variables (see `.env.example`):
 - **Admin/Web have no `src/` directory** (except `src/integrations/` for Supabase client/types): Code lives at project root (`app/`, `components/`, `lib/`, `store/`). The `@` alias maps to `./` not `./src`.
 - **Booking TenantContext is the source of truth** for all tenant settings (135+ fields, real-time subscriptions). Portal's TenantContext only loads ~7 fields for admin purposes.
 - **Customer auth vs portal auth are completely separate**: Customers use `customer_users` → `customers` tables. Portal staff use `app_users` table. Different stores, different auth flows.
+- **Vehicle availability toggles**: `available_daily`, `available_weekly`, `available_monthly` (boolean, default true) on `vehicles` table control which booking durations each vehicle supports.
 
 ## Database
 
@@ -360,6 +361,7 @@ Self-service key handover system where customers retrieve keys from a lockbox in
 - **Rental tracking**: `delivery_method` (enum: `lockbox`, `in_person`, NULL) on `rentals` table
 - **Templates**: `lockbox_templates` table stores per-tenant customizable email/SMS templates with `{{variable}}` placeholders (`{{customer_name}}`, `{{vehicle_reg}}`, `{{lockbox_code}}`, `{{booking_ref}}`, `{{delivery_address}}`, `{{lockbox_instructions}}`)
 - **Notification**: `notify-lockbox-code` edge function sends via Resend (email) and AWS SNS (SMS), falls back to default templates if no custom template exists
+- **WhatsApp**: `send-collection-whatsapp` edge function sends collection/lockbox details via WhatsApp using per-tenant templates with `{{variable}}` placeholders
 - **Portal UI**: Key handover section on rental detail page supports lockbox delivery; lockbox template editor in settings (only visible when `lockbox_enabled = true`)
 
 ## Setup Hub & Go-Live System
@@ -371,6 +373,25 @@ Tenant onboarding progress tracking during trial period:
 - **Portal hook**: `use-setup-status.ts` — computes `progressPercent`, `allComplete`, `isTrialing`, `justWentLive` (completed within 24 hours)
 - **Dashboard components**: `setup-hub.tsx` (countdown timer + progress bar during trial), `go-live-banner.tsx` (dismissible "You're Live!" banner after completion)
 - **Bonzah balance monitoring**: `use-bonzah-balance.ts` polls `bonzah-get-balance` every 60s; `use-bonzah-alert-config.ts` manages low-balance thresholds via `reminder_config` table; creates reminders with warning/critical severity levels
+
+## Dynamic Pricing
+
+Weekend and holiday surcharge system for daily-tier bookings (<7 days):
+
+- **Tenant settings**: `weekend_surcharge_percent` (numeric, 0 = disabled), `weekend_days` (JSONB array of JS day numbers, default `[6, 0]` for Sat/Sun) on `tenants` table
+- **`tenant_holidays`** table: per-tenant holiday periods with `name`, `start_date`/`end_date`, `surcharge_percent`, `excluded_vehicle_ids` (UUID array), `recurs_annually`. RLS via `get_user_tenant_id()` / `is_super_admin()`
+- **`vehicle_pricing_overrides`** table: per-vehicle overrides for weekend/holiday rules. `rule_type` (`weekend`/`holiday`), `override_type` (`fixed_price`/`custom_percent`/`excluded`). Unique on `(vehicle_id, rule_type, holiday_id)`
+- Migration: `supabase/migrations/20260218120000_add_dynamic_pricing.sql`
+
+## Policy Acceptances
+
+Portal staff must accept tenant privacy policy and terms before accessing the dashboard:
+
+- **`policy_acceptances`** table: tracks which `app_user_id` accepted which `policy_type` (`privacy_policy`/`terms_and_conditions`) at which `version`. Unique on `(app_user_id, policy_type, version)`
+- **Tenant versioning**: `privacy_policy_version` and `terms_version` columns on `tenants`, plus `policies_accepted_at` on `tenants`
+- **Gate component**: `src/components/policy/policy-acceptance-gate.tsx` — blocking dialog in portal dashboard layout
+- **Edge function**: `check-policy-acceptance` (`verify_jwt = false`) — checks if user has accepted current versions
+- Migration: `supabase/migrations/20260218100000_add_policy_acceptances.sql`
 
 ## Reserved Subdomains
 

@@ -1148,8 +1148,8 @@ const RentalDetail = () => {
         newWindow.document.write('<html><head><title>Loading Agreement...</title></head><body style="display:flex;justify-content:center;align-items:center;height:100vh;font-family:system-ui;"><p>Loading agreement...</p></body></html>');
       }
 
-      // Fetch from DocuSign via local API route
-      const response = await fetch('/api/docusign/view', {
+      // Fetch from eSign via local API route
+      const response = await fetch('/api/esign/view', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -2235,6 +2235,7 @@ const RentalDetail = () => {
           rentalStatus={displayStatus}
           needsAction={needsKeyHandover}
           isDeliveryRental={!!(rental?.delivery_address || rental?.delivery_fee)}
+          vehicleId={rental?.vehicles?.id}
           vehicleLockboxCode={rental?.vehicles?.lockbox_code || null}
           vehicleLockboxInstructions={rental?.vehicles?.lockbox_instructions || null}
           deliveryMethod={rental?.delivery_method || null}
@@ -2264,7 +2265,7 @@ const RentalDetail = () => {
             Rental Agreement
           </CardTitle>
           <CardDescription>
-            DocuSign rental agreement status and signed document
+            Rental agreement status and signed document
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -2331,8 +2332,8 @@ const RentalDetail = () => {
                   onClick={async () => {
                     setSendingDocuSign(true);
                     try {
-                      // Use local API route instead of edge function
-                      const response = await fetch('/api/docusign', {
+                      // Use local API route (BoldSign)
+                      const response = await fetch('/api/esign', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({
@@ -2347,21 +2348,21 @@ const RentalDetail = () => {
 
                       if (!response.ok || !docuSignData?.ok) {
                         toast({
-                          title: "DocuSign Error",
-                          description: docuSignData?.detail || docuSignData?.error || "Failed to send DocuSign agreement.",
+                          title: "Agreement Error",
+                          description: docuSignData?.detail || docuSignData?.error || "Failed to send agreement.",
                           variant: "destructive",
                         });
                       } else {
                         toast({
-                          title: "DocuSign Sent",
-                          description: "Rental agreement has been sent via DocuSign",
+                          title: "Agreement Sent",
+                          description: "Rental agreement has been sent for signing",
                         });
                         queryClient.invalidateQueries({ queryKey: ["rental", id, tenant?.id] });
                       }
                     } catch (error: any) {
                       toast({
-                        title: "DocuSign Error",
-                        description: error?.message || "Failed to send DocuSign agreement",
+                        title: "Agreement Error",
+                        description: error?.message || "Failed to send agreement",
                         variant: "destructive",
                       });
                     } finally {
@@ -2371,7 +2372,7 @@ const RentalDetail = () => {
                   disabled={sendingDocuSign}
                 >
                   <Send className="h-4 w-4 mr-2" />
-                  {sendingDocuSign ? "Sending..." : rental.document_status === 'sent' ? "Resend DocuSign" : "Send DocuSign"}
+                  {sendingDocuSign ? "Sending..." : rental.document_status === 'sent' ? "Resend Agreement" : "Send Agreement"}
                 </Button>
               )}
 
@@ -2383,7 +2384,7 @@ const RentalDetail = () => {
                   onClick={async () => {
                     setCheckingDocuSignStatus(true);
                     try {
-                      const response = await fetch('/api/docusign/status', {
+                      const response = await fetch('/api/esign/status', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({
@@ -2523,27 +2524,41 @@ const RentalDetail = () => {
             </div>
           </CardHeader>
           <CardContent className="space-y-4">
-            {/* Bonzah CD Balance */}
+            {/* Bonzah Balance */}
             {isBonzahConnected && bonzahCdBalance != null && (
               <div className="flex items-center justify-between rounded-md px-4 py-2.5 bg-muted/50 border border-border">
-                <span className="text-sm font-medium text-muted-foreground">CD Balance (Broker Total)</span>
+                <span className="text-sm font-medium text-muted-foreground">Bonzah Balance (Broker Total)</span>
                 <span className="text-base font-bold tabular-nums text-foreground">
                   ${bonzahCdBalance.toFixed(2)}
                 </span>
               </div>
             )}
 
-            {/* Insufficient allocated balance warning */}
+            {/* Insufficient balance warning — mode-aware messaging */}
             {bonzahPolicy.status === 'insufficient_balance' && (
               <div className="rounded-lg border border-[#CC004A]/30 bg-[#CC004A]/5 p-4 space-y-3">
                 <div className="flex items-start gap-2">
                   <AlertTriangle className="h-4 w-4 text-[#CC004A] mt-0.5 flex-shrink-0" />
                   <div className="text-sm space-y-2">
-                    <p className="font-medium text-[#CC004A]">Insurance quoted — insufficient allocated balance</p>
+                    <p className="font-medium text-[#CC004A]">
+                      {bonzahMode === 'live'
+                        ? 'Insurance quoted — insufficient available balance'
+                        : 'Insurance quoted — insufficient allocated balance'}
+                    </p>
                     <p className="text-muted-foreground">
-                      This insurance has been quoted but could not be activated because your Bonzah <strong>allocated balance</strong> is too low.
-                      {bonzahCdBalance != null && <> Your CD balance is <strong>${bonzahCdBalance.toFixed(2)}</strong>.</>}
-                      {' '}Please allocate at least <strong>${bonzahPolicy.premium_amount}</strong> more to activate this policy.
+                      {bonzahMode === 'live' ? (
+                        <>
+                          This insurance has been quoted but could not be activated because your Bonzah <strong>available balance</strong> is too low.
+                          {bonzahCdBalance != null && <> Your balance is <strong>${bonzahCdBalance.toFixed(2)}</strong>.</>}
+                          {' '}You need at least <strong>${bonzahPolicy.premium_amount}</strong> to activate this policy. Please top up your Bonzah account.
+                        </>
+                      ) : (
+                        <>
+                          This insurance has been quoted but could not be activated because your Bonzah <strong>allocated balance</strong> is too low.
+                          {bonzahCdBalance != null && <> Your Bonzah balance is <strong>${bonzahCdBalance.toFixed(2)}</strong>.</>}
+                          {' '}Please allocate at least <strong>${bonzahPolicy.premium_amount}</strong> more to activate this policy.
+                        </>
+                      )}
                     </p>
                     <p className="text-muted-foreground">
                       The customer is not affected — their booking is confirmed normally.
@@ -2551,13 +2566,13 @@ const RentalDetail = () => {
                   </div>
                 </div>
                 <a
-                  href={bonzahPortalUrl}
+                  href={portalUrl}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="inline-flex items-center gap-1.5 text-sm font-medium text-[#CC004A] hover:underline ml-6"
                 >
                   <ExternalLink className="h-3.5 w-3.5" />
-                  Allocate Funds on Bonzah Portal
+                  {bonzahMode === 'live' ? 'Top Up Balance on Bonzah Portal' : 'Allocate Funds on Bonzah Portal'}
                 </a>
               </div>
             )}
@@ -2581,7 +2596,12 @@ const RentalDetail = () => {
                       });
                       if (error) throw error;
                       if (data?.error === 'insufficient_balance') {
-                        toast({ title: "Allocated balance still insufficient", description: `Your Bonzah allocated balance is still too low (premium: $${data.premium}). Allocate more funds in the Bonzah portal and retry.`, variant: "destructive" });
+                        const mode = data?.bonzah_mode || bonzahMode;
+                        const title = mode === 'live' ? 'Available balance still insufficient' : 'Allocated balance still insufficient';
+                        const desc = mode === 'live'
+                          ? `Your Bonzah available balance is still too low (premium: $${data.premium}). Top up your Bonzah account and retry.`
+                          : `Your Bonzah allocated balance is still too low (premium: $${data.premium}). Allocate more funds in the Bonzah portal and retry.`;
+                        toast({ title, description: desc, variant: "destructive" });
                       } else {
                         await Promise.all([
                           queryClient.invalidateQueries({ queryKey: ['rental-bonzah-policy', id] }),
@@ -2592,8 +2612,11 @@ const RentalDetail = () => {
                         toast({ title: "Policy Issued", description: `Bonzah policy ${data?.policy_no || ''} has been issued successfully.` });
                       }
                     } catch (err: any) {
-                      const msg = err.message?.includes('insufficient') || err.message?.includes('balance')
-                        ? 'Allocated balance still insufficient. Allocate more funds in the Bonzah portal and retry.'
+                      const isBalanceErr = err.message?.includes('insufficient') || err.message?.includes('balance');
+                      const msg = isBalanceErr
+                        ? (bonzahMode === 'live'
+                          ? 'Available balance still insufficient. Top up your Bonzah account and retry.'
+                          : 'Allocated balance still insufficient. Allocate more funds in the Bonzah portal and retry.')
                         : err.message || "Failed to issue policy. Please try again.";
                       toast({ title: "Error", description: msg, variant: "destructive" });
                     } finally {
@@ -3957,7 +3980,7 @@ const RentalDetail = () => {
           <AlertDialogHeader>
             <AlertDialogTitle className="flex items-center gap-2 text-amber-600">
               <AlertTriangle className="h-5 w-5" />
-              DocuSign Not Signed
+              Agreement Not Signed
             </AlertDialogTitle>
             <AlertDialogDescription>
               The rental agreement has been sent but has not been signed by the customer yet.

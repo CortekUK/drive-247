@@ -197,6 +197,8 @@ export function BuyInsuranceDialog({
 
       // 5. Confirm payment with Bonzah to issue the policy
       const policyRecordId = quoteResult?.policy_record_id;
+      let policyActive = false;
+
       if (policyRecordId) {
         const { data: confirmResult, error: confirmError } = await supabase.functions.invoke('bonzah-confirm-payment', {
           body: {
@@ -207,13 +209,40 @@ export function BuyInsuranceDialog({
 
         if (confirmError) {
           console.error('Bonzah confirm payment error:', confirmError);
-          toast({
-            title: 'Warning',
-            description: 'Insurance quote created but policy issuance failed. You may need to retry.',
-            variant: 'destructive',
-          });
+          // Parse the error body to check for insufficient_balance
+          let errorBody: any = null;
+          try {
+            if (confirmError.context && typeof confirmError.context === 'object') {
+              errorBody = confirmError.context;
+            } else if (confirmError.context?.json) {
+              errorBody = await confirmError.context.json();
+            }
+          } catch { /* ignore parse errors */ }
+
+          const isInsufficientBalance = errorBody?.error === 'insufficient_balance'
+            || confirmError.message?.toLowerCase().includes('insufficient')
+            || confirmError.message?.toLowerCase().includes('balance');
+
+          if (isInsufficientBalance) {
+            const mode = errorBody?.bonzah_mode || tenant?.bonzah_mode || 'test';
+            const guidance = mode === 'live'
+              ? 'Your Bonzah available balance is too low. Top up your Bonzah account and retry from the rental page.'
+              : 'Your Bonzah allocated balance is too low. Allocate funds in the Bonzah portal and retry from the rental page.';
+            toast({
+              title: 'Insurance Quoted — Pending Balance',
+              description: guidance,
+              variant: 'destructive',
+            });
+          } else {
+            toast({
+              title: 'Insurance Quoted',
+              description: 'Quote created but policy could not be activated. You can retry from the rental page.',
+              variant: 'destructive',
+            });
+          }
         } else {
-          console.log('Bonzah policy issued:', confirmResult);
+          policyActive = confirmResult?.policy_issued === true;
+          console.log('Bonzah confirm result:', confirmResult);
         }
       }
 
@@ -237,7 +266,6 @@ export function BuyInsuranceDialog({
 
       if (ledgerError) {
         console.error('Ledger entry error:', ledgerError);
-        // Non-fatal — policy was created, just the charge failed
         toast({
           title: 'Warning',
           description: 'Insurance purchased but failed to create charge entry. Add it manually.',
@@ -253,12 +281,24 @@ export function BuyInsuranceDialog({
         queryClient.invalidateQueries({ queryKey: ['rental-payment-breakdown', rental.id] }),
         queryClient.invalidateQueries({ queryKey: ['rental', rental.id] }),
         queryClient.invalidateQueries({ queryKey: ['ledger-entries'] }),
+        queryClient.invalidateQueries({ queryKey: ['bonzah-balance'] }),
+        queryClient.invalidateQueries({ queryKey: ['bonzah-insufficient-balance-count'] }),
+        queryClient.invalidateQueries({ queryKey: ['bonzah-pending-policies'] }),
       ]);
 
-      toast({
-        title: 'Insurance Purchased',
-        description: `Bonzah insurance policy created. Premium: ${formatCurrency(premium, tenant?.currency_code || 'USD')}`,
-      });
+      if (policyActive) {
+        toast({
+          title: 'Insurance Active',
+          description: `Bonzah policy issued and active. Premium: ${formatCurrency(premium, tenant?.currency_code || 'USD')}`,
+        });
+      } else if (!policyRecordId) {
+        // Quote was created but no policy_record_id — unusual
+        toast({
+          title: 'Insurance Quoted',
+          description: 'Quote created. You may need to complete the purchase from the rental page.',
+        });
+      }
+      // If insufficient_balance or other confirm error, toast was already shown above
 
       // 8. Close dialog and trigger payment flow
       handleClose();
@@ -420,26 +460,44 @@ export function BuyInsuranceDialog({
               </div>
             </div>
 
-            {premium > 0 && (
-              <div className="rounded-lg border border-blue-200 bg-blue-50 dark:bg-blue-950/30 dark:border-blue-800 p-3 space-y-2">
-                <div className="flex items-start gap-2">
-                  <Info className="h-4 w-4 text-blue-600 dark:text-blue-400 mt-0.5 flex-shrink-0" />
-                  <p className="text-sm text-muted-foreground">
-                    {bonzahCdBalance != null && <>CD Balance: <span className="font-medium">${bonzahCdBalance.toFixed(2)}</span>. </>}
-                    The policy will only activate if your Bonzah <strong>allocated balance</strong> is sufficient. If not, the policy will be quoted and you can retry after allocating more funds.
-                  </p>
+            {premium > 0 && (() => {
+              const mode = tenant?.bonzah_mode || 'test';
+              const balanceSufficient = bonzahCdBalance != null && bonzahCdBalance >= premium;
+              return (
+                <div className={`rounded-lg border p-3 space-y-2 ${
+                  mode === 'live' && balanceSufficient
+                    ? 'border-green-200 bg-green-50 dark:bg-green-950/30 dark:border-green-800'
+                    : 'border-blue-200 bg-blue-50 dark:bg-blue-950/30 dark:border-blue-800'
+                }`}>
+                  <div className="flex items-start gap-2">
+                    <Info className={`h-4 w-4 mt-0.5 flex-shrink-0 ${
+                      mode === 'live' && balanceSufficient ? 'text-green-600 dark:text-green-400' : 'text-blue-600 dark:text-blue-400'
+                    }`} />
+                    <p className="text-sm text-muted-foreground">
+                      {bonzahCdBalance != null && <>Balance: <span className="font-medium">${bonzahCdBalance.toFixed(2)}</span>. </>}
+                      {mode === 'live' ? (
+                        balanceSufficient
+                          ? <>Your balance covers this premium. The policy will activate immediately.</>
+                          : <>Your Bonzah balance is too low for this premium. Top up your account or the policy will be quoted for later activation.</>
+                      ) : (
+                        <>The policy will only activate if your Bonzah <strong>allocated balance</strong> is sufficient. If not, the policy will be quoted and you can retry after allocating more funds.</>
+                      )}
+                    </p>
+                  </div>
+                  {!(mode === 'live' && balanceSufficient) && (
+                    <a
+                      href={bonzahPortalUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1.5 text-xs font-medium text-blue-600 dark:text-blue-400 hover:underline ml-6"
+                    >
+                      <ExternalLink className="h-3 w-3" />
+                      {mode === 'live' ? 'Top Up Balance' : 'Check Allocated Balance'}
+                    </a>
+                  )}
                 </div>
-                <a
-                  href={bonzahPortalUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex items-center gap-1.5 text-xs font-medium text-blue-600 dark:text-blue-400 hover:underline ml-6"
-                >
-                  <ExternalLink className="h-3 w-3" />
-                  Check Allocated Balance
-                </a>
-              </div>
-            )}
+              );
+            })()}
 
             <p className="text-xs text-muted-foreground">
               Purchasing will create a Bonzah insurance policy and add an insurance charge to the rental ledger.

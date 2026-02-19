@@ -45,7 +45,7 @@ export function BonzahBalanceWidget() {
             </div>
             <div>
               <p className="text-xs text-muted-foreground font-medium">
-                Bonzah CD Balance
+                Bonzah Balance
               </p>
               <div className="flex items-center gap-2">
                 <p

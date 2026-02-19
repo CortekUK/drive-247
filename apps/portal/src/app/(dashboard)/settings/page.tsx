@@ -3259,12 +3259,12 @@ const Settings = () => {
                 Agreement Templates
               </CardTitle>
               <CardDescription>
-                Customize the rental agreement template used for DocuSign contracts
+                Customize the rental agreement template used for electronic signing
               </CardDescription>
             </CardHeader>
             <CardContent>
               <p className="text-sm text-muted-foreground mb-4">
-                Create and manage agreement templates that will be used when sending rental contracts via DocuSign.
+                Create and manage agreement templates that will be used when sending rental contracts for electronic signing.
                 Each tenant can have their own customized template with variable placeholders for customer, vehicle, and rental information.
               </p>
               <div className="flex justify-center">

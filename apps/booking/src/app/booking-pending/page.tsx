@@ -68,7 +68,7 @@ const BookingPendingContent = () => {
         }
 
         // Confirm Bonzah insurance if applicable
-        // Bonzah uses tenant CD balance (not customer card), so it can be confirmed for preauth bookings
+        // Bonzah uses tenant balance (not customer card), so it can be confirmed for preauth bookings
         if (rental?.bonzah_policy_id) {
           try {
             console.log('🛡️ Confirming Bonzah insurance policy...');
@@ -204,7 +204,7 @@ const BookingPendingContent = () => {
                     </li>
                     <li className="flex items-start gap-3">
                       <span className="bg-accent text-background w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0">3</span>
-                      <span>Your rental agreement will be sent via DocuSign for signature</span>
+                      <span>Your rental agreement will be sent for electronic signature</span>
                     </li>
                     <li className="flex items-start gap-3">
                       <span className="bg-accent text-background w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0">4</span>

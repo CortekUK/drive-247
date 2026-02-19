@@ -33,14 +33,14 @@ const getAdminEmailContent = (data: NotifyRequest, branding: TenantBranding) => 
                                 </span>
                             </div>
                             <h2 style="margin: 0 0 20px; color: #10b981;">Rental Agreement Signed</h2>
-                            <p style="margin: 0 0 20px; color: #444;">A customer has completed signing their rental agreement via DocuSign.</p>
+                            <p style="margin: 0 0 20px; color: #444;">A customer has completed signing their rental agreement.</p>
                             <table style="width: 100%; border-collapse: collapse; background: #f8f9fa; border-radius: 8px;">
                                 <tr><td style="padding: 12px; border-bottom: 1px solid #e5e7eb; color: #666;">Booking Reference:</td><td style="padding: 12px; border-bottom: 1px solid #e5e7eb; font-weight: 600;">${data.bookingRef}</td></tr>
                                 <tr><td style="padding: 12px; border-bottom: 1px solid #e5e7eb; color: #666;">Customer:</td><td style="padding: 12px; border-bottom: 1px solid #e5e7eb;">${data.customerName}</td></tr>
                                 <tr><td style="padding: 12px; border-bottom: 1px solid #e5e7eb; color: #666;">Email:</td><td style="padding: 12px; border-bottom: 1px solid #e5e7eb;">${data.customerEmail}</td></tr>
                                 <tr><td style="padding: 12px; border-bottom: 1px solid #e5e7eb; color: #666;">Vehicle:</td><td style="padding: 12px; border-bottom: 1px solid #e5e7eb;">${data.vehicleName} (${data.vehicleReg})</td></tr>
                                 <tr><td style="padding: 12px; border-bottom: 1px solid #e5e7eb; color: #666;">Signed At:</td><td style="padding: 12px; border-bottom: 1px solid #e5e7eb; color: #10b981;">${data.signedAt}</td></tr>
-                                <tr><td style="padding: 12px; color: #666;">Envelope ID:</td><td style="padding: 12px; font-family: monospace; font-size: 12px;">${data.envelopeId}</td></tr>
+                                <tr><td style="padding: 12px; color: #666;">Document ID:</td><td style="padding: 12px; font-family: monospace; font-size: 12px;">${data.envelopeId}</td></tr>
                             </table>
                             ${data.documentUrl ? `
                             <div style="text-align: center; margin-top: 25px;">
@@ -52,8 +52,6 @@ const getAdminEmailContent = (data: NotifyRequest, branding: TenantBranding) => 
                     </tr>`;
 };
 
-// sendEmail is now imported from resend-service.ts
-
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -61,14 +59,12 @@ serve(async (req) => {
 
   try {
     const data: NotifyRequest = await req.json();
-    console.log('Sending DocuSign completed notification for:', data.bookingRef);
+    console.log('Sending agreement signed notification for:', data.bookingRef);
 
-    // Create supabase client for all email operations
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    // Get tenant branding
     const branding = data.tenantId
       ? await getTenantBranding(data.tenantId, supabase)
       : { companyName: 'Drive 247', logoUrl: null, primaryColor: '#1a1a1a', accentColor: '#C5A572', contactEmail: 'support@drive-247.com', contactPhone: null, slug: 'drive247' };
@@ -77,7 +73,6 @@ serve(async (req) => {
       adminEmail: null as any,
     };
 
-    // Get tenant-specific admin email, fall back to env variable
     let adminEmail: string | null = null;
     if (data.tenantId) {
       adminEmail = await getTenantAdminEmail(data.tenantId, supabase);
@@ -88,11 +83,9 @@ serve(async (req) => {
       console.log('Falling back to env ADMIN_EMAIL:', adminEmail);
     }
 
-    // Build branded admin email HTML
     const adminEmailContent = getAdminEmailContent(data, branding);
     const adminEmailHtml = wrapWithBrandedTemplate(adminEmailContent, branding);
 
-    // Send admin email
     if (adminEmail) {
       results.adminEmail = await sendEmail(
         adminEmail,

@@ -1175,10 +1175,10 @@ const CreateRental = () => {
       queryClient.invalidateQueries({ queryKey: ["reminders"] });
       queryClient.invalidateQueries({ queryKey: ["reminder-stats"] });
 
-      // Auto-trigger DocuSign via portal API route (uses Node.js crypto, same as booking app)
+      // Auto-trigger eSign via portal API route (BoldSign)
       let docuSignSuccess = false;
       try {
-        const docuSignResponse = await fetch("/api/docusign", {
+        const docuSignResponse = await fetch("/api/esign", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
@@ -1192,25 +1192,25 @@ const CreateRental = () => {
         const docuSignData = await docuSignResponse.json();
 
         if (!docuSignResponse.ok || !docuSignData?.ok) {
-          console.error("DocuSign error:", docuSignData);
+          console.error("eSign error:", docuSignData);
           toast({
-            title: "Rental Created - DocuSign Pending",
-            description: `Rental created but DocuSign failed to send. You can retry from the rental details page.`,
+            title: "Rental Created - Agreement Pending",
+            description: `Rental created but agreement failed to send. You can retry from the rental details page.`,
             variant: "default",
           });
         } else {
           docuSignSuccess = true;
-          // The API route already updates the rental with envelope ID
+          // The API route already updates the rental with document ID
           toast({
             title: "Rental Created - Agreement Sent",
-            description: `Rental created for ${customerName} • ${vehicleReg}. DocuSign agreement sent to customer.`,
+            description: `Rental created for ${customerName} • ${vehicleReg}. Agreement sent to customer for signing.`,
           });
         }
       } catch (docuSignErr: any) {
-        console.error("Error sending DocuSign:", docuSignErr);
+        console.error("Error sending agreement:", docuSignErr);
         toast({
-          title: "Rental Created - DocuSign Pending",
-          description: `Rental created but DocuSign failed. You can retry from the rental details page.`,
+          title: "Rental Created - Agreement Pending",
+          description: `Rental created but agreement failed to send. You can retry from the rental details page.`,
           variant: "default",
         });
       }
@@ -1935,7 +1935,7 @@ const CreateRental = () => {
                                   <Info className="h-4 w-4 text-blue-600 dark:text-blue-400 mt-0.5 flex-shrink-0" />
                                   <p className="text-sm text-muted-foreground">
                                     Insurance premium: <span className="font-medium">${bonzahPremium.toFixed(2)}</span>.
-                                    {bonzahCdBalance != null && <> CD Balance: <span className="font-medium">${bonzahCdBalance.toFixed(2)}</span>.</>}
+                                    {bonzahCdBalance != null && <> Bonzah Balance: <span className="font-medium">${bonzahCdBalance.toFixed(2)}</span>.</>}
                                     {' '}The policy will only activate if your Bonzah <strong>allocated balance</strong> is sufficient. If not, the policy will be quoted and you can retry after allocating more funds.
                                   </p>
                                 </div>

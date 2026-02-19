@@ -175,7 +175,7 @@ export function useDownloadAgreement() {
         throw new Error('No document available');
       }
 
-      const response = await fetch('/api/docusign/view', {
+      const response = await fetch('/api/esign/view', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ rentalId: agreement.id }),
@@ -250,7 +250,7 @@ export function useViewAgreement() {
         throw new Error('No document available');
       }
 
-      const response = await fetch('/api/docusign/view', {
+      const response = await fetch('/api/esign/view', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ rentalId: agreement.id }),
@@ -292,7 +292,7 @@ export function useSignAgreement() {
   return useMutation({
     mutationFn: async (agreement: CustomerAgreement): Promise<{ signingUrl?: string; emailSent?: boolean; error?: string }> => {
       if (!agreement.docusign_envelope_id) {
-        throw new Error('No DocuSign envelope for this agreement');
+        throw new Error('No document for this agreement');
       }
 
       // Check if already signed
@@ -300,7 +300,7 @@ export function useSignAgreement() {
         throw new Error('Document already signed');
       }
 
-      const response = await fetch('/api/docusign/sign', {
+      const response = await fetch('/api/esign/sign', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ rentalId: agreement.id }),

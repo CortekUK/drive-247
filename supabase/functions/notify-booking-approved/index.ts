@@ -96,7 +96,7 @@ const getApprovalEmailHtml = (data: NotifyRequest, currencyCode: string = 'USD')
                                     <td style="padding: 20px;">
                                         <h3 style="margin: 0 0 10px; color: #1e40af; font-size: 14px;">Rental Agreement</h3>
                                         <p style="margin: 0; color: #1e40af; font-size: 14px; line-height: 1.6;">
-                                            You'll receive a separate email from DocuSign with your rental agreement. Please sign it before pickup.
+                                            You'll receive a separate email with your rental agreement. Please sign it electronically before pickup.
                                         </p>
                                     </td>
                                 </tr>

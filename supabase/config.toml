@@ -1,6 +1,6 @@
 project_id = "hviqoaokxvlancmftwuo"
 
-[functions.docusign-webhook]
+[functions.boldsign-webhook]
 verify_jwt = false
 
 [functions.veriff-webhook]

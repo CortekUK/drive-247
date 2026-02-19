@@ -56,8 +56,8 @@ async function checkLowBalanceThreshold(
         await supabase
           .from('reminders')
           .update({
-            title: 'Bonzah CD Balance Low',
-            message: `Your Bonzah CD balance (${formattedBalance}) is below your alert threshold of ${formattedThreshold}. Top up to continue issuing insurance policies.`,
+            title: 'Bonzah Balance Low',
+            message: `Your Bonzah balance (${formattedBalance}) is below your alert threshold of ${formattedThreshold}. Top up to continue issuing insurance policies.`,
             severity,
             context: { balance, threshold },
             updated_at: new Date().toISOString(),
@@ -77,8 +77,8 @@ async function checkLowBalanceThreshold(
             rule_code: 'BONZAH_LOW_BALANCE',
             object_type: 'Integration',
             object_id: tenantId,
-            title: 'Bonzah CD Balance Low',
-            message: `Your Bonzah CD balance (${formattedBalance}) is below your alert threshold of ${formattedThreshold}. Top up to continue issuing insurance policies.`,
+            title: 'Bonzah Balance Low',
+            message: `Your Bonzah balance (${formattedBalance}) is below your alert threshold of ${formattedThreshold}. Top up to continue issuing insurance policies.`,
             due_on: today,
             remind_on: today,
             severity,
@@ -113,7 +113,7 @@ async function checkLowBalanceThreshold(
       if (adminUsers?.length) {
         const notifications = adminUsers.map((admin: { id: string }) => ({
           user_id: admin.id,
-          title: 'Bonzah CD Balance Low',
+          title: 'Bonzah Balance Low',
           message: `Your Bonzah balance (${formattedBalance}) is below ${formattedThreshold}. Top up soon.`,
           type: severity === 'critical' ? 'reminder_critical' : 'reminder_warning',
           link: '/settings?tab=integrations',
@@ -138,7 +138,7 @@ async function checkLowBalanceThreshold(
           <tr>
             <td style="padding: 30px;">
               <p style="font-size: 16px; margin: 0 0 15px;">Hello,</p>
-              <p style="margin: 0 0 20px; color: #444;">Your Bonzah CD balance is running low:</p>
+              <p style="margin: 0 0 20px; color: #444;">Your Bonzah balance is running low:</p>
               <table role="presentation" style="width: 100%; border-collapse: collapse; margin-bottom: 20px;">
                 <tr>
                   <td style="background: ${severity === 'critical' ? '#fef2f2' : '#fffbeb'}; border-left: 4px solid ${severity === 'critical' ? '#dc2626' : '#f59e0b'}; padding: 20px; border-radius: 0 8px 8px 0;">
@@ -177,7 +177,7 @@ async function checkLowBalanceThreshold(
           .from('reminders')
           .update({
             title: `Bonzah Low Balance Alert — Below ${formattedThreshold}`,
-            message: `Monitoring your Bonzah CD balance. You will be notified when it drops below ${formattedThreshold}.`,
+            message: `Monitoring your Bonzah balance. You will be notified when it drops below ${formattedThreshold}.`,
             severity: 'info',
             context: { threshold, alerted: false },
             updated_at: new Date().toISOString(),

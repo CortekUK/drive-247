@@ -127,7 +127,7 @@ export default function AgreementTemplatesPage() {
         <div>
           <h1 className="text-2xl font-bold">Agreement Templates</h1>
           <p className="text-muted-foreground text-sm">
-            Choose which template to use for rental agreements sent via DocuSign
+            Choose which template to use for rental agreements sent for electronic signing
           </p>
         </div>
       </div>
@@ -345,7 +345,7 @@ export default function AgreementTemplatesPage() {
         <Info className="h-4 w-4 text-muted-foreground mt-0.5 shrink-0" />
         <div className="text-sm text-muted-foreground">
           <p>
-            The active template will be used when sending rental agreements via DocuSign.
+            The active template will be used when sending rental agreements for electronic signing.
             You can edit either template to customize the content using dynamic variables.
           </p>
         </div>

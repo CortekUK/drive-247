@@ -324,7 +324,7 @@ export default function AgreementsPage() {
     signAgreement.mutate(agreement, {
       onSuccess: (result) => {
         if (result.emailSent) {
-          toast.info('Check your email for the signing link from DocuSign');
+          toast.info('Check your email for the signing link');
         }
         // If signingUrl is returned, the hook will redirect automatically
       },

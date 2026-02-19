@@ -48,7 +48,7 @@ export function BonzahPendingAlert() {
           <p className="text-sm text-muted-foreground mt-0.5">
             Total premium needed: <span className="font-semibold text-[#CC004A]">${totalPremium.toFixed(2)}</span>
             {balanceNumber != null && (
-              <> | CD Balance: <span className="font-semibold">${balanceNumber.toFixed(2)}</span></>
+              <> | Bonzah Balance: <span className="font-semibold">${balanceNumber.toFixed(2)}</span></>
             )}
           </p>
           <p className="text-xs text-muted-foreground mt-1">
