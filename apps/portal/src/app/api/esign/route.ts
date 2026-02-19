@@ -303,9 +303,10 @@ export async function POST(request: NextRequest) {
             try {
                 const brandForm = new FormData();
                 brandForm.append('BrandName', tenant.company_name);
-                brandForm.append('EmailDisplayName', `${tenant.company_name} via {SenderName}`);
+                brandForm.append('EmailDisplayName', tenant.company_name);
 
-                // Fetch and attach tenant logo if available
+                // Fetch tenant logo or generate a placeholder
+                let logoAttached = false;
                 if (tenant.logo_url) {
                     try {
                         const logoResponse = await fetch(tenant.logo_url);
@@ -315,10 +316,19 @@ export async function POST(request: NextRequest) {
                             const ext = contentType.includes('svg') ? 'svg' : contentType.includes('jpeg') || contentType.includes('jpg') ? 'jpg' : 'png';
                             const logoBlob = new Blob([logoBuffer], { type: contentType });
                             brandForm.append('BrandLogo', logoBlob, `logo.${ext}`);
+                            logoAttached = true;
                         }
                     } catch (e) {
                         console.warn('Could not fetch tenant logo for brand:', e);
                     }
+                }
+
+                // BoldSign requires a logo (JPG/PNG/SVG) — generate a simple SVG placeholder
+                if (!logoAttached) {
+                    const initials = tenant.company_name.split(' ').map((w: string) => w[0]).join('').substring(0, 2).toUpperCase();
+                    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="200" height="200"><rect width="200" height="200" fill="#3366CC"/><text x="100" y="120" font-family="Arial,sans-serif" font-size="80" font-weight="bold" fill="white" text-anchor="middle">${initials}</text></svg>`;
+                    const svgBlob = new Blob([svg], { type: 'image/svg+xml' });
+                    brandForm.append('BrandLogo', svgBlob, 'logo.svg');
                 }
 
                 const brandResponse = await fetch(`${BOLDSIGN_BASE_URL}/v1/brand/create`, {
@@ -330,7 +340,6 @@ export async function POST(request: NextRequest) {
                 if (brandResponse.ok) {
                     const brandResult = await brandResponse.json();
                     brandId = brandResult.brandId;
-                    // Cache brand ID on tenant
                     await supabase
                         .from('tenants')
                         .update({ boldsign_brand_id: brandId })
