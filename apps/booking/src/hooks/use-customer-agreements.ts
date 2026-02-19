@@ -309,8 +309,6 @@ export function useSignAgreement() {
       const result = await response.json();
 
       if (result.signingUrl) {
-        // Open DocuSign signing page in a new tab
-        window.open(result.signingUrl, '_blank');
         return { signingUrl: result.signingUrl };
       }
 

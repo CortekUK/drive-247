@@ -303,6 +303,9 @@ export default function AgreementsPage() {
   const [viewingAgreement, setViewingAgreement] = useState<CustomerAgreement | null>(null);
   const [documentUrl, setDocumentUrl] = useState<string | null>(null);
   const [viewDialogOpen, setViewDialogOpen] = useState(false);
+  const [signingUrl, setSigningUrl] = useState<string | null>(null);
+  const [signDialogOpen, setSignDialogOpen] = useState(false);
+  const [signingAgreement, setSigningAgreement] = useState<CustomerAgreement | null>(null);
 
   const handleDownload = (agreement: CustomerAgreement) => {
     downloadAgreement.mutate(agreement);
@@ -321,17 +324,29 @@ export default function AgreementsPage() {
   };
 
   const handleSign = (agreement: CustomerAgreement) => {
+    setSigningAgreement(agreement);
     signAgreement.mutate(agreement, {
       onSuccess: (result) => {
-        if (result.emailSent) {
+        if (result.signingUrl) {
+          setSigningUrl(result.signingUrl);
+          setSignDialogOpen(true);
+        } else if (result.emailSent) {
           toast.info('Check your email for the signing link');
         }
-        // If signingUrl is returned, the hook will redirect automatically
       },
       onError: (error) => {
         toast.error(error.message || 'Failed to get signing link');
       },
     });
+  };
+
+  const handleCloseSignDialog = () => {
+    setSignDialogOpen(false);
+    setSigningUrl(null);
+    setSigningAgreement(null);
+    // Refresh agreements to pick up any status changes
+    refetch();
+    refetchStats();
   };
 
   const handleCloseDialog = () => {
@@ -445,6 +460,45 @@ export default function AgreementsPage() {
         onDownload={() => viewingAgreement && handleDownload(viewingAgreement)}
         isLoading={viewAgreement.isPending}
       />
+
+      {/* Embedded Signing Dialog */}
+      <Dialog open={signDialogOpen} onOpenChange={(open) => !open && handleCloseSignDialog()}>
+        <DialogContent className="max-w-4xl h-[90vh] flex flex-col p-0">
+          <DialogHeader className="px-6 py-4 border-b flex-shrink-0">
+            <div className="flex items-center justify-between">
+              <div>
+                <DialogTitle>
+                  Sign Agreement {signingAgreement?.rental_number ? `#${signingAgreement.rental_number}` : ''}
+                </DialogTitle>
+                <p className="text-sm text-muted-foreground mt-1">
+                  Review and sign your rental agreement below
+                </p>
+              </div>
+            </div>
+          </DialogHeader>
+          <div className="flex-1 overflow-hidden">
+            {signAgreement.isPending ? (
+              <div className="flex items-center justify-center h-full">
+                <div className="text-center">
+                  <Loader2 className="h-8 w-8 animate-spin mx-auto text-primary" />
+                  <p className="text-muted-foreground mt-2">Loading signing page...</p>
+                </div>
+              </div>
+            ) : signingUrl ? (
+              <iframe
+                src={signingUrl}
+                className="w-full h-full border-0"
+                title="Sign Agreement"
+                allow="camera; microphone"
+              />
+            ) : (
+              <div className="flex items-center justify-center h-full">
+                <p className="text-muted-foreground">Signing page not available</p>
+              </div>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
