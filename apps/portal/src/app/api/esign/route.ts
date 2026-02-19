@@ -15,7 +15,6 @@ interface ESignRequest {
     customerEmail: string;
     customerName: string;
     tenantId: string;
-    deliveryMode?: 'Email' | 'SMS' | 'EmailAndSMS' | 'WhatsApp';
 }
 
 // Format helpers
@@ -364,22 +363,6 @@ export async function POST(request: NextRequest) {
         formData.append('Signers[0][Name]', body.customerName);
         formData.append('Signers[0][EmailAddress]', body.customerEmail);
         formData.append('Signers[0][SignerType]', 'Signer');
-
-        // Set delivery mode (Email, SMS, EmailAndSMS, WhatsApp)
-        const deliveryMode = body.deliveryMode || 'Email';
-        if (deliveryMode !== 'Email') {
-            formData.append('Signers[0][DeliveryMode]', deliveryMode);
-            // Add phone number for SMS/WhatsApp delivery
-            const phone = (customer as any)?.phone || '';
-            if (phone && (deliveryMode === 'SMS' || deliveryMode === 'EmailAndSMS' || deliveryMode === 'WhatsApp')) {
-                // Extract country code and number (assume format like +44... or 44...)
-                const cleaned = phone.replace(/\s+/g, '').replace(/^(\+)/, '');
-                const countryCode = cleaned.substring(0, 2);
-                const number = cleaned.substring(2);
-                formData.append('Signers[0][PhoneNumber][CountryCode]', `+${countryCode}`);
-                formData.append('Signers[0][PhoneNumber][Number]', number);
-            }
-        }
         formData.append('Signers[0][FormFields][0][FieldType]', 'Signature');
         formData.append('Signers[0][FormFields][0][PageNumber]', String(pdfDoc.getPageCount()));
         formData.append('Signers[0][FormFields][0][Bounds][X]', '50');
@@ -421,8 +404,55 @@ export async function POST(request: NextRequest) {
             })
             .eq('id', body.rentalId);
 
+        // Send WhatsApp notification with signing link if customer has phone
+        let whatsAppSent = false;
+        const customerPhone = (customer as any)?.phone || '';
+        if (customerPhone && documentId) {
+            try {
+                // Get the embedded signing link from BoldSign
+                const signLinkResponse = await fetch(
+                    `${BOLDSIGN_BASE_URL}/v1/document/getEmbeddedSignLink?documentId=${documentId}&signerEmail=${encodeURIComponent(body.customerEmail)}&redirectUrl=${encodeURIComponent('https://drive-247.com')}`,
+                    { headers: { 'X-API-KEY': BOLDSIGN_API_KEY } }
+                );
+
+                let signingUrl = '';
+                if (signLinkResponse.ok) {
+                    const signLinkData = await signLinkResponse.json();
+                    signingUrl = signLinkData.signLink || '';
+                }
+
+                if (signingUrl) {
+                    const companyName = tenant?.company_name || 'Drive 247';
+                    const message = `📝 *Rental Agreement Ready to Sign*\n\nHi ${body.customerName},\n\n${companyName} has sent you a rental agreement to sign.\n\n👉 Sign here: ${signingUrl}\n\nPlease sign at your earliest convenience.`;
+
+                    // Send via Supabase edge function (has Twilio creds)
+                    const whatsappResponse = await fetch(`${supabaseUrl}/functions/v1/send-signing-whatsapp`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Authorization': `Bearer ${supabaseServiceKey}`,
+                        },
+                        body: JSON.stringify({
+                            customerPhone: customerPhone,
+                            message: message,
+                        }),
+                    });
+
+                    whatsAppSent = whatsappResponse.ok;
+                    if (!whatsAppSent) {
+                        console.warn('WhatsApp edge function error:', await whatsappResponse.text());
+                    }
+                    console.log('WhatsApp signing notification:', whatsAppSent ? 'sent' : 'failed');
+                } else {
+                    console.warn('Could not get signing link for WhatsApp notification');
+                }
+            } catch (e) {
+                console.warn('WhatsApp notification error:', e);
+            }
+        }
+
         console.log('SUCCESS! Document ID:', documentId);
-        return NextResponse.json({ ok: true, envelopeId: documentId, emailSent: true });
+        return NextResponse.json({ ok: true, envelopeId: documentId, emailSent: true, whatsAppSent });
 
     } catch (error: any) {
         console.error('API Error:', error);
