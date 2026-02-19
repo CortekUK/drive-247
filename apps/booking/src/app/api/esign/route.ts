@@ -272,23 +272,6 @@ export async function POST(request: NextRequest) {
             );
         }
 
-        // Send via BoldSign
-        const formData = new FormData();
-        formData.append('Title', `Rental Agreement - Ref: ${body.rentalId.substring(0, 8).toUpperCase()}`);
-        formData.append('Message', 'Please review and sign the rental agreement.');
-        formData.append('Signers[0][Name]', body.customerName);
-        formData.append('Signers[0][EmailAddress]', body.customerEmail);
-        formData.append('Signers[0][SignerType]', 'Signer');
-        formData.append('Signers[0][FormFields][0][FieldType]', 'Signature');
-        formData.append('Signers[0][FormFields][0][PageNumber]', String(pdfDoc.getPageCount()));
-        formData.append('Signers[0][FormFields][0][Bounds][X]', '50');
-        formData.append('Signers[0][FormFields][0][Bounds][Y]', String(Math.max(y - 60, 50)));
-        formData.append('Signers[0][FormFields][0][Bounds][Width]', '250');
-        formData.append('Signers[0][FormFields][0][Bounds][Height]', '50');
-        formData.append('Signers[0][FormFields][0][IsRequired]', 'true');
-        formData.append('EnableSigningOrder', 'false');
-        formData.append('EnableEmbeddedSigning', 'true');
-
         // Generate PDF from text content
         const pdfDoc = await PDFDocument.create();
         const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
@@ -336,6 +319,24 @@ export async function POST(request: NextRequest) {
         }
 
         const pdfBytes = await pdfDoc.save();
+
+        // Build BoldSign request
+        const formData = new FormData();
+        formData.append('Title', `Rental Agreement - Ref: ${body.rentalId.substring(0, 8).toUpperCase()}`);
+        formData.append('Message', 'Please review and sign the rental agreement.');
+        formData.append('Signers[0][Name]', body.customerName);
+        formData.append('Signers[0][EmailAddress]', body.customerEmail);
+        formData.append('Signers[0][SignerType]', 'Signer');
+        formData.append('Signers[0][FormFields][0][FieldType]', 'Signature');
+        formData.append('Signers[0][FormFields][0][PageNumber]', String(pdfDoc.getPageCount()));
+        formData.append('Signers[0][FormFields][0][Bounds][X]', '50');
+        formData.append('Signers[0][FormFields][0][Bounds][Y]', String(Math.max(y - 60, 50)));
+        formData.append('Signers[0][FormFields][0][Bounds][Width]', '250');
+        formData.append('Signers[0][FormFields][0][Bounds][Height]', '50');
+        formData.append('Signers[0][FormFields][0][IsRequired]', 'true');
+        formData.append('EnableSigningOrder', 'false');
+        formData.append('EnableEmbeddedSigning', 'true');
+
         const fileBlob = new Blob([pdfBytes], { type: 'application/pdf' });
         formData.append('Files', fileBlob, 'Rental-Agreement.pdf');
 
