@@ -245,7 +245,6 @@ async function sendBoldSignDocument(
     formData.append('Signers[0][FormFields][0][IsRequired]', 'true');
     formData.append('EnableSigningOrder', 'false');
     formData.append('DisableEmails', 'false');
-    formData.append('OnBehalfOf', 'support@drive-247.com');
 
     const blob = new Blob([fileBytes], { type: 'text/plain' });
     formData.append('Files', blob, 'Rental-Agreement.txt');
