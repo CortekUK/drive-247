@@ -335,7 +335,6 @@ export async function POST(request: NextRequest) {
         formData.append('Signers[0][FormFields][0][Bounds][Height]', '50');
         formData.append('Signers[0][FormFields][0][IsRequired]', 'true');
         formData.append('EnableSigningOrder', 'false');
-        formData.append('EnableEmbeddedSigning', 'true');
         formData.append('DisableEmails', 'false');
 
         const fileBlob = new Blob([pdfBytes], { type: 'application/pdf' });
