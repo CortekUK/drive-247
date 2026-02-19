@@ -172,16 +172,12 @@ ${'='.repeat(70)}
                          SIGNATURES
 ${'='.repeat(70)}
 
-Customer Signature: _______________________________
+{{sign|1|*|Customer Signature|customer_sig}}
 
-Date: _______________________________
+Date: {{text|1||Date|date_field}}
 
 
 For ${(tenant?.company_name as string) || 'Drive 247'}
-
-Authorized Signature: _______________________________
-
-Date: _______________________________
 `;
 }
 
@@ -236,21 +232,8 @@ async function sendBoldSignDocument(
     formData.append('Signers[0][Name]', customerName);
     formData.append('Signers[0][EmailAddress]', customerEmail);
     formData.append('Signers[0][SignerType]', 'Signer');
-    formData.append('Signers[0][FormFields][0][FieldType]', 'Signature');
-    formData.append('Signers[0][FormFields][0][PageNumber]', '1');
-    formData.append('Signers[0][FormFields][0][Bounds][X]', '200');
-    formData.append('Signers[0][FormFields][0][Bounds][Y]', '200');
-    formData.append('Signers[0][FormFields][0][Bounds][Width]', '200');
-    formData.append('Signers[0][FormFields][0][Bounds][Height]', '50');
-    formData.append('Signers[0][FormFields][0][IsRequired]', 'true');
     formData.append('EnableSigningOrder', 'false');
     formData.append('UseTextTags', 'true');
-    formData.append('TextTagDefinitions[0][DefinitionId]', 'sig1');
-    formData.append('TextTagDefinitions[0][Type]', 'Signature');
-    formData.append('TextTagDefinitions[0][SignerIndex]', '1');
-    formData.append('TextTagDefinitions[0][IsRequired]', 'true');
-    formData.append('TextTagDefinitions[0][Placeholder]', 'Customer Signature:');
-    formData.append('TextTagDefinitions[0][FieldId]', 'CustomerSignature');
 
     const blob = new Blob([fileBytes], { type: 'text/plain' });
     formData.append('Files', blob, 'Rental-Agreement.txt');
