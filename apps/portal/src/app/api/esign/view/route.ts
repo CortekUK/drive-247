@@ -66,17 +66,20 @@ export async function POST(request: NextRequest) {
             return NextResponse.json({ ok: false, error: 'BoldSign not configured' }, { status: 500 });
         }
 
-        // Get document properties for status
-        const statusResponse = await fetch(
-            `${BOLDSIGN_BASE_URL}/v1/document/properties?documentId=${documentId}`,
-            { headers: { 'X-API-KEY': BOLDSIGN_API_KEY } }
-        );
-
-        if (!statusResponse.ok) {
-            return NextResponse.json({ ok: false, error: 'Failed to get document status' }, { status: 500 });
+        // Try to get document properties for status (non-blocking)
+        let documentStatus = 'unknown';
+        try {
+            const statusResponse = await fetch(
+                `${BOLDSIGN_BASE_URL}/v1/document/properties?documentId=${documentId}`,
+                { headers: { 'X-API-KEY': BOLDSIGN_API_KEY } }
+            );
+            if (statusResponse.ok) {
+                const propsData = await statusResponse.json();
+                documentStatus = propsData.status || 'unknown';
+            }
+        } catch (e) {
+            console.warn('Could not fetch document properties:', e);
         }
-
-        const propsData = await statusResponse.json();
 
         // Download the document PDF
         const docResponse = await fetch(
@@ -85,6 +88,8 @@ export async function POST(request: NextRequest) {
         );
 
         if (!docResponse.ok) {
+            const errorText = await docResponse.text();
+            console.error('BoldSign download error:', docResponse.status, errorText);
             return NextResponse.json({ ok: false, error: 'Failed to get document from BoldSign' }, { status: 500 });
         }
 
@@ -96,7 +101,7 @@ export async function POST(request: NextRequest) {
             ok: true,
             documentBase64: pdfBase64,
             contentType: 'application/pdf',
-            status: propsData.status,
+            status: documentStatus,
             source: 'boldsign'
         });
 
