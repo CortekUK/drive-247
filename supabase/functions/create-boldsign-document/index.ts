@@ -233,6 +233,7 @@ async function sendBoldSignDocument(
     formData.append('Signers[0][EmailAddress]', customerEmail);
     formData.append('Signers[0][SignerType]', 'Signer');
     formData.append('EnableSigningOrder', 'false');
+    formData.append('EnableEmbeddedSigning', 'true');
     formData.append('UseTextTags', 'true');
 
     const blob = new Blob([fileBytes], { type: 'text/plain' });

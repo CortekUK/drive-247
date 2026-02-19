@@ -280,6 +280,7 @@ export async function POST(request: NextRequest) {
         formData.append('Signers[0][EmailAddress]', body.customerEmail);
         formData.append('Signers[0][SignerType]', 'Signer');
         formData.append('EnableSigningOrder', 'false');
+        formData.append('EnableEmbeddedSigning', 'true');
         formData.append('UseTextTags', 'true');
 
         // Generate PDF from text content
