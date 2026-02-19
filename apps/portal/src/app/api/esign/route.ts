@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { PDFDocument, StandardFonts, rgb } from 'pdf-lib';
 
 // BoldSign configuration
 const BOLDSIGN_API_KEY = process.env.BOLDSIGN_API_KEY || '';
@@ -259,8 +260,54 @@ export async function POST(request: NextRequest) {
         formData.append('EnableSigningOrder', 'false');
         formData.append('UseTextTags', 'true');
 
-        const fileBlob = new Blob([documentContent], { type: 'text/plain' });
-        formData.append('Files', fileBlob, 'Rental-Agreement.txt');
+        // Generate PDF from text content
+        const pdfDoc = await PDFDocument.create();
+        const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
+        const boldFont = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
+        const fontSize = 10;
+        const lineHeight = 14;
+        const margin = 50;
+        const pageWidth = 595;  // A4
+        const pageHeight = 842;
+        const maxWidth = pageWidth - margin * 2;
+
+        const lines = documentContent.split('\n');
+        let page = pdfDoc.addPage([pageWidth, pageHeight]);
+        let y = pageHeight - margin;
+
+        for (const line of lines) {
+            const words = line.split(' ');
+            let currentLine = '';
+            for (const word of words) {
+                const testLine = currentLine ? `${currentLine} ${word}` : word;
+                const width = font.widthOfTextAtSize(testLine, fontSize);
+                if (width > maxWidth && currentLine) {
+                    if (y < margin + lineHeight) {
+                        page = pdfDoc.addPage([pageWidth, pageHeight]);
+                        y = pageHeight - margin;
+                    }
+                    const isHeader = currentLine.startsWith('=') || (currentLine === currentLine.toUpperCase() && currentLine.length > 3 && !currentLine.startsWith('{{'));
+                    page.drawText(currentLine, { x: margin, y, size: fontSize, font: isHeader ? boldFont : font, color: rgb(0, 0, 0) });
+                    y -= lineHeight;
+                    currentLine = word;
+                } else {
+                    currentLine = testLine;
+                }
+            }
+            if (y < margin + lineHeight) {
+                page = pdfDoc.addPage([pageWidth, pageHeight]);
+                y = pageHeight - margin;
+            }
+            if (currentLine) {
+                const isHeader = currentLine.startsWith('=') || (currentLine === currentLine.toUpperCase() && currentLine.length > 3 && !currentLine.startsWith('{{'));
+                page.drawText(currentLine, { x: margin, y, size: fontSize, font: isHeader ? boldFont : font, color: rgb(0, 0, 0) });
+            }
+            y -= lineHeight;
+        }
+
+        const pdfBytes = await pdfDoc.save();
+        const fileBlob = new Blob([pdfBytes], { type: 'application/pdf' });
+        formData.append('Files', fileBlob, 'Rental-Agreement.pdf');
 
         console.log('Sending document to BoldSign...');
         const boldSignResponse = await fetch(`${BOLDSIGN_BASE_URL}/v1/document/send`, {

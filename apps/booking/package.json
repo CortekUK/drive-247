@@ -64,6 +64,7 @@
     "next-themes": "^0.3.0",
     "nextjs-toploader": "^3.9.17",
     "node-tesseract-ocr": "^2.2.1",
+    "pdf-lib": "^1.17.1",
     "qrcode": "^1.5.4",
     "qrcode.react": "^4.2.0",
     "react": "^18.3.1",
