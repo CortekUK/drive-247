@@ -14,6 +14,7 @@ interface CollectionWhatsAppRequest {
   notes?: string | null;
   photoUrls?: string[];
   tenantId?: string;
+  defaultInstructions?: string | null;
 }
 
 function replaceVars(template: string, data: CollectionWhatsAppRequest): string {
@@ -26,7 +27,8 @@ function replaceVars(template: string, data: CollectionWhatsAppRequest): string 
     .replace(/\{\{delivery_address\}\}/g, data.deliveryAddress || '')
     .replace(/\{\{booking_ref\}\}/g, data.bookingRef || '')
     .replace(/\{\{odometer\}\}/g, data.odometerReading || '')
-    .replace(/\{\{notes\}\}/g, data.notes || '');
+    .replace(/\{\{notes\}\}/g, data.notes || '')
+    .replace(/\{\{default_instructions\}\}/g, data.defaultInstructions || '');
 }
 
 function buildDynamicSections(data: CollectionWhatsAppRequest): string {
@@ -35,6 +37,10 @@ function buildDynamicSections(data: CollectionWhatsAppRequest): string {
   if (data.lockboxCode) {
     sections += `\n\n🔑 *Lockbox Code:* ${data.lockboxCode}`;
     if (data.lockboxInstructions) sections += `\n${data.lockboxInstructions}`;
+  }
+
+  if (data.defaultInstructions) {
+    sections += `\n\n📋 *Instructions:*\n${data.defaultInstructions}`;
   }
 
   if (data.deliveryAddress) {
@@ -79,55 +85,20 @@ Deno.serve(async (req) => {
       return errorResponse('Customer phone number is required', 400);
     }
 
-    // Build message — use custom template if available, otherwise default
-    let message = buildDefaultMessage(data);
-
-    if (data.tenantId) {
-      try {
-        const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
-        const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-        const supabase = createClient(supabaseUrl, supabaseServiceKey);
-
-        // Check for custom WhatsApp template, fall back to SMS template
-        const { data: templates } = await supabase
-          .from('lockbox_templates')
-          .select('channel, body, is_active')
-          .eq('tenant_id', data.tenantId)
-          .eq('is_active', true)
-          .in('channel', ['whatsapp', 'sms']);
-
-        const whatsappTemplate = templates?.find((t: any) => t.channel === 'whatsapp');
-        const smsTemplate = templates?.find((t: any) => t.channel === 'sms');
-        const customTemplate = whatsappTemplate || smsTemplate;
-
-        if (customTemplate?.body) {
-          message = replaceVars(customTemplate.body, data);
-          // Append dynamic sections not covered by template variables
-          message += buildDynamicSections(data);
-          console.log('Using custom template (channel:', customTemplate === whatsappTemplate ? 'whatsapp' : 'sms', ')');
-        }
-      } catch (templateError) {
-        console.warn('Error loading templates, using default:', templateError);
-      }
-    }
-
-    // Truncate message if over WhatsApp 4096-char limit
-    if (message.length > 4096) {
-      message = message.substring(0, 4093) + '...';
-    }
-
     // Normalize phone number
     let phone = data.customerPhone.replace(/[^+\d]/g, '');
     if (!phone.startsWith('+')) {
       phone = '+44' + phone; // Default UK prefix
     }
 
+    // Check for Content Template (WhatsApp Business API production mode)
+    const CONTENT_SID = Deno.env.get('TWILIO_WHATSAPP_CONTENT_SID');
+
     // Build Twilio request
     const auth = btoa(`${TWILIO_ACCOUNT_SID}:${TWILIO_AUTH_TOKEN}`);
     const params = new URLSearchParams();
     params.append('To', `whatsapp:${phone}`);
     params.append('From', `whatsapp:${TWILIO_WHATSAPP_NUMBER}`);
-    params.append('Body', message);
 
     // Add photo MediaUrls (Twilio supports up to 10)
     const photoUrls = (data.photoUrls || []).slice(0, 10);
@@ -135,7 +106,67 @@ Deno.serve(async (req) => {
       params.append('MediaUrl', url);
     });
 
-    console.log(`Sending WhatsApp to ${phone} with ${photoUrls.length} photos`);
+    if (CONTENT_SID) {
+      // Production mode — use Meta-approved Content Template
+      // Build combined extras for {{7}}
+      const extras: string[] = [];
+      if (data.lockboxInstructions) extras.push(`📌 ${data.lockboxInstructions}`);
+      if (data.defaultInstructions) extras.push(`📋 Instructions:\n${data.defaultInstructions}`);
+      if (data.odometerReading) extras.push(`🔢 Odometer: ${data.odometerReading} miles`);
+      if (data.notes) extras.push(`📝 Notes: ${data.notes}`);
+
+      const contentVariables = JSON.stringify({
+        '1': data.customerName || '',
+        '2': data.vehicleName || '',
+        '3': data.vehicleReg || '',
+        '4': data.lockboxCode || 'N/A',
+        '5': data.deliveryAddress || 'See booking details',
+        '6': data.bookingRef || '',
+        '7': extras.join('\n\n') || '',
+      });
+
+      params.append('ContentSid', CONTENT_SID);
+      params.append('ContentVariables', contentVariables);
+      console.log(`Sending WhatsApp (Content Template) to ${phone} with ${photoUrls.length} photos`);
+    } else {
+      // Sandbox mode — use free-form Body
+      let message = buildDefaultMessage(data);
+
+      if (data.tenantId) {
+        try {
+          const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+          const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+          const supabase = createClient(supabaseUrl, supabaseServiceKey);
+
+          const { data: templates } = await supabase
+            .from('lockbox_templates')
+            .select('channel, body, is_active')
+            .eq('tenant_id', data.tenantId)
+            .eq('is_active', true)
+            .in('channel', ['whatsapp', 'sms']);
+
+          const whatsappTemplate = templates?.find((t: any) => t.channel === 'whatsapp');
+          const smsTemplate = templates?.find((t: any) => t.channel === 'sms');
+          const customTemplate = whatsappTemplate || smsTemplate;
+
+          if (customTemplate?.body) {
+            message = replaceVars(customTemplate.body, data);
+            message += buildDynamicSections(data);
+            console.log('Using custom template (channel:', customTemplate === whatsappTemplate ? 'whatsapp' : 'sms', ')');
+          }
+        } catch (templateError) {
+          console.warn('Error loading templates, using default:', templateError);
+        }
+      }
+
+      // Truncate if over WhatsApp 4096-char limit
+      if (message.length > 4096) {
+        message = message.substring(0, 4093) + '...';
+      }
+
+      params.append('Body', message);
+      console.log(`Sending WhatsApp (Sandbox) to ${phone} with ${photoUrls.length} photos`);
+    }
 
     const response = await fetch(
       `https://api.twilio.com/2010-04-01/Accounts/${TWILIO_ACCOUNT_SID}/Messages.json`,

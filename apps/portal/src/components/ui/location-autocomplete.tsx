@@ -62,7 +62,6 @@ export function LocationAutocomplete({
         await google.maps.places.AutocompleteSuggestion.fetchAutocompleteSuggestions({
           input: inputValue,
           sessionToken: sessionManager.current.getToken(),
-          includedRegionCodes: ["us"],
         });
 
       const results: Suggestion[] = autocompleteSuggestions.slice(0, 5).map((s) => ({

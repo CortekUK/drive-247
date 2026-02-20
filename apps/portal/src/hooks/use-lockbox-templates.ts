@@ -17,7 +17,7 @@ const DEFAULT_EMAIL_TEMPLATE = {
   subject: 'Your Vehicle Keys - Lockbox Code',
   body: `Hi {{customer_name}},
 
-Your vehicle ({{vehicle_name}} - {{vehicle_reg}}) has been delivered to {{delivery_address}}.
+Your vehicle ({{vehicle_name}} - {{vehicle_reg}}) is ready for collection at {{delivery_address}}.
 
 Your lockbox code is: {{lockbox_code}}
 

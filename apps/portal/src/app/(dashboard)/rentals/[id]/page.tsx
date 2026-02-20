@@ -2244,7 +2244,7 @@ const RentalDetail = () => {
           customerName={rental?.customers?.name || ''}
           vehicleName={rental?.vehicles ? `${rental.vehicles.make} ${rental.vehicles.model}` : ''}
           vehicleReg={rental?.vehicles?.reg || ''}
-          deliveryAddress={rental?.delivery_address || null}
+          deliveryAddress={rental?.delivery_address || rental?.pickup_location || null}
           bookingRef={rental?.id?.slice(0, 8)?.toUpperCase() || ''}
         />
       )}

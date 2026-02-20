@@ -215,52 +215,63 @@ export const RentalsFilters = ({ filters, onFiltersChange, onClearFilters }: Ren
           })()}
         </div>
 
-        {/* Bonzah filters */}
-        <div className="flex items-center gap-1.5">
-        <Button
-          variant={filters.bonzahStatus === 'ins_quoted' ? 'default' : 'outline'}
-          size="sm"
-          onClick={() => updateFilter('bonzahStatus', filters.bonzahStatus === 'ins_quoted' ? undefined : 'ins_quoted')}
-          className={`whitespace-nowrap ${filters.bonzahStatus === 'ins_quoted' ? 'bg-[#CC004A] hover:bg-[#CC004A]/90 text-white border-[#CC004A]' : 'border-[#CC004A]/30 text-[#CC004A] bg-[#CC004A]/10 hover:bg-[#CC004A]/20'}`}
-        >
-          <img src="/bonzah-logo.svg" alt="" className={`mr-2 h-4 w-auto flex-shrink-0 dark:hidden ${filters.bonzahStatus === 'ins_quoted' ? 'brightness-0 invert' : ''}`} />
-          <img src="/bonzah-logo-dark.svg" alt="" className={`mr-2 h-4 w-auto flex-shrink-0 hidden dark:block ${filters.bonzahStatus === 'ins_quoted' ? 'brightness-0 invert' : ''}`} />
-          Ins. Quoted
-          {filters.bonzahStatus === 'ins_quoted' && <X className="ml-2 h-3 w-3 flex-shrink-0" />}
-        </Button>
-        <Button
-          variant={filters.bonzahStatus === 'ins_pending' ? 'default' : 'outline'}
-          size="sm"
-          onClick={() => updateFilter('bonzahStatus', filters.bonzahStatus === 'ins_pending' ? undefined : 'ins_pending')}
-          className={`whitespace-nowrap ${filters.bonzahStatus === 'ins_pending' ? 'bg-[#CC004A] hover:bg-[#CC004A]/90 text-white border-[#CC004A]' : 'border-[#CC004A]/30 text-[#CC004A] bg-[#CC004A]/10 hover:bg-[#CC004A]/20'}`}
-        >
-          <img src="/bonzah-logo.svg" alt="" className={`mr-2 h-4 w-auto flex-shrink-0 dark:hidden ${filters.bonzahStatus === 'ins_pending' ? 'brightness-0 invert' : ''}`} />
-          <img src="/bonzah-logo-dark.svg" alt="" className={`mr-2 h-4 w-auto flex-shrink-0 hidden dark:block ${filters.bonzahStatus === 'ins_pending' ? 'brightness-0 invert' : ''}`} />
-          Ins. Pending
-          {filters.bonzahStatus === 'ins_pending' && <X className="ml-2 h-3 w-3 flex-shrink-0" />}
-        </Button>
-        <Button
-          variant={filters.bonzahStatus === 'active' ? 'default' : 'outline'}
-          size="sm"
-          onClick={() => updateFilter('bonzahStatus', filters.bonzahStatus === 'active' ? undefined : 'active')}
-          className={`whitespace-nowrap ${filters.bonzahStatus === 'active' ? 'bg-[#CC004A] hover:bg-[#CC004A]/90 text-white border-[#CC004A]' : 'border-[#CC004A]/30 text-[#CC004A] bg-[#CC004A]/10 hover:bg-[#CC004A]/20'}`}
-        >
-          <img src="/bonzah-logo.svg" alt="" className={`mr-2 h-4 w-auto flex-shrink-0 dark:hidden ${filters.bonzahStatus === 'active' ? 'brightness-0 invert' : ''}`} />
-          <img src="/bonzah-logo-dark.svg" alt="" className={`mr-2 h-4 w-auto flex-shrink-0 hidden dark:block ${filters.bonzahStatus === 'active' ? 'brightness-0 invert' : ''}`} />
-          Ins. Active
-          {filters.bonzahStatus === 'active' && <X className="ml-2 h-3 w-3 flex-shrink-0" />}
-        </Button>
-        <Button
-          variant={filters.bonzahStatus === 'failed' ? 'default' : 'outline'}
-          size="sm"
-          onClick={() => updateFilter('bonzahStatus', filters.bonzahStatus === 'failed' ? undefined : 'failed')}
-          className={`whitespace-nowrap ${filters.bonzahStatus === 'failed' ? 'bg-[#CC004A] hover:bg-[#CC004A]/90 text-white border-[#CC004A]' : 'border-[#CC004A]/30 text-[#CC004A] bg-[#CC004A]/10 hover:bg-[#CC004A]/20'}`}
-        >
-          <img src="/bonzah-logo.svg" alt="" className={`mr-2 h-4 w-auto flex-shrink-0 dark:hidden ${filters.bonzahStatus === 'failed' ? 'brightness-0 invert' : ''}`} />
-          <img src="/bonzah-logo-dark.svg" alt="" className={`mr-2 h-4 w-auto flex-shrink-0 hidden dark:block ${filters.bonzahStatus === 'failed' ? 'brightness-0 invert' : ''}`} />
-          Ins. Failed
-          {filters.bonzahStatus === 'failed' && <X className="ml-2 h-3 w-3 flex-shrink-0" />}
-        </Button>
+        {/* Bonzah filters group */}
+        <div className="flex items-center border border-[#CC004A]/30 rounded-md overflow-hidden">
+          <span className="px-2.5 shrink-0 flex items-center">
+            <img src="/bonzah-logo.svg" alt="bonzah" className="h-4 w-auto dark:hidden" />
+            <img src="/bonzah-logo-dark.svg" alt="bonzah" className="h-4 w-auto hidden dark:block" />
+          </span>
+          <div className="h-5 w-px bg-[#CC004A]/30" />
+          {(() => {
+            const isActive = filters.bonzahStatus === 'ins_quoted';
+            return (
+              <button
+                onClick={() => updateFilter('bonzahStatus', isActive ? undefined : 'ins_quoted')}
+                className="inline-flex items-center gap-1.5 px-2.5 h-8 text-xs font-medium whitespace-nowrap transition-colors"
+                style={{
+                  backgroundColor: isActive ? '#CC004A' : 'transparent',
+                  color: isActive ? '#fff' : '#CC004A',
+                }}
+              >
+                Quoted
+                {isActive && <X className="ml-1 h-3 w-3" />}
+              </button>
+            );
+          })()}
+          <div className="h-5 w-px bg-[#CC004A]/30" />
+          {(() => {
+            const isActive = filters.bonzahStatus === 'active';
+            return (
+              <button
+                onClick={() => updateFilter('bonzahStatus', isActive ? undefined : 'active')}
+                className="inline-flex items-center gap-1.5 px-2.5 h-8 text-xs font-medium whitespace-nowrap transition-colors"
+                style={{
+                  backgroundColor: isActive ? '#CC004A' : 'transparent',
+                  color: isActive ? '#fff' : '#CC004A',
+                }}
+              >
+                Active
+                {isActive && <X className="ml-1 h-3 w-3" />}
+              </button>
+            );
+          })()}
+          <div className="h-5 w-px bg-[#CC004A]/30" />
+          {(() => {
+            const isActive = filters.bonzahStatus === 'failed';
+            return (
+              <button
+                onClick={() => updateFilter('bonzahStatus', isActive ? undefined : 'failed')}
+                className="inline-flex items-center gap-1.5 px-2.5 h-8 text-xs font-medium whitespace-nowrap transition-colors"
+                style={{
+                  backgroundColor: isActive ? '#CC004A' : 'transparent',
+                  color: isActive ? '#fff' : '#CC004A',
+                }}
+              >
+                Failed
+                {isActive && <X className="ml-1 h-3 w-3" />}
+              </button>
+            );
+          })()}
         </div>
         </div>
 

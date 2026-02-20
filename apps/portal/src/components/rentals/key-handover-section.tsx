@@ -4,6 +4,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
+import { PhoneInput } from "@/components/ui/phone-input";
 import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import {
@@ -200,6 +201,7 @@ export const KeyHandoverSection = ({
           .eq("id", rentalId);
 
         // Send lockbox notification
+        const photoUrls = (givingHandover?.photos || []).map((p) => p.file_url);
         const { error } = await supabase.functions.invoke("notify-lockbox-code", {
           body: {
             customerName,
@@ -212,6 +214,10 @@ export const KeyHandoverSection = ({
             deliveryAddress: deliveryAddress || '',
             bookingRef,
             tenantId: tenant?.id,
+            odometerReading: givingMileage || null,
+            notes: givingNotes || null,
+            photoUrls,
+            defaultInstructions: rentalSettings?.lockbox_default_instructions || null,
           },
         });
 
@@ -260,6 +266,7 @@ export const KeyHandoverSection = ({
             notes: givingNotes || null,
             photoUrls,
             tenantId: tenant?.id,
+            defaultInstructions: rentalSettings?.lockbox_default_instructions || null,
           },
         });
 
@@ -498,12 +505,10 @@ export const KeyHandoverSection = ({
                     <Label htmlFor="whatsapp-phone" className="text-xs text-muted-foreground">
                       WhatsApp number
                     </Label>
-                    <Input
-                      id="whatsapp-phone"
-                      type="tel"
+                    <PhoneInput
                       value={whatsAppPhone}
-                      onChange={(e) => setWhatsAppPhone(e.target.value)}
-                      placeholder="+44 7XXX XXXXXX"
+                      onChange={(val) => setWhatsAppPhone(val)}
+                      defaultCountry="GB"
                     />
                     <p className="text-xs text-muted-foreground">
                       Please enter the number with WhatsApp on it

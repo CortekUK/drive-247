@@ -1,11 +1,12 @@
 'use client';
 
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { useCustomerAuthStore } from '@/stores/customer-auth-store';
 import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { PhoneInput } from '@/components/ui/phone-input';
 import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -62,6 +63,23 @@ export default function SettingsPage() {
   const [licenseState, setLicenseState] = useState(customerUser?.customer?.license_state || '');
   const [isUpdatingProfile, setIsUpdatingProfile] = useState(false);
   const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
+
+  // Sync profile state when customerUser loads or changes (e.g. after save + refetch)
+  useEffect(() => {
+    const c = customerUser?.customer;
+    if (c) {
+      setName(c.name || '');
+      setPhone(c.phone || '');
+      setDateOfBirth(c.date_of_birth || '');
+      setTimezone(c.timezone || '');
+      setAddressStreet(c.address_street || '');
+      setAddressCity(c.address_city || '');
+      setAddressState(c.address_state || '');
+      setAddressZip(c.address_zip || '');
+      setLicenseNumber(c.license_number || '');
+      setLicenseState(c.license_state || '');
+    }
+  }, [customerUser]);
 
   // Password change state
   const [showPasswordDialog, setShowPasswordDialog] = useState(false);
@@ -380,11 +398,10 @@ export default function SettingsPage() {
             </div>
             <div className="space-y-2">
               <Label htmlFor="phone">Phone Number</Label>
-              <Input
-                id="phone"
+              <PhoneInput
                 value={phone}
-                onChange={(e) => setPhone(e.target.value)}
-                placeholder="Enter your phone number"
+                onChange={(val) => setPhone(val)}
+                defaultCountry="GB"
               />
               <p className="text-xs text-muted-foreground">
                 Your phone number will be used to auto-fill booking forms

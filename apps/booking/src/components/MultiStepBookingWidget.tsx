@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useMemo } from "react";
+import { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
@@ -113,7 +113,7 @@ const MultiStepBookingWidget = () => {
   const { holidays, vehicleOverrides } = useDynamicPricing(formData.vehicleId || undefined);
 
   // Customer authentication state
-  const { customerUser, session, loading: authLoading, initialized: authInitialized } = useCustomerAuthStore();
+  const { customerUser, session, loading: authLoading, initialized: authInitialized, refetchCustomerUser } = useCustomerAuthStore();
   const { data: customerVerification, isLoading: verificationLoading } = useCustomerVerification();
   const { data: customerDocuments } = useCustomerDocuments();
   const [showAuthDialog, setShowAuthDialog] = useState(false);
@@ -173,6 +173,27 @@ const MultiStepBookingWidget = () => {
     priceRange: [0, 1000] as [number, number]
   });
   const searchDebounceTimer = useRef<NodeJS.Timeout>();
+  const phoneSaveTimer = useRef<NodeJS.Timeout>();
+
+  // Auto-save phone to customer profile for authenticated users (debounced)
+  const savePhoneToProfile = useCallback((phone: string) => {
+    if (!isAuthenticated || !customerUser?.customer_id) return;
+    // Only save if different from what's in the profile
+    if (phone === customerUser?.customer?.phone) return;
+    clearTimeout(phoneSaveTimer.current);
+    phoneSaveTimer.current = setTimeout(async () => {
+      try {
+        await supabase
+          .from('customers')
+          .update({ phone: phone || null })
+          .eq('id', customerUser.customer_id);
+        // Refresh customer data in store so other pages pick it up
+        refetchCustomerUser();
+      } catch (err) {
+        console.error('Failed to auto-save phone:', err);
+      }
+    }, 1000);
+  }, [isAuthenticated, customerUser?.customer_id, customerUser?.customer?.phone]);
   const [expandedDescriptions, setExpandedDescriptions] = useState<Set<string>>(new Set());
   const [vehicleImageIndex, setVehicleImageIndex] = useState<Record<string, number>>({});
   // formData comes from useBookingStore (persisted to sessionStorage)
@@ -4750,38 +4771,28 @@ const MultiStepBookingWidget = () => {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
               <div className="space-y-2">
                 <Label htmlFor="customerPhone" className="font-medium">Phone Number *</Label>
-                {/* Show read-only display when phone is from account profile */}
-                {isAuthenticated && isCustomerDataPopulated && customerHasPhone && formData.customerPhone ? (
-                  <div className="space-y-2">
-                    <Input
-                      value={formData.customerPhone}
-                      readOnly
-                      className="h-12 bg-muted/50"
-                    />
-                    <p className="text-xs text-muted-foreground flex items-center gap-1">
-                      <CheckCircle className="w-3 h-3 text-primary" /> From your account profile
-                    </p>
-                  </div>
-                ) : (
-                  <>
-                    <PhoneInput
-                      id="customerPhone"
-                      value={formData.customerPhone}
-                      defaultCountry="US"
-                      onChange={value => {
-                        setFormData({
-                          ...formData,
-                          customerPhone: value
-                        });
-                        // Instant validation
-                        validateField('customerPhone', value);
-                      }}
-                      error={!!errors.customerPhone}
-                      className="h-12"
-                    />
-                    {errors.customerPhone && <p className="text-sm text-destructive">{errors.customerPhone}</p>}
-                  </>
+                <PhoneInput
+                  id="customerPhone"
+                  value={formData.customerPhone}
+                  defaultCountry="GB"
+                  onChange={value => {
+                    setFormData({
+                      ...formData,
+                      customerPhone: value
+                    });
+                    validateField('customerPhone', value);
+                    // Auto-save to customer profile for logged-in users
+                    savePhoneToProfile(value);
+                  }}
+                  error={!!errors.customerPhone}
+                  className="h-12"
+                />
+                {isAuthenticated && isCustomerDataPopulated && customerHasPhone && formData.customerPhone && (
+                  <p className="text-xs text-muted-foreground flex items-center gap-1">
+                    <CheckCircle className="w-3 h-3 text-primary" /> From your account profile
+                  </p>
                 )}
+                {errors.customerPhone && <p className="text-sm text-destructive">{errors.customerPhone}</p>}
               </div>
 
               <div className="space-y-2">

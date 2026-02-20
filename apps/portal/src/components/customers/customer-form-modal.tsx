@@ -4,6 +4,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage, FormDescription } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
+import { PhoneInput } from "@/components/ui/phone-input";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -701,14 +702,10 @@ export const CustomerFormModal = ({ open, onOpenChange, customer }: CustomerForm
                       Phone *
                     </FormLabel>
                     <FormControl>
-                      <Input
-                        placeholder="(555) 123-4567"
-                        {...field}
-                        className="input-focus"
-                        onChange={(e) => {
-                          const value = e.target.value.replace(/[^0-9\s\-\(\)\+]/g, "");
-                          field.onChange(value);
-                        }}
+                      <PhoneInput
+                        value={field.value || ""}
+                        onChange={(val) => field.onChange(val)}
+                        defaultCountry="GB"
                       />
                     </FormControl>
                     <FormMessage />
@@ -871,14 +868,10 @@ export const CustomerFormModal = ({ open, onOpenChange, customer }: CustomerForm
                         <FormItem>
                           <FormLabel>Phone</FormLabel>
                           <FormControl>
-                            <Input
-                              placeholder="(555) 123-4567"
-                              {...field}
-                              className="input-focus"
-                              onChange={(e) => {
-                                const value = e.target.value.replace(/[^0-9\s\-\(\)\+]/g, "");
-                                field.onChange(value);
-                              }}
+                            <PhoneInput
+                              value={field.value || ""}
+                              onChange={(val) => field.onChange(val)}
+                              defaultCountry="GB"
                             />
                           </FormControl>
                           <FormMessage />
