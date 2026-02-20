@@ -120,6 +120,7 @@ const Settings = () => {
     booking_lead_time_value: number;
     booking_lead_time_unit: 'hours' | 'days';
     min_rental_days: number;
+    min_rental_hours: number;
     max_rental_days: number;
     lockbox_enabled: boolean;
     lockbox_code_length: number | null;
@@ -162,7 +163,8 @@ const Settings = () => {
     booking_lead_time_value: 24,
     booking_lead_time_unit: 'hours' as 'hours' | 'days',
     // Rental duration limits
-    min_rental_days: 1,
+    min_rental_days: 0,
+    min_rental_hours: 1,
     max_rental_days: 90,
     // Lockbox settings
     lockbox_enabled: false,
@@ -203,7 +205,8 @@ const Settings = () => {
           ? rentalSettings.booking_lead_time_hours / 24
           : rentalSettings.booking_lead_time_hours ?? 24,
         // Rental duration limits
-        min_rental_days: rentalSettings.min_rental_days ?? 1,
+        min_rental_days: rentalSettings.min_rental_days ?? 0,
+        min_rental_hours: rentalSettings.min_rental_hours ?? 1,
         max_rental_days: rentalSettings.max_rental_days ?? 90,
         // Lockbox settings
         lockbox_enabled: rentalSettings.lockbox_enabled ?? false,
@@ -1835,19 +1838,41 @@ const Settings = () => {
                 </Select>
                 <span className="text-sm text-muted-foreground">before pickup</span>
               </div>
-              <p className="text-sm text-muted-foreground">
-                Customers must book at least {rentalForm.booking_lead_time_value} {rentalForm.booking_lead_time_unit} in advance.
-                {rentalForm.booking_lead_time_unit === 'days' && rentalForm.booking_lead_time_value > 0 && (
-                  <> ({rentalForm.booking_lead_time_value * 24} hours)</>
-                )}
-              </p>
+              {(() => {
+                const totalHours = rentalForm.booking_lead_time_unit === 'days'
+                  ? rentalForm.booking_lead_time_value * 24
+                  : rentalForm.booking_lead_time_value;
+                return (
+                  <>
+                    <p className="text-sm text-muted-foreground">
+                      Customers must book at least {rentalForm.booking_lead_time_value} {rentalForm.booking_lead_time_unit} in advance.
+                      {rentalForm.booking_lead_time_unit === 'days' && rentalForm.booking_lead_time_value > 0 && (
+                        <> ({totalHours} hours)</>
+                      )}
+                    </p>
+                    {totalHours < 1 && (
+                      <p className="text-sm text-destructive">
+                        Minimum booking notice must be at least 1 hour.
+                      </p>
+                    )}
+                  </>
+                );
+              })()}
               {canEditSettings('rental') && (
                 <Button
                   onClick={async () => {
+                    const hours = rentalForm.booking_lead_time_unit === 'days'
+                      ? rentalForm.booking_lead_time_value * 24
+                      : rentalForm.booking_lead_time_value;
+                    if (hours < 1) {
+                      toast({
+                        title: "Invalid Configuration",
+                        description: "Minimum booking notice must be at least 1 hour.",
+                        variant: "destructive",
+                      });
+                      return;
+                    }
                     try {
-                      const hours = rentalForm.booking_lead_time_unit === 'days'
-                        ? rentalForm.booking_lead_time_value * 24
-                        : rentalForm.booking_lead_time_value;
                       await updateRentalSettings({
                         booking_lead_time_hours: hours,
                         booking_lead_time_unit: rentalForm.booking_lead_time_unit,
@@ -1856,7 +1881,12 @@ const Settings = () => {
                       console.error('Failed to update booking notice settings:', error);
                     }
                   }}
-                  disabled={isUpdatingRentalSettings}
+                  disabled={(() => {
+                    const totalHours = rentalForm.booking_lead_time_unit === 'days'
+                      ? rentalForm.booking_lead_time_value * 24
+                      : rentalForm.booking_lead_time_value;
+                    return isUpdatingRentalSettings || totalHours < 1;
+                  })()}
                   className="flex items-center gap-2"
                 >
                   {isUpdatingRentalSettings ? (
@@ -1893,10 +1923,23 @@ const Settings = () => {
                       const raw = e.target.value.replace(/[^0-9]/g, '');
                       setRentalForm(prev => ({ ...prev, min_rental_days: raw === '' ? 0 : parseInt(raw) }));
                     }}
-                    placeholder="e.g. 1"
-                    className="w-24"
+                    placeholder="0"
+                    className="w-20"
                   />
                   <span className="text-sm text-muted-foreground">days</span>
+                  <Input
+                    type="text"
+                    inputMode="numeric"
+                    value={rentalForm.min_rental_hours || ''}
+                    onChange={(e) => {
+                      const raw = e.target.value.replace(/[^0-9]/g, '');
+                      const val = raw === '' ? 0 : Math.min(23, parseInt(raw) || 0);
+                      setRentalForm(prev => ({ ...prev, min_rental_hours: val }));
+                    }}
+                    placeholder="0"
+                    className="w-20"
+                  />
+                  <span className="text-sm text-muted-foreground">hours</span>
                 </div>
                 <div className="flex items-center gap-3">
                   <Label className="w-24 text-sm">Maximum</Label>
@@ -1909,29 +1952,54 @@ const Settings = () => {
                       setRentalForm(prev => ({ ...prev, max_rental_days: raw === '' ? 0 : parseInt(raw) }));
                     }}
                     placeholder="e.g. 90"
-                    className="w-24"
+                    className="w-20"
                   />
                   <span className="text-sm text-muted-foreground">days</span>
                 </div>
               </div>
-              {rentalForm.min_rental_days > 0 && rentalForm.max_rental_days > 0 && (
-                <p className="text-sm text-muted-foreground">
-                  Customers can book rentals between {rentalForm.min_rental_days} and {rentalForm.max_rental_days} days.
-                </p>
-              )}
-              {rentalForm.min_rental_days > 0 && rentalForm.max_rental_days > 0 && rentalForm.min_rental_days > rentalForm.max_rental_days && (
-                <p className="text-sm text-destructive">
-                  Minimum days cannot exceed maximum days.
-                </p>
-              )}
+              {(() => {
+                const totalMinHours = (rentalForm.min_rental_days || 0) * 24 + (rentalForm.min_rental_hours || 0);
+                const minDaysDisplay = rentalForm.min_rental_days || 0;
+                const minHoursDisplay = rentalForm.min_rental_hours || 0;
+                const maxDays = rentalForm.max_rental_days || 0;
+                return (
+                  <>
+                    {totalMinHours > 0 && maxDays > 0 && (
+                      <p className="text-sm text-muted-foreground">
+                        Minimum rental: {minDaysDisplay > 0 ? `${minDaysDisplay} day${minDaysDisplay !== 1 ? 's' : ''}` : ''}{minDaysDisplay > 0 && minHoursDisplay > 0 ? ' ' : ''}{minHoursDisplay > 0 ? `${minHoursDisplay} hour${minHoursDisplay !== 1 ? 's' : ''}` : ''}{totalMinHours > 0 && ` (${totalMinHours} hours total)`}. Maximum: {maxDays} day{maxDays !== 1 ? 's' : ''}.
+                      </p>
+                    )}
+                    {totalMinHours < 1 && (
+                      <p className="text-sm text-destructive">
+                        Minimum rental period must be at least 1 hour.
+                      </p>
+                    )}
+                    {totalMinHours > 0 && maxDays > 0 && totalMinHours > maxDays * 24 && (
+                      <p className="text-sm text-destructive">
+                        Minimum duration cannot exceed maximum duration.
+                      </p>
+                    )}
+                  </>
+                );
+              })()}
               <Button
                 onClick={async () => {
-                  const minDays = rentalForm.min_rental_days || 1;
+                  const minDays = rentalForm.min_rental_days || 0;
+                  const minHours = Math.min(23, rentalForm.min_rental_hours || 0);
+                  const totalMinHours = minDays * 24 + minHours;
                   const maxDays = rentalForm.max_rental_days || 90;
-                  if (minDays > maxDays) {
+                  if (totalMinHours < 1) {
                     toast({
                       title: "Invalid Configuration",
-                      description: "Minimum rental days cannot exceed maximum rental days.",
+                      description: "Minimum rental period must be at least 1 hour.",
+                      variant: "destructive",
+                    });
+                    return;
+                  }
+                  if (totalMinHours > maxDays * 24) {
+                    toast({
+                      title: "Invalid Configuration",
+                      description: "Minimum rental duration cannot exceed maximum rental duration.",
                       variant: "destructive",
                     });
                     return;
@@ -1939,103 +2007,19 @@ const Settings = () => {
                   try {
                     await updateRentalSettings({
                       min_rental_days: minDays,
+                      min_rental_hours: minHours,
                       max_rental_days: maxDays,
                     });
-                    setRentalForm(prev => ({ ...prev, min_rental_days: minDays, max_rental_days: maxDays }));
+                    setRentalForm(prev => ({ ...prev, min_rental_days: minDays, min_rental_hours: minHours, max_rental_days: maxDays }));
                   } catch (error) {
                     console.error('Failed to update rental duration settings:', error);
                   }
                 }}
-                disabled={isUpdatingRentalSettings || (rentalForm.min_rental_days > 0 && rentalForm.max_rental_days > 0 && rentalForm.min_rental_days > rentalForm.max_rental_days)}
-                className="flex items-center gap-2"
-              >
-                {isUpdatingRentalSettings ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  <Save className="h-4 w-4" />
-                )}
-                Save
-              </Button>
-            </CardContent>
-          </Card>
-
-          {/* Minimum Rental Duration Card */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Car className="h-5 w-5 text-primary" />
-                Rental Duration Limits
-              </CardTitle>
-              <CardDescription>
-                Set minimum and maximum rental duration for bookings
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="space-y-3">
-                <div className="flex items-center gap-3">
-                  <Label className="w-24 text-sm">Minimum</Label>
-                  <Input
-                    type="text"
-                    inputMode="numeric"
-                    value={rentalForm.min_rental_days || ''}
-                    onChange={(e) => {
-                      const raw = e.target.value.replace(/[^0-9]/g, '');
-                      setRentalForm(prev => ({ ...prev, min_rental_days: raw === '' ? 0 : parseInt(raw) }));
-                    }}
-                    placeholder="e.g. 1"
-                    className="w-24"
-                  />
-                  <span className="text-sm text-muted-foreground">days</span>
-                </div>
-                <div className="flex items-center gap-3">
-                  <Label className="w-24 text-sm">Maximum</Label>
-                  <Input
-                    type="text"
-                    inputMode="numeric"
-                    value={rentalForm.max_rental_days || ''}
-                    onChange={(e) => {
-                      const raw = e.target.value.replace(/[^0-9]/g, '');
-                      setRentalForm(prev => ({ ...prev, max_rental_days: raw === '' ? 0 : parseInt(raw) }));
-                    }}
-                    placeholder="e.g. 90"
-                    className="w-24"
-                  />
-                  <span className="text-sm text-muted-foreground">days</span>
-                </div>
-              </div>
-              {rentalForm.min_rental_days > 0 && rentalForm.max_rental_days > 0 && (
-                <p className="text-sm text-muted-foreground">
-                  Customers can book rentals between {rentalForm.min_rental_days} and {rentalForm.max_rental_days} days.
-                </p>
-              )}
-              {rentalForm.min_rental_days > 0 && rentalForm.max_rental_days > 0 && rentalForm.min_rental_days > rentalForm.max_rental_days && (
-                <p className="text-sm text-destructive">
-                  Minimum days cannot exceed maximum days.
-                </p>
-              )}
-              <Button
-                onClick={async () => {
-                  const minDays = rentalForm.min_rental_days || 1;
-                  const maxDays = rentalForm.max_rental_days || 90;
-                  if (minDays > maxDays) {
-                    toast({
-                      title: "Invalid Configuration",
-                      description: "Minimum rental days cannot exceed maximum rental days.",
-                      variant: "destructive",
-                    });
-                    return;
-                  }
-                  try {
-                    await updateRentalSettings({
-                      min_rental_days: minDays,
-                      max_rental_days: maxDays,
-                    });
-                    setRentalForm(prev => ({ ...prev, min_rental_days: minDays, max_rental_days: maxDays }));
-                  } catch (error) {
-                    console.error('Failed to update rental duration settings:', error);
-                  }
-                }}
-                disabled={isUpdatingRentalSettings || (rentalForm.min_rental_days > 0 && rentalForm.max_rental_days > 0 && rentalForm.min_rental_days > rentalForm.max_rental_days)}
+                disabled={(() => {
+                  const totalMinHours = (rentalForm.min_rental_days || 0) * 24 + (rentalForm.min_rental_hours || 0);
+                  const maxDays = rentalForm.max_rental_days || 0;
+                  return isUpdatingRentalSettings || totalMinHours < 1 || (totalMinHours > 0 && maxDays > 0 && totalMinHours > maxDays * 24);
+                })()}
                 className="flex items-center gap-2"
               >
                 {isUpdatingRentalSettings ? (

@@ -396,7 +396,7 @@ export function isTimeWithinWorkingHours(
     };
   }
 
-  if (requestedMinutes >= closeMinutes) {
+  if (requestedMinutes > closeMinutes) {
     return {
       isValid: false,
       reason: `Selected time is after closing hours (${formatTime12Hour(daySchedule.close)})`,

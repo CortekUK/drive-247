@@ -35,7 +35,7 @@ function isTimeWithinBusinessHours(time: string, openTime: string, closeTime: st
   const timeMinutes = timeToMinutes(time)
   const openMinutes = timeToMinutes(openTime)
   const closeMinutes = timeToMinutes(closeTime)
-  return timeMinutes >= openMinutes && timeMinutes < closeMinutes
+  return timeMinutes >= openMinutes && timeMinutes <= closeMinutes
 }
 
 /**
@@ -290,9 +290,9 @@ export function TimePicker({
     if (currentMinutes < openMinutes) {
       // Before opening - set to opening time
       correctedMinutes = openMinutes
-    } else if (currentMinutes >= closeMinutes) {
-      // After closing - set to last valid time (close - 1 minute)
-      correctedMinutes = closeMinutes - 1
+    } else if (currentMinutes > closeMinutes) {
+      // After closing - set to closing time (last valid time)
+      correctedMinutes = closeMinutes
     } else {
       // Within range, no correction needed
       return

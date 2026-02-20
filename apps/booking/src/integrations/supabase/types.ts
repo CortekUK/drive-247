@@ -1,3 +1,4 @@
+Using workdir /Users/ghulam/projects/drive-247
 export type Json =
   | string
   | number
@@ -5802,6 +5803,7 @@ export type Database = {
           area_center_lat: number | null
           area_center_lon: number | null
           area_delivery_fee: number | null
+          boldsign_brand_id: string | null
           bonzah_mode: string
           bonzah_password: string | null
           bonzah_username: string | null
@@ -5849,6 +5851,7 @@ export type Database = {
           light_secondary_color: string | null
           linkedin_url: string | null
           lockbox_code_length: number | null
+          lockbox_default_instructions: string | null
           lockbox_enabled: boolean | null
           lockbox_notification_methods: Json | null
           logo_url: string | null
@@ -5857,6 +5860,7 @@ export type Database = {
           meta_description: string | null
           meta_title: string | null
           min_rental_days: number | null
+          min_rental_hours: number
           minimum_rental_age: number | null
           monday_close: string | null
           monday_enabled: boolean | null
@@ -5870,6 +5874,7 @@ export type Database = {
           pickup_fixed_enabled: boolean | null
           pickup_location_mode: string | null
           pickup_multiple_locations_enabled: boolean | null
+          policies_accepted_at: string | null
           primary_color: string | null
           privacy_policy_version: string | null
           require_identity_verification: boolean | null
@@ -5934,6 +5939,7 @@ export type Database = {
           area_center_lat?: number | null
           area_center_lon?: number | null
           area_delivery_fee?: number | null
+          boldsign_brand_id?: string | null
           bonzah_mode?: string
           bonzah_password?: string | null
           bonzah_username?: string | null
@@ -5981,6 +5987,7 @@ export type Database = {
           light_secondary_color?: string | null
           linkedin_url?: string | null
           lockbox_code_length?: number | null
+          lockbox_default_instructions?: string | null
           lockbox_enabled?: boolean | null
           lockbox_notification_methods?: Json | null
           logo_url?: string | null
@@ -5989,6 +5996,7 @@ export type Database = {
           meta_description?: string | null
           meta_title?: string | null
           min_rental_days?: number | null
+          min_rental_hours?: number
           minimum_rental_age?: number | null
           monday_close?: string | null
           monday_enabled?: boolean | null
@@ -6002,6 +6010,7 @@ export type Database = {
           pickup_fixed_enabled?: boolean | null
           pickup_location_mode?: string | null
           pickup_multiple_locations_enabled?: boolean | null
+          policies_accepted_at?: string | null
           primary_color?: string | null
           privacy_policy_version?: string | null
           require_identity_verification?: boolean | null
@@ -6066,6 +6075,7 @@ export type Database = {
           area_center_lat?: number | null
           area_center_lon?: number | null
           area_delivery_fee?: number | null
+          boldsign_brand_id?: string | null
           bonzah_mode?: string
           bonzah_password?: string | null
           bonzah_username?: string | null
@@ -6113,6 +6123,7 @@ export type Database = {
           light_secondary_color?: string | null
           linkedin_url?: string | null
           lockbox_code_length?: number | null
+          lockbox_default_instructions?: string | null
           lockbox_enabled?: boolean | null
           lockbox_notification_methods?: Json | null
           logo_url?: string | null
@@ -6121,6 +6132,7 @@ export type Database = {
           meta_description?: string | null
           meta_title?: string | null
           min_rental_days?: number | null
+          min_rental_hours?: number
           minimum_rental_age?: number | null
           monday_close?: string | null
           monday_enabled?: boolean | null
@@ -6134,6 +6146,7 @@ export type Database = {
           pickup_fixed_enabled?: boolean | null
           pickup_location_mode?: string | null
           pickup_multiple_locations_enabled?: boolean | null
+          policies_accepted_at?: string | null
           primary_color?: string | null
           privacy_policy_version?: string | null
           require_identity_verification?: boolean | null
@@ -8003,4 +8016,3 @@ export const Constants = {
     },
   },
 } as const
-

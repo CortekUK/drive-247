@@ -245,6 +245,55 @@ const MultiStepBookingWidget = () => {
     return getWorkingHoursForDate(dropoffDate, tenant);
   }, [formData.dropoffDate, tenant, workingHours]);
 
+  // Compute effective open time for pickup — on the earliest date, enforce lead time
+  const effectivePickupOpen = useMemo(() => {
+    if (pickupDateWorkingHours.isAlwaysOpen || !pickupDateWorkingHours.enabled) return undefined;
+    const baseOpen = pickupDateWorkingHours.open;
+    if (!formData.pickupDate) return baseOpen;
+
+    const leadTimeHours = tenant?.booking_lead_time_hours ?? 24;
+    const earliestPickup = new Date(Date.now() + leadTimeHours * 60 * 60 * 1000);
+    const pickupDate = parseDateString(formData.pickupDate);
+
+    // Only adjust on the boundary date (earliest allowed day)
+    if (format(pickupDate, 'yyyy-MM-dd') === format(earliestPickup, 'yyyy-MM-dd')) {
+      const leadHH = earliestPickup.getHours().toString().padStart(2, '0');
+      const leadMM = earliestPickup.getMinutes().toString().padStart(2, '0');
+      const leadTimeStr = `${leadHH}:${leadMM}`;
+      // Use the later of business open and lead time cutoff
+      const [baseH, baseM] = baseOpen.split(':').map(Number);
+      const baseMinutes = baseH * 60 + baseM;
+      const leadMinutes = earliestPickup.getHours() * 60 + earliestPickup.getMinutes();
+      return leadMinutes > baseMinutes ? leadTimeStr : baseOpen;
+    }
+    return baseOpen;
+  }, [pickupDateWorkingHours, formData.pickupDate, tenant]);
+
+  // Compute effective open time for return — on the earliest date, enforce min rental
+  const effectiveReturnOpen = useMemo(() => {
+    if (dropoffDateWorkingHours.isAlwaysOpen || !dropoffDateWorkingHours.enabled) return undefined;
+    const baseOpen = dropoffDateWorkingHours.open;
+    if (!formData.pickupDate || !formData.pickupTime || !formData.dropoffDate) return baseOpen;
+
+    const minTotalHours = Math.max(1, (tenant?.min_rental_days ?? 0) * 24 + (tenant?.min_rental_hours ?? 1));
+    const pickupDateTime = new Date(`${formData.pickupDate}T${formData.pickupTime}:00`);
+    const earliestReturn = new Date(pickupDateTime.getTime() + minTotalHours * 60 * 60 * 1000);
+    const dropoffDate = parseDateString(formData.dropoffDate);
+
+    // Only adjust on the boundary date (earliest allowed return day)
+    if (format(dropoffDate, 'yyyy-MM-dd') === format(earliestReturn, 'yyyy-MM-dd')) {
+      const returnHH = earliestReturn.getHours().toString().padStart(2, '0');
+      const returnMM = earliestReturn.getMinutes().toString().padStart(2, '0');
+      const returnTimeStr = `${returnHH}:${returnMM}`;
+      // Use the later of business open and min rental cutoff
+      const [baseH, baseM] = baseOpen.split(':').map(Number);
+      const baseMinutes = baseH * 60 + baseM;
+      const returnMinutes = earliestReturn.getHours() * 60 + earliestReturn.getMinutes();
+      return returnMinutes > baseMinutes ? returnTimeStr : baseOpen;
+    }
+    return baseOpen;
+  }, [dropoffDateWorkingHours, formData.pickupDate, formData.pickupTime, formData.dropoffDate, tenant]);
+
   // Insurance state
   const [hasInsurance, setHasInsurance] = useState<boolean | null>(null);
   const [showUploadDialog, setShowUploadDialog] = useState(false);
@@ -2115,13 +2164,13 @@ const MultiStepBookingWidget = () => {
       }
     };
 
-    const minDays = tenant?.min_rental_days ?? 1;
+    const minTotalHours = Math.max(1, (tenant?.min_rental_days ?? 0) * 24 + (tenant?.min_rental_hours ?? 1));
     const maxDays = tenant?.max_rental_days ?? 90;
     return {
       hours,
       days,
       remainingHours,
-      isValid: hours >= minDays * 24 && days <= maxDays,
+      isValid: hours >= minTotalHours && days <= maxDays,
       formatted: formatDuration()
     };
   };
@@ -2632,13 +2681,19 @@ const MultiStepBookingWidget = () => {
     // Validate rental duration using tenant settings
     if (formData.pickupDate && formData.dropoffDate && formData.pickupTime && formData.dropoffTime) {
       const duration = calculateRentalDuration();
-      const minDays = tenant?.min_rental_days ?? 1;
+      const minDays = tenant?.min_rental_days ?? 0;
+      const minHours = tenant?.min_rental_hours ?? 1;
+      const minTotalHours = Math.max(1, minDays * 24 + minHours);
       const maxDays = tenant?.max_rental_days ?? 90;
       if (duration) {
-        if (duration.hours < minDays * 24) {
-          newErrors.dropoffDate = minDays === 1
-            ? "Return must be at least 24 hours after pickup."
-            : `Minimum rental period is ${minDays} day${minDays !== 1 ? 's' : ''}.`;
+        if (duration.hours < minTotalHours) {
+          // Format a human-readable minimum duration message
+          const displayDays = Math.floor(minTotalHours / 24);
+          const displayHours = minTotalHours % 24;
+          const parts: string[] = [];
+          if (displayDays > 0) parts.push(`${displayDays} day${displayDays !== 1 ? 's' : ''}`);
+          if (displayHours > 0) parts.push(`${displayHours} hour${displayHours !== 1 ? 's' : ''}`);
+          newErrors.dropoffDate = `Minimum rental period is ${parts.join(' ')}.`;
         } else if (duration.days > maxDays) {
           newErrors.dropoffDate = `Maximum rental period is ${maxDays} day${maxDays !== 1 ? 's' : ''}.`;
         }
@@ -3271,11 +3326,14 @@ const MultiStepBookingWidget = () => {
                       }} disabled={date => {
                         const dateStr = format(date, "yyyy-MM-dd");
                         const today = new Date(new Date().setHours(0, 0, 0, 0));
+                        const leadTimeHours = tenant?.booking_lead_time_hours ?? 24;
+                        const earliestPickup = new Date(Date.now() + leadTimeHours * 60 * 60 * 1000);
+                        earliestPickup.setHours(0, 0, 0, 0);
                         const oneYearFromNow = new Date(today);
                         oneYearFromNow.setFullYear(oneYearFromNow.getFullYear() + 1);
                         const dayWorkingHours = getWorkingHoursForDate(date, tenant);
                         const isClosedDay = !dayWorkingHours.enabled;
-                        return date < today || date > oneYearFromNow || blockedDates.includes(dateStr) || isClosedDay;
+                        return date < earliestPickup || date > oneYearFromNow || blockedDates.includes(dateStr) || isClosedDay;
                       }} initialFocus className="pointer-events-auto" />
                     </PopoverContent>
                   </Popover>
@@ -3295,7 +3353,7 @@ const MultiStepBookingWidget = () => {
                       }
                     }}
                     className="h-11"
-                    businessHoursOpen={!pickupDateWorkingHours.isAlwaysOpen && pickupDateWorkingHours.enabled ? pickupDateWorkingHours.open : undefined}
+                    businessHoursOpen={effectivePickupOpen}
                     businessHoursClose={!pickupDateWorkingHours.isAlwaysOpen && pickupDateWorkingHours.enabled ? pickupDateWorkingHours.close : undefined}
                     customerTimezone={formData.customerTimezone}
                     tenantTimezone={workingHours.timezone}
@@ -3368,12 +3426,18 @@ const MultiStepBookingWidget = () => {
                         }
                       }} disabled={date => {
                         const pickupDate = formData.pickupDate ? parseDateString(formData.pickupDate) : new Date();
+                        const minTotalHours = Math.max(1, (tenant?.min_rental_days ?? 0) * 24 + (tenant?.min_rental_hours ?? 1));
+                        // Calculate earliest return date based on minimum rental duration
+                        const earliestReturn = new Date(pickupDate);
+                        earliestReturn.setHours(earliestReturn.getHours() + minTotalHours);
+                        // Set to start of day — if the pickup time + min hours lands partway through the day, that day is still valid
+                        const earliestReturnDay = new Date(earliestReturn.getFullYear(), earliestReturn.getMonth(), earliestReturn.getDate());
                         const oneYearFromPickup = new Date(pickupDate);
                         oneYearFromPickup.setFullYear(oneYearFromPickup.getFullYear() + 1);
                         const dateStr = format(date, "yyyy-MM-dd");
                         const dayWorkingHours = getWorkingHoursForDate(date, tenant);
                         const isClosedDay = !dayWorkingHours.enabled;
-                        return date <= pickupDate || date > oneYearFromPickup || blockedDates.includes(dateStr) || isClosedDay;
+                        return date < earliestReturnDay || date > oneYearFromPickup || blockedDates.includes(dateStr) || isClosedDay;
                       }} initialFocus className="pointer-events-auto" />
                     </PopoverContent>
                   </Popover>
@@ -3393,7 +3457,7 @@ const MultiStepBookingWidget = () => {
                       }
                     }}
                     className="h-11"
-                    businessHoursOpen={!dropoffDateWorkingHours.isAlwaysOpen && dropoffDateWorkingHours.enabled ? dropoffDateWorkingHours.open : undefined}
+                    businessHoursOpen={effectiveReturnOpen}
                     businessHoursClose={!dropoffDateWorkingHours.isAlwaysOpen && dropoffDateWorkingHours.enabled ? dropoffDateWorkingHours.close : undefined}
                     customerTimezone={formData.customerTimezone}
                     tenantTimezone={workingHours.timezone}

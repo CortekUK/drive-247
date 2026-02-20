@@ -20,6 +20,7 @@ export interface InstallmentConfig {
 
 export interface RentalSettings {
   min_rental_days: number | null;
+  min_rental_hours: number | null;
   max_rental_days: number | null;
   booking_lead_time_hours: number | null;
   minimum_rental_age: number | null;
@@ -51,7 +52,8 @@ export interface RentalSettings {
 }
 
 const DEFAULT_RENTAL_SETTINGS: RentalSettings = {
-  min_rental_days: 1,
+  min_rental_days: 0,
+  min_rental_hours: 1,
   max_rental_days: 90,
   booking_lead_time_hours: 24,
   minimum_rental_age: 18,
@@ -123,6 +125,7 @@ export const useRentalSettings = () => {
         .from('tenants')
         .select(`
           min_rental_days,
+          min_rental_hours,
           max_rental_days,
           booking_lead_time_hours,
           booking_lead_time_unit,
@@ -189,6 +192,7 @@ export const useRentalSettings = () => {
         .eq('id', tenant.id)
         .select(`
           min_rental_days,
+          min_rental_hours,
           max_rental_days,
           booking_lead_time_hours,
           booking_lead_time_unit,
