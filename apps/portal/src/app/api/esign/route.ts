@@ -250,6 +250,15 @@ export async function POST(request: NextRequest) {
             documentContent = generateDefaultAgreement(rental, customer, vehicle, tenant, currencyCode);
         }
 
+        // Inject BoldSign text tag at the signature line so the field is placed exactly there
+        // Replace "Customer Signature: ___" with a text tag that BoldSign detects automatically
+        const sigTagInserted = /Customer Signature:\s*_+/i.test(documentContent);
+        documentContent = documentContent.replace(/Customer Signature:\s*_+/i, 'Customer Signature: {{@sig1}}');
+        if (!sigTagInserted) {
+            // Template doesn't have a signature line — append one
+            documentContent += '\n\nCustomer Signature: {{@sig1}}';
+        }
+
         // Generate PDF from text content
         const pdfDoc = await PDFDocument.create();
         const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
@@ -264,8 +273,6 @@ export async function POST(request: NextRequest) {
         const lines = documentContent.split('\n');
         let page = pdfDoc.addPage([pageWidth, pageHeight]);
         let y = pageHeight - margin;
-        let signatureLineY = -1;
-        let signaturePageNum = -1;
 
         for (const line of lines) {
             const words = line.split(' ');
@@ -293,11 +300,6 @@ export async function POST(request: NextRequest) {
             if (currentLine) {
                 const isHeader = currentLine.startsWith('=') || (currentLine === currentLine.toUpperCase() && currentLine.length > 3 && !currentLine.startsWith('{{'));
                 page.drawText(currentLine, { x: margin, y, size: fontSize, font: isHeader ? boldFont : font, color: rgb(0, 0, 0) });
-                // Track where "Customer Signature:" line is drawn
-                if (currentLine.toLowerCase().includes('customer signature')) {
-                    signatureLineY = y;
-                    signaturePageNum = pdfDoc.getPageCount();
-                }
             }
             y -= lineHeight;
         }
@@ -370,24 +372,14 @@ export async function POST(request: NextRequest) {
         formData.append('Signers[0][Name]', body.customerName);
         formData.append('Signers[0][EmailAddress]', body.customerEmail);
         formData.append('Signers[0][SignerType]', 'Signer');
-        // Place signature field at the "Customer Signature:" line if found, otherwise below content
-        // Convert pdf-lib bottom-up Y to BoldSign top-down Y coordinate: BoldSign_Y = pageHeight - pdflib_Y
-        let sigFieldPage: number;
-        let sigFieldY: number;
-        if (signatureLineY > 0 && signaturePageNum > 0) {
-            sigFieldPage = signaturePageNum;
-            sigFieldY = pageHeight - signatureLineY + lineHeight;
-        } else {
-            sigFieldPage = pdfDoc.getPageCount();
-            sigFieldY = Math.min(pageHeight - y + 20, pageHeight - 100);
-        }
-        formData.append('Signers[0][FormFields][0][FieldType]', 'Signature');
-        formData.append('Signers[0][FormFields][0][PageNumber]', String(sigFieldPage));
-        formData.append('Signers[0][FormFields][0][Bounds][X]', '200');
-        formData.append('Signers[0][FormFields][0][Bounds][Y]', String(sigFieldY));
-        formData.append('Signers[0][FormFields][0][Bounds][Width]', '250');
-        formData.append('Signers[0][FormFields][0][Bounds][Height]', '50');
-        formData.append('Signers[0][FormFields][0][IsRequired]', 'true');
+        // Use text tags: BoldSign finds {{@sig1}} in the PDF and places the field there automatically
+        formData.append('UseTextTags', 'true');
+        formData.append('TextTagDefinitions[0][DefinitionId]', 'sig1');
+        formData.append('TextTagDefinitions[0][Type]', 'Signature');
+        formData.append('TextTagDefinitions[0][SignerIndex]', '1');
+        formData.append('TextTagDefinitions[0][IsRequired]', 'true');
+        formData.append('TextTagDefinitions[0][Size][Width]', '250');
+        formData.append('TextTagDefinitions[0][Size][Height]', '50');
         formData.append('EnableSigningOrder', 'false');
         formData.append('DisableEmails', 'false');
 
