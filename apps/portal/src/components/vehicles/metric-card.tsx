@@ -65,12 +65,12 @@ export function MetricItem({ label, value, trend, isAmount, className }: MetricI
   };
 
   return (
-    <div className={cn("flex flex-col", className)}>
+    <div className={cn("flex flex-col min-w-0", className)}>
       <span className="text-xs text-muted-foreground mb-1">{label}</span>
-      <div className={cn("flex items-center gap-1 font-semibold text-sm", getValueColor())}>
-        {trend === "up" && <TrendingUp className="h-3 w-3" />}
-        {trend === "down" && <TrendingDown className="h-3 w-3" />}
-        <span>{formatValue(value)}</span>
+      <div className={cn("flex items-center gap-1 font-semibold text-sm min-w-0", getValueColor())}>
+        {trend === "up" && <TrendingUp className="h-3 w-3 shrink-0" />}
+        {trend === "down" && <TrendingDown className="h-3 w-3 shrink-0" />}
+        <span className="break-all">{formatValue(value)}</span>
       </div>
     </div>
   );

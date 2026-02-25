@@ -51,6 +51,7 @@ interface Customer {
   whatsapp_opt_in: boolean;
   license_number?: string;
   id_number?: string;
+  date_of_birth?: string;
   is_blocked?: boolean;
   blocked_at?: string;
   blocked_reason?: string;
@@ -81,6 +82,23 @@ const CustomerDetail = () => {
 
   const { blockCustomer, unblockCustomer, isLoading: blockingLoading } = useCustomerBlockingActions();
 
+  // Fetch latest identity verification for this customer (DOB fallback)
+  const { data: latestVerification } = useQuery({
+    queryKey: ["customer-verification", id],
+    queryFn: async () => {
+      const { data, error } = await (supabase as any)
+        .from("identity_verifications")
+        .select("date_of_birth, document_expiry_date")
+        .eq("customer_id", id)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (error) throw error;
+      return data as { date_of_birth: string | null; document_expiry_date: string | null } | null;
+    },
+    enabled: !!id,
+  });
+
   const { data: customer, isLoading, refetch: refetchCustomer } = useQuery({
     queryKey: ["customer", id],
     queryFn: async () => {
@@ -88,7 +106,7 @@ const CustomerDetail = () => {
         .from("customers")
         .select(`
           id, name, email, phone, customer_type, status, whatsapp_opt_in,
-          license_number, id_number, is_blocked, blocked_at, blocked_reason,
+          license_number, id_number, date_of_birth, is_blocked, blocked_at, blocked_reason,
           nok_full_name, nok_relationship, nok_phone, nok_email, nok_address
         `)
         .eq("id", id)
@@ -331,6 +349,9 @@ const CustomerDetail = () => {
               {customer.email && <MetricItem label="Email" value={customer.email} />}
               {customer.phone && <MetricItem label="Phone" value={customer.phone} />}
               <MetricItem label="Type" value={customer.customer_type} />
+              {(customer.date_of_birth || latestVerification?.date_of_birth) && (
+                <MetricItem label="Date of Birth" value={format(new Date((customer.date_of_birth || latestVerification?.date_of_birth)!), 'MMM d, yyyy')} />
+              )}
               {customer.license_number && <MetricItem label="License No." value={customer.license_number} />}
               {customer.id_number && <MetricItem label="ID Number" value={customer.id_number} />}
               {customer.whatsapp_opt_in && (
