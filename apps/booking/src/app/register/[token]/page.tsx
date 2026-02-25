@@ -12,6 +12,7 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
 import { toast } from 'sonner';
+import { Checkbox } from '@/components/ui/checkbox';
 import {
   Loader2,
   XCircle,
@@ -23,6 +24,10 @@ import {
   Smartphone,
   Clock,
   Copy,
+  Briefcase,
+  ImageIcon,
+  Upload,
+  X,
 } from 'lucide-react';
 
 const registrationSchema = z.object({
@@ -58,6 +63,9 @@ export default function RegisterPage() {
   const [isPolling, setIsPolling] = useState(false);
   const [verificationDone, setVerificationDone] = useState(false);
   const pollIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const [isGigDriver, setIsGigDriver] = useState(false);
+  const [gigDriverFiles, setGigDriverFiles] = useState<File[]>([]);
+  const [gigDriverUploading, setGigDriverUploading] = useState(false);
 
   const form = useForm<RegistrationFormData>({
     resolver: zodResolver(registrationSchema),
@@ -190,6 +198,20 @@ export default function RegisterPage() {
   const handleSubmitRegistration = async (data: RegistrationFormData) => {
     setPageStep('submitting');
     try {
+      // Upload gig driver files to storage first
+      const gigDriverImagePaths: string[] = [];
+      if (isGigDriver && gigDriverFiles.length > 0) {
+        for (const file of gigDriverFiles) {
+          const fileName = `${Date.now()}-${file.name.replace(/[^a-zA-Z0-9.-]/g, '_')}`;
+          const filePath = `pending/${fileName}`;
+          const { error: uploadError } = await supabase.storage
+            .from('gig-driver-images')
+            .upload(filePath, file, { cacheControl: '3600', upsert: false });
+          if (uploadError) throw new Error(`Failed to upload ${file.name}`);
+          gigDriverImagePaths.push(filePath);
+        }
+      }
+
       const { data: result, error } = await supabase.functions.invoke('submit-customer-registration', {
         body: {
           token,
@@ -197,6 +219,8 @@ export default function RegisterPage() {
           email: data.email,
           phone: data.phone,
           verificationSessionId: verificationSessionId || undefined,
+          isGigDriver: isGigDriver || undefined,
+          gigDriverImagePaths: gigDriverImagePaths.length > 0 ? gigDriverImagePaths : undefined,
         },
       });
 
@@ -354,6 +378,70 @@ export default function RegisterPage() {
                   )}
                 </div>
               </div>
+
+              {/* Gig Driver Section */}
+              <div className="flex items-start gap-3 pt-2">
+                <Checkbox
+                  id="isGigDriver"
+                  checked={isGigDriver}
+                  onCheckedChange={(checked) => {
+                    setIsGigDriver(checked === true);
+                    if (!checked) setGigDriverFiles([]);
+                  }}
+                />
+                <div className="grid gap-1 leading-none">
+                  <Label htmlFor="isGigDriver" className="text-sm cursor-pointer flex items-center gap-2">
+                    <Briefcase className="h-4 w-4" />
+                    I am a gig driver
+                  </Label>
+                  <p className="text-xs text-muted-foreground">
+                    Tick this if you drive for Uber, Bolt, Lyft, DoorDash, etc.
+                  </p>
+                </div>
+              </div>
+
+              {isGigDriver && (
+                <div className="space-y-3 pl-7">
+                  <Label className="text-sm">Upload proof images</Label>
+                  <div className="border-2 border-dashed rounded-lg p-4 text-center">
+                    <Input
+                      id="gig-reg-upload"
+                      type="file"
+                      accept=".jpg,.jpeg,.png"
+                      multiple
+                      className="hidden"
+                      onChange={(e) => {
+                        if (!e.target.files) return;
+                        const newFiles = Array.from(e.target.files).filter(
+                          f => ['image/jpeg', 'image/jpg', 'image/png'].includes(f.type) && f.size <= 10 * 1024 * 1024
+                        );
+                        setGigDriverFiles(prev => {
+                          const names = new Set(prev.map(f => f.name));
+                          return [...prev, ...newFiles.filter(f => !names.has(f.name))];
+                        });
+                        e.target.value = '';
+                      }}
+                    />
+                    <Label htmlFor="gig-reg-upload" className="cursor-pointer text-sm text-muted-foreground hover:text-foreground">
+                      <Upload className="h-8 w-8 mx-auto mb-2 text-muted-foreground" />
+                      Click to upload JPG/PNG images
+                    </Label>
+                  </div>
+                  {gigDriverFiles.length > 0 && (
+                    <div className="space-y-2">
+                      {gigDriverFiles.map((file, i) => (
+                        <div key={i} className="flex items-center gap-2 p-2 border rounded-lg text-sm">
+                          <ImageIcon className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+                          <span className="flex-1 truncate">{file.name}</span>
+                          <Button type="button" variant="ghost" size="sm" onClick={() => setGigDriverFiles(prev => prev.filter((_, idx) => idx !== i))}>
+                            <X className="h-3 w-3" />
+                          </Button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
 
               {/* ID Verification Section */}
               <div className="border-t pt-4 mt-2">

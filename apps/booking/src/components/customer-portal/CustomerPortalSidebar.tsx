@@ -26,11 +26,13 @@ import {
   FileSignature,
   AlertCircle,
   Settings,
+  Briefcase,
 } from 'lucide-react';
 import { useSiteSettings } from '@/hooks/useSiteSettings';
 import { useTheme } from 'next-themes';
 import { useCustomerUnreadCount } from '@/hooks/use-customer-unread';
 import { useCustomerOnboarding } from '@/hooks/use-customer-onboarding';
+import { useCustomerAuthStore } from '@/stores/customer-auth-store';
 
 const navItems = [
   {
@@ -84,6 +86,18 @@ export function CustomerPortalSidebar() {
   const { state } = useSidebar();
   const { unreadCount } = useCustomerUnreadCount();
   const { data: onboarding } = useCustomerOnboarding();
+  const { customerUser } = useCustomerAuthStore();
+  const isGigDriver = (customerUser?.customer as any)?.is_gig_driver === true;
+
+  const allNavItems = [
+    ...navItems,
+    ...(isGigDriver ? [{
+      title: 'Gig Driver',
+      href: '/portal/gig-driver',
+      icon: Briefcase,
+      description: 'Manage gig driver documents',
+    }] : []),
+  ];
 
   return (
     <Sidebar collapsible="icon">
@@ -129,7 +143,7 @@ export function CustomerPortalSidebar() {
           <SidebarGroupLabel>Navigation</SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
-              {navItems.map((item) => {
+              {allNavItems.map((item) => {
                 const isActive = pathname === item.href ||
                   (item.href !== '/portal/bookings' && pathname.startsWith(item.href));
                 const isMessages = item.href === '/portal/messages';

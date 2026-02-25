@@ -13,6 +13,17 @@ export interface PendingInsuranceFile {
 }
 
 /**
+ * Pending gig driver image uploaded to storage but not yet linked to a customer
+ */
+export interface PendingGigDriverFile {
+  file_path: string;
+  file_name: string;
+  file_size: number;
+  mime_type: string;
+  uploaded_at: string;
+}
+
+/**
  * Selected delivery/pickup location from tenant's configured locations
  */
 export interface SelectedLocation {
@@ -65,6 +76,9 @@ export interface BookingContext {
 
   // Step 2: Vehicle selection
   selectedVehicleId: string | null;
+
+  // Gig driver
+  isGigDriver: boolean;
 
   // Step 3: Extras & Insurance
   selectedExtras: Record<string, number>;
@@ -144,6 +158,9 @@ interface BookingState {
   // Pending insurance uploads (stored in Supabase storage, not yet linked)
   pendingInsuranceFiles: PendingInsuranceFile[];
 
+  // Pending gig driver image uploads (stored in Supabase storage, not yet linked)
+  pendingGigDriverFiles: PendingGigDriverFile[];
+
   // Widget state — persisted to sessionStorage, used directly by the widget (no useState copy)
   formData: WidgetFormData;
   currentStep: number;
@@ -158,6 +175,11 @@ interface BookingState {
   addPendingInsuranceFile: (file: PendingInsuranceFile) => void;
   clearPendingInsuranceFiles: () => void;
   getPendingInsuranceFiles: () => PendingInsuranceFile[];
+
+  // Gig driver file actions
+  addPendingGigDriverFile: (file: PendingGigDriverFile) => void;
+  clearPendingGigDriverFiles: () => void;
+  getPendingGigDriverFiles: () => PendingGigDriverFile[];
 
   // Widget state setters — support both direct value and callback (like useState)
   setFormData: (updater: FormDataUpdater) => void;
@@ -196,6 +218,7 @@ const initialContext: BookingContext = {
   requestCollection: false,
   collectionLocationId: null,
   collectionLocation: null,
+  isGigDriver: false,
   promoCode: null,
   selectedVehicleId: null,
   selectedExtras: {},
@@ -207,6 +230,7 @@ export const useBookingStore = create<BookingState>()(
     (set, get) => ({
       context: initialContext,
       pendingInsuranceFiles: [],
+      pendingGigDriverFiles: [],
       formData: initialWidgetFormData,
       currentStep: 1,
       selectedExtras: [],
@@ -218,7 +242,7 @@ export const useBookingStore = create<BookingState>()(
           context: { ...state.context, ...updates },
         })),
 
-      clearContext: () => set({ context: initialContext, pendingInsuranceFiles: [] }),
+      clearContext: () => set({ context: initialContext, pendingInsuranceFiles: [], pendingGigDriverFiles: [] }),
 
       addPendingInsuranceFile: (file) =>
         set((state) => ({
@@ -228,6 +252,15 @@ export const useBookingStore = create<BookingState>()(
       clearPendingInsuranceFiles: () => set({ pendingInsuranceFiles: [] }),
 
       getPendingInsuranceFiles: () => get().pendingInsuranceFiles,
+
+      addPendingGigDriverFile: (file) =>
+        set((state) => ({
+          pendingGigDriverFiles: [...state.pendingGigDriverFiles, file],
+        })),
+
+      clearPendingGigDriverFiles: () => set({ pendingGigDriverFiles: [] }),
+
+      getPendingGigDriverFiles: () => get().pendingGigDriverFiles,
 
       setFormData: (updater) =>
         set((state) => ({
@@ -248,6 +281,7 @@ export const useBookingStore = create<BookingState>()(
         set({
           context: initialContext,
           pendingInsuranceFiles: [],
+          pendingGigDriverFiles: [],
           formData: initialWidgetFormData,
           currentStep: 1,
           selectedExtras: [],
@@ -288,11 +322,15 @@ export const useBooking = () => {
   return {
     context: store.context,
     pendingInsuranceFiles: store.pendingInsuranceFiles,
+    pendingGigDriverFiles: store.pendingGigDriverFiles,
     setContext: store.setContext,
     updateContext: store.updateContext,
     clearContext: store.clearContext,
     addPendingInsuranceFile: store.addPendingInsuranceFile,
     clearPendingInsuranceFiles: store.clearPendingInsuranceFiles,
     hasInsuranceUploads: store.pendingInsuranceFiles.length > 0,
+    addPendingGigDriverFile: store.addPendingGigDriverFile,
+    clearPendingGigDriverFiles: store.clearPendingGigDriverFiles,
+    hasGigDriverUploads: store.pendingGigDriverFiles.length > 0,
   };
 };

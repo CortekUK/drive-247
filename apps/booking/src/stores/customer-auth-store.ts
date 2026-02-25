@@ -88,7 +88,8 @@ const fetchCustomerUser = async (authUser: User, tenantId?: string): Promise<Cus
           address_state,
           address_zip,
           license_number,
-          license_state
+          license_state,
+          is_gig_driver
         )
       `)
       .eq('auth_user_id', authUser.id);

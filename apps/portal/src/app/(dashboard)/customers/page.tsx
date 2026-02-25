@@ -16,7 +16,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { Users, Plus, Mail, Phone, Eye, Edit, Search, Shield, ArrowUpDown, ArrowUp, ArrowDown, X, MoreHorizontal, Ban, Trash2, XCircle, UserCheck, Link2 } from "lucide-react";
+import { Users, Plus, Mail, Phone, Eye, Edit, Search, Shield, ArrowUpDown, ArrowUp, ArrowDown, X, MoreHorizontal, Ban, Trash2, XCircle, UserCheck, Link2, Briefcase } from "lucide-react";
 import { CustomerFormModal } from "@/components/customers/customer-form-modal";
 import { GenerateInviteDialog } from "@/components/customers/generate-invite-dialog";
 import { CustomerBalanceChip } from "@/components/customers/customer-balance-chip";
@@ -670,6 +670,12 @@ const CustomersList = () => {
                                 <div title="Emergency contact on file">
                                   <Shield className="h-3 w-3 text-muted-foreground" />
                                 </div>
+                              )}
+                              {(customer as any).is_gig_driver && (
+                                <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-5 bg-blue-500/10 text-blue-600 border-blue-500 font-medium">
+                                  <Briefcase className="h-3 w-3 mr-1" />
+                                  Gig
+                                </Badge>
                               )}
                             </div>
                           </div>

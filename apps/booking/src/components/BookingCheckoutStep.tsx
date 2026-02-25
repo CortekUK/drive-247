@@ -72,7 +72,7 @@ export default function BookingCheckoutStep({
   const router = useRouter();
   const { tenant } = useTenant();
   const { customerUser } = useCustomerAuthStore();
-  const { pendingInsuranceFiles, clearPendingInsuranceFiles } = useBookingStore();
+  const { pendingInsuranceFiles, clearPendingInsuranceFiles, pendingGigDriverFiles, clearPendingGigDriverFiles, context: bookingContext } = useBookingStore();
   const { locations: allDeliveryLocations } = useDeliveryLocations();
   const [agreeTerms, setAgreeTerms] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
@@ -856,6 +856,7 @@ export default function BookingCheckoutStep({
         // Delivery fees
         delivery_fee: pickupDeliveryFee || 0,
         collection_fee: returnDeliveryFee || 0,
+        is_gig_driver: (bookingContext as any)?.isGigDriver === true,
       };
 
       if (tenant?.id) {
@@ -1134,6 +1135,47 @@ export default function BookingCheckoutStep({
         }
       } catch (linkErr) {
         console.warn('⚠️ Error linking insurance documents:', linkErr);
+      }
+
+      // Handle gig driver data
+      const isGigDriver = (bookingContext as any)?.isGigDriver === true;
+      if (isGigDriver) {
+        try {
+          // Set is_gig_driver on customer
+          await supabase
+            .from('customers')
+            .update({ is_gig_driver: true } as any)
+            .eq('id', customer.id);
+
+          // Link pending gig driver images
+          const uniqueGigFiles = Array.from(
+            new Map((pendingGigDriverFiles || []).map((file: any) => [file.file_path, file])).values()
+          ) as any[];
+
+          for (const fileInfo of uniqueGigFiles) {
+            const finalPath = `${tenant?.id}/${customer.id}/${fileInfo.file_name.replace(/[^a-zA-Z0-9.-]/g, '_')}`;
+            const { error: moveError } = await supabase.storage
+              .from('gig-driver-images')
+              .move(fileInfo.file_path, finalPath);
+
+            const imagePath = moveError ? fileInfo.file_path : finalPath;
+
+            await (supabase as any)
+              .from('gig_driver_images')
+              .insert({
+                customer_id: customer.id,
+                tenant_id: tenant?.id,
+                image_url: imagePath,
+                file_name: fileInfo.file_name,
+                file_size: fileInfo.file_size,
+              });
+          }
+
+          clearPendingGigDriverFiles();
+          console.log('✅ Gig driver data processed');
+        } catch (gigErr) {
+          console.warn('⚠️ Error processing gig driver data:', gigErr);
+        }
       }
 
       // Show invoice dialog first (before payment)

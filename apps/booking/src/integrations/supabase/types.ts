@@ -1,4 +1,3 @@
-Using workdir /Users/ghulam/projects/drive-247
 export type Json =
   | string
   | number
@@ -1393,6 +1392,7 @@ export type Database = {
           id_number: string | null
           identity_verification_status: string | null
           is_blocked: boolean | null
+          is_gig_driver: boolean | null
           license_number: string | null
           license_state: string | null
           name: string
@@ -1430,6 +1430,7 @@ export type Database = {
           id_number?: string | null
           identity_verification_status?: string | null
           is_blocked?: boolean | null
+          is_gig_driver?: boolean | null
           license_number?: string | null
           license_state?: string | null
           name: string
@@ -1467,6 +1468,7 @@ export type Database = {
           id_number?: string | null
           identity_verification_status?: string | null
           is_blocked?: boolean | null
+          is_gig_driver?: boolean | null
           license_number?: string | null
           license_state?: string | null
           name?: string
@@ -1875,6 +1877,72 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "view_pl_by_vehicle"
             referencedColumns: ["vehicle_id"]
+          },
+        ]
+      }
+      gig_driver_images: {
+        Row: {
+          created_at: string | null
+          customer_id: string
+          file_name: string
+          file_size: number | null
+          id: string
+          image_url: string
+          tenant_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          customer_id: string
+          file_name: string
+          file_size?: number | null
+          id?: string
+          image_url: string
+          tenant_id: string
+        }
+        Update: {
+          created_at?: string | null
+          customer_id?: string
+          file_name?: string
+          file_size?: number | null
+          id?: string
+          image_url?: string
+          tenant_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "gig_driver_images_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "customers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "gig_driver_images_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "v_customer_credit"
+            referencedColumns: ["customer_id"]
+          },
+          {
+            foreignKeyName: "gig_driver_images_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "view_aging_receivables"
+            referencedColumns: ["customer_id"]
+          },
+          {
+            foreignKeyName: "gig_driver_images_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "view_fines_export"
+            referencedColumns: ["customer_id"]
+          },
+          {
+            foreignKeyName: "gig_driver_images_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
           },
         ]
       }
@@ -4969,6 +5037,7 @@ export type Database = {
           insurance_premium: number | null
           insurance_status: string | null
           is_extended: boolean | null
+          is_gig_driver: boolean | null
           monthly_amount: number
           payment_mode: string | null
           payment_status: string | null
@@ -5023,6 +5092,7 @@ export type Database = {
           insurance_premium?: number | null
           insurance_status?: string | null
           is_extended?: boolean | null
+          is_gig_driver?: boolean | null
           monthly_amount: number
           payment_mode?: string | null
           payment_status?: string | null
@@ -5077,6 +5147,7 @@ export type Database = {
           insurance_premium?: number | null
           insurance_status?: string | null
           is_extended?: boolean | null
+          is_gig_driver?: boolean | null
           monthly_amount?: number
           payment_mode?: string | null
           payment_status?: string | null
@@ -8016,3 +8087,4 @@ export const Constants = {
     },
   },
 } as const
+
