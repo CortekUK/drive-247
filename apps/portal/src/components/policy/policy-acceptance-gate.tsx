@@ -61,6 +61,14 @@ export function PolicyAcceptanceGate() {
 
   const handleAccept = async () => {
     if (!appUser || !tenant?.id) return;
+
+    // Super admins: frontend-only check, no DB logging
+    if (appUser.is_super_admin) {
+      console.log('[PolicyGate] Super admin — skipping DB record');
+      setNeedsAcceptance(false);
+      return;
+    }
+
     setSubmitting(true);
     try {
       const res = await fetch(`${SUPABASE_URL}/functions/v1/check-policy-acceptance`, {

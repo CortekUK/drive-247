@@ -129,6 +129,10 @@ export default function TenantDetailsPage() {
   const [deleteConfirmName, setDeleteConfirmName] = useState('');
   const [deleting, setDeleting] = useState(false);
 
+  // Force logout state
+  const [showForceLogoutConfirm, setShowForceLogoutConfirm] = useState(false);
+  const [forceLogoutLoading, setForceLogoutLoading] = useState(false);
+
   // Subscription state
   const [subscription, setSubscription] = useState<TenantSubscription | null>(null);
   const [invoices, setInvoices] = useState<TenantInvoice[]>([]);
@@ -556,6 +560,30 @@ export default function TenantDetailsPage() {
       toast.error(`Error updating tenant: ${error.message}`);
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleForceLogout = async () => {
+    if (!tenant) return;
+    setForceLogoutLoading(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('admin-force-logout', {
+        body: { tenantId: tenant.id }
+      });
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+
+      toast.success(
+        `Successfully logged out ${data.successCount} user${data.successCount !== 1 ? 's' : ''} from ${tenant.company_name}`
+      );
+      if (data.failCount > 0) {
+        toast.error(`${data.failCount} user${data.failCount !== 1 ? 's' : ''} could not be logged out`);
+      }
+      setShowForceLogoutConfirm(false);
+    } catch (error: any) {
+      toast.error(`Failed to force logout: ${error.message}`);
+    } finally {
+      setForceLogoutLoading(false);
     }
   };
 
@@ -1100,6 +1128,12 @@ export default function TenantDetailsPage() {
                 >
                   Email Contact
                 </a>
+                <button
+                  onClick={() => setShowForceLogoutConfirm(true)}
+                  className="px-4 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 text-sm font-medium"
+                >
+                  Force Logout All Users
+                </button>
               </div>
             </div>
           </div>
@@ -1548,6 +1582,37 @@ export default function TenantDetailsPage() {
                 className="flex-1 px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700 disabled:opacity-50"
               >
                 {planSaving ? 'Saving...' : editingPlan ? 'Update Plan' : 'Create Plan'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Force Logout Confirmation Modal */}
+      {showForceLogoutConfirm && tenant && (
+        <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50 p-4">
+          <div className="bg-dark-card rounded-lg p-6 max-w-md w-full border border-dark-border">
+            <h2 className="text-xl font-bold text-white mb-2">Force Logout All Users</h2>
+            <p className="text-sm text-gray-400 mb-1">
+              This will immediately sign out all portal staff and booking customers
+              for <strong className="text-white">{tenant.company_name}</strong>.
+            </p>
+            <p className="text-sm text-orange-400 mb-4">
+              Users will need to sign in again to access their accounts.
+            </p>
+            <div className="flex space-x-3">
+              <button
+                onClick={() => setShowForceLogoutConfirm(false)}
+                className="flex-1 px-4 py-2 border border-dark-border rounded-md text-gray-300 hover:bg-dark-hover"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleForceLogout}
+                disabled={forceLogoutLoading}
+                className="flex-1 px-4 py-2 bg-orange-600 text-white rounded-md hover:bg-orange-700 disabled:opacity-50"
+              >
+                {forceLogoutLoading ? 'Logging out...' : 'Yes, Force Logout'}
               </button>
             </div>
           </div>

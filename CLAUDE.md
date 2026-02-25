@@ -393,6 +393,33 @@ Portal staff must accept tenant privacy policy and terms before accessing the da
 - **Edge function**: `check-policy-acceptance` (`verify_jwt = false`) — checks if user has accepted current versions
 - Migration: `supabase/migrations/20260218100000_add_policy_acceptances.sql`
 
+## Portal Design System
+
+The portal follows a specific Figma design system. Full reference: `.claude/projects/-Users-ghulam-projects-drive-247/memory/figma-design-system.md`. Figma file key: `7lwg5XRsUworswq6I1TPiM`.
+
+### Key Tokens
+
+**Colors:**
+- Text: `#080812` (headings), `#404040` (body), `#737373` (muted/placeholders)
+- Primary accent: `#6366f1` (indigo — active states, CTAs, links)
+- Surfaces: `#ffffff` (cards), `#f8fafc` (page bg/input bg), `#f1f5f9` (borders/containers), `#e0e7ff` (active sidebar)
+- Dark button: `#0f172a`
+- Status: green `#16a34a`, red `#dc2626`, orange `#d97706`, blue `#2563eb`
+
+**Typography:**
+- **DM Sans** everywhere (headings, body, nav, labels). **Inter** only for button text and badge pills.
+- Page titles: 30px medium. Section headings: 24px medium. Body: 14px regular. Captions: 12px regular.
+
+**Layout:** 280px sidebar + 1160px content. Settings pages use two-column layout (304px label + flex content). Cards have no shadows — only 1px `#f1f5f9` borders.
+
+### Design Principles
+
+1. **Flat, not elevated** — No shadows. Only 1px borders. No gradients (except booking hero).
+2. **Indigo is the accent** — `#6366f1` for primary actions and active states.
+3. **Text-only status** — Table status columns use colored text directly, NOT background pills (except Category/Module columns).
+4. **Consistent table pattern** — Every data page: stat cards → section title → filter bar → indigo-header (`#eef2ff`) table.
+5. **Two-column settings** — Left label column + right content column with horizontal separators.
+
 ## Reserved Subdomains
 
 These subdomains have dedicated Vercel deployments and should not be treated as tenant slugs:

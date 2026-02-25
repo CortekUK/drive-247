@@ -53,8 +53,13 @@ Deno.serve(async (req) => {
       return jsonResponse({ needsAcceptance: true });
     }
 
+    // Super admins skip DB logging entirely — acceptance is frontend-only
+    if (appUser.is_super_admin) {
+      return jsonResponse(action === 'record' ? { success: true } : { needsAcceptance: false });
+    }
+
     // For regular users, verify they belong to the tenant
-    if (!appUser.is_super_admin && appUser.tenant_id !== tenant_id) {
+    if (appUser.tenant_id !== tenant_id) {
       return jsonResponse({ needsAcceptance: true });
     }
 

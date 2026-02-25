@@ -20,6 +20,11 @@ export default function SettingsPage() {
   const [saving, setSaving] = useState(false);
   const [newEmail, setNewEmail] = useState('');
 
+  // Force logout state
+  const [showGlobalLogoutConfirm, setShowGlobalLogoutConfirm] = useState(false);
+  const [globalLogoutConfirmText, setGlobalLogoutConfirmText] = useState('');
+  const [globalLogoutLoading, setGlobalLogoutLoading] = useState(false);
+
   useEffect(() => {
     loadSettings();
   }, []);
@@ -124,6 +129,31 @@ export default function SettingsPage() {
       ...settings,
       notification_emails: settings.notification_emails.filter(e => e !== emailToRemove),
     });
+  };
+
+  const handleGlobalForceLogout = async () => {
+    if (globalLogoutConfirmText !== 'LOGOUT ALL') return;
+    setGlobalLogoutLoading(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('admin-force-logout', {
+        body: {}
+      });
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+
+      toast.success(
+        `Successfully logged out ${data.successCount} user${data.successCount !== 1 ? 's' : ''} across all tenants`
+      );
+      if (data.failCount > 0) {
+        toast.error(`${data.failCount} user${data.failCount !== 1 ? 's' : ''} could not be logged out`);
+      }
+      setShowGlobalLogoutConfirm(false);
+      setGlobalLogoutConfirmText('');
+    } catch (error: any) {
+      toast.error(`Failed to force logout: ${error.message}`);
+    } finally {
+      setGlobalLogoutLoading(false);
+    }
   };
 
   if (loading) {
@@ -240,7 +270,79 @@ export default function SettingsPage() {
             })}
           </p>
         )}
+
+        {/* Danger Zone */}
+        <div className="bg-dark-card rounded-lg overflow-hidden border border-red-800/50 mt-8">
+          <div className="px-6 py-4 border-b border-dark-border">
+            <h2 className="text-xl font-semibold text-red-400">Danger Zone</h2>
+            <p className="text-sm text-gray-400 mt-1">Destructive actions that affect all tenants</p>
+          </div>
+          <div className="p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="text-white font-medium">Force Logout All Users</h3>
+                <p className="text-sm text-gray-400 mt-1">
+                  Immediately sign out all portal staff and booking customers across every tenant.
+                  Super admins will not be affected.
+                </p>
+              </div>
+              <button
+                onClick={() => setShowGlobalLogoutConfirm(true)}
+                className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 text-sm font-medium whitespace-nowrap ml-4"
+              >
+                Force Logout All
+              </button>
+            </div>
+          </div>
+        </div>
       </div>
+
+      {/* Global Force Logout Confirmation Modal */}
+      {showGlobalLogoutConfirm && (
+        <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50 p-4">
+          <div className="bg-dark-card rounded-lg p-6 max-w-md w-full border border-dark-border">
+            <h2 className="text-xl font-bold text-white mb-2">Force Logout ALL Users</h2>
+            <div className="bg-red-900/20 border border-red-700 rounded-lg p-4 mb-4">
+              <p className="text-sm text-red-400">
+                This will immediately sign out <strong>every portal staff member</strong> and{' '}
+                <strong>every booking customer</strong> across all tenants on the platform.
+              </p>
+              <p className="text-sm text-red-400 mt-2">
+                Super admins will not be affected.
+              </p>
+            </div>
+
+            <div className="mb-4">
+              <label className="block text-sm font-medium text-gray-300 mb-2">
+                Type <strong className="text-white">LOGOUT ALL</strong> to confirm:
+              </label>
+              <input
+                type="text"
+                value={globalLogoutConfirmText}
+                onChange={(e) => setGlobalLogoutConfirmText(e.target.value)}
+                className="w-full px-3 py-2 bg-dark-bg border border-dark-border rounded-md text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-red-500"
+                placeholder="LOGOUT ALL"
+              />
+            </div>
+
+            <div className="flex space-x-3">
+              <button
+                onClick={() => { setShowGlobalLogoutConfirm(false); setGlobalLogoutConfirmText(''); }}
+                className="flex-1 px-4 py-2 border border-dark-border rounded-md text-gray-300 hover:bg-dark-hover"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleGlobalForceLogout}
+                disabled={globalLogoutLoading || globalLogoutConfirmText !== 'LOGOUT ALL'}
+                className="flex-1 px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {globalLogoutLoading ? 'Logging out...' : 'Force Logout Everyone'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
