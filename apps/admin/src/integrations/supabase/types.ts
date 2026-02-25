@@ -1,4 +1,3 @@
-Using workdir /Users/ghulam/projects/drive-247
 export type Json =
   | string
   | number

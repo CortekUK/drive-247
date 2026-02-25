@@ -32,6 +32,8 @@ import {
 import { useEnhancedRentals, RentalFilters, EnhancedRental } from "@/hooks/use-enhanced-rentals";
 import { RentalsFilters } from "@/components/rentals/rentals-filters";
 import { ExtensionRequestDialog } from "@/components/rentals/ExtensionRequestDialog";
+import { ReviewStatusBadge } from "@/components/reviews/review-status-badge";
+import { RentalReviewDialog } from "@/components/reviews/rental-review-dialog";
 import { CalendarView } from "@/components/rentals/calendar/calendar-view";
 import { formatDuration, formatRentalDuration } from "@/lib/rental-utils";
 import { formatCurrency, getCurrencySymbol } from "@/lib/format-utils";
@@ -51,6 +53,7 @@ const RentalsList = () => {
   const searchParams = useSearchParams();
   const [showExtensionDialog, setShowExtensionDialog] = useState(false);
   const [selectedRental, setSelectedRental] = useState<EnhancedRental | null>(null);
+  const [reviewRental, setReviewRental] = useState<EnhancedRental | null>(null);
   const { tenant } = useTenant();
   const { canEdit } = useManagerPermissions();
 
@@ -307,6 +310,7 @@ const RentalsList = () => {
                       <TableHead>End Date</TableHead>
                       <TableHead>Duration</TableHead>
                       <TableHead>Status</TableHead>
+                      <TableHead>Review</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -405,6 +409,16 @@ const RentalsList = () => {
                             {rental.computed_status}
                           </Badge>
                         </TableCell>
+                        <TableCell>
+                          <ReviewStatusBadge
+                            reviewStatus={rental.review_status}
+                            reviewRating={rental.review_rating}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setReviewRental(rental);
+                            }}
+                          />
+                        </TableCell>
                       </TableRow>
                     ))}
                   </TableBody>
@@ -491,6 +505,18 @@ const RentalsList = () => {
           </p>
           <Button onClick={handleClearFilters}>Clear Filters</Button>
         </div>
+      )}
+
+      {/* Rental Review Dialog */}
+      {reviewRental && (
+        <RentalReviewDialog
+          open={!!reviewRental}
+          onOpenChange={(open) => { if (!open) setReviewRental(null); }}
+          rentalId={reviewRental.id}
+          customerId={reviewRental.customer.id}
+          customerName={reviewRental.customer.name}
+          rentalNumber={reviewRental.rental_number}
+        />
       )}
 
       {/* Extension Request Dialog */}
