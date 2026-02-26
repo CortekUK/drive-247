@@ -12,7 +12,7 @@ import { Switch } from "@/components/ui/switch";
 import { Button } from "@/components/ui/button";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Users, Mail, Phone, ChevronDown, ChevronUp, CreditCard, AlertTriangle, Shield, Loader2 } from "lucide-react";
+import { Users, Mail, Phone, ChevronDown, ChevronUp, CreditCard, AlertTriangle, Shield, Loader2, Briefcase } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -20,6 +20,7 @@ import { useTenant } from "@/contexts/TenantContext";
 import { useAuditLog } from "@/hooks/use-audit-log";
 import { customerFormModalSchema, type CustomerFormModalFormValues } from "@/client-schemas/customers/customer-form-modal";
 import { VerificationQRModal } from "./verification-qr-modal";
+import GigDriverUploadDialog from "./gig-driver-upload-dialog";
 
 type CustomerFormData = CustomerFormModalFormValues;
 
@@ -36,6 +37,7 @@ interface Customer {
   id_number?: string;
   is_blocked?: boolean;
   blocked_reason?: string;
+  is_gig_driver?: boolean;
   nok_full_name?: string;
   nok_relationship?: string;
   nok_phone?: string;
@@ -78,6 +80,8 @@ export const CustomerFormModal = ({ open, onOpenChange, customer }: CustomerForm
   const [startingVerification, setStartingVerification] = useState(false);
   const [showQRModal, setShowQRModal] = useState(false);
   const [aiSessionData, setAiSessionData] = useState<{ sessionId: string; qrUrl: string; expiresAt: Date } | null>(null);
+  const [showGigDriverUpload, setShowGigDriverUpload] = useState(false);
+  const [gigDriverCustomerId, setGigDriverCustomerId] = useState<string | null>(null);
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const { logAction } = useAuditLog();
@@ -93,6 +97,7 @@ export const CustomerFormModal = ({ open, onOpenChange, customer }: CustomerForm
       date_of_birth: "",
       license_number: "",
       id_number: "",
+      is_gig_driver: false,
       whatsapp_opt_in: false,
       status: "Active",
       notes: "",
@@ -122,6 +127,7 @@ export const CustomerFormModal = ({ open, onOpenChange, customer }: CustomerForm
         date_of_birth: customer.date_of_birth || verificationData?.date_of_birth || "",
         license_number: customer.license_number || "",
         id_number: customer.id_number || "",
+        is_gig_driver: customer.is_gig_driver || false,
         whatsapp_opt_in: customer.whatsapp_opt_in,
         status: customer.status as "Active" | "Inactive",
         notes: "",
@@ -141,6 +147,7 @@ export const CustomerFormModal = ({ open, onOpenChange, customer }: CustomerForm
         date_of_birth: "",
         license_number: "",
         id_number: "",
+        is_gig_driver: false,
         whatsapp_opt_in: false,
         status: "Active",
         notes: "",
@@ -379,6 +386,7 @@ export const CustomerFormModal = ({ open, onOpenChange, customer }: CustomerForm
         date_of_birth: data.date_of_birth || null,
         license_number: data.license_number || null,
         id_number: data.id_number || null,
+        is_gig_driver: data.is_gig_driver,
         whatsapp_opt_in: data.whatsapp_opt_in,
         status: data.status,
         nok_full_name: data.nok_full_name || null,
@@ -447,6 +455,12 @@ export const CustomerFormModal = ({ open, onOpenChange, customer }: CustomerForm
         queryClient.invalidateQueries({ queryKey: ["customers-list"] });
         queryClient.invalidateQueries({ queryKey: ["customer-balances-list"] });
         queryClient.invalidateQueries({ queryKey: ["customer-balances-enhanced"] });
+
+        // Show gig driver upload prompt if checked
+        if (newCustomer?.id && data.is_gig_driver) {
+          setGigDriverCustomerId(newCustomer.id);
+          setShowGigDriverUpload(true);
+        }
 
         // Show verification prompt for new customers
         if (newCustomer?.id) {
@@ -542,6 +556,7 @@ export const CustomerFormModal = ({ open, onOpenChange, customer }: CustomerForm
   };
 
   return (
+    <>
     <Dialog open={open} onOpenChange={handleDialogChange}>
       <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto" onKeyDown={handleKeyDown}>
         {showVerificationPrompt ? (
@@ -825,6 +840,29 @@ export const CustomerFormModal = ({ open, onOpenChange, customer }: CustomerForm
               </Alert>
             )}
 
+            <FormField
+              control={form.control}
+              name="is_gig_driver"
+              render={({ field }) => (
+                <FormItem className="flex flex-row items-start space-x-3 space-y-0">
+                  <FormControl>
+                    <Checkbox
+                      checked={field.value}
+                      onCheckedChange={field.onChange}
+                    />
+                  </FormControl>
+                  <div className="space-y-1 leading-none">
+                    <FormLabel className="flex items-center gap-2 cursor-pointer">
+                      <Briefcase className="h-4 w-4" />
+                      Gig Driver
+                    </FormLabel>
+                    <FormDescription>
+                      Customer drives for Uber, Bolt, Lyft, DoorDash, etc.
+                    </FormDescription>
+                  </div>
+                </FormItem>
+              )}
+            />
 
             <FormField
               control={form.control}
@@ -980,5 +1018,14 @@ export const CustomerFormModal = ({ open, onOpenChange, customer }: CustomerForm
         )}
       </DialogContent>
     </Dialog>
+
+    {gigDriverCustomerId && (
+      <GigDriverUploadDialog
+        open={showGigDriverUpload}
+        onOpenChange={setShowGigDriverUpload}
+        customerId={gigDriverCustomerId}
+      />
+    )}
+    </>
   );
 };

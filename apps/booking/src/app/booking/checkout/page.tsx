@@ -56,7 +56,7 @@ const BookingCheckoutContent = () => {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { tenant } = useTenant();
-  const { context: bookingContext, pendingInsuranceFiles, clearPendingInsuranceFiles } = useBookingStore();
+  const { context: bookingContext, pendingInsuranceFiles, clearPendingInsuranceFiles, pendingGigDriverFiles, clearPendingGigDriverFiles } = useBookingStore();
   const [loading, setLoading] = useState(false);
   const [vehicleDetails, setVehicleDetails] = useState<any>(null);
   const [errors, setErrors] = useState<{[key: string]: string}>({});
@@ -457,6 +457,53 @@ const BookingCheckoutContent = () => {
       clearPendingInsuranceFiles();
       console.log('[CHECKOUT] Cleared pending insurance files from store');
 
+      // Step 2b: Handle gig driver data
+      const isGigDriver = (bookingContext as any).isGigDriver === true;
+      if (isGigDriver) {
+        // Set is_gig_driver on customer
+        await supabase
+          .from('customers')
+          .update({ is_gig_driver: true } as any)
+          .eq('id', customer.id);
+
+        // Link pending gig driver images
+        const uniqueGigFiles = Array.from(
+          new Map(pendingGigDriverFiles.map((file: any) => [file.file_path, file])).values()
+        ) as any[];
+
+        console.log(`[CHECKOUT] Processing ${uniqueGigFiles.length} gig driver images`);
+
+        for (const fileInfo of uniqueGigFiles) {
+          // Move file from pending/ to proper path
+          const finalPath = `${tenant?.id}/${customer.id}/${fileInfo.file_name.replace(/[^a-zA-Z0-9.-]/g, '_')}`;
+          const { error: moveError } = await supabase.storage
+            .from('gig-driver-images')
+            .move(fileInfo.file_path, finalPath);
+
+          const imagePath = moveError ? fileInfo.file_path : finalPath;
+
+          // Create DB record
+          const { error: imgError } = await (supabase as any)
+            .from('gig_driver_images')
+            .insert({
+              customer_id: customer.id,
+              tenant_id: tenant?.id,
+              image_url: imagePath,
+              file_name: fileInfo.file_name,
+              file_size: fileInfo.file_size,
+            });
+
+          if (imgError) {
+            console.error('[CHECKOUT] Failed to link gig driver image:', imgError);
+          } else {
+            console.log('[CHECKOUT] Gig driver image linked for customer:', customer.id);
+          }
+        }
+
+        clearPendingGigDriverFiles();
+        console.log('[CHECKOUT] Cleared pending gig driver files from store');
+      }
+
       // Step 3: Check if Individual customer already has active rental
       if (customer.customer_type === "Individual") {
         const { data: activeRentals, error: checkError } = await supabase
@@ -504,7 +551,8 @@ const BookingCheckoutContent = () => {
           collection_location_id: null, // No longer used in new flow
           collection_address: null,
           collection_fee: 0, // Same fee applies for both
-        })
+          is_gig_driver: isGigDriver,
+        } as any)
         .select()
         .single();
 

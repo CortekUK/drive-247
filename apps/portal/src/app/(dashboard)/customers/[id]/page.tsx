@@ -15,7 +15,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { ArrowLeft, CreditCard, FileText, Plus, Upload, Car, AlertTriangle, Eye, Download, Edit, Trash2, User, Mail, Phone, CalendarPlus, DollarSign, FolderOpen, Receipt, CreditCard as PaymentIcon, Ban, CheckCircle, Users, ShieldCheck } from "lucide-react";
+import { ArrowLeft, CreditCard, FileText, Plus, Upload, Car, AlertTriangle, Eye, Download, Edit, Trash2, User, Mail, Phone, CalendarPlus, DollarSign, FolderOpen, Receipt, CreditCard as PaymentIcon, Ban, CheckCircle, Users, ShieldCheck, Briefcase, ExternalLink, ImageIcon, Loader2 } from "lucide-react";
 import { MetricItem, MetricDivider } from "@/components/vehicles/metric-card";
 import { useCustomerBlockingActions } from "@/hooks/use-customer-blocking";
 import { TruncatedCell } from "@/components/shared/data-display/truncated-cell";
@@ -40,6 +40,18 @@ import { FineStatusBadge } from "@/components/shared/status/fine-status-badge";
 import { format } from "date-fns";
 import { useTenant } from "@/contexts/TenantContext";
 import { formatCurrency, getCurrencySymbol } from "@/lib/format-utils";
+import { useGigDriverImages, useDeleteGigDriverImage } from "@/hooks/use-gig-driver-images";
+import GigDriverUploadDialog from "@/components/customers/gig-driver-upload-dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 interface Customer {
   id: string;
@@ -55,6 +67,7 @@ interface Customer {
   is_blocked?: boolean;
   blocked_at?: string;
   blocked_reason?: string;
+  is_gig_driver?: boolean;
   nok_full_name?: string;
   nok_relationship?: string;
   nok_phone?: string;
@@ -76,6 +89,8 @@ const CustomerDetail = () => {
   const [editCustomerOpen, setEditCustomerOpen] = useState(false);
   const [blockDialogOpen, setBlockDialogOpen] = useState(false);
   const [blockReason, setBlockReason] = useState("");
+  const [gigDriverUploadOpen, setGigDriverUploadOpen] = useState(false);
+  const [gigDriverDeleteId, setGigDriverDeleteId] = useState<string | null>(null);
 
   const { tenant } = useTenant();
   const currencyCode = tenant?.currency_code || 'GBP';
@@ -107,6 +122,7 @@ const CustomerDetail = () => {
         .select(`
           id, name, email, phone, customer_type, status, whatsapp_opt_in,
           license_number, id_number, date_of_birth, is_blocked, blocked_at, blocked_reason,
+          is_gig_driver,
           nok_full_name, nok_relationship, nok_phone, nok_email, nok_address
         `)
         .eq("id", id)
@@ -157,6 +173,8 @@ const CustomerDetail = () => {
   const { data: documents } = useCustomerDocuments(id!);
   const deleteDocument = useDeleteCustomerDocument();
   const downloadDocument = useDownloadDocument();
+  const { data: gigDriverImages } = useGigDriverImages(id);
+  const deleteGigDriverImage = useDeleteGigDriverImage();
 
   // Fetch per-rental outstanding amounts from ledger entries
   const { data: rentalOutstandings } = useQuery({
@@ -456,6 +474,14 @@ const CustomerDetail = () => {
                 <span className="xs:hidden sm:inline">Documents</span>
                 <span className="sm:hidden">D</span>
               </TabsTrigger>
+              {customer?.is_gig_driver && (
+                <TabsTrigger value="gig-driver" variant="evenly-spaced" className="min-w-0">
+                  <Briefcase className="h-4 w-4 mr-1 sm:mr-2" />
+                  <span className="hidden xs:inline sm:hidden">Gig</span>
+                  <span className="xs:hidden sm:inline">Gig Driver</span>
+                  <span className="sm:hidden">G</span>
+                </TabsTrigger>
+              )}
             </TabsList>
           </div>
 
@@ -996,8 +1022,104 @@ const CustomerDetail = () => {
           </Card>
         </TabsContent>
 
+        {customer?.is_gig_driver && (
+          <TabsContent value="gig-driver" className="mt-6">
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center justify-between">
+                  <span className="flex items-center gap-2">
+                    <Briefcase className="h-5 w-5" />
+                    Gig Driver Documents
+                  </span>
+                  <Button size="sm" onClick={() => setGigDriverUploadOpen(true)}>
+                    <Plus className="h-4 w-4 mr-2" />
+                    Add Images
+                  </Button>
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                {gigDriverImages && gigDriverImages.length > 0 ? (
+                  <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                    {gigDriverImages.map((image) => {
+                      const { data: urlData } = supabase.storage.from('gig-driver-images').getPublicUrl(image.image_url);
+                      return (
+                        <div key={image.id} className="relative group rounded-lg overflow-hidden border">
+                          <div className="aspect-square bg-muted">
+                            <img
+                              src={urlData.publicUrl}
+                              alt={image.file_name}
+                              className="w-full h-full object-cover"
+                            />
+                          </div>
+                          <div className="absolute inset-0 bg-black/0 group-hover:bg-black/40 transition-colors flex items-center justify-center gap-2 opacity-0 group-hover:opacity-100">
+                            <Button
+                              size="sm"
+                              variant="secondary"
+                              onClick={() => window.open(urlData.publicUrl, '_blank')}
+                            >
+                              <ExternalLink className="h-4 w-4" />
+                            </Button>
+                            {gigDriverImages && gigDriverImages.length > 1 && (
+                              <Button
+                                size="sm"
+                                variant="destructive"
+                                onClick={() => setGigDriverDeleteId(image.id)}
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            )}
+                          </div>
+                          <div className="p-2">
+                            <p className="text-xs text-muted-foreground truncate">{image.file_name}</p>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <EmptyState
+                    icon={ImageIcon}
+                    title="No gig driver documents"
+                    description="Upload proof images showing this customer's gig driver status."
+                  />
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+        )}
+
         </Tabs>
       </div>
+
+      {/* Gig Driver Dialogs */}
+      <GigDriverUploadDialog
+        open={gigDriverUploadOpen}
+        onOpenChange={setGigDriverUploadOpen}
+        customerId={id}
+      />
+
+      <AlertDialog open={!!gigDriverDeleteId} onOpenChange={(open) => !open && setGigDriverDeleteId(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Image</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete this gig driver document? This cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={() => {
+              const image = gigDriverImages?.find(i => i.id === gigDriverDeleteId);
+              if (image) {
+                deleteGigDriverImage.mutate(image);
+              }
+              setGigDriverDeleteId(null);
+            }}>
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* Dialogs */}
       <AddPaymentDialog

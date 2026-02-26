@@ -16,7 +16,7 @@ import { Badge } from "@/components/ui/badge";
 import { supabase } from "@/integrations/supabase/client";
 import { useTenant } from "@/contexts/TenantContext";
 import { toast } from "sonner";
-import { ChevronRight, ChevronLeft, Check, Baby, Coffee, MapPin, UserCheck, Car, Crown, TrendingUp, Users as GroupIcon, Calculator, Shield, CheckCircle, CalendarIcon, Clock, Search, Grid3x3, List, SlidersHorizontal, X, AlertCircle, FileCheck, RefreshCw, Upload, Gauge, User, Loader2, Globe } from "lucide-react";
+import { ChevronRight, ChevronLeft, Check, Baby, Coffee, MapPin, UserCheck, Car, Crown, TrendingUp, Users as GroupIcon, Calculator, Shield, CheckCircle, CalendarIcon, Clock, Search, Grid3x3, List, SlidersHorizontal, X, AlertCircle, FileCheck, RefreshCw, Upload, Gauge, User, Loader2, Globe, Briefcase } from "lucide-react";
 import { format, differenceInHours } from "date-fns";
 import { cn } from "@/lib/utils";
 import BookingConfirmation from "./BookingConfirmation";
@@ -45,6 +45,8 @@ import { useCustomerVerification } from "@/hooks/use-customer-verification";
 import { AuthPromptDialog } from "@/components/booking/AuthPromptDialog";
 import { getTimezonesByRegion, findTimezone, getDetectedTimezone } from "@/lib/timezones";
 import { useCustomerDocuments, getDocumentStatus } from "@/hooks/use-customer-documents";
+import { useGigDriverImages } from "@/hooks/use-gig-driver-images";
+import GigDriverUploadDialog from "@/components/booking/gig-driver-upload-dialog";
 import { formatCurrency, getEarthRadius, metersToUnit, getPerMonthLabel, getUnlimitedLabel, getDistanceUnitLong } from "@/lib/format-utils";
 import type { DistanceUnit } from "@/lib/format-utils";
 import { useDynamicPricing } from "@/hooks/use-dynamic-pricing";
@@ -117,6 +119,14 @@ const MultiStepBookingWidget = () => {
   const { data: customerVerification, isLoading: verificationLoading } = useCustomerVerification();
   const { data: customerDocuments } = useCustomerDocuments();
   const [showAuthDialog, setShowAuthDialog] = useState(false);
+
+  // Gig driver state
+  const [isGigDriver, setIsGigDriver] = useState(false);
+  const [showGigDriverUpload, setShowGigDriverUpload] = useState(false);
+  const customerId = customerUser?.customer?.id;
+  const { data: existingGigImages } = useGigDriverImages(customerId);
+  const hasExistingGigImages = (existingGigImages?.length ?? 0) > 0;
+  const { addPendingGigDriverFile, clearPendingGigDriverFiles, pendingGigDriverFiles } = useBookingStore();
   const [isCustomerDataPopulated, setIsCustomerDataPopulated] = useState(false);
 
   // Check if user is authenticated with valid session
@@ -3016,7 +3026,8 @@ const MultiStepBookingWidget = () => {
       customerType: formData.customerType,
       driverDOB: formData.driverDOB,
       driverAge: driverAge,
-      young_driver: isYoungDriver
+      young_driver: isYoungDriver,
+      isGigDriver: isGigDriver,
     } as any);
 
     // Analytics tracking
@@ -4880,6 +4891,53 @@ const MultiStepBookingWidget = () => {
                 {errors.customerType && <p className="text-sm text-destructive">{errors.customerType}</p>}
               </div>
             </div>
+
+            {/* Gig Driver Checkbox */}
+            <div className="flex items-start gap-3 pt-2">
+              <Checkbox
+                id="isGigDriver"
+                checked={isGigDriver}
+                onCheckedChange={(checked) => {
+                  const val = checked === true;
+                  if (val) {
+                    if (customerId && hasExistingGigImages) {
+                      setIsGigDriver(true);
+                    } else {
+                      setIsGigDriver(true);
+                      setShowGigDriverUpload(true);
+                    }
+                  } else {
+                    setIsGigDriver(false);
+                    clearPendingGigDriverFiles();
+                  }
+                }}
+              />
+              <div className="grid gap-1 leading-none">
+                <Label htmlFor="isGigDriver" className="text-sm font-medium cursor-pointer flex items-center gap-2">
+                  <Briefcase className="h-4 w-4" />
+                  Are you a gig driver?
+                </Label>
+                <p className="text-xs text-muted-foreground">
+                  Tick this if you drive for Uber, Bolt, Lyft, DoorDash, etc.
+                </p>
+                {isGigDriver && customerId && hasExistingGigImages && (
+                  <p className="text-xs text-green-600">Your gig driver documents are on file.</p>
+                )}
+              </div>
+            </div>
+
+            <GigDriverUploadDialog
+              open={showGigDriverUpload}
+              onOpenChange={(open) => {
+                setShowGigDriverUpload(open);
+                if (!open && useBookingStore.getState().pendingGigDriverFiles.length === 0 && !(customerId && hasExistingGigImages)) {
+                  setIsGigDriver(false);
+                }
+              }}
+              onUploadComplete={() => {
+                setShowGigDriverUpload(false);
+              }}
+            />
 
             {/* Address Information - Required for Bonzah Insurance */}
             {bonzahPremium > 0 && (

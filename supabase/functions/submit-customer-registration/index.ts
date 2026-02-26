@@ -23,6 +23,8 @@ interface RegistrationData {
   email: string;
   phone: string;
   verificationSessionId?: string;
+  isGigDriver?: boolean;
+  gigDriverImagePaths?: string[];
 }
 
 Deno.serve(async (req) => {
@@ -32,7 +34,7 @@ Deno.serve(async (req) => {
 
   try {
     const body: RegistrationData = await req.json();
-    const { token, name, email, phone, verificationSessionId } = body;
+    const { token, name, email, phone, verificationSessionId, isGigDriver, gigDriverImagePaths } = body;
 
     // Validate required fields
     if (!token) return errorResponse('token is required');
@@ -81,17 +83,22 @@ Deno.serve(async (req) => {
     }
 
     // Insert the customer
+    const customerPayload: Record<string, unknown> = {
+      tenant_id: tenantId,
+      customer_type: 'Individual',
+      type: 'Individual',
+      name: name.trim(),
+      email: email.trim().toLowerCase(),
+      phone: phone.trim(),
+      status: 'Active',
+    };
+    if (isGigDriver) {
+      customerPayload.is_gig_driver = true;
+    }
+
     const { data: newCustomer, error: customerError } = await supabase
       .from('customers')
-      .insert({
-        tenant_id: tenantId,
-        customer_type: 'Individual',
-        type: 'Individual',
-        name: name.trim(),
-        email: email.trim().toLowerCase(),
-        phone: phone.trim(),
-        status: 'Active',
-      })
+      .insert(customerPayload)
       .select('id')
       .single();
 
@@ -127,6 +134,35 @@ Deno.serve(async (req) => {
       if (linkError) {
         console.error('Error linking verification:', linkError);
         // Non-fatal — customer was still created
+      }
+    }
+
+    // Link gig driver images if provided
+    if (isGigDriver && gigDriverImagePaths && gigDriverImagePaths.length > 0) {
+      for (const imagePath of gigDriverImagePaths) {
+        // Move from pending/ to proper path
+        const fileName = imagePath.split('/').pop() || imagePath;
+        const finalPath = `${tenantId}/${newCustomer.id}/${fileName}`;
+
+        const { error: moveError } = await supabase.storage
+          .from('gig-driver-images')
+          .move(imagePath, finalPath);
+
+        const storedPath = moveError ? imagePath : finalPath;
+
+        const { error: imgError } = await supabase
+          .from('gig_driver_images')
+          .insert({
+            customer_id: newCustomer.id,
+            tenant_id: tenantId,
+            image_url: storedPath,
+            file_name: fileName,
+          });
+
+        if (imgError) {
+          console.error('Error linking gig driver image:', imgError);
+          // Non-fatal
+        }
       }
     }
 

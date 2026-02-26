@@ -12,7 +12,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { FileText, ArrowLeft, DollarSign, Plus, X, Send, Download, Ban, Check, AlertTriangle, Loader2, Shield, ShieldCheck, CheckCircle, XCircle, ExternalLink, UserCheck, IdCard, Camera, FileSignature, Clock, Mail, RefreshCw, Trash2, Receipt, Percent, Car, Undo2, Truck, MapPin, Key, KeyRound, CalendarPlus, Package, Banknote, CreditCard, Calendar, Info, Copy, Gauge } from "lucide-react";
+import { FileText, ArrowLeft, DollarSign, Plus, X, Send, Download, Ban, Check, AlertTriangle, Loader2, Shield, ShieldCheck, CheckCircle, XCircle, ExternalLink, UserCheck, IdCard, Camera, FileSignature, Clock, Mail, RefreshCw, Trash2, Receipt, Percent, Car, Undo2, Truck, MapPin, Key, KeyRound, CalendarPlus, Package, Banknote, CreditCard, Calendar, Info, Copy, Gauge, Briefcase } from "lucide-react";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Progress } from "@/components/ui/progress";
 import { AddPaymentDialog } from "@/components/shared/dialogs/add-payment-dialog";
@@ -85,6 +85,8 @@ interface Rental {
   // Installment & Insurance fields
   has_installment_plan?: boolean;
   bonzah_policy_id?: string | null;
+  // Gig driver
+  is_gig_driver?: boolean;
 }
 
 function LocationCard({ type, address, location, fee, time, currencyCode }: {
@@ -1294,6 +1296,15 @@ const RentalDetail = () => {
                   : bonzahPolicy.status === 'insufficient_balance' ? 'Insurance Insufficient Balance'
                   : `Insurance ${bonzahPolicy.status}`}
               </Badge>
+              {(rental as any)?.is_gig_driver && (
+                <Badge
+                  variant="outline"
+                  className="bg-blue-500/10 text-blue-600 border-blue-500"
+                >
+                  <Briefcase className="h-3 w-3 mr-1" />
+                  Gig Driver
+                </Badge>
+              )}
             </div>
           </div>
         </div>
@@ -3381,10 +3392,22 @@ const RentalDetail = () => {
       {/* Identity Verification Section - Always show */}
       <Card>
         <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <UserCheck className="h-5 w-5 text-purple-600" />
-            Identity Verification
-          </CardTitle>
+          <div className="flex items-center justify-between">
+            <CardTitle className="flex items-center gap-2">
+              <UserCheck className="h-5 w-5 text-purple-600" />
+              Identity Verification
+            </CardTitle>
+            {(rental as any)?.is_gig_driver && rental?.customer_id && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => router.push(`/customers/${rental.customer_id}?tab=gig-driver`)}
+              >
+                <Briefcase className="h-4 w-4 mr-2" />
+                View Gig Driver Docs
+              </Button>
+            )}
+          </div>
           <CardDescription>
             Identity verification status and documents for this customer
           </CardDescription>

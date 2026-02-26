@@ -12,6 +12,7 @@ export const customerFormModalSchema = z.object({
   date_of_birth: z.string().optional(),
   license_number: z.string().optional(),
   id_number: z.string().optional(),
+  is_gig_driver: z.boolean(),
   whatsapp_opt_in: z.boolean(),
   status: z.enum(['Active', 'Inactive']),
   notes: z.string().optional(),
