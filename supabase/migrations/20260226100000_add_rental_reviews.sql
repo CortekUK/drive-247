@@ -27,6 +27,7 @@ CREATE TABLE IF NOT EXISTS public.rental_reviews (
 
 ALTER TABLE public.rental_reviews ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "Tenant users can view their own tenant reviews" ON public.rental_reviews;
 CREATE POLICY "Tenant users can view their own tenant reviews"
   ON public.rental_reviews FOR SELECT
   USING (
@@ -34,6 +35,7 @@ CREATE POLICY "Tenant users can view their own tenant reviews"
     OR is_super_admin()
   );
 
+DROP POLICY IF EXISTS "Tenant users can insert reviews for their tenant" ON public.rental_reviews;
 CREATE POLICY "Tenant users can insert reviews for their tenant"
   ON public.rental_reviews FOR INSERT
   WITH CHECK (
@@ -41,6 +43,7 @@ CREATE POLICY "Tenant users can insert reviews for their tenant"
     OR is_super_admin()
   );
 
+DROP POLICY IF EXISTS "Tenant users can update reviews for their tenant" ON public.rental_reviews;
 CREATE POLICY "Tenant users can update reviews for their tenant"
   ON public.rental_reviews FOR UPDATE
   USING (
@@ -48,6 +51,7 @@ CREATE POLICY "Tenant users can update reviews for their tenant"
     OR is_super_admin()
   );
 
+DROP POLICY IF EXISTS "Tenant users can delete reviews for their tenant" ON public.rental_reviews;
 CREATE POLICY "Tenant users can delete reviews for their tenant"
   ON public.rental_reviews FOR DELETE
   USING (
@@ -55,6 +59,7 @@ CREATE POLICY "Tenant users can delete reviews for their tenant"
     OR is_super_admin()
   );
 
+DROP TRIGGER IF EXISTS set_rental_reviews_updated_at ON public.rental_reviews;
 CREATE TRIGGER set_rental_reviews_updated_at
   BEFORE UPDATE ON public.rental_reviews
   FOR EACH ROW EXECUTE FUNCTION set_updated_at();
@@ -86,6 +91,7 @@ CREATE TABLE IF NOT EXISTS public.customer_review_summaries (
 
 ALTER TABLE public.customer_review_summaries ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "Tenant users can view their own tenant summaries" ON public.customer_review_summaries;
 CREATE POLICY "Tenant users can view their own tenant summaries"
   ON public.customer_review_summaries FOR SELECT
   USING (
@@ -93,11 +99,13 @@ CREATE POLICY "Tenant users can view their own tenant summaries"
     OR is_super_admin()
   );
 
+DROP POLICY IF EXISTS "Service role can manage summaries" ON public.customer_review_summaries;
 CREATE POLICY "Service role can manage summaries"
   ON public.customer_review_summaries FOR ALL
   USING (true)
   WITH CHECK (true);
 
+DROP TRIGGER IF EXISTS set_customer_review_summaries_updated_at ON public.customer_review_summaries;
 CREATE TRIGGER set_customer_review_summaries_updated_at
   BEFORE UPDATE ON public.customer_review_summaries
   FOR EACH ROW EXECUTE FUNCTION set_updated_at();

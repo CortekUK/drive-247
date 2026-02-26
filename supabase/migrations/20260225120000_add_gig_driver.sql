@@ -20,33 +20,39 @@ CREATE INDEX IF NOT EXISTS idx_gig_driver_images_tenant_id ON gig_driver_images(
 ALTER TABLE gig_driver_images ENABLE ROW LEVEL SECURITY;
 
 -- Tenant isolation: authenticated users see their tenant's data
+DROP POLICY IF EXISTS "Tenant users can view gig driver images" ON gig_driver_images;
 CREATE POLICY "Tenant users can view gig driver images"
   ON gig_driver_images FOR SELECT
   TO authenticated
   USING (tenant_id = get_user_tenant_id() OR is_super_admin());
 
+DROP POLICY IF EXISTS "Tenant users can insert gig driver images" ON gig_driver_images;
 CREATE POLICY "Tenant users can insert gig driver images"
   ON gig_driver_images FOR INSERT
   TO authenticated
   WITH CHECK (tenant_id = get_user_tenant_id() OR is_super_admin());
 
+DROP POLICY IF EXISTS "Tenant users can delete gig driver images" ON gig_driver_images;
 CREATE POLICY "Tenant users can delete gig driver images"
   ON gig_driver_images FOR DELETE
   TO authenticated
   USING (tenant_id = get_user_tenant_id() OR is_super_admin());
 
 -- Anon access for guest checkout flow
+DROP POLICY IF EXISTS "Anon can insert gig driver images" ON gig_driver_images;
 CREATE POLICY "Anon can insert gig driver images"
   ON gig_driver_images FOR INSERT
   TO anon
   WITH CHECK (true);
 
+DROP POLICY IF EXISTS "Anon can view gig driver images" ON gig_driver_images;
 CREATE POLICY "Anon can view gig driver images"
   ON gig_driver_images FOR SELECT
   TO anon
   USING (true);
 
 -- Service role full access
+DROP POLICY IF EXISTS "Service role full access on gig driver images" ON gig_driver_images;
 CREATE POLICY "Service role full access on gig driver images"
   ON gig_driver_images FOR ALL
   TO service_role
@@ -68,21 +74,25 @@ ON CONFLICT (id) DO UPDATE SET
   allowed_mime_types = ARRAY['image/jpeg', 'image/jpg', 'image/png'];
 
 -- Storage policies for gig-driver-images bucket
+DROP POLICY IF EXISTS "Allow public uploads to gig-driver-images" ON storage.objects;
 CREATE POLICY "Allow public uploads to gig-driver-images"
   ON storage.objects FOR INSERT
   TO public
   WITH CHECK (bucket_id = 'gig-driver-images');
 
+DROP POLICY IF EXISTS "Allow public reads from gig-driver-images" ON storage.objects;
 CREATE POLICY "Allow public reads from gig-driver-images"
   ON storage.objects FOR SELECT
   TO public
   USING (bucket_id = 'gig-driver-images');
 
+DROP POLICY IF EXISTS "Allow service role full access to gig-driver-images" ON storage.objects;
 CREATE POLICY "Allow service role full access to gig-driver-images"
   ON storage.objects FOR ALL
   TO service_role
   USING (bucket_id = 'gig-driver-images');
 
+DROP POLICY IF EXISTS "Allow public deletes from gig-driver-images" ON storage.objects;
 CREATE POLICY "Allow public deletes from gig-driver-images"
   ON storage.objects FOR DELETE
   TO public
