@@ -42,46 +42,90 @@ function formatCurrency(amount: number | null, currencyCode: string = 'GBP'): st
 }
 
 // Process template variables
-function processTemplate(template: string, rental: any, customer: any, vehicle: any, tenant: any): string {
+function processTemplate(template: string, rental: any, customer: any, vehicle: any, tenant: any, verification?: any): string {
     const cc = tenant?.currency_code || 'GBP';
+
+    // Compose full address from separate fields
+    const customerAddress = [
+        customer?.address_street,
+        customer?.address_city,
+        customer?.address_state,
+        customer?.address_zip,
+    ].filter(Boolean).join(', ') || customer?.address || verification?.address || '';
+
+    // Resolve identity fields: customer table first, then fall back to identity_verifications
+    const dob = customer?.date_of_birth || verification?.date_of_birth || '';
+    const documentNumber = customer?.license_number || verification?.document_number || '';
+    const documentExpiry = verification?.document_expiry_date || '';
+    const documentType = verification?.document_type || '';
+
     const variables: Record<string, string> = {
+        // Customer — basic
         customer_name: customer?.name || '',
         customer_email: customer?.email || '',
         customer_phone: customer?.phone || '',
-        customer_type: customer?.customer_type || '',
-        customer_id_number: customer?.id_number || '',
-        customer_license_number: customer?.license_number || '',
-        customer_address: customer?.address || '',
+        customer_type: customer?.customer_type || customer?.type || '',
+        customer_address: customerAddress,
+        customer_address_street: customer?.address_street || '',
+        customer_address_city: customer?.address_city || '',
+        customer_address_state: customer?.address_state || '',
+        customer_address_zip: customer?.address_zip || '',
+
+        // Customer — identity & license (with verification fallback)
+        customer_id_number: customer?.id_number || documentNumber,
+        customer_license_number: documentNumber,
+        customer_license_state: customer?.license_state || '',
+        customer_license_expiry: documentExpiry ? formatDate(documentExpiry) : '',
+        customer_document_type: documentType === 'drivers_license' ? "Driver's License" : documentType === 'passport' ? 'Passport' : documentType === 'id_card' ? 'ID Card' : '',
+        customer_date_of_birth: dob ? formatDate(dob) : '',
+        customer_dob: dob ? formatDate(dob) : '',
+
+        // Customer — next of kin
         nok_name: customer?.nok_full_name || '',
         nok_phone: customer?.nok_phone || '',
         nok_email: customer?.nok_email || '',
         nok_address: customer?.nok_address || '',
         nok_relationship: customer?.nok_relationship || '',
 
+        // Vehicle
         vehicle_make: vehicle?.make || '',
         vehicle_model: vehicle?.model || '',
         vehicle_year: vehicle?.year?.toString() || '',
         vehicle_reg: vehicle?.reg || '',
         vehicle_color: vehicle?.color || vehicle?.colour || '',
+        vehicle_vin: vehicle?.vin || 'Not Added',
         vehicle_fuel_type: vehicle?.fuel_type || '',
         vehicle_description: vehicle?.description || '',
         vehicle_daily_rent: formatCurrency(vehicle?.daily_rent, cc),
         vehicle_weekly_rent: formatCurrency(vehicle?.weekly_rent, cc),
         vehicle_monthly_rent: formatCurrency(vehicle?.monthly_rent, cc),
+        vehicle_mileage: vehicle?.current_mileage?.toString() || '',
+        vehicle_allowed_mileage: vehicle?.allowed_mileage?.toString() || '',
 
+        // Rental
         rental_number: rental?.rental_number || rental?.id?.substring(0, 8)?.toUpperCase() || '',
         rental_id: rental?.id || '',
         rental_start_date: formatDate(rental?.start_date),
         rental_end_date: rental?.end_date ? formatDate(rental.end_date) : 'Ongoing',
+        rental_days: (() => {
+            if (rental?.start_date && rental?.end_date) {
+                const diff = Math.ceil((new Date(rental.end_date).getTime() - new Date(rental.start_date).getTime()) / (1000 * 60 * 60 * 24));
+                return diff > 0 ? diff.toString() : '1';
+            }
+            return '';
+        })(),
         monthly_amount: formatCurrency(rental?.monthly_amount, cc),
         rental_amount: formatCurrency(rental?.monthly_amount, cc),
         rental_period_type: rental?.rental_period_type || 'Monthly',
+        rental_status: rental?.status || '',
         pickup_location: rental?.pickup_location || '',
         return_location: rental?.return_location || '',
+        delivery_address: rental?.delivery_address || '',
         pickup_time: rental?.pickup_time || '',
         return_time: rental?.return_time || '',
         promo_code: rental?.promo_code || '',
 
+        // Company / Tenant
         company_name: tenant?.company_name || 'Drive 247',
         company_email: tenant?.contact_email || '',
         company_phone: tenant?.contact_phone || tenant?.phone || '',
@@ -89,6 +133,7 @@ function processTemplate(template: string, rental: any, customer: any, vehicle: 
         admin_name: tenant?.admin_name || '',
         admin_email: tenant?.admin_email || '',
 
+        // Dates
         agreement_date: formatDate(new Date()),
         today_date: formatDate(new Date()),
         current_date: formatDate(new Date()),
@@ -233,6 +278,21 @@ export async function POST(request: NextRequest) {
             }
         }
 
+        // Fetch latest identity verification for this customer
+        let verification: any = null;
+        const customerId = rental?.customer_id || (customer as any)?.id;
+        if (customerId) {
+            const { data: verificationData } = await supabase
+                .from('identity_verifications')
+                .select('date_of_birth, document_number, document_expiry_date, document_type, address')
+                .eq('customer_id', customerId)
+                .order('created_at', { ascending: false })
+                .limit(1)
+                .maybeSingle();
+            verification = verificationData;
+            console.log('Verification data:', verification ? 'found' : 'none');
+        }
+
         // Fetch tenant info
         if (tenantId) {
             const { data: tenantData } = await supabase
@@ -256,7 +316,7 @@ export async function POST(request: NextRequest) {
 
             if (templateData?.template_content) {
                 console.log('Using admin custom template:', templateData.template_name);
-                const processed = processTemplate(templateData.template_content, rental, customer, vehicle, tenant);
+                const processed = processTemplate(templateData.template_content, rental, customer, vehicle, tenant, verification);
                 documentContent = htmlToText(processed);
             } else {
                 console.log('No active template found, using default');
