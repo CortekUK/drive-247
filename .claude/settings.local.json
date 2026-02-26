@@ -34,7 +34,8 @@
       "Bash(npx next lint)",
       "Bash(xargs:*)",
       "mcp__ide__getDiagnostics",
-      "Bash(npx tsc:*)"
+      "Bash(npx tsc:*)",
+      "Bash(npx shadcn@latest add \"https://lucide-animated.com/r/chart-bar-increasing.json\")"
     ],
     "deny": [],
     "ask": []

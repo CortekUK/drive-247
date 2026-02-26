@@ -3,7 +3,25 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Car, Users, FileText, CreditCard, LayoutDashboard, Bell, BarChart3, AlertCircle, TrendingUp, Settings, CalendarDays, Receipt, FolderOpen, UserX, Globe, History, Clock, UsersRound, MessageSquare, ChevronRight, Layers, Timer, Zap } from "lucide-react";
+import { Clock, ChevronRight, Layers, Timer, Zap } from "lucide-react";
+import { EarthIcon } from "@/components/ui/earth";
+import { CarIcon } from "@/components/ui/car";
+import { BlocksIcon } from "@/components/ui/blocks";
+import { FileTextIcon } from "@/components/ui/file-text";
+import { CalendarDaysIcon } from "@/components/ui/calendar-days";
+import { UsersIcon } from "@/components/ui/users";
+import { BanIcon } from "@/components/ui/ban";
+import { MessageSquareIcon } from "@/components/ui/message-square";
+import { BadgeAlertIcon } from "@/components/ui/badge-alert";
+import { FolderOpenIcon } from "@/components/ui/folder-open";
+import { BellIcon } from "@/components/ui/bell";
+import { ChartBarIncreasingIcon } from "@/components/ui/chart-bar-increasing";
+import { TrendingUpIcon } from "@/components/ui/trending-up";
+import { HistoryIcon } from "@/components/ui/history";
+import { SettingsIcon } from "@/components/ui/settings";
+import { CreditCardIcon } from "@/components/ui/credit-card-icon";
+import { ReceiptIcon } from "@/components/ui/receipt";
+import { wrapAnimatedIcon } from "@/components/ui/animated-icon-wrapper";
 import { Sidebar, SidebarContent, SidebarGroup, SidebarGroupContent, SidebarHeader, SidebarMenu, SidebarMenuButton, SidebarMenuItem, SidebarFooter, useSidebar } from "@/components/ui/sidebar";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -19,6 +37,24 @@ import { useManagerPermissions } from "@/hooks/use-manager-permissions";
 import { ROUTE_TO_TAB } from "@/lib/permissions";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useTheme } from "next-themes";
+
+const AnimatedBlocks = wrapAnimatedIcon(BlocksIcon);
+const AnimatedFileText = wrapAnimatedIcon(FileTextIcon);
+const AnimatedCalendarDays = wrapAnimatedIcon(CalendarDaysIcon);
+const AnimatedUsers = wrapAnimatedIcon(UsersIcon);
+const AnimatedBan = wrapAnimatedIcon(BanIcon);
+const AnimatedMessageSquare = wrapAnimatedIcon(MessageSquareIcon);
+const AnimatedBadgeAlert = wrapAnimatedIcon(BadgeAlertIcon);
+const AnimatedFolderOpen = wrapAnimatedIcon(FolderOpenIcon);
+const AnimatedBell = wrapAnimatedIcon(BellIcon);
+const AnimatedChartBar = wrapAnimatedIcon(ChartBarIncreasingIcon);
+const AnimatedTrendingUp = wrapAnimatedIcon(TrendingUpIcon);
+const AnimatedHistory = wrapAnimatedIcon(HistoryIcon);
+const AnimatedSettings = wrapAnimatedIcon(SettingsIcon);
+const AnimatedCreditCard = wrapAnimatedIcon(CreditCardIcon);
+const AnimatedReceipt = wrapAnimatedIcon(ReceiptIcon);
+const AnimatedCar = wrapAnimatedIcon(CarIcon);
+const AnimatedEarth = wrapAnimatedIcon(EarthIcon);
 
 interface NavItem {
   name: string;
@@ -71,49 +107,49 @@ export function AppSidebar() {
   const groups: NavGroup[] = [
     {
       label: "Fleet & Bookings",
-      icon: Car,
+      icon: AnimatedCar,
       items: [
-        { name: "Vehicles", href: "/vehicles", icon: Car },
-        { name: "Rentals", href: "/rentals", icon: FileText },
+        { name: "Vehicles", href: "/vehicles", icon: AnimatedCar },
+        { name: "Rentals", href: "/rentals", icon: AnimatedFileText },
         ...(showPendingBookings ? [{ name: "Pending Bookings", href: "/pending-bookings", icon: Clock, badge: pendingBookingsCount || 0 }] : []),
-        { name: "Availability", href: "/blocked-dates", icon: CalendarDays },
+        { name: "Availability", href: "/blocked-dates", icon: AnimatedCalendarDays },
       ],
     },
     {
       label: "Customers",
-      icon: Users,
+      icon: AnimatedUsers,
       items: [
-        { name: "Customers", href: "/customers", icon: Users },
-        { name: "Blocked Customers", href: "/blocked-customers", icon: UserX },
-        { name: "Messages", href: "/messages", icon: MessageSquare, badge: chatUnreadCount || 0 },
+        { name: "Customers", href: "/customers", icon: AnimatedUsers },
+        { name: "Blocked Customers", href: "/blocked-customers", icon: AnimatedBan },
+        { name: "Messages", href: "/messages", icon: AnimatedMessageSquare, badge: chatUnreadCount || 0 },
       ],
     },
     {
       label: "Finance",
-      icon: CreditCard,
+      icon: AnimatedCreditCard,
       items: [
-        { name: "Payments", href: "/payments", icon: CreditCard },
-        { name: "Invoices", href: "/invoices", icon: Receipt },
-        { name: "Fines", href: "/fines", icon: AlertCircle },
+        { name: "Payments", href: "/payments", icon: AnimatedCreditCard },
+        { name: "Invoices", href: "/invoices", icon: AnimatedReceipt },
+        { name: "Fines", href: "/fines", icon: AnimatedBadgeAlert },
       ],
     },
     {
       label: "Insights",
-      icon: BarChart3,
+      icon: AnimatedChartBar,
       items: [
-        { name: "Documents", href: "/documents", icon: FolderOpen },
-        { name: "Reminders", href: "/reminders", icon: Bell, badge: reminderStats?.due || 0 },
-        { name: "Reports", href: "/reports", icon: BarChart3 },
-        { name: "P&L Dashboard", href: "/pl-dashboard", icon: TrendingUp },
+        { name: "Documents", href: "/documents", icon: AnimatedFolderOpen },
+        { name: "Reminders", href: "/reminders", icon: AnimatedBell, badge: reminderStats?.due || 0 },
+        { name: "Reports", href: "/reports", icon: AnimatedChartBar },
+        { name: "P&L Dashboard", href: "/pl-dashboard", icon: AnimatedTrendingUp },
       ],
     },
     {
       label: "Administration",
-      icon: Globe,
+      icon: AnimatedEarth,
       items: [
-        { name: "Website Content", href: "/cms", icon: Globe },
-        { name: "Audit Logs", href: "/audit-logs", icon: History },
-        { name: "Manage Users", href: "/users", icon: UsersRound, headAdminOnly: true },
+        { name: "Website Content", href: "/cms", icon: AnimatedEarth },
+        { name: "Audit Logs", href: "/audit-logs", icon: AnimatedHistory },
+        { name: "Manage Users", href: "/users", icon: AnimatedUsers, headAdminOnly: true },
       ].filter(item => {
         if (item.superAdminOnly && !appUser?.is_super_admin) return false;
         if (item.headAdminOnly && appUser?.role !== 'head_admin') return false;
@@ -254,7 +290,7 @@ export function AppSidebar() {
                   className="h-8 transition-all duration-200 ease-in-out"
                 >
                   <Link href="/" className="flex items-center gap-2">
-                    <LayoutDashboard className="h-4 w-4 shrink-0" />
+                    <AnimatedBlocks className="h-4 w-4 shrink-0" />
                     <span className={`text-[13px] transition-all duration-200 ease-in-out ${collapsed ? "sr-only opacity-0 w-0" : "opacity-100"}`}>
                       Dashboard
                     </span>
@@ -407,7 +443,7 @@ export function AppSidebar() {
                 className="h-8 transition-all duration-200 ease-in-out"
               >
                 <Link href="/settings">
-                  <Settings className="h-4 w-4 shrink-0" />
+                  <AnimatedSettings className="h-4 w-4 shrink-0" />
                   <span className={`text-[13px] transition-all duration-200 ease-in-out ${collapsed ? "sr-only opacity-0 w-0" : "opacity-100"}`}>
                     Settings
                   </span>
