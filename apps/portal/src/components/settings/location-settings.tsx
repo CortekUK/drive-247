@@ -40,6 +40,7 @@ import {
   Truck,
   MapPinned,
   CircleDot,
+  AlertTriangle,
 } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
 import {
@@ -735,9 +736,6 @@ export function LocationSettings() {
                     />
                     <span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">{distanceUnitLabel}</span>
                   </div>
-                  {(areaRadius ?? 0) > Math.floor(kmToDisplayUnit(50, distanceUnit)) && (
-                    <p className="text-[11px] text-amber-500">For best results, keep radius below {Math.floor(kmToDisplayUnit(50, distanceUnit))}{distanceUnitLabel}. Larger areas rely on distance-based filtering instead of Google suggestions.</p>
-                  )}
                 </div>
 
                 <div className="space-y-2">
@@ -761,6 +759,15 @@ export function LocationSettings() {
                 </div>
               </div>
             </div>
+
+            {(areaRadius ?? 0) > Math.floor(kmToDisplayUnit(50, distanceUnit)) && (
+              <div className="mt-3 flex items-start gap-2.5 rounded-lg border border-amber-500/30 bg-amber-500/5 px-3.5 py-2.5">
+                <AlertTriangle className="h-4 w-4 text-amber-500 mt-0.5 shrink-0" />
+                <p className="text-xs text-amber-500 leading-relaxed">
+                  For best results, keep the radius below <strong>{Math.floor(kmToDisplayUnit(50, distanceUnit))}{distanceUnitLabel}</strong>. Radii within this limit use Google&apos;s location-aware suggestions for more accurate address results. Larger areas fall back to distance-based filtering.
+                </p>
+              </div>
+            )}
 
             <div className="mt-4 p-3 rounded-lg bg-muted/50 border">
               <p className="text-sm text-muted-foreground">
