@@ -291,12 +291,17 @@ serve(async (req) => {
         customerStatus = 'rejected';
       }
 
+      const customerUpdate: Record<string, unknown> = {
+        identity_verification_status: customerStatus,
+        license_number: ocrData?.documentNumber || null,
+      };
+      // Also copy DOB from verification if not already set on customer
+      if (ocrData?.dateOfBirth) {
+        customerUpdate.date_of_birth = ocrData.dateOfBirth;
+      }
       await supabaseClient
         .from('customers')
-        .update({
-          identity_verification_status: customerStatus,
-          license_number: ocrData?.documentNumber || null
-        })
+        .update(customerUpdate)
         .eq('id', verification.customer_id);
     }
 

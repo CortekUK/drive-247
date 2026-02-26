@@ -57,6 +57,7 @@ interface Vehicle {
   has_tracker?: boolean;
   has_remote_immobiliser?: boolean;
   security_notes?: string | null;
+  vin?: string | null;
   description?: string | null;
   security_deposit?: number | null;
   allowed_mileage?: number | null;
@@ -104,6 +105,7 @@ export const EditVehicleDialogEnhanced = ({ vehicle, open, onOpenChange }: EditV
     reValidateMode: "onChange",
     defaultValues: {
       reg: vehicle.reg,
+      vin: vehicle.vin || '',
       make: vehicle.make,
       model: vehicle.model,
       colour: vehicle.colour || '',
@@ -159,6 +161,7 @@ export const EditVehicleDialogEnhanced = ({ vehicle, open, onOpenChange }: EditV
       
       const vehicleData: any = {
         reg: normalizedReg,
+        vin: data.vin || null,
         make: data.make,
         model: data.model,
         colour: data.colour,
@@ -370,6 +373,23 @@ export const EditVehicleDialogEnhanced = ({ vehicle, open, onOpenChange }: EditV
                     <FormControl>
                       <Input
                         placeholder="e.g. AB12 CDE"
+                        {...field}
+                        onChange={(e) => field.onChange(e.target.value.toUpperCase())}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="vin"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>VIN</FormLabel>
+                    <FormControl>
+                      <Input
+                        placeholder="e.g. 1HGBH41JXMN109186"
                         {...field}
                         onChange={(e) => field.onChange(e.target.value.toUpperCase())}
                       />

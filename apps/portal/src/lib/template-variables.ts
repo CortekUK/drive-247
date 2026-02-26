@@ -37,8 +37,8 @@ export const TEMPLATE_VARIABLES: TemplateVariable[] = [
   {
     key: 'customer_address',
     label: 'Customer Address',
-    description: 'Full address of the customer',
-    sample: '123 Main Street, London, UK',
+    description: 'Full address (street, city, state, zip)',
+    sample: '123 Main Street, Las Vegas, NV 89120',
     category: 'customer',
   },
   {
@@ -46,6 +46,62 @@ export const TEMPLATE_VARIABLES: TemplateVariable[] = [
     label: 'Customer Type',
     description: 'Type of customer (Individual/Business)',
     sample: 'Individual',
+    category: 'customer',
+  },
+  {
+    key: 'customer_date_of_birth',
+    label: 'Date of Birth',
+    description: 'Customer date of birth',
+    sample: 'March 15, 1990',
+    category: 'customer',
+  },
+  {
+    key: 'customer_license_number',
+    label: 'License / ID Number',
+    description: "Document number from ID verification (license, passport, or ID card)",
+    sample: 'DL-12345678',
+    category: 'customer',
+  },
+  {
+    key: 'customer_license_expiry',
+    label: 'Document Expiry Date',
+    description: "Expiry date of the verified document",
+    sample: 'March 20, 2028',
+    category: 'customer',
+  },
+  {
+    key: 'customer_document_type',
+    label: 'Document Type',
+    description: "Type of ID document (Driver's License, Passport, ID Card)",
+    sample: "Driver's License",
+    category: 'customer',
+  },
+  {
+    key: 'customer_license_state',
+    label: 'License State',
+    description: 'State/province where license was issued',
+    sample: 'Nevada (NV)',
+    category: 'customer',
+  },
+  {
+    key: 'customer_id_number',
+    label: 'ID Number',
+    description: 'Customer identification number',
+    sample: 'ID-98765432',
+    category: 'customer',
+  },
+  {
+    key: 'nok_name',
+    label: 'Next of Kin Name',
+    description: 'Emergency contact / next of kin name',
+    sample: 'Jane Smith',
+    category: 'customer',
+  },
+  {
+    key: 'nok_phone',
+    label: 'Next of Kin Phone',
+    description: 'Emergency contact phone number',
+    sample: '+1 234 567 8901',
     category: 'customer',
   },
 
@@ -92,13 +148,41 @@ export const TEMPLATE_VARIABLES: TemplateVariable[] = [
     sample: 'WDB1234567890123',
     category: 'vehicle',
   },
+  {
+    key: 'vehicle_fuel_type',
+    label: 'Fuel Type',
+    description: 'Type of fuel (Petrol/Diesel/Electric/Hybrid)',
+    sample: 'Petrol',
+    category: 'vehicle',
+  },
+  {
+    key: 'vehicle_daily_rent',
+    label: 'Daily Rent',
+    description: 'Daily rental rate for the vehicle',
+    sample: '$220.00',
+    category: 'vehicle',
+  },
+  {
+    key: 'vehicle_weekly_rent',
+    label: 'Weekly Rent',
+    description: 'Weekly rental rate for the vehicle',
+    sample: '$1,200.00',
+    category: 'vehicle',
+  },
+  {
+    key: 'vehicle_monthly_rent',
+    label: 'Monthly Rent',
+    description: 'Monthly rental rate for the vehicle',
+    sample: '$4,500.00',
+    category: 'vehicle',
+  },
 
   // Rental variables
   {
     key: 'rental_number',
     label: 'Rental Number',
     description: 'Unique rental reference number',
-    sample: 'RNT-2024-001',
+    sample: 'R-B0F986',
     category: 'rental',
   },
   {
@@ -116,9 +200,16 @@ export const TEMPLATE_VARIABLES: TemplateVariable[] = [
     category: 'rental',
   },
   {
+    key: 'rental_days',
+    label: 'Days Rented',
+    description: 'Number of days between start and end date',
+    sample: '30',
+    category: 'rental',
+  },
+  {
     key: 'monthly_amount',
-    label: 'Monthly Amount',
-    description: 'Monthly rental amount',
+    label: 'Rental Amount',
+    description: 'Rental payment amount',
     sample: '$2,500.00',
     category: 'rental',
   },
@@ -127,6 +218,34 @@ export const TEMPLATE_VARIABLES: TemplateVariable[] = [
     label: 'Rental Period Type',
     description: 'Type of rental period (Daily/Weekly/Monthly)',
     sample: 'Monthly',
+    category: 'rental',
+  },
+  {
+    key: 'rental_status',
+    label: 'Rental Status',
+    description: 'Current status of the rental',
+    sample: 'Started',
+    category: 'rental',
+  },
+  {
+    key: 'pickup_location',
+    label: 'Pickup Location',
+    description: 'Vehicle pickup location',
+    sample: '3430 East Russell Road, Las Vegas, NV 89120',
+    category: 'rental',
+  },
+  {
+    key: 'return_location',
+    label: 'Return Location',
+    description: 'Vehicle return location',
+    sample: '3430 East Russell Road, Las Vegas, NV 89120',
+    category: 'rental',
+  },
+  {
+    key: 'delivery_address',
+    label: 'Delivery Address',
+    description: 'Delivery address for the vehicle',
+    sample: '456 Oak Avenue, Las Vegas, NV 89101',
     category: 'rental',
   },
 
@@ -150,6 +269,13 @@ export const TEMPLATE_VARIABLES: TemplateVariable[] = [
     label: 'Company Phone',
     description: 'Contact phone of the company',
     sample: '+1 800 555 0000',
+    category: 'company',
+  },
+  {
+    key: 'company_address',
+    label: 'Company Address',
+    description: 'Address of the rental company',
+    sample: '3430 East Russell Road, Las Vegas, NV 89120',
     category: 'company',
   },
   {
@@ -221,63 +347,65 @@ export function formatTemplateCurrency(
 
 // Build data object from rental, customer, vehicle, and tenant data
 export function buildTemplateData(
-  rental: {
-    id: string;
-    rental_number?: string | null;
-    start_date: string;
-    end_date?: string | null;
-    monthly_amount: number;
-    rental_period_type?: string | null;
-  },
-  customer: {
-    name: string;
-    email: string;
-    phone?: string | null;
-    address?: string | null;
-    customer_type?: string | null;
-  },
-  vehicle: {
-    make: string;
-    model: string;
-    year?: number | null;
-    reg: string;
-    color?: string | null;
-    vin?: string | null;
-  },
-  tenant: {
-    company_name?: string | null;
-    contact_email?: string | null;
-    contact_phone?: string | null;
-  },
+  rental: Record<string, any>,
+  customer: Record<string, any>,
+  vehicle: Record<string, any>,
+  tenant: Record<string, any>,
   currencyCode: string = 'GBP'
 ): Record<string, string> {
+  const customerAddress = [
+    customer?.address_street,
+    customer?.address_city,
+    customer?.address_state,
+    customer?.address_zip,
+  ].filter(Boolean).join(', ') || customer?.address || '';
+
   return {
-    // Customer
-    customer_name: customer.name || '',
-    customer_email: customer.email || '',
-    customer_phone: customer.phone || '',
-    customer_address: customer.address || '',
-    customer_type: customer.customer_type || 'Individual',
+    // Customer — basic
+    customer_name: customer?.name || '',
+    customer_email: customer?.email || '',
+    customer_phone: customer?.phone || '',
+    customer_type: customer?.customer_type || customer?.type || 'Individual',
+    customer_address: customerAddress,
+
+    // Customer — identity & license
+    customer_date_of_birth: customer?.date_of_birth ? formatDate(customer.date_of_birth) : '',
+    customer_license_number: customer?.license_number || '',
+    customer_license_expiry: '',
+    customer_document_type: '',
+    customer_license_state: customer?.license_state || '',
+    customer_id_number: customer?.id_number || '',
+    nok_name: customer?.nok_full_name || '',
+    nok_phone: customer?.nok_phone || '',
 
     // Vehicle
-    vehicle_make: vehicle.make || '',
-    vehicle_model: vehicle.model || '',
-    vehicle_year: vehicle.year?.toString() || '',
-    vehicle_reg: vehicle.reg || '',
-    vehicle_color: vehicle.color || '',
-    vehicle_vin: vehicle.vin || '',
+    vehicle_make: vehicle?.make || '',
+    vehicle_model: vehicle?.model || '',
+    vehicle_year: vehicle?.year?.toString() || '',
+    vehicle_reg: vehicle?.reg || '',
+    vehicle_color: vehicle?.color || '',
+    vehicle_vin: vehicle?.vin || 'Not Added',
+    vehicle_fuel_type: vehicle?.fuel_type || '',
+    vehicle_daily_rent: formatTemplateCurrency(vehicle?.daily_rent, currencyCode),
+    vehicle_weekly_rent: formatTemplateCurrency(vehicle?.weekly_rent, currencyCode),
+    vehicle_monthly_rent: formatTemplateCurrency(vehicle?.monthly_rent, currencyCode),
 
     // Rental
-    rental_number: rental.rental_number || rental.id.substring(0, 8).toUpperCase(),
-    rental_start_date: formatDate(rental.start_date),
-    rental_end_date: rental.end_date ? formatDate(rental.end_date) : 'Ongoing',
-    monthly_amount: formatTemplateCurrency(rental.monthly_amount, currencyCode),
-    rental_period_type: rental.rental_period_type || 'Monthly',
+    rental_number: rental?.rental_number || rental?.id?.substring(0, 8)?.toUpperCase() || '',
+    rental_start_date: formatDate(rental?.start_date),
+    rental_end_date: rental?.end_date ? formatDate(rental.end_date) : 'Ongoing',
+    monthly_amount: formatTemplateCurrency(rental?.monthly_amount, currencyCode),
+    rental_period_type: rental?.rental_period_type || 'Monthly',
+    rental_status: rental?.status || '',
+    pickup_location: rental?.pickup_location || '',
+    return_location: rental?.return_location || '',
+    delivery_address: rental?.delivery_address || '',
 
     // Company
-    company_name: tenant.company_name || '',
-    company_email: tenant.contact_email || '',
-    company_phone: tenant.contact_phone || '',
+    company_name: tenant?.company_name || '',
+    company_email: tenant?.contact_email || '',
+    company_phone: tenant?.contact_phone || '',
+    company_address: tenant?.address || '',
 
     // Agreement
     agreement_date: formatDate(new Date()),

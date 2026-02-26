@@ -627,7 +627,7 @@ export default function VehicleDetail() {
               </h3>
               <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-x-8 gap-y-3">
                 <MetricItem label="Registration" value={vehicle.reg} />
-                {vehicle.vin && <MetricItem label="VIN" value={vehicle.vin} />}
+                <MetricItem label="VIN" value={vehicle.vin || 'Not Added'} />
                 <MetricItem label="Make" value={vehicle.make} />
                 <MetricItem label="Model" value={vehicle.model} />
                 {vehicle.year && <MetricItem label="Year" value={vehicle.year} />}

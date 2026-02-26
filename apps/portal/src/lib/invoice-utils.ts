@@ -50,16 +50,13 @@ export const generateInvoiceNumber = async (tenantId?: string): Promise<string> 
   const nextMonth = Number(month) === 12 ? 1 : Number(month) + 1;
   const nextYear = Number(month) === 12 ? Number(year) + 1 : Number(year);
 
-  // Get count of invoices this month
-  let query = supabase
+  // Count ALL invoices this month (globally, not per-tenant) to avoid
+  // unique constraint violations on invoice_number
+  const query = supabase
     .from('invoices')
     .select('*', { count: 'exact', head: true })
     .gte('invoice_date', `${year}-${month}-01`)
     .lt('invoice_date', `${nextYear}-${String(nextMonth).padStart(2, '0')}-01`);
-
-  if (tenantId) {
-    query = query.eq('tenant_id', tenantId);
-  }
 
   const { count, error } = await query;
 
@@ -72,41 +69,52 @@ export const generateInvoiceNumber = async (tenantId?: string): Promise<string> 
   return `INV-${year}${month}-${sequence}`;
 };
 
-// Create invoice
+// Create invoice (retries once on unique constraint conflict)
 export const createInvoice = async (data: InvoiceData): Promise<Invoice> => {
-  const invoiceNumber = await generateInvoiceNumber(data.tenant_id);
+  const maxRetries = 2;
 
-  const { data: invoice, error } = await supabase
-    .from('invoices')
-    .insert({
-      rental_id: data.rental_id,
-      customer_id: data.customer_id,
-      vehicle_id: data.vehicle_id,
-      invoice_number: invoiceNumber,
-      invoice_date: format(data.invoice_date, 'yyyy-MM-dd'),
-      due_date: data.due_date ? format(data.due_date, 'yyyy-MM-dd') : null,
-      subtotal: data.subtotal,
-      rental_fee: data.subtotal,
-      tax_amount: data.tax_amount || 0,
-      service_fee: data.service_fee || 0,
-      security_deposit: data.security_deposit || 0,
-      insurance_premium: data.insurance_premium || 0,
-      delivery_fee: data.delivery_fee || 0,
-      extras_total: data.extras_total || 0,
-      total_amount: data.total_amount,
-      status: 'pending',
-      notes: data.notes,
-      tenant_id: data.tenant_id,
-    })
-    .select()
-    .single();
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
+    const invoiceNumber = await generateInvoiceNumber(data.tenant_id);
 
-  if (error) {
-    console.error('Error creating invoice:', error);
-    throw error;
+    const { data: invoice, error } = await supabase
+      .from('invoices')
+      .insert({
+        rental_id: data.rental_id,
+        customer_id: data.customer_id,
+        vehicle_id: data.vehicle_id,
+        invoice_number: invoiceNumber,
+        invoice_date: format(data.invoice_date, 'yyyy-MM-dd'),
+        due_date: data.due_date ? format(data.due_date, 'yyyy-MM-dd') : null,
+        subtotal: data.subtotal,
+        rental_fee: data.subtotal,
+        tax_amount: data.tax_amount || 0,
+        service_fee: data.service_fee || 0,
+        security_deposit: data.security_deposit || 0,
+        insurance_premium: data.insurance_premium || 0,
+        delivery_fee: data.delivery_fee || 0,
+        extras_total: data.extras_total || 0,
+        total_amount: data.total_amount,
+        status: 'pending',
+        notes: data.notes,
+        tenant_id: data.tenant_id,
+      })
+      .select()
+      .single();
+
+    if (error) {
+      // Retry on unique constraint violation (duplicate invoice number)
+      if (error.code === '23505' && attempt < maxRetries - 1) {
+        console.warn(`Invoice number ${invoiceNumber} conflict, retrying...`);
+        continue;
+      }
+      console.error('Error creating invoice:', error.message, error.code, error.details);
+      throw error;
+    }
+
+    return invoice as Invoice;
   }
 
-  return invoice as Invoice;
+  throw new Error('Failed to create invoice after retries');
 };
 
 // Re-export formatCurrency from shared format-utils
