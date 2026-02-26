@@ -104,7 +104,9 @@ const LocationAutocompleteWithRadius = ({
       };
 
       // Add location bias if we have center coordinates
-      if (center) {
+      // Google Places API max radius is 50,000 meters (50km)
+      // For larger radii, skip the bias and rely on haversine distance filtering
+      if (center && radiusKm <= 50) {
         request.locationBias = new google.maps.Circle({
           center: { lat: center.lat, lng: center.lon },
           radius: radiusKm * 1000,

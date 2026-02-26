@@ -719,16 +719,25 @@ export function LocationSettings() {
                       value={areaRadius ?? ''}
                       onChange={(e) => {
                         const val = e.target.value;
-                        setAreaRadius(val === '' ? null : parseInt(val) || null);
+                        if (val === '') {
+                          setAreaRadius(null);
+                        } else {
+                          const hardMax = Math.floor(kmToDisplayUnit(1000, distanceUnit));
+                          const num = parseInt(val) || null;
+                          setAreaRadius(num && num > hardMax ? hardMax : num);
+                        }
                         setHasChanges(true);
                       }}
                       className="pr-10"
                       min={1}
-                      max={100}
-                      placeholder="100"
+                      max={Math.floor(kmToDisplayUnit(1000, distanceUnit))}
+                      placeholder="50"
                     />
                     <span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">{distanceUnitLabel}</span>
                   </div>
+                  {(areaRadius ?? 0) > Math.floor(kmToDisplayUnit(50, distanceUnit)) && (
+                    <p className="text-[11px] text-amber-500">For best results, keep radius below {Math.floor(kmToDisplayUnit(50, distanceUnit))}{distanceUnitLabel}. Larger areas rely on distance-based filtering instead of Google suggestions.</p>
+                  )}
                 </div>
 
                 <div className="space-y-2">
