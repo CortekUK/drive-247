@@ -15,7 +15,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Users, Mail, Phone, ChevronDown, ChevronUp, CreditCard, AlertTriangle, Shield, Loader2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTenant } from "@/contexts/TenantContext";
 import { useAuditLog } from "@/hooks/use-audit-log";
 import { customerFormModalSchema, type CustomerFormModalFormValues } from "@/client-schemas/customers/customer-form-modal";
@@ -31,6 +31,7 @@ interface Customer {
   customer_type: "Individual" | "Company";
   status: string;
   whatsapp_opt_in: boolean;
+  date_of_birth?: string;
   license_number?: string;
   id_number?: string;
   is_blocked?: boolean;
@@ -50,6 +51,24 @@ interface CustomerFormModalProps {
 
 export const CustomerFormModal = ({ open, onOpenChange, customer }: CustomerFormModalProps) => {
   const { tenant } = useTenant();
+
+  // Fetch verification DOB as fallback when editing
+  const { data: verificationData } = useQuery({
+    queryKey: ["customer-verification-dob", customer?.id],
+    queryFn: async () => {
+      const { data, error } = await (supabase as any)
+        .from("identity_verifications")
+        .select("date_of_birth")
+        .eq("customer_id", customer!.id)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (error) throw error;
+      return data as { date_of_birth: string | null } | null;
+    },
+    enabled: !!customer?.id && open,
+  });
+
   const [loading, setLoading] = useState(false);
   const [showNextOfKin, setShowNextOfKin] = useState(false);
   const [blockWarning, setBlockWarning] = useState<{ isBlocked: boolean; reason?: string; type?: string } | null>(null);
@@ -71,6 +90,7 @@ export const CustomerFormModal = ({ open, onOpenChange, customer }: CustomerForm
       name: "",
       email: "",
       phone: "",
+      date_of_birth: "",
       license_number: "",
       id_number: "",
       whatsapp_opt_in: false,
@@ -86,7 +106,7 @@ export const CustomerFormModal = ({ open, onOpenChange, customer }: CustomerForm
 
   const customerType = form.watch("customer_type");
 
-  // Update form when customer changes
+  // Update form when customer or verification data changes
   useEffect(() => {
     setBlockWarning(null);
     if (customer) {
@@ -99,6 +119,7 @@ export const CustomerFormModal = ({ open, onOpenChange, customer }: CustomerForm
         name: customer.name,
         email: customer.email || "",
         phone: customer.phone || "",
+        date_of_birth: customer.date_of_birth || verificationData?.date_of_birth || "",
         license_number: customer.license_number || "",
         id_number: customer.id_number || "",
         whatsapp_opt_in: customer.whatsapp_opt_in,
@@ -117,6 +138,7 @@ export const CustomerFormModal = ({ open, onOpenChange, customer }: CustomerForm
         name: "",
         email: "",
         phone: "",
+        date_of_birth: "",
         license_number: "",
         id_number: "",
         whatsapp_opt_in: false,
@@ -129,7 +151,7 @@ export const CustomerFormModal = ({ open, onOpenChange, customer }: CustomerForm
         nok_address: "",
       });
     }
-  }, [customer, form]);
+  }, [customer, verificationData, form]);
 
   // DEV MODE: Listen for dev panel fill event (only in development)
   useEffect(() => {
@@ -354,6 +376,7 @@ export const CustomerFormModal = ({ open, onOpenChange, customer }: CustomerForm
         name: data.name,
         email: data.email || null,
         phone: data.phone || null,
+        date_of_birth: data.date_of_birth || null,
         license_number: data.license_number || null,
         id_number: data.id_number || null,
         whatsapp_opt_in: data.whatsapp_opt_in,
@@ -714,6 +737,24 @@ export const CustomerFormModal = ({ open, onOpenChange, customer }: CustomerForm
               />
             </div>
 
+            <FormField
+              control={form.control}
+              name="date_of_birth"
+              render={({ field }) => (
+                <FormItem className="max-w-[280px]">
+                  <FormLabel>Date of Birth</FormLabel>
+                  <FormControl>
+                    <Input
+                      type="date"
+                      {...field}
+                      className="input-focus"
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
             {/* License and ID Number Fields */}
             <div className="grid grid-cols-2 gap-4">
               <FormField
@@ -723,7 +764,7 @@ export const CustomerFormModal = ({ open, onOpenChange, customer }: CustomerForm
                   <FormItem>
                     <FormLabel className="flex items-center gap-2">
                       <CreditCard className="h-4 w-4" />
-                      Driver's License *
+                      Driver's License
                     </FormLabel>
                     <FormControl>
                       <Input

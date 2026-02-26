@@ -9,7 +9,8 @@ export const customerFormModalSchema = z.object({
   phone: z.string()
     .optional()
     .refine((val) => !val || /^[0-9\s\-\(\)\+]+$/.test(val), "Phone number can only contain numbers and formatting characters"),
-  license_number: z.string().min(1, "Driver's License is required"),
+  date_of_birth: z.string().optional(),
+  license_number: z.string().optional(),
   id_number: z.string().optional(),
   whatsapp_opt_in: z.boolean(),
   status: z.enum(['Active', 'Inactive']),

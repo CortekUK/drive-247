@@ -45,15 +45,17 @@ import {
   AlertDescription,
   AlertTitle,
 } from '@/components/ui/alert';
+import { useCustomerVerification } from '@/hooks/use-customer-verification';
+import { format } from 'date-fns';
 
 export default function SettingsPage() {
   const { customerUser, user, refetchCustomerUser } = useCustomerAuthStore();
+  const { data: customerVerification } = useCustomerVerification();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Profile state
   const [name, setName] = useState(customerUser?.customer?.name || '');
   const [phone, setPhone] = useState(customerUser?.customer?.phone || '');
-  const [dateOfBirth, setDateOfBirth] = useState(customerUser?.customer?.date_of_birth || '');
   const [timezone, setTimezone] = useState(customerUser?.customer?.timezone || '');
   const [addressStreet, setAddressStreet] = useState(customerUser?.customer?.address_street || '');
   const [addressCity, setAddressCity] = useState(customerUser?.customer?.address_city || '');
@@ -70,7 +72,6 @@ export default function SettingsPage() {
     if (c) {
       setName(c.name || '');
       setPhone(c.phone || '');
-      setDateOfBirth(c.date_of_birth || '');
       setTimezone(c.timezone || '');
       setAddressStreet(c.address_street || '');
       setAddressCity(c.address_city || '');
@@ -182,7 +183,6 @@ export default function SettingsPage() {
         .update({
           name: name.trim(),
           phone: phone.trim() || null,
-          date_of_birth: dateOfBirth || null,
           timezone: timezone || null,
           address_street: addressStreet.trim() || null,
           address_city: addressCity.trim() || null,
@@ -409,19 +409,77 @@ export default function SettingsPage() {
             </div>
           </div>
 
-          {/* Date of Birth */}
-          <div className="space-y-2 max-w-sm">
-            <Label htmlFor="dob">Date of Birth</Label>
-            <Input
-              id="dob"
-              type="date"
-              value={dateOfBirth}
-              onChange={(e) => setDateOfBirth(e.target.value)}
-            />
-            <p className="text-xs text-muted-foreground">
-              Your date of birth will be used to auto-fill booking forms
-            </p>
-          </div>
+          {/* Date of Birth & ID Document Expiry - read-only, sourced from ID verification */}
+          {(() => {
+            const dob = customerUser?.customer?.date_of_birth || customerVerification?.date_of_birth;
+            const docExpiry = customerVerification?.document_expiry_date;
+            const isExpired = docExpiry ? new Date(docExpiry) < new Date() : false;
+            return (
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div className="space-y-2">
+                  <Label>Date of Birth</Label>
+                  {dob ? (
+                    <>
+                      <Input
+                        value={format(new Date(dob), 'MMMM d, yyyy')}
+                        readOnly
+                        className="bg-muted/50 cursor-default"
+                      />
+                      <p className="text-xs text-green-600 flex items-center gap-1">
+                        <CheckCircle className="h-3 w-3" />
+                        From your verified ID document
+                      </p>
+                    </>
+                  ) : (
+                    <>
+                      <Input
+                        value=""
+                        readOnly
+                        placeholder="Not available"
+                        className="bg-muted/50 cursor-default"
+                      />
+                      <p className="text-xs text-muted-foreground">
+                        Complete ID verification to set your date of birth
+                      </p>
+                    </>
+                  )}
+                </div>
+                <div className="space-y-2">
+                  <Label>ID Document Expiry</Label>
+                  {docExpiry ? (
+                    <>
+                      <div className="relative">
+                        <Input
+                          value={format(new Date(docExpiry), 'MMMM d, yyyy')}
+                          readOnly
+                          className="bg-muted/50 cursor-default"
+                        />
+                        <span className={`absolute right-3 top-1/2 -translate-y-1/2 text-xs font-medium px-2 py-0.5 rounded ${isExpired ? 'bg-destructive/10 text-destructive' : 'bg-green-500/10 text-green-600'}`}>
+                          {isExpired ? 'Expired' : 'Valid'}
+                        </span>
+                      </div>
+                      <p className="text-xs text-green-600 flex items-center gap-1">
+                        <CheckCircle className="h-3 w-3" />
+                        From your verified ID document
+                      </p>
+                    </>
+                  ) : (
+                    <>
+                      <Input
+                        value=""
+                        readOnly
+                        placeholder="Not available"
+                        className="bg-muted/50 cursor-default"
+                      />
+                      <p className="text-xs text-muted-foreground">
+                        Complete ID verification to set your document expiry
+                      </p>
+                    </>
+                  )}
+                </div>
+              </div>
+            );
+          })()}
 
           {/* Timezone */}
           <div className="space-y-2 max-w-sm">
