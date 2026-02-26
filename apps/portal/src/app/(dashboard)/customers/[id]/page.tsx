@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
@@ -15,7 +15,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { ArrowLeft, CreditCard, FileText, Plus, Upload, Car, AlertTriangle, Eye, Download, Edit, Trash2, User, Mail, Phone, CalendarPlus, DollarSign, FolderOpen, Receipt, CreditCard as PaymentIcon, Ban, CheckCircle, Users, ShieldCheck, Briefcase, ExternalLink, ImageIcon, Loader2 } from "lucide-react";
+import { ArrowLeft, CreditCard, FileText, Plus, Upload, Car, AlertTriangle, Eye, Download, Edit, Trash2, User, Mail, Phone, CalendarPlus, DollarSign, FolderOpen, Receipt, CreditCard as PaymentIcon, Ban, CheckCircle, Users, ShieldCheck, Briefcase, ExternalLink, ImageIcon, Loader2, Pencil, Check, X } from "lucide-react";
 import { MetricItem, MetricDivider } from "@/components/vehicles/metric-card";
 import { useCustomerBlockingActions } from "@/hooks/use-customer-blocking";
 import { TruncatedCell } from "@/components/shared/data-display/truncated-cell";
@@ -53,6 +53,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { CustomerReviewSummaryCard } from "@/components/reviews/customer-review-summary-card";
+import { useToast } from "@/hooks/use-toast";
 
 interface Customer {
   id: string;
@@ -92,8 +93,17 @@ const CustomerDetail = () => {
   const [blockReason, setBlockReason] = useState("");
   const [gigDriverUploadOpen, setGigDriverUploadOpen] = useState(false);
   const [gigDriverDeleteId, setGigDriverDeleteId] = useState<string | null>(null);
+  const [editingDob, setEditingDob] = useState(false);
+  const [dobValue, setDobValue] = useState("");
+  const [savingDob, setSavingDob] = useState(false);
+  const dobInputRef = useRef<HTMLInputElement>(null);
+  const [editingName, setEditingName] = useState(false);
+  const [nameValue, setNameValue] = useState("");
+  const [savingName, setSavingName] = useState(false);
+  const nameInputRef = useRef<HTMLInputElement>(null);
 
   const { tenant } = useTenant();
+  const { toast } = useToast();
   const currencyCode = tenant?.currency_code || 'GBP';
 
   const { blockCustomer, unblockCustomer, isLoading: blockingLoading } = useCustomerBlockingActions();
@@ -158,6 +168,67 @@ const CustomerDetail = () => {
         await refetchCustomer();
       }
     });
+  };
+
+  const handleStartEditDob = () => {
+    const currentDob = customer?.date_of_birth || latestVerification?.date_of_birth || "";
+    setDobValue(currentDob);
+    setEditingDob(true);
+    setTimeout(() => dobInputRef.current?.focus(), 0);
+  };
+
+  const handleSaveDob = async () => {
+    if (!dobValue) return;
+    setSavingDob(true);
+    try {
+      const { error } = await (supabase as any)
+        .from("customers")
+        .update({ date_of_birth: dobValue })
+        .eq("id", id);
+      if (error) throw error;
+      toast({ title: "Date of birth updated" });
+      setEditingDob(false);
+      refetchCustomer();
+    } catch (err: any) {
+      toast({ title: "Error", description: err.message || "Failed to update DOB", variant: "destructive" });
+    } finally {
+      setSavingDob(false);
+    }
+  };
+
+  const handleCancelEditDob = () => {
+    setEditingDob(false);
+    setDobValue("");
+  };
+
+  const handleStartEditName = () => {
+    setNameValue(customer?.name || "");
+    setEditingName(true);
+    setTimeout(() => nameInputRef.current?.focus(), 0);
+  };
+
+  const handleSaveName = async () => {
+    if (!nameValue.trim()) return;
+    setSavingName(true);
+    try {
+      const { error } = await (supabase as any)
+        .from("customers")
+        .update({ name: nameValue.trim() })
+        .eq("id", id);
+      if (error) throw error;
+      toast({ title: "Customer name updated" });
+      setEditingName(false);
+      refetchCustomer();
+    } catch (err: any) {
+      toast({ title: "Error", description: err.message || "Failed to update name", variant: "destructive" });
+    } finally {
+      setSavingName(false);
+    }
+  };
+
+  const handleCancelEditName = () => {
+    setEditingName(false);
+    setNameValue("");
   };
 
   // Use the enhanced customer balance hook with status
@@ -364,13 +435,83 @@ const CustomerDetail = () => {
           <div className="space-y-3">
             {/* Contact Information */}
             <div className="grid grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-x-6 gap-y-2">
-              <MetricItem label="Name" value={customer.name} />
+              <div className="flex flex-col">
+                <span className="text-xs text-muted-foreground mb-0.5">Name</span>
+                {editingName ? (
+                  <div className="flex items-center gap-1">
+                    <Input
+                      ref={nameInputRef}
+                      type="text"
+                      value={nameValue}
+                      onChange={(e) => setNameValue(e.target.value)}
+                      className="h-7 text-sm w-[180px]"
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") handleSaveName();
+                        if (e.key === "Escape") handleCancelEditName();
+                      }}
+                    />
+                    <Button variant="ghost" size="icon" className="h-6 w-6" onClick={handleSaveName} disabled={savingName || !nameValue.trim()}>
+                      <Check className="h-3.5 w-3.5 text-green-600" />
+                    </Button>
+                    <Button variant="ghost" size="icon" className="h-6 w-6" onClick={handleCancelEditName} disabled={savingName}>
+                      <X className="h-3.5 w-3.5 text-red-500" />
+                    </Button>
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-1 group">
+                    <span className="text-sm font-semibold">{customer.name}</span>
+                    <button
+                      onClick={handleStartEditName}
+                      className="opacity-0 group-hover:opacity-100 transition-opacity p-0.5 rounded hover:bg-muted"
+                      title="Edit name"
+                    >
+                      <Pencil className="h-3 w-3 text-muted-foreground" />
+                    </button>
+                  </div>
+                )}
+              </div>
               {customer.email && <MetricItem label="Email" value={customer.email} />}
               {customer.phone && <MetricItem label="Phone" value={customer.phone} />}
               <MetricItem label="Type" value={customer.customer_type} />
-              {(customer.date_of_birth || latestVerification?.date_of_birth) && (
-                <MetricItem label="Date of Birth" value={format(new Date((customer.date_of_birth || latestVerification?.date_of_birth)!), 'MMM d, yyyy')} />
-              )}
+              <div className="flex flex-col">
+                <span className="text-xs text-muted-foreground mb-0.5">Date of Birth</span>
+                {editingDob ? (
+                  <div className="flex items-center gap-1">
+                    <Input
+                      ref={dobInputRef}
+                      type="date"
+                      value={dobValue}
+                      onChange={(e) => setDobValue(e.target.value)}
+                      className="h-7 text-sm w-[140px]"
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") handleSaveDob();
+                        if (e.key === "Escape") handleCancelEditDob();
+                      }}
+                    />
+                    <Button variant="ghost" size="icon" className="h-6 w-6" onClick={handleSaveDob} disabled={savingDob || !dobValue}>
+                      <Check className="h-3.5 w-3.5 text-green-600" />
+                    </Button>
+                    <Button variant="ghost" size="icon" className="h-6 w-6" onClick={handleCancelEditDob} disabled={savingDob}>
+                      <X className="h-3.5 w-3.5 text-red-500" />
+                    </Button>
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-1 group">
+                    <span className="text-sm font-semibold">
+                      {(customer.date_of_birth || latestVerification?.date_of_birth)
+                        ? format(new Date((customer.date_of_birth || latestVerification?.date_of_birth)!), 'MMM d, yyyy')
+                        : "Not set"}
+                    </span>
+                    <button
+                      onClick={handleStartEditDob}
+                      className="opacity-0 group-hover:opacity-100 transition-opacity p-0.5 rounded hover:bg-muted"
+                      title="Edit date of birth"
+                    >
+                      <Pencil className="h-3 w-3 text-muted-foreground" />
+                    </button>
+                  </div>
+                )}
+              </div>
               {customer.license_number && <MetricItem label="License No." value={customer.license_number} />}
               {customer.id_number && <MetricItem label="ID Number" value={customer.id_number} />}
               {customer.whatsapp_opt_in && (

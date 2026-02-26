@@ -909,12 +909,6 @@ const CreateRental = () => {
         throw new Error("Monthly amount must be greater than 0");
       }
 
-      // Enforce rental rules based on customer type
-      const customerType = selectedCustomer?.customer_type;
-      if (customerType === "Individual" && activeRentalsCount && activeRentalsCount > 0) {
-        throw new Error("This customer already has an active rental. Individuals can only have one active rental at a time.");
-      }
-
       // Check for blocked dates (global and vehicle-specific)
       const blockCheck = checkBlockedDatesOverlap(data.start_date, data.end_date, data.vehicle_id);
       if (blockCheck.blocked) {

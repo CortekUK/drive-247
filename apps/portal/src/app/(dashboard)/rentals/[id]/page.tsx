@@ -1143,11 +1143,15 @@ const RentalDetail = () => {
     try {
       // If we have a signed document, open it directly
       if (signedDocument?.file_url) {
-        const { data } = supabase.storage
-          .from('customer-documents')
-          .getPublicUrl(signedDocument.file_url);
+        let documentUrl = signedDocument.file_url;
+        if (!documentUrl.startsWith('http')) {
+          const { data } = supabase.storage
+            .from('customer-documents')
+            .getPublicUrl(signedDocument.file_url);
+          documentUrl = data.publicUrl;
+        }
         if (newWindow) {
-          newWindow.location.href = data.publicUrl;
+          newWindow.location.href = documentUrl;
         }
         return;
       }
@@ -3276,10 +3280,14 @@ const RentalDetail = () => {
                           variant="outline"
                           size="sm"
                           onClick={() => {
-                            const { data } = supabase.storage
-                              .from('customer-documents')
-                              .getPublicUrl(doc.file_url);
-                            window.open(data.publicUrl, '_blank');
+                            let url = doc.file_url;
+                            if (!url.startsWith('http')) {
+                              const { data } = supabase.storage
+                                .from('customer-documents')
+                                .getPublicUrl(doc.file_url);
+                              url = data.publicUrl;
+                            }
+                            window.open(url, '_blank');
                           }}
                         >
                           <ExternalLink className="h-3 w-3 mr-1" />

@@ -44,6 +44,9 @@ import {
   ChevronDown,
   Table as TableIcon,
   Pilcrow,
+  PenLine,
+  Calendar,
+  Fingerprint,
 } from 'lucide-react';
 import {
   getVariablesByCategory,
@@ -99,12 +102,37 @@ const categoryLabels: Record<string, string> = {
   company: 'Company',
 };
 
+const ESIGN_FIELDS = [
+  {
+    key: 'sig1',
+    label: 'Signature',
+    description: 'Customer signs here',
+    icon: PenLine,
+    tag: '{{@sig1}}',
+  },
+  {
+    key: 'date1',
+    label: 'Date Signed',
+    description: 'Auto-filled signing date',
+    icon: Calendar,
+    tag: '{{@date1}}',
+  },
+  {
+    key: 'init1',
+    label: 'Initials',
+    description: 'Customer initials here',
+    icon: Fingerprint,
+    tag: '{{@init1}}',
+  },
+] as const;
+
 export const TipTapEditor: React.FC<TipTapEditorProps> = ({
   content,
   onChange,
   placeholder = 'Start typing your agreement...',
 }) => {
   const [variablesOpen, setVariablesOpen] = React.useState(false);
+  const [esignOpen, setEsignOpen] = React.useState(false);
   const variablesByCategory = getVariablesByCategory();
 
   const editor = useEditor({
@@ -160,6 +188,21 @@ export const TipTapEditor: React.FC<TipTapEditorProps> = ({
         .run();
 
       setVariablesOpen(false);
+    },
+    [editor]
+  );
+
+  const insertEsignField = useCallback(
+    (field: typeof ESIGN_FIELDS[number]) => {
+      if (!editor) return;
+
+      editor
+        .chain()
+        .focus()
+        .insertContent(field.tag)
+        .run();
+
+      setEsignOpen(false);
     },
     [editor]
   );
@@ -346,6 +389,47 @@ export const TipTapEditor: React.FC<TipTapEditorProps> = ({
             </ScrollArea>
           </PopoverContent>
         </Popover>
+
+        <Separator orientation="vertical" className="h-6 mx-1" />
+
+        {/* E-Sign Fields */}
+        <Popover open={esignOpen} onOpenChange={setEsignOpen}>
+          <PopoverTrigger asChild>
+            <Button variant="outline" size="sm" className="h-8 gap-1">
+              <PenLine className="h-4 w-4" />
+              E-Sign Fields
+              <ChevronDown className="h-3 w-3" />
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent className="w-64 p-2" align="start">
+            <div className="space-y-1">
+              <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wide px-2 py-1">
+                BoldSign Fields
+              </div>
+              {ESIGN_FIELDS.map((field) => {
+                const Icon = field.icon;
+                return (
+                  <button
+                    key={field.key}
+                    className="w-full text-left flex items-center gap-3 px-2 py-2 hover:bg-muted rounded-md transition-colors"
+                    onClick={() => insertEsignField(field)}
+                  >
+                    <Icon className="h-4 w-4 text-muted-foreground shrink-0" />
+                    <div className="flex-1 min-w-0">
+                      <div className="font-medium text-sm">{field.label}</div>
+                      <div className="text-xs text-muted-foreground">{field.description}</div>
+                    </div>
+                  </button>
+                );
+              })}
+              <div className="px-2 pt-2 border-t mt-2">
+                <p className="text-xs text-muted-foreground">
+                  These fields become interactive signing areas in BoldSign where the customer can sign, initial, or see the date.
+                </p>
+              </div>
+            </div>
+          </PopoverContent>
+        </Popover>
       </div>
 
       {/* Editor */}
@@ -365,6 +449,7 @@ export const TipTapEditor: React.FC<TipTapEditorProps> = ({
           height: 0;
           pointer-events: none;
         }
+        /* Override prose default margins for tiptap editor to keep it tight */
         .tiptap h1 {
           font-size: 1.75rem;
           font-weight: 700;

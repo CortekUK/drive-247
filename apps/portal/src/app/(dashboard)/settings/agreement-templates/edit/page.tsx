@@ -123,7 +123,19 @@ export default function EditAgreementTemplatePage() {
     setTemplateContent(content);
   };
 
-  const previewContent = replaceVariables(templateContent, sampleData);
+  const previewContent = replaceVariables(templateContent, sampleData)
+    .replace(
+      /\{\{@sig1\}\}/g,
+      '<span style="display:inline-block;border:2px dashed #6366f1;border-radius:6px;padding:8px 24px;color:#6366f1;font-size:12px;font-weight:600;background:#eef2ff;">Signature</span>'
+    )
+    .replace(
+      /\{\{@date1\}\}/g,
+      '<span style="display:inline-block;border:2px dashed #2563eb;border-radius:6px;padding:4px 16px;color:#2563eb;font-size:12px;font-weight:600;background:#eff6ff;">Date Signed</span>'
+    )
+    .replace(
+      /\{\{@init1\}\}/g,
+      '<span style="display:inline-block;border:2px dashed #d97706;border-radius:6px;padding:4px 16px;color:#d97706;font-size:12px;font-weight:600;background:#fffbeb;">Initials</span>'
+    );
   const isSaving = isUpdating;
 
   if (isLoading) {

@@ -61,32 +61,97 @@ function processTemplate(
   rental: Record<string, unknown>,
   customer: Record<string, unknown>,
   vehicle: Record<string, unknown>,
-  tenant: Record<string, unknown>
+  tenant: Record<string, unknown>,
+  verification?: Record<string, unknown> | null
 ): string {
+  // Compose full address from separate fields
+  const customerAddress = [
+    customer?.address_street as string,
+    customer?.address_city as string,
+    customer?.address_state as string,
+    customer?.address_zip as string,
+  ].filter(Boolean).join(', ') || (customer?.address as string) || (verification?.address as string) || '';
+
+  // Resolve identity fields: customer table first, then fall back to identity_verifications
+  const dob = (customer?.date_of_birth as string) || (verification?.date_of_birth as string) || '';
+  const documentNumber = (customer?.license_number as string) || (verification?.document_number as string) || '';
+  const documentExpiry = (verification?.document_expiry_date as string) || '';
+  const documentType = (verification?.document_type as string) || '';
+
   const variables: Record<string, string> = {
+    // Customer — basic
     customer_name: (customer?.name as string) || 'Customer',
     customer_email: (customer?.email as string) || '',
     customer_phone: (customer?.phone as string) || '',
-    customer_address: (customer?.address as string) || '',
     customer_type: (customer?.customer_type as string) || (customer?.type as string) || 'Individual',
+    customer_address: customerAddress,
+    customer_address_street: (customer?.address_street as string) || '',
+    customer_address_city: (customer?.address_city as string) || '',
+    customer_address_state: (customer?.address_state as string) || '',
+    customer_address_zip: (customer?.address_zip as string) || '',
 
+    // Customer — identity & license (with verification fallback)
+    customer_id_number: (customer?.id_number as string) || documentNumber,
+    customer_license_number: documentNumber,
+    customer_license_state: (customer?.license_state as string) || '',
+    customer_license_expiry: documentExpiry ? formatDate(documentExpiry) : '',
+    customer_document_type: documentType === 'drivers_license' ? "Driver's License" : documentType === 'passport' ? 'Passport' : documentType === 'id_card' ? 'ID Card' : '',
+    customer_date_of_birth: dob ? formatDate(dob) : '',
+    customer_dob: dob ? formatDate(dob) : '',
+
+    // Customer — next of kin
+    nok_name: (customer?.nok_full_name as string) || '',
+    nok_phone: (customer?.nok_phone as string) || '',
+    nok_email: (customer?.nok_email as string) || '',
+    nok_address: (customer?.nok_address as string) || '',
+    nok_relationship: (customer?.nok_relationship as string) || '',
+
+    // Vehicle
     vehicle_make: (vehicle?.make as string) || '',
     vehicle_model: (vehicle?.model as string) || '',
     vehicle_year: vehicle?.year?.toString() || '',
     vehicle_reg: (vehicle?.reg as string) || 'N/A',
     vehicle_color: (vehicle?.color as string) || '',
+    vehicle_vin: (vehicle?.vin as string) || 'Not Added',
+    vehicle_fuel_type: (vehicle?.fuel_type as string) || '',
+    vehicle_daily_rent: formatCurrency(vehicle?.daily_rent as number),
+    vehicle_weekly_rent: formatCurrency(vehicle?.weekly_rent as number),
+    vehicle_monthly_rent: formatCurrency(vehicle?.monthly_rent as number),
+    vehicle_mileage: vehicle?.current_mileage?.toString() || '',
+    vehicle_allowed_mileage: vehicle?.allowed_mileage?.toString() || '',
 
-    rental_number: (rental?.id as string)?.substring(0, 8)?.toUpperCase() || 'N/A',
+    // Rental
+    rental_number: (rental?.rental_number as string) || (rental?.id as string)?.substring(0, 8)?.toUpperCase() || 'N/A',
+    rental_id: (rental?.id as string) || '',
     rental_start_date: formatDate(rental?.start_date as string),
     rental_end_date: rental?.end_date ? formatDate(rental.end_date as string) : 'Ongoing',
+    rental_days: (() => {
+      if (rental?.start_date && rental?.end_date) {
+        const diff = Math.ceil((new Date(rental.end_date as string).getTime() - new Date(rental.start_date as string).getTime()) / (1000 * 60 * 60 * 24));
+        return diff > 0 ? diff.toString() : '1';
+      }
+      return '';
+    })(),
     monthly_amount: formatCurrency(rental?.monthly_amount as number),
+    rental_amount: formatCurrency(rental?.monthly_amount as number),
     rental_period_type: (rental?.rental_period_type as string) || 'Monthly',
+    rental_status: (rental?.status as string) || '',
+    pickup_location: (rental?.pickup_location as string) || '',
+    return_location: (rental?.return_location as string) || '',
+    delivery_address: (rental?.delivery_address as string) || '',
+    pickup_time: (rental?.pickup_time as string) || '',
+    return_time: (rental?.return_time as string) || '',
 
+    // Company / Tenant
     company_name: (tenant?.company_name as string) || 'Drive 247',
     company_email: (tenant?.contact_email as string) || '',
     company_phone: (tenant?.contact_phone as string) || '',
+    company_address: (tenant?.address as string) || '',
 
+    // Dates
     agreement_date: formatDate(new Date()),
+    today_date: formatDate(new Date()),
+    current_date: formatDate(new Date()),
   };
 
   let result = template;
@@ -186,7 +251,8 @@ async function generateDocument(
   rental: Record<string, unknown>,
   customer: Record<string, unknown>,
   vehicle: Record<string, unknown>,
-  tenantId: string
+  tenantId: string,
+  verification?: Record<string, unknown> | null
 ): Promise<string> {
   const { data: tenant } = await supabase
     .from('tenants')
@@ -198,7 +264,7 @@ async function generateDocument(
 
   if (template) {
     console.log('Using custom template from portal');
-    const processedContent = processTemplate(template, rental, customer, vehicle, tenant || {});
+    const processedContent = processTemplate(template, rental, customer, vehicle, tenant || {}, verification);
     return htmlToText(processedContent);
   }
 
@@ -222,11 +288,17 @@ async function sendBoldSignDocument(
   try {
     console.log('Creating BoldSign document...');
 
-    // Inject BoldSign text tag at the signature line
-    let taggedText = documentText.replace(/Customer Signature:\s*_+/i, 'Customer Signature: {{@sig1}}');
-    if (taggedText === documentText) {
-      // No signature line found — append one
-      taggedText += '\n\nCustomer Signature: {{@sig1}}';
+    // Handle BoldSign e-sign text tags
+    // If template already has {{@sig1}} (inserted via editor), leave it. Otherwise legacy fallback.
+    let taggedText = documentText;
+    const hasExplicitSigTag = /\{\{@sig1\}\}/.test(taggedText);
+    if (!hasExplicitSigTag) {
+      const replaced = taggedText.replace(/Customer Signature:\s*_+/i, 'Customer Signature: {{@sig1}}');
+      if (replaced === taggedText) {
+        taggedText += '\n\nCustomer Signature: {{@sig1}}';
+      } else {
+        taggedText = replaced;
+      }
     }
 
     const encoder = new TextEncoder();
@@ -242,14 +314,45 @@ async function sendBoldSignDocument(
     formData.append('Signers[0][Name]', customerName);
     formData.append('Signers[0][EmailAddress]', customerEmail);
     formData.append('Signers[0][SignerType]', 'Signer');
-    // Use text tags: BoldSign finds {{@sig1}} in the document and places the field there
+    // Use text tags: BoldSign finds {{@sig1}}, {{@date1}}, {{@init1}} and places fields there
     formData.append('UseTextTags', 'true');
-    formData.append('TextTagDefinitions[0][DefinitionId]', 'sig1');
-    formData.append('TextTagDefinitions[0][Type]', 'Signature');
-    formData.append('TextTagDefinitions[0][SignerIndex]', '1');
-    formData.append('TextTagDefinitions[0][IsRequired]', 'true');
-    formData.append('TextTagDefinitions[0][Size][Width]', '250');
-    formData.append('TextTagDefinitions[0][Size][Height]', '50');
+
+    const hasDateTag = /\{\{@date1\}\}/.test(taggedText);
+    const hasInitTag = /\{\{@init1\}\}/.test(taggedText);
+
+    let tagIdx = 0;
+
+    // Signature field (always present)
+    formData.append(`TextTagDefinitions[${tagIdx}][DefinitionId]`, 'sig1');
+    formData.append(`TextTagDefinitions[${tagIdx}][Type]`, 'Signature');
+    formData.append(`TextTagDefinitions[${tagIdx}][SignerIndex]`, '1');
+    formData.append(`TextTagDefinitions[${tagIdx}][IsRequired]`, 'true');
+    formData.append(`TextTagDefinitions[${tagIdx}][Size][Width]`, '250');
+    formData.append(`TextTagDefinitions[${tagIdx}][Size][Height]`, '50');
+    tagIdx++;
+
+    // Date signed field (if present in template)
+    if (hasDateTag) {
+      formData.append(`TextTagDefinitions[${tagIdx}][DefinitionId]`, 'date1');
+      formData.append(`TextTagDefinitions[${tagIdx}][Type]`, 'DateSigned');
+      formData.append(`TextTagDefinitions[${tagIdx}][SignerIndex]`, '1');
+      formData.append(`TextTagDefinitions[${tagIdx}][IsRequired]`, 'true');
+      formData.append(`TextTagDefinitions[${tagIdx}][Size][Width]`, '150');
+      formData.append(`TextTagDefinitions[${tagIdx}][Size][Height]`, '30');
+      tagIdx++;
+    }
+
+    // Initials field (if present in template)
+    if (hasInitTag) {
+      formData.append(`TextTagDefinitions[${tagIdx}][DefinitionId]`, 'init1');
+      formData.append(`TextTagDefinitions[${tagIdx}][Type]`, 'Initial');
+      formData.append(`TextTagDefinitions[${tagIdx}][SignerIndex]`, '1');
+      formData.append(`TextTagDefinitions[${tagIdx}][IsRequired]`, 'true');
+      formData.append(`TextTagDefinitions[${tagIdx}][Size][Width]`, '100');
+      formData.append(`TextTagDefinitions[${tagIdx}][Size][Height]`, '40');
+      tagIdx++;
+    }
+
     formData.append('EnableSigningOrder', 'false');
     formData.append('DisableEmails', 'false');
 
@@ -318,8 +421,8 @@ Deno.serve(async (req) => {
       .from('rentals')
       .select(`
         *,
-        customers:customer_id (id, name, email, phone, address, customer_type, type),
-        vehicles:vehicle_id (id, reg, make, model, year, color)
+        customers:customer_id (*),
+        vehicles:vehicle_id (*)
       `)
       .eq('id', rentalId)
       .single();
@@ -336,6 +439,21 @@ Deno.serve(async (req) => {
       customer = rental.customers || { name: customerName, email: customerEmail };
       vehicle = rental.vehicles || { make: 'Vehicle', model: '', reg: 'N/A' };
       tenantId = rental.tenant_id;
+    }
+
+    // Fetch latest identity verification for this customer
+    let verification: Record<string, unknown> | null = null;
+    const custId = (rental?.customer_id || customer?.id) as string | undefined;
+    if (custId) {
+      const { data: verificationData } = await supabase
+        .from('identity_verifications')
+        .select('date_of_birth, document_number, document_expiry_date, document_type, address')
+        .eq('customer_id', custId)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      verification = verificationData;
+      console.log('Verification data:', verification ? 'found' : 'none');
     }
 
     const email = (customerEmail || customer?.email || 'N/A') as string;
@@ -360,7 +478,7 @@ Deno.serve(async (req) => {
     // Generate document content
     let doc: string;
     if (tenantId) {
-      doc = await generateDocument(supabase, rental, customer, vehicle, tenantId);
+      doc = await generateDocument(supabase, rental, customer, vehicle, tenantId, verification);
     } else {
       doc = generateDefaultTemplate(rental || {}, customer, vehicle, null);
     }
