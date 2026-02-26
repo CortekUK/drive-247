@@ -40,6 +40,10 @@ import { formatCurrency as formatCurrencyUtil } from "@/lib/format-utils";
 import { usePickupLocations } from "@/hooks/use-pickup-locations";
 import { LocationMap } from "@/components/ui/location-map";
 import { useManagerPermissions } from "@/hooks/use-manager-permissions";
+import { ReviewDisplayCard } from "@/components/reviews/review-display-card";
+import { RentalReviewDialog } from "@/components/reviews/rental-review-dialog";
+import { ApprovalReviewSummary } from "@/components/reviews/approval-review-summary";
+import { CustomerReviewSummaryCard } from "@/components/reviews/customer-review-summary-card";
 
 interface Rental {
   id: string;
@@ -241,6 +245,9 @@ const RentalDetail = () => {
   // Extension payment state
   const [showExtensionPayment, setShowExtensionPayment] = useState(false);
   const [extensionPaymentAmount, setExtensionPaymentAmount] = useState<number | undefined>();
+
+  // Review dialog state
+  const [showReviewDialog, setShowReviewDialog] = useState(false);
 
   // Buy Insurance dialog state
   const [showBuyInsurance, setShowBuyInsurance] = useState(false);
@@ -1419,6 +1426,23 @@ const RentalDetail = () => {
           )}
         </div>
       </div>
+
+      {/* Review Card for Completed Rentals */}
+      {displayStatus === 'Completed' && (
+        <ReviewDisplayCard
+          rentalId={id}
+          onEdit={() => setShowReviewDialog(true)}
+          onLeaveReview={() => setShowReviewDialog(true)}
+        />
+      )}
+
+      {/* Customer Review Summary for non-completed rentals (helps with approval decisions) */}
+      {displayStatus !== 'Completed' && rental?.customers?.id && (
+        <CustomerReviewSummaryCard
+          customerId={rental.customers.id}
+          customerName={rental.customers.name}
+        />
+      )}
 
       {/* Cancellation Requested Alert */}
       {rental.cancellation_requested && (
@@ -4091,6 +4115,12 @@ const RentalDetail = () => {
                 </span>
               )}
             </AlertDialogDescription>
+            {rental?.customers?.id && (
+              <ApprovalReviewSummary
+                customerId={rental.customers.id}
+                customerName={rental.customers.name}
+              />
+            )}
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel disabled={isApproving}>Cancel</AlertDialogCancel>
@@ -4243,6 +4273,15 @@ const RentalDetail = () => {
                     description: "Rental has been closed and vehicle is now available.",
                   });
 
+                  // Prompt review after a short delay
+                  setTimeout(() => {
+                    toast({
+                      title: "Leave a Review?",
+                      description: "Rate this customer's rental experience.",
+                    });
+                    setShowReviewDialog(true);
+                  }, 1500);
+
                   queryClient.invalidateQueries({ queryKey: ["rental", id, tenant?.id] });
                   queryClient.invalidateQueries({ queryKey: ["rentals-list"] });
                   queryClient.invalidateQueries({ queryKey: ["enhanced-rentals"] });
@@ -4337,6 +4376,18 @@ const RentalDetail = () => {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Rental Review Dialog */}
+      {rental?.customers?.id && (
+        <RentalReviewDialog
+          open={showReviewDialog}
+          onOpenChange={setShowReviewDialog}
+          rentalId={id}
+          customerId={rental.customers.id}
+          customerName={rental.customers.name}
+          rentalNumber={rental.rental_number}
+        />
+      )}
     </div>
   );
 };

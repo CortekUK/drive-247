@@ -52,6 +52,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { CustomerReviewSummaryCard } from "@/components/reviews/customer-review-summary-card";
 
 interface Customer {
   id: string;
@@ -438,6 +439,9 @@ const CustomerDetail = () => {
           </div>
         </CardContent>
       </Card>
+
+      {/* Customer Review Summary */}
+      <CustomerReviewSummaryCard customerId={id} customerName={customer?.name} />
 
       {/* Complete Tabbed Interface */}
       <div className="relative">

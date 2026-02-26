@@ -45,6 +45,8 @@ export interface EnhancedRental {
   previous_end_date?: string | null;
   cancellation_requested?: boolean;
   bonzah_status?: string | null;
+  review_status?: 'pending' | 'reviewed' | 'skipped' | null;
+  review_rating?: number | null;
   customer: {
     id: string;
     name: string;
@@ -170,7 +172,7 @@ export const useEnhancedRentals = (filters: RentalFilters = {}) => {
       // Get initial payments and bonzah policies for these rentals
       const rentalIds = rentalsData?.map((r: any) => r.id) || [];
 
-      const [{ data: initialPayments }, { data: bonzahPolicies }] = await Promise.all([
+      const [{ data: initialPayments }, { data: bonzahPolicies }, { data: rentalReviews }] = await Promise.all([
         supabase
           .from("payments")
           .select("rental_id, amount, capture_status")
@@ -182,6 +184,11 @@ export const useEnhancedRentals = (filters: RentalFilters = {}) => {
           .select("rental_id, status")
           .eq("tenant_id", tenant.id)
           .in("rental_id", rentalIds),
+        (supabase as any)
+          .from("rental_reviews")
+          .select("rental_id, rating, is_skipped")
+          .eq("tenant_id", tenant.id)
+          .in("rental_id", rentalIds),
       ]);
 
       const initialPaymentMap = new Map(
@@ -190,6 +197,10 @@ export const useEnhancedRentals = (filters: RentalFilters = {}) => {
 
       const bonzahPolicyMap = new Map(
         bonzahPolicies?.map((p: any) => [p.rental_id, p.status]) || []
+      );
+
+      const reviewMap = new Map(
+        rentalReviews?.map((r: any) => [r.rental_id, { rating: r.rating, is_skipped: r.is_skipped }]) || []
       );
 
       // Transform and filter data - skip rentals with missing customer or vehicle
@@ -227,6 +238,12 @@ export const useEnhancedRentals = (filters: RentalFilters = {}) => {
             previous_end_date: rental.previous_end_date,
             cancellation_requested: rental.cancellation_requested,
             bonzah_status: bonzahPolicyMap.get(rental.id) || null,
+            review_status: computedStatus === 'Completed'
+              ? reviewMap.has(rental.id)
+                ? reviewMap.get(rental.id)!.is_skipped ? 'skipped' : 'reviewed'
+                : 'pending'
+              : null,
+            review_rating: reviewMap.get(rental.id)?.rating || null,
             customer: rental.customers as any,
             vehicle: rental.vehicles as any,
           };
