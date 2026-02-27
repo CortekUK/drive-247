@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -36,11 +36,33 @@ export function SiteSettingsEditor({
   const [socialData, setSocialData] = useState<SocialLinksContent>(social);
   const [footerData, setFooterData] = useState<FooterContent>(footer);
 
+  // Track previous prop values by JSON to avoid resetting local state on unstable references
+  const prevLogoJson = useRef(JSON.stringify(logo));
+  const prevContactJson = useRef(JSON.stringify(contact));
+  const prevSocialJson = useRef(JSON.stringify(social));
+  const prevFooterJson = useRef(JSON.stringify(footer));
+
   useEffect(() => {
-    setLogoData(logo);
-    setContactData(contact);
-    setSocialData(social);
-    setFooterData(footer);
+    const logoJson = JSON.stringify(logo);
+    if (logoJson !== prevLogoJson.current) {
+      prevLogoJson.current = logoJson;
+      setLogoData(logo);
+    }
+    const contactJson = JSON.stringify(contact);
+    if (contactJson !== prevContactJson.current) {
+      prevContactJson.current = contactJson;
+      setContactData(contact);
+    }
+    const socialJson = JSON.stringify(social);
+    if (socialJson !== prevSocialJson.current) {
+      prevSocialJson.current = socialJson;
+      setSocialData(social);
+    }
+    const footerJson = JSON.stringify(footer);
+    if (footerJson !== prevFooterJson.current) {
+      prevFooterJson.current = footerJson;
+      setFooterData(footer);
+    }
   }, [logo, contact, social, footer]);
 
   return (

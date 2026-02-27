@@ -83,7 +83,7 @@ const Navigation = () => {
               <img
                 src={settings.dark_logo_url || settings.logo_url}
                 alt={settings.logo_alt || 'Drive247'}
-                className="h-14 lg:h-16 w-auto max-w-[140px] object-contain"
+                className="h-16 lg:h-20 w-auto max-w-[200px] object-contain"
               />
             ) : (
               <div className="flex flex-col py-4 ">
