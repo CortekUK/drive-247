@@ -89,6 +89,28 @@ interface BlockedDate {
   vehicle_id: string | null;
   reason?: string | null;
 }
+
+function LiveClock({ timezone }: { timezone: string }) {
+  const [time, setTime] = useState(() =>
+    new Date().toLocaleTimeString('en-US', { timeZone: timezone, hour: 'numeric', minute: '2-digit', hour12: true })
+  );
+
+  useEffect(() => {
+    const fmt = () =>
+      new Date().toLocaleTimeString('en-US', { timeZone: timezone, hour: 'numeric', minute: '2-digit', hour12: true });
+    setTime(fmt());
+    const id = setInterval(() => setTime(fmt()), 30_000);
+    return () => clearInterval(id);
+  }, [timezone]);
+
+  return (
+    <div className="flex items-center gap-1.5">
+      <Clock className="h-3.5 w-3.5 text-primary" />
+      <span className="font-semibold text-foreground tabular-nums">{time}</span>
+    </div>
+  );
+}
+
 const MultiStepBookingWidget = () => {
   // Safari-safe date parser for YYYY-MM-DD strings
   // Safari doesn't support new Date("YYYY-MM-DD") format
@@ -3228,6 +3250,8 @@ const MultiStepBookingWidget = () => {
                 </Select>
               )}
             </div>
+            <div className="h-4 w-px bg-primary/20 hidden sm:block" />
+            <LiveClock timezone={formData.customerTimezone} />
           </div>
 
           {/* Pickup & Return Sections */}
