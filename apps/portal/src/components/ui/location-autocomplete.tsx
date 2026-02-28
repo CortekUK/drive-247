@@ -154,14 +154,14 @@ export function LocationAutocomplete({
             <button
               key={suggestion.placeId}
               type="button"
-              className="w-full px-3 py-2 text-left hover:bg-accent flex items-start gap-2 transition-colors border-b border-border/50 last:border-0"
+              className="group w-full px-3 py-2 text-left hover:bg-accent hover:text-accent-foreground flex items-start gap-2 transition-colors border-b border-border/50 last:border-0"
               onClick={() => handleSelectSuggestion(suggestion)}
             >
-              <MapPin className="w-4 h-4 mt-0.5 text-muted-foreground flex-shrink-0" />
+              <MapPin className="w-4 h-4 mt-0.5 text-muted-foreground group-hover:text-accent-foreground/70 flex-shrink-0" />
               <div className="flex-1 min-w-0">
                 <div className="text-sm font-medium">{suggestion.mainText}</div>
                 {suggestion.secondaryText && (
-                  <div className="text-xs text-muted-foreground truncate">
+                  <div className="text-xs text-muted-foreground group-hover:text-accent-foreground/70 truncate">
                     {suggestion.secondaryText}
                   </div>
                 )}
