@@ -3181,31 +3181,6 @@ const MultiStepBookingWidget = () => {
           </div>
         </div>
 
-        {/* Start over button */}
-        <div className="flex justify-end -mt-2 mb-2">
-          <AlertDialog>
-            <AlertDialogTrigger asChild>
-              <Button variant="ghost" size="sm" className="text-muted-foreground hover:text-destructive text-xs gap-1.5 h-7">
-                <X className="w-3 h-3" /> Start over
-              </Button>
-            </AlertDialogTrigger>
-            <AlertDialogContent>
-              <AlertDialogHeader>
-                <AlertDialogTitle>Start a new booking?</AlertDialogTitle>
-                <AlertDialogDescription>
-                  This will clear all your booking details across all steps. This action cannot be undone.
-                </AlertDialogDescription>
-              </AlertDialogHeader>
-              <AlertDialogFooter>
-                <AlertDialogCancel>Cancel</AlertDialogCancel>
-                <AlertDialogAction onClick={handleClearForm} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
-                  Clear form
-                </AlertDialogAction>
-              </AlertDialogFooter>
-            </AlertDialogContent>
-          </AlertDialog>
-        </div>
-
         {/* Step 1: Rental Details */}
         {currentStep === 1 && <div className="space-y-8 animate-fade-in">
           {/* Header with underline */}
@@ -3252,19 +3227,6 @@ const MultiStepBookingWidget = () => {
                   </SelectContent>
                 </Select>
               )}
-            </div>
-            <div className="h-4 w-px bg-primary/20 hidden sm:block" />
-            <div className="flex items-center gap-2">
-              <div className="flex items-center justify-center w-6 h-6 rounded-full bg-primary/10">
-                <Clock className="h-3.5 w-3.5 text-primary" />
-              </div>
-              <span className="text-muted-foreground">Business:</span>
-              <span className="font-semibold text-foreground">
-                {findTimezone(workingHours.timezone)?.label || workingHours.timezone}
-              </span>
-              <span className="text-xs text-muted-foreground bg-muted/50 px-2 py-0.5 rounded-full">
-                {workingHours.isAlwaysOpen ? '24/7' : `${workingHours.formattedOpenTime} - ${workingHours.formattedCloseTime}`}
-              </span>
             </div>
           </div>
 
@@ -3480,13 +3442,38 @@ const MultiStepBookingWidget = () => {
             </div>
           </div>
 
-          <Button
-            onClick={handleStep1Continue}
-            className="w-full h-12 bg-primary hover:bg-primary/90 text-primary-foreground font-semibold text-base shadow-md hover:shadow-lg transition-all"
-            size="lg"
-          >
-            Continue to Vehicle Selection <ChevronRight className="ml-2 w-5 h-5" />
-          </Button>
+          <div className="flex flex-col sm:flex-row sm:gap-3">
+            <Button
+              onClick={handleStep1Continue}
+              className="w-full sm:flex-1 h-14 sm:h-12 bg-primary hover:bg-primary/90 text-primary-foreground font-semibold text-base shadow-md hover:shadow-lg transition-all"
+              size="lg"
+            >
+              Continue to Vehicle Selection <ChevronRight className="ml-2 w-5 h-5" />
+            </Button>
+            <div className="flex justify-center mt-3 sm:mt-0">
+              <AlertDialog>
+                <AlertDialogTrigger asChild>
+                  <Button variant="outline" size="sm" className="h-8 px-3 sm:h-12 sm:px-4 text-destructive/70 hover:text-destructive border-destructive/30 hover:bg-destructive/10 hover:border-destructive/50 text-xs sm:text-sm gap-1.5">
+                    <RefreshCw className="w-3 h-3 sm:w-4 sm:h-4" /> Start over
+                  </Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>Start a new booking?</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      This will clear all your booking details across all steps. This action cannot be undone.
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>Cancel</AlertDialogCancel>
+                    <AlertDialogAction onClick={handleClearForm} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+                      Clear form
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
+            </div>
+          </div>
         </div>}
 
         {/* Step 2: Vehicle Selection */}
