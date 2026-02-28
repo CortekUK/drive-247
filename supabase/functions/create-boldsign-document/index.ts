@@ -134,6 +134,11 @@ function processTemplate(
     })(),
     monthly_amount: formatCurrency(rental?.monthly_amount as number),
     rental_amount: formatCurrency(rental?.monthly_amount as number),
+    rental_price: (() => {
+      const type = (rental?.rental_period_type as string) || 'Monthly';
+      const rate = type === 'Daily' ? vehicle?.daily_rent as number : type === 'Weekly' ? vehicle?.weekly_rent as number : vehicle?.monthly_rent as number;
+      return formatCurrency(rate);
+    })(),
     rental_period_type: (rental?.rental_period_type as string) || 'Monthly',
     rental_status: (rental?.status as string) || '',
     pickup_location: (rental?.pickup_location as string) || '',
@@ -219,7 +224,7 @@ RENTAL PERIOD
 ${'─'.repeat(70)}
 Start Date:    ${formatDate(rental?.start_date as string)}
 End Date:      ${rental?.end_date ? formatDate(rental.end_date as string) : 'Ongoing'}
-Payment:       ${formatCurrency(rental?.monthly_amount as number)} (${(rental?.rental_period_type as string) || 'Monthly'})
+Rental Price:  ${(() => { const t = (rental?.rental_period_type as string) || 'Monthly'; const r = t === 'Daily' ? vehicle?.daily_rent as number : t === 'Weekly' ? vehicle?.weekly_rent as number : vehicle?.monthly_rent as number; return formatCurrency(r); })()} (${(rental?.rental_period_type as string) || 'Monthly'})
 
 ${'='.repeat(70)}
                       TERMS & CONDITIONS

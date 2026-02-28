@@ -115,6 +115,11 @@ function processTemplate(template: string, rental: any, customer: any, vehicle: 
         })(),
         monthly_amount: formatCurrency(rental?.monthly_amount, currencyCode),
         rental_amount: formatCurrency(rental?.monthly_amount, currencyCode),
+        rental_price: (() => {
+            const type = rental?.rental_period_type || 'Monthly';
+            const rate = type === 'Daily' ? vehicle?.daily_rent : type === 'Weekly' ? vehicle?.weekly_rent : vehicle?.monthly_rent;
+            return formatCurrency(rate, currencyCode);
+        })(),
         rental_period_type: rental?.rental_period_type || 'Monthly',
         rental_status: rental?.status || '',
         pickup_location: rental?.pickup_location || '',
@@ -610,7 +615,11 @@ RENTAL TERMS:
 ${lines(
     line('Start Date', formatDate(rental?.start_date)),
     line('End Date', rental?.end_date ? formatDate(rental.end_date) : 'Ongoing'),
-    line('Amount', formatCurrency(rental?.monthly_amount, currencyCode))
+    line('Rental Price', (() => {
+        const type = rental?.rental_period_type || 'Monthly';
+        const rate = type === 'Daily' ? vehicle?.daily_rent : type === 'Weekly' ? vehicle?.weekly_rent : vehicle?.monthly_rent;
+        return `${formatCurrency(rate, currencyCode)} (${type})`;
+    })())
 )}
 
 ${'='.repeat(70)}

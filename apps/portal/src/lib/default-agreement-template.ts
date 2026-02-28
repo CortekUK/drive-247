@@ -27,7 +27,7 @@ export const DEFAULT_AGREEMENT_TEMPLATE = `<h1>RENTAL AGREEMENT</h1>
 <table>
 <tr><td><strong>Start Date</strong></td><td>{{rental_start_date}}</td></tr>
 <tr><td><strong>End Date</strong></td><td>{{rental_end_date}}</td></tr>
-<tr><td><strong>Payment Amount</strong></td><td>{{monthly_amount}} ({{rental_period_type}})</td></tr>
+<tr><td><strong>Rental Price</strong></td><td>{{rental_price}} ({{rental_period_type}})</td></tr>
 </table>
 
 <hr>

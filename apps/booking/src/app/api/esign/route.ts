@@ -116,6 +116,11 @@ function processTemplate(template: string, rental: any, customer: any, vehicle: 
         })(),
         monthly_amount: formatCurrency(rental?.monthly_amount, cc),
         rental_amount: formatCurrency(rental?.monthly_amount, cc),
+        rental_price: (() => {
+            const type = rental?.rental_period_type || 'Monthly';
+            const rate = type === 'Daily' ? vehicle?.daily_rent : type === 'Weekly' ? vehicle?.weekly_rent : vehicle?.monthly_rent;
+            return formatCurrency(rate, cc);
+        })(),
         rental_period_type: rental?.rental_period_type || 'Monthly',
         rental_status: rental?.status || '',
         pickup_location: rental?.pickup_location || '',
@@ -252,7 +257,7 @@ export async function POST(request: NextRequest) {
             .single();
 
         let customer: { name: string; email: string; phone?: string } = { name: body.customerName, email: body.customerEmail };
-        let vehicle: { make?: string; model?: string; reg: string; year?: string } = { make: '', model: '', reg: 'N/A' };
+        let vehicle: Record<string, any> = { make: '', model: '', reg: 'N/A' };
         let tenant: { company_name?: string; contact_email?: string; contact_phone?: string } | null = null;
 
         let tenantId: string | null = body.tenantId || null;
