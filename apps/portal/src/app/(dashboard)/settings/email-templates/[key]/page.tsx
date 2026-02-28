@@ -35,6 +35,8 @@ import {
 import { toast } from '@/hooks/use-toast';
 import { TipTapEditor } from '@/components/settings/tiptap-editor';
 import { useTenant } from '@/contexts/TenantContext';
+import { useUnsavedChangesWarning } from '@/hooks/use-unsaved-changes-warning';
+import { UnsavedChangesDialog } from '@/components/shared/unsaved-changes-dialog';
 
 export default function EditEmailTemplatePage() {
   const router = useRouter();
@@ -63,8 +65,12 @@ export default function EditEmailTemplatePage() {
 
   const [subject, setSubject] = useState('');
   const [templateContent, setTemplateContent] = useState('');
+  const [originalSubject, setOriginalSubject] = useState('');
+  const [originalContent, setOriginalContent] = useState('');
   const [loaded, setLoaded] = useState(false);
   const [showResetDialog, setShowResetDialog] = useState(false);
+
+  const hasChanges = loaded && (subject !== originalSubject || templateContent !== originalContent);
 
   // Get sample data and override with actual tenant info
   const sampleData = {
@@ -82,28 +88,32 @@ export default function EditEmailTemplatePage() {
         // Load custom template
         setSubject(customTemplate.subject);
         setTemplateContent(customTemplate.template_content);
+        setOriginalSubject(customTemplate.subject);
+        setOriginalContent(customTemplate.template_content);
       } else {
         // Load default template (from hook or fallback)
         const defaultToUse = defaultTemplate || fallbackDefault;
         if (defaultToUse) {
           setSubject(defaultToUse.subject);
           setTemplateContent(defaultToUse.content);
+          setOriginalSubject(defaultToUse.subject);
+          setOriginalContent(defaultToUse.content);
         }
       }
       setLoaded(true);
     }
   }, [customTemplate, defaultTemplate, fallbackDefault, isLoading, loaded]);
 
-  const handleSave = async () => {
+  // Save content without navigation (for unsaved changes warning)
+  const saveContent = async (): Promise<boolean> => {
     if (!subject.trim()) {
       toast({ title: 'Error', description: 'Please enter an email subject', variant: 'destructive' });
-      return;
+      return false;
     }
     if (!templateContent.trim()) {
       toast({ title: 'Error', description: 'Please enter template content', variant: 'destructive' });
-      return;
+      return false;
     }
-
     try {
       await saveTemplateAsync({
         template_key: templateKey,
@@ -111,9 +121,26 @@ export default function EditEmailTemplatePage() {
         subject: subject,
         template_content: templateContent,
       });
+      setOriginalSubject(subject);
+      setOriginalContent(templateContent);
+      return true;
+    } catch {
+      return false;
+    }
+  };
+
+  const {
+    isDialogOpen,
+    confirmLeave,
+    saveAndLeave,
+    cancelLeave,
+    isSaving: isSavingNav,
+  } = useUnsavedChangesWarning({ hasChanges, onSave: saveContent });
+
+  const handleSave = async () => {
+    const success = await saveContent();
+    if (success) {
       router.push('/settings/email-templates');
-    } catch (error) {
-      // Error handled by hook
     }
   };
 
@@ -164,6 +191,9 @@ export default function EditEmailTemplatePage() {
               {templateType.name}
               {isCustomized && (
                 <Badge variant="outline" className="text-xs">Customized</Badge>
+              )}
+              {hasChanges && (
+                <Badge variant="secondary" className="text-xs">Unsaved changes</Badge>
               )}
             </h1>
             <p className="text-sm text-muted-foreground">
@@ -290,6 +320,14 @@ export default function EditEmailTemplatePage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <UnsavedChangesDialog
+        open={isDialogOpen}
+        onCancel={cancelLeave}
+        onDiscard={confirmLeave}
+        onSave={saveAndLeave}
+        isSaving={isSavingNav}
+      />
 
       {/* Preview Styles */}
       <style jsx global>{`

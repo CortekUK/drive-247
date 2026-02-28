@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { supabase } from '@/integrations/supabase/client';
@@ -42,6 +42,8 @@ import { LockboxTemplatesSection } from '@/components/settings/lockbox-templates
 import { PricingRulesSettings } from '@/components/settings/pricing-rules-settings';
 import { formatCurrency } from '@/lib/format-utils';
 import { useManagerPermissions } from '@/hooks/use-manager-permissions';
+import { useUnsavedChangesWarning } from '@/hooks/use-unsaved-changes-warning';
+import { UnsavedChangesDialog } from '@/components/shared/unsaved-changes-dialog';
 
 const Settings = () => {
   const queryClient = useQueryClient();
@@ -311,6 +313,214 @@ const Settings = () => {
       favicon_url: b.favicon_url || '',
     });
   };
+
+  // --- Dirty tracking for unsaved changes warning ---
+  const [locationsDirty, setLocationsDirty] = useState(false);
+  const [pricingDirty, setPricingDirty] = useState(false);
+
+  const generalFormDirty = useMemo(() => {
+    if (!settings && !tenant) return false;
+    const origCurrency = settings?.currency_code || tenant?.currency_code || 'USD';
+    const origDistance = (settings?.distance_unit as string) || (tenant?.distance_unit as string) || 'miles';
+    const origPrivacy = tenant?.privacy_policy_version || '1.0';
+    const origTerms = tenant?.terms_version || '1.0';
+    return (
+      generalForm.currency_code !== origCurrency ||
+      generalForm.distance_unit !== origDistance ||
+      generalForm.privacy_policy_version !== origPrivacy ||
+      generalForm.terms_version !== origTerms
+    );
+  }, [generalForm, settings, tenant]);
+
+  const brandingFormDirty = useMemo(() => {
+    const b = tenantBranding;
+    if (!b) return false;
+    return (
+      brandingForm.app_name !== (b.app_name || 'Drive 917') ||
+      brandingForm.primary_color !== (b.primary_color || '#C6A256') ||
+      brandingForm.secondary_color !== (b.secondary_color || '#C6A256') ||
+      brandingForm.accent_color !== (b.accent_color || '#C6A256') ||
+      brandingForm.light_primary_color !== (b.light_primary_color || '') ||
+      brandingForm.light_secondary_color !== (b.light_secondary_color || '') ||
+      brandingForm.light_accent_color !== (b.light_accent_color || '') ||
+      brandingForm.dark_primary_color !== (b.dark_primary_color || '') ||
+      brandingForm.dark_secondary_color !== (b.dark_secondary_color || '') ||
+      brandingForm.dark_accent_color !== (b.dark_accent_color || '') ||
+      brandingForm.light_background_color !== (b.light_background_color || '') ||
+      brandingForm.dark_background_color !== (b.dark_background_color || '') ||
+      brandingForm.light_header_footer_color !== (b.light_header_footer_color || '') ||
+      brandingForm.dark_header_footer_color !== (b.dark_header_footer_color || '') ||
+      brandingForm.meta_title !== (b.meta_title || '') ||
+      brandingForm.meta_description !== (b.meta_description || '') ||
+      brandingForm.og_image_url !== (b.og_image_url || '') ||
+      brandingForm.favicon_url !== (b.favicon_url || '')
+    );
+  }, [brandingForm, tenantBranding]);
+
+  const rentalFormDirty = useMemo(() => {
+    if (!rentalSettings) return false;
+    const rs = rentalSettings;
+    return (
+      (rentalForm.minimum_rental_age || null) !== (rs.minimum_rental_age || null) ||
+      rentalForm.tax_enabled !== (rs.tax_enabled ?? false) ||
+      rentalForm.tax_percentage !== (rs.tax_percentage ?? 0) ||
+      rentalForm.service_fee_enabled !== (rs.service_fee_enabled ?? false) ||
+      rentalForm.service_fee_type !== ((rs.service_fee_type as string) ?? 'fixed_amount') ||
+      rentalForm.service_fee_value !== (rs.service_fee_value ?? rs.service_fee_amount ?? 0) ||
+      rentalForm.deposit_mode !== (rs.deposit_mode ?? 'global') ||
+      rentalForm.global_deposit_amount !== (rs.global_deposit_amount ?? 0) ||
+      rentalForm.installments_enabled !== (rs.installments_enabled ?? false) ||
+      rentalForm.lockbox_enabled !== (rs.lockbox_enabled ?? false) ||
+      rentalForm.lockbox_code_length !== (rs.lockbox_code_length ?? null) ||
+      rentalForm.min_rental_days !== (rs.min_rental_days ?? 0) ||
+      rentalForm.min_rental_hours !== (rs.min_rental_hours ?? 1) ||
+      rentalForm.max_rental_days !== (rs.max_rental_days ?? 90)
+    );
+  }, [rentalForm, rentalSettings]);
+
+  const hasUnsavedChanges = generalFormDirty || brandingFormDirty || rentalFormDirty || locationsDirty || pricingDirty;
+
+  // Per-tab dirty mapping for tab switch guard
+  const tabDirtyMap: Record<string, boolean> = useMemo(() => ({
+    general: generalFormDirty,
+    branding: brandingFormDirty,
+    rental: rentalFormDirty,
+    locations: locationsDirty,
+    pricing: pricingDirty,
+  }), [generalFormDirty, brandingFormDirty, rentalFormDirty, locationsDirty, pricingDirty]);
+
+  // Tab switch guard state
+  const [pendingTab, setPendingTab] = useState<string | null>(null);
+  const [showTabWarning, setShowTabWarning] = useState(false);
+
+  const handleTabChange = useCallback((newTab: string) => {
+    // Check if current tab has unsaved changes
+    if (tabDirtyMap[activeTab]) {
+      setPendingTab(newTab);
+      setShowTabWarning(true);
+    } else {
+      setActiveTab(newTab);
+    }
+  }, [activeTab, tabDirtyMap]);
+
+  const handleTabDiscardAndSwitch = useCallback(() => {
+    setShowTabWarning(false);
+    if (pendingTab) {
+      setActiveTab(pendingTab);
+      setPendingTab(null);
+    }
+  }, [pendingTab]);
+
+  const handleTabCancel = useCallback(() => {
+    setPendingTab(null);
+    setShowTabWarning(false);
+  }, []);
+
+  // Save all dirty main forms (for "Save & Leave")
+  const saveAllDirtyForms = useCallback(async (): Promise<boolean> => {
+    try {
+      const saves: Promise<void>[] = [];
+
+      if (generalFormDirty) {
+        saves.push((async () => {
+          setIsSavingGeneral(true);
+          try {
+            await updateSettingsAsync({
+              currency_code: generalForm.currency_code,
+              distance_unit: generalForm.distance_unit,
+            });
+            if (tenant?.id) {
+              const policyVersionChanged =
+                generalForm.privacy_policy_version !== (tenant?.privacy_policy_version || '1.0') ||
+                generalForm.terms_version !== (tenant?.terms_version || '1.0');
+              await supabase
+                .from('tenants')
+                .update({
+                  distance_unit: generalForm.distance_unit,
+                  currency_code: generalForm.currency_code,
+                  privacy_policy_version: generalForm.privacy_policy_version,
+                  terms_version: generalForm.terms_version,
+                  ...(policyVersionChanged ? { policies_accepted_at: null } : {}),
+                })
+                .eq('id', tenant.id);
+              await refetchTenant();
+            }
+          } finally {
+            setIsSavingGeneral(false);
+          }
+        })());
+      }
+
+      if (brandingFormDirty) {
+        saves.push((async () => {
+          setIsSavingBranding(true);
+          try {
+            const brandingData = {
+              app_name: brandingForm.app_name,
+              primary_color: brandingForm.primary_color,
+              secondary_color: brandingForm.secondary_color,
+              accent_color: brandingForm.accent_color,
+              light_primary_color: brandingForm.light_primary_color || null,
+              light_secondary_color: brandingForm.light_secondary_color || null,
+              light_accent_color: brandingForm.light_accent_color || null,
+              dark_primary_color: brandingForm.dark_primary_color || null,
+              dark_secondary_color: brandingForm.dark_secondary_color || null,
+              dark_accent_color: brandingForm.dark_accent_color || null,
+              light_background_color: brandingForm.light_background_color || null,
+              dark_background_color: brandingForm.dark_background_color || null,
+              light_header_footer_color: brandingForm.light_header_footer_color || null,
+              dark_header_footer_color: brandingForm.dark_header_footer_color || null,
+              meta_title: brandingForm.meta_title,
+              meta_description: brandingForm.meta_description,
+              og_image_url: brandingForm.og_image_url,
+              favicon_url: brandingForm.favicon_url || null,
+              logo_url: tenantBranding?.logo_url || null,
+            };
+            await updateTenantBranding(brandingData);
+            await updateOrgBranding(brandingData);
+          } finally {
+            setIsSavingBranding(false);
+          }
+        })());
+      }
+
+      await Promise.all(saves);
+      return true;
+    } catch {
+      toast({
+        title: 'Error',
+        description: 'Failed to save some settings. Please try again.',
+        variant: 'destructive',
+      });
+      return false;
+    }
+  }, [generalFormDirty, brandingFormDirty, generalForm, brandingForm, tenant, tenantBranding, updateSettingsAsync, updateTenantBranding, updateOrgBranding, refetchTenant, supabase, toast]);
+
+  const {
+    isDialogOpen: unsavedDialogOpen,
+    confirmLeave,
+    saveAndLeave,
+    cancelLeave,
+    isSaving: isSavingNav,
+  } = useUnsavedChangesWarning({ hasChanges: hasUnsavedChanges, onSave: saveAllDirtyForms });
+
+  // Save & switch tab handler (needs saveAllDirtyForms defined above)
+  const [isSavingForTab, setIsSavingForTab] = useState(false);
+  const handleTabSaveAndSwitch = useCallback(async () => {
+    setIsSavingForTab(true);
+    try {
+      const success = await saveAllDirtyForms();
+      if (success && pendingTab) {
+        setActiveTab(pendingTab);
+        setPendingTab(null);
+        setShowTabWarning(false);
+      }
+    } catch {
+      // stay on current tab
+    } finally {
+      setIsSavingForTab(false);
+    }
+  }, [pendingTab, saveAllDirtyForms]);
 
   // Maintenance run tracking
   const { data: maintenanceRuns } = useQuery({
@@ -850,7 +1060,7 @@ const Settings = () => {
       </div>
 
       {/* Settings Tabs */}
-      <Tabs value={activeTab} onValueChange={setActiveTab}>
+      <Tabs value={activeTab} onValueChange={handleTabChange}>
         <div className="flex flex-col lg:flex-row gap-6">
           {/* Mobile: Horizontal scrollable nav */}
           <div className="lg:hidden">
@@ -1721,7 +1931,7 @@ const Settings = () => {
 
         {/* Locations Tab */}
         <TabsContent value="locations" className="space-y-6">
-          <LocationSettings />
+          <LocationSettings onDirtyChange={setLocationsDirty} />
         </TabsContent>
 
         {/* Rental Tab */}
@@ -3225,7 +3435,7 @@ const Settings = () => {
 
         {/* Dynamic Pricing Tab */}
         <TabsContent value="pricing" className="space-y-6">
-          <PricingRulesSettings />
+          <PricingRulesSettings onDirtyChange={setPricingDirty} />
         </TabsContent>
 
         {/* Extras Tab */}
@@ -3307,6 +3517,22 @@ const Settings = () => {
           </div>{/* end Tab Content Area */}
         </div>{/* end flex layout */}
       </Tabs>
+
+      <UnsavedChangesDialog
+        open={unsavedDialogOpen}
+        onCancel={cancelLeave}
+        onDiscard={confirmLeave}
+        onSave={saveAndLeave}
+        isSaving={isSavingNav}
+      />
+
+      <UnsavedChangesDialog
+        open={showTabWarning}
+        onCancel={handleTabCancel}
+        onDiscard={handleTabDiscardAndSwitch}
+        onSave={handleTabSaveAndSwitch}
+        isSaving={isSavingForTab}
+      />
 
       {/* Data Cleanup Dialog */}
       <DataCleanupDialog

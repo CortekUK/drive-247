@@ -76,7 +76,11 @@ const EMPTY_FORM: LocationFormData = {
   is_return_enabled: true,
 };
 
-export function LocationSettings() {
+interface LocationSettingsProps {
+  onDirtyChange?: (dirty: boolean) => void;
+}
+
+export function LocationSettings({ onDirtyChange }: LocationSettingsProps = {}) {
   const {
     locationSettings,
     isLoadingSettings,
@@ -121,6 +125,11 @@ export function LocationSettings() {
   const [areaCenterLon, setAreaCenterLon] = useState<number | null>(null);
 
   const [hasChanges, setHasChanges] = useState(false);
+
+  // Report dirty state to parent
+  useEffect(() => {
+    onDirtyChange?.(hasChanges);
+  }, [hasChanges, onDirtyChange]);
 
   // Dialog state
   const [isDialogOpen, setIsDialogOpen] = useState(false);
@@ -354,7 +363,7 @@ export function LocationSettings() {
       {/* Two Column Layout for Pickup & Return */}
       <div className="grid xl:grid-cols-2 gap-6">
         {/* PICKUP OPTIONS CARD */}
-        <Card className="overflow-hidden">
+        <Card className="overflow-hidden flex flex-col">
           <div className="bg-muted/30 border-b px-6 py-4">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-xl bg-muted flex items-center justify-center">
@@ -366,10 +375,10 @@ export function LocationSettings() {
               </div>
             </div>
           </div>
-          <CardContent className="p-0">
+          <CardContent className="p-0 flex-1 flex flex-col">
             {/* Fixed Address */}
             <div className={cn(
-              "p-5 border-b transition-colors",
+              "p-5 border-b transition-colors xl:min-h-[180px]",
               pickupFixedEnabled && "bg-muted/20"
             )}>
               <div className="flex items-start justify-between gap-3 sm:gap-4">
@@ -419,7 +428,7 @@ export function LocationSettings() {
 
             {/* Predefined Locations */}
             <div className={cn(
-              "p-5 border-b transition-colors",
+              "p-5 border-b transition-colors flex-1",
               pickupMultipleEnabled && "bg-muted/20"
             )}>
               <div className="flex items-start justify-between gap-3 sm:gap-4">
@@ -472,7 +481,7 @@ export function LocationSettings() {
 
             {/* Area Delivery */}
             <div className={cn(
-              "p-5 transition-colors",
+              "p-5 transition-colors xl:min-h-[88px]",
               pickupAreaEnabled && "bg-muted/20"
             )}>
               <div className="flex items-start justify-between gap-3 sm:gap-4">
@@ -513,7 +522,7 @@ export function LocationSettings() {
         </Card>
 
         {/* RETURN OPTIONS CARD */}
-        <Card className="overflow-hidden">
+        <Card className="overflow-hidden flex flex-col">
           <div className="bg-muted/30 border-b px-6 py-4">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-xl bg-muted flex items-center justify-center">
@@ -525,10 +534,10 @@ export function LocationSettings() {
               </div>
             </div>
           </div>
-          <CardContent className="p-0">
+          <CardContent className="p-0 flex-1 flex flex-col">
             {/* Fixed Address */}
             <div className={cn(
-              "p-5 border-b transition-colors",
+              "p-5 border-b transition-colors xl:min-h-[180px]",
               returnFixedEnabled && "bg-muted/20"
             )}>
               <div className="flex items-start justify-between gap-3 sm:gap-4">
@@ -587,7 +596,7 @@ export function LocationSettings() {
 
             {/* Predefined Locations */}
             <div className={cn(
-              "p-5 border-b transition-colors",
+              "p-5 border-b transition-colors flex-1",
               returnMultipleEnabled && "bg-muted/20"
             )}>
               <div className="flex items-start justify-between gap-3 sm:gap-4">
@@ -640,7 +649,7 @@ export function LocationSettings() {
 
             {/* Area Collection */}
             <div className={cn(
-              "p-5 transition-colors",
+              "p-5 transition-colors xl:min-h-[88px]",
               returnAreaEnabled && "bg-muted/20"
             )}>
               <div className="flex items-start justify-between gap-3 sm:gap-4">
