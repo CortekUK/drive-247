@@ -208,9 +208,16 @@ export const TEMPLATE_VARIABLES: TemplateVariable[] = [
   },
   {
     key: 'monthly_amount',
-    label: 'Rental Amount',
-    description: 'Rental payment amount',
+    label: 'Total Amount',
+    description: 'Total payment amount (includes taxes, fees, deposit)',
     sample: '$2,500.00',
+    category: 'rental',
+  },
+  {
+    key: 'rental_price',
+    label: 'Rental Price',
+    description: 'Vehicle rental rate based on period type (daily/weekly/monthly)',
+    sample: '$100.00',
     category: 'rental',
   },
   {
@@ -395,6 +402,11 @@ export function buildTemplateData(
     rental_start_date: formatDate(rental?.start_date),
     rental_end_date: rental?.end_date ? formatDate(rental.end_date) : 'Ongoing',
     monthly_amount: formatTemplateCurrency(rental?.monthly_amount, currencyCode),
+    rental_price: (() => {
+      const type = rental?.rental_period_type || 'Monthly';
+      const rate = type === 'Daily' ? vehicle?.daily_rent : type === 'Weekly' ? vehicle?.weekly_rent : vehicle?.monthly_rent;
+      return formatTemplateCurrency(rate, currencyCode);
+    })(),
     rental_period_type: rental?.rental_period_type || 'Monthly',
     rental_status: rental?.status || '',
     pickup_location: rental?.pickup_location || '',
