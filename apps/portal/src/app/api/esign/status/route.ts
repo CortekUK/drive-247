@@ -15,7 +15,7 @@ function mapDocumentStatus(status: string): string {
         'WaitingForOthers': 'sent',
         'NeedsSigning': 'sent',
         'InProgress': 'signed',
-        'Completed': 'signed',
+        'Completed': 'completed',
         'Declined': 'declined',
         'Revoked': 'voided',
         'Expired': 'expired',

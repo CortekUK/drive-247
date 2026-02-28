@@ -1123,9 +1123,29 @@ const RentalDetail = () => {
     }
   };
 
-  const handleApproveClick = () => {
+  const handleApproveClick = async () => {
     if (hasDocuSign && !isDocuSignSigned) {
-      // DocuSign sent but not signed - show warning
+      // DB says not signed — check BoldSign API for latest status before warning
+      try {
+        const response = await fetch('/api/esign/status', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            rentalId: id,
+            envelopeId: rental?.docusign_envelope_id,
+          }),
+        });
+        const result = await response.json();
+        if (result.ok && (result.status === 'signed' || result.status === 'completed')) {
+          // Actually signed — refresh rental data and proceed
+          queryClient.invalidateQueries({ queryKey: ["rental", id, tenant?.id] });
+          proceedToApproveAfterChecks();
+          return;
+        }
+      } catch (err) {
+        console.error('Failed to check BoldSign status:', err);
+      }
+      // Still not signed — show warning
       setShowDocuSignWarning(true);
     } else {
       // No DocuSign or already signed - check insurance next
@@ -2311,7 +2331,7 @@ const RentalDetail = () => {
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-4">
               {/* Status Badge */}
-              {rental.document_status === 'signed' || rental.signed_document_id ? (
+              {rental.document_status === 'signed' || rental.document_status === 'completed' || rental.signed_document_id ? (
                 <Badge className="bg-green-600">
                   <CheckCircle className="h-3 w-3 mr-1" />
                   Signed
@@ -2335,7 +2355,7 @@ const RentalDetail = () => {
 
               {/* Info text */}
               <span className="text-sm text-muted-foreground">
-                {rental.document_status === 'signed' || rental.signed_document_id
+                {rental.document_status === 'signed' || rental.document_status === 'completed' || rental.signed_document_id
                   ? 'Agreement has been signed by customer'
                   : rental.document_status === 'sent'
                   ? 'Waiting for customer to sign'
@@ -2416,7 +2436,7 @@ const RentalDetail = () => {
               )}
 
               {/* Check Status Button - show when sent but not signed */}
-              {rental.docusign_envelope_id && rental.document_status !== 'signed' && !rental.signed_document_id && (
+              {rental.docusign_envelope_id && rental.document_status !== 'signed' && rental.document_status !== 'completed' && !rental.signed_document_id && (
                 <Button
                   variant="ghost"
                   size="sm"
