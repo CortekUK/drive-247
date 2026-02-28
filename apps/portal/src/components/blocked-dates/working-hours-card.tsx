@@ -1,14 +1,14 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useQueryClient, useQuery } from '@tanstack/react-query';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Clock, Save, Loader2, Copy } from 'lucide-react';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Clock, Save, Loader2, Copy, ChevronDown } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
 import { useTenant } from '@/contexts/TenantContext';
 import { supabase } from '@/integrations/supabase/client';
@@ -38,6 +38,120 @@ interface WorkingHoursForm {
   working_hours_always_open: boolean;
   timezone: string;
   schedule: Record<DayKey, DaySchedule>;
+}
+
+const HOURS = Array.from({ length: 12 }, (_, i) => i + 1); // 1–12
+const MINUTES = Array.from({ length: 60 }, (_, i) => i);   // 0–59
+const PERIODS = ['AM', 'PM'] as const;
+
+/** Convert 24h "HH:mm" → { hour12, minute, period } */
+function parse24(time: string) {
+  const [h, m] = time.split(':').map(Number);
+  const period: 'AM' | 'PM' = h >= 12 ? 'PM' : 'AM';
+  const hour12 = h === 0 ? 12 : h > 12 ? h - 12 : h;
+  return { hour12, minute: m, period };
+}
+
+/** Convert { hour12, minute, period } → 24h "HH:mm" */
+function to24(hour12: number, minute: number, period: 'AM' | 'PM') {
+  let h = hour12;
+  if (period === 'AM' && h === 12) h = 0;
+  if (period === 'PM' && h !== 12) h += 12;
+  return `${h.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`;
+}
+
+/** Format "HH:mm" → display string like "9:00 AM" */
+function formatTime(time: string) {
+  const { hour12, minute, period } = parse24(time);
+  return `${hour12}:${minute.toString().padStart(2, '0')} ${period}`;
+}
+
+function ScrollColumn({ items, selected, onSelect, formatItem }: {
+  items: readonly (string | number)[];
+  selected: string | number;
+  onSelect: (v: string | number) => void;
+  formatItem?: (v: string | number) => string;
+}) {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const itemRefs = useRef<Map<string | number, HTMLButtonElement>>(new Map());
+
+  useEffect(() => {
+    const el = itemRefs.current.get(selected);
+    if (el && containerRef.current) {
+      el.scrollIntoView({ block: 'center', behavior: 'instant' });
+    }
+  }, [selected]);
+
+  return (
+    <div ref={containerRef} className="flex flex-col overflow-y-auto h-[200px] scrollbar-thin px-0.5">
+      {items.map((item) => (
+        <button
+          key={item}
+          ref={(el) => { if (el) itemRefs.current.set(item, el); }}
+          type="button"
+          onClick={() => onSelect(item)}
+          className={`shrink-0 px-3 py-1.5 text-sm rounded-md text-center transition-colors ${
+            item === selected
+              ? 'bg-primary text-primary-foreground font-medium'
+              : 'hover:bg-muted text-foreground'
+          }`}
+        >
+          {formatItem ? formatItem(item) : String(item)}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function TimeSelect({ value, onChange, disabled }: { value: string; onChange: (v: string) => void; disabled?: boolean }) {
+  const [open, setOpen] = useState(false);
+  const { hour12, minute, period } = parse24(value);
+
+  const handleChange = useCallback((h: number, m: number, p: 'AM' | 'PM') => {
+    onChange(to24(h, m, p));
+  }, [onChange]);
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <Button
+          variant="outline"
+          disabled={disabled}
+          className="w-[130px] justify-between font-normal"
+        >
+          {formatTime(value)}
+          <ChevronDown className="h-3.5 w-3.5 opacity-50" />
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent className="w-auto p-2" align="start">
+        <div className="flex gap-1">
+          {/* Hours */}
+          <ScrollColumn
+            items={HOURS}
+            selected={hour12}
+            onSelect={(h) => handleChange(h as number, minute, period)}
+          />
+          {/* Divider */}
+          <div className="w-px bg-border" />
+          {/* Minutes */}
+          <ScrollColumn
+            items={MINUTES}
+            selected={minute}
+            onSelect={(m) => handleChange(hour12, m as number, period)}
+            formatItem={(m) => String(m).padStart(2, '0')}
+          />
+          {/* Divider */}
+          <div className="w-px bg-border" />
+          {/* AM/PM */}
+          <ScrollColumn
+            items={PERIODS}
+            selected={period}
+            onSelect={(p) => handleChange(hour12, minute, p as 'AM' | 'PM')}
+          />
+        </div>
+      </PopoverContent>
+    </Popover>
+  );
 }
 
 const DEFAULT_SCHEDULE: Record<DayKey, DaySchedule> = {
@@ -329,19 +443,15 @@ export function WorkingHoursCard() {
                   {/* Time Inputs */}
                   {form.schedule[key].enabled ? (
                     <div className="flex items-center gap-2 flex-1">
-                      <Input
-                        type="time"
+                      <TimeSelect
                         value={form.schedule[key].open}
-                        onChange={(e) => updateDaySchedule(key, 'open', e.target.value)}
-                        className="w-32"
+                        onChange={(v) => updateDaySchedule(key, 'open', v)}
                         disabled={!canEdit('availability')}
                       />
                       <span className="text-muted-foreground">to</span>
-                      <Input
-                        type="time"
+                      <TimeSelect
                         value={form.schedule[key].close}
-                        onChange={(e) => updateDaySchedule(key, 'close', e.target.value)}
-                        className="w-32"
+                        onChange={(v) => updateDaySchedule(key, 'close', v)}
                         disabled={!canEdit('availability')}
                       />
                       {canEdit('availability') && (

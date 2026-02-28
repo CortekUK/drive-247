@@ -235,23 +235,6 @@ export function TimePicker({
     setIsOpen(false)
   }
 
-  // Check if a time is within business hours (for quick select buttons)
-  // Uses timezone-converted business hours for validation
-  const isQuickTimeAvailable = (h: string, m: string, p: string): boolean => {
-    if (!hasBusinessHours || !displayBusinessHours) return true
-    if (h === "" && m === "" && p === "") return true // "Now" is always available
-
-    let hour24 = parseInt(h, 10)
-    if (p === "AM") {
-      if (hour24 === 12) hour24 = 0
-    } else {
-      if (hour24 !== 12) hour24 += 12
-    }
-
-    const timeString = `${hour24.toString().padStart(2, "0")}:${m}`
-    return isTimeWithinBusinessHours(timeString, displayBusinessHours.open, displayBusinessHours.close)
-  }
-
   // Check if current selection is within business hours
   // Uses timezone-converted business hours for validation
   const isCurrentSelectionValid = (): boolean => {
@@ -308,84 +291,6 @@ export function TimePicker({
     setMinutes(correctedMins.toString().padStart(2, "0"))
     setPeriod(correctedPeriod)
   }
-
-  // Check if a preset time matches the current selection
-  const isPresetSelected = (presetH: string, presetM: string, presetP: string) => {
-    if (presetH === "" && presetM === "" && presetP === "") {
-      // "Now" button - never highlight as selected
-      return false;
-    }
-    return hours === presetH && minutes === presetM && period === presetP;
-  };
-
-  // Generate quick select times based on business hours
-  // Uses timezone-converted business hours
-  const getQuickSelectTimes = () => {
-    const defaultTimes = [
-      { label: "9:00 AM", h: "09", m: "00", p: "AM" },
-      { label: "12:00 PM", h: "12", m: "00", p: "PM" },
-      { label: "3:00 PM", h: "03", m: "00", p: "PM" },
-      { label: "6:00 PM", h: "06", m: "00", p: "PM" },
-      { label: "9:00 PM", h: "09", m: "00", p: "PM" },
-      { label: "Now", h: "", m: "", p: "" },
-    ]
-
-    if (!hasBusinessHours || !displayBusinessHours) return defaultTimes
-
-    // Generate times within business hours (converted to customer's timezone)
-    const openMinutes = timeToMinutes(displayBusinessHours.open)
-    const closeMinutes = timeToMinutes(displayBusinessHours.close)
-    const businessHoursTimes: { label: string; h: string; m: string; p: string }[] = []
-
-    // Add opening time
-    const openHour = Math.floor(openMinutes / 60)
-    const openHour12 = openHour === 0 ? 12 : openHour > 12 ? openHour - 12 : openHour
-    const openPeriod = openHour >= 12 ? "PM" : "AM"
-    businessHoursTimes.push({
-      label: `${openHour12}:00 ${openPeriod}`,
-      h: openHour12.toString().padStart(2, "0"),
-      m: "00",
-      p: openPeriod
-    })
-
-    // Add mid-day times at 3-hour intervals within business hours
-    for (let mins = openMinutes + 180; mins < closeMinutes - 60; mins += 180) {
-      const hour = Math.floor(mins / 60)
-      const hour12 = hour === 0 ? 12 : hour > 12 ? hour - 12 : hour
-      const timePeriod = hour >= 12 ? "PM" : "AM"
-      businessHoursTimes.push({
-        label: `${hour12}:00 ${timePeriod}`,
-        h: hour12.toString().padStart(2, "0"),
-        m: "00",
-        p: timePeriod
-      })
-    }
-
-    // Add closing time - 1 hour (last available slot)
-    const closeHour = Math.floor((closeMinutes - 60) / 60)
-    if (closeHour > openHour) {
-      const closeHour12 = closeHour === 0 ? 12 : closeHour > 12 ? closeHour - 12 : closeHour
-      const closePeriod = closeHour >= 12 ? "PM" : "AM"
-      const lastTime = {
-        label: `${closeHour12}:00 ${closePeriod}`,
-        h: closeHour12.toString().padStart(2, "0"),
-        m: "00",
-        p: closePeriod
-      }
-      // Avoid duplicates
-      if (!businessHoursTimes.some(t => t.label === lastTime.label)) {
-        businessHoursTimes.push(lastTime)
-      }
-    }
-
-    // Limit to 5 times and add "Now"
-    const limitedTimes = businessHoursTimes.slice(0, 5)
-    limitedTimes.push({ label: "Now", h: "", m: "", p: "" })
-
-    return limitedTimes
-  }
-
-  const quickSelectTimes = getQuickSelectTimes()
 
   return (
     <Popover open={isOpen} onOpenChange={setIsOpen}>
@@ -542,49 +447,26 @@ export function TimePicker({
               </div>
             </div>
 
-            {/* Quick select times */}
-            <div className="space-y-2">
-              <Label className="text-xs">Quick Select</Label>
-              <div className="grid grid-cols-3 gap-2">
-                {quickSelectTimes.map((time) => {
-                  const isSelected = isPresetSelected(time.h, time.m, time.p);
-                  const isAvailable = isQuickTimeAvailable(time.h, time.m, time.p);
-                  return (
-                    <Button
-                      key={time.label}
-                      type="button"
-                      variant={isSelected ? "default" : "outline"}
-                      size="sm"
-                      disabled={!isAvailable}
-                      onClick={() => {
-                        if (time.label === "Now") {
-                          const now = new Date()
-                          const currentHours = now.getHours()
-                          const currentMinutes = now.getMinutes()
-                          const hour12 = currentHours === 0 ? 12 : currentHours > 12 ? currentHours - 12 : currentHours
-                          const currentPeriod = currentHours >= 12 ? "PM" : "AM"
+            {/* Now button */}
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                const now = new Date()
+                const currentHours = now.getHours()
+                const currentMinutes = now.getMinutes()
+                const hour12 = currentHours === 0 ? 12 : currentHours > 12 ? currentHours - 12 : currentHours
+                const currentPeriod = currentHours >= 12 ? "PM" : "AM"
 
-                          setHours(hour12.toString().padStart(2, "0"))
-                          setMinutes(currentMinutes.toString().padStart(2, "0"))
-                          setPeriod(currentPeriod)
-                        } else {
-                          setHours(time.h)
-                          setMinutes(time.m)
-                          setPeriod(time.p as "AM" | "PM")
-                        }
-                      }}
-                      className={cn(
-                        "text-xs",
-                        isSelected && "bg-accent text-accent-foreground hover:bg-accent/90",
-                        !isAvailable && "opacity-50 cursor-not-allowed"
-                      )}
-                    >
-                      {time.label}
-                    </Button>
-                  );
-                })}
-              </div>
-            </div>
+                setHours(hour12.toString().padStart(2, "0"))
+                setMinutes(currentMinutes.toString().padStart(2, "0"))
+                setPeriod(currentPeriod)
+              }}
+              className="w-full text-xs"
+            >
+              Now
+            </Button>
 
             {/* Validation message - always reserve space to prevent layout shift */}
             {hasBusinessHours && (
