@@ -1224,47 +1224,6 @@ const Settings = () => {
             </CardContent>
           </Card>
 
-          {/* Policy & Terms Versioning */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Shield className="h-5 w-5 text-primary" />
-                Policy &amp; Terms Versioning
-              </CardTitle>
-              <CardDescription>
-                When you update a version, all users must re-accept on next login.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-6">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="privacy_policy_version">Privacy Policy Version</Label>
-                  <Input
-                    id="privacy_policy_version"
-                    value={generalForm.privacy_policy_version}
-                    onChange={(e) => setGeneralForm(prev => ({ ...prev, privacy_policy_version: e.target.value }))}
-                    placeholder="e.g. 1.0"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="terms_version">Terms &amp; Conditions Version</Label>
-                  <Input
-                    id="terms_version"
-                    value={generalForm.terms_version}
-                    onChange={(e) => setGeneralForm(prev => ({ ...prev, terms_version: e.target.value }))}
-                    placeholder="e.g. 1.0"
-                  />
-                </div>
-              </div>
-              <Alert>
-                <AlertTriangle className="h-4 w-4" />
-                <AlertDescription>
-                  Changing a version number will require all portal users to re-accept on their next login.
-                </AlertDescription>
-              </Alert>
-            </CardContent>
-          </Card>
-
           {/* Save Button */}
           {canEditSettings('general') && (
             <div className="flex justify-end">

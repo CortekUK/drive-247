@@ -3255,16 +3255,16 @@ const MultiStepBookingWidget = () => {
           </div>
 
           {/* Pickup & Return Sections */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <div className="grid grid-cols-1 lg:grid-cols-2 lg:grid-rows-[auto_auto_auto] gap-x-6 gap-y-4">
             {/* PICKUP SECTION */}
-            <div className="space-y-4">
+            <div className="flex flex-col gap-4 lg:grid lg:grid-rows-subgrid lg:row-span-3">
               <div className="flex items-center gap-2 pb-2 border-b border-border">
                 <div className="w-2 h-2 rounded-full bg-green-500" />
                 <h4 className="font-medium text-sm uppercase tracking-wide text-muted-foreground">Pickup</h4>
               </div>
 
               {/* Pickup Location */}
-              <div className="space-y-2">
+              <div className="space-y-2 lg:self-start">
                 <Label htmlFor="pickupLocation" className="text-xs text-muted-foreground">Location</Label>
                 <LocationPicker
                   type="pickup"
@@ -3362,14 +3362,14 @@ const MultiStepBookingWidget = () => {
             </div>
 
             {/* RETURN SECTION */}
-            <div className="space-y-4">
+            <div className="flex flex-col gap-4 lg:grid lg:grid-rows-subgrid lg:row-span-3">
               <div className="flex items-center gap-2 pb-2 border-b border-border">
                 <div className="w-2 h-2 rounded-full bg-orange-500" />
                 <h4 className="font-medium text-sm uppercase tracking-wide text-muted-foreground">Return</h4>
               </div>
 
               {/* Return Location */}
-              <div className="space-y-2">
+              <div className="space-y-2 lg:self-start">
                 <Label htmlFor="dropoffLocation" className="text-xs text-muted-foreground">Location</Label>
                 <LocationPicker
                   type="return"
