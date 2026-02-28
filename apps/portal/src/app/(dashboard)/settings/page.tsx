@@ -1226,11 +1226,55 @@ const Settings = () => {
 
           {/* Save Button */}
           {canEditSettings('general') && (
-            <div className="flex justify-end">
+            <div className="flex flex-col sm:flex-row justify-between items-stretch sm:items-center gap-3">
+              <AlertDialog>
+                <AlertDialogTrigger asChild>
+                  <Button variant="outline" className="text-destructive border-destructive hover:bg-destructive/10 w-full sm:w-auto">
+                    Reset to Defaults
+                  </Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>Reset General Settings?</AlertDialogTitle>
+                    <div className="text-sm text-muted-foreground">
+                      This will reset all general settings to their default values:
+                      <ul className="mt-2 list-disc list-inside space-y-1">
+                        <li>Currency: USD ($)</li>
+                        <li>Distance Unit: Miles</li>
+                      </ul>
+                    </div>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>Cancel</AlertDialogCancel>
+                    <AlertDialogAction
+                      onClick={async () => {
+                        setIsSavingGeneral(true);
+                        try {
+                          const defaults = { currency_code: 'USD', distance_unit: 'miles' as const };
+                          await updateSettingsAsync(defaults);
+                          if (tenant?.id) {
+                            await supabase.from('tenants').update(defaults).eq('id', tenant.id);
+                            await refetchTenant();
+                          }
+                          setGeneralForm(prev => ({ ...prev, ...defaults }));
+                          toast({ title: "Settings Reset", description: "General settings have been restored to defaults." });
+                        } catch (error: any) {
+                          toast({ title: "Error", description: error.message || "Failed to reset settings", variant: "destructive" });
+                        } finally {
+                          setIsSavingGeneral(false);
+                        }
+                      }}
+                    >
+                      Reset to Defaults
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
+
               <Button
                 onClick={handleSaveGeneralSettings}
                 disabled={isSavingGeneral}
-                className="min-w-[120px]"
+                className="min-w-[120px] w-full sm:w-auto"
               >
                 {isSavingGeneral ? (
                   <>
@@ -3389,6 +3433,115 @@ const Settings = () => {
               )}
             </CardContent>
           </Card>
+
+          {/* Reset All Booking Settings to Defaults */}
+          {canEditSettings('rental') && (
+            <div className="flex justify-start">
+              <AlertDialog>
+                <AlertDialogTrigger asChild>
+                  <Button variant="outline" className="text-destructive border-destructive hover:bg-destructive/10">
+                    Reset All Booking Settings to Defaults
+                  </Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>Reset All Booking Settings?</AlertDialogTitle>
+                    <div className="text-sm text-muted-foreground">
+                      This will reset all booking/rental settings to their default values:
+                      <ul className="mt-2 list-disc list-inside space-y-1">
+                        <li>Minimum Driver Age: 21</li>
+                        <li>Tax: Disabled (0%)</li>
+                        <li>Service Fee: Disabled</li>
+                        <li>Deposit Mode: Global ($0)</li>
+                        <li>Installments: Disabled (defaults restored)</li>
+                        <li>Booking Lead Time: 24 hours</li>
+                        <li>Min Rental: 0 days, 1 hour</li>
+                        <li>Max Rental: 90 days</li>
+                        <li>Lockbox: Disabled</li>
+                      </ul>
+                    </div>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>Cancel</AlertDialogCancel>
+                    <AlertDialogAction
+                      onClick={async () => {
+                        try {
+                          const defaults = {
+                            minimum_rental_age: 21,
+                            tax_enabled: false,
+                            tax_percentage: 0,
+                            service_fee_enabled: false,
+                            service_fee_type: 'fixed_amount' as const,
+                            service_fee_value: 0,
+                            service_fee_amount: 0,
+                            deposit_mode: 'global' as const,
+                            global_deposit_amount: 0,
+                            installments_enabled: false,
+                            installment_config: {
+                              min_days_for_weekly: 7,
+                              min_days_for_monthly: 30,
+                              max_installments_weekly: 4,
+                              max_installments_monthly: 6,
+                              charge_first_upfront: true,
+                              what_gets_split: 'rental_tax' as const,
+                              grace_period_days: 3,
+                              max_retry_attempts: 3,
+                              retry_interval_days: 1,
+                            },
+                            booking_lead_time_value: 24,
+                            booking_lead_time_unit: 'hours' as const,
+                            min_rental_days: 0,
+                            min_rental_hours: 1,
+                            max_rental_days: 90,
+                            lockbox_enabled: false,
+                            lockbox_code_length: 4,
+                            lockbox_notification_methods: ['email'],
+                          };
+                          await updateRentalSettings(defaults);
+                          setRentalForm({
+                            minimum_rental_age: 21,
+                            tax_enabled: false,
+                            tax_percentage: 0,
+                            service_fee_enabled: false,
+                            service_fee_amount: 0,
+                            service_fee_type: 'fixed_amount',
+                            service_fee_value: 0,
+                            deposit_mode: 'global',
+                            global_deposit_amount: 0,
+                            installments_enabled: false,
+                            installment_config: {
+                              min_days_for_weekly: 7,
+                              min_days_for_monthly: 30,
+                              max_installments_weekly: 4,
+                              max_installments_monthly: 6,
+                              charge_first_upfront: true,
+                              what_gets_split: 'rental_tax',
+                              grace_period_days: 3,
+                              max_retry_attempts: 3,
+                              retry_interval_days: 1,
+                            },
+                            booking_lead_time_value: 24,
+                            booking_lead_time_unit: 'hours',
+                            min_rental_days: 0,
+                            min_rental_hours: 1,
+                            max_rental_days: 90,
+                            lockbox_enabled: false,
+                            lockbox_code_length: null,
+                            lockbox_notification_methods: ['email'],
+                          });
+                          toast({ title: "Settings Reset", description: "All booking settings have been restored to defaults." });
+                        } catch (error: any) {
+                          toast({ title: "Error", description: error.message || "Failed to reset booking settings", variant: "destructive" });
+                        }
+                      }}
+                    >
+                      Reset to Defaults
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
+            </div>
+          )}
 
         </TabsContent>
 

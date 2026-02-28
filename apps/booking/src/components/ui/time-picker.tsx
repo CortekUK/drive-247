@@ -197,6 +197,19 @@ export function TimePicker({
     return { open: businessHoursOpen!, close: businessHoursClose! }
   }, [hasBusinessHours, businessHoursOpen, businessHoursClose, customerTimezone, tenantTimezone, needsTimezoneConversion])
 
+  // Default the picker to business hours opening time when no value is set
+  React.useEffect(() => {
+    if (!value && displayBusinessHours) {
+      const openTime = displayBusinessHours.open
+      const [h, m] = openTime.split(":").map(Number)
+      const openPeriod: "AM" | "PM" = h >= 12 ? "PM" : "AM"
+      const hour12 = h === 0 ? 12 : h > 12 ? h - 12 : h
+      setHours(hour12.toString().padStart(2, "0"))
+      setMinutes((m || 0).toString().padStart(2, "0"))
+      setPeriod(openPeriod)
+    }
+  }, [displayBusinessHours, value])
+
   // Parse existing value on mount or when value changes
   React.useEffect(() => {
     if (value) {

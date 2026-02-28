@@ -7,6 +7,15 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
+import {
   Mail,
   Pencil,
   ArrowLeft,
@@ -14,14 +23,41 @@ import {
   Check,
   FileText,
   Search,
+  RotateCcw,
 } from 'lucide-react';
 import { useEmailTemplates } from '@/hooks/use-email-templates';
 import { EMAIL_TEMPLATE_TYPES } from '@/lib/email-template-variables';
+import { toast } from '@/hooks/use-toast';
 
 export default function EmailTemplatesPage() {
   const router = useRouter();
-  const { customTemplates, isLoading, isCustomized } = useEmailTemplates();
+  const { customTemplates, isLoading, isCustomized, resetTemplateAsync } = useEmailTemplates();
   const [searchQuery, setSearchQuery] = useState('');
+  const [showResetAllDialog, setShowResetAllDialog] = useState(false);
+  const [isResettingAll, setIsResettingAll] = useState(false);
+
+  const customizedCount = useMemo(() => {
+    return EMAIL_TEMPLATE_TYPES.filter(t => isCustomized(t.key)).length;
+  }, [customTemplates]);
+
+  const handleResetAll = async () => {
+    setIsResettingAll(true);
+    try {
+      const customizedKeys = EMAIL_TEMPLATE_TYPES
+        .filter(t => isCustomized(t.key))
+        .map(t => t.key);
+
+      for (const key of customizedKeys) {
+        await resetTemplateAsync(key);
+      }
+      toast({ title: 'All Templates Reset', description: `${customizedKeys.length} email template(s) have been restored to defaults.` });
+      setShowResetAllDialog(false);
+    } catch (error: any) {
+      toast({ title: 'Error', description: error.message || 'Failed to reset templates', variant: 'destructive' });
+    } finally {
+      setIsResettingAll(false);
+    }
+  };
 
   // Filter templates based on search query
   const filteredTemplates = useMemo(() => {
@@ -48,20 +84,32 @@ export default function EmailTemplatesPage() {
   return (
     <div className="container mx-auto p-6 space-y-6">
       {/* Header */}
-      <div className="flex items-center gap-4">
-        <Button
-          variant="ghost"
-          size="icon"
-          onClick={() => router.push('/settings')}
-        >
-          <ArrowLeft className="h-4 w-4" />
-        </Button>
-        <div>
-          <h1 className="text-3xl font-bold">Email Templates</h1>
-          <p className="text-muted-foreground mt-1">
-            Customize the emails sent to your customers
-          </p>
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-4">
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => router.push('/settings')}
+          >
+            <ArrowLeft className="h-4 w-4" />
+          </Button>
+          <div>
+            <h1 className="text-3xl font-bold">Email Templates</h1>
+            <p className="text-muted-foreground mt-1">
+              Customize the emails sent to your customers
+            </p>
+          </div>
         </div>
+        {customizedCount > 0 && (
+          <Button
+            variant="outline"
+            className="text-destructive border-destructive hover:bg-destructive/10"
+            onClick={() => setShowResetAllDialog(true)}
+          >
+            <RotateCcw className="h-4 w-4 mr-2" />
+            Reset All to Defaults
+          </Button>
+        )}
       </div>
 
       {/* Info Card */}
@@ -157,6 +205,31 @@ export default function EmailTemplatesPage() {
           );
         })}
       </div>
+
+      {/* Reset All Confirmation Dialog */}
+      <AlertDialog open={showResetAllDialog} onOpenChange={setShowResetAllDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Reset All Email Templates?</AlertDialogTitle>
+            <div className="text-sm text-muted-foreground">
+              This will remove all your customizations and restore {customizedCount} email template(s) to their default content. This action cannot be undone.
+            </div>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isResettingAll}>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleResetAll} disabled={isResettingAll}>
+              {isResettingAll ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Resetting...
+                </>
+              ) : (
+                'Reset All to Defaults'
+              )}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

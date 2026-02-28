@@ -6,6 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Clock, Save, Loader2, Copy, ChevronDown } from 'lucide-react';
@@ -478,18 +479,98 @@ export function WorkingHoursCard() {
         )}
 
         {canEdit('availability') && (
-          <Button
-            onClick={handleSave}
-            disabled={isSaving}
-            className="flex items-center gap-2"
-          >
-            {isSaving ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
-            ) : (
-              <Save className="h-4 w-4" />
-            )}
-            Save Working Hours
-          </Button>
+          <div className="flex flex-col sm:flex-row justify-between items-stretch sm:items-center gap-3">
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <Button variant="outline" className="text-destructive border-destructive hover:bg-destructive/10 w-full sm:w-auto">
+                  Reset to Defaults
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Reset Working Hours?</AlertDialogTitle>
+                  <div className="text-sm text-muted-foreground">
+                    This will reset working hours to their default values:
+                    <ul className="mt-2 list-disc list-inside space-y-1">
+                      <li>Always Open: Enabled (24/7)</li>
+                      <li>Mon–Fri: 9:00 AM – 5:00 PM</li>
+                      <li>Sat–Sun: Closed (10:00 AM – 2:00 PM if enabled)</li>
+                    </ul>
+                    <p className="mt-2">Your timezone will remain unchanged.</p>
+                  </div>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                  <AlertDialogAction
+                    onClick={async () => {
+                      const defaultForm: WorkingHoursForm = {
+                        working_hours_always_open: true,
+                        timezone: form.timezone,
+                        schedule: { ...DEFAULT_SCHEDULE },
+                      };
+                      setForm(defaultForm);
+
+                      if (!tenant?.id) return;
+                      setIsSaving(true);
+                      try {
+                        const updateData: Record<string, any> = {
+                          working_hours_always_open: true,
+                          working_hours_enabled: true,
+                          timezone: form.timezone,
+                          monday_enabled: DEFAULT_SCHEDULE.monday.enabled,
+                          monday_open: DEFAULT_SCHEDULE.monday.open,
+                          monday_close: DEFAULT_SCHEDULE.monday.close,
+                          tuesday_enabled: DEFAULT_SCHEDULE.tuesday.enabled,
+                          tuesday_open: DEFAULT_SCHEDULE.tuesday.open,
+                          tuesday_close: DEFAULT_SCHEDULE.tuesday.close,
+                          wednesday_enabled: DEFAULT_SCHEDULE.wednesday.enabled,
+                          wednesday_open: DEFAULT_SCHEDULE.wednesday.open,
+                          wednesday_close: DEFAULT_SCHEDULE.wednesday.close,
+                          thursday_enabled: DEFAULT_SCHEDULE.thursday.enabled,
+                          thursday_open: DEFAULT_SCHEDULE.thursday.open,
+                          thursday_close: DEFAULT_SCHEDULE.thursday.close,
+                          friday_enabled: DEFAULT_SCHEDULE.friday.enabled,
+                          friday_open: DEFAULT_SCHEDULE.friday.open,
+                          friday_close: DEFAULT_SCHEDULE.friday.close,
+                          saturday_enabled: DEFAULT_SCHEDULE.saturday.enabled,
+                          saturday_open: DEFAULT_SCHEDULE.saturday.open,
+                          saturday_close: DEFAULT_SCHEDULE.saturday.close,
+                          sunday_enabled: DEFAULT_SCHEDULE.sunday.enabled,
+                          sunday_open: DEFAULT_SCHEDULE.sunday.open,
+                          sunday_close: DEFAULT_SCHEDULE.sunday.close,
+                        };
+                        const { error } = await supabase.from('tenants').update(updateData).eq('id', tenant.id);
+                        if (error) throw error;
+                        queryClient.invalidateQueries({ queryKey: ['working-hours', tenant.id] });
+                        queryClient.invalidateQueries({ queryKey: ['tenant'] });
+                        toast({ title: "Settings Reset", description: "Working hours have been restored to defaults." });
+                      } catch (error) {
+                        console.error('Failed to reset working hours:', error);
+                        toast({ title: "Error", description: "Failed to reset working hours", variant: "destructive" });
+                      } finally {
+                        setIsSaving(false);
+                      }
+                    }}
+                  >
+                    Reset to Defaults
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+
+            <Button
+              onClick={handleSave}
+              disabled={isSaving}
+              className="flex items-center gap-2 w-full sm:w-auto"
+            >
+              {isSaving ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Save className="h-4 w-4" />
+              )}
+              Save Working Hours
+            </Button>
+          </div>
         )}
       </CardContent>
     </Card>

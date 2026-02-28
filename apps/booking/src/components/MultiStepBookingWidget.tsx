@@ -91,13 +91,15 @@ interface BlockedDate {
 }
 
 function LiveClock({ timezone }: { timezone: string }) {
+  const tz = timezone || Intl.DateTimeFormat().resolvedOptions().timeZone;
   const [time, setTime] = useState(() =>
-    new Date().toLocaleTimeString('en-US', { timeZone: timezone, hour: 'numeric', minute: '2-digit', hour12: true })
+    new Date().toLocaleTimeString('en-US', { timeZone: tz, hour: 'numeric', minute: '2-digit', hour12: true })
   );
 
   useEffect(() => {
+    const safeTz = timezone || Intl.DateTimeFormat().resolvedOptions().timeZone;
     const fmt = () =>
-      new Date().toLocaleTimeString('en-US', { timeZone: timezone, hour: 'numeric', minute: '2-digit', hour12: true });
+      new Date().toLocaleTimeString('en-US', { timeZone: safeTz, hour: 'numeric', minute: '2-digit', hour12: true });
     setTime(fmt());
     const id = setInterval(() => setTime(fmt()), 30_000);
     return () => clearInterval(id);
