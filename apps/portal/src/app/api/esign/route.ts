@@ -950,6 +950,36 @@ export async function POST(request: NextRequest) {
             }
         }
 
+        // Create in-app notification for the customer
+        try {
+            const { data: customerUser } = await supabase
+                .from('customer_users')
+                .select('id')
+                .eq('customer_id', rental.customer_id)
+                .eq('tenant_id', body.tenantId)
+                .maybeSingle();
+
+            if (customerUser?.id) {
+                const companyName = tenant?.company_name || tenant?.app_name || 'Drive 247';
+                await supabase
+                    .from('customer_notifications')
+                    .insert({
+                        customer_user_id: customerUser.id,
+                        tenant_id: body.tenantId,
+                        title: 'Rental Agreement Ready to Sign',
+                        message: `${companyName} has sent you a rental agreement to sign. Please check your email and click "Review and Sign" to complete.`,
+                        type: 'agreement',
+                        link: '/portal/agreements',
+                        metadata: { rental_id: body.rentalId, document_id: documentId },
+                    });
+                console.log('In-app notification created for customer:', customerUser.id);
+            } else {
+                console.log('No customer_user found for customer_id:', rental.customer_id, '— skipping in-app notification');
+            }
+        } catch (notifErr) {
+            console.warn('Failed to create in-app notification:', notifErr);
+        }
+
         console.log('SUCCESS! Document ID:', documentId);
         return NextResponse.json({ ok: true, envelopeId: documentId, emailSent: true, whatsAppSent });
 

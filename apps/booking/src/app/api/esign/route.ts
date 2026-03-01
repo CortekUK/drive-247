@@ -508,6 +508,37 @@ export async function POST(request: NextRequest) {
             console.error('Failed to update rental:', updateError);
         }
 
+        // Create in-app notification for the customer
+        try {
+            const customerId = rental?.customer_id;
+            if (customerId && tenantId) {
+                const { data: customerUser } = await supabase
+                    .from('customer_users')
+                    .select('id')
+                    .eq('customer_id', customerId)
+                    .eq('tenant_id', tenantId)
+                    .maybeSingle();
+
+                if (customerUser?.id) {
+                    const companyName = tenant?.company_name || 'Drive 247';
+                    await supabase
+                        .from('customer_notifications')
+                        .insert({
+                            customer_user_id: customerUser.id,
+                            tenant_id: tenantId,
+                            title: 'Rental Agreement Ready to Sign',
+                            message: `${companyName} has sent you a rental agreement to sign. Please check your email and click "Review and Sign" to complete.`,
+                            type: 'agreement',
+                            link: '/portal/agreements',
+                            metadata: { rental_id: body.rentalId, document_id: documentId },
+                        });
+                    console.log('In-app notification created for customer:', customerUser.id);
+                }
+            }
+        } catch (notifErr) {
+            console.warn('Failed to create in-app notification:', notifErr);
+        }
+
         console.log('SUCCESS! Document ID:', documentId);
         return NextResponse.json({ ok: true, envelopeId: documentId, emailSent: true });
 

@@ -202,6 +202,44 @@ async function handleBoldSignWebhook(supabaseClient: ReturnType<typeof createCli
       return { ok: false, error: updateError.message };
     }
 
+    // Send customer notification when agreement is signed or completed
+    if (mappedStatus === 'signed' || mappedStatus === 'completed') {
+      try {
+        const { data: customerUser } = await supabaseClient
+          .from('customer_users')
+          .select('id')
+          .eq('customer_id', rental.customer_id)
+          .eq('tenant_id', rental.tenant_id)
+          .maybeSingle();
+
+        if (customerUser?.id) {
+          // Fetch tenant name for the notification message
+          const { data: tenantData } = await supabaseClient
+            .from('tenants')
+            .select('company_name, app_name')
+            .eq('id', rental.tenant_id)
+            .single();
+
+          const companyName = tenantData?.company_name || tenantData?.app_name || 'Drive 247';
+
+          await supabaseClient
+            .from('customer_notifications')
+            .insert({
+              customer_user_id: customerUser.id,
+              tenant_id: rental.tenant_id,
+              title: 'Rental Agreement Signed',
+              message: `Your rental agreement with ${companyName} has been successfully signed. You can view and download it from your Agreements page.`,
+              type: 'agreement',
+              link: '/portal/agreements',
+              metadata: { rental_id: rental.id, document_id: documentId },
+            });
+          console.log('Agreement signed notification sent to customer:', customerUser.id);
+        }
+      } catch (notifErr) {
+        console.warn('Failed to create agreement signed notification:', notifErr);
+      }
+    }
+
     console.log('Successfully processed webhook for rental:', rental.id);
     return { ok: true };
   } catch (error) {

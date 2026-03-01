@@ -1358,13 +1358,9 @@ const RentalDetail = () => {
           </div>
         </div>
         <div className="flex gap-2">
-          {/* Pending Rental - Show Add Payment, Approve, Reject, Delete buttons */}
+          {/* Pending Rental - Show Approve, Reject, Delete buttons */}
           {canEdit('rentals') && displayStatus === 'Pending' && (
             <>
-              <Button variant="outline" onClick={() => setShowAddPayment(true)}>
-                <Plus className="h-4 w-4 mr-2" />
-                Add Payment
-              </Button>
               <Button
                 variant="default"
                 className="bg-green-600 hover:bg-green-700"
@@ -2271,7 +2267,7 @@ const RentalDetail = () => {
           {/* Status Overview */}
           <div className="border rounded-lg p-4">
             <p className="text-xs uppercase tracking-wider text-muted-foreground mb-3">Status Overview</p>
-            <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
               <div className="text-center p-3 bg-muted/20 rounded-lg">
                 <p className="text-xs text-muted-foreground mb-2">Rental</p>
                 <Badge
@@ -2334,17 +2330,6 @@ const RentalDetail = () => {
                   }
                 >
                   {rental.vehicles?.status || 'Unknown'}
-                </Badge>
-              </div>
-              <div className="text-center p-3 bg-muted/20 rounded-lg">
-                <p className="text-xs text-muted-foreground mb-2">Payment Mode</p>
-                <Badge
-                  variant="outline"
-                  className={rental.payment_mode === 'auto'
-                    ? 'bg-sky-950/50 text-sky-300 border-sky-800'
-                    : 'bg-slate-800/50 text-slate-300 border-slate-700'}
-                >
-                  {rental.payment_mode === 'auto' ? 'Auto' : 'Manual'}
                 </Badge>
               </div>
             </div>

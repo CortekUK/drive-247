@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
-import { Calendar, Car, MapPin, CreditCard, Clock, AlertCircle, AlertTriangle, Pencil, CalendarPlus, XCircle, RefreshCw, ExternalLink, Lock } from 'lucide-react';
+import { Calendar, Car, MapPin, CreditCard, Clock, AlertCircle, AlertTriangle, Pencil, CalendarPlus, XCircle, RefreshCw, ExternalLink, Lock, FileSignature } from 'lucide-react';
 import { format, differenceInDays, isPast, isToday } from 'date-fns';
 import { CustomerRental } from '@/hooks/use-customer-rentals';
 import { cn } from '@/lib/utils';
@@ -60,6 +60,10 @@ export function RentalCard({ rental, insuranceReuploadRequired }: RentalCardProp
   const hasCancellationPending = rental.cancellation_requested === true;
   // Check if rental can be renewed (Closed/completed status)
   const canRenew = rental.status === 'Closed' || (rental.status === 'Active' && isPast(new Date(rental.end_date)) && !isToday(new Date(rental.end_date)));
+  // Check if agreement needs signing
+  const hasSignedAgreement = !!rental.docusign_envelope_id &&
+    (rental.document_status === 'signed' || rental.document_status === 'completed' || !!rental.signed_document_id);
+  const hasUnsignedAgreement = !!rental.docusign_envelope_id && !hasSignedAgreement;
   const vehicleName = vehicle
     ? vehicle.make && vehicle.model
       ? `${vehicle.make} ${vehicle.model}`
@@ -179,6 +183,20 @@ export function RentalCard({ rental, insuranceReuploadRequired }: RentalCardProp
                 {hasCancellationPending && (
                   <Badge variant="outline" className="bg-red-50 text-red-700 border-red-200 dark:bg-red-900/20 dark:text-red-400 dark:border-red-800">
                     Cancellation Requested
+                  </Badge>
+                )}
+                {hasUnsignedAgreement && (
+                  <Link href="/portal/agreements" onClick={(e) => e.stopPropagation()}>
+                    <Badge variant="outline" className="bg-indigo-50 text-indigo-700 border-indigo-200 dark:bg-indigo-900/20 dark:text-indigo-400 dark:border-indigo-800 cursor-pointer hover:bg-indigo-100 dark:hover:bg-indigo-900/30 transition-colors">
+                      <FileSignature className="h-3 w-3 mr-1" />
+                      Sign Agreement
+                    </Badge>
+                  </Link>
+                )}
+                {hasSignedAgreement && (
+                  <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200 dark:bg-green-900/20 dark:text-green-400 dark:border-green-800">
+                    <FileSignature className="h-3 w-3 mr-1" />
+                    Agreement Signed
                   </Badge>
                 )}
                 {canEditInsurance && (

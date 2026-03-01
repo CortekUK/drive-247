@@ -44,6 +44,9 @@ export interface CustomerRental {
   delivery_method: string | null;
   delivery_address: string | null;
   delivery_fee: number | null;
+  document_status: string | null;
+  docusign_envelope_id: string | null;
+  signed_document_id: string | null;
   vehicles: {
     id: string;
     reg: string;
@@ -90,6 +93,9 @@ export function useCustomerRentals(filter: 'all' | 'current' | 'past' = 'all') {
           delivery_method,
           delivery_address,
           delivery_fee,
+          document_status,
+          docusign_envelope_id,
+          signed_document_id,
           vehicles (
             id,
             reg,
