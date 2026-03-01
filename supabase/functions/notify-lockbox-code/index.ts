@@ -24,6 +24,8 @@ interface NotifyRequest {
   notes?: string | null;
   photoUrls?: string[];
   defaultInstructions?: string | null;
+  sendEmail?: boolean;
+  sendSms?: boolean;
 }
 
 interface TenantBranding {
@@ -493,22 +495,30 @@ serve(async (req) => {
     }
 
     // Send customer email (pass supabase + tenantId for tenant-specific sender)
-    results.customerEmail = await sendEmail(
-      data.customerEmail,
-      customerSubject,
-      customerHtml,
-      supabase,
-      data.tenantId
-    );
-    console.log('Customer email result:', results.customerEmail);
+    const shouldSendEmail = data.sendEmail !== false; // default true for backward compat
+    if (shouldSendEmail) {
+      results.customerEmail = await sendEmail(
+        data.customerEmail,
+        customerSubject,
+        customerHtml,
+        supabase,
+        data.tenantId
+      );
+      console.log('Customer email result:', results.customerEmail);
+    } else {
+      console.log('Email sending skipped (sendEmail=false)');
+    }
 
     // Send customer SMS
-    if (data.customerPhone) {
+    const shouldSendSms = data.sendSms !== false; // default true for backward compat
+    if (shouldSendSms && data.customerPhone) {
       results.customerSMS = await sendSMS(
         data.customerPhone,
         smsMessage
       );
       console.log('Customer SMS result:', results.customerSMS);
+    } else {
+      console.log('SMS sending skipped', !shouldSendSms ? '(sendSms=false)' : '(no phone number)');
     }
 
     return new Response(
