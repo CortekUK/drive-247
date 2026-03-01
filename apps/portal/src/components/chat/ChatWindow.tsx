@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { Loader2, Circle, Phone, Video, MoreVertical, ChevronDown, MessageCircle, Send } from 'lucide-react';
+import { Loader2, Circle, Phone, Video, MoreVertical, ChevronDown, MessageCircle, Send, ArrowLeft } from 'lucide-react';
 import { useChatMessages, type ChatMessage } from '@/hooks/use-chat-messages';
 import { ChatMessageBubble, DateSeparator } from './ChatMessageBubble';
 import { CustomerChatInput } from './CustomerChatInput';
@@ -20,9 +20,10 @@ interface ChatWindowProps {
   customerName: string;
   customerAvatar?: string | null;
   customerEmail?: string | null;
+  onBack?: () => void;
 }
 
-export function ChatWindow({ channelId, customerId, customerName, customerAvatar, customerEmail }: ChatWindowProps) {
+export function ChatWindow({ channelId, customerId, customerName, customerAvatar, customerEmail, onBack }: ChatWindowProps) {
   const { messages, isLoading, loadMore, hasMore, isLoadingMore } = useChatMessages(channelId, customerId);
   const { onTyping, onPresenceUpdate } = useSocket();
   const { appUser } = useAuthStore();
@@ -93,7 +94,13 @@ export function ChatWindow({ channelId, customerId, customerName, customerAvatar
       {/* Header */}
       <div className="px-6 py-4 border-b border-border/50 bg-card/50 backdrop-blur-sm">
         <div className="flex items-center justify-between">
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-3 sm:gap-4">
+            {/* Back button - mobile only */}
+            {onBack && (
+              <Button variant="ghost" size="icon" onClick={onBack} className="md:hidden h-9 w-9 shrink-0">
+                <ArrowLeft className="h-5 w-5" />
+              </Button>
+            )}
             {/* Avatar with status */}
             <div className="relative">
               <Avatar className="h-11 w-11 ring-2 ring-background">

@@ -64,10 +64,10 @@ const rentalSchema = z.object({
   rental_period_type: z.enum(["Daily", "Weekly", "Monthly"]),
   monthly_amount: z.coerce.number().min(1, "Rental amount must be at least 1"),
   // New booking-aligned fields
-  pickup_location: z.string().optional(),
-  return_location: z.string().optional(),
-  pickup_time: z.string().regex(/^\d{2}:\d{2}$/, "Invalid time format").optional().or(z.literal("")),
-  return_time: z.string().regex(/^\d{2}:\d{2}$/, "Invalid time format").optional().or(z.literal("")),
+  pickup_location: z.string().min(1, "Pickup location is required"),
+  return_location: z.string().min(1, "Return location is required"),
+  pickup_time: z.string().regex(/^\d{2}:\d{2}$/, "Pickup time is required"),
+  return_time: z.string().regex(/^\d{2}:\d{2}$/, "Return time is required"),
   driver_age_range: z.enum(["under_25", "25_70", "over_70"]).optional(),
   promo_code: z.string().optional(),
   insurance_status: z.enum(["pending", "uploaded", "verified", "bonzah", "not_required"]).optional(),
@@ -531,6 +531,13 @@ const CreateRental = () => {
     sameAsPickup, selectedExtras, pickupLocationId, returnLocationId,
     renewFromId,
   ]);
+
+  // Keep return_location synced with pickup_location when sameAsPickup is checked
+  useEffect(() => {
+    if (sameAsPickup && watchedPickupLocation) {
+      form.setValue("return_location", watchedPickupLocation);
+    }
+  }, [sameAsPickup, watchedPickupLocation, form]);
 
   // Get customers and available vehicles
   const { data: customers } = useQuery({
@@ -1781,15 +1788,15 @@ const CreateRental = () => {
                       name="monthly_amount"
                       render={({ field }) => {
                         const periodType = watchedRentalPeriodType || "Monthly";
-                        const label = periodType === "Daily" ? "Daily Amount *" :
-                          periodType === "Weekly" ? "Weekly Amount *" :
-                            "Monthly Amount *";
+                        const labelText = periodType === "Daily" ? "Daily Amount" :
+                          periodType === "Weekly" ? "Weekly Amount" :
+                            "Monthly Amount";
                         const placeholder = periodType === "Daily" ? "Daily rental amount" :
                           periodType === "Weekly" ? "Weekly rental amount" :
                             "Monthly rental amount";
                         return (
                           <FormItem>
-                            <FormLabel>{label}</FormLabel>
+                            <FormLabel>{labelText} <span className="text-red-500">*</span></FormLabel>
                             <FormControl>
                               <CurrencyInput
                                 value={field.value}
@@ -1824,7 +1831,7 @@ const CreateRental = () => {
                         name="pickup_location"
                         render={({ field }) => (
                           <FormItem>
-                            <FormLabel>Pickup Location</FormLabel>
+                            <FormLabel>Pickup Location <span className="text-red-500">*</span></FormLabel>
                             <FormControl>
                               <LocationPicker
                                 type="pickup"
@@ -1852,7 +1859,7 @@ const CreateRental = () => {
                         render={({ field }) => (
                           <FormItem>
                             <div className="flex items-center justify-between">
-                              <FormLabel>Return Location</FormLabel>
+                              <FormLabel>Return Location <span className="text-red-500">*</span></FormLabel>
                               <div className="flex items-center gap-2">
                                 <Checkbox
                                   id="sameAsPickup"
@@ -1862,6 +1869,9 @@ const CreateRental = () => {
                                     if (checked) {
                                       form.setValue("return_location", form.getValues("pickup_location"));
                                       setReturnLocationId(pickupLocationId);
+                                    } else {
+                                      form.setValue("return_location", "");
+                                      setReturnLocationId(undefined);
                                     }
                                   }}
                                 />
@@ -1901,7 +1911,7 @@ const CreateRental = () => {
                         name="pickup_time"
                         render={({ field }) => (
                           <FormItem>
-                            <FormLabel>Pickup Time</FormLabel>
+                            <FormLabel>Pickup Time <span className="text-red-500">*</span></FormLabel>
                             <FormControl>
                               <TimePicker
                                 id="pickup_time"
@@ -1919,7 +1929,7 @@ const CreateRental = () => {
                         name="return_time"
                         render={({ field }) => (
                           <FormItem>
-                            <FormLabel>Return Time</FormLabel>
+                            <FormLabel>Return Time <span className="text-red-500">*</span></FormLabel>
                             <FormControl>
                               <TimePicker
                                 id="return_time"

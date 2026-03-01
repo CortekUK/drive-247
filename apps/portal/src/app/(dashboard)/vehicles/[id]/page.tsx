@@ -430,11 +430,11 @@ export default function VehicleDetail() {
   }
 
   return (
-    <div className="container mx-auto p-6 space-y-6">
+    <div className="container mx-auto p-4 sm:p-6 space-y-6">
       {selectedMonth && <PLBreadcrumb items={getBreadcrumbItems()} />}
 
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div className="flex items-center space-x-4">
           <TooltipProvider>
             <Tooltip>
@@ -449,13 +449,13 @@ export default function VehicleDetail() {
             </Tooltip>
           </TooltipProvider>
           <div>
-            <h1 className="text-3xl font-bold">{vehicle.reg}</h1>
+            <h1 className="text-2xl sm:text-3xl font-bold">{vehicle.reg}</h1>
             <p className="text-muted-foreground">
               {vehicle.make} {vehicle.model} • {vehicle.colour}
             </p>
           </div>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           {/* Lockbox code */}
           {rentalSettings?.lockbox_enabled && (
             <div className="relative">
@@ -641,40 +641,42 @@ export default function VehicleDetail() {
                   <span className="text-xs text-muted-foreground">Acquisition:</span>
                   <AcquisitionBadge acquisitionType={vehicle.acquisition_type} />
                 </div>
-                <div className="col-span-full flex items-center gap-4 pt-1">
-                  <span className="text-xs text-muted-foreground">Availability:</span>
-                  <div className="flex items-center gap-1.5">
-                    <Switch
-                      id="avail-daily"
-                      checked={vehicle.available_daily !== false}
-                      onCheckedChange={async (checked) => {
-                        await supabase.from("vehicles").update({ available_daily: checked }).eq("id", vehicle.id);
-                        queryClient.invalidateQueries({ queryKey: ["vehicle", id] });
-                      }}
-                    />
-                    <label htmlFor="avail-daily" className="text-xs font-medium">Daily</label>
-                  </div>
-                  <div className="flex items-center gap-1.5">
-                    <Switch
-                      id="avail-weekly"
-                      checked={vehicle.available_weekly !== false}
-                      onCheckedChange={async (checked) => {
-                        await supabase.from("vehicles").update({ available_weekly: checked }).eq("id", vehicle.id);
-                        queryClient.invalidateQueries({ queryKey: ["vehicle", id] });
-                      }}
-                    />
-                    <label htmlFor="avail-weekly" className="text-xs font-medium">Weekly</label>
-                  </div>
-                  <div className="flex items-center gap-1.5">
-                    <Switch
-                      id="avail-monthly"
-                      checked={vehicle.available_monthly !== false}
-                      onCheckedChange={async (checked) => {
-                        await supabase.from("vehicles").update({ available_monthly: checked }).eq("id", vehicle.id);
-                        queryClient.invalidateQueries({ queryKey: ["vehicle", id] });
-                      }}
-                    />
-                    <label htmlFor="avail-monthly" className="text-xs font-medium">Monthly</label>
+                <div className="col-span-full flex items-start gap-3 sm:gap-4 pt-1">
+                  <span className="text-xs text-muted-foreground mt-1">Availability:</span>
+                  <div className="flex flex-wrap items-center gap-3 sm:gap-4">
+                    <div className="flex items-center gap-1.5">
+                      <Switch
+                        id="avail-daily"
+                        checked={vehicle.available_daily !== false}
+                        onCheckedChange={async (checked) => {
+                          await supabase.from("vehicles").update({ available_daily: checked }).eq("id", vehicle.id);
+                          queryClient.invalidateQueries({ queryKey: ["vehicle", id] });
+                        }}
+                      />
+                      <label htmlFor="avail-daily" className="text-xs font-medium">Daily</label>
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <Switch
+                        id="avail-weekly"
+                        checked={vehicle.available_weekly !== false}
+                        onCheckedChange={async (checked) => {
+                          await supabase.from("vehicles").update({ available_weekly: checked }).eq("id", vehicle.id);
+                          queryClient.invalidateQueries({ queryKey: ["vehicle", id] });
+                        }}
+                      />
+                      <label htmlFor="avail-weekly" className="text-xs font-medium">Weekly</label>
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <Switch
+                        id="avail-monthly"
+                        checked={vehicle.available_monthly !== false}
+                        onCheckedChange={async (checked) => {
+                          await supabase.from("vehicles").update({ available_monthly: checked }).eq("id", vehicle.id);
+                          queryClient.invalidateQueries({ queryKey: ["vehicle", id] });
+                        }}
+                      />
+                      <label htmlFor="avail-monthly" className="text-xs font-medium">Monthly</label>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -752,10 +754,10 @@ export default function VehicleDetail() {
                 </div>
               </CardHeader>
               <CardContent>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-4 sm:gap-6">
                   <MetricCard title="Total Revenue" icon={TrendingUp}>
                     <div className="space-y-2">
-                      <div className="text-3xl font-bold text-emerald-600">
+                      <div className="text-xl sm:text-3xl font-bold text-emerald-600">
                         {formatCurrency(plSummary.totalRevenue, currencyCode)}
                       </div>
                       <p className="text-xs text-muted-foreground">All rental income</p>
@@ -764,7 +766,7 @@ export default function VehicleDetail() {
 
                   <MetricCard title="Total Costs" icon={Receipt}>
                     <div className="space-y-2">
-                      <div className="text-3xl font-bold text-orange-600">
+                      <div className="text-xl sm:text-3xl font-bold text-orange-600">
                         {formatCurrency(plSummary.totalCosts, currencyCode)}
                       </div>
                       <p className="text-xs text-muted-foreground">All vehicle expenses</p>
@@ -773,7 +775,7 @@ export default function VehicleDetail() {
 
                   <MetricCard title={netProfit >= 0 ? "Net Profit" : "Net Loss"} icon={TrendingUp}>
                     <div className="space-y-2">
-                      <div className={`text-3xl font-bold ${netProfit >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
+                      <div className={`text-xl sm:text-3xl font-bold ${netProfit >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
                         {formatCurrency(Math.abs(netProfit), currencyCode)}
                       </div>
                       {netProfit >= 0 && (
@@ -790,7 +792,7 @@ export default function VehicleDetail() {
           <div className="mt-8">
             <Card className="shadow-card rounded-lg">
               <CardHeader className="pb-3">
-                <div className="flex items-center justify-between">
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
                   <div>
                     <CardTitle className="text-lg font-semibold flex items-center gap-2">
                       <Wrench className="h-5 w-5" />
@@ -812,8 +814,8 @@ export default function VehicleDetail() {
                     <p>Loading service records...</p>
                   </div>
                 ) : serviceRecords && serviceRecords.length > 0 ? (
-                  <div className="h-[300px] overflow-y-auto">
-                    <Table>
+                  <div className="h-[300px] overflow-y-auto overflow-x-auto">
+                    <Table className="min-w-[500px]">
                       <TableHeader className="sticky top-0 bg-background z-10">
                         <TableRow>
                           <TableHead>Date</TableHead>
@@ -874,7 +876,7 @@ export default function VehicleDetail() {
             />
             <Card className="shadow-card rounded-lg">
               <CardHeader className="pb-3">
-                <div className="flex items-center justify-between">
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
                   <div>
                     <CardTitle className="text-lg font-semibold flex items-center gap-2">
                       <FileText className="h-5 w-5" />
@@ -888,6 +890,7 @@ export default function VehicleDetail() {
                       size="sm"
                       onClick={() => fileInputRef.current?.click()}
                       disabled={isUploadingFile}
+                      className="self-start sm:self-auto"
                     >
                       <Upload className="h-4 w-4 mr-2" />
                       Upload

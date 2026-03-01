@@ -1275,8 +1275,8 @@ const RentalDetail = () => {
       />
 
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-4">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div className="flex items-start gap-4">
           <TooltipProvider>
             <Tooltip>
               <TooltipTrigger asChild>
@@ -1290,12 +1290,12 @@ const RentalDetail = () => {
             </Tooltip>
           </TooltipProvider>
           <div>
-            <h1 className="text-3xl font-bold">Rental Agreement</h1>
+            <h1 className="text-2xl sm:text-3xl font-bold">Rental Agreement</h1>
             <p className="text-muted-foreground">
               {rental.customers?.name} • {rental.vehicles?.reg}
             </p>
             {/* Key Status Badges */}
-            <div className="flex gap-2 mt-2">
+            <div className="flex flex-wrap gap-2 mt-2">
               <Badge
                 variant="outline"
                 className={`cursor-pointer transition-colors ${
@@ -1357,7 +1357,7 @@ const RentalDetail = () => {
             </div>
           </div>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           {/* Pending Rental - Show Approve, Reject, Delete buttons */}
           {canEdit('rentals') && displayStatus === 'Pending' && (
             <>
@@ -1513,29 +1513,47 @@ const RentalDetail = () => {
       )}
 
       {/* Rental Summary */}
-      <div className={`grid gap-6 md:grid-cols-2 ${isProcessingPayment ? 'opacity-50 pointer-events-none' : ''}`}>
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-lg">Total Paid</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-green-600">
-              {formatCurrencyUtil(totalPayments, tenant?.currency_code || 'GBP')}
-            </div>
-          </CardContent>
-        </Card>
+      {(() => {
+        const totalRefunded = refundBreakdown
+          ? Object.values(refundBreakdown).reduce((sum, val) => sum + val, 0)
+          : 0;
+        return (
+          <div className={`grid gap-6 md:grid-cols-3 ${isProcessingPayment ? 'opacity-50 pointer-events-none' : ''}`}>
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-lg">Total Paid</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold text-green-600">
+                  {formatCurrencyUtil(totalPayments, tenant?.currency_code || 'GBP')}
+                </div>
+              </CardContent>
+            </Card>
 
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-lg">Outstanding</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className={`text-2xl font-bold ${outstandingBalance > 0 ? 'text-red-600' : 'text-green-600'}`}>
-              {formatCurrencyUtil(outstandingBalance, tenant?.currency_code || 'GBP')}
-            </div>
-          </CardContent>
-        </Card>
-      </div>
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-lg">Outstanding</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className={`text-2xl font-bold ${outstandingBalance > 0 ? 'text-red-600' : 'text-green-600'}`}>
+                  {formatCurrencyUtil(outstandingBalance, tenant?.currency_code || 'GBP')}
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-lg">Total Refunded</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className={`text-2xl font-bold ${totalRefunded > 0 ? 'text-orange-500' : 'text-muted-foreground'}`}>
+                  {formatCurrencyUtil(totalRefunded, tenant?.currency_code || 'GBP')}
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        );
+      })()}
 
       {/* Payment Breakdown Table */}
       {invoiceBreakdown && (() => {
@@ -2212,7 +2230,7 @@ const RentalDetail = () => {
           {/* Rental Period */}
           <div className="border rounded-lg p-4">
             <p className="text-xs uppercase tracking-wider text-muted-foreground mb-3">Rental Period</p>
-            <div className="grid grid-cols-3 gap-6">
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 sm:gap-6">
               <div>
                 <p className="text-sm text-muted-foreground">Start Date</p>
                 <p className="text-base font-medium">{new Date(rental.start_date).toLocaleDateString()}</p>
@@ -2394,8 +2412,8 @@ const RentalDetail = () => {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+            <div className="flex flex-wrap items-center gap-3">
               {/* Status Badge */}
               {rental.document_status === 'signed' || rental.document_status === 'completed' || rental.signed_document_id ? (
                 <Badge className="bg-green-600">
@@ -2431,7 +2449,7 @@ const RentalDetail = () => {
               </span>
             </div>
 
-            <div className="flex gap-2">
+            <div className="flex flex-wrap gap-2">
               {/* View Agreement Button - works for both pending and signed */}
               {(rental.document_status === 'sent' || rental.document_status === 'delivered' || rental.document_status === 'viewed' || rental.document_status === 'signed' || rental.document_status === 'completed' || signedDocument) && (
                 <Button
@@ -2929,7 +2947,7 @@ const RentalDetail = () => {
               className={`relative overflow-hidden rounded-lg border border-[#CC004A]/20 bg-gradient-to-r from-[#CC004A]/5 via-[#CC004A]/10 to-[#CC004A]/5 dark:from-[#CC004A]/10 dark:via-[#CC004A]/15 dark:to-[#CC004A]/10 p-4 transition-all ${tenant?.bonzah_username && isBonzahEligible ? 'cursor-pointer hover:border-[#CC004A]/40 group' : 'opacity-60'}`}
               onClick={() => { if (tenant?.bonzah_username && isBonzahEligible) setShowBuyInsurance(true); }}
             >
-              <div className="flex items-center justify-between gap-4">
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
                 <div className="flex items-center gap-4">
                   <div className="h-10 w-16 flex-shrink-0 flex items-center">
                     <img
@@ -2955,8 +2973,8 @@ const RentalDetail = () => {
                 {tenant?.bonzah_username ? (
                   <Button
                     size="sm"
-                    className={!isBonzahEligible ? "flex-shrink-0 opacity-50" : "bg-[#CC004A] hover:bg-[#A80040] text-white flex-shrink-0 group-hover:shadow-md transition-shadow"}
-                    variant={!isBonzahEligible ? "outline" : "default"}
+                    className={!isBonzahEligible ? "flex-shrink-0 opacity-50" : "bg-[#CC004A] hover:bg-[#A80040] text-white hover:text-white flex-shrink-0 group-hover:shadow-md transition-shadow"}
+                    variant={!isBonzahEligible ? "outline" : undefined}
                     disabled={!isBonzahEligible || isBonzahEligibilityLoading}
                     title={!isBonzahEligible ? "This vehicle is not eligible for Bonzah insurance" : undefined}
                     onClick={(e) => {
@@ -2983,10 +3001,10 @@ const RentalDetail = () => {
             </div>
           )}
 
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
             <p className="text-sm text-muted-foreground">Upload customer's insurance documents for verification</p>
             {canEdit('rentals') && (
-            <div className="flex gap-2">
+            <div className="flex flex-wrap gap-2 shrink-0">
               {hasInvalidInsuranceDoc && (
                 <Button
                   variant="outline"
@@ -3123,10 +3141,10 @@ const RentalDetail = () => {
                       )}
 
                       {/* Document Info Row */}
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                          <FileText className="h-4 w-4 text-muted-foreground" />
-                          <span className="font-medium">{doc.file_name || doc.document_name}</span>
+                      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <FileText className="h-4 w-4 text-muted-foreground shrink-0" />
+                          <span className="font-medium break-all">{doc.file_name || doc.document_name}</span>
                           {doc.isUnlinked && (
                             <Badge variant="outline" className="text-yellow-600 border-yellow-500">Unlinked</Badge>
                           )}
@@ -3451,7 +3469,7 @@ const RentalDetail = () => {
                 <Button
                   size="sm"
                   variant="outline"
-                  className={!isBonzahEligible ? "h-7 text-xs opacity-50" : "h-7 text-xs border-[#CC004A]/30 text-[#CC004A] hover:bg-[#CC004A]/10"}
+                  className={!isBonzahEligible ? "h-7 text-xs opacity-50" : "h-7 text-xs border-[#CC004A]/30 text-[#CC004A] hover:bg-[#CC004A]/10 hover:text-[#CC004A]"}
                   disabled={!isBonzahEligible || isBonzahEligibilityLoading}
                   title={!isBonzahEligible ? "This vehicle is not eligible for Bonzah insurance" : undefined}
                   onClick={() => setShowBuyInsurance(true)}
@@ -3541,8 +3559,8 @@ const RentalDetail = () => {
           {identityVerification && (
             <div className="space-y-4">
               {/* Status Row */}
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div className="flex flex-wrap items-center gap-3">
                   <span className="text-sm text-muted-foreground">Status:</span>
                   {identityVerification.review_result === 'GREEN' ? (
                     <Badge className="bg-green-600">

@@ -532,16 +532,16 @@ const PLDashboard: React.FC = () => {
   ];
 
   return (
-    <div className="container mx-auto p-6 space-y-6">
+    <div className="container mx-auto p-4 sm:p-6 space-y-6">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
-          <h1 className="text-3xl font-bold">Global P&L Dashboard</h1>
-          <p className="text-muted-foreground mt-1">
+          <h1 className="text-2xl sm:text-3xl font-bold">Global P&L Dashboard</h1>
+          <p className="text-muted-foreground mt-1 text-sm sm:text-base">
             Track profitability across your entire fleet
           </p>
         </div>
 
-        <div className="flex flex-col sm:flex-row gap-2 items-end sm:items-center">
+        <div className="flex flex-wrap gap-2 w-full sm:w-auto">
           <Button
             variant="outline"
             onClick={exportToCSV}
@@ -580,11 +580,11 @@ const PLDashboard: React.FC = () => {
               <Button
                 variant="outline"
                 className={cn(
-                  "w-[280px] justify-start text-left font-normal",
+                  "w-full sm:w-[280px] justify-start text-left font-normal",
                   !dateRange && "text-muted-foreground"
                 )}
               >
-                <CalendarIcon className="mr-2 h-4 w-4" />
+                <CalendarIcon className="mr-2 h-4 w-4 shrink-0" />
                 {dateRange?.from ? (
                   dateRange.to ? (
                     <>
@@ -618,7 +618,7 @@ const PLDashboard: React.FC = () => {
       </div>
 
       {/* Summary Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
         {summaryCards.map((card, index) => (
           <Card key={index} className={cn(
             "shadow-sm transition-all duration-200 cursor-pointer hover:shadow-md",
@@ -641,7 +641,7 @@ const PLDashboard: React.FC = () => {
             </CardHeader>
             <CardContent>
               <div className={cn(
-                "text-2xl font-bold",
+                "text-xl sm:text-2xl font-bold",
                 card.title === 'Net Profit' && card.trend === 'positive' ? "text-success" :
                 card.title === 'Net Profit' && card.trend === 'negative' ? "text-destructive" :
                 ""
@@ -780,7 +780,7 @@ const PLDashboard: React.FC = () => {
             // Vehicle view
             <div className="space-y-4">
               <div className="relative overflow-x-auto">
-                <Table>
+                <Table className="min-w-[800px]">
                   <TableHeader className="sticky top-0 bg-background">
                     <TableRow>
                       <TableHead>

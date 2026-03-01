@@ -183,49 +183,28 @@ export function TimePicker({
             </div>
           </div>
 
-          {/* Quick select times */}
+          {/* Quick select */}
           <div className="space-y-2">
             <Label className="text-xs">Quick Select</Label>
-            <div className="grid grid-cols-3 gap-2">
-              {[
-                { label: "9:00 AM", h: "09", m: "00", p: "AM" },
-                { label: "12:00 PM", h: "12", m: "00", p: "PM" },
-                { label: "3:00 PM", h: "03", m: "00", p: "PM" },
-                { label: "6:00 PM", h: "06", m: "00", p: "PM" },
-                { label: "9:00 PM", h: "09", m: "00", p: "PM" },
-                { label: "Now", h: "", m: "", p: "" },
-              ].map((time) => {
-                const isSelected = isPresetSelected(time.h, time.m, time.p);
-                return (
-                  <Button
-                    key={time.label}
-                    type="button"
-                    variant={isSelected ? "default" : "outline"}
-                    size="sm"
-                    onClick={() => {
-                      if (time.label === "Now") {
-                        const now = new Date()
-                        const currentHours = now.getHours()
-                        const currentMinutes = now.getMinutes()
-                        const hour12 = currentHours === 0 ? 12 : currentHours > 12 ? currentHours - 12 : currentHours
-                        const currentPeriod = currentHours >= 12 ? "PM" : "AM"
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                const now = new Date()
+                const currentHours = now.getHours()
+                const currentMinutes = now.getMinutes()
+                const hour12 = currentHours === 0 ? 12 : currentHours > 12 ? currentHours - 12 : currentHours
+                const currentPeriod = currentHours >= 12 ? "PM" : "AM"
 
-                        setHours(hour12.toString().padStart(2, "0"))
-                        setMinutes(currentMinutes.toString().padStart(2, "0"))
-                        setPeriod(currentPeriod)
-                      } else {
-                        setHours(time.h)
-                        setMinutes(time.m)
-                        setPeriod(time.p as "AM" | "PM")
-                      }
-                    }}
-                    className="text-xs"
-                  >
-                    {time.label}
-                  </Button>
-                );
-              })}
-            </div>
+                setHours(hour12.toString().padStart(2, "0"))
+                setMinutes(currentMinutes.toString().padStart(2, "0"))
+                setPeriod(currentPeriod)
+              }}
+              className="text-xs w-full"
+            >
+              Now
+            </Button>
           </div>
 
           <div className="flex gap-2">

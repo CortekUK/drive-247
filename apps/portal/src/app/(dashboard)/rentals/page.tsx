@@ -242,7 +242,7 @@ const RentalsList = () => {
 
       {/* Quick Stats — list view only */}
       {currentView !== "calendar" && stats && (
-        <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-4">
           <Card className="bg-card hover:bg-accent/50 border transition-all duration-200 cursor-pointer hover:shadow-md">
             <CardContent className="p-4">
               <div className="text-2xl font-bold">{stats.total}</div>
@@ -298,8 +298,8 @@ const RentalsList = () => {
       rentals.length > 0 ? (
         <>
           <Card>
-            <CardContent className="p-0">
-              <Table>
+            <CardContent className="p-0 overflow-x-auto">
+              <Table className="min-w-[700px]">
                   <TableHeader>
                     <TableRow>
                       <TableHead>Rental #</TableHead>
