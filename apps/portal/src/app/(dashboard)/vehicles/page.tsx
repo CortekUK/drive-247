@@ -132,14 +132,13 @@ export default function VehiclesListEnhanced() {
             photo_url,
             display_order
           )
-        `)
-        .order("created_at", { ascending: false });
+        `);
 
       if (tenant?.id) {
         query = query.eq("tenant_id", tenant.id);
       }
 
-      const { data, error } = await query;
+      const { data, error } = await query.order("created_at", { ascending: false });
 
       if (error) throw error;
 

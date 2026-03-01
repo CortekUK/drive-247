@@ -34,6 +34,7 @@ import InstallmentPlanCard from "@/components/rentals/InstallmentPlanCard";
 import { useInstallmentPlan } from "@/hooks/use-installment-plan";
 import { BuyInsuranceDialog } from "@/components/rentals/buy-insurance-dialog";
 import { useBonzahBalance } from "@/hooks/use-bonzah-balance";
+import { useBonzahVehicleEligibility } from "@/hooks/use-bonzah-vehicle-eligibility";
 import { Checkbox } from "@/components/ui/checkbox";
 import { formatCurrency } from "@/lib/formatters";
 import { formatCurrency as formatCurrencyUtil } from "@/lib/format-utils";
@@ -64,7 +65,7 @@ interface Rental {
   cancellation_requested?: boolean;
   customer_id?: string;
   customers: { id: string; name: string; email?: string; phone?: string | null };
-  vehicles: { id: string; reg: string; make: string; model: string; status?: string; lockbox_code?: string | null; lockbox_instructions?: string | null };
+  vehicles: { id: string; reg: string; make: string; model: string; status?: string; lockbox_code?: string | null; lockbox_instructions?: string | null; daily_rent?: number | null; weekly_rent?: number | null; monthly_rent?: number | null };
   // Location fields
   pickup_location?: string | null;
   pickup_location_id?: string | null;
@@ -278,7 +279,7 @@ const RentalDetail = () => {
         .select(`
           *,
           customers!rentals_customer_id_fkey(id, name, email, phone),
-          vehicles!rentals_vehicle_id_fkey(id, reg, make, model, status, lockbox_code, lockbox_instructions)
+          vehicles!rentals_vehicle_id_fkey(id, reg, make, model, status, lockbox_code, lockbox_instructions, daily_rent, weekly_rent, monthly_rent)
         `)
         .eq("id", id)
         .eq("tenant_id", tenant.id)
@@ -300,6 +301,13 @@ const RentalDetail = () => {
         !d?.signed_document_id;
       return isPending ? 5000 : false;
     },
+  });
+
+  // Check Bonzah vehicle eligibility (only queries when rental + Bonzah integration exist)
+  const { isEligible: isBonzahEligible, isLoading: isBonzahEligibilityLoading } = useBonzahVehicleEligibility({
+    vehicleMake: rental?.vehicles?.make || null,
+    vehicleModel: rental?.vehicles?.model || null,
+    enabled: !!rental?.vehicles && !!tenant?.bonzah_username,
   });
 
   const { data: rentalTotals } = useRentalTotals(id);
@@ -2103,8 +2111,55 @@ const RentalDetail = () => {
               <p className="text-sm text-muted-foreground">{rental.vehicles?.make} {rental.vehicles?.model}</p>
             </div>
             <div className="bg-muted/30 rounded-lg p-4 space-y-1">
-              <p className="text-xs uppercase tracking-wider text-muted-foreground">{rental.rental_period_type || 'Monthly'} Amount</p>
-              <p className="text-lg font-semibold">{formatCurrencyUtil(Number(rental.monthly_amount), tenant?.currency_code || 'GBP')}</p>
+              {(() => {
+                const periodType = (rental.rental_period_type || 'Monthly').toLowerCase();
+                const vehicle = rental.vehicles;
+                const currCode = tenant?.currency_code || 'GBP';
+                const totalAmount = Number(rental.monthly_amount);
+
+                // Get the per-unit rate from the vehicle
+                let unitRate = 0;
+                let unitLabel = 'month';
+                if (periodType === 'daily' && vehicle?.daily_rent) {
+                  unitRate = vehicle.daily_rent;
+                  unitLabel = 'day';
+                } else if (periodType === 'weekly' && vehicle?.weekly_rent) {
+                  unitRate = vehicle.weekly_rent;
+                  unitLabel = 'week';
+                } else if (periodType === 'monthly' && vehicle?.monthly_rent) {
+                  unitRate = vehicle.monthly_rent;
+                  unitLabel = 'month';
+                }
+
+                // Calculate number of units
+                const startDate = new Date(rental.start_date);
+                const endDate = new Date(rental.end_date);
+                const totalDays = Math.max(1, Math.ceil((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24)));
+                let units = 1;
+                if (unitLabel === 'day') units = totalDays;
+                else if (unitLabel === 'week') units = Math.ceil(totalDays / 7);
+                else units = Math.max(1, Math.round(totalDays / 30));
+
+                if (unitRate > 0) {
+                  return (
+                    <>
+                      <p className="text-xs uppercase tracking-wider text-muted-foreground">{rental.rental_period_type || 'Monthly'} Rate</p>
+                      <p className="text-lg font-semibold">{formatCurrencyUtil(unitRate, currCode)}<span className="text-sm font-normal text-muted-foreground">/{unitLabel}</span></p>
+                      <p className="text-xs text-muted-foreground">
+                        {formatCurrencyUtil(unitRate, currCode)} × {units} {unitLabel}{units !== 1 ? 's' : ''} = {formatCurrencyUtil(totalAmount, currCode)}
+                      </p>
+                    </>
+                  );
+                }
+
+                // Fallback: no vehicle rate available, show total as before
+                return (
+                  <>
+                    <p className="text-xs uppercase tracking-wider text-muted-foreground">{rental.rental_period_type || 'Monthly'} Amount</p>
+                    <p className="text-lg font-semibold">{formatCurrencyUtil(totalAmount, currCode)}</p>
+                  </>
+                );
+              })()}
             </div>
           </div>
 
@@ -2860,8 +2915,8 @@ const RentalDetail = () => {
           {/* Bonzah Insurance CTA - Show when no Bonzah policy exists */}
           {canEdit('rentals') && !bonzahPolicy && (
             <div
-              className={`relative overflow-hidden rounded-lg border border-[#CC004A]/20 bg-gradient-to-r from-[#CC004A]/5 via-[#CC004A]/10 to-[#CC004A]/5 dark:from-[#CC004A]/10 dark:via-[#CC004A]/15 dark:to-[#CC004A]/10 p-4 transition-all ${tenant?.bonzah_username ? 'cursor-pointer hover:border-[#CC004A]/40 group' : 'opacity-60'}`}
-              onClick={() => { if (tenant?.bonzah_username) setShowBuyInsurance(true); }}
+              className={`relative overflow-hidden rounded-lg border border-[#CC004A]/20 bg-gradient-to-r from-[#CC004A]/5 via-[#CC004A]/10 to-[#CC004A]/5 dark:from-[#CC004A]/10 dark:via-[#CC004A]/15 dark:to-[#CC004A]/10 p-4 transition-all ${tenant?.bonzah_username && isBonzahEligible ? 'cursor-pointer hover:border-[#CC004A]/40 group' : 'opacity-60'}`}
+              onClick={() => { if (tenant?.bonzah_username && isBonzahEligible) setShowBuyInsurance(true); }}
             >
               <div className="flex items-center justify-between gap-4">
                 <div className="flex items-center gap-4">
@@ -2880,21 +2935,26 @@ const RentalDetail = () => {
                   <div>
                     <p className="font-medium text-sm">Purchase Rental Car Insurance</p>
                     <p className="text-xs text-muted-foreground mt-0.5">
-                      CDW, Liability, Supplemental &amp; Personal Accident coverage powered by Bonzah
+                      {!isBonzahEligible
+                        ? `${rental.vehicles?.make} ${rental.vehicles?.model} is not eligible for Bonzah coverage`
+                        : 'CDW, Liability, Supplemental & Personal Accident coverage powered by Bonzah'}
                     </p>
                   </div>
                 </div>
                 {tenant?.bonzah_username ? (
                   <Button
                     size="sm"
-                    className="bg-[#CC004A] hover:bg-[#A80040] text-white flex-shrink-0 group-hover:shadow-md transition-shadow"
+                    className={!isBonzahEligible ? "flex-shrink-0 opacity-50" : "bg-[#CC004A] hover:bg-[#A80040] text-white flex-shrink-0 group-hover:shadow-md transition-shadow"}
+                    variant={!isBonzahEligible ? "outline" : "default"}
+                    disabled={!isBonzahEligible || isBonzahEligibilityLoading}
+                    title={!isBonzahEligible ? "This vehicle is not eligible for Bonzah insurance" : undefined}
                     onClick={(e) => {
                       e.stopPropagation();
                       setShowBuyInsurance(true);
                     }}
                   >
                     <ShieldCheck className="h-4 w-4 mr-1.5" />
-                    Get Insurance
+                    {isBonzahEligibilityLoading ? 'Checking...' : !isBonzahEligible ? 'Not Eligible' : 'Get Insurance'}
                   </Button>
                 ) : (
                   <Button
@@ -3380,11 +3440,13 @@ const RentalDetail = () => {
                 <Button
                   size="sm"
                   variant="outline"
-                  className="h-7 text-xs border-[#CC004A]/30 text-[#CC004A] hover:bg-[#CC004A]/10"
+                  className={!isBonzahEligible ? "h-7 text-xs opacity-50" : "h-7 text-xs border-[#CC004A]/30 text-[#CC004A] hover:bg-[#CC004A]/10"}
+                  disabled={!isBonzahEligible || isBonzahEligibilityLoading}
+                  title={!isBonzahEligible ? "This vehicle is not eligible for Bonzah insurance" : undefined}
                   onClick={() => setShowBuyInsurance(true)}
                 >
                   <ShieldCheck className="h-3 w-3 mr-1" />
-                  Get Insurance
+                  {isBonzahEligibilityLoading ? 'Checking...' : !isBonzahEligible ? 'Not Eligible' : 'Get Insurance'}
                 </Button>
               )}
               <Button

@@ -5651,46 +5651,6 @@ const MultiStepBookingWidget = () => {
 
         {/* Step 5: Review & Payment */}
         {currentStep === 5 && <div className="animate-fade-in space-y-6">
-          {/* Promo Code Section */}
-          <div className="bg-card border border-border rounded-lg p-4 sm:p-6">
-            <div className="space-y-3">
-              <Label htmlFor="promoCode" className="font-medium text-base">Promo Code (Optional)</Label>
-              <div className="flex gap-2">
-                <Input
-                  id="promoCode"
-                  placeholder="Enter code"
-                  value={formData.promoCode}
-                  onChange={(e) => {
-                    setFormData({ ...formData, promoCode: e.target.value });
-                    setPromoError(null);
-                    if (!e.target.value) {
-                      setPromoDetails(null);
-                      localStorage.removeItem('appliedPromoCode');
-                      localStorage.removeItem('appliedPromoDetails');
-                    }
-                  }}
-                  className={cn("h-12", promoError ? "border-destructive" : promoDetails ? "border-green-500" : "")}
-                />
-                <Button
-                  type="button"
-                  variant="outline"
-                  className="h-12 px-6"
-                  onClick={() => validatePromoCode(formData.promoCode)}
-                  disabled={loading || !formData.promoCode}
-                >
-                  Apply
-                </Button>
-              </div>
-              {promoError && <p className="text-sm text-destructive">{promoError}</p>}
-              {promoDetails && (
-                <p className="text-sm text-green-600 font-medium flex items-center gap-1">
-                  <Check className="w-4 h-4" />
-                  Code applied: {promoDetails.type === 'percentage' ? `${promoDetails.value}% off` : `${formatCurrency(promoDetails.value, currencyCode)} off`}
-                </p>
-              )}
-            </div>
-          </div>
-
           {/* Optional Extras */}
           <ExtrasSelector
             extras={availableExtras}
@@ -5713,7 +5673,21 @@ const MultiStepBookingWidget = () => {
             pricingTier={estimatedBooking?.pricingTier || 'daily'}
             dayBreakdown={estimatedBooking?.dayBreakdown || []}
             promoDetails={promoDetails}
+            promoCode={formData.promoCode}
+            promoError={promoError}
+            promoLoading={loading}
+            onPromoCodeChange={(value) => {
+              setFormData({ ...formData, promoCode: value });
+              setPromoError(null);
+              if (!value) {
+                setPromoDetails(null);
+                localStorage.removeItem('appliedPromoCode');
+                localStorage.removeItem('appliedPromoDetails');
+              }
+            }}
+            onApplyPromo={validatePromoCode}
             onBack={() => setCurrentStep(4)}
+            uploadedDocumentId={uploadedDocumentId}
             bonzahPremium={bonzahPremium}
             bonzahCoverage={bonzahCoverage}
             pickupDeliveryFee={formData.pickupDeliveryFee}

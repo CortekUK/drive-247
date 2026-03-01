@@ -1,6 +1,7 @@
 'use client'
 
-import { useEffect, useState, Suspense } from "react";
+import { useEffect, useState, Suspense, useCallback } from "react";
+import confetti from "canvas-confetti";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import Navigation from "@/components/Navigation";
@@ -371,6 +372,42 @@ const BookingSuccessContent = () => {
     updateRentalStatus();
   }, [sessionId, rentalId]);
 
+  // Fire confetti when booking details have loaded
+  const fireConfetti = useCallback(() => {
+    const duration = 2000;
+    const end = Date.now() + duration;
+
+    const frame = () => {
+      confetti({
+        particleCount: 3,
+        angle: 60,
+        spread: 55,
+        origin: { x: 0, y: 0.6 },
+        colors: ['#6366f1', '#22c55e', '#f59e0b', '#ec4899', '#3b82f6'],
+      });
+      confetti({
+        particleCount: 3,
+        angle: 120,
+        spread: 55,
+        origin: { x: 1, y: 0.6 },
+        colors: ['#6366f1', '#22c55e', '#f59e0b', '#ec4899', '#3b82f6'],
+      });
+
+      if (Date.now() < end) {
+        requestAnimationFrame(frame);
+      }
+    };
+    frame();
+  }, []);
+
+  useEffect(() => {
+    if (!loading && bookingDetails) {
+      // Small delay so the UI renders first
+      const timer = setTimeout(fireConfetti, 300);
+      return () => clearTimeout(timer);
+    }
+  }, [loading, bookingDetails, fireConfetti]);
+
   return (
     <>
       <Navigation />
@@ -447,31 +484,6 @@ const BookingSuccessContent = () => {
                     </div>
                   </div>
                 )}
-
-                <div className="bg-accent/5 border border-accent/20 rounded-lg p-6 mb-8 text-left">
-                  <h2 className="text-xl font-semibold mb-4 flex items-center gap-2">
-                    <Mail className="w-5 h-5 text-accent" />
-                    What's Next?
-                  </h2>
-                  <ul className="space-y-3 text-muted-foreground">
-                    <li className="flex items-start gap-2">
-                      <CheckCircle className="w-5 h-5 text-accent mt-0.5 flex-shrink-0" />
-                      <span>A confirmation email will be sent to your email address with your rental details</span>
-                    </li>
-                    <li className="flex items-start gap-2">
-                      <CheckCircle className="w-5 h-5 text-accent mt-0.5 flex-shrink-0" />
-                      <span>Your rental is confirmed and ready for pickup at the scheduled time</span>
-                    </li>
-                    <li className="flex items-start gap-2">
-                      <CheckCircle className="w-5 h-5 text-accent mt-0.5 flex-shrink-0" />
-                      <span>You will receive pickup instructions 24 hours before your rental period</span>
-                    </li>
-                    <li className="flex items-start gap-2">
-                      <CheckCircle className="w-5 h-5 text-accent mt-0.5 flex-shrink-0" />
-                      <span>Your security deposit is held and will be released after the rental period</span>
-                    </li>
-                  </ul>
-                </div>
 
                 <div className="flex flex-col sm:flex-row gap-4 justify-center">
                   {isAuthenticated ? (

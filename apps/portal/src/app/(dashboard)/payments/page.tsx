@@ -403,7 +403,42 @@ const PaymentsList = () => {
                            </TableCell>
                            <TableCell>{payment.method ? payment.method.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()) : '-'}</TableCell>
                           <TableCell className="text-left font-medium">
-                            {formatCurrency(payment.amount, tenant?.currency_code || 'USD')}
+                            <div>
+                              {formatCurrency(payment.amount, tenant?.currency_code || 'USD')}
+                              {(() => {
+                                const rental = payment.rentals;
+                                const vehicle = payment.vehicles;
+                                if (!rental || !vehicle || !rental.start_date || !rental.end_date) return null;
+
+                                const periodType = (rental.rental_period_type || 'monthly').toLowerCase();
+                                let unitRate = 0;
+                                let unitLabel = 'month';
+                                if (periodType === 'daily' && vehicle.daily_rent) {
+                                  unitRate = vehicle.daily_rent;
+                                  unitLabel = 'day';
+                                } else if (periodType === 'weekly' && vehicle.weekly_rent) {
+                                  unitRate = vehicle.weekly_rent;
+                                  unitLabel = 'week';
+                                } else if (periodType === 'monthly' && vehicle.monthly_rent) {
+                                  unitRate = vehicle.monthly_rent;
+                                  unitLabel = 'month';
+                                }
+                                if (!unitRate) return null;
+
+                                const totalDays = Math.max(1, Math.ceil((new Date(rental.end_date).getTime() - new Date(rental.start_date).getTime()) / (1000 * 60 * 60 * 24)));
+                                let units = 1;
+                                if (unitLabel === 'day') units = totalDays;
+                                else if (unitLabel === 'week') units = Math.ceil(totalDays / 7);
+                                else units = Math.max(1, Math.round(totalDays / 30));
+
+                                const cc = tenant?.currency_code || 'USD';
+                                return (
+                                  <p className="text-xs text-muted-foreground font-normal">
+                                    {formatCurrency(unitRate, cc)}/{unitLabel} × {units}
+                                  </p>
+                                );
+                              })()}
+                            </div>
                           </TableCell>
                           <TableCell>
                             {(() => {

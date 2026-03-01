@@ -7,7 +7,9 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
-import { ChevronLeft, CreditCard, Shield, Calendar, MapPin, Clock, Car, User, Loader2, ArrowDown, CircleDot } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { cn } from "@/lib/utils";
+import { ChevronLeft, CreditCard, Shield, Calendar, MapPin, Clock, Car, User, Loader2, ArrowDown, CircleDot, Check } from "lucide-react";
 import type { PricingTier, DayBreakdown } from "@/lib/calculate-rental-price";
 import { supabase } from "@/integrations/supabase/client";
 import { useTenant } from "@/contexts/TenantContext";
@@ -49,7 +51,14 @@ interface BookingCheckoutStepProps {
   pricingTier?: PricingTier;
   dayBreakdown?: DayBreakdown[];
   promoDetails?: PromoDetails | null;
+  promoCode: string;
+  promoError: string | null;
+  promoLoading?: boolean;
+  onPromoCodeChange: (value: string) => void;
+  onApplyPromo: (code: string) => void;
   onBack: () => void;
+  // Reused existing document ID (needs rental_id linking at checkout)
+  uploadedDocumentId?: string | null;
   // Bonzah insurance props
   bonzahPremium?: number;
   bonzahCoverage?: BonzahCoverage;
@@ -68,7 +77,13 @@ export default function BookingCheckoutStep({
   pricingTier = 'daily',
   dayBreakdown = [],
   promoDetails,
+  promoCode,
+  promoError,
+  promoLoading = false,
+  onPromoCodeChange,
+  onApplyPromo,
   onBack,
+  uploadedDocumentId,
   bonzahPremium = 0,
   bonzahCoverage,
   pickupDeliveryFee = 0,
@@ -1182,7 +1197,22 @@ export default function BookingCheckoutStep({
           console.log('✅ Insurance files processed and cleaned up');
         }
 
-        if (pendingDocs.length === 0 && pendingFiles.length === 0) {
+        // Handle reused existing document (selected from dropdown, not in pendingFiles)
+        if (uploadedDocumentId && uploadedDocumentId !== 'pending' && pendingDocs.length === 0 && pendingFiles.length === 0) {
+          console.log(`📎 Linking reused existing document ${uploadedDocumentId} to rental ${rental.id}`);
+          const { error: linkError } = await supabase
+            .from('customer_documents')
+            .update({ rental_id: rental.id })
+            .eq('id', uploadedDocumentId);
+
+          if (linkError) {
+            console.warn('⚠️ Could not link reused document:', linkError);
+          } else {
+            console.log('✅ Reused document linked to rental');
+          }
+        }
+
+        if (pendingDocs.length === 0 && pendingFiles.length === 0 && !uploadedDocumentId) {
           console.log('ℹ️ No pending insurance documents to link');
         }
       } catch (linkErr) {
@@ -1674,7 +1704,37 @@ export default function BookingCheckoutStep({
               )}
             </div>
 
-            <div className="mt-6 space-y-3">
+            {/* Promo Code */}
+            <div className="mt-4 space-y-2">
+              <Label htmlFor="promoCode" className="text-sm font-medium">Promo Code</Label>
+              <div className="flex gap-2">
+                <Input
+                  id="promoCode"
+                  placeholder="Enter code"
+                  value={promoCode}
+                  onChange={(e) => onPromoCodeChange(e.target.value)}
+                  className={cn("h-9", promoError ? "border-destructive" : promoDetails ? "border-green-500" : "")}
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="h-9 px-4"
+                  onClick={() => onApplyPromo(promoCode)}
+                  disabled={promoLoading || !promoCode}
+                >
+                  Apply
+                </Button>
+              </div>
+              {promoError && <p className="text-xs text-destructive">{promoError}</p>}
+              {promoDetails && (
+                <p className="text-xs text-green-600 font-medium flex items-center gap-1">
+                  <Check className="w-3 h-3" />
+                  {promoDetails.type === 'percentage' ? `${promoDetails.value}% off` : `${fmt(promoDetails.value)} off`}
+                </p>
+              )}
+            </div>
+
+            <div className="mt-4 space-y-3">
               <Button
                 onClick={handlePayment}
                 disabled={isProcessing || sendingDocuSign || !agreeTerms}

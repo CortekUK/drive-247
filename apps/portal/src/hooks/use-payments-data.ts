@@ -36,10 +36,17 @@ export interface PaymentRow {
     reg: string;
     make: string | null;
     model: string | null;
+    daily_rent: number | null;
+    weekly_rent: number | null;
+    monthly_rent: number | null;
   } | null;
   rentals: {
     id: string;
     rental_number: string | null;
+    rental_period_type: string | null;
+    monthly_amount: number | null;
+    start_date: string | null;
+    end_date: string | null;
   } | null;
 }
 
@@ -112,8 +119,8 @@ export const usePaymentsData = ({
         .select(`
           *,
           customers!payments_customer_id_fkey(id, name),
-          vehicles!payments_vehicle_id_fkey(id, reg, make, model),
-          rentals!payments_rental_id_fkey(id, rental_number)
+          vehicles!payments_vehicle_id_fkey(id, reg, make, model, daily_rent, weekly_rent, monthly_rent),
+          rentals!payments_rental_id_fkey(id, rental_number, rental_period_type, monthly_amount, start_date, end_date)
         `, { count: 'exact' })
         .eq("tenant_id", tenant.id);
 
