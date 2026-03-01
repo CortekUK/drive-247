@@ -1587,7 +1587,9 @@ const RentalDetail = () => {
         // Compute which rows have unpaid charges (selectable for targeted payment)
         // Don't allow payments on cancelled/rejected rentals
         const isCancelledOrRejected = rental.status === 'Cancelled' || rental.approval_status === 'rejected';
-        const selectableCategories = isCancelledOrRejected ? [] : rows
+        const isRentalCompleted = rental.status === 'Closed' || rental.status === 'Completed';
+        const isInactive = isCancelledOrRejected || isRentalCompleted;
+        const selectableCategories = isInactive ? [] : rows
           .filter(({ category, amount }) => {
             if (amount <= 0) return false;
             const refunded = refundBreakdown?.[category] ?? 0;
@@ -1741,11 +1743,11 @@ const RentalDetail = () => {
                         </TableCell>
                         <TableCell className="text-right pr-6">
                           {isExcessMileageUnpaid && excessMileageCharge ? (
-                            <div className="flex items-center gap-2 justify-end">
+                            <div className={`flex items-center gap-2 justify-end ${isRentalCompleted ? 'opacity-40 pointer-events-none' : ''}`}>
                               {invoiceBreakdown && invoiceBreakdown.securityDeposit > 0 && (
                                 <button
                                   className="text-xs text-amber-500 hover:text-amber-400 hover:underline font-medium"
-                                  disabled={isDeductingDeposit}
+                                  disabled={isDeductingDeposit || isRentalCompleted}
                                   onClick={(e) => {
                                     e.stopPropagation();
                                     setShowDeductFromDepositDialog(true);
@@ -1756,7 +1758,7 @@ const RentalDetail = () => {
                               )}
                               <button
                                 className="text-xs text-blue-500 hover:text-blue-400 hover:underline font-medium"
-                                disabled={isSendingPaymentLink}
+                                disabled={isSendingPaymentLink || isRentalCompleted}
                                 onClick={async (e) => {
                                   e.stopPropagation();
                                   setIsSendingPaymentLink(true);
@@ -1779,15 +1781,18 @@ const RentalDetail = () => {
                           ) : nonRefundable && applied ? (
                             <span className="text-xs text-muted-foreground/50">-</span>
                           ) : (() => {
-                            // Only show Refund if category has actually been paid
+                            // Show Refund if category has been paid (dimmed for completed rentals)
                             const catPayment = paymentBreakdown?.[category];
                             const categoryHasBeenPaid = catPayment ? catPayment.paid > 0 : false;
-                            return applied && !fullyRefunded && canRefund && categoryHasBeenPaid;
+                            const wouldShowRefund = applied && !fullyRefunded && categoryHasBeenPaid && (canRefund || isRentalCompleted);
+                            return wouldShowRefund;
                           })() ? (
                             <button
-                              className="text-xs text-orange-500 hover:text-orange-400 hover:underline font-medium"
+                              className={`text-xs font-medium ${isRentalCompleted ? 'text-orange-500/40 cursor-not-allowed' : 'text-orange-500 hover:text-orange-400 hover:underline'}`}
+                              disabled={isRentalCompleted}
                               onClick={(e) => {
                                 e.stopPropagation();
+                                if (isRentalCompleted) return;
                                 setRefundCategory(category);
                                 setRefundTotalAmount(amount);
                                 const alreadyRefunded = refundBreakdown?.[category] ?? 0;
@@ -1799,11 +1804,17 @@ const RentalDetail = () => {
                             </button>
                           ) : applied && fullyRefunded ? (
                             <Check className="h-4 w-4 text-green-500 inline-block" />
-                          ) : isSelectable ? (
+                          ) : (() => {
+                            // Show Add Payment if category has remaining amount (dimmed for completed rentals)
+                            const wouldBeSelectable = isSelectable || (isRentalCompleted && applied && !fullyRefunded && (categoryRemainingAmounts[category] ?? 0) > 0);
+                            return wouldBeSelectable;
+                          })() ? (
                             <button
-                              className="text-xs text-blue-500 hover:text-blue-400 hover:underline font-medium"
+                              className={`text-xs font-medium ${isRentalCompleted ? 'text-blue-500/40 cursor-not-allowed' : 'text-blue-500 hover:text-blue-400 hover:underline'}`}
+                              disabled={isRentalCompleted}
                               onClick={(e) => {
                                 e.stopPropagation();
+                                if (isRentalCompleted) return;
                                 setSelectedCategories(new Set([category]));
                                 setShowTargetedPayment(true);
                               }}
@@ -1844,6 +1855,7 @@ const RentalDetail = () => {
       {/* Extensions Section */}
       {extensionCharges.length > 0 && (() => {
         const canRefund = totalPayments > 0 && rental.status !== 'Cancelled' && rental.status !== 'Closed';
+        const isExtRentalCompleted = rental.status === 'Closed' || rental.status === 'Completed';
         return (
           <Card>
             <CardHeader className="pb-4">
@@ -1905,18 +1917,22 @@ const RentalDetail = () => {
                         <TableCell className="text-right pr-6">
                           {!isPaid ? (
                             <button
-                              className="text-xs text-blue-500 hover:text-blue-400 hover:underline font-medium"
+                              className={`text-xs font-medium ${isExtRentalCompleted ? 'text-blue-500/40 cursor-not-allowed' : 'text-blue-500 hover:text-blue-400 hover:underline'}`}
+                              disabled={isExtRentalCompleted}
                               onClick={() => {
+                                if (isExtRentalCompleted) return;
                                 setExtensionPaymentAmount(charge.remaining_amount);
                                 setShowExtensionPayment(true);
                               }}
                             >
                               Add Payment
                             </button>
-                          ) : isPaid && !fullyRefunded && canRefund ? (
+                          ) : isPaid && !fullyRefunded && (canRefund || isExtRentalCompleted) ? (
                             <button
-                              className="text-xs text-orange-500 hover:text-orange-400 hover:underline font-medium"
+                              className={`text-xs font-medium ${isExtRentalCompleted ? 'text-orange-500/40 cursor-not-allowed' : 'text-orange-500 hover:text-orange-400 hover:underline'}`}
+                              disabled={isExtRentalCompleted}
                               onClick={() => {
+                                if (isExtRentalCompleted) return;
                                 setRefundCategory('Extension');
                                 setRefundTotalAmount(charge.amount);
                                 const alreadyRefunded = refundBreakdown?.['Extension'] ?? 0;
@@ -3655,7 +3671,7 @@ const RentalDetail = () => {
                     {identityVerification.document_type && (
                       <div>
                         <span className="text-muted-foreground">Type:</span>
-                        <p className="font-medium capitalize">{identityVerification.document_type.replace(/_/g, ' ')}</p>
+                        <p className="font-medium">{identityVerification.document_type.replace(/_/g, ' ').replace(/\bid\b/gi, 'ID').replace(/\b\w/g, c => c.toUpperCase())}</p>
                       </div>
                     )}
                     {identityVerification.document_number && (

@@ -3078,7 +3078,7 @@ const Settings = () => {
                           <th className="p-3 text-left font-semibold">Expires</th>
                           <th className="p-3 text-left font-semibold">Max Users</th>
                           <th className="p-3 text-left font-semibold">Code</th>
-                          <th className="p-3 text-right font-semibold">Actions</th>
+                          <th className="p-3 text-center font-semibold">Actions</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -3116,8 +3116,8 @@ const Settings = () => {
                                   </Button>
                                 </div>
                               </td>
-                              <td className="p-3 text-right">
-                                <div className="flex justify-end gap-2">
+                              <td className="p-3">
+                                <div className="flex justify-center gap-2">
                                   <Button
                                     variant="ghost"
                                     size="icon"

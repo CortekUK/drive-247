@@ -147,7 +147,6 @@ function PermissionRow({ label, checked, accessLevel, onToggle, onAccessLevelTog
             <Switch
               checked={accessLevel === 'editor'}
               onCheckedChange={onAccessLevelToggle}
-              className="h-4 w-7 data-[state=checked]:bg-primary"
             />
             <span className={`text-xs ${accessLevel === 'editor' ? 'text-primary font-medium' : 'text-muted-foreground'}`}>
               Edit

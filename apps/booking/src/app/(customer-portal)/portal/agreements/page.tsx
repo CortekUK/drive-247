@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useCallback, useRef } from 'react';
 import {
   useCustomerAgreements,
   useCustomerAgreementStats,
@@ -238,7 +238,7 @@ function AgreementViewerDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-4xl h-[90vh] flex flex-col p-0">
         <DialogHeader className="px-6 py-4 border-b flex-shrink-0">
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between pr-8">
             <div>
               <DialogTitle>
                 Rental Agreement {agreement.rental_number ? `#${agreement.rental_number}` : ''}
@@ -328,6 +328,7 @@ export default function AgreementsPage() {
     signAgreement.mutate(agreement, {
       onSuccess: (result) => {
         if (result.signingUrl) {
+          signingIframeLoadCount.current = 0;
           setSigningUrl(result.signingUrl);
           setSignDialogOpen(true);
         } else if (result.emailSent) {
@@ -340,14 +341,27 @@ export default function AgreementsPage() {
     });
   };
 
+  const signingIframeLoadCount = useRef(0);
+
   const handleCloseSignDialog = () => {
     setSignDialogOpen(false);
     setSigningUrl(null);
     setSigningAgreement(null);
+    signingIframeLoadCount.current = 0;
     // Refresh agreements to pick up any status changes
     refetch();
     refetchStats();
   };
+
+  // When the BoldSign iframe redirects back to our domain after signing,
+  // it fires a second load event. Auto-close the dialog on that redirect.
+  const handleSigningIframeLoad = useCallback(() => {
+    signingIframeLoadCount.current += 1;
+    // First load = BoldSign signing page. Second load = redirect back after signing.
+    if (signingIframeLoadCount.current > 1) {
+      handleCloseSignDialog();
+    }
+  }, []);
 
   const handleCloseDialog = () => {
     setViewDialogOpen(false);
@@ -465,7 +479,7 @@ export default function AgreementsPage() {
       <Dialog open={signDialogOpen} onOpenChange={(open) => !open && handleCloseSignDialog()}>
         <DialogContent className="max-w-4xl h-[90vh] flex flex-col p-0">
           <DialogHeader className="px-6 py-4 border-b flex-shrink-0">
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between pr-8">
               <div>
                 <DialogTitle>
                   Sign Agreement {signingAgreement?.rental_number ? `#${signingAgreement.rental_number}` : ''}
@@ -500,6 +514,7 @@ export default function AgreementsPage() {
                 className="w-full h-full border-0"
                 title="Sign Agreement"
                 allow="camera; microphone"
+                onLoad={handleSigningIframeLoad}
               />
             ) : (
               <div className="flex items-center justify-center h-full">

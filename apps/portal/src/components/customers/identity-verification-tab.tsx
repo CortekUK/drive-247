@@ -269,8 +269,8 @@ export function IdentityVerificationTab({ customerId }: IdentityVerificationTabP
                     </TableCell>
                     <TableCell>
                       {verification.document_type ? (
-                        <span className="capitalize">
-                          {verification.document_type.replace('_', ' ').toLowerCase()}
+                        <span>
+                          {verification.document_type.replace(/_/g, ' ').replace(/\bid\b/gi, 'ID').replace(/\b\w/g, c => c.toUpperCase())}
                         </span>
                       ) : (
                         <span className="text-muted-foreground">—</span>

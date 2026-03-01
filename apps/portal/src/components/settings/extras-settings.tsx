@@ -489,7 +489,6 @@ export function ExtrasSettings() {
                             }`}>
                               {extra.remaining_stock} left
                             </span>
-                            <span className="text-muted-foreground"> / {extra.max_quantity}</span>
                           </div>
                         ) : (
                           <span className="text-sm text-muted-foreground">—</span>

@@ -5323,7 +5323,7 @@ const MultiStepBookingWidget = () => {
                             {customerVerification.document_type && (
                               <div>
                                 <span className="text-muted-foreground">Document Type:</span>
-                                <p className="font-medium capitalize">{customerVerification.document_type.replace('_', ' ')}</p>
+                                <p className="font-medium">{customerVerification.document_type.replace(/_/g, ' ').replace(/\bid\b/gi, 'ID').replace(/\b\w/g, c => c.toUpperCase())}</p>
                               </div>
                             )}
                             {customerVerification.document_number && (
