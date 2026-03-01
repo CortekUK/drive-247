@@ -449,6 +449,89 @@ const CreateRental = () => {
     }
   }, [renewalSource]);
 
+  // Persist form state to localStorage so it survives tab close/refresh
+  const PORTAL_RENTAL_STORAGE_KEY = 'portal_new_rental_draft';
+  const draftRestoredRef = useRef(false);
+
+  // Restore saved draft on mount (skip if this is a renewal)
+  useEffect(() => {
+    if (renewFromId || draftRestoredRef.current) return;
+    draftRestoredRef.current = true;
+
+    try {
+      const saved = localStorage.getItem(PORTAL_RENTAL_STORAGE_KEY);
+      if (!saved) return;
+      const draft = JSON.parse(saved);
+
+      // Restore form values
+      if (draft.customer_id) form.setValue("customer_id", draft.customer_id);
+      if (draft.vehicle_id) form.setValue("vehicle_id", draft.vehicle_id);
+      if (draft.start_date) form.setValue("start_date", new Date(draft.start_date));
+      if (draft.end_date) form.setValue("end_date", new Date(draft.end_date));
+      if (draft.rental_period_type) form.setValue("rental_period_type", draft.rental_period_type);
+      if (draft.monthly_amount != null) form.setValue("monthly_amount", draft.monthly_amount);
+      if (draft.pickup_location) form.setValue("pickup_location", draft.pickup_location);
+      if (draft.return_location) form.setValue("return_location", draft.return_location);
+      if (draft.pickup_time) form.setValue("pickup_time", draft.pickup_time);
+      if (draft.return_time) form.setValue("return_time", draft.return_time);
+      if (draft.driver_age_range) form.setValue("driver_age_range", draft.driver_age_range);
+      if (draft.promo_code) form.setValue("promo_code", draft.promo_code);
+      if (draft.insurance_status) form.setValue("insurance_status", draft.insurance_status);
+      if (draft.notes) form.setValue("notes", draft.notes);
+
+      // Restore non-form state
+      if (draft.sameAsPickup === false) setSameAsPickup(false);
+      if (draft.selectedExtras) setSelectedExtras(draft.selectedExtras);
+      if (draft.pickupLocationId) setPickupLocationId(draft.pickupLocationId);
+      if (draft.returnLocationId) setReturnLocationId(draft.returnLocationId);
+    } catch {
+      // Corrupted data — ignore
+    }
+  }, [renewFromId]);
+
+  // Save form values to localStorage on change (debounced)
+  const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  useEffect(() => {
+    // Don't save if this is a renewal or form hasn't been restored yet
+    if (renewFromId) return;
+
+    if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
+    saveTimeoutRef.current = setTimeout(() => {
+      const values = form.getValues();
+      const draft = {
+        customer_id: values.customer_id,
+        vehicle_id: values.vehicle_id,
+        start_date: values.start_date?.toISOString(),
+        end_date: values.end_date?.toISOString(),
+        rental_period_type: values.rental_period_type,
+        monthly_amount: values.monthly_amount,
+        pickup_location: values.pickup_location,
+        return_location: values.return_location,
+        pickup_time: values.pickup_time,
+        return_time: values.return_time,
+        driver_age_range: values.driver_age_range,
+        promo_code: values.promo_code,
+        insurance_status: values.insurance_status,
+        notes: values.notes,
+        sameAsPickup,
+        selectedExtras,
+        pickupLocationId,
+        returnLocationId,
+      };
+      localStorage.setItem(PORTAL_RENTAL_STORAGE_KEY, JSON.stringify(draft));
+    }, 500);
+
+    return () => {
+      if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
+    };
+  }, [
+    selectedCustomerId, selectedVehicleId, watchedStartDate, watchedEndDate,
+    watchedRentalPeriodType, watchedMonthlyAmount, watchedPickupLocation,
+    watchedPromoCode, watchedInsuranceStatus, watchedDriverAgeRange,
+    sameAsPickup, selectedExtras, pickupLocationId, returnLocationId,
+    renewFromId,
+  ]);
+
   // Get customers and available vehicles
   const { data: customers } = useQuery({
     queryKey: ["customers-for-rental", tenant?.id],
@@ -1208,6 +1291,9 @@ const CreateRental = () => {
           variant: "default",
         });
       }
+
+      // Clear the persisted draft since rental was created successfully
+      localStorage.removeItem(PORTAL_RENTAL_STORAGE_KEY);
 
       // Store rental data for invoice dialog
       setCreatedRentalData({

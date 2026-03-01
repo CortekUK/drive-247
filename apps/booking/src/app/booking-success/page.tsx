@@ -12,17 +12,28 @@ import { toast } from "sonner";
 import { format } from "date-fns";
 import { useTenant } from "@/contexts/TenantContext";
 import { useCustomerAuthStore } from "@/stores/customer-auth-store";
+import { useBookingStore } from "@/stores/booking-store";
 import { formatCurrency } from "@/lib/format-utils";
 
 const BookingSuccessContent = () => {
   const searchParams = useSearchParams();
   const { tenant } = useTenant();
   const { customerUser } = useCustomerAuthStore();
+  const { clearBooking } = useBookingStore();
   const [bookingDetails, setBookingDetails] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const sessionId = searchParams?.get("session_id");
   const rentalId = searchParams?.get("rental_id");
   const isAuthenticated = !!customerUser;
+
+  // Clear persisted booking form data on successful booking
+  useEffect(() => {
+    clearBooking();
+    // Also clear booking-local localStorage keys
+    localStorage.removeItem('booking_isGigDriver');
+    localStorage.removeItem('booking_hasInsurance');
+    localStorage.removeItem('booking_uploadedDocumentId');
+  }, []);
 
   useEffect(() => {
     const updateRentalStatus = async () => {

@@ -168,12 +168,12 @@ const BookingCheckoutContent = () => {
     return Math.ceil(diffTime / (1000 * 60 * 60 * 24));
   };
 
-  const calculateVehiclePrice = () => {
-    if (!vehicleDetails) return 0;
+  const calculateVehiclePriceResult = () => {
+    if (!vehicleDetails) return { rentalPrice: 0, rentalDays: 0, pricingTier: 'daily' as const, dayBreakdown: [] };
     const weekendConfig = (tenant?.weekend_surcharge_percent && tenant.weekend_surcharge_percent > 0)
       ? { weekend_surcharge_percent: tenant.weekend_surcharge_percent, weekend_days: tenant.weekend_days || [6, 0] }
       : null;
-    const result = calculateRentalPriceBreakdown(
+    return calculateRentalPriceBreakdown(
       pickupDate,
       returnDate,
       {
@@ -186,8 +186,9 @@ const BookingCheckoutContent = () => {
       vehicleOverrides,
       vehicleIdParam
     );
-    return result.rentalPrice;
   };
+
+  const calculateVehiclePrice = () => calculateVehiclePriceResult().rentalPrice;
 
   const calculateTotal = () => {
     return calculateVehiclePrice();
@@ -846,9 +847,71 @@ const BookingCheckoutContent = () => {
                       <span className="text-muted-foreground">Duration</span>
                       <span className="font-medium">{calculateRentalDays()} days</span>
                     </div>
-                    <div className="flex justify-between text-sm">
-                      <span className="text-muted-foreground">Vehicle Cost</span>
-                      <span className="font-medium">{formatCurrency(totals.vehiclePrice)}</span>
+                    <div className="space-y-1">
+                      <div className="flex justify-between text-sm">
+                        <span className="text-muted-foreground">Vehicle Cost</span>
+                        <span className="font-medium">{formatCurrency(totals.vehiclePrice)}</span>
+                      </div>
+                      {(() => {
+                        const days = calculateRentalDays();
+                        const dailyRent = vehicleDetails.daily_rent || 0;
+                        const weeklyRent = vehicleDetails.weekly_rent || 0;
+                        const monthlyRent = vehicleDetails.monthly_rent || 0;
+                        const priceResult = calculateVehiclePriceResult();
+                        const hasDynamicPricing = priceResult.pricingTier === 'daily' && priceResult.dayBreakdown.length > 0 &&
+                          priceResult.dayBreakdown.some(d => d.type !== 'regular');
+
+                        if (hasDynamicPricing) {
+                          // Group days by rate type for cleaner display
+                          const groups: { type: string; rate: number; count: number; label: string }[] = [];
+                          for (const day of priceResult.dayBreakdown) {
+                            const last = groups[groups.length - 1];
+                            if (last && last.rate === day.effectiveRate && last.type === day.type) {
+                              last.count++;
+                            } else {
+                              const label = day.type === 'holiday'
+                                ? (day.holidayName || 'Holiday')
+                                : day.type === 'weekend' ? 'Weekend' : 'Weekday';
+                              groups.push({ type: day.type, rate: day.effectiveRate, count: 1, label });
+                            }
+                          }
+                          return groups.map((group, i) => (
+                            <div key={i} className="flex justify-between text-xs text-muted-foreground/70 pl-1">
+                              <span>{group.label} — {formatCurrency(group.rate)}/day × {group.count} day{group.count !== 1 ? 's' : ''}</span>
+                              <span>{formatCurrency(group.rate * group.count)}</span>
+                            </div>
+                          ));
+                        }
+
+                        let unitRate = 0;
+                        let unitLabel = '';
+                        let quantityLabel = '';
+                        if (days > 30 && monthlyRent > 0) {
+                          unitRate = monthlyRent;
+                          unitLabel = '/mo';
+                          const months = days / 30;
+                          quantityLabel = months === Math.floor(months)
+                            ? `${Math.floor(months)} month${Math.floor(months) !== 1 ? 's' : ''}`
+                            : `${days} days`;
+                        } else if (days >= 7 && days <= 30 && weeklyRent > 0) {
+                          unitRate = weeklyRent;
+                          unitLabel = '/wk';
+                          const weeks = days / 7;
+                          quantityLabel = weeks === Math.floor(weeks)
+                            ? `${Math.floor(weeks)} week${Math.floor(weeks) !== 1 ? 's' : ''}`
+                            : `${days} days`;
+                        } else {
+                          unitRate = dailyRent;
+                          unitLabel = '/day';
+                          quantityLabel = `${days} day${days !== 1 ? 's' : ''}`;
+                        }
+                        if (unitRate <= 0) return null;
+                        return (
+                          <div className="text-xs text-muted-foreground/70 pl-1">
+                            {formatCurrency(unitRate)}{unitLabel} × {quantityLabel}
+                          </div>
+                        );
+                      })()}
                     </div>
                   </div>
                 )}

@@ -85,8 +85,9 @@ export interface BookingContext {
 }
 
 /**
- * Widget form data — persisted to sessionStorage via Zustand persist.
+ * Widget form data — persisted to localStorage via Zustand persist.
  * This IS the form state (no separate useState copy).
+ * Survives both page refresh AND tab close/reopen.
  */
 export interface WidgetFormData {
   pickupLocation: string;
@@ -158,7 +159,7 @@ interface BookingState {
   // Pending gig driver image uploads (stored in Supabase storage, not yet linked)
   pendingGigDriverFiles: PendingGigDriverFile[];
 
-  // Widget state — persisted to sessionStorage, used directly by the widget (no useState copy)
+  // Widget state — persisted to localStorage, used directly by the widget (no useState copy)
   formData: WidgetFormData;
   currentStep: number;
   selectedExtras: string[];
@@ -284,9 +285,13 @@ export const useBookingStore = create<BookingState>()(
         });
 
         if (typeof window !== 'undefined') {
+          // Clean up the Zustand persist key
+          localStorage.removeItem('booking-widget');
+          // Legacy sessionStorage keys (from old implementation)
           sessionStorage.removeItem('booking_form_data');
           sessionStorage.removeItem('booking_current_step');
           sessionStorage.removeItem('booking_selected_extras');
+          // Legacy localStorage keys
           localStorage.removeItem('appliedPromoCode');
           localStorage.removeItem('appliedPromoDetails');
         }
@@ -297,7 +302,7 @@ export const useBookingStore = create<BookingState>()(
     {
       name: 'booking-widget',
       storage: createJSONStorage(() =>
-        typeof window !== 'undefined' ? sessionStorage : {
+        typeof window !== 'undefined' ? localStorage : {
           getItem: () => null,
           setItem: () => {},
           removeItem: () => {},

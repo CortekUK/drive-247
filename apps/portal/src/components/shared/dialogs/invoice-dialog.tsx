@@ -49,10 +49,12 @@ interface InvoiceDialogProps {
   };
   selectedExtras?: { name: string; quantity: number; price: number }[];
   currencyCode?: string;
+  // Rental price breakdown for display (e.g., "€345.00/wk × 3 weeks")
+  rentalBreakdown?: { label: string; amount?: number }[];
 }
 
 // Separate printable component
-const PrintableInvoice = ({ invoice, customer, vehicle, rental, protectionPlan, selectedExtras, companyName, logoUrl, accentColor, currencyCode = 'GBP' }: Omit<InvoiceDialogProps, "open" | "onOpenChange"> & { companyName: string; logoUrl?: string | null; accentColor: string }) => {
+const PrintableInvoice = ({ invoice, customer, vehicle, rental, protectionPlan, selectedExtras, rentalBreakdown, companyName, logoUrl, accentColor, currencyCode = 'GBP' }: Omit<InvoiceDialogProps, "open" | "onOpenChange"> & { companyName: string; logoUrl?: string | null; accentColor: string }) => {
   const fc = (amount: number) => formatCurrency(amount, currencyCode);
   const vehicleName = vehicle.make && vehicle.model ? `${vehicle.make} ${vehicle.model}` : vehicle.reg;
   const hasDiscount = (invoice.discount_amount ?? 0) > 0;
@@ -128,9 +130,19 @@ const PrintableInvoice = ({ invoice, customer, vehicle, rental, protectionPlan, 
                   <p className="text-xs text-gray-600">
                     {vehicleName} ({vehicle.reg})
                   </p>
+                  {rentalBreakdown && rentalBreakdown.length > 0 && (
+                    <div className="mt-1 space-y-0.5">
+                      {rentalBreakdown.map((item, i) => (
+                        <div key={i} className="flex justify-between text-xs text-gray-500">
+                          <span>{item.label}</span>
+                          {item.amount !== undefined && <span>{fc(item.amount)}</span>}
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
               </td>
-              <td className="p-3 text-sm text-right font-medium">
+              <td className="p-3 text-sm text-right font-medium align-top">
                 {hasDiscount ? (
                   <div>
                     <span className="line-through text-gray-400 mr-2">{fc(originalRentalFee)}</span>
@@ -258,6 +270,7 @@ export const InvoiceDialog = ({
   protectionPlan,
   selectedExtras,
   currencyCode: currencyCodeProp,
+  rentalBreakdown,
 }: InvoiceDialogProps) => {
   const { tenant } = useTenant();
   const { branding } = useTenantBranding();
@@ -301,6 +314,7 @@ export const InvoiceDialog = ({
             rental={rental}
             protectionPlan={protectionPlan}
             selectedExtras={selectedExtras}
+            rentalBreakdown={rentalBreakdown}
             companyName={companyName}
             logoUrl={logoUrl}
             accentColor={accentColor}
@@ -387,9 +401,19 @@ export const InvoiceDialog = ({
                         <p className="text-xs text-muted-foreground">
                           {vehicleName} ({vehicle.reg})
                         </p>
+                        {rentalBreakdown && rentalBreakdown.length > 0 && (
+                          <div className="mt-1 space-y-0.5">
+                            {rentalBreakdown.map((item, i) => (
+                              <div key={i} className="flex justify-between text-xs text-muted-foreground/70">
+                                <span>{item.label}</span>
+                                {item.amount !== undefined && <span>{fc(item.amount)}</span>}
+                              </div>
+                            ))}
+                          </div>
+                        )}
                       </div>
                     </td>
-                    <td className="p-3 text-sm text-right font-medium">
+                    <td className="p-3 text-sm text-right font-medium align-top">
                       {hasDiscount ? (
                         <div>
                           <span className="line-through text-muted-foreground mr-2">{fc(originalRentalFee)}</span>

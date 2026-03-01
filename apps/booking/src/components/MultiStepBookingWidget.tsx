@@ -144,8 +144,14 @@ const MultiStepBookingWidget = () => {
   const { data: customerDocuments } = useCustomerDocuments();
   const [showAuthDialog, setShowAuthDialog] = useState(false);
 
-  // Gig driver state
-  const [isGigDriver, setIsGigDriver] = useState(false);
+  // Gig driver state (restored from localStorage)
+  const [isGigDriver, setIsGigDriver] = useState(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('booking_isGigDriver');
+      return saved === 'true';
+    }
+    return false;
+  });
   const [showGigDriverUpload, setShowGigDriverUpload] = useState(false);
   const customerId = customerUser?.customer?.id;
   const { data: existingGigImages } = useGigDriverImages(customerId);
@@ -328,10 +334,22 @@ const MultiStepBookingWidget = () => {
     return baseOpen;
   }, [dropoffDateWorkingHours, formData.pickupDate, formData.pickupTime, formData.dropoffDate, tenant]);
 
-  // Insurance state
-  const [hasInsurance, setHasInsurance] = useState<boolean | null>(null);
+  // Insurance state (restored from localStorage)
+  const [hasInsurance, setHasInsurance] = useState<boolean | null>(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('booking_hasInsurance');
+      if (saved === 'true') return true;
+      if (saved === 'false') return false;
+    }
+    return null;
+  });
   const [showUploadDialog, setShowUploadDialog] = useState(false);
-  const [uploadedDocumentId, setUploadedDocumentId] = useState<string | null>(null);
+  const [uploadedDocumentId, setUploadedDocumentId] = useState<string | null>(() => {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('booking_uploadedDocumentId');
+    }
+    return null;
+  });
   const [selectedExistingDocument, setSelectedExistingDocument] = useState<string | null>(null);
 
   // Filter to get only valid insurance documents for logged-in users
@@ -395,6 +413,27 @@ const MultiStepBookingWidget = () => {
       setFormData(prev => ({ ...prev, customerTimezone: tenant.timezone || '' }));
     }
   }, [tenant?.timezone, isAuthenticated, customerUser?.customer?.timezone]);
+
+  // Persist booking-local state to localStorage so it survives tab close/refresh
+  useEffect(() => {
+    localStorage.setItem('booking_isGigDriver', String(isGigDriver));
+  }, [isGigDriver]);
+
+  useEffect(() => {
+    if (hasInsurance === null) {
+      localStorage.removeItem('booking_hasInsurance');
+    } else {
+      localStorage.setItem('booking_hasInsurance', String(hasInsurance));
+    }
+  }, [hasInsurance]);
+
+  useEffect(() => {
+    if (uploadedDocumentId) {
+      localStorage.setItem('booking_uploadedDocumentId', uploadedDocumentId);
+    } else {
+      localStorage.removeItem('booking_uploadedDocumentId');
+    }
+  }, [uploadedDocumentId]);
 
   // Auto-populate fixed addresses when tenant loads
   // This ensures form data is set even if LocationPicker's useEffect has timing issues
@@ -1923,6 +1962,11 @@ const MultiStepBookingWidget = () => {
     setCalculatedDistance(null);
     setDistanceOverride(false);
 
+    // Reset insurance/gig state
+    setHasInsurance(null);
+    setUploadedDocumentId(null);
+    setIsGigDriver(false);
+
     // Clear all persisted booking data (store + legacy storage keys)
     clearBooking();
   };
@@ -1966,6 +2010,9 @@ const MultiStepBookingWidget = () => {
     setBonzahPremium(0);
     setBonzahPolicyId(null);
 
+    // Reset gig driver state
+    setIsGigDriver(false);
+
     // Reset verification state
     setVerificationStatus('init');
     setVerificationSessionId(null);
@@ -1981,8 +2028,8 @@ const MultiStepBookingWidget = () => {
     // Clear store + legacy storage keys
     clearBooking();
 
-    // Clear localStorage verification keys
-    const verificationKeys = [
+    // Clear localStorage keys (verification + booking-local state)
+    const keysToRemove = [
       'verificationSessionId',
       'verificationStatus',
       'verificationTimestamp',
@@ -1991,8 +2038,11 @@ const MultiStepBookingWidget = () => {
       'verificationToken',
       'verificationVendorData',
       'verificationMode',
+      'booking_isGigDriver',
+      'booking_hasInsurance',
+      'booking_uploadedDocumentId',
     ];
-    verificationKeys.forEach(key => localStorage.removeItem(key));
+    keysToRemove.forEach(key => localStorage.removeItem(key));
 
     toast.success("Booking form cleared");
   };
@@ -2234,7 +2284,9 @@ const MultiStepBookingWidget = () => {
       total,
       vehicleTotal,
       deliveryFees,
-      days
+      days,
+      pricingTier: result.pricingTier,
+      dayBreakdown: result.dayBreakdown,
     };
   };
 
@@ -5658,6 +5710,8 @@ const MultiStepBookingWidget = () => {
               formatted: '1 day'
             }}
             vehicleTotal={estimatedBooking?.vehicleTotal || 0}
+            pricingTier={estimatedBooking?.pricingTier || 'daily'}
+            dayBreakdown={estimatedBooking?.dayBreakdown || []}
             promoDetails={promoDetails}
             onBack={() => setCurrentStep(4)}
             bonzahPremium={bonzahPremium}

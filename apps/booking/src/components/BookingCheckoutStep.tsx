@@ -8,6 +8,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import { ChevronLeft, CreditCard, Shield, Calendar, MapPin, Clock, Car, User, Loader2, ArrowDown, CircleDot } from "lucide-react";
+import type { PricingTier, DayBreakdown } from "@/lib/calculate-rental-price";
 import { supabase } from "@/integrations/supabase/client";
 import { useTenant } from "@/contexts/TenantContext";
 import { useCustomerAuthStore } from "@/stores/customer-auth-store";
@@ -45,6 +46,8 @@ interface BookingCheckoutStepProps {
     formatted: string;
   };
   vehicleTotal: number; // Original price before promo discount
+  pricingTier?: PricingTier;
+  dayBreakdown?: DayBreakdown[];
   promoDetails?: PromoDetails | null;
   onBack: () => void;
   // Bonzah insurance props
@@ -62,6 +65,8 @@ export default function BookingCheckoutStep({
   selectedExtras = {},
   rentalDuration,
   vehicleTotal,
+  pricingTier = 'daily',
+  dayBreakdown = [],
   promoDetails,
   onBack,
   bonzahPremium = 0,
@@ -253,6 +258,55 @@ export default function BookingCheckoutStep({
 
   const currencyCode = tenant?.currency_code || 'GBP';
   const fmt = (amount: number) => formatCurrency(amount, currencyCode);
+
+  // Build rental breakdown for invoice display
+  const buildRentalBreakdown = (): { label: string; amount?: number }[] => {
+    const days = rentalDuration.days;
+    const dailyRent = selectedVehicle?.daily_rent || 0;
+    const weeklyRent = selectedVehicle?.weekly_rent || 0;
+    const monthlyRent = selectedVehicle?.monthly_rent || 0;
+
+    const hasDynamicPricing = pricingTier === 'daily' && dayBreakdown.length > 0 &&
+      dayBreakdown.some(d => d.type !== 'regular');
+
+    if (hasDynamicPricing && dayBreakdown.length > 0) {
+      const groups: { type: string; rate: number; count: number; label: string }[] = [];
+      for (const day of dayBreakdown) {
+        const last = groups[groups.length - 1];
+        if (last && last.rate === day.effectiveRate && last.type === day.type) {
+          last.count++;
+        } else {
+          const label = day.type === 'holiday'
+            ? (day.holidayName || 'Holiday')
+            : day.type === 'weekend' ? 'Weekend' : 'Weekday';
+          groups.push({ type: day.type, rate: day.effectiveRate, count: 1, label });
+        }
+      }
+      return groups.map(g => ({
+        label: `${g.label} — ${fmt(g.rate)}/day × ${g.count} day${g.count !== 1 ? 's' : ''}`,
+        amount: g.rate * g.count,
+      }));
+    }
+
+    if (pricingTier === 'monthly' && monthlyRent > 0) {
+      const months = days / 30;
+      const qtyLabel = months === Math.floor(months)
+        ? `${Math.floor(months)} month${Math.floor(months) !== 1 ? 's' : ''}`
+        : `${days} days`;
+      return [{ label: `${fmt(monthlyRent)}/mo × ${qtyLabel}` }];
+    } else if (pricingTier === 'weekly' && weeklyRent > 0) {
+      const weeks = days / 7;
+      const qtyLabel = weeks === Math.floor(weeks)
+        ? `${Math.floor(weeks)} week${Math.floor(weeks) !== 1 ? 's' : ''}`
+        : `${days} days`;
+      return [{ label: `${fmt(weeklyRent)}/wk × ${qtyLabel}` }];
+    } else if (dailyRent > 0) {
+      return [{ label: `${fmt(dailyRent)}/day × ${days} day${days !== 1 ? 's' : ''}` }];
+    }
+    return [];
+  };
+
+  const rentalBreakdown = buildRentalBreakdown();
 
   // Function to get booking payment mode
   const getBookingMode = async (): Promise<'manual' | 'auto'> => {
@@ -1425,13 +1479,88 @@ export default function BookingCheckoutStep({
               ) : (
                 <>
                   {/* STANDARD TENANT: Show full price breakdown */}
-                  {/* Original rental price */}
-                  <div className="flex justify-between text-sm">
-                    <span className="text-muted-foreground">Rental ({rentalDuration.formatted})</span>
-                    <span className={`font-medium ${promoDetails ? 'line-through text-muted-foreground' : ''}`}>
-                      {fmt(vehicleTotal)}
-                    </span>
-                  </div>
+                  {/* Rental price with unit breakdown */}
+                  {(() => {
+                    const days = rentalDuration.days;
+                    const dailyRent = selectedVehicle?.daily_rent || 0;
+                    const weeklyRent = selectedVehicle?.weekly_rent || 0;
+                    const monthlyRent = selectedVehicle?.monthly_rent || 0;
+
+                    // For daily tier with dynamic pricing, check if rates vary across days
+                    const hasDynamicPricing = pricingTier === 'daily' && dayBreakdown.length > 0 &&
+                      dayBreakdown.some(d => d.type !== 'regular');
+
+                    // Group days by rate for a cleaner breakdown
+                    const buildDailyBreakdown = () => {
+                      if (!dayBreakdown.length) return null;
+                      // Group consecutive days with same rate
+                      const groups: { type: string; rate: number; count: number; label: string }[] = [];
+                      for (const day of dayBreakdown) {
+                        const last = groups[groups.length - 1];
+                        if (last && last.rate === day.effectiveRate && last.type === day.type) {
+                          last.count++;
+                        } else {
+                          const label = day.type === 'holiday'
+                            ? (day.holidayName || 'Holiday')
+                            : day.type === 'weekend' ? 'Weekend' : 'Weekday';
+                          groups.push({ type: day.type, rate: day.effectiveRate, count: 1, label });
+                        }
+                      }
+                      return groups;
+                    };
+
+                    let unitRate = 0;
+                    let unitLabel = '';
+                    let quantityLabel = '';
+
+                    if (pricingTier === 'monthly') {
+                      unitRate = monthlyRent;
+                      unitLabel = '/mo';
+                      const months = days / 30;
+                      quantityLabel = months === Math.floor(months)
+                        ? `${Math.floor(months)} month${Math.floor(months) !== 1 ? 's' : ''}`
+                        : `${days} days`;
+                    } else if (pricingTier === 'weekly') {
+                      unitRate = weeklyRent;
+                      unitLabel = '/wk';
+                      const weeks = days / 7;
+                      quantityLabel = weeks === Math.floor(weeks)
+                        ? `${Math.floor(weeks)} week${Math.floor(weeks) !== 1 ? 's' : ''}`
+                        : `${days} days`;
+                    } else if (!hasDynamicPricing) {
+                      unitRate = dailyRent;
+                      unitLabel = '/day';
+                      quantityLabel = `${days} day${days !== 1 ? 's' : ''}`;
+                    }
+
+                    const dailyGroups = hasDynamicPricing ? buildDailyBreakdown() : null;
+
+                    return (
+                      <div className="space-y-1">
+                        <div className="flex justify-between text-sm">
+                          <span className="text-muted-foreground">Rental ({rentalDuration.formatted})</span>
+                          <span className={`font-medium ${promoDetails ? 'line-through text-muted-foreground' : ''}`}>
+                            {fmt(vehicleTotal)}
+                          </span>
+                        </div>
+                        {/* Flat rate breakdown (monthly/weekly/daily without surcharges) */}
+                        {unitRate > 0 && !hasDynamicPricing && (
+                          <div className="text-xs text-muted-foreground/70 pl-1">
+                            {fmt(unitRate)}{unitLabel} × {quantityLabel}
+                          </div>
+                        )}
+                        {/* Dynamic pricing per-day breakdown */}
+                        {dailyGroups && dailyGroups.map((group, i) => (
+                          <div key={i} className="flex justify-between text-xs text-muted-foreground/70 pl-1">
+                            <span>
+                              {group.label} — {fmt(group.rate)}/day × {group.count} day{group.count !== 1 ? 's' : ''}
+                            </span>
+                            <span>{fmt(group.rate * group.count)}</span>
+                          </div>
+                        ))}
+                      </div>
+                    );
+                  })()}
 
                   {/* Promo discount line item - only show when applied */}
                   {promoDetails && calculatePromoDiscount() > 0 && (
@@ -1598,7 +1727,11 @@ export default function BookingCheckoutStep({
               {/* Only show Stripe security message if payment is required */}
               {getPayableAmount() > 0 && (
                 <div className="flex items-center gap-2 text-xs text-muted-foreground justify-center pt-2">
-                  <Shield className="w-4 h-4" />
+                  {tenant?.logo_url ? (
+                    <img src={tenant.logo_url} alt={tenant?.app_name || tenant?.company_name || ''} className="h-4 w-auto object-contain" />
+                  ) : (
+                    <Shield className="w-4 h-4" />
+                  )}
                   <span>Secured by Stripe. Card details never stored.</span>
                 </div>
               )}
@@ -1636,6 +1769,7 @@ export default function BookingCheckoutStep({
             const extra = extras.find((e: any) => e.id === extraId);
             return { name: extra?.name || 'Extra', quantity: qty, price: extra?.price || 0 };
           }).filter(e => e.quantity > 0)}
+          rentalBreakdown={rentalBreakdown}
         />
       )}
 
