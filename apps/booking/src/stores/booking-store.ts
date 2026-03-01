@@ -50,7 +50,6 @@ export interface BookingContext {
   customerName: string | null;
   customerEmail: string | null;
   customerPhone: string | null;
-  customerType: 'Individual' | 'Company' | null;
   customerTimezone: string | null;
 
   // Driver info
@@ -107,7 +106,6 @@ export interface WidgetFormData {
   customerName: string;
   customerEmail: string;
   customerPhone: string;
-  customerType: string;
   licenseNumber: string;
   licenseState: string;
   addressStreet: string;
@@ -136,7 +134,6 @@ export const initialWidgetFormData: WidgetFormData = {
   customerName: "",
   customerEmail: "",
   customerPhone: "",
-  customerType: "",
   licenseNumber: "",
   licenseState: "",
   addressStreet: "",
@@ -204,7 +201,6 @@ const initialContext: BookingContext = {
   customerName: null,
   customerEmail: null,
   customerPhone: null,
-  customerType: null,
   customerTimezone: null,
   driverDOB: null,
   driverAge: null,

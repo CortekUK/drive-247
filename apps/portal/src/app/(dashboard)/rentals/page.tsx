@@ -64,7 +64,6 @@ const RentalsList = () => {
     () => ({
       search: searchParams.get("search") || "",
       status: searchParams.get("status") || "all",
-      customerType: searchParams.get("customerType") || "all",
       paymentMode: searchParams.get("paymentMode") || "all",
       duration: searchParams.get("duration") || "all",
       durationMin: searchParams.get("durationMin")

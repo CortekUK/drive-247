@@ -8,7 +8,6 @@ import { formatCurrency } from "@/lib/format-utils";
 interface Customer {
   id: string;
   name: string;
-  customer_type?: string;
   type?: string;
 }
 
@@ -58,9 +57,6 @@ export const ContractSummary = ({
           {customer ? (
             <div className="pl-4">
               <div className="font-medium">{customer.name}</div>
-              <Badge variant="secondary" className="text-xs">
-                {customer.customer_type || 'Individual'}
-              </Badge>
             </div>
           ) : (
             <div className="pl-4 text-sm text-muted-foreground">Not selected</div>

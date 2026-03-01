@@ -313,7 +313,6 @@ const BookingCheckoutContent = () => {
       const customerName = (bookingContext as any).customerName;
       const customerEmail = (bookingContext as any).customerEmail;
       const customerPhone = (bookingContext as any).customerPhone;
-      const customerType = (bookingContext as any).customerType;
 
       if (!customerEmail) {
         throw new Error("Customer information not found. Please restart booking.");
@@ -343,7 +342,6 @@ const BookingCheckoutContent = () => {
             name: customerName,
             email: customerEmail,
             phone: customerPhone,
-            customer_type: customerType || "Individual",
             status: "Active",
             tenant_id: tenant?.id
           })
@@ -504,8 +502,8 @@ const BookingCheckoutContent = () => {
         console.log('[CHECKOUT] Cleared pending gig driver files from store');
       }
 
-      // Step 3: Check if Individual customer already has active rental
-      if (customer.customer_type === "Individual") {
+      // Step 3: Check if customer already has active rental
+      {
         const { data: activeRentals, error: checkError } = await supabase
           .from("rentals")
           .select("id")
@@ -514,7 +512,7 @@ const BookingCheckoutContent = () => {
 
         if (checkError) throw checkError;
         if (activeRentals && activeRentals.length > 0) {
-          throw new Error("You already have an active rental. Individuals can only have one active rental at a time.");
+          throw new Error("You already have an active rental. You can only have one active rental at a time.");
         }
       }
 

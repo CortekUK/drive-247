@@ -14,7 +14,7 @@ import { Input } from "@/components/ui/input";
 import { useRentalSettings } from "@/hooks/use-rental-settings";
 import { getContractTotal } from "@/lib/vehicle-utils";
 import { useTenant } from "@/contexts/TenantContext";
-import { formatCurrency, getPerMonthLabelLong, getUnlimitedLabel } from "@/lib/format-utils";
+import { formatCurrency, getDistanceUnitLong, getUnlimitedLabel } from "@/lib/format-utils";
 import type { DistanceUnit } from "@/lib/format-utils";
 import { format } from "date-fns";
 import { startOfMonth, endOfMonth, parseISO } from "date-fns";
@@ -635,7 +635,7 @@ export default function VehicleDetail() {
                 {vehicle.fuel_type && <MetricItem label="Fuel Type" value={vehicle.fuel_type === 'Petrol' ? 'Gas' : vehicle.fuel_type} />}
                 <MetricItem
                   label="Allowed Mileage"
-                  value={vehicle.allowed_mileage ? `${vehicle.allowed_mileage.toLocaleString()} ${getPerMonthLabelLong(distanceUnit)}` : getUnlimitedLabel(distanceUnit)}
+                  value={vehicle.allowed_mileage ? `${vehicle.allowed_mileage.toLocaleString()} ${getDistanceUnitLong(distanceUnit)}` : getUnlimitedLabel(distanceUnit)}
                 />
                 <div className="flex items-center gap-2">
                   <span className="text-xs text-muted-foreground">Acquisition:</span>

@@ -33,7 +33,6 @@ const MOCK_WIDGET_FORM_DATA = {
   customerName: "Ghulam Mohiuddin",
   customerEmail: "ilyasghulam35@gmail.com",
   customerPhone: "+15551234567",
-  customerType: "Individual",
   licenseNumber: "DL123456789",
   verificationSessionId: "",
 }

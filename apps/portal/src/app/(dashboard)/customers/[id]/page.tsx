@@ -60,7 +60,6 @@ interface Customer {
   name: string;
   email: string;
   phone: string;
-  customer_type: "Individual" | "Company";
   status: string;
   whatsapp_opt_in: boolean;
   license_number?: string;
@@ -131,7 +130,7 @@ const CustomerDetail = () => {
       const { data, error } = await (supabase as any)
         .from("customers")
         .select(`
-          id, name, email, phone, customer_type, status, whatsapp_opt_in,
+          id, name, email, phone, status, whatsapp_opt_in,
           license_number, id_number, date_of_birth, is_blocked, blocked_at, blocked_reason,
           is_gig_driver,
           nok_full_name, nok_relationship, nok_phone, nok_email, nok_address
@@ -358,15 +357,11 @@ const CustomerDetail = () => {
                 </Badge>
               )}
             </div>
-            <p className="text-muted-foreground text-sm">
-              {customer.customer_type} Customer
-              {customer.license_number && (
-                <span className="mx-2">•</span>
-              )}
-              {customer.license_number && (
-                <span>License: {customer.license_number}</span>
-              )}
-            </p>
+            {customer.license_number && (
+              <p className="text-muted-foreground text-sm">
+                License: {customer.license_number}
+              </p>
+            )}
           </div>
 
           {/* Action Buttons */}
@@ -472,7 +467,6 @@ const CustomerDetail = () => {
               </div>
               {customer.email && <MetricItem label="Email" value={customer.email} />}
               {customer.phone && <MetricItem label="Phone" value={customer.phone} />}
-              <MetricItem label="Type" value={customer.customer_type} />
               <div className="flex flex-col">
                 <span className="text-xs text-muted-foreground mb-0.5">Date of Birth</span>
                 {editingDob ? (

@@ -23,7 +23,7 @@ export interface CalendarRental {
   monthly_amount: number;
   status: string;
   computed_status: string;
-  customer: { id: string; name: string; customer_type: string };
+  customer: { id: string; name: string };
   vehicle: { id: string; reg: string; make: string; model: string; photo_url?: string };
 }
 

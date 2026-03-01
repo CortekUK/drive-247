@@ -455,7 +455,7 @@ const CreateRental = () => {
     queryFn: async () => {
       let query = supabase
         .from("customers")
-        .select("id, name, customer_type, email, phone")
+        .select("id, name, email, phone")
         .eq("status", "Active");
 
       if (tenant?.id) {
@@ -1332,13 +1332,12 @@ const CreateRental = () => {
                             </FormControl>
                             <SelectContent className="max-w-[calc(100vw-2rem)]">
                               {customers?.map((customer) => {
-                                const customerType = customer.customer_type;
                                 const contact = customer.email || customer.phone;
                                 return (
                                   <SelectItem key={customer.id} value={customer.id} className="whitespace-normal break-words">
                                     <div className="flex flex-col gap-0.5">
                                       <span className="font-medium">{customer.name}</span>
-                                      <span className="text-xs text-muted-foreground">{contact || customerType}</span>
+                                      {contact && <span className="text-xs text-muted-foreground">{contact}</span>}
                                     </div>
                                   </SelectItem>
                                 );

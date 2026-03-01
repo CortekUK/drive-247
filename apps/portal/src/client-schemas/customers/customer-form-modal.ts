@@ -1,7 +1,6 @@
 import { z } from "zod";
 
 export const customerFormModalSchema = z.object({
-  customer_type: z.enum(['Individual', 'Company']),
   name: z.string()
     .min(1, "Name is required")
     .refine((val) => !/\d/.test(val), "Name cannot contain numbers"),

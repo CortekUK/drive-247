@@ -3,7 +3,7 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { Input } from "@/components/ui/input";
-import { PhoneInput } from "@/components/ui/phone-input";
+import { PhoneInput, COUNTRY_CODES } from "@/components/ui/phone-input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -16,7 +16,7 @@ import { Badge } from "@/components/ui/badge";
 import { supabase } from "@/integrations/supabase/client";
 import { useTenant } from "@/contexts/TenantContext";
 import { toast } from "sonner";
-import { ChevronRight, ChevronLeft, Check, Baby, Coffee, MapPin, UserCheck, Car, Crown, TrendingUp, Users as GroupIcon, Calculator, Shield, CheckCircle, CalendarIcon, Clock, Search, Grid3x3, List, SlidersHorizontal, X, AlertCircle, FileCheck, RefreshCw, Upload, Gauge, User, Loader2, Globe, Briefcase } from "lucide-react";
+import { ChevronRight, ChevronLeft, Check, Baby, Coffee, MapPin, UserCheck, Car, Crown, TrendingUp, Users as GroupIcon, Calculator, Shield, CheckCircle, CalendarIcon, Clock, Search, Grid3x3, List, SlidersHorizontal, X, AlertCircle, FileCheck, RefreshCw, Upload, Gauge, User, Loader2, Globe, Briefcase, ExternalLink, Mail, Phone as PhoneIcon } from "lucide-react";
 import { format, differenceInHours } from "date-fns";
 import { cn } from "@/lib/utils";
 import BookingConfirmation from "./BookingConfirmation";
@@ -47,7 +47,7 @@ import { getTimezonesByRegion, findTimezone, getDetectedTimezone } from "@/lib/t
 import { useCustomerDocuments, getDocumentStatus } from "@/hooks/use-customer-documents";
 import { useGigDriverImages } from "@/hooks/use-gig-driver-images";
 import GigDriverUploadDialog from "@/components/booking/gig-driver-upload-dialog";
-import { formatCurrency, getEarthRadius, metersToUnit, getPerMonthLabel, getUnlimitedLabel, getDistanceUnitLong } from "@/lib/format-utils";
+import { formatCurrency, getEarthRadius, metersToUnit, getDistanceUnitShort, getUnlimitedLabel, getDistanceUnitLong } from "@/lib/format-utils";
 import type { DistanceUnit } from "@/lib/format-utils";
 import { useDynamicPricing } from "@/hooks/use-dynamic-pricing";
 import { calculateRentalPriceBreakdown, parseDateString as parseDateStringSafe } from "@/lib/calculate-rental-price";
@@ -798,9 +798,6 @@ const MultiStepBookingWidget = () => {
         if (customer.phone) {
           updates.customerPhone = customer.phone;
         }
-        if (customer.customer_type) {
-          updates.customerType = customer.customer_type;
-        }
         if (customer.date_of_birth) {
           updates.driverDOB = customer.date_of_birth;
         }
@@ -893,9 +890,6 @@ const MultiStepBookingWidget = () => {
         }
         if (customer.phone) {
           updates.customerPhone = customer.phone;
-        }
-        if (customer.customer_type) {
-          updates.customerType = customer.customer_type;
         }
         // Populate address/license fields from customer profile
         if (customer.address_street) updates.addressStreet = customer.address_street;
@@ -1779,7 +1773,6 @@ const MultiStepBookingWidget = () => {
           name: sanitizeName(formData.customerName),
           email: sanitizeEmail(formData.customerEmail),
           phone: sanitizePhone(formData.customerPhone),
-          customer_type: formData.customerType || "Individual",
           status: "Active",
           date_of_birth: formData.driverDOB || null
         };
@@ -1915,7 +1908,6 @@ const MultiStepBookingWidget = () => {
       customerName: "",
       customerEmail: "",
       customerPhone: "",
-      customerType: "",
       licenseNumber: "",
       licenseState: "",
       addressStreet: "",
@@ -1955,7 +1947,6 @@ const MultiStepBookingWidget = () => {
       customerName: "",
       customerEmail: "",
       customerPhone: "",
-      customerType: "",
       licenseNumber: "",
       licenseState: "",
       addressStreet: "",
@@ -2854,14 +2845,6 @@ const MultiStepBookingWidget = () => {
         }
         break;
 
-      case 'customerType':
-        if (!value || value.trim() === "") {
-          newErrors.customerType = "Please select a customer type";
-        } else if (value !== "Individual" && value !== "Company") {
-          newErrors.customerType = "Invalid customer type selected";
-        }
-        break;
-
       case 'driverDOB':
         if (!value || value.trim() === "") {
           newErrors.driverDOB = "Date of birth is required.";
@@ -3047,7 +3030,6 @@ const MultiStepBookingWidget = () => {
       customerName: formData.customerName,
       customerEmail: formData.customerEmail,
       customerPhone: formData.customerPhone,
-      customerType: formData.customerType,
       driverDOB: formData.driverDOB,
       driverAge: driverAge,
       young_driver: isYoungDriver,
@@ -3057,7 +3039,6 @@ const MultiStepBookingWidget = () => {
     // Analytics tracking
     if ((window as any).gtag) {
       (window as any).gtag('event', 'booking_step4_submitted', {
-        customer_type: formData.customerType,
         verification_status: verificationStatus,
         driver_age: driverAge
       });
@@ -3082,9 +3063,6 @@ const MultiStepBookingWidget = () => {
     }
     if (!formData.customerPhone || formData.customerPhone.trim() === '') {
       newErrors.customerPhone = 'Please enter your phone number';
-    }
-    if (!formData.customerType) {
-      newErrors.customerType = 'Please select customer type';
     }
     // DOB validation
     if (!formData.driverDOB || formData.driverDOB.trim() === '') {
@@ -3888,7 +3866,7 @@ const MultiStepBookingWidget = () => {
                                   {vehicle.colour && <p className="text-xs text-muted-foreground mt-1">{vehicle.colour}</p>}
                                   <div className="flex items-center gap-1 text-xs text-muted-foreground mt-1">
                                     <Gauge className="h-3 w-3" />
-                                    <span>{vehicle.allowed_mileage ? `${vehicle.allowed_mileage.toLocaleString()} ${getPerMonthLabel(distanceUnit)}` : getUnlimitedLabel(distanceUnit)}</span>
+                                    <span>{vehicle.allowed_mileage ? `${vehicle.allowed_mileage.toLocaleString()} ${getDistanceUnitShort(distanceUnit)}` : getUnlimitedLabel(distanceUnit)}</span>
                                   </div>
                                 </div>
                                 {isSelected && <div className="w-6 h-6 bg-primary rounded-full flex items-center justify-center">
@@ -4103,7 +4081,7 @@ const MultiStepBookingWidget = () => {
                             <span className="flex items-center gap-1" title="Mileage Allowance">
                               <Gauge className="h-3 w-3" />
                               {vehicle.allowed_mileage
-                                ? `${vehicle.allowed_mileage.toLocaleString()} ${getPerMonthLabel(distanceUnit)}`
+                                ? `${vehicle.allowed_mileage.toLocaleString()} ${getDistanceUnitShort(distanceUnit)}`
                                 : getUnlimitedLabel(distanceUnit)}
                             </span>
                           </div>
@@ -4413,6 +4391,8 @@ const MultiStepBookingWidget = () => {
                                 if (selectedExistingDocument) {
                                   setUploadedDocumentId(selectedExistingDocument);
                                   setHasInsurance(true);
+                                  // Skip the upload success screen — existing docs are already verified
+                                  setCurrentStep(4);
                                 }
                               }}
                             >
@@ -4761,149 +4741,157 @@ const MultiStepBookingWidget = () => {
             </h3>
           </div>
 
-          {/* Authenticated User Banner */}
-          {isAuthenticated && isCustomerDataPopulated && (
-            <div className="bg-primary/5 border border-primary/20 rounded-lg p-4">
-              <div className="flex items-center gap-3">
-                <div className="p-2 rounded-full bg-primary/10">
-                  <UserCheck className="w-5 h-5 text-primary" />
+          {/* Authenticated User — Read-Only Details Card */}
+          {isAuthenticated && isCustomerDataPopulated ? (
+            <div className="space-y-8">
+              <div className="bg-primary/5 border border-primary/20 rounded-lg p-5">
+                <div className="flex items-center justify-between mb-4">
+                  <div className="flex items-center gap-3">
+                    <div className="p-2 rounded-full bg-primary/10">
+                      <UserCheck className="w-5 h-5 text-primary" />
+                    </div>
+                    <div>
+                      <p className="text-sm font-medium text-foreground">
+                        Welcome back, {customerUser?.customer?.name}!
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        Your details from your account
+                        {isCustomerAlreadyVerified && ' — ID verified'}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {isCustomerAlreadyVerified && (
+                      <Badge variant="default" className="bg-green-500 hover:bg-green-500/90 text-white">
+                        <CheckCircle className="w-3 h-3 mr-1" /> Verified
+                      </Badge>
+                    )}
+                    <a
+                      href="/portal/settings"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    >
+                      <Button variant="outline" size="sm" className="gap-1.5">
+                        Edit <ExternalLink className="w-3.5 h-3.5" />
+                      </Button>
+                    </a>
+                  </div>
                 </div>
-                <div className="flex-1">
-                  <p className="text-sm font-medium text-foreground">
-                    Welcome back, {customerUser?.customer?.name}!
-                  </p>
-                  <p className="text-xs text-muted-foreground">
-                    Your details have been auto-filled from your account.
-                    {isCustomerAlreadyVerified && ' Your ID is already verified.'}
-                  </p>
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                  <div className="flex items-center gap-3 bg-background/60 rounded-md px-3 py-2.5">
+                    <User className="w-4 h-4 text-muted-foreground flex-shrink-0" />
+                    <div className="min-w-0">
+                      <p className="text-[11px] text-muted-foreground uppercase tracking-wider">Name</p>
+                      <p className="text-sm font-medium text-foreground truncate">{formData.customerName || '—'}</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-3 bg-background/60 rounded-md px-3 py-2.5">
+                    <Mail className="w-4 h-4 text-muted-foreground flex-shrink-0" />
+                    <div className="min-w-0">
+                      <p className="text-[11px] text-muted-foreground uppercase tracking-wider">Email</p>
+                      <p className="text-sm font-medium text-foreground truncate">{formData.customerEmail || '—'}</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-3 bg-background/60 rounded-md px-3 py-2.5">
+                    <PhoneIcon className="w-4 h-4 text-muted-foreground flex-shrink-0" />
+                    <div className="min-w-0">
+                      <p className="text-[11px] text-muted-foreground uppercase tracking-wider">Phone</p>
+                      <p className="text-sm font-medium text-foreground truncate">
+                        {(() => {
+                          if (!formData.customerPhone) return '—';
+                          const sorted = [...COUNTRY_CODES].sort((a, b) => b.code.length - a.code.length);
+                          const match = sorted.find(c => formData.customerPhone.startsWith(c.code));
+                          if (match) return `${match.flag} ${formData.customerPhone}`;
+                          return formData.customerPhone;
+                        })()}
+                      </p>
+                    </div>
+                  </div>
                 </div>
-                {isCustomerAlreadyVerified && (
-                  <Badge variant="default" className="bg-green-500 hover:bg-green-500/90 text-white">
-                    <CheckCircle className="w-3 h-3 mr-1" /> Verified
-                  </Badge>
-                )}
+              </div>
+            </div>
+          ) : (
+            /* Guest User — Editable Form Fields */
+            <div className="space-y-8">
+              {/* Row 1: Customer Name & Email */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
+                <div className="space-y-2">
+                  <Label htmlFor="customerName" className="font-medium">Full Name *</Label>
+                  <Input
+                    id="customerName"
+                    value={formData.customerName}
+                    onChange={e => {
+                      const value = e.target.value;
+                      setFormData({
+                        ...formData,
+                        customerName: value
+                      });
+                      validateField('customerName', value);
+                    }}
+                    placeholder="Enter your full name"
+                    className={cn(
+                      "h-12 focus-visible:ring-primary",
+                      verificationStatus === 'verified' && "bg-muted cursor-not-allowed"
+                    )}
+                    disabled={verificationStatus === 'verified'}
+                  />
+                  {verificationStatus === 'verified' && (
+                    <p className="text-xs text-green-600 flex items-center gap-1">
+                      <CheckCircle className="w-3 h-3" /> Verified from ID document
+                    </p>
+                  )}
+                  {errors.customerName && <p className="text-sm text-destructive">{errors.customerName}</p>}
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="customerEmail" className="font-medium">Email Address *</Label>
+                  <Input
+                    id="customerEmail"
+                    type="email"
+                    value={formData.customerEmail}
+                    onChange={e => {
+                      const value = e.target.value;
+                      setFormData({
+                        ...formData,
+                        customerEmail: value
+                      });
+                      validateField('customerEmail', value);
+                    }}
+                    placeholder="your@email.com"
+                    className="h-12 focus-visible:ring-primary"
+                  />
+                  {errors.customerEmail && <p className="text-sm text-destructive">{errors.customerEmail}</p>}
+                </div>
+              </div>
+
+              {/* Row 2: Customer Phone */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
+                <div className="space-y-2">
+                  <Label htmlFor="customerPhone" className="font-medium">Phone Number *</Label>
+                  <PhoneInput
+                    id="customerPhone"
+                    value={formData.customerPhone}
+                    defaultCountry="GB"
+                    onChange={value => {
+                      setFormData({
+                        ...formData,
+                        customerPhone: value
+                      });
+                      validateField('customerPhone', value);
+                      savePhoneToProfile(value);
+                    }}
+                    error={!!errors.customerPhone}
+                    className="h-12"
+                  />
+                  {errors.customerPhone && <p className="text-sm text-destructive">{errors.customerPhone}</p>}
+                </div>
               </div>
             </div>
           )}
 
-          {/* Form Fields */}
+          {/* Form Fields (shared between authenticated & guest) */}
           <div className="space-y-8">
-            {/* Row 1: Customer Name & Email */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
-              <div className="space-y-2">
-                <Label htmlFor="customerName" className="font-medium">Full Name *</Label>
-                <Input
-                  id="customerName"
-                  value={formData.customerName}
-                  onChange={e => {
-                    const value = e.target.value;
-                    setFormData({
-                      ...formData,
-                      customerName: value
-                    });
-                    // Instant validation
-                    validateField('customerName', value);
-                  }}
-                  placeholder="Enter your full name"
-                  className={cn(
-                    "h-12 focus-visible:ring-primary",
-                    (verificationStatus === 'verified' || (isAuthenticated && isCustomerAlreadyVerified)) && "bg-muted cursor-not-allowed"
-                  )}
-                  disabled={verificationStatus === 'verified' || (isAuthenticated && isCustomerAlreadyVerified)}
-                />
-                {verificationStatus === 'verified' && !isCustomerAlreadyVerified && (
-                  <p className="text-xs text-green-600 flex items-center gap-1">
-                    <CheckCircle className="w-3 h-3" /> Verified from ID document
-                  </p>
-                )}
-                {isAuthenticated && isCustomerDataPopulated && isCustomerAlreadyVerified && (
-                  <p className="text-xs text-green-600 flex items-center gap-1">
-                    <CheckCircle className="w-3 h-3" /> From your verified account
-                  </p>
-                )}
-                {errors.customerName && <p className="text-sm text-destructive">{errors.customerName}</p>}
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="customerEmail" className="font-medium">Email Address *</Label>
-                <Input
-                  id="customerEmail"
-                  type="email"
-                  value={formData.customerEmail}
-                  onChange={e => {
-                    const value = e.target.value;
-                    setFormData({
-                      ...formData,
-                      customerEmail: value
-                    });
-                    // Instant validation
-                    validateField('customerEmail', value);
-                  }}
-                  placeholder="your@email.com"
-                  className={cn(
-                    "h-12 focus-visible:ring-primary",
-                    isAuthenticated && isCustomerDataPopulated && "bg-muted/50"
-                  )}
-                  readOnly={isAuthenticated && isCustomerDataPopulated}
-                />
-                {isAuthenticated && isCustomerDataPopulated && (
-                  <p className="text-xs text-muted-foreground flex items-center gap-1">
-                    <UserCheck className="w-3 h-3" /> From your account
-                  </p>
-                )}
-                {errors.customerEmail && <p className="text-sm text-destructive">{errors.customerEmail}</p>}
-              </div>
-            </div>
-
-            {/* Row 2: Customer Phone & Type */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
-              <div className="space-y-2">
-                <Label htmlFor="customerPhone" className="font-medium">Phone Number *</Label>
-                <PhoneInput
-                  id="customerPhone"
-                  value={formData.customerPhone}
-                  defaultCountry="GB"
-                  onChange={value => {
-                    setFormData({
-                      ...formData,
-                      customerPhone: value
-                    });
-                    validateField('customerPhone', value);
-                    // Auto-save to customer profile for logged-in users
-                    savePhoneToProfile(value);
-                  }}
-                  error={!!errors.customerPhone}
-                  className="h-12"
-                />
-                {isAuthenticated && isCustomerDataPopulated && customerHasPhone && formData.customerPhone && (
-                  <p className="text-xs text-muted-foreground flex items-center gap-1">
-                    <CheckCircle className="w-3 h-3 text-primary" /> From your account profile
-                  </p>
-                )}
-                {errors.customerPhone && <p className="text-sm text-destructive">{errors.customerPhone}</p>}
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="customerType" className="font-medium">Customer Type *</Label>
-                <Select value={formData.customerType} onValueChange={value => {
-                  setFormData({
-                    ...formData,
-                    customerType: value
-                  });
-                  // Instant validation
-                  validateField('customerType', value);
-                }}>
-                  <SelectTrigger id="customerType" className="h-12 focus-visible:ring-primary">
-                    <SelectValue placeholder="Select customer type" />
-                  </SelectTrigger>
-                  <SelectContent position="popper" sideOffset={4}>
-                    <SelectItem value="Individual">Individual</SelectItem>
-                    <SelectItem value="Company">Company</SelectItem>
-                  </SelectContent>
-                </Select>
-                {errors.customerType && <p className="text-sm text-destructive">{errors.customerType}</p>}
-              </div>
-            </div>
 
             {/* Gig Driver Checkbox */}
             <div className="flex items-start gap-3 pt-2">

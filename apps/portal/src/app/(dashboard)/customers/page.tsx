@@ -37,7 +37,6 @@ interface Customer {
   email: string;
   phone: string;
   type: string;
-  customer_type?: "Individual" | "Company";
   status: string;
   whatsapp_opt_in: boolean;
   high_switcher?: boolean;

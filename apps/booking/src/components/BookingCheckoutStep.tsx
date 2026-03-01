@@ -660,7 +660,6 @@ export default function BookingCheckoutStep({
         console.log('👤 Found existing customer, updating...', existingCustomer.id);
 
         const updateData: Record<string, unknown> = {
-          type: formData.customerType,
           name: formData.customerName,
           phone: formData.customerPhone,
           status: "Active",
@@ -688,7 +687,6 @@ export default function BookingCheckoutStep({
         console.log('🆕 Creating new customer...');
 
         const customerData: Record<string, unknown> = {
-          type: formData.customerType,
           name: formData.customerName,
           email: formData.customerEmail,
           phone: formData.customerPhone,
@@ -1327,7 +1325,6 @@ export default function BookingCheckoutStep({
                 <User className="w-5 h-5 text-accent mt-0.5" />
                 <div>
                   <p className="font-medium">{formData.customerName}</p>
-                  <p className="text-sm text-muted-foreground">{formData.customerType}</p>
                 </div>
               </div>
               <div className="flex items-start gap-3">

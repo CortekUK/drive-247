@@ -105,8 +105,8 @@ export const searchService = {
       if (entityFilter === 'all' || entityFilter === 'customers') {
         let customerQuery = supabase
           .from("customers")
-          .select("id, name, email, phone, customer_type, status")
-          .or(`name.ilike.${searchTerm},email.ilike.${searchTerm},phone.ilike.${searchTerm},customer_type.ilike.${searchTerm}`);
+          .select("id, name, email, phone, status")
+          .or(`name.ilike.${searchTerm},email.ilike.${searchTerm},phone.ilike.${searchTerm}`);
 
         if (tenantId) {
           customerQuery = customerQuery.eq("tenant_id", tenantId);
@@ -117,7 +117,7 @@ export const searchService = {
         const customerResults = (customers || []).map(customer => ({
           id: customer.id,
           title: customer.name,
-          subtitle: `${customer.email || customer.phone || ''} • ${customer.customer_type || 'Individual'} • ${customer.status || 'Active'}`,
+          subtitle: `${customer.email || customer.phone || ''} • ${customer.status || 'Active'}`,
           category: "Customers",
           url: `/customers/${customer.id}`,
           icon: "user",

@@ -29,7 +29,6 @@ interface Customer {
   email?: string | null;
   phone?: string | null;
   type?: string;
-  customer_type?: string | null;
   status?: string | null;
   license_number?: string | null;
   id_number?: string | null;
@@ -78,8 +77,6 @@ export function RejectedCustomerDialog({
 
   if (!customer) return null;
 
-  const customerType = customer.customer_type || "Individual";
-
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-[550px] max-h-[90vh] overflow-y-auto">
@@ -103,19 +100,6 @@ export function RejectedCustomerDialog({
               <div className="space-y-1">
                 <p className="text-xs text-muted-foreground">Name</p>
                 <p className="font-medium">{customer.name}</p>
-              </div>
-              <div className="space-y-1">
-                <p className="text-xs text-muted-foreground">Type</p>
-                <Badge
-                  variant="secondary"
-                  className={
-                    customerType === "Company"
-                      ? "bg-blue-100 text-blue-800"
-                      : "bg-purple-100 text-purple-800"
-                  }
-                >
-                  {customerType}
-                </Badge>
               </div>
               <div className="space-y-1">
                 <p className="text-xs text-muted-foreground">Email</p>
