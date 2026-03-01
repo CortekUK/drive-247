@@ -616,6 +616,15 @@ const RentalDetail = () => {
     }
   };
 
+  const scrollToInsurance = () => {
+    const element = document.getElementById('insurance-section');
+    if (element) {
+      const yOffset = -90;
+      const y = element.getBoundingClientRect().top + window.pageYOffset + yOffset;
+      window.scrollTo({ top: y, behavior: 'smooth' });
+    }
+  };
+
   // Sync DB status to 'Active' if all conditions are met but DB status is still 'Pending'
   // This handles edge cases where the status update might have failed
   useEffect(() => {
@@ -1315,7 +1324,7 @@ const RentalDetail = () => {
               )}
               <Badge
                 variant="outline"
-                className={
+                className={`cursor-pointer hover:opacity-80 transition-opacity ${
                   !bonzahPolicy
                     ? 'bg-gray-500/10 text-gray-400 border-gray-500'
                     : bonzahPolicy.status === 'active'
@@ -1325,7 +1334,8 @@ const RentalDetail = () => {
                     : bonzahPolicy.status === 'failed'
                     ? 'bg-red-500/10 text-red-500 border-red-500'
                     : 'bg-muted text-muted-foreground border-border'
-                }
+                }`}
+                onClick={scrollToInsurance}
               >
                 <ShieldCheck className="h-3 w-3 mr-1" />
                 {!bonzahPolicy ? 'No Insurance'
@@ -2904,7 +2914,7 @@ const RentalDetail = () => {
 
       {/* Insurance Verification Card - Compact when no documents, full when documents exist */}
       {insuranceDocuments && insuranceDocuments.length > 0 ? (
-      <Card>
+      <Card id="insurance-section">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Shield className="h-5 w-5" />
@@ -3428,7 +3438,7 @@ const RentalDetail = () => {
         </Card>
       ) : (
         /* Compact empty state — single-row card */
-        <Card className="px-5 py-4">
+        <Card id="insurance-section" className="px-5 py-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
               <Shield className="h-4 w-4 text-muted-foreground" />
