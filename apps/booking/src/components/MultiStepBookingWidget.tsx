@@ -188,6 +188,26 @@ const MultiStepBookingWidget = () => {
   const [calculatedDistance, setCalculatedDistance] = useState<number | null>(null);
   const [distanceOverride, setDistanceOverride] = useState(false);
   const stepContainerRef = useRef<HTMLDivElement>(null); // Ref for scrolling to step content on step change
+  const [isStepTransitioning, setIsStepTransitioning] = useState(false);
+  const transitionTimerRef = useRef<NodeJS.Timeout>();
+  const transitionTimer2Ref = useRef<NodeJS.Timeout>();
+  const transitionToStep = useCallback((targetStep: number) => {
+    if (targetStep === currentStep || isStepTransitioning) return;
+    // Phase 1: fade out content + show overlay (300ms for CSS transition)
+    setIsStepTransitioning(true);
+    transitionTimerRef.current = setTimeout(() => {
+      // Phase 2: swap step while content is invisible behind overlay
+      setCurrentStep(targetStep);
+      // Phase 3: after overlay shows the animation, fade content back in
+      transitionTimer2Ref.current = setTimeout(() => {
+        setIsStepTransitioning(false);
+      }, 600);
+    }, 450);
+  }, [currentStep, setCurrentStep, isStepTransitioning]);
+  // Cleanup transition timers on unmount
+  useEffect(() => {
+    return () => { clearTimeout(transitionTimerRef.current); clearTimeout(transitionTimer2Ref.current); };
+  }, []);
   const [blockedDates, setBlockedDates] = useState<string[]>([]); // Global blocked dates (vehicle_id is null)
   const [allBlockedDates, setAllBlockedDates] = useState<BlockedDate[]>([]); // All blocked dates including vehicle-specific
   const [errors, setErrors] = useState<{
@@ -2966,7 +2986,7 @@ const MultiStepBookingWidget = () => {
           young_driver: isYoungDriver
         });
       }
-      setCurrentStep(2);
+      transitionToStep(2);
     }
   };
   const handleStep2Continue = () => {
@@ -2987,9 +3007,9 @@ const MultiStepBookingWidget = () => {
       } as any);
       // Skip insurance step for exempt tenants (like Kedic Services)
       if (skipInsurance) {
-        setCurrentStep(4); // Skip directly to customer details
+        transitionToStep(4); // Skip directly to customer details
       } else {
-        setCurrentStep(3); // Go to insurance verification
+        transitionToStep(3); // Go to insurance verification
       }
     }
   };
@@ -3005,7 +3025,7 @@ const MultiStepBookingWidget = () => {
     }
 
     // Insurance step - just move to customer details (Step 4)
-    setCurrentStep(4);
+    transitionToStep(4);
   };
 
   // Handle Bonzah coverage change from BonzahInsuranceSelector
@@ -3095,7 +3115,7 @@ const MultiStepBookingWidget = () => {
         driver_age: driverAge
       });
     }
-    setCurrentStep(5);
+    transitionToStep(5);
   };
 
   const validateStep3 = () => {
@@ -3235,8 +3255,22 @@ const MultiStepBookingWidget = () => {
           </div>
         </div>
 
+        {/* Step content wrapper with transition */}
+        <div className="relative min-h-[200px]">
+          {/* Transition overlay */}
+          <div className={cn("step-transition-overlay", isStepTransitioning ? "step-overlay-visible" : "step-overlay-hidden")}>
+            <div className="step-transition-dots">
+              <span /><span /><span />
+            </div>
+            <div className="step-transition-bar" />
+            <span className="step-transition-label">Loading</span>
+          </div>
+
+          {/* Fade wrapper for step content */}
+          <div className={cn("transition-opacity duration-300", isStepTransitioning ? "opacity-0" : "opacity-100")}>
+
         {/* Step 1: Rental Details */}
-        {currentStep === 1 && <div className="space-y-8 animate-fade-in">
+        {currentStep === 1 && <div className="space-y-8">
           {/* Header with underline */}
           <div>
             <h3 className="text-2xl md:text-3xl font-display font-semibold text-foreground pb-2 border-b-2 border-primary/30">
@@ -3533,9 +3567,9 @@ const MultiStepBookingWidget = () => {
         </div>}
 
         {/* Step 2: Vehicle Selection */}
-        {currentStep === 2 && <div className="space-y-6 animate-fade-in">
+        {currentStep === 2 && <div className="space-y-6">
           {/* Back Button */}
-          <Button onClick={() => setCurrentStep(1)} variant="ghost" className="text-muted-foreground hover:text-foreground -ml-2">
+          <Button onClick={() => transitionToStep(1)} variant="ghost" className="text-muted-foreground hover:text-foreground -ml-2">
             <ChevronLeft className="mr-1 w-5 h-5" /> Back to Trip Details
           </Button>
 
@@ -4343,7 +4377,7 @@ const MultiStepBookingWidget = () => {
 
           {/* Mobile Action Bar */}
           <div className="flex flex-col sm:flex-row gap-3 lg:hidden mt-8">
-            <Button onClick={() => setCurrentStep(1)} variant="outline" className="w-full sm:flex-1" size="lg">
+            <Button onClick={() => transitionToStep(1)} variant="outline" className="w-full sm:flex-1" size="lg">
               <ChevronLeft className="mr-2 w-5 h-5" /> Back
             </Button>
             <Button onClick={handleStep2Continue} disabled={!selectedVehicle} className="w-full sm:flex-1 bg-primary hover:bg-primary/90 text-primary-foreground font-semibold shadow-md hover:shadow-lg transition-all disabled:opacity-50" size="lg">
@@ -4353,7 +4387,7 @@ const MultiStepBookingWidget = () => {
         </div>}
 
         {/* Step 3: Insurance Verification (skipped for insurance-exempt tenants) */}
-        {currentStep === 3 && !skipInsurance && <div className="space-y-8 animate-fade-in">
+        {currentStep === 3 && !skipInsurance && <div className="space-y-8">
           {/* Header */}
           <div className="text-center space-y-2">
             <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-primary/10 mb-4">
@@ -4444,7 +4478,7 @@ const MultiStepBookingWidget = () => {
                                   setUploadedDocumentId(selectedExistingDocument);
                                   setHasInsurance(true);
                                   // Skip the upload success screen — existing docs are already verified
-                                  setCurrentStep(4);
+                                  transitionToStep(4);
                                 }
                               }}
                             >
@@ -4565,7 +4599,7 @@ const MultiStepBookingWidget = () => {
 
               {/* Back Button */}
               <div className="flex justify-center mt-6">
-                <Button onClick={() => setCurrentStep(2)} variant="outline" size="lg">
+                <Button onClick={() => transitionToStep(2)} variant="outline" size="lg">
                   <ChevronLeft className="mr-2 w-5 h-5" /> Back to Vehicles
                 </Button>
               </div>
@@ -4757,7 +4791,7 @@ const MultiStepBookingWidget = () => {
             <>
               <div className="flex flex-col sm:flex-row gap-4">
                 <Button
-                  onClick={() => setCurrentStep(2)}
+                  onClick={() => transitionToStep(2)}
                   variant="outline"
                   className="w-full sm:flex-1"
                   size="lg"
@@ -4785,7 +4819,7 @@ const MultiStepBookingWidget = () => {
         </div>}
 
         {/* Step 4: Customer Details */}
-        {currentStep === 4 && <div className="space-y-8 animate-fade-in">
+        {currentStep === 4 && <div className="space-y-8">
           {/* Header with underline */}
           <div>
             <h3 className="text-2xl md:text-3xl font-display font-semibold text-foreground pb-2 border-b-2 border-primary/30">
@@ -5619,7 +5653,7 @@ const MultiStepBookingWidget = () => {
           {/* Navigation Buttons */}
           <div className="flex flex-col sm:flex-row gap-3 sm:gap-4">
             <Button
-              onClick={() => setCurrentStep(skipInsurance ? 2 : 3)}
+              onClick={() => transitionToStep(skipInsurance ? 2 : 3)}
               variant="outline"
               className="w-full sm:flex-1 h-11 sm:h-12 border-primary text-primary hover:bg-primary/10 font-semibold text-sm sm:text-base"
               size="lg"
@@ -5650,7 +5684,7 @@ const MultiStepBookingWidget = () => {
         </div>}
 
         {/* Step 5: Review & Payment */}
-        {currentStep === 5 && <div className="animate-fade-in space-y-6">
+        {currentStep === 5 && <div className="space-y-6">
           {/* Optional Extras */}
           <ExtrasSelector
             extras={availableExtras}
@@ -5686,7 +5720,7 @@ const MultiStepBookingWidget = () => {
               }
             }}
             onApplyPromo={validatePromoCode}
-            onBack={() => setCurrentStep(4)}
+            onBack={() => transitionToStep(4)}
             uploadedDocumentId={uploadedDocumentId}
             bonzahPremium={bonzahPremium}
             bonzahCoverage={bonzahCoverage}
@@ -5695,6 +5729,8 @@ const MultiStepBookingWidget = () => {
           />
         </div>}
 
+          </div>{/* End fade wrapper */}
+        </div>{/* End step content wrapper */}
       </div>
     </Card>
 

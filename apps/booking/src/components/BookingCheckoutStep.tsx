@@ -23,6 +23,7 @@ import { AuthPromptDialog } from "@/components/booking/AuthPromptDialog";
 import { createInvoiceWithFallback, Invoice } from "@/lib/invoiceUtils";
 import InstallmentSelector, { InstallmentOption, InstallmentConfig } from "@/components/InstallmentSelector";
 import { useDeliveryLocations } from "@/hooks/useDeliveryLocations";
+import CheckoutProgressOverlay from "@/components/CheckoutProgressOverlay";
 
 interface PromoDetails {
   code: string;
@@ -106,6 +107,17 @@ export default function BookingCheckoutStep({
 
   // Bonzah policy ID - created dynamically during checkout
   const [bonzahPolicyId, setBonzahPolicyId] = useState<string | null>(null);
+
+  // Checkout progress overlay
+  const [checkoutProgress, setCheckoutProgress] = useState(0);
+  const checkoutSteps = [
+    { label: 'Verifying customer details' },
+    { label: 'Securing your vehicle' },
+    { label: 'Processing insurance' },
+    { label: 'Generating invoice' },
+    { label: 'Preparing payment' },
+    { label: 'Almost there' },
+  ];
 
   // Installment state
   const [selectedInstallmentPlan, setSelectedInstallmentPlan] = useState<InstallmentOption | null>(null);
@@ -706,6 +718,7 @@ export default function BookingCheckoutStep({
     }
 
     setIsProcessing(true);
+    setCheckoutProgress(1); // Step 1: Verifying customer details
 
     // DEBUG: Check if verificationSessionId is present
     console.log('🔍 Checkout formData:', formData);
@@ -893,6 +906,8 @@ export default function BookingCheckoutStep({
         console.log('⚠️ No verification session ID in formData');
       }
 
+      setCheckoutProgress(2); // Step 2: Securing your vehicle
+
       // Step 2: Get booking mode FIRST (needed for rental creation)
       const bookingMode = await getBookingMode();
       console.log('📋 Booking mode:', bookingMode);
@@ -971,6 +986,8 @@ export default function BookingCheckoutStep({
         console.log('✅ First charge generated successfully');
       }
 
+      setCheckoutProgress(3); // Step 3: Processing insurance
+
       // Step 4: Vehicle status - keep as Available until admin approves (both modes)
       // Vehicle will only be marked as "Rented" when admin clicks Approve
       console.log('⏳ Vehicle status unchanged - awaiting admin approval');
@@ -986,6 +1003,8 @@ export default function BookingCheckoutStep({
           console.log('⚠️ Bonzah quote creation failed or skipped');
         }
       }
+
+      setCheckoutProgress(4); // Step 4: Generating invoice
 
       // Step 5: Create invoice (with fallback to local if DB fails)
       const promoDiscount = calculatePromoDiscount();
@@ -1020,6 +1039,8 @@ export default function BookingCheckoutStep({
         promo_code: promoDetails?.code || null,
       };
       setGeneratedInvoice(invoiceWithDiscount);
+
+      setCheckoutProgress(5); // Step 5: Preparing payment
 
       // Step 5: Store payment details in localStorage for success page
       // Payment record will be created ONLY after Stripe confirms successful payment
@@ -1260,7 +1281,13 @@ export default function BookingCheckoutStep({
         }
       }
 
+      setCheckoutProgress(6); // Step 6: Almost there
+
+      // Brief pause so the user sees the final step complete
+      await new Promise(resolve => setTimeout(resolve, 600));
+
       // Show invoice dialog first (before payment)
+      setCheckoutProgress(0);
       setShowInvoiceDialog(true);
       setIsProcessing(false);
     } catch (error: any) {
@@ -1274,6 +1301,7 @@ export default function BookingCheckoutStep({
       }
     } finally {
       setIsProcessing(false);
+      setCheckoutProgress(0);
     }
   };
 
@@ -1848,6 +1876,13 @@ export default function BookingCheckoutStep({
           setShowAuthDialog(false);
           proceedWithPayment();
         }}
+      />
+
+      {/* Checkout progress overlay */}
+      <CheckoutProgressOverlay
+        isVisible={checkoutProgress > 0}
+        currentStep={checkoutProgress}
+        steps={checkoutSteps}
       />
 
     </div>
