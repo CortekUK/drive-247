@@ -600,7 +600,7 @@ export const EditVehicleDialogEnhanced = ({ vehicle, open, onOpenChange }: EditV
                 <h3 className="font-semibold text-sm">Rental Rates</h3>
               </div>
 
-              <div className="grid grid-cols-2 md:grid-cols-6 gap-4 items-start">
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 items-start">
                 <FormField
                   control={form.control}
                   name="daily_rent"
@@ -720,13 +720,15 @@ export const EditVehicleDialogEnhanced = ({ vehicle, open, onOpenChange }: EditV
                     </FormItem>
                   )}
                 />
+              </div>
 
+              <div className="grid grid-cols-2 gap-4 items-start">
                 <FormField
                   control={form.control}
                   name="allowed_mileage"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel className="whitespace-nowrap">Mileage Allowance</FormLabel>
+                      <FormLabel>Mileage Allowance</FormLabel>
                       <FormControl>
                         <Input
                           type="number"
@@ -755,7 +757,7 @@ export const EditVehicleDialogEnhanced = ({ vehicle, open, onOpenChange }: EditV
                   name="excess_mileage_rate"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel className="whitespace-nowrap">Excess Mileage Rate</FormLabel>
+                      <FormLabel>Excess Mileage Rate</FormLabel>
                       <FormControl>
                         <Input
                           type="number"

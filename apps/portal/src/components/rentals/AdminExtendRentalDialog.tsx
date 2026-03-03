@@ -241,15 +241,38 @@ export function AdminExtendRentalDialog({
         }
       }
 
+      // 7. Auto-send extension agreement (fire-and-forget)
+      try {
+        fetch('/api/esign', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            rentalId: rental.id,
+            customerEmail: rental.customers?.email,
+            customerName: rental.customers?.name,
+            tenantId: tenant.id,
+            agreementType: 'extension',
+            extensionPreviousEndDate: rental.end_date,
+            extensionNewEndDate: newEndDate,
+          }),
+        }).then(res => {
+          if (!res.ok) console.error('Extension agreement send failed:', res.status);
+          else console.log('Extension agreement sent successfully');
+        }).catch(err => console.error('Extension agreement send error:', err));
+      } catch (e) {
+        console.error('Failed to trigger extension agreement:', e);
+      }
+
       toast({
         title: 'Rental Extended',
-        description: `Rental extended to ${format(new Date(newEndDate), 'MMMM dd, yyyy')}.${extensionCost > 0 ? ` Extension charge of ${tenant?.currency_code || '$'}${extensionCost.toFixed(2)} created with payment link sent to customer.` : ' Customer has been notified.'}`,
+        description: `Rental extended to ${format(new Date(newEndDate), 'MMMM dd, yyyy')}.${extensionCost > 0 ? ` Extension charge of ${tenant?.currency_code || '$'}${extensionCost.toFixed(2)} created with payment link sent to customer.` : ' Customer has been notified.'} An extension agreement has been sent for signing.`,
       });
 
       queryClient.invalidateQueries({ queryKey: ['rental', rental.id, tenant.id] });
       queryClient.invalidateQueries({ queryKey: ['rentals-list'] });
       queryClient.invalidateQueries({ queryKey: ['enhanced-rentals'] });
       queryClient.invalidateQueries({ queryKey: ['ledger-entries'] });
+      queryClient.invalidateQueries({ queryKey: ['rental-agreements', rental.id] });
 
       logAction({
         action: "rental_extended",

@@ -235,6 +235,24 @@ async function handleSubscriptionDeleted(supabase: any, subscription: any) {
   console.log(`Subscription ${subscription.id} deleted/canceled`);
 }
 
+function parseInvoiceLineItems(invoice: any): { baseAmount: number; usageAmount: number; usageQuantity: number } {
+  let baseAmount = 0;
+  let usageAmount = 0;
+  let usageQuantity = 0;
+
+  const lines = invoice.lines?.data || [];
+  for (const line of lines) {
+    if (line.price?.recurring?.usage_type === "metered") {
+      usageAmount += line.amount || 0;
+      usageQuantity += line.quantity || 0;
+    } else {
+      baseAmount += line.amount || 0;
+    }
+  }
+
+  return { baseAmount, usageAmount, usageQuantity };
+}
+
 async function handleInvoicePaid(supabase: any, invoice: any) {
   const subscriptionId = invoice.subscription;
   const customerId = invoice.customer;
@@ -243,6 +261,8 @@ async function handleInvoicePaid(supabase: any, invoice: any) {
   if (!tenant) { console.log("No tenant found for customer:", customerId); return; }
 
   const { data: sub } = await supabase.from("tenant_subscriptions").select("id").eq("stripe_subscription_id", subscriptionId).maybeSingle();
+
+  const { baseAmount, usageAmount, usageQuantity } = parseInvoiceLineItems(invoice);
 
   const { error } = await supabase
     .from("tenant_subscription_invoices")
@@ -261,10 +281,13 @@ async function handleInvoicePaid(supabase: any, invoice: any) {
       due_date: invoice.due_date ? new Date(invoice.due_date * 1000).toISOString() : null,
       paid_at: new Date().toISOString(),
       invoice_number: invoice.number || null,
+      base_amount: baseAmount || null,
+      usage_amount: usageAmount || null,
+      usage_quantity: usageQuantity || null,
     }, { onConflict: "stripe_invoice_id" });
 
   if (error) console.error("Error upserting invoice:", error);
-  console.log(`Invoice ${invoice.id} paid for tenant ${tenant.id}`);
+  console.log(`Invoice ${invoice.id} paid for tenant ${tenant.id} (base: ${baseAmount}, usage: ${usageAmount}, qty: ${usageQuantity})`);
 }
 
 async function handleInvoicePaymentFailed(supabase: any, invoice: any) {
@@ -274,6 +297,8 @@ async function handleInvoicePaymentFailed(supabase: any, invoice: any) {
   if (!tenant) { console.log("No tenant found for customer:", customerId); return; }
 
   const { data: sub } = await supabase.from("tenant_subscriptions").select("id").eq("stripe_subscription_id", invoice.subscription).maybeSingle();
+
+  const { baseAmount, usageAmount, usageQuantity } = parseInvoiceLineItems(invoice);
 
   await supabase
     .from("tenant_subscription_invoices")
@@ -291,6 +316,9 @@ async function handleInvoicePaymentFailed(supabase: any, invoice: any) {
       period_end: invoice.period_end ? new Date(invoice.period_end * 1000).toISOString() : null,
       due_date: invoice.due_date ? new Date(invoice.due_date * 1000).toISOString() : null,
       invoice_number: invoice.number || null,
+      base_amount: baseAmount || null,
+      usage_amount: usageAmount || null,
+      usage_quantity: usageQuantity || null,
     }, { onConflict: "stripe_invoice_id" });
 
   console.log(`Invoice payment failed for tenant ${tenant.id} (${tenant.company_name})`);

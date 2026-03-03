@@ -132,10 +132,19 @@ Deno.serve(async (req) => {
     // If the plan has a longer trial configured, use that instead.
     const trialDays = Math.max(2, plan.trial_days || 0);
 
+    // Build line items: fixed plan price + optional metered e-sign price
+    const lineItems: Array<{ price: string; quantity?: number }> = [
+      { price: priceId, quantity: 1 },
+    ];
+    const meteredPriceId = Deno.env.get("STRIPE_ESIGN_METERED_PRICE_ID");
+    if (meteredPriceId) {
+      lineItems.push({ price: meteredPriceId }); // no quantity for metered
+    }
+
     const session = await stripe.checkout.sessions.create({
       mode: "subscription",
       customer: stripeCustomerId,
-      line_items: [{ price: priceId, quantity: 1 }],
+      line_items: lineItems,
       success_url: successUrl,
       cancel_url: cancelUrl,
       metadata: { tenant_id: tenantId, plan_id: planId, plan_name: plan.name, source: "platform_subscription" },

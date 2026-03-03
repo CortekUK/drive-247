@@ -44,6 +44,8 @@ import { ReviewDisplayCard } from "@/components/reviews/review-display-card";
 import { RentalReviewDialog } from "@/components/reviews/rental-review-dialog";
 import { ApprovalReviewSummary } from "@/components/reviews/approval-review-summary";
 import { CustomerReviewSummaryCard } from "@/components/reviews/customer-review-summary-card";
+import { useRentalAgreements } from "@/hooks/use-rental-agreements";
+import { AgreementTimeline } from "@/components/rentals/AgreementTimeline";
 
 interface Rental {
   id: string;
@@ -56,6 +58,7 @@ interface Rental {
   document_status?: string;
   docusign_envelope_id?: string;
   signed_document_id?: string;
+  boldsign_mode?: string;
   insurance_status?: string;
   payment_mode?: string;
   approval_status?: string;
@@ -213,6 +216,7 @@ const RentalDetail = () => {
   const { tenant } = useTenant();
   const { canEdit } = useManagerPermissions();
   const { balanceNumber: bonzahCdBalance, isBonzahConnected, portalUrl: bonzahPortalUrl } = useBonzahBalance();
+  const { data: rentalAgreements = [], isLoading: loadingAgreements } = useRentalAgreements(id);
   // skipInsurance removed — insurance doc upload is always visible; only Bonzah selector is gated on integration_bonzah
   const [downloadingPdf, setDownloadingPdf] = useState<string | null>(null);
   const [refreshingPolicy, setRefreshingPolicy] = useState(false);
@@ -1109,9 +1113,14 @@ const RentalDetail = () => {
 
   const displayStatus = computeStatus(rental);
 
-  // Check if DocuSign is signed
-  const isDocuSignSigned = rental?.document_status === 'completed' || rental?.document_status === 'signed';
-  const hasDocuSign = !!rental?.docusign_envelope_id;
+  // Check if original agreement is signed (from rental_agreements or fallback to rental fields)
+  const originalAgreement = rentalAgreements.find(a => a.agreement_type === 'original');
+  const isDocuSignSigned = originalAgreement
+    ? (originalAgreement.document_status === 'completed' || originalAgreement.document_status === 'signed' || !!originalAgreement.signed_document_id)
+    : (rental?.document_status === 'completed' || rental?.document_status === 'signed');
+  const hasDocuSign = originalAgreement
+    ? !!originalAgreement.document_id
+    : !!rental?.docusign_envelope_id;
 
   // Handle Approve button click - check DocuSign first
   const proceedToApproveAfterChecks = () => {
@@ -1132,13 +1141,15 @@ const RentalDetail = () => {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             rentalId: id,
-            envelopeId: rental?.docusign_envelope_id,
+            envelopeId: originalAgreement?.document_id || rental?.docusign_envelope_id,
+            agreementId: originalAgreement?.id,
           }),
         });
         const result = await response.json();
         if (result.ok && (result.status === 'signed' || result.status === 'completed')) {
           // Actually signed — refresh rental data and proceed
           queryClient.invalidateQueries({ queryKey: ["rental", id, tenant?.id] });
+          queryClient.invalidateQueries({ queryKey: ["rental-agreements", id] });
           proceedToApproveAfterChecks();
           return;
         }
@@ -1232,6 +1243,65 @@ const RentalDetail = () => {
         description: err?.message || "Failed to view agreement",
         variant: "destructive",
       });
+    } finally {
+      setLoadingDocuSignDoc(false);
+    }
+  };
+
+  // View agreement from AgreementTimeline (by agreementId)
+  const handleViewAgreementById = async (agreementId: string, signedDocFileUrl?: string | null) => {
+    setLoadingDocuSignDoc(true);
+    const newWindow = window.open('about:blank', '_blank');
+
+    try {
+      // If signed document URL provided, open directly
+      if (signedDocFileUrl) {
+        let documentUrl = signedDocFileUrl;
+        if (!documentUrl.startsWith('http')) {
+          const { data } = supabase.storage
+            .from('customer-documents')
+            .getPublicUrl(signedDocFileUrl);
+          documentUrl = data.publicUrl;
+        }
+        if (newWindow) newWindow.location.href = documentUrl;
+        return;
+      }
+
+      if (newWindow) {
+        newWindow.document.write('<html><head><title>Loading Agreement...</title></head><body style="display:flex;justify-content:center;align-items:center;height:100vh;font-family:system-ui;"><p>Loading agreement...</p></body></html>');
+      }
+
+      const response = await fetch('/api/esign/view', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ rentalId: id, agreementId }),
+      });
+      const data = await response.json();
+
+      if (!response.ok || !data?.ok) {
+        if (newWindow) newWindow.close();
+        toast({ title: 'Error', description: data?.error || 'Failed to get document', variant: 'destructive' });
+        return;
+      }
+
+      if (data.documentUrl) {
+        if (newWindow) newWindow.location.href = data.documentUrl;
+        return;
+      }
+
+      if (data.documentBase64) {
+        const byteCharacters = atob(data.documentBase64);
+        const byteNumbers = new Array(byteCharacters.length);
+        for (let i = 0; i < byteCharacters.length; i++) {
+          byteNumbers[i] = byteCharacters.charCodeAt(i);
+        }
+        const byteArray = new Uint8Array(byteNumbers);
+        const blob = new Blob([byteArray], { type: 'application/pdf' });
+        if (newWindow) newWindow.location.href = URL.createObjectURL(blob);
+      }
+    } catch (err: any) {
+      if (newWindow) newWindow.close();
+      toast({ title: 'Error', description: err?.message || 'Failed to view agreement', variant: 'destructive' });
     } finally {
       setLoadingDocuSignDoc(false);
     }
@@ -2316,177 +2386,17 @@ const RentalDetail = () => {
         />
       )}
 
-      {/* DocuSign Agreement Section */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <FileSignature className="h-5 w-5 text-blue-600" />
-            Rental Agreement
-          </CardTitle>
-          <CardDescription>
-            Rental agreement status and signed document
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4">
-              {/* Status Badge */}
-              {rental.document_status === 'signed' || rental.document_status === 'completed' || rental.signed_document_id ? (
-                <Badge className="bg-green-600">
-                  <CheckCircle className="h-3 w-3 mr-1" />
-                  Signed
-                </Badge>
-              ) : rental.document_status === 'sent' ? (
-                <Badge className="bg-yellow-600">
-                  <Mail className="h-3 w-3 mr-1" />
-                  Sent - Awaiting Signature
-                </Badge>
-              ) : rental.document_status === 'viewed' ? (
-                <Badge className="bg-blue-600">
-                  <Clock className="h-3 w-3 mr-1" />
-                  Viewed - Awaiting Signature
-                </Badge>
-              ) : (
-                <Badge variant="outline">
-                  <Clock className="h-3 w-3 mr-1" />
-                  Not Sent
-                </Badge>
-              )}
-
-              {/* Info text */}
-              <span className="text-sm text-muted-foreground">
-                {rental.document_status === 'signed' || rental.document_status === 'completed' || rental.signed_document_id
-                  ? 'Agreement has been signed by customer'
-                  : rental.document_status === 'sent'
-                  ? 'Waiting for customer to sign'
-                  : rental.document_status === 'viewed'
-                  ? 'Customer has viewed the agreement'
-                  : 'Agreement has not been sent yet'}
-              </span>
-            </div>
-
-            <div className="flex gap-2">
-              {/* View Agreement Button - works for both pending and signed */}
-              {(rental.document_status === 'sent' || rental.document_status === 'delivered' || rental.document_status === 'viewed' || rental.document_status === 'signed' || rental.document_status === 'completed' || signedDocument) && (
-                <Button
-                  variant="outline"
-                  onClick={handleViewAgreement}
-                  disabled={loadingDocuSignDoc}
-                >
-                  {loadingDocuSignDoc ? (
-                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  ) : (
-                    <ExternalLink className="h-4 w-4 mr-2" />
-                  )}
-                  {signedDocument || rental.document_status === 'completed' || rental.document_status === 'signed'
-                    ? 'View Signed Agreement'
-                    : 'View Agreement'}
-                </Button>
-              )}
-
-              {/* Send DocuSign Button - only show if not signed */}
-              {canEdit('rentals') && !rental.signed_document_id && displayStatus !== 'Completed' && (
-                <Button
-                  variant="outline"
-                  onClick={async () => {
-                    setSendingDocuSign(true);
-                    try {
-                      // Use local API route (BoldSign)
-                      const response = await fetch('/api/esign', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                          rentalId: id,
-                          customerEmail: rental.customers?.email,
-                          customerName: rental.customers?.name,
-                          tenantId: tenant?.id,
-                        }),
-                      });
-
-                      const docuSignData = await response.json();
-
-                      if (!response.ok || !docuSignData?.ok) {
-                        toast({
-                          title: "Agreement Error",
-                          description: docuSignData?.detail || docuSignData?.error || "Failed to send agreement.",
-                          variant: "destructive",
-                        });
-                      } else {
-                        toast({
-                          title: "Agreement Sent",
-                          description: "Rental agreement has been sent for signing",
-                        });
-                        queryClient.invalidateQueries({ queryKey: ["rental", id, tenant?.id] });
-                      }
-                    } catch (error: any) {
-                      toast({
-                        title: "Agreement Error",
-                        description: error?.message || "Failed to send agreement",
-                        variant: "destructive",
-                      });
-                    } finally {
-                      setSendingDocuSign(false);
-                    }
-                  }}
-                  disabled={sendingDocuSign}
-                >
-                  <Send className="h-4 w-4 mr-2" />
-                  {sendingDocuSign ? "Sending..." : rental.document_status === 'sent' ? "Resend Agreement" : "Send Agreement"}
-                </Button>
-              )}
-
-              {/* Check Status Button - show when sent but not signed */}
-              {rental.docusign_envelope_id && rental.document_status !== 'signed' && rental.document_status !== 'completed' && !rental.signed_document_id && (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={async () => {
-                    setCheckingDocuSignStatus(true);
-                    try {
-                      const response = await fetch('/api/esign/status', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                          rentalId: id,
-                          envelopeId: rental.docusign_envelope_id,
-                        }),
-                      });
-
-                      const statusData = await response.json();
-
-                      if (statusData?.ok) {
-                        toast({
-                          title: "Status Updated",
-                          description: `Document status: ${statusData.status}`,
-                        });
-                        queryClient.invalidateQueries({ queryKey: ["rental", id, tenant?.id] });
-                      } else {
-                        toast({
-                          title: "Check Failed",
-                          description: statusData?.error || "Could not check status",
-                          variant: "destructive",
-                        });
-                      }
-                    } catch (error: any) {
-                      toast({
-                        title: "Error",
-                        description: error?.message || "Failed to check status",
-                        variant: "destructive",
-                      });
-                    } finally {
-                      setCheckingDocuSignStatus(false);
-                    }
-                  }}
-                  disabled={checkingDocuSignStatus}
-                >
-                  <RefreshCw className={`h-4 w-4 mr-1 ${checkingDocuSignStatus ? 'animate-spin' : ''}`} />
-                  {checkingDocuSignStatus ? "Checking..." : "Check Status"}
-                </Button>
-              )}
-            </div>
-          </div>
-        </CardContent>
-      </Card>
+      {/* Rental Agreements Timeline */}
+      <AgreementTimeline
+        rentalId={id}
+        rental={rental}
+        agreements={rentalAgreements}
+        isLoading={loadingAgreements}
+        canEdit={canEdit('rentals')}
+        tenantId={tenant?.id}
+        displayStatus={displayStatus}
+        onViewAgreement={handleViewAgreementById}
+      />
 
       {/* Bonzah Insurance Policy Card - Show if policy exists for this rental */}
       {bonzahPolicy && (() => {

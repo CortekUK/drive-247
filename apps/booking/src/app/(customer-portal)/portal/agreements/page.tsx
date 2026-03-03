@@ -32,6 +32,7 @@ import {
   Loader2,
   RefreshCw,
   PenLine,
+  CalendarPlus,
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { toast } from 'sonner';
@@ -82,7 +83,7 @@ function AgreementCard({
 }) {
   const statusInfo = getAgreementStatusInfo(agreement.document_status);
   const hasSignedDocument = !!agreement.signed_document?.file_url;
-  const hasEnvelope = !!agreement.docusign_envelope_id;
+  const hasEnvelope = !!agreement.document_id;
   const canViewDocument = hasSignedDocument || hasEnvelope;
   const needsSignature = hasEnvelope && !hasSignedDocument &&
     agreement.document_status !== 'completed' &&
@@ -90,19 +91,34 @@ function AgreementCard({
   const vehicleInfo = agreement.vehicles
     ? `${agreement.vehicles.make || ''} ${agreement.vehicles.model || ''} - ${agreement.vehicles.reg}`.trim()
     : 'Vehicle';
+  const isExtension = agreement.agreement_type === 'extension';
 
   return (
     <Card className="hover:shadow-md transition-shadow">
       <CardContent className="p-4">
         <div className="flex items-start gap-4">
           <div className="flex-shrink-0 w-12 h-12 bg-primary/10 rounded-lg flex items-center justify-center">
-            <FileText className="h-6 w-6 text-primary" />
+            {isExtension ? (
+              <CalendarPlus className="h-6 w-6 text-amber-600" />
+            ) : (
+              <FileText className="h-6 w-6 text-primary" />
+            )}
           </div>
           <div className="flex-1 min-w-0">
             <div className="flex items-start justify-between gap-2">
               <div>
-                <h3 className="font-semibold truncate">
-                  Rental Agreement {agreement.rental_number ? `#${agreement.rental_number}` : ''}
+                <h3 className="font-semibold truncate flex items-center gap-2">
+                  {isExtension ? 'Extension Agreement' : 'Rental Agreement'}
+                  {agreement.rental_number && (
+                    <span className="text-muted-foreground font-normal text-sm">
+                      #{agreement.rental_number}
+                    </span>
+                  )}
+                  {isExtension && (
+                    <Badge variant="outline" className="text-amber-600 border-amber-300 bg-amber-50">
+                      Extension
+                    </Badge>
+                  )}
                 </h3>
                 <p className="text-sm text-muted-foreground flex items-center gap-1">
                   <Car className="h-3 w-3" />
@@ -117,15 +133,36 @@ function AgreementCard({
             </div>
 
             <div className="mt-2 grid grid-cols-2 gap-x-4 gap-y-1 text-sm">
-              <div>
-                <span className="text-muted-foreground">Start Date:</span>{' '}
-                {format(new Date(agreement.start_date), 'MMM d, yyyy')}
-              </div>
-              {agreement.end_date && (
-                <div>
-                  <span className="text-muted-foreground">End Date:</span>{' '}
-                  {format(new Date(agreement.end_date), 'MMM d, yyyy')}
-                </div>
+              {isExtension ? (
+                <>
+                  {agreement.period_start_date && (
+                    <div>
+                      <span className="text-muted-foreground">Previous End:</span>{' '}
+                      {format(new Date(agreement.period_start_date), 'MMM d, yyyy')}
+                    </div>
+                  )}
+                  {agreement.period_end_date && (
+                    <div>
+                      <span className="text-muted-foreground">Extended To:</span>{' '}
+                      {format(new Date(agreement.period_end_date), 'MMM d, yyyy')}
+                    </div>
+                  )}
+                </>
+              ) : (
+                <>
+                  {agreement.rental_start_date && (
+                    <div>
+                      <span className="text-muted-foreground">Start Date:</span>{' '}
+                      {format(new Date(agreement.rental_start_date), 'MMM d, yyyy')}
+                    </div>
+                  )}
+                  {agreement.rental_end_date && (
+                    <div>
+                      <span className="text-muted-foreground">End Date:</span>{' '}
+                      {format(new Date(agreement.rental_end_date), 'MMM d, yyyy')}
+                    </div>
+                  )}
+                </>
               )}
               {agreement.envelope_sent_at && (
                 <div>
@@ -233,6 +270,7 @@ function AgreementViewerDialog({
   const vehicleInfo = agreement.vehicles
     ? `${agreement.vehicles.make || ''} ${agreement.vehicles.model || ''} - ${agreement.vehicles.reg}`.trim()
     : 'Vehicle';
+  const isExtension = agreement.agreement_type === 'extension';
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -240,8 +278,14 @@ function AgreementViewerDialog({
         <DialogHeader className="px-6 py-4 border-b flex-shrink-0">
           <div className="flex items-center justify-between">
             <div>
-              <DialogTitle>
-                Rental Agreement {agreement.rental_number ? `#${agreement.rental_number}` : ''}
+              <DialogTitle className="flex items-center gap-2">
+                {isExtension ? 'Extension Agreement' : 'Rental Agreement'}
+                {agreement.rental_number && ` #${agreement.rental_number}`}
+                {isExtension && (
+                  <Badge variant="outline" className="text-amber-600 border-amber-300 bg-amber-50 text-xs">
+                    Extension
+                  </Badge>
+                )}
               </DialogTitle>
               <p className="text-sm text-muted-foreground mt-1">
                 {vehicleInfo}
@@ -344,14 +388,12 @@ export default function AgreementsPage() {
     setSignDialogOpen(false);
     setSigningUrl(null);
     setSigningAgreement(null);
-    // Refresh agreements to pick up any status changes
     refetch();
     refetchStats();
   };
 
   const handleCloseDialog = () => {
     setViewDialogOpen(false);
-    // Clean up blob URL if it was created
     if (documentUrl?.startsWith('blob:')) {
       URL.revokeObjectURL(documentUrl);
     }
@@ -468,7 +510,7 @@ export default function AgreementsPage() {
             <div className="flex items-center justify-between">
               <div>
                 <DialogTitle>
-                  Sign Agreement {signingAgreement?.rental_number ? `#${signingAgreement.rental_number}` : ''}
+                  Sign {signingAgreement?.agreement_type === 'extension' ? 'Extension' : ''} Agreement {signingAgreement?.rental_number ? `#${signingAgreement.rental_number}` : ''}
                 </DialogTitle>
                 <p className="text-sm text-muted-foreground mt-1">
                   Review and sign your rental agreement below

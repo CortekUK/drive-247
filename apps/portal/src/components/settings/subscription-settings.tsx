@@ -19,6 +19,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { useTenant } from "@/contexts/TenantContext";
+import { UsageDashboard } from "./usage-dashboard";
 
 function formatCurrency(amount: number, currency: string) {
   return new Intl.NumberFormat("en-US", {
@@ -140,15 +141,30 @@ function LocalInvoiceView({
               <tbody>
                 <tr className="border-b">
                   <td className="py-3">
-                    <p className="font-medium">Drive247 Pro — Monthly Subscription</p>
+                    <p className="font-medium">Monthly Subscription</p>
                     <p className="text-muted-foreground print:text-gray-500">
                       {formatDate(invoice.period_start)} – {formatDate(invoice.period_end)}
                     </p>
                   </td>
                   <td className="py-3 text-right font-medium">
-                    {formatCurrency(invoice.amount_due, invoice.currency)}
+                    {invoice.base_amount != null
+                      ? formatCurrency(invoice.base_amount, invoice.currency)
+                      : formatCurrency(invoice.amount_due, invoice.currency)}
                   </td>
                 </tr>
+                {invoice.usage_amount != null && invoice.usage_amount > 0 && (
+                  <tr className="border-b">
+                    <td className="py-3">
+                      <p className="font-medium">E-Sign Usage</p>
+                      <p className="text-muted-foreground print:text-gray-500">
+                        {invoice.usage_quantity || 0} agreement{(invoice.usage_quantity || 0) !== 1 ? "s" : ""}
+                      </p>
+                    </td>
+                    <td className="py-3 text-right font-medium">
+                      {formatCurrency(invoice.usage_amount, invoice.currency)}
+                    </td>
+                  </tr>
+                )}
               </tbody>
               <tfoot>
                 <tr>
@@ -390,58 +406,12 @@ export function SubscriptionSettings() {
 
       <Separator />
 
-      {/* Invoices Section */}
-      <div className="space-y-4">
-        <h3 className="text-lg font-semibold">Invoices</h3>
-
-        {invoicesLoading ? (
-          <div className="space-y-3">
-            {[...Array(3)].map((_, i) => (
-              <Skeleton key={i} className="h-10 w-full" />
-            ))}
-          </div>
-        ) : invoices.length === 0 ? (
-          <p className="text-sm text-muted-foreground py-4">
-            No invoices yet
-          </p>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead>
-                <tr className="border-b">
-                  <th className="text-left py-3 text-sm font-semibold">Date</th>
-                  <th className="text-left py-3 text-sm font-semibold">Total</th>
-                  <th className="text-left py-3 text-sm font-semibold">Status</th>
-                  <th className="text-left py-3 text-sm font-semibold">Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {invoices.map((invoice) => (
-                  <tr key={invoice.id} className="border-b last:border-0">
-                    <td className="py-3 text-sm">
-                      {formatDate(invoice.created_at)}
-                    </td>
-                    <td className="py-3 text-sm">
-                      {formatCurrency(invoice.amount_due, invoice.currency)}
-                    </td>
-                    <td className="py-3">
-                      <StatusBadge status={invoice.status} />
-                    </td>
-                    <td className="py-3 text-sm">
-                      <button
-                        onClick={() => setViewingInvoice(invoice)}
-                        className="text-primary hover:underline"
-                      >
-                        View
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
+      {/* Usage Dashboard: current period summary, event log, chart, and invoices */}
+      <UsageDashboard
+        invoices={invoices}
+        invoicesLoading={invoicesLoading}
+        onViewInvoice={setViewingInvoice}
+      />
 
       {/* Local Invoice Viewer */}
       <LocalInvoiceView

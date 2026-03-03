@@ -43,6 +43,9 @@ export interface TenantSubscriptionInvoice {
   due_date: string | null;
   paid_at: string | null;
   invoice_number: string | null;
+  base_amount: number | null;
+  usage_amount: number | null;
+  usage_quantity: number | null;
   created_at: string;
   updated_at: string;
 }

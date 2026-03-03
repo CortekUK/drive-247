@@ -3,9 +3,10 @@ import { CheckCircle, Clock, Mail, FileSignature, XCircle, Ban } from "lucide-re
 
 interface DocumentSigningStatusBadgeProps {
   status: string;
+  boldsignMode?: string | null;
 }
 
-export const DocumentSigningStatusBadge = ({ status }: DocumentSigningStatusBadgeProps) => {
+export const DocumentSigningStatusBadge = ({ status, boldsignMode }: DocumentSigningStatusBadgeProps) => {
   const statusConfig: Record<string, { label: string; variant: "default" | "secondary" | "destructive" | "outline"; icon: any; className?: string }> = {
     pending: {
       label: "Pending",
@@ -49,9 +50,16 @@ export const DocumentSigningStatusBadge = ({ status }: DocumentSigningStatusBadg
   const Icon = config.icon;
 
   return (
-    <Badge variant={config.variant} className={`flex items-center gap-1 ${config.className || ''}`}>
-      <Icon className="h-3 w-3" />
-      {config.label}
-    </Badge>
+    <div className="flex items-center gap-1.5">
+      <Badge variant={config.variant} className={`flex items-center gap-1 ${config.className || ''}`}>
+        <Icon className="h-3 w-3" />
+        {config.label}
+      </Badge>
+      {boldsignMode === 'test' && (
+        <Badge variant="outline" className="!bg-blue-50 !text-blue-700 !border-blue-200 text-[10px] px-1.5 py-0">
+          TEST
+        </Badge>
+      )}
+    </div>
   );
 };

@@ -287,6 +287,7 @@ const CustomerDetail = () => {
           created_at,
           docusign_envelope_id,
           document_status,
+          boldsign_mode,
           signed_document_id,
           signed_document:signed_document_id (
             id,
@@ -1098,7 +1099,7 @@ const CustomerDetail = () => {
                                   />
                                 </TableCell>
                                 <TableCell>
-                                  <DocumentSigningStatusBadge status={rental.document_status || 'pending'} />
+                                  <DocumentSigningStatusBadge status={rental.document_status || 'pending'} boldsignMode={rental.boldsign_mode} />
                                 </TableCell>
                                 <TableCell className="whitespace-nowrap">
                                   {format(new Date(rental.created_at), "MM/dd/yyyy")}

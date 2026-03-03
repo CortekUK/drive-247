@@ -1,6 +1,8 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.57.4';
 import { handleCors, jsonResponse, errorResponse } from '../_shared/cors.ts';
 import { formatCurrency as sharedFormatCurrency } from '../_shared/format-utils.ts';
+import { getBoldSignApiKey, getBoldSignBaseUrl, getTenantBoldSignMode, getBoldSignBrandId } from '../_shared/boldsign-client.ts';
+import type { BoldSignMode } from '../_shared/boldsign-client.ts';
 
 interface CreateDocumentRequest {
   rentalId: string;
@@ -359,7 +361,7 @@ async function sendBoldSignDocument(
     }
 
     formData.append('EnableSigningOrder', 'false');
-    formData.append('DisableEmails', 'false');
+    formData.append('DisableEmails', 'true');
 
     const blob = new Blob([fileBytes], { type: 'text/plain' });
     formData.append('Files', blob, 'Rental-Agreement.txt');
@@ -414,13 +416,6 @@ Deno.serve(async (req) => {
       return errorResponse('rentalId is required', 400);
     }
 
-    const BOLDSIGN_API_KEY = Deno.env.get('BOLDSIGN_API_KEY');
-    const BOLDSIGN_BASE_URL = Deno.env.get('BOLDSIGN_BASE_URL') || 'https://api.boldsign.com';
-
-    if (!BOLDSIGN_API_KEY) {
-      return errorResponse('BoldSign API key not configured', 400);
-    }
-
     // Fetch rental with customer and vehicle data
     const { data: rental, error: rentalError } = await supabase
       .from('rentals')
@@ -468,17 +463,30 @@ Deno.serve(async (req) => {
     console.log('Vehicle:', vehicle?.make, vehicle?.model, vehicle?.reg);
     console.log('Tenant ID:', tenantId);
 
-    // Get tenant currency code and brand info
+    // Get tenant currency code, brand info, and BoldSign mode
     let tenantBrandId: string | undefined;
+    let boldsignMode: BoldSignMode = 'test';
     if (tenantId) {
       const { data: tenantInfo } = await supabase
         .from('tenants')
-        .select('currency_code, boldsign_brand_id')
+        .select('currency_code, boldsign_mode, boldsign_test_brand_id, boldsign_live_brand_id')
         .eq('id', tenantId)
         .single();
       if (tenantInfo?.currency_code) _currencyCode = tenantInfo.currency_code;
-      if (tenantInfo?.boldsign_brand_id) tenantBrandId = tenantInfo.boldsign_brand_id;
+      if (tenantInfo?.boldsign_mode) boldsignMode = tenantInfo.boldsign_mode as BoldSignMode;
+      const brandId = getBoldSignBrandId(tenantInfo || {}, boldsignMode);
+      if (brandId) tenantBrandId = brandId;
     }
+
+    // Resolve API key based on mode
+    let BOLDSIGN_API_KEY: string;
+    try {
+      BOLDSIGN_API_KEY = getBoldSignApiKey(boldsignMode);
+    } catch {
+      return errorResponse('BoldSign API key not configured for mode: ' + boldsignMode, 400);
+    }
+    const BOLDSIGN_BASE_URL = getBoldSignBaseUrl();
+    console.log('BoldSign mode:', boldsignMode);
 
     // Generate document content
     let doc: string;
@@ -501,6 +509,53 @@ Deno.serve(async (req) => {
 
     if (!result) {
       return errorResponse('Failed to create document', 400);
+    }
+
+    // Report metered usage to Stripe (only for live mode agreements)
+    if (boldsignMode === 'live' && tenantId) {
+      try {
+        const { data: tenantSub } = await supabase
+          .from('tenant_subscriptions')
+          .select('stripe_customer_id')
+          .eq('tenant_id', tenantId)
+          .in('status', ['active', 'trialing', 'past_due'])
+          .maybeSingle();
+
+        if (tenantSub?.stripe_customer_id) {
+          const STRIPE_KEY = Deno.env.get('STRIPE_SUBSCRIPTION_SECRET_KEY') || Deno.env.get('STRIPE_SUBSCRIPTION_TEST_SECRET_KEY') || Deno.env.get('STRIPE_TEST_SECRET_KEY') || '';
+          const meterRes = await fetch('https://api.stripe.com/v1/billing/meter_events', {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${STRIPE_KEY}`,
+              'Content-Type': 'application/x-www-form-urlencoded',
+            },
+            body: new URLSearchParams({
+              'event_name': 'esign_sent',
+              'payload[stripe_customer_id]': tenantSub.stripe_customer_id,
+              'payload[value]': '1',
+            }),
+          });
+          const meterData = await meterRes.json();
+          console.log('Stripe meter event:', meterRes.ok ? meterData.identifier : 'FAILED', meterRes.status);
+
+          // Log usage for portal UI
+          const usageRefId = rentalId.substring(0, 8).toUpperCase();
+          await supabase.from('esign_usage_log').insert({
+            tenant_id: tenantId,
+            rental_id: rentalId,
+            customer_id: custId || null,
+            customer_name: name,
+            rental_ref: usageRefId,
+            unit_cost: 1.00,
+            currency: 'usd',
+            stripe_event_id: meterRes.ok ? meterData.identifier : null,
+          });
+        } else {
+          console.log('No active subscription for tenant, skipping meter event');
+        }
+      } catch (e) {
+        console.warn('Stripe meter event error (non-blocking):', e);
+      }
     }
 
     console.log('='.repeat(60));

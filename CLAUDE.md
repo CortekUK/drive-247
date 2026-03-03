@@ -149,13 +149,14 @@ Uses Supabase Realtime channels (replaced Socket.io):
 - **Webhooks**: Stripe (`stripe-webhook-test`, `stripe-webhook-live`, `stripe-connect-webhook`), BoldSign (`boldsign-webhook`), Veriff
 - **Payments**: `create-checkout-session`, `create-preauth-checkout`, `capture-booking-payment`, `process-refund`, `schedule-refund`, installment handling
 - **Stripe Connect**: `create-connected-account`, `get-connect-onboarding-link`, `sync-stripe-account`
-- **Notifications**: `aws-ses-email`, `aws-sns-sms`, `send-booking-email`, 15+ `notify-*` functions
+- **Notifications**: `aws-ses-email`, `aws-sns-sms`, `send-booking-email`, 15+ `notify-*` functions, `send-collection-whatsapp`, `send-signing-whatsapp` (Twilio WhatsApp)
 - **Verification**: `create-veriff-session`, `create-ai-verification-session`, `ai-document-ocr`, `ai-face-match`
 - **Insurance**: `bonzah-calculate-premium`, `bonzah-create-quote`, `bonzah-confirm-payment`, `bonzah-download-pdf`, `bonzah-verify-credentials`, `bonzah-view-policy`, `bonzah-get-balance`, `bonzah-probe-pdf`
 - **Lockbox**: `notify-lockbox-code` — sends lockbox code to customers via email/SMS using per-tenant templates from `lockbox_templates` table
 - **Admin**: `admin-create-user`, `admin-update-role`, `admin-deactivate-user`, `emergency-bootstrap`
 - **RAG chatbot**: `chat`, `rag-init`, `rag-sync`
 - **Subscriptions**: `create-subscription-checkout`, `create-subscription-portal-session`, `get-subscription-details`, `subscription-webhook`
+- **Reviews**: `generate-review-summary` — AI-generated customer review summaries via OpenAI
 - **Shared utilities** in `supabase/functions/_shared/`: `cors.ts`, `stripe-client.ts`, `aws-config.ts`, `email-template-service.ts`, `openai.ts`, `bonzah-client.ts`, `resend-service.ts`, `document-loaders.ts`
 
 10 functions have `verify_jwt = false` in `supabase/config.toml`: `boldsign-webhook`, `veriff-webhook`, `customer-chat`, `validate-customer-invite`, `submit-customer-registration`, `custom-auth-email`, `subscription-webhook`, `check-policy-acceptance`, `stripe-webhook-test`, `stripe-webhook-live`. Stripe webhook functions handle their own signature verification. All other functions require JWT auth by default.
@@ -226,8 +227,9 @@ Required variables (see `.env.example`):
 - `STRIPE_TEST_PUBLISHABLE_KEY`, `STRIPE_LIVE_PUBLISHABLE_KEY`
 - `STRIPE_SUBSCRIPTION_SECRET_KEY`, `STRIPE_SUBSCRIPTION_PRICE_ID`, `STRIPE_SUBSCRIPTION_WEBHOOK_SECRET` (platform subscription billing)
 - `NEXT_PUBLIC_VERIFF_API_KEY` (booking)
-- BoldSign API key (`BOLDSIGN_API_KEY`, `BOLDSIGN_BASE_URL`)
+- BoldSign API keys (`BOLDSIGN_TEST_API_KEY`, `BOLDSIGN_LIVE_API_KEY`, `BOLDSIGN_BASE_URL`)
 - AWS SES/SNS credentials for emails and SMS
+- Twilio (`TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_WHATSAPP_NUMBER`) for WhatsApp
 
 ## Build Notes
 
@@ -382,6 +384,59 @@ Weekend and holiday surcharge system for daily-tier bookings (<7 days):
 - **`tenant_holidays`** table: per-tenant holiday periods with `name`, `start_date`/`end_date`, `surcharge_percent`, `excluded_vehicle_ids` (UUID array), `recurs_annually`. RLS via `get_user_tenant_id()` / `is_super_admin()`
 - **`vehicle_pricing_overrides`** table: per-vehicle overrides for weekend/holiday rules. `rule_type` (`weekend`/`holiday`), `override_type` (`fixed_price`/`custom_percent`/`excluded`). Unique on `(vehicle_id, rule_type, holiday_id)`
 - Migration: `supabase/migrations/20260218120000_add_dynamic_pricing.sql`
+
+## Rental Reviews
+
+Internal customer rating system where portal staff rate customers after completed rentals:
+
+- **`rental_reviews`** table: one review per rental (unique on `rental_id`). Fields: `rating` (1-10), `comment`, `tags` (JSONB array), `is_skipped` (boolean), `reviewer_id` (FK to `app_users`). Rating required when not skipped.
+- **`customer_review_summaries`** table: AI-generated, one per customer per tenant. Fields: `summary` (text), `average_rating` (numeric), `total_reviews` (int), `generated_at`
+- **Portal hooks**: `use-rental-review.ts` (submit/skip mutations), `use-customer-reviews.ts` (list reviews), `use-customer-review-summary.ts` (AI summary)
+- **Edge function**: `generate-review-summary` — calls OpenAI to produce 2-3 sentence summary from all non-skipped reviews, upserts `customer_review_summaries`. Called fire-and-forget after review submission.
+- Migration: `supabase/migrations/20260226100000_add_rental_reviews.sql`
+
+## Gig Driver Feature
+
+Allows customers to identify as gig drivers (e.g., Uber/Lyft) and upload proof documents:
+
+- **DB fields**: `customers.is_gig_driver` (boolean), `rentals.is_gig_driver` (boolean)
+- **`gig_driver_images`** table: stores proof images per customer (`customer_id`, `tenant_id`, `image_url`, `file_name`, `file_size`)
+- **Storage bucket**: `gig-driver-images` (public, 10MB limit, JPG/PNG only)
+- **Portal hook**: `use-gig-driver-images.ts` — fetch, upload, delete images. Query key: `["gig-driver-images", tenant?.id, customerId]`
+- **Booking UI**: `/portal/gig-driver` page in customer portal — multi-upload grid with delete
+- Migration: `supabase/migrations/20260225120000_add_gig_driver.sql`
+
+## Min Rental Hours
+
+Sub-day minimum rental durations (e.g., 4-hour minimum instead of full day):
+
+- **DB column**: `tenants.min_rental_hours` (integer, default 1, range 0-23). Works with existing `min_rental_days` (default 0)
+- **Formula**: `minRentalHours = Math.max(1, (min_rental_days * 24) + min_rental_hours)`
+- **Booking validation**: Used in Zod schema for rental duration validation in `apps/booking/src/app/booking/page.tsx`
+- Migration: `supabase/migrations/20260220120000_add_min_rental_hours.sql`
+
+## WhatsApp Notifications (Twilio)
+
+WhatsApp messaging for collection/lockbox and signing notifications:
+
+- **Edge functions**: `send-collection-whatsapp` (vehicle collection with lockbox code, instructions, photos — supports Meta Content Templates via `TWILIO_WHATSAPP_CONTENT_SID` and sandbox free-form), `send-signing-whatsapp` (simple signing link message)
+- **Env vars**: `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_WHATSAPP_NUMBER`, optional `TWILIO_WHATSAPP_CONTENT_SID`
+- Phone normalization defaults to `+44` (UK) if no country code provided
+- Supports up to 10 photo MediaUrls in collection messages
+
+## BoldSign E-Signatures
+
+Per-tenant test/live mode with branded signing experience:
+
+- **Tenant columns**: `boldsign_mode` (`test`/`live`, default `test`), `boldsign_test_brand_id`, `boldsign_live_brand_id`
+- **Rental column**: `boldsign_mode` — records which mode was used when creating the agreement
+- **Shared helper**: `supabase/functions/_shared/boldsign-client.ts` — mirrors `stripe-client.ts` pattern. `getBoldSignApiKey(mode)`, `getTenantBoldSignMode()`, `getBoldSignBrandId()`
+- **Env vars**: `BOLDSIGN_TEST_API_KEY` (sandbox), `BOLDSIGN_LIVE_API_KEY` (production), `BOLDSIGN_BASE_URL`
+- **E-sign flow**: All esign API routes (portal + booking) resolve tenant's `boldsign_mode` per-request. `DisableEmails: true` always — we send our own signing email via `send-signing-email` edge function + WhatsApp via `send-signing-whatsapp`
+- **Webhook**: `boldsign-webhook` resolves mode from `rental.boldsign_mode` → tenant fallback to download signed PDF with correct API key
+- **Portal UI**: Settings → Integrations has `<ESignSettings />` — self-service test/live toggle with confirmation dialog for going live. TEST badge shown on agreements created in test mode.
+- **Test mode**: Documents are watermarked and auto-deleted after 14 days (BoldSign sandbox behavior)
+- Migration: `supabase/migrations/20260303120000_add_boldsign_mode.sql`
 
 ## Policy Acceptances
 

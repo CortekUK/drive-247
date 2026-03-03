@@ -442,6 +442,9 @@ const CreateRental = () => {
     form.setValue("return_time", renewalSource.return_time || "");
     form.setValue("insurance_status", "pending");
 
+    // Trigger validation after pre-filling so isValid updates correctly
+    setTimeout(() => form.trigger(), 0);
+
     // If source had different pickup/return, uncheck sameAsPickup
     if (renewalSource.pickup_location && renewalSource.return_location &&
         renewalSource.pickup_location !== renewalSource.return_location) {
@@ -637,7 +640,7 @@ const CreateRental = () => {
         }
 
         if (amount !== undefined && amount !== watchedMonthlyAmount) {
-          form.setValue("monthly_amount", amount);
+          form.setValue("monthly_amount", amount, { shouldValidate: true });
         }
       }
     }

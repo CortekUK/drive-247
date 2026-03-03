@@ -2,9 +2,14 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { PDFDocument, PDFPage, PDFFont, StandardFonts, rgb } from 'pdf-lib';
 
-// BoldSign configuration
-const BOLDSIGN_API_KEY = process.env.BOLDSIGN_API_KEY || '';
+// BoldSign configuration — resolved per-request based on tenant mode
 const BOLDSIGN_BASE_URL = process.env.BOLDSIGN_BASE_URL || 'https://api.boldsign.com';
+
+function getBoldSignApiKey(mode: 'test' | 'live'): string {
+    return mode === 'live'
+        ? (process.env.BOLDSIGN_LIVE_API_KEY || '')
+        : (process.env.BOLDSIGN_TEST_API_KEY || '');
+}
 
 // Supabase
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
@@ -15,6 +20,9 @@ interface ESignRequest {
     customerEmail: string;
     customerName: string;
     tenantId: string;
+    agreementType?: 'original' | 'extension';
+    extensionPreviousEndDate?: string;
+    extensionNewEndDate?: string;
 }
 
 // ============================================================================
@@ -43,7 +51,7 @@ function formatCurrency(amount: number | null, currencyCode: string = 'GBP'): st
 // TEMPLATE PROCESSING
 // ============================================================================
 
-function processTemplate(template: string, rental: any, customer: any, vehicle: any, tenant: any, currencyCode: string = 'GBP', verification?: any): string {
+function processTemplate(template: string, rental: any, customer: any, vehicle: any, tenant: any, currencyCode: string = 'GBP', verification?: any, extensionData?: { previousEndDate?: string; newEndDate?: string }): string {
     // Compose full address from separate fields (DB stores street/city/state/zip separately)
     const customerAddress = [
         customer?.address_street,
@@ -141,6 +149,17 @@ function processTemplate(template: string, rental: any, customer: any, vehicle: 
         agreement_date: formatDate(new Date()),
         today_date: formatDate(new Date()),
         current_date: formatDate(new Date()),
+
+        // Extension (empty if not an extension agreement — non-breaking)
+        extension_previous_end_date: extensionData?.previousEndDate ? formatDate(extensionData.previousEndDate) : '',
+        extension_new_end_date: extensionData?.newEndDate ? formatDate(extensionData.newEndDate) : '',
+        extension_days: (() => {
+            if (extensionData?.previousEndDate && extensionData?.newEndDate) {
+                const diff = Math.ceil((new Date(extensionData.newEndDate).getTime() - new Date(extensionData.previousEndDate).getTime()) / (1000 * 60 * 60 * 24));
+                return diff > 0 ? diff.toString() : '';
+            }
+            return '';
+        })(),
     };
 
     let result = template;
@@ -684,10 +703,6 @@ export async function POST(request: NextRequest) {
             return NextResponse.json({ ok: false, error: 'Missing required fields' }, { status: 400 });
         }
 
-        if (!BOLDSIGN_API_KEY) {
-            return NextResponse.json({ ok: false, error: 'BoldSign not configured' }, { status: 500 });
-        }
-
         const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
         // Fetch rental with related data
@@ -720,7 +735,7 @@ export async function POST(request: NextRequest) {
         if (body.tenantId) {
             const { data: tenantData } = await supabase
                 .from('tenants')
-                .select('company_name, contact_email, contact_phone, phone, address, admin_name, admin_email, currency_code, logo_url, boldsign_brand_id')
+                .select('company_name, contact_email, contact_phone, phone, address, admin_name, admin_email, currency_code, logo_url, boldsign_mode, boldsign_test_brand_id, boldsign_live_brand_id')
                 .eq('id', body.tenantId)
                 .single();
             tenant = tenantData;
@@ -748,7 +763,7 @@ export async function POST(request: NextRequest) {
                 console.log('Using admin template (structured HTML → PDF)');
                 hasCustomTemplate = true;
                 processedHtml = removeEmptyFields(
-                    processTemplate(templateData.template_content, rental, customer, vehicle, tenant, currencyCode, verification)
+                    processTemplate(templateData.template_content, rental, customer, vehicle, tenant, currencyCode, verification, body.extensionPreviousEndDate ? { previousEndDate: body.extensionPreviousEndDate, newEndDate: body.extensionNewEndDate } : undefined)
                 );
 
                 // Ensure a signature tag exists
@@ -783,8 +798,16 @@ export async function POST(request: NextRequest) {
 
         const pdfBytes = await pdfDoc.save();
 
+        // ── Resolve BoldSign mode + API key ──
+        const boldsignMode: 'test' | 'live' = tenant?.boldsign_mode || 'test';
+        const BOLDSIGN_API_KEY = getBoldSignApiKey(boldsignMode);
+        if (!BOLDSIGN_API_KEY) {
+            return NextResponse.json({ ok: false, error: 'BoldSign not configured' }, { status: 500 });
+        }
+        console.log('BoldSign mode:', boldsignMode);
+
         // ── BoldSign brand ──
-        let brandId = tenant?.boldsign_brand_id || '';
+        let brandId = (boldsignMode === 'test' ? tenant?.boldsign_test_brand_id : tenant?.boldsign_live_brand_id) || '';
         if (!brandId && body.tenantId && tenant?.company_name) {
             try {
                 const brandForm = new FormData();
@@ -824,11 +847,12 @@ export async function POST(request: NextRequest) {
                 if (brandResponse.ok) {
                     const brandResult = await brandResponse.json();
                     brandId = brandResult.brandId;
+                    const brandColumn = boldsignMode === 'test' ? 'boldsign_test_brand_id' : 'boldsign_live_brand_id';
                     await supabase
                         .from('tenants')
-                        .update({ boldsign_brand_id: brandId })
+                        .update({ [brandColumn]: brandId })
                         .eq('id', body.tenantId);
-                    console.log('Created BoldSign brand:', brandId);
+                    console.log('Created BoldSign brand:', brandId, 'for mode:', boldsignMode);
                 } else {
                     console.warn('Failed to create BoldSign brand:', await brandResponse.text());
                 }
@@ -886,7 +910,7 @@ export async function POST(request: NextRequest) {
         }
 
         formData.append('EnableSigningOrder', 'false');
-        formData.append('DisableEmails', 'false');
+        formData.append('DisableEmails', 'true');
 
         const fileBlob = new Blob([pdfBytes], { type: 'application/pdf' });
         formData.append('Files', fileBlob, 'Rental-Agreement.pdf');
@@ -906,18 +930,131 @@ export async function POST(request: NextRequest) {
 
         const boldSignResult = await boldSignResponse.json();
         const documentId = boldSignResult.documentId;
+        const agreementType = body.agreementType || 'original';
+        const now = new Date().toISOString();
 
-        // Update rental with BoldSign document info
-        console.log('Updating rental with document info...');
-        await supabase
-            .from('rentals')
-            .update({
-                docusign_envelope_id: documentId,
+        // Insert into rental_agreements table
+        console.log('Creating rental_agreements record, type:', agreementType);
+        const { data: agreementRow, error: agreementError } = await supabase
+            .from('rental_agreements')
+            .insert({
+                rental_id: body.rentalId,
+                tenant_id: body.tenantId,
+                agreement_type: agreementType,
+                document_id: documentId,
                 document_status: 'sent',
-                envelope_created_at: new Date().toISOString(),
-                envelope_sent_at: new Date().toISOString(),
+                boldsign_mode: boldsignMode,
+                envelope_created_at: now,
+                envelope_sent_at: now,
+                period_start_date: agreementType === 'extension' && body.extensionPreviousEndDate
+                    ? body.extensionPreviousEndDate
+                    : rental?.start_date || null,
+                period_end_date: agreementType === 'extension' && body.extensionNewEndDate
+                    ? body.extensionNewEndDate
+                    : rental?.end_date || null,
             })
-            .eq('id', body.rentalId);
+            .select('id')
+            .single();
+
+        if (agreementError) {
+            console.error('Failed to create rental_agreements row:', agreementError);
+        }
+        const agreementId = agreementRow?.id || null;
+
+        // For original agreements: also update rentals fields (backward compat)
+        if (agreementType === 'original') {
+            console.log('Updating rental with document info (original agreement)...');
+            await supabase
+                .from('rentals')
+                .update({
+                    docusign_envelope_id: documentId,
+                    document_status: 'sent',
+                    envelope_created_at: now,
+                    envelope_sent_at: now,
+                    boldsign_mode: boldsignMode,
+                })
+                .eq('id', body.rentalId);
+        }
+
+        // Report metered usage to Stripe (only for live mode agreements)
+        if (boldsignMode === 'live' && body.tenantId) {
+            try {
+                const { data: tenantSub } = await supabase
+                    .from('tenant_subscriptions')
+                    .select('stripe_customer_id')
+                    .eq('tenant_id', body.tenantId)
+                    .in('status', ['active', 'trialing', 'past_due'])
+                    .maybeSingle();
+
+                if (tenantSub?.stripe_customer_id) {
+                    const STRIPE_KEY = process.env.STRIPE_SUBSCRIPTION_SECRET_KEY || process.env.STRIPE_SUBSCRIPTION_TEST_SECRET_KEY || process.env.STRIPE_TEST_SECRET_KEY || '';
+                    const meterRes = await fetch('https://api.stripe.com/v1/billing/meter_events', {
+                        method: 'POST',
+                        headers: {
+                            'Authorization': `Bearer ${STRIPE_KEY}`,
+                            'Content-Type': 'application/x-www-form-urlencoded',
+                        },
+                        body: new URLSearchParams({
+                            'event_name': 'esign_sent',
+                            'payload[stripe_customer_id]': tenantSub.stripe_customer_id,
+                            'payload[value]': '1',
+                        }),
+                    });
+                    const meterData = await meterRes.json();
+                    console.log('Stripe meter event:', meterRes.ok ? meterData.identifier : 'FAILED', meterRes.status);
+
+                    // Log usage for portal UI
+                    const refId = body.rentalId.substring(0, 8).toUpperCase();
+                    await supabase.from('esign_usage_log').insert({
+                        tenant_id: body.tenantId,
+                        rental_id: body.rentalId,
+                        customer_id: rental?.customer_id || null,
+                        customer_name: body.customerName,
+                        rental_ref: refId,
+                        unit_cost: 1.00,
+                        currency: 'usd',
+                        stripe_event_id: meterRes.ok ? meterData.identifier : null,
+                    });
+                } else {
+                    console.log('No active subscription for tenant, skipping meter event');
+                }
+            } catch (e) {
+                console.warn('Stripe meter event error (non-blocking):', e);
+            }
+        }
+
+        // Send signing email (we handle emails ourselves since DisableEmails is true)
+        let emailSent = false;
+        try {
+            const refId = body.rentalId.substring(0, 8).toUpperCase();
+            const companyName = tenant?.company_name || 'Drive 247';
+            const vehicleDesc = [vehicle?.make, vehicle?.model].filter(Boolean).join(' ') || 'your vehicle';
+
+            const signingEmailResponse = await fetch(`${supabaseUrl}/functions/v1/send-signing-email`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${supabaseServiceKey}`,
+                },
+                body: JSON.stringify({
+                    customerEmail: body.customerEmail,
+                    customerName: body.customerName,
+                    documentId,
+                    companyName,
+                    rentalRef: refId,
+                    vehicleInfo: vehicleDesc,
+                    tenantId: body.tenantId,
+                    boldsignMode: boldsignMode,
+                }),
+            });
+            emailSent = signingEmailResponse.ok;
+            if (!emailSent) {
+                console.warn('Signing email error:', await signingEmailResponse.text());
+            }
+            console.log('Signing email:', emailSent ? 'sent' : 'failed');
+        } catch (e) {
+            console.warn('Signing email error:', e);
+        }
 
         // Send WhatsApp notification
         let whatsAppSent = false;
@@ -950,8 +1087,8 @@ export async function POST(request: NextRequest) {
             }
         }
 
-        console.log('SUCCESS! Document ID:', documentId);
-        return NextResponse.json({ ok: true, envelopeId: documentId, emailSent: true, whatsAppSent });
+        console.log('SUCCESS! Document ID:', documentId, 'Agreement ID:', agreementId);
+        return NextResponse.json({ ok: true, envelopeId: documentId, agreementId, emailSent: true, whatsAppSent });
 
     } catch (error: any) {
         console.error('API Error:', error);

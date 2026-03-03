@@ -1,5 +1,7 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.57.4';
 import { handleCors, jsonResponse, errorResponse } from '../_shared/cors.ts';
+import { getBoldSignApiKey, getBoldSignBaseUrl, getTenantBoldSignMode } from '../_shared/boldsign-client.ts';
+import type { BoldSignMode } from '../_shared/boldsign-client.ts';
 
 interface BoldSignEvent {
   event: {
@@ -105,109 +107,212 @@ async function handleBoldSignWebhook(supabaseClient: ReturnType<typeof createCli
       return { ok: false, error: 'Missing document ID' };
     }
 
-    // Find the rental by document ID (stored in docusign_envelope_id column)
-    const { data: rental, error: rentalError } = await supabaseClient
-      .from('rentals')
-      .select('*, tenant_id, customers:customer_id(id, name, email)')
-      .eq('docusign_envelope_id', documentId)
-      .single();
+    // Step 1: Look up rental_agreements by document_id (new table)
+    const { data: agreement } = await supabaseClient
+      .from('rental_agreements')
+      .select('id, rental_id, tenant_id, agreement_type, boldsign_mode')
+      .eq('document_id', documentId)
+      .maybeSingle();
 
-    if (rentalError || !rental) {
-      console.error('Rental not found for document:', documentId);
-      return { ok: false, error: 'Rental not found' };
+    let rental: any;
+    let agreementType: 'original' | 'extension' = 'original';
+    let agreementId: string | null = null;
+
+    if (agreement) {
+      // Found in rental_agreements table
+      agreementId = agreement.id;
+      agreementType = agreement.agreement_type as 'original' | 'extension';
+      console.log('Found agreement:', agreementId, 'type:', agreementType);
+
+      const { data: rentalData, error: rentalError } = await supabaseClient
+        .from('rentals')
+        .select('*, tenant_id, boldsign_mode, customers:customer_id(id, name, email)')
+        .eq('id', agreement.rental_id)
+        .single();
+
+      if (rentalError || !rentalData) {
+        console.error('Rental not found for agreement:', agreementId);
+        return { ok: false, error: 'Rental not found' };
+      }
+      rental = rentalData;
+    } else {
+      // Step 2: Fallback to rentals.docusign_envelope_id (backward compat)
+      console.log('Agreement not found in rental_agreements, falling back to rentals table');
+      const { data: rentalData, error: rentalError } = await supabaseClient
+        .from('rentals')
+        .select('*, tenant_id, boldsign_mode, customers:customer_id(id, name, email)')
+        .eq('docusign_envelope_id', documentId)
+        .single();
+
+      if (rentalError || !rentalData) {
+        console.error('Rental not found for document:', documentId);
+        return { ok: false, error: 'Rental not found' };
+      }
+      rental = rentalData;
     }
 
-    console.log('Found rental:', rental.id, 'Event:', eventType);
+    console.log('Found rental:', rental.id, 'Event:', eventType, 'Agreement type:', agreementType);
 
     const mappedStatus = mapBoldSignStatus(eventType);
-    const updateData: Record<string, unknown> = {
-      document_status: mappedStatus,
-    };
 
-    // If completed, update rental to Active, vehicle to Rented, and download signed document
-    if (mappedStatus === 'completed') {
-      console.log('Document completed, activating rental and downloading signed document...');
+    // Always update rental_agreements row if we have one
+    if (agreementId) {
+      const agreementUpdate: Record<string, unknown> = {
+        document_status: mappedStatus,
+      };
+      if (mappedStatus === 'completed') {
+        agreementUpdate.envelope_completed_at = new Date().toISOString();
+      }
 
-      updateData.status = 'Active';
-
-      // Update vehicle status to Rented
-      if (rental.vehicle_id) {
-        const { error: vehicleUpdateError } = await supabaseClient
-          .from('vehicles')
-          .update({ status: 'Rented' })
-          .eq('id', rental.vehicle_id);
-
-        if (vehicleUpdateError) {
-          console.error('Error updating vehicle status:', vehicleUpdateError);
-        } else {
-          console.log('Vehicle status updated to Rented:', rental.vehicle_id);
+      // Download signed document for completed agreements (both original and extension)
+      if (mappedStatus === 'completed') {
+        const resolvedMode = await resolveMode(supabaseClient, agreement, rental);
+        const downloadResult = await downloadAndStore(supabaseClient, documentId, resolvedMode, rental, agreementType);
+        if (downloadResult.docRecordId) {
+          agreementUpdate.signed_document_id = downloadResult.docRecordId;
         }
       }
 
-      // Download signed document from BoldSign
-      const BOLDSIGN_API_KEY = Deno.env.get('BOLDSIGN_API_KEY');
-      const BOLDSIGN_BASE_URL = Deno.env.get('BOLDSIGN_BASE_URL') || 'https://api.boldsign.com';
+      await supabaseClient
+        .from('rental_agreements')
+        .update(agreementUpdate)
+        .eq('id', agreementId);
+    }
 
-      if (!BOLDSIGN_API_KEY) {
-        console.error('BoldSign API key not configured');
-        return { ok: false, error: 'BoldSign API key missing' };
-      }
+    // For original agreements (or fallback without agreement row): update rentals too
+    if (agreementType === 'original') {
+      const rentalUpdate: Record<string, unknown> = {
+        document_status: mappedStatus,
+      };
 
-      const downloadResult = await downloadSignedDocument(
-        supabaseClient,
-        documentId,
-        BOLDSIGN_API_KEY,
-        BOLDSIGN_BASE_URL
-      );
+      if (mappedStatus === 'completed') {
+        rentalUpdate.status = 'Active';
 
-      if (downloadResult.success && downloadResult.fileUrl) {
-        console.log('Creating customer_documents record...');
+        // Update vehicle status to Rented
+        if (rental.vehicle_id) {
+          const { error: vehicleUpdateError } = await supabaseClient
+            .from('vehicles')
+            .update({ status: 'Rented' })
+            .eq('id', rental.vehicle_id);
 
-        const { data: docRecord, error: docError } = await supabaseClient
-          .from('customer_documents')
-          .insert({
-            customer_id: rental.customer_id,
-            document_type: 'Other',
-            document_name: `Signed Rental Agreement - ${rental.customers.name}`,
-            file_url: downloadResult.fileUrl,
-            file_name: downloadResult.fileName || `rental-agreement-${documentId}-signed.pdf`,
-            mime_type: 'application/pdf',
-            verified: true,
-            status: 'Active',
-            tenant_id: rental.tenant_id,
-          })
-          .select()
-          .single();
-
-        if (docError) {
-          console.error('Error creating document record:', docError);
-        } else {
-          console.log('Created document record:', docRecord.id);
-          updateData.signed_document_id = docRecord.id;
-          updateData.envelope_completed_at = new Date().toISOString();
+          if (vehicleUpdateError) {
+            console.error('Error updating vehicle status:', vehicleUpdateError);
+          } else {
+            console.log('Vehicle status updated to Rented:', rental.vehicle_id);
+          }
         }
-      } else {
-        console.error('Failed to download signed document:', downloadResult.error);
+
+        // Download signed doc if not already done via agreement path
+        if (!agreementId) {
+          const resolvedMode = await resolveMode(supabaseClient, null, rental);
+          const downloadResult = await downloadAndStore(supabaseClient, documentId, resolvedMode, rental, 'original');
+          if (downloadResult.docRecordId) {
+            rentalUpdate.signed_document_id = downloadResult.docRecordId;
+            rentalUpdate.envelope_completed_at = new Date().toISOString();
+          }
+        } else {
+          // Copy signed_document_id from agreement update
+          const { data: updatedAgreement } = await supabaseClient
+            .from('rental_agreements')
+            .select('signed_document_id, envelope_completed_at')
+            .eq('id', agreementId)
+            .single();
+          if (updatedAgreement?.signed_document_id) {
+            rentalUpdate.signed_document_id = updatedAgreement.signed_document_id;
+            rentalUpdate.envelope_completed_at = updatedAgreement.envelope_completed_at;
+          }
+        }
+      }
+
+      const { error: updateError } = await supabaseClient
+        .from('rentals')
+        .update(rentalUpdate)
+        .eq('id', rental.id);
+
+      if (updateError) {
+        console.error('Error updating rental:', updateError);
+        return { ok: false, error: updateError.message };
       }
     }
+    // For extension agreements: do NOT change rental status or vehicle status
 
-    // Update rental record
-    const { error: updateError } = await supabaseClient
-      .from('rentals')
-      .update(updateData)
-      .eq('id', rental.id);
-
-    if (updateError) {
-      console.error('Error updating rental:', updateError);
-      return { ok: false, error: updateError.message };
-    }
-
-    console.log('Successfully processed webhook for rental:', rental.id);
+    console.log('Successfully processed webhook for rental:', rental.id, 'agreement type:', agreementType);
     return { ok: true };
   } catch (error) {
     console.error('Error handling webhook:', error);
     return { ok: false, error: error instanceof Error ? error.message : 'Unknown error' };
   }
+}
+
+// Helper: resolve BoldSign mode from agreement/rental/tenant
+async function resolveMode(
+  supabaseClient: ReturnType<typeof createClient>,
+  agreement: { boldsign_mode: string | null } | null,
+  rental: any
+): Promise<BoldSignMode> {
+  let mode: BoldSignMode = (agreement?.boldsign_mode as BoldSignMode) || (rental.boldsign_mode as BoldSignMode) || 'test';
+  if (!mode || mode === ('test' as any)) {
+    if (rental.tenant_id) {
+      mode = await getTenantBoldSignMode(supabaseClient, rental.tenant_id);
+    }
+  }
+  return mode;
+}
+
+// Helper: download signed PDF, store in customer_documents, return record ID
+async function downloadAndStore(
+  supabaseClient: ReturnType<typeof createClient>,
+  documentId: string,
+  boldsignMode: BoldSignMode,
+  rental: any,
+  agreementType: string
+): Promise<{ docRecordId?: string }> {
+  let BOLDSIGN_API_KEY: string;
+  try {
+    BOLDSIGN_API_KEY = getBoldSignApiKey(boldsignMode);
+  } catch {
+    console.error('BoldSign API key not configured for mode:', boldsignMode);
+    return {};
+  }
+  const BOLDSIGN_BASE_URL = getBoldSignBaseUrl();
+
+  const downloadResult = await downloadSignedDocument(
+    supabaseClient,
+    documentId,
+    BOLDSIGN_API_KEY,
+    BOLDSIGN_BASE_URL
+  );
+
+  if (downloadResult.success && downloadResult.fileUrl) {
+    console.log('Creating customer_documents record...');
+    const docLabel = agreementType === 'extension' ? 'Extension Agreement' : 'Rental Agreement';
+
+    const { data: docRecord, error: docError } = await supabaseClient
+      .from('customer_documents')
+      .insert({
+        customer_id: rental.customer_id,
+        document_type: 'Other',
+        document_name: `Signed ${docLabel} - ${rental.customers?.name || 'Customer'}`,
+        file_url: downloadResult.fileUrl,
+        file_name: downloadResult.fileName || `rental-agreement-${documentId}-signed.pdf`,
+        mime_type: 'application/pdf',
+        verified: true,
+        status: 'Active',
+        tenant_id: rental.tenant_id,
+      })
+      .select()
+      .single();
+
+    if (docError) {
+      console.error('Error creating document record:', docError);
+      return {};
+    }
+    console.log('Created document record:', docRecord.id);
+    return { docRecordId: docRecord.id };
+  }
+
+  console.error('Failed to download signed document:', downloadResult.error);
+  return {};
 }
 
 Deno.serve(async (req) => {

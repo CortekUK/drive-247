@@ -4,17 +4,23 @@ import { useCustomerAuthStore } from '@/stores/customer-auth-store';
 import { toast } from 'sonner';
 
 export interface CustomerAgreement {
-  id: string;
-  rental_number: string | null;
-  start_date: string;
-  end_date: string | null;
+  id: string; // rental_agreements.id
+  rental_id: string;
+  agreement_type: 'original' | 'extension';
+  document_id: string | null;
   document_status: string | null;
-  docusign_envelope_id: string | null;
+  boldsign_mode: string | null;
   envelope_created_at: string | null;
   envelope_sent_at: string | null;
   envelope_completed_at: string | null;
   signed_document_id: string | null;
+  period_start_date: string | null;
+  period_end_date: string | null;
   created_at: string | null;
+  // Joined from rental
+  rental_number: string | null;
+  rental_start_date: string;
+  rental_end_date: string | null;
   vehicles: {
     id: string;
     reg: string;
@@ -37,35 +43,54 @@ export function useCustomerAgreements() {
     queryFn: async () => {
       if (!customerUser?.customer_id) return [];
 
-      const { data, error } = await supabase
+      // First get customer's rental IDs
+      const { data: rentals, error: rentalsError } = await supabase
         .from('rentals')
+        .select('id')
+        .eq('customer_id', customerUser.customer_id);
+
+      if (rentalsError || !rentals?.length) return [];
+
+      const rentalIds = rentals.map(r => r.id);
+
+      // Then query rental_agreements for those rentals
+      const { data, error } = await supabase
+        .from('rental_agreements')
         .select(`
           id,
-          rental_number,
-          start_date,
-          end_date,
+          rental_id,
+          agreement_type,
+          document_id,
           document_status,
-          docusign_envelope_id,
+          boldsign_mode,
           envelope_created_at,
           envelope_sent_at,
           envelope_completed_at,
           signed_document_id,
+          period_start_date,
+          period_end_date,
           created_at,
-          vehicles (
+          rentals:rental_id (
             id,
-            reg,
-            make,
-            model
+            rental_number,
+            start_date,
+            end_date,
+            vehicles (
+              id,
+              reg,
+              make,
+              model
+            )
           ),
-          customer_documents!rentals_signed_document_id_fkey (
+          customer_documents:signed_document_id (
             id,
             file_url,
             file_name,
             document_name
           )
         `)
-        .eq('customer_id', customerUser.customer_id)
-        .not('docusign_envelope_id', 'is', null)
+        .in('rental_id', rentalIds)
+        .not('document_id', 'is', null)
         .order('created_at', { ascending: false });
 
       if (error) {
@@ -73,20 +98,25 @@ export function useCustomerAgreements() {
         throw error;
       }
 
-      return (data || []).map((rental: any) => ({
-        id: rental.id,
-        rental_number: rental.rental_number,
-        start_date: rental.start_date,
-        end_date: rental.end_date,
-        document_status: rental.document_status,
-        docusign_envelope_id: rental.docusign_envelope_id,
-        envelope_created_at: rental.envelope_created_at,
-        envelope_sent_at: rental.envelope_sent_at,
-        envelope_completed_at: rental.envelope_completed_at,
-        signed_document_id: rental.signed_document_id,
-        created_at: rental.created_at,
-        vehicles: rental.vehicles,
-        signed_document: rental.customer_documents,
+      return (data || []).map((row: any) => ({
+        id: row.id,
+        rental_id: row.rental_id,
+        agreement_type: row.agreement_type,
+        document_id: row.document_id,
+        document_status: row.document_status,
+        boldsign_mode: row.boldsign_mode,
+        envelope_created_at: row.envelope_created_at,
+        envelope_sent_at: row.envelope_sent_at,
+        envelope_completed_at: row.envelope_completed_at,
+        signed_document_id: row.signed_document_id,
+        period_start_date: row.period_start_date,
+        period_end_date: row.period_end_date,
+        created_at: row.created_at,
+        rental_number: row.rentals?.rental_number || null,
+        rental_start_date: row.rentals?.start_date,
+        rental_end_date: row.rentals?.end_date,
+        vehicles: row.rentals?.vehicles || null,
+        signed_document: row.customer_documents || null,
       })) as CustomerAgreement[];
     },
     enabled: !!customerUser?.customer_id,
@@ -101,11 +131,21 @@ export function useCustomerAgreementStats() {
     queryFn: async () => {
       if (!customerUser?.customer_id) return null;
 
-      const { data, error } = await supabase
+      // Get rental IDs first
+      const { data: rentals } = await supabase
         .from('rentals')
-        .select('id, document_status, docusign_envelope_id')
-        .eq('customer_id', customerUser.customer_id)
-        .not('docusign_envelope_id', 'is', null);
+        .select('id')
+        .eq('customer_id', customerUser.customer_id);
+
+      if (!rentals?.length) return { total: 0, signed: 0, pending: 0 };
+
+      const rentalIds = rentals.map(r => r.id);
+
+      const { data, error } = await supabase
+        .from('rental_agreements')
+        .select('id, document_status')
+        .in('rental_id', rentalIds)
+        .not('document_id', 'is', null);
 
       if (error) {
         console.error('Error fetching agreement stats:', error);
@@ -114,16 +154,12 @@ export function useCustomerAgreementStats() {
 
       const agreements = data || [];
       const total = agreements.length;
-      const signed = agreements.filter((a) => a.document_status === 'completed').length;
+      const signed = agreements.filter((a) => a.document_status === 'completed' || a.document_status === 'signed').length;
       const pending = agreements.filter(
         (a) => a.document_status && ['sent', 'delivered'].includes(a.document_status)
       ).length;
 
-      return {
-        total,
-        signed,
-        pending,
-      };
+      return { total, signed, pending };
     },
     enabled: !!customerUser?.customer_id,
   });
@@ -144,7 +180,7 @@ export function useDownloadAgreement() {
           const url = URL.createObjectURL(blob);
           const a = document.createElement('a');
           a.href = url;
-          a.download = agreement.signed_document.file_name || `rental-agreement-${agreement.rental_number || agreement.id}.pdf`;
+          a.download = agreement.signed_document.file_name || `rental-agreement-${agreement.rental_number || agreement.rental_id}.pdf`;
           document.body.appendChild(a);
           a.click();
           document.body.removeChild(a);
@@ -162,7 +198,7 @@ export function useDownloadAgreement() {
         const url = URL.createObjectURL(data);
         const a = document.createElement('a');
         a.href = url;
-        a.download = agreement.signed_document.file_name || `rental-agreement-${agreement.rental_number || agreement.id}.pdf`;
+        a.download = agreement.signed_document.file_name || `rental-agreement-${agreement.rental_number || agreement.rental_id}.pdf`;
         document.body.appendChild(a);
         a.click();
         document.body.removeChild(a);
@@ -170,15 +206,15 @@ export function useDownloadAgreement() {
         return;
       }
 
-      // Otherwise fetch from DocuSign API
-      if (!agreement.docusign_envelope_id) {
+      // Otherwise fetch from BoldSign API via view route
+      if (!agreement.document_id) {
         throw new Error('No document available');
       }
 
       const response = await fetch('/api/esign/view', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ rentalId: agreement.id }),
+        body: JSON.stringify({ rentalId: agreement.rental_id, agreementId: agreement.id }),
       });
 
       const result = await response.json();
@@ -187,7 +223,6 @@ export function useDownloadAgreement() {
         throw new Error(result.error || 'Failed to fetch document');
       }
 
-      // If we got a URL, redirect to it
       if (result.documentUrl) {
         const response = await fetch(result.documentUrl);
         if (!response.ok) throw new Error('Failed to download document');
@@ -196,7 +231,7 @@ export function useDownloadAgreement() {
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        a.download = `rental-agreement-${agreement.rental_number || agreement.id}.pdf`;
+        a.download = `rental-agreement-${agreement.rental_number || agreement.rental_id}.pdf`;
         document.body.appendChild(a);
         a.click();
         document.body.removeChild(a);
@@ -204,7 +239,6 @@ export function useDownloadAgreement() {
         return;
       }
 
-      // If we got base64, convert and download
       if (result.documentBase64) {
         const byteCharacters = atob(result.documentBase64);
         const byteNumbers = new Array(byteCharacters.length);
@@ -217,7 +251,7 @@ export function useDownloadAgreement() {
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        a.download = `rental-agreement-${agreement.rental_number || agreement.id}.pdf`;
+        a.download = `rental-agreement-${agreement.rental_number || agreement.rental_id}.pdf`;
         document.body.appendChild(a);
         a.click();
         document.body.removeChild(a);
@@ -245,15 +279,15 @@ export function useViewAgreement() {
         return agreement.signed_document.file_url;
       }
 
-      // Otherwise fetch from DocuSign API
-      if (!agreement.docusign_envelope_id) {
+      // Otherwise fetch from BoldSign API
+      if (!agreement.document_id) {
         throw new Error('No document available');
       }
 
       const response = await fetch('/api/esign/view', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ rentalId: agreement.id }),
+        body: JSON.stringify({ rentalId: agreement.rental_id, agreementId: agreement.id }),
       });
 
       const result = await response.json();
@@ -262,12 +296,10 @@ export function useViewAgreement() {
         throw new Error(result.error || 'Failed to fetch document');
       }
 
-      // If we got a URL, return it
       if (result.documentUrl) {
         return result.documentUrl;
       }
 
-      // If we got base64, convert to blob URL
       if (result.documentBase64) {
         const byteCharacters = atob(result.documentBase64);
         const byteNumbers = new Array(byteCharacters.length);
@@ -291,7 +323,7 @@ export function useViewAgreement() {
 export function useSignAgreement() {
   return useMutation({
     mutationFn: async (agreement: CustomerAgreement): Promise<{ signingUrl?: string; emailSent?: boolean; error?: string }> => {
-      if (!agreement.docusign_envelope_id) {
+      if (!agreement.document_id) {
         throw new Error('No document for this agreement');
       }
 
@@ -303,7 +335,7 @@ export function useSignAgreement() {
       const response = await fetch('/api/esign/sign', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ rentalId: agreement.id }),
+        body: JSON.stringify({ rentalId: agreement.rental_id, agreementId: agreement.id }),
       });
 
       const result = await response.json();
@@ -320,7 +352,6 @@ export function useSignAgreement() {
     },
     onError: (error) => {
       console.error('Error getting signing URL:', error);
-      // Don't show toast here - let the component handle it
     },
   });
 }

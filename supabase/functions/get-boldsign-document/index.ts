@@ -1,5 +1,7 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.57.4';
 import { handleCors, jsonResponse, errorResponse } from '../_shared/cors.ts';
+import { getBoldSignApiKey, getBoldSignBaseUrl, getTenantBoldSignMode } from '../_shared/boldsign-client.ts';
+import type { BoldSignMode } from '../_shared/boldsign-client.ts';
 
 Deno.serve(async (req) => {
   const corsResponse = handleCors(req);
@@ -69,13 +71,29 @@ Deno.serve(async (req) => {
       documentId = rental.docusign_envelope_id;
     }
 
-    // Get BoldSign credentials
-    const BOLDSIGN_API_KEY = Deno.env.get('BOLDSIGN_API_KEY');
-    const BOLDSIGN_BASE_URL = Deno.env.get('BOLDSIGN_BASE_URL') || 'https://api.boldsign.com';
-
-    if (!BOLDSIGN_API_KEY) {
-      return errorResponse('BoldSign not configured', 500);
+    // Resolve BoldSign mode from rental
+    let boldsignMode: BoldSignMode = 'test';
+    if (rentalId) {
+      const { data: rentalMode } = await supabase
+        .from('rentals')
+        .select('boldsign_mode, tenant_id')
+        .eq('id', rentalId)
+        .single();
+      if (rentalMode?.boldsign_mode) {
+        boldsignMode = rentalMode.boldsign_mode as BoldSignMode;
+      } else if (rentalMode?.tenant_id) {
+        boldsignMode = await getTenantBoldSignMode(supabase, rentalMode.tenant_id);
+      }
     }
+
+    // Get BoldSign credentials for the resolved mode
+    let BOLDSIGN_API_KEY: string;
+    try {
+      BOLDSIGN_API_KEY = getBoldSignApiKey(boldsignMode);
+    } catch {
+      return errorResponse('BoldSign not configured for mode: ' + boldsignMode, 500);
+    }
+    const BOLDSIGN_BASE_URL = getBoldSignBaseUrl();
 
     // Get document properties for status
     const propsResponse = await fetch(

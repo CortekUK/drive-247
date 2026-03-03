@@ -739,7 +739,7 @@ export const AddVehicleDialog = ({ open, onOpenChange }: AddVehicleDialogProps) 
                   />
                 </div>
 
-                <div className="grid grid-cols-2 md:grid-cols-6 gap-3 items-start">
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3 items-start">
                   <FormField
                     control={form.control}
                     name="daily_rent"
@@ -850,13 +850,15 @@ export const AddVehicleDialog = ({ open, onOpenChange }: AddVehicleDialogProps) 
                       </FormItem>
                     )}
                   />
+                </div>
 
+                <div className="grid grid-cols-2 gap-3 items-start">
                   <FormField
                     control={form.control}
                     name="allowed_mileage"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel className="whitespace-nowrap">Mileage Allowance</FormLabel>
+                        <FormLabel>Mileage Allowance</FormLabel>
                         <FormControl>
                           <Input
                             type="number"
@@ -880,7 +882,7 @@ export const AddVehicleDialog = ({ open, onOpenChange }: AddVehicleDialogProps) 
                     name="excess_mileage_rate"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel className="whitespace-nowrap">Excess Mileage Rate</FormLabel>
+                        <FormLabel>Excess Mileage Rate</FormLabel>
                         <FormControl>
                           <Input
                             type="number"
