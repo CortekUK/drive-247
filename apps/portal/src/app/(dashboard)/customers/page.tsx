@@ -16,7 +16,26 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { Users, Plus, Mail, Phone, Eye, Edit, Search, Shield, ArrowUpDown, ArrowUp, ArrowDown, X, MoreHorizontal, Ban, Trash2, XCircle, UserCheck, Link2, Briefcase } from "lucide-react";
+import { Users, Plus, Mail, Phone, Eye, Edit, Search, Shield, ArrowUpDown, ArrowUp, ArrowDown, X, MoreHorizontal, Ban, Trash2, XCircle, UserCheck, Link2, Briefcase, Info } from "lucide-react";
+import {
+  BarChart,
+  Bar,
+  AreaChart,
+  Area,
+  PieChart,
+  Pie,
+  Cell,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+} from "recharts";
+import {
+  ChartContainer,
+  ChartTooltip,
+  ChartTooltipContent,
+  type ChartConfig,
+} from "@/components/ui/chart";
+import { startOfWeek, eachWeekOfInterval, subMonths, format } from "date-fns";
 import { CustomerFormModal } from "@/components/customers/customer-form-modal";
 import { GenerateInviteDialog } from "@/components/customers/generate-invite-dialog";
 import { CustomerBalanceChip } from "@/components/customers/customer-balance-chip";
@@ -58,6 +77,54 @@ interface Customer {
 
 type SortField = 'name' | 'type' | 'balance';
 type SortOrder = 'asc' | 'desc';
+
+// Chart configs
+const statusChartConfig = {
+  Active: { label: "Active", color: "#10b981" },
+  Inactive: { label: "Inactive", color: "#6b7280" },
+  Rejected: { label: "Rejected", color: "#ef4444" },
+} satisfies ChartConfig;
+
+const STATUS_COLORS: Record<string, string> = {
+  Active: "#10b981",
+  Inactive: "#6b7280",
+  Rejected: "#ef4444",
+};
+
+const typeChartConfig = {
+  Individual: { label: "Individual", color: "#6366f1" },
+  Company: { label: "Company", color: "#3b82f6" },
+} satisfies ChartConfig;
+
+const TYPE_COLORS: Record<string, string> = {
+  Individual: "#6366f1",
+  Company: "#3b82f6",
+};
+
+const authChartConfig = {
+  count: { label: "Customers", color: "#6366f1" },
+} satisfies ChartConfig;
+
+const AUTH_COLORS: Record<string, string> = {
+  Authenticated: "#10b981",
+  Guest: "#9ca3af",
+};
+
+const areaChartConfig = {
+  count: { label: "Customers", color: "#6366f1" },
+} satisfies ChartConfig;
+
+const balanceChartConfig = {
+  "In Credit": { label: "In Credit", color: "#10b981" },
+  Settled: { label: "Settled", color: "#6b7280" },
+  "In Debt": { label: "In Debt", color: "#ef4444" },
+} satisfies ChartConfig;
+
+const BALANCE_COLORS: Record<string, string> = {
+  "In Credit": "#10b981",
+  Settled: "#6b7280",
+  "In Debt": "#ef4444",
+};
 
 const CustomersList = () => {
   const router = useRouter();
@@ -254,6 +321,92 @@ const CustomersList = () => {
   });
 
   const customerBalances = customerBalanceQueries.data || {};
+
+  // Chart data derivations (before early return to respect Rules of Hooks)
+  const nonBlockedCustomers = useMemo(() =>
+    customers?.filter(c => !c.is_blocked) || [], [customers]);
+
+  // Chart 1: Status distribution donut
+  const statusDonutData = useMemo(() => {
+    if (!nonBlockedCustomers.length) return [];
+    const counts: Record<string, number> = {};
+    nonBlockedCustomers.forEach((c) => {
+      const s = c.status || "Inactive";
+      counts[s] = (counts[s] || 0) + 1;
+    });
+    return Object.entries(counts)
+      .map(([name, value]) => ({ name, value }))
+      .sort((a, b) => b.value - a.value);
+  }, [nonBlockedCustomers]);
+
+  // Chart 2: Customer type breakdown donut
+  const typeDonutData = useMemo(() => {
+    if (!nonBlockedCustomers.length) return [];
+    const counts: Record<string, number> = { Individual: 0, Company: 0 };
+    nonBlockedCustomers.forEach((c) => {
+      const t = c.customer_type || "Individual";
+      counts[t] = (counts[t] || 0) + 1;
+    });
+    return Object.entries(counts)
+      .filter(([, v]) => v > 0)
+      .map(([name, value]) => ({ name, value }));
+  }, [nonBlockedCustomers]);
+
+  // Chart 3: Auth type (horizontal bar)
+  const authBarData = useMemo(() => {
+    if (!nonBlockedCustomers.length) return [];
+    const counts: Record<string, number> = { Authenticated: 0, Guest: 0 };
+    nonBlockedCustomers.forEach((c) => {
+      const t = c.user_type || "Guest";
+      counts[t] = (counts[t] || 0) + 1;
+    });
+    return Object.entries(counts)
+      .map(([name, count]) => ({ name, count }))
+      .sort((a, b) => b.count - a.count);
+  }, [nonBlockedCustomers]);
+
+  // Chart 4: Customers added over time (area — last 3 months)
+  const customersOverTimeData = useMemo(() => {
+    if (!nonBlockedCustomers.length) return [];
+    const now = new Date();
+    const threeMonthsAgo = subMonths(now, 3);
+    const weeks = eachWeekOfInterval({ start: threeMonthsAgo, end: now }, { weekStartsOn: 1 });
+    const weekCounts = new Map<string, number>();
+    weeks.forEach((w) => weekCounts.set(format(w, "MMM d"), 0));
+
+    nonBlockedCustomers.forEach((c) => {
+      if (!c.created_at) return;
+      const created = new Date(c.created_at);
+      if (created < threeMonthsAgo) return;
+      const weekStart = startOfWeek(created, { weekStartsOn: 1 });
+      const key = format(weekStart, "MMM d");
+      if (weekCounts.has(key)) {
+        weekCounts.set(key, (weekCounts.get(key) || 0) + 1);
+      }
+    });
+
+    return Array.from(weekCounts.entries()).map(([week, count]) => ({
+      week,
+      count,
+    }));
+  }, [nonBlockedCustomers]);
+
+  // Chart 5: Balance status donut
+  const balanceDonutData = useMemo(() => {
+    if (!nonBlockedCustomers.length || !Object.keys(customerBalances).length) return [];
+    const counts: Record<string, number> = { "In Credit": 0, Settled: 0, "In Debt": 0 };
+    nonBlockedCustomers.forEach((c) => {
+      const b = customerBalances[c.id];
+      if (b) {
+        counts[b.status] = (counts[b.status] || 0) + 1;
+      } else {
+        counts["Settled"]++;
+      }
+    });
+    return Object.entries(counts)
+      .filter(([, v]) => v > 0)
+      .map(([name, value]) => ({ name, value }));
+  }, [nonBlockedCustomers, customerBalances]);
 
   // Filter and sort customers
   const filteredAndSortedCustomers = useMemo(() => {
@@ -565,6 +718,219 @@ const CustomersList = () => {
 
       {/* Summary Cards */}
       {customers && <CustomerSummaryCards customers={customers} />}
+
+      {/* Charts */}
+      {nonBlockedCustomers.length > 0 && (
+        <TooltipProvider>
+          {/* Row 1: Three charts */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            {/* Chart 1: Status Distribution Donut */}
+            <Card className="rounded-lg border border-border/60 bg-card/50 p-4">
+              <div className="flex items-center gap-1.5 mb-3">
+                <h3 className="text-sm font-medium">Status Distribution</h3>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Info className="h-3.5 w-3.5 text-muted-foreground cursor-help" />
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p className="text-xs">Breakdown of customers by account status</p>
+                  </TooltipContent>
+                </Tooltip>
+              </div>
+              {statusDonutData.length > 0 ? (
+                <ChartContainer config={statusChartConfig} className="h-[200px] w-full">
+                  <PieChart>
+                    <Pie
+                      data={statusDonutData}
+                      cx="50%"
+                      cy="50%"
+                      innerRadius={55}
+                      outerRadius={80}
+                      paddingAngle={2}
+                      dataKey="value"
+                      nameKey="name"
+                    >
+                      {statusDonutData.map((entry) => (
+                        <Cell key={entry.name} fill={STATUS_COLORS[entry.name] || "#6b7280"} />
+                      ))}
+                    </Pie>
+                    <ChartTooltip content={<ChartTooltipContent />} />
+                    <text x="50%" y="48%" textAnchor="middle" dominantBaseline="middle" className="fill-foreground text-2xl font-bold">
+                      {nonBlockedCustomers.length}
+                    </text>
+                    <text x="50%" y="62%" textAnchor="middle" dominantBaseline="middle" className="fill-muted-foreground text-xs">
+                      Total
+                    </text>
+                  </PieChart>
+                </ChartContainer>
+              ) : (
+                <div className="h-[200px] flex items-center justify-center text-muted-foreground text-sm">No data</div>
+              )}
+            </Card>
+
+            {/* Chart 2: Customer Type Breakdown Donut */}
+            <Card className="rounded-lg border border-border/60 bg-card/50 p-4">
+              <div className="flex items-center gap-1.5 mb-3">
+                <h3 className="text-sm font-medium">Customer Types</h3>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Info className="h-3.5 w-3.5 text-muted-foreground cursor-help" />
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p className="text-xs">Individual vs company customers</p>
+                  </TooltipContent>
+                </Tooltip>
+              </div>
+              {typeDonutData.length > 0 ? (
+                <ChartContainer config={typeChartConfig} className="h-[200px] w-full">
+                  <PieChart>
+                    <Pie
+                      data={typeDonutData}
+                      cx="50%"
+                      cy="50%"
+                      innerRadius={55}
+                      outerRadius={80}
+                      paddingAngle={2}
+                      dataKey="value"
+                      nameKey="name"
+                    >
+                      {typeDonutData.map((entry) => (
+                        <Cell key={entry.name} fill={TYPE_COLORS[entry.name] || "#6b7280"} />
+                      ))}
+                    </Pie>
+                    <ChartTooltip content={<ChartTooltipContent />} />
+                    <text x="50%" y="48%" textAnchor="middle" dominantBaseline="middle" className="fill-foreground text-2xl font-bold">
+                      {typeDonutData.reduce((s, d) => s + d.value, 0)}
+                    </text>
+                    <text x="50%" y="62%" textAnchor="middle" dominantBaseline="middle" className="fill-muted-foreground text-xs">
+                      Total
+                    </text>
+                  </PieChart>
+                </ChartContainer>
+              ) : (
+                <div className="h-[200px] flex items-center justify-center text-muted-foreground text-sm">No data</div>
+              )}
+            </Card>
+
+            {/* Chart 3: Auth Type (Horizontal Bar) */}
+            <Card className="rounded-lg border border-border/60 bg-card/50 p-4">
+              <div className="flex items-center gap-1.5 mb-3">
+                <h3 className="text-sm font-medium">Authentication</h3>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Info className="h-3.5 w-3.5 text-muted-foreground cursor-help" />
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p className="text-xs">Authenticated (portal access) vs guest customers</p>
+                  </TooltipContent>
+                </Tooltip>
+              </div>
+              {authBarData.length > 0 ? (
+                <ChartContainer config={authChartConfig} className="h-[200px] w-full">
+                  <BarChart data={authBarData} layout="vertical" margin={{ left: 10, right: 10 }}>
+                    <CartesianGrid horizontal={false} strokeDasharray="3 3" opacity={0.3} />
+                    <YAxis dataKey="name" type="category" tickLine={false} axisLine={false} tick={{ fontSize: 11 }} width={95} />
+                    <XAxis type="number" tickLine={false} axisLine={false} tick={{ fontSize: 10 }} allowDecimals={false} />
+                    <ChartTooltip content={<ChartTooltipContent />} />
+                    <Bar dataKey="count" radius={[0, 4, 4, 0]}>
+                      {authBarData.map((entry) => (
+                        <Cell key={entry.name} fill={AUTH_COLORS[entry.name] || "#6b7280"} />
+                      ))}
+                    </Bar>
+                  </BarChart>
+                </ChartContainer>
+              ) : (
+                <div className="h-[200px] flex items-center justify-center text-muted-foreground text-sm">No data</div>
+              )}
+            </Card>
+          </div>
+
+          {/* Row 2: Area chart + Balance donut */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            {/* Chart 4: Customers Over Time (Area) */}
+            <Card className={`rounded-lg border border-border/60 bg-card/50 p-4 ${balanceDonutData.length > 0 ? "md:col-span-2" : "md:col-span-3"}`}>
+              <div className="flex items-center gap-1.5 mb-3">
+                <h3 className="text-sm font-medium">Customers Over Time</h3>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Info className="h-3.5 w-3.5 text-muted-foreground cursor-help" />
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p className="text-xs">New customers added per week over the last 3 months</p>
+                  </TooltipContent>
+                </Tooltip>
+              </div>
+              {customersOverTimeData.length > 0 ? (
+                <ChartContainer config={areaChartConfig} className="h-[200px] w-full">
+                  <AreaChart data={customersOverTimeData} margin={{ left: -10, right: 5, top: 5 }}>
+                    <defs>
+                      <linearGradient id="customersAreaFill" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#6366f1" stopOpacity={0.3} />
+                        <stop offset="95%" stopColor="#6366f1" stopOpacity={0.02} />
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid vertical={false} strokeDasharray="3 3" opacity={0.3} />
+                    <XAxis dataKey="week" tickLine={false} axisLine={false} tick={{ fontSize: 10 }} interval="preserveStartEnd" />
+                    <YAxis tickLine={false} axisLine={false} tick={{ fontSize: 10 }} allowDecimals={false} />
+                    <ChartTooltip content={<ChartTooltipContent />} />
+                    <Area
+                      type="monotone"
+                      dataKey="count"
+                      stroke="#6366f1"
+                      strokeWidth={2}
+                      fill="url(#customersAreaFill)"
+                    />
+                  </AreaChart>
+                </ChartContainer>
+              ) : (
+                <div className="h-[200px] flex items-center justify-center text-muted-foreground text-sm">No data</div>
+              )}
+            </Card>
+
+            {/* Chart 5: Balance Status Donut */}
+            {balanceDonutData.length > 0 && (
+              <Card className="rounded-lg border border-border/60 bg-card/50 p-4">
+                <div className="flex items-center gap-1.5 mb-3">
+                  <h3 className="text-sm font-medium">Balance Overview</h3>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Info className="h-3.5 w-3.5 text-muted-foreground cursor-help" />
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <p className="text-xs">Customer balance status — settled, in credit, or in debt</p>
+                    </TooltipContent>
+                  </Tooltip>
+                </div>
+                <ChartContainer config={balanceChartConfig} className="h-[200px] w-full">
+                  <PieChart>
+                    <Pie
+                      data={balanceDonutData}
+                      cx="50%"
+                      cy="50%"
+                      innerRadius={55}
+                      outerRadius={80}
+                      paddingAngle={2}
+                      dataKey="value"
+                      nameKey="name"
+                    >
+                      {balanceDonutData.map((entry) => (
+                        <Cell key={entry.name} fill={BALANCE_COLORS[entry.name] || "#6b7280"} />
+                      ))}
+                    </Pie>
+                    <ChartTooltip content={<ChartTooltipContent />} />
+                    <text x="50%" y="48%" textAnchor="middle" dominantBaseline="middle" className="fill-foreground text-2xl font-bold">
+                      {balanceDonutData.reduce((s, d) => s + d.value, 0)}
+                    </text>
+                    <text x="50%" y="62%" textAnchor="middle" dominantBaseline="middle" className="fill-muted-foreground text-xs">
+                      Customers
+                    </text>
+                  </PieChart>
+                </ChartContainer>
+              </Card>
+            )}
+          </div>
+        </TooltipProvider>
+      )}
 
       {/* Search and Filters */}
       <div className="space-y-4">

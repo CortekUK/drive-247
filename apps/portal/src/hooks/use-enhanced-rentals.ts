@@ -346,6 +346,7 @@ export const useEnhancedRentals = (filters: RentalFilters = {}) => {
 
       return {
         rentals: paginatedRentals,
+        allRentals: enhancedRentals,
         stats,
         totalCount: enhancedRentals.length,
         totalPages: Math.ceil(enhancedRentals.length / pageSize)

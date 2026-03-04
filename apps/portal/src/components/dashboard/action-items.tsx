@@ -5,12 +5,13 @@ import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { format, subMonths, startOfMonth, endOfMonth, eachDayOfInterval } from "date-fns";
-import { BarChart, Bar, AreaChart, Area, XAxis, YAxis, PieChart, Pie, Cell, CartesianGrid } from "recharts";
+import { BarChart, Bar, AreaChart, Area, XAxis, YAxis, PieChart, Pie, Cell, CartesianGrid, RadarChart, Radar, PolarGrid, PolarAngleAxis, PolarRadiusAxis } from "recharts";
 import { ChartContainer, ChartTooltip, ChartTooltipContent, type ChartConfig } from "@/components/ui/chart";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { useTenant } from "@/contexts/TenantContext";
 import { useDashboardKPIs } from "@/hooks/use-dashboard-kpis";
 import { formatCurrency, getCurrencySymbol } from "@/lib/format-utils";
-import { TrendingUp, TrendingDown, DollarSign, Loader2 } from "lucide-react";
+import { TrendingUp, TrendingDown, DollarSign, Loader2, Info } from "lucide-react";
 
 // --- Types ---
 
@@ -37,6 +38,9 @@ const EXPENSE_COLORS: Record<string, string> = {
   Tyres: "#f59e0b",
   Valet: "#8b5cf6",
   Accessory: "#06b6d4",
+  Fines: "#f43f5e",
+  Acquisition: "#d97706",
+  Finance: "#8b5cf6",
   Other: "#6b7280",
 };
 
@@ -125,7 +129,16 @@ export const ActionItems = () => {
         .lte("service_date", prevMonthEndStr);
       if (tenant?.id) prevServicesQuery = prevServicesQuery.eq("tenant_id", tenant.id);
 
-      const [paymentsRes, expensesRes, servicesRes, prevPaymentsRes, prevExpensesRes, prevServicesRes] =
+      // P&L entries for richer cost breakdown (Service, Fines, Acquisition, etc.)
+      let pnlCostQuery = supabase
+        .from("pnl_entries")
+        .select("amount, category")
+        .eq("side", "Cost")
+        .gte("entry_date", monthStartStr)
+        .lte("entry_date", monthEndStr);
+      if (tenant?.id) pnlCostQuery = pnlCostQuery.eq("tenant_id", tenant.id);
+
+      const [paymentsRes, expensesRes, servicesRes, prevPaymentsRes, prevExpensesRes, prevServicesRes, pnlCostRes] =
         await Promise.all([
           paymentsQuery,
           expensesQuery,
@@ -133,6 +146,7 @@ export const ActionItems = () => {
           prevPaymentsQuery,
           prevExpensesQuery,
           prevServicesQuery,
+          pnlCostQuery,
         ]);
 
       const payments = paymentsRes.data || [];
@@ -201,14 +215,25 @@ export const ActionItems = () => {
       });
 
       // --- Expense breakdown by category ---
+      // Use P&L entries for richer multi-category breakdown (Service, Fines, Acquisition, etc.)
+      const pnlCosts = pnlCostRes.data || [];
       const categoryTotals: Record<string, number> = {};
-      expenses.forEach((e: any) => {
-        const cat = e.category || "Other";
-        categoryTotals[cat] = (categoryTotals[cat] || 0) + Number(e.amount || 0);
-      });
-      // Add service records as "Service" category
-      if (serviceRecordTotal > 0) {
-        categoryTotals["Service"] = (categoryTotals["Service"] || 0) + serviceRecordTotal;
+
+      if (pnlCosts.length > 0) {
+        // P&L entries have proper categories from pnl_entries table
+        pnlCosts.forEach((entry: any) => {
+          const cat = entry.category || "Other";
+          categoryTotals[cat] = (categoryTotals[cat] || 0) + Number(entry.amount || 0);
+        });
+      } else {
+        // Fallback to vehicle_expenses + service_records
+        expenses.forEach((e: any) => {
+          const cat = e.category || "Other";
+          categoryTotals[cat] = (categoryTotals[cat] || 0) + Number(e.amount || 0);
+        });
+        if (serviceRecordTotal > 0) {
+          categoryTotals["Service"] = (categoryTotals["Service"] || 0) + serviceRecordTotal;
+        }
       }
 
       const expenseByCategory = Object.entries(categoryTotals)
@@ -353,10 +378,16 @@ export const ActionItems = () => {
               <p className="text-sm">Revenue and expenses will appear here as transactions are recorded</p>
             </div>
           ) : (
-            <>
+            <TooltipProvider>
               {/* Chart 1: Daily Revenue Bar Chart */}
               <div className="rounded-lg border border-border/60 bg-card/50 p-4">
-                <h4 className="text-sm font-semibold text-foreground mb-3">Daily Revenue</h4>
+                <h4 className="text-sm font-semibold text-foreground mb-3 flex items-center gap-1.5">
+                  Daily Revenue
+                  <Tooltip>
+                    <TooltipTrigger asChild><Info className="h-3.5 w-3.5 text-muted-foreground cursor-help" /></TooltipTrigger>
+                    <TooltipContent><p>Daily revenue collected from payments this month</p></TooltipContent>
+                  </Tooltip>
+                </h4>
                 <ChartContainer
                   config={revenueChartConfig}
                   className="aspect-[4/1] w-full"
@@ -395,7 +426,7 @@ export const ActionItems = () => {
                             }
                             return "";
                           }}
-                          formatter={(value: any) => formatCurrency(Number(value), currencyCode)}
+                          valueFormatter={(value) => formatCurrency(value, currencyCode)}
                         />
                       }
                     />
@@ -406,7 +437,13 @@ export const ActionItems = () => {
 
               {/* Chart 2: Revenue vs Expenses Area Chart */}
               <div className="rounded-lg border border-border/60 bg-card/50 p-4">
-                <h4 className="text-sm font-semibold text-foreground mb-3">Revenue vs Expenses</h4>
+                <h4 className="text-sm font-semibold text-foreground mb-3 flex items-center gap-1.5">
+                  Revenue vs Expenses
+                  <Tooltip>
+                    <TooltipTrigger asChild><Info className="h-3.5 w-3.5 text-muted-foreground cursor-help" /></TooltipTrigger>
+                    <TooltipContent><p>Comparison of daily revenue against expenses for the current month</p></TooltipContent>
+                  </Tooltip>
+                </h4>
                 <ChartContainer
                   config={profitChartConfig}
                   className="aspect-[4/1] w-full"
@@ -452,10 +489,7 @@ export const ActionItems = () => {
                             }
                             return "";
                           }}
-                          formatter={(value: any, name: any) => {
-                            const label = name === "revenue" ? "Revenue" : name === "expenses" ? "Expenses" : "Profit";
-                            return `${label}: ${formatCurrency(Number(value), currencyCode)}`;
-                          }}
+                          valueFormatter={(value) => formatCurrency(value, currencyCode)}
                         />
                       }
                     />
@@ -489,16 +523,24 @@ export const ActionItems = () => {
 
               {/* Chart 3 + 4: Expense Breakdown + Fleet Utilization */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                {/* Chart 3: Expense Breakdown Donut */}
+                {/* Chart 3: Expense Breakdown Radar */}
                 <div className="rounded-lg border border-border/60 bg-card/50 p-4">
-                  <h4 className="text-sm font-semibold text-foreground mb-3">Expense Breakdown</h4>
+                  <h4 className="text-sm font-semibold text-foreground mb-3 flex items-center gap-1.5">
+                    Expense Breakdown
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Info className="h-3.5 w-3.5 text-muted-foreground cursor-help" />
+                      </TooltipTrigger>
+                      <TooltipContent><p>Distribution of expenses across maintenance categories</p></TooltipContent>
+                    </Tooltip>
+                  </h4>
                   {performanceData?.expenseByCategory && performanceData.expenseByCategory.length > 0 ? (
                     <ChartContainer config={expenseChartConfig} className="aspect-square max-h-[250px] mx-auto">
                       <PieChart>
                         <ChartTooltip
                           content={
                             <ChartTooltipContent
-                              formatter={(value: any) => formatCurrency(Number(value), currencyCode)}
+                              valueFormatter={(value) => formatCurrency(value, currencyCode)}
                               nameKey="category"
                             />
                           }
@@ -516,23 +558,10 @@ export const ActionItems = () => {
                             <Cell key={entry.category} fill={entry.fill} />
                           ))}
                         </Pie>
-                        {/* Center label */}
-                        <text
-                          x="50%"
-                          y="46%"
-                          textAnchor="middle"
-                          dominantBaseline="middle"
-                          className="fill-foreground text-xl font-bold"
-                        >
+                        <text x="50%" y="46%" textAnchor="middle" dominantBaseline="middle" className="fill-foreground text-xl font-bold">
                           {formatCurrency(performanceData.totalExpenses, currencyCode)}
                         </text>
-                        <text
-                          x="50%"
-                          y="56%"
-                          textAnchor="middle"
-                          dominantBaseline="middle"
-                          className="fill-muted-foreground text-xs"
-                        >
+                        <text x="50%" y="56%" textAnchor="middle" dominantBaseline="middle" className="fill-muted-foreground text-xs">
                           Total
                         </text>
                       </PieChart>
@@ -559,7 +588,13 @@ export const ActionItems = () => {
 
                 {/* Chart 4: Fleet Utilization Pie */}
                 <div className="rounded-lg border border-border/60 bg-card/50 p-4">
-                  <h4 className="text-sm font-semibold text-foreground mb-3">Fleet Utilization</h4>
+                  <h4 className="text-sm font-semibold text-foreground mb-3 flex items-center gap-1.5">
+                    Fleet Utilization
+                    <Tooltip>
+                      <TooltipTrigger asChild><Info className="h-3.5 w-3.5 text-muted-foreground cursor-help" /></TooltipTrigger>
+                      <TooltipContent><p>Proportion of your fleet currently on rental vs available</p></TooltipContent>
+                    </Tooltip>
+                  </h4>
                   {fleet && fleetPieData.length > 0 ? (
                     <>
                       <ChartContainer config={fleetChartConfig} className="aspect-square max-h-[250px] mx-auto">
@@ -567,7 +602,7 @@ export const ActionItems = () => {
                           <ChartTooltip
                             content={
                               <ChartTooltipContent
-                                formatter={(value: any) => `${value} vehicles`}
+                                valueFormatter={(value) => `${value} vehicles`}
                                 nameKey="name"
                               />
                             }
@@ -635,7 +670,7 @@ export const ActionItems = () => {
                   )}
                 </div>
               </div>
-            </>
+            </TooltipProvider>
           )}
         </CardContent>
       </Card>
