@@ -979,9 +979,17 @@ export async function POST(request: NextRequest) {
                 .eq('id', body.rentalId);
         }
 
-        // Report metered usage to Stripe (only for live mode agreements)
-        if (boldsignMode === 'live' && body.tenantId) {
+        // Report metered usage to Stripe (for all agreements when tenant has an active subscription)
+        if (body.tenantId) {
             try {
+                // Resolve tenant's subscription Stripe mode (test or live)
+                const { data: tenantModeData } = await supabase
+                    .from('tenants')
+                    .select('subscription_stripe_mode')
+                    .eq('id', body.tenantId)
+                    .single();
+                const subStripeMode: 'test' | 'live' = tenantModeData?.subscription_stripe_mode || 'test';
+
                 const { data: tenantSub } = await supabase
                     .from('tenant_subscriptions')
                     .select('stripe_customer_id')
@@ -990,7 +998,11 @@ export async function POST(request: NextRequest) {
                     .maybeSingle();
 
                 if (tenantSub?.stripe_customer_id) {
-                    const STRIPE_KEY = process.env.STRIPE_SUBSCRIPTION_SECRET_KEY || process.env.STRIPE_SUBSCRIPTION_TEST_SECRET_KEY || process.env.STRIPE_TEST_SECRET_KEY || '';
+                    // Use the correct Stripe key based on subscription mode
+                    const STRIPE_KEY = subStripeMode === 'live'
+                        ? (process.env.STRIPE_SUBSCRIPTION_LIVE_SECRET_KEY || process.env.STRIPE_LIVE_SECRET_KEY || '')
+                        : (process.env.STRIPE_SUBSCRIPTION_TEST_SECRET_KEY || process.env.STRIPE_SUBSCRIPTION_SECRET_KEY || process.env.STRIPE_TEST_SECRET_KEY || '');
+
                     const meterRes = await fetch('https://api.stripe.com/v1/billing/meter_events', {
                         method: 'POST',
                         headers: {
@@ -1004,7 +1016,7 @@ export async function POST(request: NextRequest) {
                         }),
                     });
                     const meterData = await meterRes.json();
-                    console.log('Stripe meter event:', meterRes.ok ? meterData.identifier : 'FAILED', meterRes.status);
+                    console.log('Stripe meter event:', meterRes.ok ? meterData.identifier : 'FAILED', meterRes.status, `(sub mode: ${subStripeMode})`);
 
                     // Log usage for portal UI
                     const refId = body.rentalId.substring(0, 8).toUpperCase();
