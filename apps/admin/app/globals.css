@@ -5,6 +5,22 @@
 @tailwind utilities;
 
 @layer base {
+  :root {
+    /* CSS variables for shadcn chart component */
+    --background: #0a0a0a;
+    --foreground: #f3f4f6;
+    --card: #141414;
+    --card-foreground: #f3f4f6;
+    --muted: #262626;
+    --muted-foreground: #9ca3af;
+    --border: #262626;
+    --chart-1: #0ea5e9;
+    --chart-2: #d946ef;
+    --chart-3: #22c55e;
+    --chart-4: #f59e0b;
+    --chart-5: #ef4444;
+  }
+
   * {
     @apply border-dark-border;
   }

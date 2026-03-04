@@ -36,12 +36,23 @@ function extractTenantSlug(hostname: string): string | null {
   const host = hostname.split(':')[0];
   const parts = host.split('.');
 
-  // Handle localhost: "acme.portal.localhost" → "acme"
-  // Pattern: {tenant}.portal.localhost
-  if (parts.length >= 3 && parts[parts.length - 1] === 'localhost' && parts[parts.length - 2] === 'portal') {
-    const tenant = parts[0];
-    if (tenant && tenant !== 'portal') {
-      return tenant;
+  // Handle localhost: "acme.portal.localhost" → "acme" or "acme.localhost" → "acme"
+  if (parts[parts.length - 1] === 'localhost') {
+    // Pattern: {tenant}.portal.localhost
+    if (parts.length >= 3 && parts[parts.length - 2] === 'portal') {
+      const tenant = parts[0];
+      if (tenant && tenant !== 'portal') {
+        return tenant;
+      }
+      return null;
+    }
+    // Pattern: {tenant}.localhost
+    if (parts.length === 2) {
+      const tenant = parts[0];
+      if (tenant && tenant !== 'localhost') {
+        return tenant;
+      }
+      return null;
     }
     return null;
   }
