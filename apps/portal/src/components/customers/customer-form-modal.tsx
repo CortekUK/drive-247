@@ -29,7 +29,6 @@ interface Customer {
   name: string;
   email: string | null;
   phone: string | null;
-  customer_type: "Individual" | "Company";
   status: string;
   whatsapp_opt_in: boolean;
   date_of_birth?: string;
@@ -90,7 +89,6 @@ export const CustomerFormModal = ({ open, onOpenChange, customer }: CustomerForm
   const form = useForm<CustomerFormData>({
     resolver: zodResolver(customerFormModalSchema),
     defaultValues: {
-      customer_type: "Individual",
       name: "",
       email: "",
       phone: "",
@@ -109,8 +107,6 @@ export const CustomerFormModal = ({ open, onOpenChange, customer }: CustomerForm
     },
   });
 
-  const customerType = form.watch("customer_type");
-
   // Update form when customer or verification data changes
   useEffect(() => {
     setBlockWarning(null);
@@ -120,7 +116,6 @@ export const CustomerFormModal = ({ open, onOpenChange, customer }: CustomerForm
       setShowNextOfKin(!!hasNextOfKin);
 
       form.reset({
-        customer_type: customer.customer_type || "Individual",
         name: customer.name,
         email: customer.email || "",
         phone: customer.phone || "",
@@ -140,7 +135,6 @@ export const CustomerFormModal = ({ open, onOpenChange, customer }: CustomerForm
     } else {
       setShowNextOfKin(false);
       form.reset({
-        customer_type: "Individual",
         name: "",
         email: "",
         phone: "",
@@ -165,7 +159,6 @@ export const CustomerFormModal = ({ open, onOpenChange, customer }: CustomerForm
     if (process.env.NODE_ENV !== 'development') return;
 
     const handleDevFill = (e: CustomEvent<{
-      customer_type?: 'Individual' | 'Company';
       name: string;
       email: string;
       phone: string;
@@ -184,7 +177,6 @@ export const CustomerFormModal = ({ open, onOpenChange, customer }: CustomerForm
       form.setValue('id_number', data.id_number || '');
 
       // Fill additional fields if provided
-      if (data.customer_type) form.setValue('customer_type', data.customer_type);
       if (data.status) form.setValue('status', data.status);
       if (data.whatsapp_opt_in !== undefined) form.setValue('whatsapp_opt_in', data.whatsapp_opt_in);
       if (data.notes) form.setValue('notes', data.notes);
@@ -378,8 +370,6 @@ export const CustomerFormModal = ({ open, onOpenChange, customer }: CustomerForm
       }
 
       const payload: any = {
-        customer_type: data.customer_type,
-        type: data.customer_type, // Required field in database
         name: data.name,
         email: data.email || null,
         phone: data.phone || null,
@@ -628,40 +618,6 @@ export const CustomerFormModal = ({ open, onOpenChange, customer }: CustomerForm
             <div className="grid grid-cols-2 gap-4">
               <FormField
                 control={form.control}
-                name="customer_type"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Customer Type <span className="text-red-500">*</span></FormLabel>
-                    <FormControl>
-                      <div className="flex gap-6">
-                        <label className="flex items-center space-x-2 cursor-pointer">
-                          <input
-                            type="radio"
-                            value="Individual"
-                            checked={field.value === "Individual"}
-                            onChange={() => field.onChange("Individual")}
-                            className="w-4 h-4 text-primary"
-                          />
-                          <span>Individual</span>
-                        </label>
-                        <label className="flex items-center space-x-2 cursor-pointer">
-                          <input
-                            type="radio"
-                            value="Company"
-                            checked={field.value === "Company"}
-                            onChange={() => field.onChange("Company")}
-                            className="w-4 h-4 text-primary"
-                          />
-                          <span>Company</span>
-                        </label>
-                      </div>
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
                 name="status"
                 render={({ field }) => (
                   <FormItem>
@@ -688,12 +644,10 @@ export const CustomerFormModal = ({ open, onOpenChange, customer }: CustomerForm
               name="name"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>
-                    {customerType === "Company" ? "Company Name *" : "Name *"}
-                  </FormLabel>
+                  <FormLabel>Name *</FormLabel>
                   <FormControl>
                     <Input
-                      placeholder={customerType === "Company" ? "Enter company name" : "Enter customer name"}
+                      placeholder="Enter customer name"
                       {...field}
                       className="input-focus"
                       autoFocus

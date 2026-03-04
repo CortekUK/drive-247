@@ -1,5 +1,5 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Users, Building, UserCheck, XCircle } from "lucide-react";
+import { Users, UserCheck, XCircle } from "lucide-react";
 
 interface Customer {
   id: string;
@@ -7,7 +7,6 @@ interface Customer {
   email: string;
   phone: string;
   type: string;
-  customer_type?: "Individual" | "Company";
   status: string;
   whatsapp_opt_in: boolean;
   is_blocked?: boolean;
@@ -23,7 +22,6 @@ export const CustomerSummaryCards = ({ customers }: CustomerSummaryCardsProps) =
   const totalCustomers = nonBlockedCustomers.length;
   const activeCustomers = nonBlockedCustomers.filter(c => c.status === 'Active').length;
   const rejectedCustomers = nonBlockedCustomers.filter(c => c.status === 'Rejected').length;
-  const companies = nonBlockedCustomers.filter(c => c.customer_type === 'Company').length;
 
   const cards = [
     {
@@ -43,12 +41,6 @@ export const CustomerSummaryCards = ({ customers }: CustomerSummaryCardsProps) =
       value: rejectedCustomers,
       icon: XCircle,
       description: "Customers pending review"
-    },
-    {
-      title: "Companies",
-      value: companies,
-      icon: Building,
-      description: "Business customers"
     }
   ];
 

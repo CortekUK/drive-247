@@ -3,7 +3,7 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { Input } from "@/components/ui/input";
-import { PhoneInput } from "@/components/ui/phone-input";
+import { PhoneInput, COUNTRY_CODES } from "@/components/ui/phone-input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -16,7 +16,7 @@ import { Badge } from "@/components/ui/badge";
 import { supabase } from "@/integrations/supabase/client";
 import { useTenant } from "@/contexts/TenantContext";
 import { toast } from "sonner";
-import { ChevronRight, ChevronLeft, Check, Baby, Coffee, MapPin, UserCheck, Car, Crown, TrendingUp, Users as GroupIcon, Calculator, Shield, CheckCircle, CalendarIcon, Clock, Search, Grid3x3, List, SlidersHorizontal, X, AlertCircle, FileCheck, RefreshCw, Upload, Gauge, User, Loader2, Globe, Briefcase } from "lucide-react";
+import { ChevronRight, ChevronLeft, Check, Baby, Coffee, MapPin, UserCheck, Car, Crown, TrendingUp, Users as GroupIcon, Calculator, Shield, CheckCircle, CalendarIcon, Clock, Search, Grid3x3, List, SlidersHorizontal, X, AlertCircle, FileCheck, RefreshCw, Upload, Gauge, User, Loader2, Globe, Briefcase, ExternalLink, Mail, Phone as PhoneIcon } from "lucide-react";
 import { format, differenceInHours } from "date-fns";
 import { cn } from "@/lib/utils";
 import BookingConfirmation from "./BookingConfirmation";
@@ -92,6 +92,30 @@ interface BlockedDate {
   vehicle_id: string | null;
   reason?: string | null;
 }
+
+function LiveClock({ timezone }: { timezone: string }) {
+  const tz = timezone || Intl.DateTimeFormat().resolvedOptions().timeZone;
+  const [time, setTime] = useState(() =>
+    new Date().toLocaleTimeString('en-US', { timeZone: tz, hour: 'numeric', minute: '2-digit', hour12: true })
+  );
+
+  useEffect(() => {
+    const safeTz = timezone || Intl.DateTimeFormat().resolvedOptions().timeZone;
+    const fmt = () =>
+      new Date().toLocaleTimeString('en-US', { timeZone: safeTz, hour: 'numeric', minute: '2-digit', hour12: true });
+    setTime(fmt());
+    const id = setInterval(() => setTime(fmt()), 30_000);
+    return () => clearInterval(id);
+  }, [timezone]);
+
+  return (
+    <div className="flex items-center gap-1.5">
+      <Clock className="h-3.5 w-3.5 text-primary" />
+      <span className="font-semibold text-foreground tabular-nums">{time}</span>
+    </div>
+  );
+}
+
 const MultiStepBookingWidget = () => {
   // Safari-safe date parser for YYYY-MM-DD strings
   // Safari doesn't support new Date("YYYY-MM-DD") format
@@ -123,8 +147,14 @@ const MultiStepBookingWidget = () => {
   const { data: customerDocuments } = useCustomerDocuments();
   const [showAuthDialog, setShowAuthDialog] = useState(false);
 
-  // Gig driver state
-  const [isGigDriver, setIsGigDriver] = useState(false);
+  // Gig driver state (restored from localStorage)
+  const [isGigDriver, setIsGigDriver] = useState(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('booking_isGigDriver');
+      return saved === 'true';
+    }
+    return false;
+  });
   const [showGigDriverUpload, setShowGigDriverUpload] = useState(false);
   const customerId = customerUser?.customer?.id;
   const { data: existingGigImages } = useGigDriverImages(customerId);
@@ -161,6 +191,26 @@ const MultiStepBookingWidget = () => {
   const [calculatedDistance, setCalculatedDistance] = useState<number | null>(null);
   const [distanceOverride, setDistanceOverride] = useState(false);
   const stepContainerRef = useRef<HTMLDivElement>(null); // Ref for scrolling to step content on step change
+  const [isStepTransitioning, setIsStepTransitioning] = useState(false);
+  const transitionTimerRef = useRef<NodeJS.Timeout>();
+  const transitionTimer2Ref = useRef<NodeJS.Timeout>();
+  const transitionToStep = useCallback((targetStep: number) => {
+    if (targetStep === currentStep || isStepTransitioning) return;
+    // Phase 1: fade out content + show overlay (300ms for CSS transition)
+    setIsStepTransitioning(true);
+    transitionTimerRef.current = setTimeout(() => {
+      // Phase 2: swap step while content is invisible behind overlay
+      setCurrentStep(targetStep);
+      // Phase 3: after overlay shows the animation, fade content back in
+      transitionTimer2Ref.current = setTimeout(() => {
+        setIsStepTransitioning(false);
+      }, 600);
+    }, 450);
+  }, [currentStep, setCurrentStep, isStepTransitioning]);
+  // Cleanup transition timers on unmount
+  useEffect(() => {
+    return () => { clearTimeout(transitionTimerRef.current); clearTimeout(transitionTimer2Ref.current); };
+  }, []);
   const [blockedDates, setBlockedDates] = useState<string[]>([]); // Global blocked dates (vehicle_id is null)
   const [allBlockedDates, setAllBlockedDates] = useState<BlockedDate[]>([]); // All blocked dates including vehicle-specific
   const [errors, setErrors] = useState<{
@@ -307,10 +357,22 @@ const MultiStepBookingWidget = () => {
     return baseOpen;
   }, [dropoffDateWorkingHours, formData.pickupDate, formData.pickupTime, formData.dropoffDate, tenant]);
 
-  // Insurance state
-  const [hasInsurance, setHasInsurance] = useState<boolean | null>(null);
+  // Insurance state (restored from localStorage)
+  const [hasInsurance, setHasInsurance] = useState<boolean | null>(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('booking_hasInsurance');
+      if (saved === 'true') return true;
+      if (saved === 'false') return false;
+    }
+    return null;
+  });
   const [showUploadDialog, setShowUploadDialog] = useState(false);
-  const [uploadedDocumentId, setUploadedDocumentId] = useState<string | null>(null);
+  const [uploadedDocumentId, setUploadedDocumentId] = useState<string | null>(() => {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('booking_uploadedDocumentId');
+    }
+    return null;
+  });
   const [selectedExistingDocument, setSelectedExistingDocument] = useState<string | null>(null);
 
   // Filter to get only valid insurance documents for logged-in users
@@ -374,6 +436,27 @@ const MultiStepBookingWidget = () => {
       setFormData(prev => ({ ...prev, customerTimezone: tenant.timezone || '' }));
     }
   }, [tenant?.timezone, isAuthenticated, customerUser?.customer?.timezone]);
+
+  // Persist booking-local state to localStorage so it survives tab close/refresh
+  useEffect(() => {
+    localStorage.setItem('booking_isGigDriver', String(isGigDriver));
+  }, [isGigDriver]);
+
+  useEffect(() => {
+    if (hasInsurance === null) {
+      localStorage.removeItem('booking_hasInsurance');
+    } else {
+      localStorage.setItem('booking_hasInsurance', String(hasInsurance));
+    }
+  }, [hasInsurance]);
+
+  useEffect(() => {
+    if (uploadedDocumentId) {
+      localStorage.setItem('booking_uploadedDocumentId', uploadedDocumentId);
+    } else {
+      localStorage.removeItem('booking_uploadedDocumentId');
+    }
+  }, [uploadedDocumentId]);
 
   // Auto-populate fixed addresses when tenant loads
   // This ensures form data is set even if LocationPicker's useEffect has timing issues
@@ -777,9 +860,6 @@ const MultiStepBookingWidget = () => {
         if (customer.phone) {
           updates.customerPhone = customer.phone;
         }
-        if (customer.customer_type) {
-          updates.customerType = customer.customer_type;
-        }
         if (customer.date_of_birth) {
           updates.driverDOB = customer.date_of_birth;
         }
@@ -872,9 +952,6 @@ const MultiStepBookingWidget = () => {
         }
         if (customer.phone) {
           updates.customerPhone = customer.phone;
-        }
-        if (customer.customer_type) {
-          updates.customerType = customer.customer_type;
         }
         // Populate address/license fields from customer profile
         if (customer.address_street) updates.addressStreet = customer.address_street;
@@ -1758,7 +1835,6 @@ const MultiStepBookingWidget = () => {
           name: sanitizeName(formData.customerName),
           email: sanitizeEmail(formData.customerEmail),
           phone: sanitizePhone(formData.customerPhone),
-          customer_type: formData.customerType || "Individual",
           status: "Active",
           date_of_birth: formData.driverDOB || null
         };
@@ -1894,7 +1970,6 @@ const MultiStepBookingWidget = () => {
       customerName: "",
       customerEmail: "",
       customerPhone: "",
-      customerType: "",
       licenseNumber: "",
       licenseState: "",
       addressStreet: "",
@@ -1909,6 +1984,11 @@ const MultiStepBookingWidget = () => {
     setSelectedExtras([]);
     setCalculatedDistance(null);
     setDistanceOverride(false);
+
+    // Reset insurance/gig state
+    setHasInsurance(null);
+    setUploadedDocumentId(null);
+    setIsGigDriver(false);
 
     // Clear all persisted booking data (store + legacy storage keys)
     clearBooking();
@@ -1934,7 +2014,6 @@ const MultiStepBookingWidget = () => {
       customerName: "",
       customerEmail: "",
       customerPhone: "",
-      customerType: "",
       licenseNumber: "",
       licenseState: "",
       addressStreet: "",
@@ -1954,6 +2033,9 @@ const MultiStepBookingWidget = () => {
     setBonzahPremium(0);
     setBonzahPolicyId(null);
 
+    // Reset gig driver state
+    setIsGigDriver(false);
+
     // Reset verification state
     setVerificationStatus('init');
     setVerificationSessionId(null);
@@ -1969,8 +2051,8 @@ const MultiStepBookingWidget = () => {
     // Clear store + legacy storage keys
     clearBooking();
 
-    // Clear localStorage verification keys
-    const verificationKeys = [
+    // Clear localStorage keys (verification + booking-local state)
+    const keysToRemove = [
       'verificationSessionId',
       'verificationStatus',
       'verificationTimestamp',
@@ -1979,8 +2061,11 @@ const MultiStepBookingWidget = () => {
       'verificationToken',
       'verificationVendorData',
       'verificationMode',
+      'booking_isGigDriver',
+      'booking_hasInsurance',
+      'booking_uploadedDocumentId',
     ];
-    verificationKeys.forEach(key => localStorage.removeItem(key));
+    keysToRemove.forEach(key => localStorage.removeItem(key));
 
     toast.success("Booking form cleared");
   };
@@ -2222,7 +2307,9 @@ const MultiStepBookingWidget = () => {
       total,
       vehicleTotal,
       deliveryFees,
-      days
+      days,
+      pricingTier: result.pricingTier,
+      dayBreakdown: result.dayBreakdown,
     };
   };
 
@@ -2851,14 +2938,6 @@ const MultiStepBookingWidget = () => {
         }
         break;
 
-      case 'customerType':
-        if (!value || value.trim() === "") {
-          newErrors.customerType = "Please select a customer type";
-        } else if (value !== "Individual" && value !== "Company") {
-          newErrors.customerType = "Invalid customer type selected";
-        }
-        break;
-
       case 'driverDOB':
         if (!value || value.trim() === "") {
           newErrors.driverDOB = "Date of birth is required.";
@@ -2928,7 +3007,7 @@ const MultiStepBookingWidget = () => {
           young_driver: isYoungDriver
         });
       }
-      setCurrentStep(2);
+      transitionToStep(2);
     }
   };
   const handleStep2Continue = () => {
@@ -2949,9 +3028,9 @@ const MultiStepBookingWidget = () => {
       } as any);
       // Skip insurance step for exempt tenants (like Kedic Services)
       if (skipInsurance) {
-        setCurrentStep(4); // Skip directly to customer details
+        transitionToStep(4); // Skip directly to customer details
       } else {
-        setCurrentStep(3); // Go to insurance verification
+        transitionToStep(3); // Go to insurance verification
       }
     }
   };
@@ -2967,7 +3046,7 @@ const MultiStepBookingWidget = () => {
     }
 
     // Insurance step - just move to customer details (Step 4)
-    setCurrentStep(4);
+    transitionToStep(4);
   };
 
   // Handle Bonzah coverage change from BonzahInsuranceSelector
@@ -3044,7 +3123,6 @@ const MultiStepBookingWidget = () => {
       customerName: formData.customerName,
       customerEmail: formData.customerEmail,
       customerPhone: formData.customerPhone,
-      customerType: formData.customerType,
       driverDOB: formData.driverDOB,
       driverAge: driverAge,
       young_driver: isYoungDriver,
@@ -3054,12 +3132,11 @@ const MultiStepBookingWidget = () => {
     // Analytics tracking
     if ((window as any).gtag) {
       (window as any).gtag('event', 'booking_step4_submitted', {
-        customer_type: formData.customerType,
         verification_status: verificationStatus,
         driver_age: driverAge
       });
     }
-    setCurrentStep(5);
+    transitionToStep(5);
   };
 
   const validateStep3 = () => {
@@ -3079,9 +3156,6 @@ const MultiStepBookingWidget = () => {
     }
     if (!formData.customerPhone || formData.customerPhone.trim() === '') {
       newErrors.customerPhone = 'Please enter your phone number';
-    }
-    if (!formData.customerType) {
-      newErrors.customerType = 'Please select customer type';
     }
     // DOB validation
     if (!formData.driverDOB || formData.driverDOB.trim() === '') {
@@ -3202,33 +3276,22 @@ const MultiStepBookingWidget = () => {
           </div>
         </div>
 
-        {/* Start over button */}
-        <div className="flex justify-end -mt-2 mb-2">
-          <AlertDialog>
-            <AlertDialogTrigger asChild>
-              <Button variant="ghost" size="sm" className="text-muted-foreground hover:text-destructive text-xs gap-1.5 h-7">
-                <X className="w-3 h-3" /> Start over
-              </Button>
-            </AlertDialogTrigger>
-            <AlertDialogContent>
-              <AlertDialogHeader>
-                <AlertDialogTitle>Start a new booking?</AlertDialogTitle>
-                <AlertDialogDescription>
-                  This will clear all your booking details across all steps. This action cannot be undone.
-                </AlertDialogDescription>
-              </AlertDialogHeader>
-              <AlertDialogFooter>
-                <AlertDialogCancel>Cancel</AlertDialogCancel>
-                <AlertDialogAction onClick={handleClearForm} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
-                  Clear form
-                </AlertDialogAction>
-              </AlertDialogFooter>
-            </AlertDialogContent>
-          </AlertDialog>
-        </div>
+        {/* Step content wrapper with transition */}
+        <div className="relative min-h-[200px]">
+          {/* Transition overlay */}
+          <div className={cn("step-transition-overlay", isStepTransitioning ? "step-overlay-visible" : "step-overlay-hidden")}>
+            <div className="step-transition-dots">
+              <span /><span /><span />
+            </div>
+            <div className="step-transition-bar" />
+            <span className="step-transition-label">Loading</span>
+          </div>
+
+          {/* Fade wrapper for step content */}
+          <div className={cn("transition-opacity duration-300", isStepTransitioning ? "opacity-0" : "opacity-100")}>
 
         {/* Step 1: Rental Details */}
-        {currentStep === 1 && <div className="space-y-8 animate-fade-in">
+        {currentStep === 1 && <div className="space-y-8">
           {/* Header with underline */}
           <div>
             <h3 className="text-2xl md:text-3xl font-display font-semibold text-foreground pb-2 border-b-2 border-primary/30">
@@ -3275,31 +3338,20 @@ const MultiStepBookingWidget = () => {
               )}
             </div>
             <div className="h-4 w-px bg-primary/20 hidden sm:block" />
-            <div className="flex items-center gap-2">
-              <div className="flex items-center justify-center w-6 h-6 rounded-full bg-primary/10">
-                <Clock className="h-3.5 w-3.5 text-primary" />
-              </div>
-              <span className="text-muted-foreground">Business:</span>
-              <span className="font-semibold text-foreground">
-                {findTimezone(workingHours.timezone)?.label || workingHours.timezone}
-              </span>
-              <span className="text-xs text-muted-foreground bg-muted/50 px-2 py-0.5 rounded-full">
-                {workingHours.isAlwaysOpen ? '24/7' : `${workingHours.formattedOpenTime} - ${workingHours.formattedCloseTime}`}
-              </span>
-            </div>
+            <LiveClock timezone={formData.customerTimezone} />
           </div>
 
           {/* Pickup & Return Sections */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <div className="grid grid-cols-1 lg:grid-cols-2 lg:grid-rows-[auto_auto_auto] gap-x-6 gap-y-4">
             {/* PICKUP SECTION */}
-            <div className="space-y-4">
+            <div className="flex flex-col gap-4 lg:grid lg:grid-rows-subgrid lg:row-span-3">
               <div className="flex items-center gap-2 pb-2 border-b border-border">
                 <div className="w-2 h-2 rounded-full bg-green-500" />
                 <h4 className="font-medium text-sm uppercase tracking-wide text-muted-foreground">Pickup</h4>
               </div>
 
               {/* Pickup Location */}
-              <div className="space-y-2">
+              <div className="space-y-2 lg:self-start">
                 <Label htmlFor="pickupLocation" className="text-xs text-muted-foreground">Location</Label>
                 <LocationPicker
                   type="pickup"
@@ -3397,14 +3449,14 @@ const MultiStepBookingWidget = () => {
             </div>
 
             {/* RETURN SECTION */}
-            <div className="space-y-4">
+            <div className="flex flex-col gap-4 lg:grid lg:grid-rows-subgrid lg:row-span-3">
               <div className="flex items-center gap-2 pb-2 border-b border-border">
                 <div className="w-2 h-2 rounded-full bg-orange-500" />
                 <h4 className="font-medium text-sm uppercase tracking-wide text-muted-foreground">Return</h4>
               </div>
 
               {/* Return Location */}
-              <div className="space-y-2">
+              <div className="space-y-2 lg:self-start">
                 <Label htmlFor="dropoffLocation" className="text-xs text-muted-foreground">Location</Label>
                 <LocationPicker
                   type="return"
@@ -3501,19 +3553,44 @@ const MultiStepBookingWidget = () => {
             </div>
           </div>
 
-          <Button
-            onClick={handleStep1Continue}
-            className="w-full h-12 bg-primary hover:bg-primary/90 text-primary-foreground font-semibold text-base shadow-md hover:shadow-lg transition-all"
-            size="lg"
-          >
-            Continue to Vehicle Selection <ChevronRight className="ml-2 w-5 h-5" />
-          </Button>
+          <div className="flex flex-col sm:flex-row sm:gap-3">
+            <Button
+              onClick={handleStep1Continue}
+              className="w-full sm:flex-1 h-14 sm:h-12 bg-primary hover:bg-primary/90 text-primary-foreground font-semibold text-base shadow-md hover:shadow-lg transition-all"
+              size="lg"
+            >
+              Continue to Vehicle Selection <ChevronRight className="ml-2 w-5 h-5" />
+            </Button>
+            <div className="flex justify-center mt-3 sm:mt-0">
+              <AlertDialog>
+                <AlertDialogTrigger asChild>
+                  <Button variant="outline" size="sm" className="h-8 px-3 sm:h-12 sm:px-4 text-destructive/70 hover:text-destructive border-destructive/30 hover:bg-destructive/10 hover:border-destructive/50 text-xs sm:text-sm gap-1.5">
+                    <RefreshCw className="w-3 h-3 sm:w-4 sm:h-4" /> Start over
+                  </Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>Start a new booking?</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      This will clear all your booking details across all steps. This action cannot be undone.
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>Cancel</AlertDialogCancel>
+                    <AlertDialogAction onClick={handleClearForm} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+                      Clear form
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
+            </div>
+          </div>
         </div>}
 
         {/* Step 2: Vehicle Selection */}
-        {currentStep === 2 && <div className="space-y-6 animate-fade-in">
+        {currentStep === 2 && <div className="space-y-6">
           {/* Back Button */}
-          <Button onClick={() => setCurrentStep(1)} variant="ghost" className="text-muted-foreground hover:text-foreground -ml-2">
+          <Button onClick={() => transitionToStep(1)} variant="ghost" className="text-muted-foreground hover:text-foreground -ml-2">
             <ChevronLeft className="mr-1 w-5 h-5" /> Back to Trip Details
           </Button>
 
@@ -4319,7 +4396,7 @@ const MultiStepBookingWidget = () => {
 
           {/* Mobile Action Bar */}
           <div className="flex flex-col sm:flex-row gap-3 lg:hidden mt-8">
-            <Button onClick={() => setCurrentStep(1)} variant="outline" className="w-full sm:flex-1" size="lg">
+            <Button onClick={() => transitionToStep(1)} variant="outline" className="w-full sm:flex-1" size="lg">
               <ChevronLeft className="mr-2 w-5 h-5" /> Back
             </Button>
             <Button onClick={handleStep2Continue} disabled={!selectedVehicle} className="w-full sm:flex-1 bg-primary hover:bg-primary/90 text-primary-foreground font-semibold shadow-md hover:shadow-lg transition-all disabled:opacity-50" size="lg">
@@ -4329,7 +4406,7 @@ const MultiStepBookingWidget = () => {
         </div>}
 
         {/* Step 3: Insurance Verification (skipped for insurance-exempt tenants) */}
-        {currentStep === 3 && !skipInsurance && <div className="space-y-8 animate-fade-in">
+        {currentStep === 3 && !skipInsurance && <div className="space-y-8">
           {/* Header */}
           <div className="text-center space-y-2">
             <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-primary/10 mb-4">
@@ -4419,6 +4496,8 @@ const MultiStepBookingWidget = () => {
                                 if (selectedExistingDocument) {
                                   setUploadedDocumentId(selectedExistingDocument);
                                   setHasInsurance(true);
+                                  // Skip the upload success screen — existing docs are already verified
+                                  transitionToStep(4);
                                 }
                               }}
                             >
@@ -4539,7 +4618,7 @@ const MultiStepBookingWidget = () => {
 
               {/* Back Button */}
               <div className="flex justify-center mt-6">
-                <Button onClick={() => setCurrentStep(2)} variant="outline" size="lg">
+                <Button onClick={() => transitionToStep(2)} variant="outline" size="lg">
                   <ChevronLeft className="mr-2 w-5 h-5" /> Back to Vehicles
                 </Button>
               </div>
@@ -4731,7 +4810,7 @@ const MultiStepBookingWidget = () => {
             <>
               <div className="flex flex-col sm:flex-row gap-4">
                 <Button
-                  onClick={() => setCurrentStep(2)}
+                  onClick={() => transitionToStep(2)}
                   variant="outline"
                   className="w-full sm:flex-1"
                   size="lg"
@@ -4759,7 +4838,7 @@ const MultiStepBookingWidget = () => {
         </div>}
 
         {/* Step 4: Customer Details */}
-        {currentStep === 4 && <div className="space-y-8 animate-fade-in">
+        {currentStep === 4 && <div className="space-y-8">
           {/* Header with underline */}
           <div>
             <h3 className="text-2xl md:text-3xl font-display font-semibold text-foreground pb-2 border-b-2 border-primary/30">
@@ -4767,149 +4846,157 @@ const MultiStepBookingWidget = () => {
             </h3>
           </div>
 
-          {/* Authenticated User Banner */}
-          {isAuthenticated && isCustomerDataPopulated && (
-            <div className="bg-primary/5 border border-primary/20 rounded-lg p-4">
-              <div className="flex items-center gap-3">
-                <div className="p-2 rounded-full bg-primary/10">
-                  <UserCheck className="w-5 h-5 text-primary" />
+          {/* Authenticated User — Read-Only Details Card */}
+          {isAuthenticated && isCustomerDataPopulated ? (
+            <div className="space-y-8">
+              <div className="bg-primary/5 border border-primary/20 rounded-lg p-5">
+                <div className="flex items-center justify-between mb-4">
+                  <div className="flex items-center gap-3">
+                    <div className="p-2 rounded-full bg-primary/10">
+                      <UserCheck className="w-5 h-5 text-primary" />
+                    </div>
+                    <div>
+                      <p className="text-sm font-medium text-foreground">
+                        Welcome back, {customerUser?.customer?.name}!
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        Your details from your account
+                        {isCustomerAlreadyVerified && ' — ID verified'}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {isCustomerAlreadyVerified && (
+                      <Badge variant="default" className="bg-green-500 hover:bg-green-500/90 text-white">
+                        <CheckCircle className="w-3 h-3 mr-1" /> Verified
+                      </Badge>
+                    )}
+                    <a
+                      href="/portal/settings"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    >
+                      <Button variant="outline" size="sm" className="gap-1.5">
+                        Edit <ExternalLink className="w-3.5 h-3.5" />
+                      </Button>
+                    </a>
+                  </div>
                 </div>
-                <div className="flex-1">
-                  <p className="text-sm font-medium text-foreground">
-                    Welcome back, {customerUser?.customer?.name}!
-                  </p>
-                  <p className="text-xs text-muted-foreground">
-                    Your details have been auto-filled from your account.
-                    {isCustomerAlreadyVerified && ' Your ID is already verified.'}
-                  </p>
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                  <div className="flex items-center gap-3 bg-background/60 rounded-md px-3 py-2.5">
+                    <User className="w-4 h-4 text-muted-foreground flex-shrink-0" />
+                    <div className="min-w-0">
+                      <p className="text-[11px] text-muted-foreground uppercase tracking-wider">Name</p>
+                      <p className="text-sm font-medium text-foreground truncate">{formData.customerName || '—'}</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-3 bg-background/60 rounded-md px-3 py-2.5">
+                    <Mail className="w-4 h-4 text-muted-foreground flex-shrink-0" />
+                    <div className="min-w-0">
+                      <p className="text-[11px] text-muted-foreground uppercase tracking-wider">Email</p>
+                      <p className="text-sm font-medium text-foreground truncate">{formData.customerEmail || '—'}</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-3 bg-background/60 rounded-md px-3 py-2.5">
+                    <PhoneIcon className="w-4 h-4 text-muted-foreground flex-shrink-0" />
+                    <div className="min-w-0">
+                      <p className="text-[11px] text-muted-foreground uppercase tracking-wider">Phone</p>
+                      <p className="text-sm font-medium text-foreground truncate">
+                        {(() => {
+                          if (!formData.customerPhone) return '—';
+                          const sorted = [...COUNTRY_CODES].sort((a, b) => b.code.length - a.code.length);
+                          const match = sorted.find(c => formData.customerPhone.startsWith(c.code));
+                          if (match) return `${match.flag} ${formData.customerPhone}`;
+                          return formData.customerPhone;
+                        })()}
+                      </p>
+                    </div>
+                  </div>
                 </div>
-                {isCustomerAlreadyVerified && (
-                  <Badge variant="default" className="bg-green-500 hover:bg-green-500/90 text-white">
-                    <CheckCircle className="w-3 h-3 mr-1" /> Verified
-                  </Badge>
-                )}
+              </div>
+            </div>
+          ) : (
+            /* Guest User — Editable Form Fields */
+            <div className="space-y-8">
+              {/* Row 1: Customer Name & Email */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
+                <div className="space-y-2">
+                  <Label htmlFor="customerName" className="font-medium">Full Name *</Label>
+                  <Input
+                    id="customerName"
+                    value={formData.customerName}
+                    onChange={e => {
+                      const value = e.target.value;
+                      setFormData({
+                        ...formData,
+                        customerName: value
+                      });
+                      validateField('customerName', value);
+                    }}
+                    placeholder="Enter your full name"
+                    className={cn(
+                      "h-12 focus-visible:ring-primary",
+                      verificationStatus === 'verified' && "bg-muted cursor-not-allowed"
+                    )}
+                    disabled={verificationStatus === 'verified'}
+                  />
+                  {verificationStatus === 'verified' && (
+                    <p className="text-xs text-green-600 flex items-center gap-1">
+                      <CheckCircle className="w-3 h-3" /> Verified from ID document
+                    </p>
+                  )}
+                  {errors.customerName && <p className="text-sm text-destructive">{errors.customerName}</p>}
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="customerEmail" className="font-medium">Email Address *</Label>
+                  <Input
+                    id="customerEmail"
+                    type="email"
+                    value={formData.customerEmail}
+                    onChange={e => {
+                      const value = e.target.value;
+                      setFormData({
+                        ...formData,
+                        customerEmail: value
+                      });
+                      validateField('customerEmail', value);
+                    }}
+                    placeholder="your@email.com"
+                    className="h-12 focus-visible:ring-primary"
+                  />
+                  {errors.customerEmail && <p className="text-sm text-destructive">{errors.customerEmail}</p>}
+                </div>
+              </div>
+
+              {/* Row 2: Customer Phone */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
+                <div className="space-y-2">
+                  <Label htmlFor="customerPhone" className="font-medium">Phone Number *</Label>
+                  <PhoneInput
+                    id="customerPhone"
+                    value={formData.customerPhone}
+                    defaultCountry="GB"
+                    onChange={value => {
+                      setFormData({
+                        ...formData,
+                        customerPhone: value
+                      });
+                      validateField('customerPhone', value);
+                      savePhoneToProfile(value);
+                    }}
+                    error={!!errors.customerPhone}
+                    className="h-12"
+                  />
+                  {errors.customerPhone && <p className="text-sm text-destructive">{errors.customerPhone}</p>}
+                </div>
               </div>
             </div>
           )}
 
-          {/* Form Fields */}
+          {/* Form Fields (shared between authenticated & guest) */}
           <div className="space-y-8">
-            {/* Row 1: Customer Name & Email */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
-              <div className="space-y-2">
-                <Label htmlFor="customerName" className="font-medium">Full Name *</Label>
-                <Input
-                  id="customerName"
-                  value={formData.customerName}
-                  onChange={e => {
-                    const value = e.target.value;
-                    setFormData({
-                      ...formData,
-                      customerName: value
-                    });
-                    // Instant validation
-                    validateField('customerName', value);
-                  }}
-                  placeholder="Enter your full name"
-                  className={cn(
-                    "h-12 focus-visible:ring-primary",
-                    (verificationStatus === 'verified' || (isAuthenticated && isCustomerAlreadyVerified)) && "bg-muted cursor-not-allowed"
-                  )}
-                  disabled={verificationStatus === 'verified' || (isAuthenticated && isCustomerAlreadyVerified)}
-                />
-                {verificationStatus === 'verified' && !isCustomerAlreadyVerified && (
-                  <p className="text-xs text-green-600 flex items-center gap-1">
-                    <CheckCircle className="w-3 h-3" /> Verified from ID document
-                  </p>
-                )}
-                {isAuthenticated && isCustomerDataPopulated && isCustomerAlreadyVerified && (
-                  <p className="text-xs text-green-600 flex items-center gap-1">
-                    <CheckCircle className="w-3 h-3" /> From your verified account
-                  </p>
-                )}
-                {errors.customerName && <p className="text-sm text-destructive">{errors.customerName}</p>}
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="customerEmail" className="font-medium">Email Address *</Label>
-                <Input
-                  id="customerEmail"
-                  type="email"
-                  value={formData.customerEmail}
-                  onChange={e => {
-                    const value = e.target.value;
-                    setFormData({
-                      ...formData,
-                      customerEmail: value
-                    });
-                    // Instant validation
-                    validateField('customerEmail', value);
-                  }}
-                  placeholder="your@email.com"
-                  className={cn(
-                    "h-12 focus-visible:ring-primary",
-                    isAuthenticated && isCustomerDataPopulated && "bg-muted/50"
-                  )}
-                  readOnly={isAuthenticated && isCustomerDataPopulated}
-                />
-                {isAuthenticated && isCustomerDataPopulated && (
-                  <p className="text-xs text-muted-foreground flex items-center gap-1">
-                    <UserCheck className="w-3 h-3" /> From your account
-                  </p>
-                )}
-                {errors.customerEmail && <p className="text-sm text-destructive">{errors.customerEmail}</p>}
-              </div>
-            </div>
-
-            {/* Row 2: Customer Phone & Type */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
-              <div className="space-y-2">
-                <Label htmlFor="customerPhone" className="font-medium">Phone Number *</Label>
-                <PhoneInput
-                  id="customerPhone"
-                  value={formData.customerPhone}
-                  defaultCountry="GB"
-                  onChange={value => {
-                    setFormData({
-                      ...formData,
-                      customerPhone: value
-                    });
-                    validateField('customerPhone', value);
-                    // Auto-save to customer profile for logged-in users
-                    savePhoneToProfile(value);
-                  }}
-                  error={!!errors.customerPhone}
-                  className="h-12"
-                />
-                {isAuthenticated && isCustomerDataPopulated && customerHasPhone && formData.customerPhone && (
-                  <p className="text-xs text-muted-foreground flex items-center gap-1">
-                    <CheckCircle className="w-3 h-3 text-primary" /> From your account profile
-                  </p>
-                )}
-                {errors.customerPhone && <p className="text-sm text-destructive">{errors.customerPhone}</p>}
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="customerType" className="font-medium">Customer Type *</Label>
-                <Select value={formData.customerType} onValueChange={value => {
-                  setFormData({
-                    ...formData,
-                    customerType: value
-                  });
-                  // Instant validation
-                  validateField('customerType', value);
-                }}>
-                  <SelectTrigger id="customerType" className="h-12 focus-visible:ring-primary">
-                    <SelectValue placeholder="Select customer type" />
-                  </SelectTrigger>
-                  <SelectContent position="popper" sideOffset={4}>
-                    <SelectItem value="Individual">Individual</SelectItem>
-                    <SelectItem value="Company">Company</SelectItem>
-                  </SelectContent>
-                </Select>
-                {errors.customerType && <p className="text-sm text-destructive">{errors.customerType}</p>}
-              </div>
-            </div>
 
             {/* Gig Driver Checkbox */}
             <div className="flex items-start gap-3 pt-2">
@@ -5289,7 +5376,7 @@ const MultiStepBookingWidget = () => {
                             {customerVerification.document_type && (
                               <div>
                                 <span className="text-muted-foreground">Document Type:</span>
-                                <p className="font-medium capitalize">{customerVerification.document_type.replace('_', ' ')}</p>
+                                <p className="font-medium">{customerVerification.document_type.replace(/_/g, ' ').replace(/\bid\b/gi, 'ID').replace(/\b\w/g, c => c.toUpperCase())}</p>
                               </div>
                             )}
                             {customerVerification.document_number && (
@@ -5585,7 +5672,7 @@ const MultiStepBookingWidget = () => {
           {/* Navigation Buttons */}
           <div className="flex flex-col sm:flex-row gap-3 sm:gap-4">
             <Button
-              onClick={() => setCurrentStep(skipInsurance ? 2 : 3)}
+              onClick={() => transitionToStep(skipInsurance ? 2 : 3)}
               variant="outline"
               className="w-full sm:flex-1 h-11 sm:h-12 border-primary text-primary hover:bg-primary/10 font-semibold text-sm sm:text-base"
               size="lg"
@@ -5616,47 +5703,7 @@ const MultiStepBookingWidget = () => {
         </div>}
 
         {/* Step 5: Review & Payment */}
-        {currentStep === 5 && <div className="animate-fade-in space-y-6">
-          {/* Promo Code Section */}
-          <div className="bg-card border border-border rounded-lg p-4 sm:p-6">
-            <div className="space-y-3">
-              <Label htmlFor="promoCode" className="font-medium text-base">Promo Code (Optional)</Label>
-              <div className="flex gap-2">
-                <Input
-                  id="promoCode"
-                  placeholder="Enter code"
-                  value={formData.promoCode}
-                  onChange={(e) => {
-                    setFormData({ ...formData, promoCode: e.target.value });
-                    setPromoError(null);
-                    if (!e.target.value) {
-                      setPromoDetails(null);
-                      localStorage.removeItem('appliedPromoCode');
-                      localStorage.removeItem('appliedPromoDetails');
-                    }
-                  }}
-                  className={cn("h-12", promoError ? "border-destructive" : promoDetails ? "border-green-500" : "")}
-                />
-                <Button
-                  type="button"
-                  variant="outline"
-                  className="h-12 px-6"
-                  onClick={() => validatePromoCode(formData.promoCode)}
-                  disabled={loading || !formData.promoCode}
-                >
-                  Apply
-                </Button>
-              </div>
-              {promoError && <p className="text-sm text-destructive">{promoError}</p>}
-              {promoDetails && (
-                <p className="text-sm text-green-600 font-medium flex items-center gap-1">
-                  <Check className="w-4 h-4" />
-                  Code applied: {promoDetails.type === 'percentage' ? `${promoDetails.value}% off` : `${formatCurrency(promoDetails.value, currencyCode)} off`}
-                </p>
-              )}
-            </div>
-          </div>
-
+        {currentStep === 5 && <div className="space-y-6">
           {/* Optional Extras */}
           <ExtrasSelector
             extras={availableExtras}
@@ -5676,8 +5723,24 @@ const MultiStepBookingWidget = () => {
               formatted: '1 day'
             }}
             vehicleTotal={estimatedBooking?.vehicleTotal || 0}
+            pricingTier={estimatedBooking?.pricingTier || 'daily'}
+            dayBreakdown={estimatedBooking?.dayBreakdown || []}
             promoDetails={promoDetails}
-            onBack={() => setCurrentStep(4)}
+            promoCode={formData.promoCode}
+            promoError={promoError}
+            promoLoading={loading}
+            onPromoCodeChange={(value) => {
+              setFormData({ ...formData, promoCode: value });
+              setPromoError(null);
+              if (!value) {
+                setPromoDetails(null);
+                localStorage.removeItem('appliedPromoCode');
+                localStorage.removeItem('appliedPromoDetails');
+              }
+            }}
+            onApplyPromo={validatePromoCode}
+            onBack={() => transitionToStep(4)}
+            uploadedDocumentId={uploadedDocumentId}
             bonzahPremium={bonzahPremium}
             bonzahCoverage={bonzahCoverage}
             pickupDeliveryFee={formData.pickupDeliveryFee}
@@ -5685,6 +5748,8 @@ const MultiStepBookingWidget = () => {
           />
         </div>}
 
+          </div>{/* End fade wrapper */}
+        </div>{/* End step content wrapper */}
       </div>
     </Card>
 

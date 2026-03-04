@@ -43,7 +43,11 @@ const emptyHolidayForm: HolidayFormState = {
   recurs_annually: false,
 };
 
-export function PricingRulesSettings() {
+interface PricingRulesSettingsProps {
+  onDirtyChange?: (dirty: boolean) => void;
+}
+
+export function PricingRulesSettings({ onDirtyChange }: PricingRulesSettingsProps = {}) {
   const { settings: weekendSettings, isLoading: weekendLoading, updateSettings: updateWeekend, isUpdating: weekendUpdating } = useWeekendPricing();
   const { holidays, isLoading: holidaysLoading, addHoliday, isAdding, updateHoliday, isUpdating: holidayUpdating, deleteHoliday, isDeleting } = useTenantHolidays();
 
@@ -51,6 +55,11 @@ export function PricingRulesSettings() {
   const [weekendPercent, setWeekendPercent] = useState<number | ''>(weekendSettings.weekend_surcharge_percent || '');
   const [weekendDays, setWeekendDays] = useState<number[]>(weekendSettings.weekend_days || [6, 0]);
   const [weekendDirty, setWeekendDirty] = useState(false);
+
+  // Report dirty state to parent
+  React.useEffect(() => {
+    onDirtyChange?.(weekendDirty);
+  }, [weekendDirty, onDirtyChange]);
 
   // Holiday dialog state
   const [holidayDialogOpen, setHolidayDialogOpen] = useState(false);

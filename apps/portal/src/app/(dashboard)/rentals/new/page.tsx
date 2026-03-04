@@ -64,10 +64,10 @@ const rentalSchema = z.object({
   rental_period_type: z.enum(["Daily", "Weekly", "Monthly"]),
   monthly_amount: z.coerce.number().min(1, "Rental amount must be at least 1"),
   // New booking-aligned fields
-  pickup_location: z.string().optional(),
-  return_location: z.string().optional(),
-  pickup_time: z.string().regex(/^\d{2}:\d{2}$/, "Invalid time format").optional().or(z.literal("")),
-  return_time: z.string().regex(/^\d{2}:\d{2}$/, "Invalid time format").optional().or(z.literal("")),
+  pickup_location: z.string().min(1, "Pickup location is required"),
+  return_location: z.string().min(1, "Return location is required"),
+  pickup_time: z.string().regex(/^\d{2}:\d{2}$/, "Pickup time is required"),
+  return_time: z.string().regex(/^\d{2}:\d{2}$/, "Return time is required"),
   driver_age_range: z.enum(["under_25", "25_70", "over_70"]).optional(),
   promo_code: z.string().optional(),
   insurance_status: z.enum(["pending", "uploaded", "verified", "bonzah", "not_required"]).optional(),
@@ -452,13 +452,103 @@ const CreateRental = () => {
     }
   }, [renewalSource]);
 
+  // Persist form state to localStorage so it survives tab close/refresh
+  const PORTAL_RENTAL_STORAGE_KEY = 'portal_new_rental_draft';
+  const draftRestoredRef = useRef(false);
+
+  // Restore saved draft on mount (skip if this is a renewal)
+  useEffect(() => {
+    if (renewFromId || draftRestoredRef.current) return;
+    draftRestoredRef.current = true;
+
+    try {
+      const saved = localStorage.getItem(PORTAL_RENTAL_STORAGE_KEY);
+      if (!saved) return;
+      const draft = JSON.parse(saved);
+
+      // Restore form values
+      if (draft.customer_id) form.setValue("customer_id", draft.customer_id);
+      if (draft.vehicle_id) form.setValue("vehicle_id", draft.vehicle_id);
+      if (draft.start_date) form.setValue("start_date", new Date(draft.start_date));
+      if (draft.end_date) form.setValue("end_date", new Date(draft.end_date));
+      if (draft.rental_period_type) form.setValue("rental_period_type", draft.rental_period_type);
+      if (draft.monthly_amount != null) form.setValue("monthly_amount", draft.monthly_amount);
+      if (draft.pickup_location) form.setValue("pickup_location", draft.pickup_location);
+      if (draft.return_location) form.setValue("return_location", draft.return_location);
+      if (draft.pickup_time) form.setValue("pickup_time", draft.pickup_time);
+      if (draft.return_time) form.setValue("return_time", draft.return_time);
+      if (draft.driver_age_range) form.setValue("driver_age_range", draft.driver_age_range);
+      if (draft.promo_code) form.setValue("promo_code", draft.promo_code);
+      if (draft.insurance_status) form.setValue("insurance_status", draft.insurance_status);
+      if (draft.notes) form.setValue("notes", draft.notes);
+
+      // Restore non-form state
+      if (draft.sameAsPickup === false) setSameAsPickup(false);
+      if (draft.selectedExtras) setSelectedExtras(draft.selectedExtras);
+      if (draft.pickupLocationId) setPickupLocationId(draft.pickupLocationId);
+      if (draft.returnLocationId) setReturnLocationId(draft.returnLocationId);
+    } catch {
+      // Corrupted data — ignore
+    }
+  }, [renewFromId]);
+
+  // Save form values to localStorage on change (debounced)
+  const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  useEffect(() => {
+    // Don't save if this is a renewal or form hasn't been restored yet
+    if (renewFromId) return;
+
+    if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
+    saveTimeoutRef.current = setTimeout(() => {
+      const values = form.getValues();
+      const draft = {
+        customer_id: values.customer_id,
+        vehicle_id: values.vehicle_id,
+        start_date: values.start_date?.toISOString(),
+        end_date: values.end_date?.toISOString(),
+        rental_period_type: values.rental_period_type,
+        monthly_amount: values.monthly_amount,
+        pickup_location: values.pickup_location,
+        return_location: values.return_location,
+        pickup_time: values.pickup_time,
+        return_time: values.return_time,
+        driver_age_range: values.driver_age_range,
+        promo_code: values.promo_code,
+        insurance_status: values.insurance_status,
+        notes: values.notes,
+        sameAsPickup,
+        selectedExtras,
+        pickupLocationId,
+        returnLocationId,
+      };
+      localStorage.setItem(PORTAL_RENTAL_STORAGE_KEY, JSON.stringify(draft));
+    }, 500);
+
+    return () => {
+      if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
+    };
+  }, [
+    selectedCustomerId, selectedVehicleId, watchedStartDate, watchedEndDate,
+    watchedRentalPeriodType, watchedMonthlyAmount, watchedPickupLocation,
+    watchedPromoCode, watchedInsuranceStatus, watchedDriverAgeRange,
+    sameAsPickup, selectedExtras, pickupLocationId, returnLocationId,
+    renewFromId,
+  ]);
+
+  // Keep return_location synced with pickup_location when sameAsPickup is checked
+  useEffect(() => {
+    if (sameAsPickup && watchedPickupLocation) {
+      form.setValue("return_location", watchedPickupLocation);
+    }
+  }, [sameAsPickup, watchedPickupLocation, form]);
+
   // Get customers and available vehicles
   const { data: customers } = useQuery({
     queryKey: ["customers-for-rental", tenant?.id],
     queryFn: async () => {
       let query = supabase
         .from("customers")
-        .select("id, name, customer_type, email, phone")
+        .select("id, name, email, phone")
         .eq("status", "Active");
 
       if (tenant?.id) {
@@ -1212,6 +1302,9 @@ const CreateRental = () => {
         });
       }
 
+      // Clear the persisted draft since rental was created successfully
+      localStorage.removeItem(PORTAL_RENTAL_STORAGE_KEY);
+
       // Store rental data for invoice dialog
       setCreatedRentalData({
         rental,
@@ -1335,13 +1428,12 @@ const CreateRental = () => {
                             </FormControl>
                             <SelectContent className="max-w-[calc(100vw-2rem)]">
                               {customers?.map((customer) => {
-                                const customerType = customer.customer_type;
                                 const contact = customer.email || customer.phone;
                                 return (
                                   <SelectItem key={customer.id} value={customer.id} className="whitespace-normal break-words">
                                     <div className="flex flex-col gap-0.5">
                                       <span className="font-medium">{customer.name}</span>
-                                      <span className="text-xs text-muted-foreground">{contact || customerType}</span>
+                                      {contact && <span className="text-xs text-muted-foreground">{contact}</span>}
                                     </div>
                                   </SelectItem>
                                 );
@@ -1699,15 +1791,15 @@ const CreateRental = () => {
                       name="monthly_amount"
                       render={({ field }) => {
                         const periodType = watchedRentalPeriodType || "Monthly";
-                        const label = periodType === "Daily" ? "Daily Amount *" :
-                          periodType === "Weekly" ? "Weekly Amount *" :
-                            "Monthly Amount *";
+                        const labelText = periodType === "Daily" ? "Daily Amount" :
+                          periodType === "Weekly" ? "Weekly Amount" :
+                            "Monthly Amount";
                         const placeholder = periodType === "Daily" ? "Daily rental amount" :
                           periodType === "Weekly" ? "Weekly rental amount" :
                             "Monthly rental amount";
                         return (
                           <FormItem>
-                            <FormLabel>{label}</FormLabel>
+                            <FormLabel>{labelText} <span className="text-red-500">*</span></FormLabel>
                             <FormControl>
                               <CurrencyInput
                                 value={field.value}
@@ -1742,7 +1834,7 @@ const CreateRental = () => {
                         name="pickup_location"
                         render={({ field }) => (
                           <FormItem>
-                            <FormLabel>Pickup Location</FormLabel>
+                            <FormLabel>Pickup Location <span className="text-red-500">*</span></FormLabel>
                             <FormControl>
                               <LocationPicker
                                 type="pickup"
@@ -1770,7 +1862,7 @@ const CreateRental = () => {
                         render={({ field }) => (
                           <FormItem>
                             <div className="flex items-center justify-between">
-                              <FormLabel>Return Location</FormLabel>
+                              <FormLabel>Return Location <span className="text-red-500">*</span></FormLabel>
                               <div className="flex items-center gap-2">
                                 <Checkbox
                                   id="sameAsPickup"
@@ -1780,6 +1872,9 @@ const CreateRental = () => {
                                     if (checked) {
                                       form.setValue("return_location", form.getValues("pickup_location"));
                                       setReturnLocationId(pickupLocationId);
+                                    } else {
+                                      form.setValue("return_location", "");
+                                      setReturnLocationId(undefined);
                                     }
                                   }}
                                 />
@@ -1819,7 +1914,7 @@ const CreateRental = () => {
                         name="pickup_time"
                         render={({ field }) => (
                           <FormItem>
-                            <FormLabel>Pickup Time</FormLabel>
+                            <FormLabel>Pickup Time <span className="text-red-500">*</span></FormLabel>
                             <FormControl>
                               <TimePicker
                                 id="pickup_time"
@@ -1837,7 +1932,7 @@ const CreateRental = () => {
                         name="return_time"
                         render={({ field }) => (
                           <FormItem>
-                            <FormLabel>Return Time</FormLabel>
+                            <FormLabel>Return Time <span className="text-red-500">*</span></FormLabel>
                             <FormControl>
                               <TimePicker
                                 id="return_time"

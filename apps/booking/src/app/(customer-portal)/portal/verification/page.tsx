@@ -566,8 +566,8 @@ export default function VerificationPage() {
                       <FileText className="h-4 w-4 text-muted-foreground" />
                       <div>
                         <p className="text-sm text-muted-foreground">Document Type</p>
-                        <p className="font-medium capitalize">
-                          {currentVerification.document_type.replace(/_/g, ' ')}
+                        <p className="font-medium">
+                          {currentVerification.document_type.replace(/_/g, ' ').replace(/\bid\b/gi, 'ID').replace(/\b\w/g, c => c.toUpperCase())}
                         </p>
                       </div>
                     </div>

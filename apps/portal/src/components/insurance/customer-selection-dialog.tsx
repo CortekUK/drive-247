@@ -19,7 +19,6 @@ interface Customer {
   name: string;
   email: string | null;
   phone: string | null;
-  customer_type: string | null;
 }
 
 interface CustomerSelectionDialogProps {
@@ -40,7 +39,7 @@ export function CustomerSelectionDialog({
     queryFn: async () => {
       let query = supabase
         .from("customers")
-        .select("id, name, email, phone, customer_type")
+        .select("id, name, email, phone")
         .order("name", { ascending: true });
 
       if (searchTerm.trim()) {
@@ -125,11 +124,6 @@ export function CustomerSelectionDialog({
                               <Phone className="h-3 w-3" />
                               <span>{customer.phone}</span>
                             </div>
-                          )}
-                          {customer.customer_type && (
-                            <Badge variant="outline" className="text-xs shrink-0">
-                              {customer.customer_type}
-                            </Badge>
                           )}
                         </div>
                       </div>

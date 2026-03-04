@@ -7,7 +7,10 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
-import { ChevronLeft, CreditCard, Shield, Calendar, MapPin, Clock, Car, User, Loader2, ArrowDown, CircleDot } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { cn } from "@/lib/utils";
+import { ChevronLeft, CreditCard, Shield, Calendar, MapPin, Clock, Car, User, Loader2, ArrowDown, CircleDot, Check } from "lucide-react";
+import type { PricingTier, DayBreakdown } from "@/lib/calculate-rental-price";
 import { supabase } from "@/integrations/supabase/client";
 import { useTenant } from "@/contexts/TenantContext";
 import { useCustomerAuthStore } from "@/stores/customer-auth-store";
@@ -20,6 +23,7 @@ import { AuthPromptDialog } from "@/components/booking/AuthPromptDialog";
 import { createInvoiceWithFallback, Invoice } from "@/lib/invoiceUtils";
 import InstallmentSelector, { InstallmentOption, InstallmentConfig } from "@/components/InstallmentSelector";
 import { useDeliveryLocations } from "@/hooks/useDeliveryLocations";
+import CheckoutProgressOverlay from "@/components/CheckoutProgressOverlay";
 
 interface PromoDetails {
   code: string;
@@ -45,8 +49,17 @@ interface BookingCheckoutStepProps {
     formatted: string;
   };
   vehicleTotal: number; // Original price before promo discount
+  pricingTier?: PricingTier;
+  dayBreakdown?: DayBreakdown[];
   promoDetails?: PromoDetails | null;
+  promoCode: string;
+  promoError: string | null;
+  promoLoading?: boolean;
+  onPromoCodeChange: (value: string) => void;
+  onApplyPromo: (code: string) => void;
   onBack: () => void;
+  // Reused existing document ID (needs rental_id linking at checkout)
+  uploadedDocumentId?: string | null;
   // Bonzah insurance props
   bonzahPremium?: number;
   bonzahCoverage?: BonzahCoverage;
@@ -62,8 +75,16 @@ export default function BookingCheckoutStep({
   selectedExtras = {},
   rentalDuration,
   vehicleTotal,
+  pricingTier = 'daily',
+  dayBreakdown = [],
   promoDetails,
+  promoCode,
+  promoError,
+  promoLoading = false,
+  onPromoCodeChange,
+  onApplyPromo,
   onBack,
+  uploadedDocumentId,
   bonzahPremium = 0,
   bonzahCoverage,
   pickupDeliveryFee = 0,
@@ -86,6 +107,17 @@ export default function BookingCheckoutStep({
 
   // Bonzah policy ID - created dynamically during checkout
   const [bonzahPolicyId, setBonzahPolicyId] = useState<string | null>(null);
+
+  // Checkout progress overlay
+  const [checkoutProgress, setCheckoutProgress] = useState(0);
+  const checkoutSteps = [
+    { label: 'Verifying customer details' },
+    { label: 'Securing your vehicle' },
+    { label: 'Processing insurance' },
+    { label: 'Generating invoice' },
+    { label: 'Preparing payment' },
+    { label: 'Almost there' },
+  ];
 
   // Installment state
   const [selectedInstallmentPlan, setSelectedInstallmentPlan] = useState<InstallmentOption | null>(null);
@@ -253,6 +285,55 @@ export default function BookingCheckoutStep({
 
   const currencyCode = tenant?.currency_code || 'GBP';
   const fmt = (amount: number) => formatCurrency(amount, currencyCode);
+
+  // Build rental breakdown for invoice display
+  const buildRentalBreakdown = (): { label: string; amount?: number }[] => {
+    const days = rentalDuration.days;
+    const dailyRent = selectedVehicle?.daily_rent || 0;
+    const weeklyRent = selectedVehicle?.weekly_rent || 0;
+    const monthlyRent = selectedVehicle?.monthly_rent || 0;
+
+    const hasDynamicPricing = pricingTier === 'daily' && dayBreakdown.length > 0 &&
+      dayBreakdown.some(d => d.type !== 'regular');
+
+    if (hasDynamicPricing && dayBreakdown.length > 0) {
+      const groups: { type: string; rate: number; count: number; label: string }[] = [];
+      for (const day of dayBreakdown) {
+        const last = groups[groups.length - 1];
+        if (last && last.rate === day.effectiveRate && last.type === day.type) {
+          last.count++;
+        } else {
+          const label = day.type === 'holiday'
+            ? (day.holidayName || 'Holiday')
+            : day.type === 'weekend' ? 'Weekend' : 'Weekday';
+          groups.push({ type: day.type, rate: day.effectiveRate, count: 1, label });
+        }
+      }
+      return groups.map(g => ({
+        label: `${g.label} — ${fmt(g.rate)}/day × ${g.count} day${g.count !== 1 ? 's' : ''}`,
+        amount: g.rate * g.count,
+      }));
+    }
+
+    if (pricingTier === 'monthly' && monthlyRent > 0) {
+      const months = days / 30;
+      const qtyLabel = months === Math.floor(months)
+        ? `${Math.floor(months)} month${Math.floor(months) !== 1 ? 's' : ''}`
+        : `${days} days`;
+      return [{ label: `${fmt(monthlyRent)}/mo × ${qtyLabel}` }];
+    } else if (pricingTier === 'weekly' && weeklyRent > 0) {
+      const weeks = days / 7;
+      const qtyLabel = weeks === Math.floor(weeks)
+        ? `${Math.floor(weeks)} week${Math.floor(weeks) !== 1 ? 's' : ''}`
+        : `${days} days`;
+      return [{ label: `${fmt(weeklyRent)}/wk × ${qtyLabel}` }];
+    } else if (dailyRent > 0) {
+      return [{ label: `${fmt(dailyRent)}/day × ${days} day${days !== 1 ? 's' : ''}` }];
+    }
+    return [];
+  };
+
+  const rentalBreakdown = buildRentalBreakdown();
 
   // Function to get booking payment mode
   const getBookingMode = async (): Promise<'manual' | 'auto'> => {
@@ -637,6 +718,7 @@ export default function BookingCheckoutStep({
     }
 
     setIsProcessing(true);
+    setCheckoutProgress(1); // Step 1: Verifying customer details
 
     // DEBUG: Check if verificationSessionId is present
     console.log('🔍 Checkout formData:', formData);
@@ -660,7 +742,6 @@ export default function BookingCheckoutStep({
         console.log('👤 Found existing customer, updating...', existingCustomer.id);
 
         const updateData: Record<string, unknown> = {
-          type: formData.customerType,
           name: formData.customerName,
           phone: formData.customerPhone,
           status: "Active",
@@ -688,7 +769,6 @@ export default function BookingCheckoutStep({
         console.log('🆕 Creating new customer...');
 
         const customerData: Record<string, unknown> = {
-          type: formData.customerType,
           name: formData.customerName,
           email: formData.customerEmail,
           phone: formData.customerPhone,
@@ -826,6 +906,8 @@ export default function BookingCheckoutStep({
         console.log('⚠️ No verification session ID in formData');
       }
 
+      setCheckoutProgress(2); // Step 2: Securing your vehicle
+
       // Step 2: Get booking mode FIRST (needed for rental creation)
       const bookingMode = await getBookingMode();
       console.log('📋 Booking mode:', bookingMode);
@@ -904,6 +986,8 @@ export default function BookingCheckoutStep({
         console.log('✅ First charge generated successfully');
       }
 
+      setCheckoutProgress(3); // Step 3: Processing insurance
+
       // Step 4: Vehicle status - keep as Available until admin approves (both modes)
       // Vehicle will only be marked as "Rented" when admin clicks Approve
       console.log('⏳ Vehicle status unchanged - awaiting admin approval');
@@ -919,6 +1003,8 @@ export default function BookingCheckoutStep({
           console.log('⚠️ Bonzah quote creation failed or skipped');
         }
       }
+
+      setCheckoutProgress(4); // Step 4: Generating invoice
 
       // Step 5: Create invoice (with fallback to local if DB fails)
       const promoDiscount = calculatePromoDiscount();
@@ -953,6 +1039,8 @@ export default function BookingCheckoutStep({
         promo_code: promoDetails?.code || null,
       };
       setGeneratedInvoice(invoiceWithDiscount);
+
+      setCheckoutProgress(5); // Step 5: Preparing payment
 
       // Step 5: Store payment details in localStorage for success page
       // Payment record will be created ONLY after Stripe confirms successful payment
@@ -1130,7 +1218,22 @@ export default function BookingCheckoutStep({
           console.log('✅ Insurance files processed and cleaned up');
         }
 
-        if (pendingDocs.length === 0 && pendingFiles.length === 0) {
+        // Handle reused existing document (selected from dropdown, not in pendingFiles)
+        if (uploadedDocumentId && uploadedDocumentId !== 'pending' && pendingDocs.length === 0 && pendingFiles.length === 0) {
+          console.log(`📎 Linking reused existing document ${uploadedDocumentId} to rental ${rental.id}`);
+          const { error: linkError } = await supabase
+            .from('customer_documents')
+            .update({ rental_id: rental.id })
+            .eq('id', uploadedDocumentId);
+
+          if (linkError) {
+            console.warn('⚠️ Could not link reused document:', linkError);
+          } else {
+            console.log('✅ Reused document linked to rental');
+          }
+        }
+
+        if (pendingDocs.length === 0 && pendingFiles.length === 0 && !uploadedDocumentId) {
           console.log('ℹ️ No pending insurance documents to link');
         }
       } catch (linkErr) {
@@ -1178,7 +1281,13 @@ export default function BookingCheckoutStep({
         }
       }
 
+      setCheckoutProgress(6); // Step 6: Almost there
+
+      // Brief pause so the user sees the final step complete
+      await new Promise(resolve => setTimeout(resolve, 600));
+
       // Show invoice dialog first (before payment)
+      setCheckoutProgress(0);
       setShowInvoiceDialog(true);
       setIsProcessing(false);
     } catch (error: any) {
@@ -1192,6 +1301,7 @@ export default function BookingCheckoutStep({
       }
     } finally {
       setIsProcessing(false);
+      setCheckoutProgress(0);
     }
   };
 
@@ -1327,7 +1437,6 @@ export default function BookingCheckoutStep({
                 <User className="w-5 h-5 text-accent mt-0.5" />
                 <div>
                   <p className="font-medium">{formData.customerName}</p>
-                  <p className="text-sm text-muted-foreground">{formData.customerType}</p>
                 </div>
               </div>
               <div className="flex items-start gap-3">
@@ -1428,13 +1537,88 @@ export default function BookingCheckoutStep({
               ) : (
                 <>
                   {/* STANDARD TENANT: Show full price breakdown */}
-                  {/* Original rental price */}
-                  <div className="flex justify-between text-sm">
-                    <span className="text-muted-foreground">Rental ({rentalDuration.formatted})</span>
-                    <span className={`font-medium ${promoDetails ? 'line-through text-muted-foreground' : ''}`}>
-                      {fmt(vehicleTotal)}
-                    </span>
-                  </div>
+                  {/* Rental price with unit breakdown */}
+                  {(() => {
+                    const days = rentalDuration.days;
+                    const dailyRent = selectedVehicle?.daily_rent || 0;
+                    const weeklyRent = selectedVehicle?.weekly_rent || 0;
+                    const monthlyRent = selectedVehicle?.monthly_rent || 0;
+
+                    // For daily tier with dynamic pricing, check if rates vary across days
+                    const hasDynamicPricing = pricingTier === 'daily' && dayBreakdown.length > 0 &&
+                      dayBreakdown.some(d => d.type !== 'regular');
+
+                    // Group days by rate for a cleaner breakdown
+                    const buildDailyBreakdown = () => {
+                      if (!dayBreakdown.length) return null;
+                      // Group consecutive days with same rate
+                      const groups: { type: string; rate: number; count: number; label: string }[] = [];
+                      for (const day of dayBreakdown) {
+                        const last = groups[groups.length - 1];
+                        if (last && last.rate === day.effectiveRate && last.type === day.type) {
+                          last.count++;
+                        } else {
+                          const label = day.type === 'holiday'
+                            ? (day.holidayName || 'Holiday')
+                            : day.type === 'weekend' ? 'Weekend' : 'Weekday';
+                          groups.push({ type: day.type, rate: day.effectiveRate, count: 1, label });
+                        }
+                      }
+                      return groups;
+                    };
+
+                    let unitRate = 0;
+                    let unitLabel = '';
+                    let quantityLabel = '';
+
+                    if (pricingTier === 'monthly') {
+                      unitRate = monthlyRent;
+                      unitLabel = '/mo';
+                      const months = days / 30;
+                      quantityLabel = months === Math.floor(months)
+                        ? `${Math.floor(months)} month${Math.floor(months) !== 1 ? 's' : ''}`
+                        : `${days} days`;
+                    } else if (pricingTier === 'weekly') {
+                      unitRate = weeklyRent;
+                      unitLabel = '/wk';
+                      const weeks = days / 7;
+                      quantityLabel = weeks === Math.floor(weeks)
+                        ? `${Math.floor(weeks)} week${Math.floor(weeks) !== 1 ? 's' : ''}`
+                        : `${days} days`;
+                    } else if (!hasDynamicPricing) {
+                      unitRate = dailyRent;
+                      unitLabel = '/day';
+                      quantityLabel = `${days} day${days !== 1 ? 's' : ''}`;
+                    }
+
+                    const dailyGroups = hasDynamicPricing ? buildDailyBreakdown() : null;
+
+                    return (
+                      <div className="space-y-1">
+                        <div className="flex justify-between text-sm">
+                          <span className="text-muted-foreground">Rental ({rentalDuration.formatted})</span>
+                          <span className={`font-medium ${promoDetails ? 'line-through text-muted-foreground' : ''}`}>
+                            {fmt(vehicleTotal)}
+                          </span>
+                        </div>
+                        {/* Flat rate breakdown (monthly/weekly/daily without surcharges) */}
+                        {unitRate > 0 && !hasDynamicPricing && (
+                          <div className="text-xs text-muted-foreground/70 pl-1">
+                            {fmt(unitRate)}{unitLabel} × {quantityLabel}
+                          </div>
+                        )}
+                        {/* Dynamic pricing per-day breakdown */}
+                        {dailyGroups && dailyGroups.map((group, i) => (
+                          <div key={i} className="flex justify-between text-xs text-muted-foreground/70 pl-1">
+                            <span>
+                              {group.label} — {fmt(group.rate)}/day × {group.count} day{group.count !== 1 ? 's' : ''}
+                            </span>
+                            <span>{fmt(group.rate * group.count)}</span>
+                          </div>
+                        ))}
+                      </div>
+                    );
+                  })()}
 
                   {/* Promo discount line item - only show when applied */}
                   {promoDetails && calculatePromoDiscount() > 0 && (
@@ -1548,7 +1732,37 @@ export default function BookingCheckoutStep({
               )}
             </div>
 
-            <div className="mt-6 space-y-3">
+            {/* Promo Code */}
+            <div className="mt-4 space-y-2">
+              <Label htmlFor="promoCode" className="text-sm font-medium">Promo Code</Label>
+              <div className="flex gap-2">
+                <Input
+                  id="promoCode"
+                  placeholder="Enter code"
+                  value={promoCode}
+                  onChange={(e) => onPromoCodeChange(e.target.value)}
+                  className={cn("h-9", promoError ? "border-destructive" : promoDetails ? "border-green-500" : "")}
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="h-9 px-4"
+                  onClick={() => onApplyPromo(promoCode)}
+                  disabled={promoLoading || !promoCode}
+                >
+                  Apply
+                </Button>
+              </div>
+              {promoError && <p className="text-xs text-destructive">{promoError}</p>}
+              {promoDetails && (
+                <p className="text-xs text-green-600 font-medium flex items-center gap-1">
+                  <Check className="w-3 h-3" />
+                  {promoDetails.type === 'percentage' ? `${promoDetails.value}% off` : `${fmt(promoDetails.value)} off`}
+                </p>
+              )}
+            </div>
+
+            <div className="mt-4 space-y-3">
               <Button
                 onClick={handlePayment}
                 disabled={isProcessing || sendingDocuSign || !agreeTerms}
@@ -1601,7 +1815,11 @@ export default function BookingCheckoutStep({
               {/* Only show Stripe security message if payment is required */}
               {getPayableAmount() > 0 && (
                 <div className="flex items-center gap-2 text-xs text-muted-foreground justify-center pt-2">
-                  <Shield className="w-4 h-4" />
+                  {tenant?.logo_url ? (
+                    <img src={tenant.logo_url} alt={tenant?.app_name || tenant?.company_name || ''} className="h-4 w-auto object-contain" />
+                  ) : (
+                    <Shield className="w-4 h-4" />
+                  )}
                   <span>Secured by Stripe. Card details never stored.</span>
                 </div>
               )}
@@ -1639,6 +1857,7 @@ export default function BookingCheckoutStep({
             const extra = extras.find((e: any) => e.id === extraId);
             return { name: extra?.name || 'Extra', quantity: qty, price: extra?.price || 0 };
           }).filter(e => e.quantity > 0)}
+          rentalBreakdown={rentalBreakdown}
         />
       )}
 
@@ -1657,6 +1876,13 @@ export default function BookingCheckoutStep({
           setShowAuthDialog(false);
           proceedWithPayment();
         }}
+      />
+
+      {/* Checkout progress overlay */}
+      <CheckoutProgressOverlay
+        isVisible={checkoutProgress > 0}
+        currentStep={checkoutProgress}
+        steps={checkoutSteps}
       />
 
     </div>

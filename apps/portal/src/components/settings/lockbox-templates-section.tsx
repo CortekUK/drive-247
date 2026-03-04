@@ -7,7 +7,8 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
-import { Lock, Mail, MessageSquare, MessageCircle, Save, Loader2, Info, FileText } from 'lucide-react';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
+import { Lock, Mail, MessageSquare, MessageCircle, Save, Loader2, Info, FileText, RotateCcw } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
 import { useLockboxTemplates } from '@/hooks/use-lockbox-templates';
 import { useRentalSettings } from '@/hooks/use-rental-settings';
@@ -20,6 +21,35 @@ const DEFAULT_LOCKBOX_INSTRUCTIONS = `1. Go to the vehicle location
 6. Do not share the lockbox code with anyone
 
 If you have any issues accessing the lockbox, please contact us immediately.`;
+
+const DEFAULT_LOCKBOX_EMAIL = {
+  subject: 'Your Vehicle Keys - Lockbox Code',
+  body: `Hi {{customer_name}},
+
+Your vehicle ({{vehicle_name}} - {{vehicle_reg}}) is ready for collection at {{delivery_address}}.
+
+Your lockbox code is: {{lockbox_code}}
+
+{{lockbox_instructions}}
+
+Booking Reference: {{booking_ref}}
+
+If you have any questions, please don't hesitate to contact us.`,
+};
+
+const DEFAULT_LOCKBOX_SMS = {
+  body: `Your vehicle {{vehicle_reg}} has been delivered. Lockbox code: {{lockbox_code}}. Ref: {{booking_ref}}`,
+};
+
+const DEFAULT_LOCKBOX_WHATSAPP = {
+  body: `*Vehicle Collection Confirmation*
+
+Hi {{customer_name}},
+
+Your vehicle *{{vehicle_name}}* ({{vehicle_reg}}) has been collected.
+
+Booking Ref: {{booking_ref}}`,
+};
 
 const AVAILABLE_VARIABLES = [
   { key: '{{customer_name}}', desc: 'Customer full name' },
@@ -49,6 +79,35 @@ export function LockboxTemplatesSection() {
   const [savingSms, setSavingSms] = useState(false);
   const [savingWhatsapp, setSavingWhatsapp] = useState(false);
   const [initialized, setInitialized] = useState(false);
+  const [isResettingAll, setIsResettingAll] = useState(false);
+
+  const handleResetAllToDefaults = async () => {
+    setIsResettingAll(true);
+    try {
+      // Reset instructions
+      await updateSettings({ lockbox_default_instructions: DEFAULT_LOCKBOX_INSTRUCTIONS });
+      setInstructions(DEFAULT_LOCKBOX_INSTRUCTIONS);
+
+      // Reset email template
+      await saveTemplate.mutateAsync({ channel: 'email', subject: DEFAULT_LOCKBOX_EMAIL.subject, body: DEFAULT_LOCKBOX_EMAIL.body });
+      setEmailSubject(DEFAULT_LOCKBOX_EMAIL.subject);
+      setEmailBody(DEFAULT_LOCKBOX_EMAIL.body);
+
+      // Reset SMS template
+      await saveTemplate.mutateAsync({ channel: 'sms', body: DEFAULT_LOCKBOX_SMS.body });
+      setSmsBody(DEFAULT_LOCKBOX_SMS.body);
+
+      // Reset WhatsApp template
+      await saveTemplate.mutateAsync({ channel: 'whatsapp', body: DEFAULT_LOCKBOX_WHATSAPP.body });
+      setWhatsappBody(DEFAULT_LOCKBOX_WHATSAPP.body);
+
+      toast({ title: 'Templates Reset', description: 'All lockbox templates have been restored to defaults.' });
+    } catch (err) {
+      toast({ title: 'Error', description: 'Failed to reset lockbox templates', variant: 'destructive' });
+    } finally {
+      setIsResettingAll(false);
+    }
+  };
 
   // Load instructions from rental settings
   useEffect(() => {
@@ -154,13 +213,52 @@ export function LockboxTemplatesSection() {
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="flex items-center gap-2">
-          <Lock className="h-5 w-5 text-primary" />
-          Lockbox Notification Templates
-        </CardTitle>
-        <CardDescription>
-          Customise the messages sent to customers with their lockbox access code
-        </CardDescription>
+        <div className="flex items-start justify-between">
+          <div>
+            <CardTitle className="flex items-center gap-2">
+              <Lock className="h-5 w-5 text-primary" />
+              Lockbox Notification Templates
+            </CardTitle>
+            <CardDescription className="mt-1.5">
+              Customise the messages sent to customers with their lockbox access code
+            </CardDescription>
+          </div>
+          <AlertDialog>
+            <AlertDialogTrigger asChild>
+              <Button variant="outline" size="sm" className="text-destructive border-destructive hover:bg-destructive/10">
+                <RotateCcw className="h-4 w-4 mr-2" />
+                Reset All to Defaults
+              </Button>
+            </AlertDialogTrigger>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Reset All Lockbox Templates?</AlertDialogTitle>
+                <div className="text-sm text-muted-foreground">
+                  This will reset all lockbox notification templates to their default values:
+                  <ul className="mt-2 list-disc list-inside space-y-1">
+                    <li>Default lockbox instructions</li>
+                    <li>Email template (subject & body)</li>
+                    <li>SMS template</li>
+                    <li>WhatsApp template</li>
+                  </ul>
+                </div>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel disabled={isResettingAll}>Cancel</AlertDialogCancel>
+                <AlertDialogAction onClick={handleResetAllToDefaults} disabled={isResettingAll}>
+                  {isResettingAll ? (
+                    <>
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      Resetting...
+                    </>
+                  ) : (
+                    'Reset All to Defaults'
+                  )}
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
+        </div>
       </CardHeader>
       <CardContent className="space-y-6">
         {/* Available Variables */}

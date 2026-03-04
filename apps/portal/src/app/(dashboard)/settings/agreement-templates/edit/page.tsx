@@ -39,6 +39,8 @@ import {
 } from '@/lib/template-variables';
 import { toast } from '@/hooks/use-toast';
 import { TipTapEditor } from '@/components/settings/tiptap-editor';
+import { useUnsavedChangesWarning } from '@/hooks/use-unsaved-changes-warning';
+import { UnsavedChangesDialog } from '@/components/shared/unsaved-changes-dialog';
 
 const PLATFORM_DISCLAIMER_HTML = `<hr style="margin: 24px 0; border-color: #e5e7eb;" /><p><strong>Platform Disclaimer</strong></p><p>The parties acknowledge that Drive247 is a software platform operated by Cortek Systems Ltd, which provides technology services solely to facilitate booking, documentation, and administrative processes for vehicle rental companies.</p><p>Drive247 and Cortek Systems Ltd are not a party to this Rental Agreement and do not own, lease, manage, insure, or control any vehicles listed on the platform.</p><p>All contractual obligations, responsibilities, and liabilities relating to the rental transaction, including vehicle condition, insurance coverage, payment collection, disputes, and claims, exist solely between the Rental Company and the Renter.</p><p>Drive247 and Cortek Systems Ltd shall have no liability for any losses, damages, claims, disputes, or obligations arising from or relating to this rental transaction, the performance of either party, or any third-party services integrated into the platform.</p>`;
 
@@ -92,18 +94,33 @@ export default function EditAgreementTemplatePage() {
     }
   }, [templateContent, currentTemplate, loaded, isDefault]);
 
-  const handleSave = async () => {
+  // Save content without navigation (for unsaved changes warning)
+  const saveContent = async (): Promise<boolean> => {
     if (!templateContent.trim()) {
       toast({ title: 'Error', description: 'Template content cannot be empty', variant: 'destructive' });
-      return;
+      return false;
     }
-
     try {
       await updateContentAsync({ type: templateType, content: templateContent });
       setHasChanges(false);
+      return true;
+    } catch {
+      return false;
+    }
+  };
+
+  const {
+    isDialogOpen,
+    confirmLeave,
+    saveAndLeave,
+    cancelLeave,
+    isSaving: isSavingNav,
+  } = useUnsavedChangesWarning({ hasChanges, onSave: saveContent });
+
+  const handleSave = async () => {
+    const success = await saveContent();
+    if (success) {
       router.push('/settings/agreement-templates');
-    } catch (error) {
-      // Error handled by hook
     }
   };
 
@@ -279,6 +296,14 @@ export default function EditAgreementTemplatePage() {
           </ScrollArea>
         </div>
       </div>
+
+      <UnsavedChangesDialog
+        open={isDialogOpen}
+        onCancel={cancelLeave}
+        onDiscard={confirmLeave}
+        onSave={saveAndLeave}
+        isSaving={isSavingNav}
+      />
 
       {/* Preview Styles */}
       <style jsx global>{`

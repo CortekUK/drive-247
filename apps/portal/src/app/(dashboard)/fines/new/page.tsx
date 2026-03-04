@@ -143,7 +143,7 @@ const CreateFine = () => {
     queryFn: async () => {
       let query = supabase
         .from("customers")
-        .select("id, name, email, phone, customer_type")
+        .select("id, name, email, phone")
         .eq("status", "Active")
         .order("name");
 
@@ -399,7 +399,7 @@ const CreateFine = () => {
                                   <div className="flex flex-col items-start w-[250px]">
                                     <span className="font-medium truncate w-full">{customer.name}</span>
                                     <span className="text-xs text-muted-foreground truncate w-full">
-                                      {customer.email || customer.phone || customer.customer_type}
+                                      {customer.email || customer.phone}
                                     </span>
                                   </div>
                                 </SelectItem>

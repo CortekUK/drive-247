@@ -46,9 +46,6 @@ const rentalDetailsSchema = z.object({
   customerName: z.string().min(2, "Name must be at least 2 characters"),
   customerEmail: z.string().email("Please enter a valid email address"),
   customerPhone: z.string().regex(/^[\d\s\-\+\(\)]{10,}$/, "Please enter a valid phone number (min 10 digits)"),
-  customerType: z.enum(["Individual", "Company"], {
-    required_error: "Please select customer type"
-  }),
 }).refine((data) => {
   // Combine date and time for comparison
   const pickup = new Date(`${format(data.pickupDate, "yyyy-MM-dd")}T${data.pickupTime}`);
@@ -93,7 +90,6 @@ export default function Booking() {
       customerName: "",
       customerEmail: "",
       customerPhone: "",
-      customerType: undefined,
     },
   });
 
@@ -597,28 +593,6 @@ export default function Booking() {
                         />
                       </div>
 
-                      {/* Customer Type */}
-                      <FormField
-                        control={form.control}
-                        name="customerType"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel className="text-base">Customer Type *</FormLabel>
-                            <Select onValueChange={field.onChange} value={field.value}>
-                              <FormControl>
-                                <SelectTrigger className="h-12">
-                                  <SelectValue placeholder="Select customer type" />
-                                </SelectTrigger>
-                              </FormControl>
-                              <SelectContent>
-                                <SelectItem value="Individual">Individual</SelectItem>
-                                <SelectItem value="Company">Company</SelectItem>
-                              </SelectContent>
-                            </Select>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
                     </div>
 
                     {/* Submit Button */}

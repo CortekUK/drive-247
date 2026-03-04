@@ -66,7 +66,7 @@ export const RentalsFilters = ({ filters, onFiltersChange, onClearFilters }: Ren
   return (
     <div>
       <div className="flex flex-wrap gap-3 items-center">
-        <div className="relative w-[280px] sm:w-[320px]">
+        <div className="relative w-full sm:w-[320px]">
           <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
           <Input
             placeholder="Search customer, reg, rental #..."
@@ -170,7 +170,7 @@ export const RentalsFilters = ({ filters, onFiltersChange, onClearFilters }: Ren
         </div>
 
         {/* Requests + Ins. Quoted pushed right */}
-        <div className="flex gap-3 items-center ml-auto">
+        <div className="flex flex-wrap gap-3 items-center sm:ml-auto">
 
         {/* Requests group */}
         <div className="flex items-center border rounded-md overflow-hidden">

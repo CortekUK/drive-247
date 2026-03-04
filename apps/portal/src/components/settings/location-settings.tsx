@@ -76,7 +76,11 @@ const EMPTY_FORM: LocationFormData = {
   is_return_enabled: true,
 };
 
-export function LocationSettings() {
+interface LocationSettingsProps {
+  onDirtyChange?: (dirty: boolean) => void;
+}
+
+export function LocationSettings({ onDirtyChange }: LocationSettingsProps = {}) {
   const {
     locationSettings,
     isLoadingSettings,
@@ -121,6 +125,11 @@ export function LocationSettings() {
   const [areaCenterLon, setAreaCenterLon] = useState<number | null>(null);
 
   const [hasChanges, setHasChanges] = useState(false);
+
+  // Report dirty state to parent
+  useEffect(() => {
+    onDirtyChange?.(hasChanges);
+  }, [hasChanges, onDirtyChange]);
 
   // Dialog state
   const [isDialogOpen, setIsDialogOpen] = useState(false);
@@ -352,9 +361,9 @@ export function LocationSettings() {
   return (
     <div className="space-y-6">
       {/* Two Column Layout for Pickup & Return */}
-      <div className="grid lg:grid-cols-2 gap-6">
+      <div className="grid xl:grid-cols-2 gap-6">
         {/* PICKUP OPTIONS CARD */}
-        <Card className="overflow-hidden">
+        <Card className="overflow-hidden flex flex-col">
           <div className="bg-muted/30 border-b px-6 py-4">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-xl bg-muted flex items-center justify-center">
@@ -366,14 +375,14 @@ export function LocationSettings() {
               </div>
             </div>
           </div>
-          <CardContent className="p-0">
+          <CardContent className="p-0 flex-1 flex flex-col">
             {/* Fixed Address */}
             <div className={cn(
-              "p-5 border-b transition-colors",
+              "p-5 border-b transition-colors xl:min-h-[180px]",
               pickupFixedEnabled && "bg-muted/20"
             )}>
-              <div className="flex items-start justify-between gap-4">
-                <div className="flex gap-3">
+              <div className="flex items-start justify-between gap-3 sm:gap-4">
+                <div className="flex gap-3 min-w-0">
                   <div className={cn(
                     "w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0",
                     pickupFixedEnabled
@@ -383,7 +392,7 @@ export function LocationSettings() {
                     <Building2 className="h-5 w-5" />
                   </div>
                   <div>
-                    <div className="flex items-center gap-2 mb-1">
+                    <div className="flex items-center gap-2 mb-1 flex-wrap">
                       <span className="font-semibold text-sm">Your Location</span>
                       <span className="text-[10px] font-medium uppercase tracking-wider px-2 py-0.5 rounded-full bg-muted text-muted-foreground">
                         Free
@@ -406,7 +415,7 @@ export function LocationSettings() {
                 />
               </div>
               {pickupFixedEnabled && (
-                <div className="mt-4 pl-[52px]">
+                <div className="mt-4 pl-3 sm:pl-[52px]">
                   <LocationAutocomplete
                     value={fixedPickupAddress}
                     onChange={(v) => { setFixedPickupAddress(v); setHasChanges(true); }}
@@ -419,11 +428,11 @@ export function LocationSettings() {
 
             {/* Predefined Locations */}
             <div className={cn(
-              "p-5 border-b transition-colors",
+              "p-5 border-b transition-colors flex-1",
               pickupMultipleEnabled && "bg-muted/20"
             )}>
-              <div className="flex items-start justify-between gap-4">
-                <div className="flex gap-3">
+              <div className="flex items-start justify-between gap-3 sm:gap-4">
+                <div className="flex gap-3 min-w-0">
                   <div className={cn(
                     "w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0",
                     pickupMultipleEnabled
@@ -433,7 +442,7 @@ export function LocationSettings() {
                     <MapPinned className="h-5 w-5" />
                   </div>
                   <div>
-                    <div className="flex items-center gap-2 mb-1">
+                    <div className="flex items-center gap-2 mb-1 flex-wrap">
                       <span className="font-semibold text-sm">Delivery Locations</span>
                       <span className="text-[10px] font-medium uppercase tracking-wider px-2 py-0.5 rounded-full bg-muted text-muted-foreground">
                         Paid
@@ -456,7 +465,7 @@ export function LocationSettings() {
                 />
               </div>
               {pickupMultipleEnabled && (
-                <div className="mt-4 pl-[52px]">
+                <div className="mt-4 pl-3 sm:pl-[52px]">
                   <LocationsGrid
                     locations={pickupLocations}
                     onAdd={() => handleOpenAddDialog('pickup')}
@@ -472,11 +481,11 @@ export function LocationSettings() {
 
             {/* Area Delivery */}
             <div className={cn(
-              "p-5 transition-colors",
+              "p-5 transition-colors xl:min-h-[88px]",
               pickupAreaEnabled && "bg-muted/20"
             )}>
-              <div className="flex items-start justify-between gap-4">
-                <div className="flex gap-3">
+              <div className="flex items-start justify-between gap-3 sm:gap-4">
+                <div className="flex gap-3 min-w-0">
                   <div className={cn(
                     "w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0",
                     pickupAreaEnabled
@@ -486,7 +495,7 @@ export function LocationSettings() {
                     <CircleDot className="h-5 w-5" />
                   </div>
                   <div>
-                    <div className="flex items-center gap-2 mb-1">
+                    <div className="flex items-center gap-2 mb-1 flex-wrap">
                       <span className="font-semibold text-sm">Area Delivery</span>
                       <span className="text-[10px] font-medium uppercase tracking-wider px-2 py-0.5 rounded-full bg-muted text-muted-foreground">
                         Paid
@@ -513,7 +522,7 @@ export function LocationSettings() {
         </Card>
 
         {/* RETURN OPTIONS CARD */}
-        <Card className="overflow-hidden">
+        <Card className="overflow-hidden flex flex-col">
           <div className="bg-muted/30 border-b px-6 py-4">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-xl bg-muted flex items-center justify-center">
@@ -525,14 +534,14 @@ export function LocationSettings() {
               </div>
             </div>
           </div>
-          <CardContent className="p-0">
+          <CardContent className="p-0 flex-1 flex flex-col">
             {/* Fixed Address */}
             <div className={cn(
-              "p-5 border-b transition-colors",
+              "p-5 border-b transition-colors xl:min-h-[180px]",
               returnFixedEnabled && "bg-muted/20"
             )}>
-              <div className="flex items-start justify-between gap-4">
-                <div className="flex gap-3">
+              <div className="flex items-start justify-between gap-3 sm:gap-4">
+                <div className="flex gap-3 min-w-0">
                   <div className={cn(
                     "w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0",
                     returnFixedEnabled
@@ -542,7 +551,7 @@ export function LocationSettings() {
                     <Building2 className="h-5 w-5" />
                   </div>
                   <div>
-                    <div className="flex items-center gap-2 mb-1">
+                    <div className="flex items-center gap-2 mb-1 flex-wrap">
                       <span className="font-semibold text-sm">Your Location</span>
                       <span className="text-[10px] font-medium uppercase tracking-wider px-2 py-0.5 rounded-full bg-muted text-muted-foreground">
                         Free
@@ -565,7 +574,7 @@ export function LocationSettings() {
                 />
               </div>
               {returnFixedEnabled && (
-                <div className="mt-4 pl-[52px] space-y-3">
+                <div className="mt-4 pl-3 sm:pl-[52px] space-y-3">
                   <label className="flex items-center gap-2 text-sm cursor-pointer">
                     <Checkbox
                       checked={sameReturnAddress}
@@ -587,11 +596,11 @@ export function LocationSettings() {
 
             {/* Predefined Locations */}
             <div className={cn(
-              "p-5 border-b transition-colors",
+              "p-5 border-b transition-colors flex-1",
               returnMultipleEnabled && "bg-muted/20"
             )}>
-              <div className="flex items-start justify-between gap-4">
-                <div className="flex gap-3">
+              <div className="flex items-start justify-between gap-3 sm:gap-4">
+                <div className="flex gap-3 min-w-0">
                   <div className={cn(
                     "w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0",
                     returnMultipleEnabled
@@ -601,7 +610,7 @@ export function LocationSettings() {
                     <MapPinned className="h-5 w-5" />
                   </div>
                   <div>
-                    <div className="flex items-center gap-2 mb-1">
+                    <div className="flex items-center gap-2 mb-1 flex-wrap">
                       <span className="font-semibold text-sm">Collection Locations</span>
                       <span className="text-[10px] font-medium uppercase tracking-wider px-2 py-0.5 rounded-full bg-muted text-muted-foreground">
                         Paid
@@ -624,7 +633,7 @@ export function LocationSettings() {
                 />
               </div>
               {returnMultipleEnabled && (
-                <div className="mt-4 pl-[52px]">
+                <div className="mt-4 pl-3 sm:pl-[52px]">
                   <LocationsGrid
                     locations={returnLocations}
                     onAdd={() => handleOpenAddDialog('return')}
@@ -640,11 +649,11 @@ export function LocationSettings() {
 
             {/* Area Collection */}
             <div className={cn(
-              "p-5 transition-colors",
+              "p-5 transition-colors xl:min-h-[88px]",
               returnAreaEnabled && "bg-muted/20"
             )}>
-              <div className="flex items-start justify-between gap-4">
-                <div className="flex gap-3">
+              <div className="flex items-start justify-between gap-3 sm:gap-4">
+                <div className="flex gap-3 min-w-0">
                   <div className={cn(
                     "w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0",
                     returnAreaEnabled
@@ -654,7 +663,7 @@ export function LocationSettings() {
                     <CircleDot className="h-5 w-5" />
                   </div>
                   <div>
-                    <div className="flex items-center gap-2 mb-1">
+                    <div className="flex items-center gap-2 mb-1 flex-wrap">
                       <span className="font-semibold text-sm">Area Collection</span>
                       <span className="text-[10px] font-medium uppercase tracking-wider px-2 py-0.5 rounded-full bg-muted text-muted-foreground">
                         Paid
@@ -900,70 +909,77 @@ function LocationsGrid({
 }) {
   return (
     <div className="space-y-3">
-      {locations.length > 0 && (
-        <div className="space-y-2">
-          {locations.map((location) => (
-            <div
-              key={location.id}
-              className={cn(
-                "flex items-center gap-3 p-3 rounded-xl border bg-background transition-all",
-                location.is_active
-                  ? "border-border"
-                  : "border-border/40 opacity-60"
-              )}
-            >
-              <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center flex-shrink-0">
-                <MapPin className="h-4 w-4 text-primary" />
-              </div>
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2">
-                  <span className="font-medium text-sm">{location.name}</span>
-                  <span className="text-xs font-semibold text-amber-500">
-                    {formatCurrency(location.delivery_fee, currencyCode)}
-                  </span>
-                </div>
-                <p className="text-xs text-muted-foreground truncate">{location.address}</p>
-                {location.description && (
-                  <p className="text-xs text-muted-foreground/70 truncate">{location.description}</p>
+      {/* Fixed-height container — always fits 2 cards, scrolls beyond that */}
+      <div className="h-[168px] overflow-y-auto pr-1 rounded-xl border border-dashed border-border/50 bg-muted/10">
+        {locations.length > 0 ? (
+          <div className="space-y-2 p-2">
+            {locations.map((location) => (
+              <div
+                key={location.id}
+                className={cn(
+                  "flex items-center gap-3 p-3 rounded-xl border bg-background transition-all",
+                  location.is_active
+                    ? "border-border"
+                    : "border-border/40 opacity-60"
                 )}
+              >
+                <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center flex-shrink-0">
+                  <MapPin className="h-4 w-4 text-primary" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2">
+                    <span className="font-medium text-sm truncate">{location.name}</span>
+                    <span className="text-xs font-semibold text-amber-500 shrink-0">
+                      {formatCurrency(location.delivery_fee, currencyCode)}
+                    </span>
+                  </div>
+                  <p className="text-xs text-muted-foreground truncate">{location.address}</p>
+                  {location.description && (
+                    <p className="text-xs text-muted-foreground/70 truncate">{location.description}</p>
+                  )}
+                </div>
+                <div className="flex items-center gap-1 flex-shrink-0">
+                  <Switch
+                    checked={location.is_active}
+                    onCheckedChange={() => onToggleActive(location)}
+                    disabled={isUpdating}
+                    className="scale-90"
+                  />
+                  <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => onEdit(location)}>
+                    <Pencil className="h-3.5 w-3.5" />
+                  </Button>
+                  <AlertDialog>
+                    <AlertDialogTrigger asChild>
+                      <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:text-destructive">
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </Button>
+                    </AlertDialogTrigger>
+                    <AlertDialogContent>
+                      <AlertDialogHeader>
+                        <AlertDialogTitle>Delete &ldquo;{location.name}&rdquo;?</AlertDialogTitle>
+                        <AlertDialogDescription>This cannot be undone.</AlertDialogDescription>
+                      </AlertDialogHeader>
+                      <AlertDialogFooter>
+                        <AlertDialogCancel>Cancel</AlertDialogCancel>
+                        <AlertDialogAction
+                          onClick={() => onDelete(location.id)}
+                          className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                        >
+                          Delete
+                        </AlertDialogAction>
+                      </AlertDialogFooter>
+                    </AlertDialogContent>
+                  </AlertDialog>
+                </div>
               </div>
-              <div className="flex items-center gap-1 flex-shrink-0">
-                <Switch
-                  checked={location.is_active}
-                  onCheckedChange={() => onToggleActive(location)}
-                  disabled={isUpdating}
-                  className="scale-90"
-                />
-                <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => onEdit(location)}>
-                  <Pencil className="h-3.5 w-3.5" />
-                </Button>
-                <AlertDialog>
-                  <AlertDialogTrigger asChild>
-                    <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:text-destructive">
-                      <Trash2 className="h-3.5 w-3.5" />
-                    </Button>
-                  </AlertDialogTrigger>
-                  <AlertDialogContent>
-                    <AlertDialogHeader>
-                      <AlertDialogTitle>Delete "{location.name}"?</AlertDialogTitle>
-                      <AlertDialogDescription>This cannot be undone.</AlertDialogDescription>
-                    </AlertDialogHeader>
-                    <AlertDialogFooter>
-                      <AlertDialogCancel>Cancel</AlertDialogCancel>
-                      <AlertDialogAction
-                        onClick={() => onDelete(location.id)}
-                        className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                      >
-                        Delete
-                      </AlertDialogAction>
-                    </AlertDialogFooter>
-                  </AlertDialogContent>
-                </AlertDialog>
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
+            ))}
+          </div>
+        ) : (
+          <div className="flex items-center justify-center h-full text-sm text-muted-foreground">
+            No locations added
+          </div>
+        )}
+      </div>
 
       <Button variant="outline" size="sm" onClick={onAdd} className="w-full border-dashed">
         <Plus className="mr-2 h-4 w-4" />

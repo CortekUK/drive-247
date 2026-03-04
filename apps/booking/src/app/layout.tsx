@@ -38,10 +38,15 @@ export async function generateMetadata(): Promise<Metadata> {
       return defaultMetadata;
     }
 
+    // Guard against missing env vars (e.g. during build or cold start)
+    if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
+      return defaultMetadata;
+    }
+
     // Create Supabase client for server-side fetch
     const supabase = createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL || '',
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ''
+      process.env.NEXT_PUBLIC_SUPABASE_URL,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
     );
 
     const { data: tenant } = await supabase

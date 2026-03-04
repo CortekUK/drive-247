@@ -18,6 +18,7 @@ import {
   User,
   Mail,
   MessageCircle,
+  Phone,
 } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { cn } from "@/lib/utils";
@@ -109,10 +110,18 @@ export const KeyHandoverSection = ({
   );
   const [isSendingLockbox, setIsSendingLockbox] = useState(false);
 
+  // Derive enabled notification methods from tenant settings
+  const enabledMethods = rentalSettings?.lockbox_notification_methods || ['email'];
+  const emailEnabled = enabledMethods.includes('email');
+  const whatsappEnabled = enabledMethods.includes('whatsapp');
+  const smsEnabled = enabledMethods.includes('sms');
+
   // Notification method state
   const [sendEmail, setSendEmail] = useState(true);
   const [sendWhatsApp, setSendWhatsApp] = useState(false);
+  const [sendSms, setSendSms] = useState(false);
   const [whatsAppPhone, setWhatsAppPhone] = useState(customerPhone || '');
+  const [smsPhone, setSmsPhone] = useState(customerPhone || '');
   const [isSendingWhatsApp, setIsSendingWhatsApp] = useState(false);
 
   // Show lockbox option when feature is enabled in tenant settings (not dependent on vehicle having a code)
@@ -206,7 +215,7 @@ export const KeyHandoverSection = ({
           body: {
             customerName,
             customerEmail,
-            customerPhone,
+            customerPhone: sendSms ? (smsPhone || customerPhone) : customerPhone,
             vehicleName,
             vehicleReg,
             lockboxCode,
@@ -218,6 +227,8 @@ export const KeyHandoverSection = ({
             notes: givingNotes || null,
             photoUrls,
             defaultInstructions: rentalSettings?.lockbox_default_instructions || null,
+            sendEmail,
+            sendSms,
           },
         });
 
@@ -471,33 +482,64 @@ export const KeyHandoverSection = ({
             </div>
 
             {/* Notification Method Selector */}
-            {!givingCompleted && !isClosed && (
+            {!givingCompleted && !isClosed && (emailEnabled || whatsappEnabled || smsEnabled) && (
               <div className="p-3 border rounded-lg bg-muted/20 space-y-3">
                 <Label className="text-sm font-medium">Notify customer on collection</Label>
                 <div className="space-y-2">
-                  <div className="flex items-center gap-2">
-                    <Checkbox
-                      id="notify-email"
-                      checked={sendEmail}
-                      onCheckedChange={(checked) => setSendEmail(!!checked)}
-                    />
-                    <Label htmlFor="notify-email" className="text-sm cursor-pointer flex items-center gap-1.5">
-                      <Mail className="h-3.5 w-3.5" />
-                      Email
-                    </Label>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Checkbox
-                      id="notify-whatsapp"
-                      checked={sendWhatsApp}
-                      onCheckedChange={(checked) => setSendWhatsApp(!!checked)}
-                    />
-                    <Label htmlFor="notify-whatsapp" className="text-sm cursor-pointer flex items-center gap-1.5">
-                      <MessageCircle className="h-3.5 w-3.5" />
-                      WhatsApp
-                    </Label>
-                  </div>
+                  {emailEnabled && (
+                    <div className="flex items-center gap-2">
+                      <Checkbox
+                        id="notify-email"
+                        checked={sendEmail}
+                        onCheckedChange={(checked) => setSendEmail(!!checked)}
+                      />
+                      <Label htmlFor="notify-email" className="text-sm cursor-pointer flex items-center gap-1.5">
+                        <Mail className="h-3.5 w-3.5" />
+                        Email
+                      </Label>
+                    </div>
+                  )}
+                  {smsEnabled && (
+                    <div className="flex items-center gap-2">
+                      <Checkbox
+                        id="notify-sms"
+                        checked={sendSms}
+                        onCheckedChange={(checked) => setSendSms(!!checked)}
+                      />
+                      <Label htmlFor="notify-sms" className="text-sm cursor-pointer flex items-center gap-1.5">
+                        <Phone className="h-3.5 w-3.5" />
+                        SMS
+                      </Label>
+                    </div>
+                  )}
+                  {whatsappEnabled && (
+                    <div className="flex items-center gap-2">
+                      <Checkbox
+                        id="notify-whatsapp"
+                        checked={sendWhatsApp}
+                        onCheckedChange={(checked) => setSendWhatsApp(!!checked)}
+                      />
+                      <Label htmlFor="notify-whatsapp" className="text-sm cursor-pointer flex items-center gap-1.5">
+                        <MessageCircle className="h-3.5 w-3.5" />
+                        WhatsApp
+                      </Label>
+                    </div>
+                  )}
                 </div>
+
+                {/* SMS phone input */}
+                {sendSms && (
+                  <div className="space-y-1.5 pl-6">
+                    <Label htmlFor="sms-phone" className="text-xs text-muted-foreground">
+                      SMS number
+                    </Label>
+                    <PhoneInput
+                      value={smsPhone}
+                      onChange={(val) => setSmsPhone(val)}
+                      defaultCountry="GB"
+                    />
+                  </div>
+                )}
 
                 {/* WhatsApp phone input */}
                 {sendWhatsApp && (
@@ -693,6 +735,15 @@ export const KeyHandoverSection = ({
                         <span className="flex items-center gap-1.5 text-primary font-medium">
                           <Lock className="h-3.5 w-3.5" />
                           The lockbox code will be sent to the customer via {customerEmail ? 'email' : 'notification'}.
+                        </span>
+                      </>
+                    )}
+                    {sendSms && smsPhone && (
+                      <>
+                        <br /><br />
+                        <span className="flex items-center gap-1.5 text-blue-600 font-medium">
+                          <Phone className="h-3.5 w-3.5" />
+                          An SMS with collection details will be sent to {smsPhone}.
                         </span>
                       </>
                     )}

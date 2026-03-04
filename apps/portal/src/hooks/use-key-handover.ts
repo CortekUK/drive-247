@@ -460,6 +460,7 @@ export function useKeyHandover(rentalId: string | undefined) {
     onSuccess: ({ type, becameActive, depositRefunded, depositAmount }) => {
       queryClient.invalidateQueries({ queryKey: ["key-handovers", rentalId] });
       queryClient.invalidateQueries({ queryKey: ["key-handover-status", rentalId] });
+      queryClient.invalidateQueries({ queryKey: ["key-return-status", rentalId] });
       queryClient.invalidateQueries({ queryKey: ["rental", rentalId] });
       queryClient.invalidateQueries({ queryKey: ["rentals-list"] });
       queryClient.invalidateQueries({ queryKey: ["enhanced-rentals"] });
@@ -557,6 +558,7 @@ export function useKeyHandover(rentalId: string | undefined) {
     onSuccess: ({ type }) => {
       queryClient.invalidateQueries({ queryKey: ["key-handovers", rentalId] });
       queryClient.invalidateQueries({ queryKey: ["key-handover-status", rentalId] });
+      queryClient.invalidateQueries({ queryKey: ["key-return-status", rentalId] });
       queryClient.invalidateQueries({ queryKey: ["rental", rentalId] });
       queryClient.invalidateQueries({ queryKey: ["rentals-list"] });
       queryClient.invalidateQueries({ queryKey: ["enhanced-rentals"] });

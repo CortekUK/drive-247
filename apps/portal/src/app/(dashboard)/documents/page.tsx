@@ -2,16 +2,17 @@
 
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
-import { FileText, Download, ExternalLink } from "lucide-react";
+import { FileText, Download, ExternalLink, X } from "lucide-react";
 import { EmptyState } from "@/components/shared/data-display/empty-state";
 import { format } from "date-fns";
 import { useState } from "react";
 import { useTenant } from "@/contexts/TenantContext";
 import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
+import { useRouter } from "next/navigation";
 
 interface Document {
   id: string;
@@ -28,13 +29,18 @@ interface Document {
     name: string;
   };
   isRentalAgreement?: boolean;
+  isBonzah?: boolean;
+  insurance_provider?: string | null;
+  rental_id?: string | null;
 }
 
 export default function DocumentsList() {
   const [searchQuery, setSearchQuery] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(25);
+  const [bonzahFilter, setBonzahFilter] = useState(false);
   const { tenant } = useTenant();
+  const router = useRouter();
 
   // Fetch completed documents from customer_documents table
   const { data: completedDocuments = [], isLoading: isLoadingCompleted } = useQuery({
@@ -88,11 +94,46 @@ export default function DocumentsList() {
     enabled: !!tenant,
   });
 
-  const isLoading = isLoadingCompleted || isLoadingRentals;
+  // Fetch Bonzah insurance policies
+  const { data: bonzahPolicies = [], isLoading: isLoadingBonzah } = useQuery({
+    queryKey: ["bonzah-policies-docs", tenant?.id],
+    queryFn: async () => {
+      let query = supabase
+        .from("bonzah_insurance_policies")
+        .select(`
+          id,
+          policy_no,
+          quote_no,
+          status,
+          coverage_types,
+          premium_amount,
+          created_at,
+          customer_id,
+          rental_id,
+          customers!bonzah_insurance_policies_customer_id_fkey(name)
+        `)
+        .order("created_at", { ascending: false });
 
-  // Combine both types of documents
+      if (tenant?.id) {
+        query = query.eq("tenant_id", tenant.id);
+      }
+
+      const { data, error } = await query;
+
+      if (error) throw error;
+      return data;
+    },
+    enabled: !!tenant,
+  });
+
+  const isLoading = isLoadingCompleted || isLoadingRentals || isLoadingBonzah;
+
+  // Combine all types of documents
   const allDocuments = [
-    ...completedDocuments,
+    ...completedDocuments.map((doc: any) => ({
+      ...doc,
+      isBonzah: doc.insurance_provider?.toLowerCase().includes('bonzah') || false,
+    })),
     ...rentalAgreements
       .filter((rental: any) => !rental.signed_document_id) // Only show if not yet completed
       .map((rental: any) => ({
@@ -105,7 +146,19 @@ export default function DocumentsList() {
         customers: rental.customers,
         file_url: null,
         isRentalAgreement: true,
-      }))
+      })),
+    ...bonzahPolicies.map((policy: any) => ({
+      id: `bonzah-${policy.id}`,
+      document_name: `Bonzah Insurance${policy.policy_no ? ` - Policy #${policy.policy_no}` : policy.quote_no ? ` - Quote #${policy.quote_no}` : ''}`,
+      created_at: policy.created_at,
+      document_type: 'Insurance',
+      status: policy.status,
+      customer_id: policy.customer_id,
+      customers: policy.customers,
+      file_url: null,
+      isBonzah: true,
+      rental_id: policy.rental_id,
+    })),
   ] as Document[];
 
   const documents = allDocuments;
@@ -113,7 +166,8 @@ export default function DocumentsList() {
   const filteredDocuments = documents.filter((doc) => {
     const matchesSearch = doc.document_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
                          doc.customers?.name?.toLowerCase().includes(searchQuery.toLowerCase());
-    return matchesSearch;
+    const matchesBonzah = !bonzahFilter || doc.isBonzah;
+    return matchesSearch && matchesBonzah;
   });
 
   // Pagination
@@ -186,14 +240,39 @@ export default function DocumentsList() {
         </div>
       </div>
 
-      {/* Search */}
-      <div className="relative">
+      {/* Search + Bonzah Filter */}
+      <div className="flex items-center gap-3">
         <Input
           placeholder="Search by document name or customer..."
           value={searchQuery}
           onChange={(e) => handleSearchChange(e.target.value)}
-          className="w-full"
+          className="flex-1"
         />
+        <button
+          onClick={() => {
+            setBonzahFilter(!bonzahFilter);
+            setCurrentPage(1);
+          }}
+          className="inline-flex items-center gap-2 px-3 h-9 rounded-md border text-sm font-medium whitespace-nowrap transition-colors shrink-0"
+          style={{
+            borderColor: bonzahFilter ? '#CC004A' : 'rgba(204, 0, 74, 0.3)',
+            backgroundColor: bonzahFilter ? '#CC004A' : 'transparent',
+            color: bonzahFilter ? '#fff' : '#CC004A',
+          }}
+        >
+          <img
+            src="/bonzah-logo.svg"
+            alt="Bonzah"
+            className={`h-4 w-auto ${bonzahFilter ? 'brightness-0 invert' : ''} dark:hidden`}
+          />
+          <img
+            src="/bonzah-logo-dark.svg"
+            alt="Bonzah"
+            className={`h-4 w-auto ${bonzahFilter ? 'brightness-0 invert' : ''} hidden dark:block`}
+          />
+          Insurance
+          {bonzahFilter && <X className="ml-1 h-3.5 w-3.5" />}
+        </button>
       </div>
 
       {/* Documents Table */}
@@ -201,7 +280,7 @@ export default function DocumentsList() {
         <EmptyState
           icon={FileText}
           title="No documents found"
-          description={searchQuery
+          description={searchQuery || bonzahFilter
             ? "No documents match your search criteria"
             : "There are no documents in the system yet."}
         />
@@ -221,7 +300,20 @@ export default function DocumentsList() {
                 <TableBody>
                   {paginatedDocuments.map((doc) => (
                     <TableRow key={doc.id}>
-                      <TableCell className="font-medium">{doc.document_name}</TableCell>
+                      <TableCell className="font-medium">
+                        <div className="flex items-center gap-2">
+                          {doc.document_name}
+                          {doc.isBonzah && (
+                            <span
+                              className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold"
+                              style={{ backgroundColor: 'rgba(204, 0, 74, 0.1)', color: '#CC004A' }}
+                            >
+                              <img src="/bonzah-logo.svg" alt="" className="h-2.5 w-auto dark:hidden" />
+                              <img src="/bonzah-logo-dark.svg" alt="" className="h-2.5 w-auto hidden dark:block" />
+                            </span>
+                          )}
+                        </div>
+                      </TableCell>
                       <TableCell className="font-medium text-foreground">
                         {doc.customers?.name || "—"}
                       </TableCell>
@@ -247,6 +339,16 @@ export default function DocumentsList() {
                                 <ExternalLink className="h-4 w-4" />
                               </Button>
                             </>
+                          ) : doc.isBonzah && doc.rental_id ? (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => router.push(`/rentals/${doc.rental_id}`)}
+                              className="text-xs"
+                            >
+                              <ExternalLink className="h-4 w-4 mr-1" />
+                              View Rental
+                            </Button>
                           ) : doc.isRentalAgreement ? (
                             <span className="text-sm text-muted-foreground">Pending signature</span>
                           ) : (

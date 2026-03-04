@@ -53,10 +53,12 @@ interface InvoiceDialogProps {
   } | null;
   // Selected extras for invoice line items
   selectedExtras?: { name: string; quantity: number; price: number }[];
+  // Rental price breakdown for display (e.g., "€345.00/wk × 3 weeks")
+  rentalBreakdown?: { label: string; amount?: number }[];
 }
 
 // Separate printable component
-const PrintableInvoice = ({ invoice, customer, vehicle, rental, promoDetails, selectedExtras, companyName, logoUrl, accentColor, currencyCode }: Omit<InvoiceDialogProps, "open" | "onOpenChange"> & { companyName: string; logoUrl?: string | null; accentColor: string; currencyCode: string }) => {
+const PrintableInvoice = ({ invoice, customer, vehicle, rental, promoDetails, selectedExtras, rentalBreakdown, companyName, logoUrl, accentColor, currencyCode }: Omit<InvoiceDialogProps, "open" | "onOpenChange"> & { companyName: string; logoUrl?: string | null; accentColor: string; currencyCode: string }) => {
   const fmt = (amount: number) => formatCurrency(amount, currencyCode);
   const vehicleName = vehicle.make && vehicle.model ? `${vehicle.make} ${vehicle.model}` : vehicle.reg;
   // If there's a discount, subtotal is the discounted amount, so we need to calculate original
@@ -132,9 +134,19 @@ const PrintableInvoice = ({ invoice, customer, vehicle, rental, promoDetails, se
                   <p className="text-xs text-gray-600">
                     {vehicleName} ({vehicle.reg})
                   </p>
+                  {rentalBreakdown && rentalBreakdown.length > 0 && (
+                    <div className="mt-1 space-y-0.5">
+                      {rentalBreakdown.map((item, i) => (
+                        <div key={i} className="flex justify-between text-xs text-gray-500">
+                          <span>{item.label}</span>
+                          {item.amount !== undefined && <span>{fmt(item.amount)}</span>}
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
               </td>
-              <td className="p-3 text-sm text-right font-medium">
+              <td className="p-3 text-sm text-right font-medium align-top">
                 {discountAmount > 0 ? (
                   <span style={{ textDecoration: 'line-through', color: '#9ca3af' }}>
                     {fmt(originalRentalFee)}
@@ -256,6 +268,7 @@ export const InvoiceDialog = ({
   payableAmount,
   promoDetails,
   selectedExtras,
+  rentalBreakdown,
 }: InvoiceDialogProps) => {
   const { tenant } = useTenant();
   const companyName = tenant?.app_name || tenant?.company_name || 'Invoice';
@@ -301,6 +314,7 @@ export const InvoiceDialog = ({
             rental={rental}
             promoDetails={promoDetails}
             selectedExtras={selectedExtras}
+            rentalBreakdown={rentalBreakdown}
             companyName={companyName}
             logoUrl={logoUrl}
             accentColor={accentColor}
@@ -403,9 +417,19 @@ export const InvoiceDialog = ({
                           <p className="text-xs text-muted-foreground">
                             {vehicleName} ({vehicle.reg})
                           </p>
+                          {rentalBreakdown && rentalBreakdown.length > 0 && (
+                            <div className="mt-1 space-y-0.5">
+                              {rentalBreakdown.map((item, i) => (
+                                <div key={i} className="flex justify-between text-xs text-muted-foreground/70">
+                                  <span>{item.label}</span>
+                                  {item.amount !== undefined && <span>{fmt(item.amount)}</span>}
+                                </div>
+                              ))}
+                            </div>
+                          )}
                         </div>
                       </td>
-                      <td className="p-3 text-sm text-right font-medium">
+                      <td className="p-3 text-sm text-right font-medium align-top">
                         {discountAmount > 0 ? (
                           <span className="line-through text-muted-foreground">
                             {fmt(originalRentalFee)}

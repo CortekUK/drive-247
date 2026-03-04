@@ -60,7 +60,6 @@ interface Customer {
   name: string;
   email: string;
   phone: string;
-  customer_type: "Individual" | "Company";
   status: string;
   whatsapp_opt_in: boolean;
   license_number?: string;
@@ -131,7 +130,7 @@ const CustomerDetail = () => {
       const { data, error } = await (supabase as any)
         .from("customers")
         .select(`
-          id, name, email, phone, customer_type, status, whatsapp_opt_in,
+          id, name, email, phone, status, whatsapp_opt_in,
           license_number, id_number, date_of_birth, is_blocked, blocked_at, blocked_reason,
           is_gig_driver,
           nok_full_name, nok_relationship, nok_phone, nok_email, nok_address
@@ -332,25 +331,23 @@ const CustomerDetail = () => {
 
       {/* Header */}
       <div className="space-y-4">
-        {/* Back Button */}
-        <TooltipProvider>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button variant="ghost" size="icon" onClick={() => router.push("/customers")}>
-                <ArrowLeft className="h-4 w-4" />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent>
-              <p>Back to Customers</p>
-            </TooltipContent>
-          </Tooltip>
-        </TooltipProvider>
-
         {/* Customer Info & Actions */}
         <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4">
           {/* Customer Info */}
           <div className="space-y-1">
             <div className="flex items-center gap-3">
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0" onClick={() => router.push("/customers")}>
+                      <ArrowLeft className="h-4 w-4" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p>Back to Customers</p>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
               <h1 className="text-2xl md:text-3xl font-bold">{customer.name}</h1>
               {customer.is_blocked && (
                 <Badge variant="destructive">
@@ -359,15 +356,11 @@ const CustomerDetail = () => {
                 </Badge>
               )}
             </div>
-            <p className="text-muted-foreground text-sm">
-              {customer.customer_type} Customer
-              {customer.license_number && (
-                <span className="mx-2">•</span>
-              )}
-              {customer.license_number && (
-                <span>License: {customer.license_number}</span>
-              )}
-            </p>
+            {customer.license_number && (
+              <p className="text-muted-foreground text-sm">
+                License: {customer.license_number}
+              </p>
+            )}
           </div>
 
           {/* Action Buttons */}
@@ -435,7 +428,7 @@ const CustomerDetail = () => {
         <CardContent className="pt-3 pb-4 px-5">
           <div className="space-y-3">
             {/* Contact Information */}
-            <div className="grid grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-x-6 gap-y-2">
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-x-6 gap-y-2">
               <div className="flex flex-col">
                 <span className="text-xs text-muted-foreground mb-0.5">Name</span>
                 {editingName ? (
@@ -473,7 +466,6 @@ const CustomerDetail = () => {
               </div>
               {customer.email && <MetricItem label="Email" value={customer.email} />}
               {customer.phone && <MetricItem label="Phone" value={customer.phone} />}
-              <MetricItem label="Type" value={customer.customer_type} />
               <div className="flex flex-col">
                 <span className="text-xs text-muted-foreground mb-0.5">Date of Birth</span>
                 {editingDob ? (
@@ -513,18 +505,27 @@ const CustomerDetail = () => {
                   </div>
                 )}
               </div>
-              {customer.license_number && <MetricItem label="License No." value={customer.license_number} />}
-              {customer.id_number && <MetricItem label="ID Number" value={customer.id_number} />}
-              {customer.whatsapp_opt_in && (
-                <div className="flex flex-col">
-                  <span className="text-xs text-muted-foreground mb-0.5">WhatsApp</span>
-                  <Badge variant="outline" className="w-fit text-[10px] px-1.5 py-0">
-                    <CheckCircle className="h-2.5 w-2.5 mr-0.5" />
-                    Yes
-                  </Badge>
-                </div>
-              )}
             </div>
+
+            {/* Additional Info */}
+            {(customer.license_number || customer.id_number || customer.whatsapp_opt_in) && (
+              <>
+                <MetricDivider />
+                <div className="grid grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-x-6 gap-y-2">
+                  {customer.license_number && <MetricItem label="License No." value={customer.license_number} />}
+                  {customer.id_number && <MetricItem label="ID Number" value={customer.id_number} />}
+                  {customer.whatsapp_opt_in && (
+                    <div className="flex flex-col">
+                      <span className="text-xs text-muted-foreground mb-0.5">WhatsApp</span>
+                      <Badge variant="outline" className="w-fit text-[10px] px-1.5 py-0">
+                        <CheckCircle className="h-2.5 w-2.5 mr-0.5" />
+                        Yes
+                      </Badge>
+                    </div>
+                  )}
+                </div>
+              </>
+            )}
 
             {/* Account & Statistics */}
             <MetricDivider />
@@ -591,41 +592,29 @@ const CustomerDetail = () => {
           <div className="overflow-x-auto scrollbar-hide">
             <TabsList variant="sticky-evenly-spaced" className="min-w-full">
               <TabsTrigger value="rentals" variant="evenly-spaced" className="min-w-0">
-                <Car className="h-4 w-4 mr-1 sm:mr-2" />
-                <span className="hidden xs:inline sm:hidden">Rentals</span>
-                <span className="xs:hidden sm:inline">Rentals</span>
-                <span className="sm:hidden">R</span>
+                <Car className="h-4 w-4 shrink-0" />
+                <span className="hidden sm:inline">Rentals</span>
               </TabsTrigger>
               <TabsTrigger value="payments" variant="evenly-spaced" className="min-w-0">
-                <PaymentIcon className="h-4 w-4 mr-1 sm:mr-2" />
-                <span className="hidden xs:inline sm:hidden">Payments</span>
-                <span className="xs:hidden sm:inline">Payments</span>
-                <span className="sm:hidden">P</span>
+                <PaymentIcon className="h-4 w-4 shrink-0" />
+                <span className="hidden sm:inline">Payments</span>
               </TabsTrigger>
               <TabsTrigger value="fines" variant="evenly-spaced" className="min-w-0">
-                <AlertTriangle className="h-4 w-4 mr-1 sm:mr-2" />
-                <span className="hidden xs:inline sm:hidden">Fines</span>
-                <span className="xs:hidden sm:inline">Fines</span>
-                <span className="sm:hidden">F</span>
+                <AlertTriangle className="h-4 w-4 shrink-0" />
+                <span className="hidden sm:inline">Fines</span>
               </TabsTrigger>
               <TabsTrigger value="vehicles" variant="evenly-spaced" className="min-w-0">
-                <Car className="h-4 w-4 mr-1 sm:mr-2" />
-                <span className="hidden xs:inline sm:hidden">History</span>
-                <span className="xs:hidden sm:inline">Vehicle History</span>
-                <span className="sm:hidden">H</span>
+                <Car className="h-4 w-4 shrink-0" />
+                <span className="hidden sm:inline">Vehicle History</span>
               </TabsTrigger>
               <TabsTrigger value="documents" variant="evenly-spaced" className="min-w-0">
-                <FileText className="h-4 w-4 mr-1 sm:mr-2" />
-                <span className="hidden xs:inline sm:hidden">Documents</span>
-                <span className="xs:hidden sm:inline">Documents</span>
-                <span className="sm:hidden">D</span>
+                <FileText className="h-4 w-4 shrink-0" />
+                <span className="hidden sm:inline">Documents</span>
               </TabsTrigger>
               {customer?.is_gig_driver && (
                 <TabsTrigger value="gig-driver" variant="evenly-spaced" className="min-w-0">
-                  <Briefcase className="h-4 w-4 mr-1 sm:mr-2" />
-                  <span className="hidden xs:inline sm:hidden">Gig</span>
-                  <span className="xs:hidden sm:inline">Gig Driver</span>
-                  <span className="sm:hidden">G</span>
+                  <Briefcase className="h-4 w-4 shrink-0" />
+                  <span className="hidden sm:inline">Gig Driver</span>
                 </TabsTrigger>
               )}
             </TabsList>

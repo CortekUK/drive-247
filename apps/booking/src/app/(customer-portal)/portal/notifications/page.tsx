@@ -15,6 +15,7 @@ import {
   CreditCard,
   Info,
   AlertCircle,
+  FileSignature,
 } from 'lucide-react';
 import { formatDistanceToNow, format } from 'date-fns';
 import {
@@ -41,6 +42,8 @@ function getNotificationIcon(type: string) {
       return CreditCard;
     case 'welcome':
       return Bell;
+    case 'agreement':
+      return FileSignature;
     case 'alert':
       return AlertCircle;
     default:

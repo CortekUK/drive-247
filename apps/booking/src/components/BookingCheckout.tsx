@@ -180,7 +180,6 @@ const BookingCheckout = () => {
       const customerName = (bookingContext as any).customerName;
       const customerEmail = (bookingContext as any).customerEmail;
       const customerPhone = (bookingContext as any).customerPhone;
-      const customerType = (bookingContext as any).customerType;
 
       if (!customerEmail) {
         throw new Error("Customer information not found. Please restart booking.");
@@ -216,7 +215,6 @@ const BookingCheckout = () => {
           name: customerName,
           email: customerEmail,
           phone: customerPhone,
-          customer_type: customerType,
           status: "Active"
         };
 
@@ -338,8 +336,8 @@ const BookingCheckout = () => {
       clearPendingInsuranceFiles();
       console.log('[CHECKOUT] Cleared pending_insurance_files from store');
 
-      // Step 3: Check if Individual customer already has active rental
-      if (customer.customer_type === "Individual") {
+      // Step 3: Check if customer already has active rental
+      {
         const { data: activeRentals, error: checkError } = await supabase
           .from("rentals")
           .select("id")
@@ -348,7 +346,7 @@ const BookingCheckout = () => {
 
         if (checkError) throw checkError;
         if (activeRentals && activeRentals.length > 0) {
-          throw new Error("You already have an active rental. Individuals can only have one active rental at a time.");
+          throw new Error("You already have an active rental. You can only have one active rental at a time.");
         }
       }
 

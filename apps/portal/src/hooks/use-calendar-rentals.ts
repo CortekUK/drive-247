@@ -18,7 +18,6 @@ export const useCalendarRentals = (
   const {
     search = "",
     status = "all",
-    customerType = "all",
     paymentMode = "all",
   } = filters;
 
@@ -36,7 +35,6 @@ export const useCalendarRentals = (
       endStr,
       search,
       status,
-      customerType,
       paymentMode,
     ],
     queryFn: async () => {
@@ -55,7 +53,7 @@ export const useCalendarRentals = (
           monthly_amount,
           status,
           payment_mode,
-          customers!rentals_customer_id_fkey(id, name, customer_type),
+          customers!rentals_customer_id_fkey(id, name),
           vehicles!rentals_vehicle_id_fkey(id, reg, make, model, vehicle_photos(photo_url))
         `
         )
@@ -87,11 +85,6 @@ export const useCalendarRentals = (
           },
         }))
         .filter((rental: CalendarRental) => {
-          if (
-            customerType !== "all" &&
-            rental.customer?.customer_type !== customerType
-          )
-            return false;
           if (paymentMode !== "all" && (rental as any).payment_mode !== paymentMode)
             return false;
           if (status !== "all") {

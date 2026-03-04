@@ -134,7 +134,6 @@ const BookingWidget = () => {
         name: formData.customerName,
         email: formData.customerEmail,
         phone: formData.customerPhone,
-        customer_type: "Individual",
         status: "Active"
       };
 

@@ -8,7 +8,6 @@ export interface CustomerData {
   email: string | null;
   phone: string | null;
   identity_verification_status: string | null;
-  customer_type: string | null;
   type: string;
   tenant_id: string | null;
   profile_photo_url: string | null;
@@ -77,7 +76,6 @@ const fetchCustomerUser = async (authUser: User, tenantId?: string): Promise<Cus
           email,
           phone,
           identity_verification_status,
-          customer_type,
           type,
           tenant_id,
           profile_photo_url,

@@ -19,7 +19,7 @@ import {
 } from "@/components/ui/popover";
 
 // Country codes with phone number length rules (digits after country code)
-const COUNTRY_CODES = [
+export const COUNTRY_CODES = [
     { code: "+1", country: "US", flag: "🇺🇸", name: "United States", minLen: 10, maxLen: 10 },
     { code: "+44", country: "GB", flag: "🇬🇧", name: "United Kingdom", minLen: 10, maxLen: 10 },
     { code: "+1", country: "CA", flag: "🇨🇦", name: "Canada", minLen: 10, maxLen: 10 },

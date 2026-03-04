@@ -173,7 +173,7 @@ export const RefundDialog = ({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[520px]">
+      <DialogContent className="sm:max-w-[600px]">
         <DialogHeader>
           <DialogTitle>Refund {category}</DialogTitle>
           <DialogDescription>
@@ -191,33 +191,65 @@ export const RefundDialog = ({
         )}
 
         <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-            <div className="grid grid-cols-2 gap-4">
-              {/* Left column - Summary & Type */}
-              <div className="space-y-4">
-                <div className="bg-muted/50 rounded-lg p-3">
-                  <div className="grid grid-cols-2 gap-3 text-sm">
-                    <div>
-                      <p className="text-muted-foreground text-xs">Total Charged</p>
-                      <p className="font-semibold">{formatCurrency(totalAmount, tenant?.currency_code || 'USD')}</p>
-                    </div>
-                    <div>
-                      <p className="text-muted-foreground text-xs">Amount Paid</p>
-                      <p className="font-semibold text-green-600">{formatCurrency(paidAmount, tenant?.currency_code || 'USD')}</p>
-                    </div>
-                  </div>
-                  <div className="mt-2 pt-2 border-t">
-                    <p className="text-muted-foreground text-xs">Maximum Refundable</p>
-                    <p className="font-bold text-lg">{formatCurrency(maxRefundAmount, tenant?.currency_code || 'USD')}</p>
-                  </div>
+          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-5">
+            {/* Summary Row */}
+            <div className="bg-muted/50 rounded-lg p-4">
+              <div className="grid grid-cols-3 gap-4 text-sm">
+                <div>
+                  <p className="text-muted-foreground text-xs">Total Charged</p>
+                  <p className="font-semibold mt-0.5">{formatCurrency(totalAmount, tenant?.currency_code || 'USD')}</p>
                 </div>
+                <div>
+                  <p className="text-muted-foreground text-xs">Amount Paid</p>
+                  <p className="font-semibold text-green-600 mt-0.5">{formatCurrency(paidAmount, tenant?.currency_code || 'USD')}</p>
+                </div>
+                <div>
+                  <p className="text-muted-foreground text-xs">Maximum Refundable</p>
+                  <p className="font-bold text-lg">{formatCurrency(maxRefundAmount, tenant?.currency_code || 'USD')}</p>
+                </div>
+              </div>
+            </div>
 
+            {/* Refund Type & Partial Options */}
+            <div className="grid grid-cols-2 gap-x-6 gap-y-4">
+              <FormField
+                control={form.control}
+                name="refundType"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Refund Type</FormLabel>
+                    <FormControl>
+                      <RadioGroup
+                        onValueChange={field.onChange}
+                        defaultValue={field.value}
+                        className="flex gap-4"
+                      >
+                        <div className="flex items-center space-x-2">
+                          <RadioGroupItem value="full" id="full" />
+                          <Label htmlFor="full" className="cursor-pointer text-sm">
+                            Full ({formatCurrency(maxRefundAmount, tenant?.currency_code || 'USD')})
+                          </Label>
+                        </div>
+                        <div className="flex items-center space-x-2">
+                          <RadioGroupItem value="partial" id="partial" />
+                          <Label htmlFor="partial" className="cursor-pointer text-sm">
+                            Partial
+                          </Label>
+                        </div>
+                      </RadioGroup>
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              {refundType === "partial" && (
                 <FormField
                   control={form.control}
-                  name="refundType"
+                  name="amountType"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Refund Type</FormLabel>
+                      <FormLabel>Specify Amount By</FormLabel>
                       <FormControl>
                         <RadioGroup
                           onValueChange={field.onChange}
@@ -225,15 +257,17 @@ export const RefundDialog = ({
                           className="flex gap-4"
                         >
                           <div className="flex items-center space-x-2">
-                            <RadioGroupItem value="full" id="full" />
-                            <Label htmlFor="full" className="cursor-pointer text-sm">
-                              Full ({formatCurrency(maxRefundAmount, tenant?.currency_code || 'USD')})
+                            <RadioGroupItem value="fixed" id="fixed" />
+                            <Label htmlFor="fixed" className="cursor-pointer flex items-center gap-1 text-sm">
+                              <DollarSign className="h-3.5 w-3.5" />
+                              Fixed
                             </Label>
                           </div>
                           <div className="flex items-center space-x-2">
-                            <RadioGroupItem value="partial" id="partial" />
-                            <Label htmlFor="partial" className="cursor-pointer text-sm">
-                              Partial
+                            <RadioGroupItem value="percentage" id="percentage" />
+                            <Label htmlFor="percentage" className="cursor-pointer flex items-center gap-1 text-sm">
+                              <Percent className="h-3.5 w-3.5" />
+                              Percentage
                             </Label>
                           </div>
                         </RadioGroup>
@@ -242,139 +276,106 @@ export const RefundDialog = ({
                     </FormItem>
                   )}
                 />
-
-                {refundType === "partial" && (
-                  <>
-                    <FormField
-                      control={form.control}
-                      name="amountType"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Specify Amount By</FormLabel>
-                          <FormControl>
-                            <RadioGroup
-                              onValueChange={field.onChange}
-                              defaultValue={field.value}
-                              className="flex gap-4"
-                            >
-                              <div className="flex items-center space-x-2">
-                                <RadioGroupItem value="fixed" id="fixed" />
-                                <Label htmlFor="fixed" className="cursor-pointer flex items-center gap-1 text-sm">
-                                  <DollarSign className="h-3.5 w-3.5" />
-                                  Fixed
-                                </Label>
-                              </div>
-                              <div className="flex items-center space-x-2">
-                                <RadioGroupItem value="percentage" id="percentage" />
-                                <Label htmlFor="percentage" className="cursor-pointer flex items-center gap-1 text-sm">
-                                  <Percent className="h-3.5 w-3.5" />
-                                  Percentage
-                                </Label>
-                              </div>
-                            </RadioGroup>
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-
-                    {amountType === "fixed" && (
-                      <FormField
-                        control={form.control}
-                        name="refundAmount"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>Refund Amount ({getCurrencySymbol(tenant?.currency_code || 'USD')})</FormLabel>
-                            <FormControl>
-                              <div className="relative">
-                                <DollarSign className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                                <Input
-                                  type="number"
-                                  step="0.01"
-                                  max={maxRefundAmount}
-                                  placeholder="Enter amount"
-                                  className="pl-9"
-                                  {...field}
-                                  value={field.value ?? ''}
-                                  onChange={(e) => field.onChange(e.target.value === '' ? undefined : parseFloat(e.target.value))}
-                                />
-                              </div>
-                            </FormControl>
-                            <FormDescription>
-                              Max: {formatCurrency(maxRefundAmount, tenant?.currency_code || 'USD')}
-                            </FormDescription>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-                    )}
-
-                    {amountType === "percentage" && (
-                      <FormField
-                        control={form.control}
-                        name="refundPercentage"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>Refund Percentage (%)</FormLabel>
-                            <FormControl>
-                              <div className="relative">
-                                <Input
-                                  type="number"
-                                  step="any"
-                                  min="0.01"
-                                  max="100"
-                                  placeholder="Enter percentage"
-                                  className="pr-9"
-                                  {...field}
-                                  value={field.value ?? ''}
-                                  onChange={(e) => field.onChange(e.target.value === '' ? undefined : parseFloat(e.target.value))}
-                                />
-                                <Percent className="absolute right-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                              </div>
-                            </FormControl>
-                            {field.value && (
-                              <FormDescription>
-                                Refund Amount: {formatCurrency((maxRefundAmount * field.value) / 100, tenant?.currency_code || 'USD')}
-                              </FormDescription>
-                            )}
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-                    )}
-                  </>
-                )}
-              </div>
-
-              {/* Right column - Reason & Summary */}
-              <div className="space-y-4">
-                <FormField
-                  control={form.control}
-                  name="reason"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Reason for Refund <span className="text-red-500">*</span></FormLabel>
-                      <FormControl>
-                        <Textarea
-                          placeholder="Enter the reason for this refund..."
-                          className="resize-none"
-                          rows={refundType === "partial" ? 5 : 4}
-                          {...field}
-                        />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                {calculatedRefundAmount > 0 && (
-                  <div className="bg-primary/10 rounded-lg p-3 border border-primary/20">
-                    <p className="text-sm text-muted-foreground">Refund Amount</p>
-                    <p className="text-xl font-bold text-primary">{formatCurrency(calculatedRefundAmount, tenant?.currency_code || 'USD')}</p>
-                  </div>
-                )}
-              </div>
+              )}
             </div>
+
+            {/* Partial Amount Input */}
+            {refundType === "partial" && (
+              <div className="grid grid-cols-2 gap-x-6">
+                {amountType === "fixed" && (
+                  <FormField
+                    control={form.control}
+                    name="refundAmount"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Refund Amount ({getCurrencySymbol(tenant?.currency_code || 'USD')})</FormLabel>
+                        <FormControl>
+                          <div className="relative">
+                            <DollarSign className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                            <Input
+                              type="number"
+                              step="0.01"
+                              max={maxRefundAmount}
+                              placeholder="Enter amount"
+                              className="pl-9"
+                              {...field}
+                              value={field.value ?? ''}
+                              onChange={(e) => field.onChange(e.target.value === '' ? undefined : parseFloat(e.target.value))}
+                            />
+                          </div>
+                        </FormControl>
+                        <FormDescription>
+                          Max: {formatCurrency(maxRefundAmount, tenant?.currency_code || 'USD')}
+                        </FormDescription>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                )}
+
+                {amountType === "percentage" && (
+                  <FormField
+                    control={form.control}
+                    name="refundPercentage"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Refund Percentage (%)</FormLabel>
+                        <FormControl>
+                          <div className="relative">
+                            <Input
+                              type="number"
+                              step="any"
+                              min="0.01"
+                              max="100"
+                              placeholder="Enter percentage"
+                              className="pr-9"
+                              {...field}
+                              value={field.value ?? ''}
+                              onChange={(e) => field.onChange(e.target.value === '' ? undefined : parseFloat(e.target.value))}
+                            />
+                            <Percent className="absolute right-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                          </div>
+                        </FormControl>
+                        {field.value && (
+                          <FormDescription>
+                            = {formatCurrency((maxRefundAmount * field.value) / 100, tenant?.currency_code || 'USD')}
+                          </FormDescription>
+                        )}
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                )}
+              </div>
+            )}
+
+            {/* Reason */}
+            <FormField
+              control={form.control}
+              name="reason"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Reason for Refund <span className="text-red-500">*</span></FormLabel>
+                  <FormControl>
+                    <Textarea
+                      placeholder="Enter the reason for this refund..."
+                      className="resize-none"
+                      rows={3}
+                      {...field}
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            {/* Refund Amount Preview */}
+            {calculatedRefundAmount > 0 && (
+              <div className="bg-primary/10 rounded-lg p-3 border border-primary/20 flex items-center justify-between">
+                <p className="text-sm text-muted-foreground">Refund Amount</p>
+                <p className="text-xl font-bold text-primary">{formatCurrency(calculatedRefundAmount, tenant?.currency_code || 'USD')}</p>
+              </div>
+            )}
 
             <div className="flex justify-end gap-2 pt-2 border-t">
               <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>

@@ -7,7 +7,6 @@ export interface RentalFilters {
   captureStatus?: string;
   search?: string;
   status?: string;
-  customerType?: string;
   paymentMode?: string;
   duration?: string;
   durationMin?: number;
@@ -50,7 +49,6 @@ export interface EnhancedRental {
   customer: {
     id: string;
     name: string;
-    customer_type: string;
   };
   vehicle: {
     id: string;
@@ -75,7 +73,6 @@ export const useEnhancedRentals = (filters: RentalFilters = {}) => {
   const {
     search = "",
     status = "all",
-    customerType = "all",
     paymentMode = "all",
     duration = "all",
     durationMin,
@@ -99,7 +96,6 @@ export const useEnhancedRentals = (filters: RentalFilters = {}) => {
     tenant?.id,
     search,
     status,
-    customerType,
     paymentMode,
     duration,
     durationMin,
@@ -138,7 +134,7 @@ export const useEnhancedRentals = (filters: RentalFilters = {}) => {
           is_extended,
           previous_end_date,
           cancellation_requested,
-          customers!rentals_customer_id_fkey(id, name, customer_type),
+          customers!rentals_customer_id_fkey(id, name),
           vehicles!rentals_vehicle_id_fkey(id, reg, make, model)
         `, { count: 'exact' })
         .eq("tenant_id", tenant.id) as any;
@@ -249,11 +245,6 @@ export const useEnhancedRentals = (filters: RentalFilters = {}) => {
           };
         })
         .filter((rental: EnhancedRental) => {
-          // Apply customer type filter (moved from DB level for regular joins)
-          if (customerType !== "all") {
-            if (rental.customer?.customer_type !== customerType) return false;
-          }
-
           // Apply payment mode filter
           if (paymentMode !== "all") {
             if (rental.payment_mode !== paymentMode) return false;

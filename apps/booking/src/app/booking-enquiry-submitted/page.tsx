@@ -8,14 +8,24 @@ import Footer from "@/components/Footer";
 import { CheckCircle, Mail, Phone, Calendar, Car, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
+import { useBookingStore } from "@/stores/booking-store";
 import { toast } from "sonner";
 import { format } from "date-fns";
 
 const BookingEnquirySubmittedContent = () => {
   const searchParams = useSearchParams();
+  const { clearBooking } = useBookingStore();
   const [bookingDetails, setBookingDetails] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const rentalId = searchParams?.get("rental_id");
+
+  // Clear persisted booking form data on successful enquiry submission
+  useEffect(() => {
+    clearBooking();
+    localStorage.removeItem('booking_isGigDriver');
+    localStorage.removeItem('booking_hasInsurance');
+    localStorage.removeItem('booking_uploadedDocumentId');
+  }, []);
 
   useEffect(() => {
     // Set a timeout to prevent infinite loading

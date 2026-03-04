@@ -34,6 +34,7 @@ import InstallmentPlanCard from "@/components/rentals/InstallmentPlanCard";
 import { useInstallmentPlan } from "@/hooks/use-installment-plan";
 import { BuyInsuranceDialog } from "@/components/rentals/buy-insurance-dialog";
 import { useBonzahBalance } from "@/hooks/use-bonzah-balance";
+import { useBonzahVehicleEligibility } from "@/hooks/use-bonzah-vehicle-eligibility";
 import { Checkbox } from "@/components/ui/checkbox";
 import { formatCurrency } from "@/lib/formatters";
 import { formatCurrency as formatCurrencyUtil } from "@/lib/format-utils";
@@ -67,7 +68,7 @@ interface Rental {
   cancellation_requested?: boolean;
   customer_id?: string;
   customers: { id: string; name: string; email?: string; phone?: string | null };
-  vehicles: { id: string; reg: string; make: string; model: string; status?: string; lockbox_code?: string | null; lockbox_instructions?: string | null };
+  vehicles: { id: string; reg: string; make: string; model: string; status?: string; lockbox_code?: string | null; lockbox_instructions?: string | null; daily_rent?: number | null; weekly_rent?: number | null; monthly_rent?: number | null };
   // Location fields
   pickup_location?: string | null;
   pickup_location_id?: string | null;
@@ -282,7 +283,7 @@ const RentalDetail = () => {
         .select(`
           *,
           customers!rentals_customer_id_fkey(id, name, email, phone),
-          vehicles!rentals_vehicle_id_fkey(id, reg, make, model, status, lockbox_code, lockbox_instructions)
+          vehicles!rentals_vehicle_id_fkey(id, reg, make, model, status, lockbox_code, lockbox_instructions, daily_rent, weekly_rent, monthly_rent)
         `)
         .eq("id", id)
         .eq("tenant_id", tenant.id)
@@ -304,6 +305,13 @@ const RentalDetail = () => {
         !d?.signed_document_id;
       return isPending ? 5000 : false;
     },
+  });
+
+  // Check Bonzah vehicle eligibility (only queries when rental + Bonzah integration exist)
+  const { isEligible: isBonzahEligible, isLoading: isBonzahEligibilityLoading } = useBonzahVehicleEligibility({
+    vehicleMake: rental?.vehicles?.make || null,
+    vehicleModel: rental?.vehicles?.model || null,
+    enabled: !!rental?.vehicles && !!tenant?.bonzah_username,
   });
 
   const { data: rentalTotals } = useRentalTotals(id);
@@ -605,6 +613,15 @@ const RentalDetail = () => {
   // Helper to scroll to key handover section
   const scrollToKeyHandover = () => {
     const element = document.getElementById('key-handover-section');
+    if (element) {
+      const yOffset = -90;
+      const y = element.getBoundingClientRect().top + window.pageYOffset + yOffset;
+      window.scrollTo({ top: y, behavior: 'smooth' });
+    }
+  };
+
+  const scrollToInsurance = () => {
+    const element = document.getElementById('insurance-section');
     if (element) {
       const yOffset = -90;
       const y = element.getBoundingClientRect().top + window.pageYOffset + yOffset;
@@ -1328,8 +1345,8 @@ const RentalDetail = () => {
       />
 
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-4">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div className="flex items-start gap-4">
           <TooltipProvider>
             <Tooltip>
               <TooltipTrigger asChild>
@@ -1343,12 +1360,12 @@ const RentalDetail = () => {
             </Tooltip>
           </TooltipProvider>
           <div>
-            <h1 className="text-3xl font-bold">Rental Agreement</h1>
+            <h1 className="text-2xl sm:text-3xl font-bold">Rental Agreement</h1>
             <p className="text-muted-foreground">
               {rental.customers?.name} • {rental.vehicles?.reg}
             </p>
             {/* Key Status Badges */}
-            <div className="flex gap-2 mt-2">
+            <div className="flex flex-wrap gap-2 mt-2">
               <Badge
                 variant="outline"
                 className={`cursor-pointer transition-colors ${
@@ -1377,7 +1394,7 @@ const RentalDetail = () => {
               )}
               <Badge
                 variant="outline"
-                className={
+                className={`cursor-pointer hover:opacity-80 transition-opacity ${
                   !bonzahPolicy
                     ? 'bg-gray-500/10 text-gray-400 border-gray-500'
                     : bonzahPolicy.status === 'active'
@@ -1387,7 +1404,8 @@ const RentalDetail = () => {
                     : bonzahPolicy.status === 'failed'
                     ? 'bg-red-500/10 text-red-500 border-red-500'
                     : 'bg-muted text-muted-foreground border-border'
-                }
+                }`}
+                onClick={scrollToInsurance}
               >
                 <ShieldCheck className="h-3 w-3 mr-1" />
                 {!bonzahPolicy ? 'No Insurance'
@@ -1409,14 +1427,10 @@ const RentalDetail = () => {
             </div>
           </div>
         </div>
-        <div className="flex gap-2">
-          {/* Pending Rental - Show Add Payment, Approve, Reject, Delete buttons */}
+        <div className="flex flex-wrap gap-2">
+          {/* Pending Rental - Show Approve, Reject, Delete buttons */}
           {canEdit('rentals') && displayStatus === 'Pending' && (
             <>
-              <Button variant="outline" onClick={() => setShowAddPayment(true)}>
-                <Plus className="h-4 w-4 mr-2" />
-                Add Payment
-              </Button>
               <Button
                 variant="default"
                 className="bg-green-600 hover:bg-green-700"
@@ -1569,29 +1583,47 @@ const RentalDetail = () => {
       )}
 
       {/* Rental Summary */}
-      <div className={`grid gap-6 md:grid-cols-2 ${isProcessingPayment ? 'opacity-50 pointer-events-none' : ''}`}>
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-lg">Total Paid</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-green-600">
-              {formatCurrencyUtil(totalPayments, tenant?.currency_code || 'GBP')}
-            </div>
-          </CardContent>
-        </Card>
+      {(() => {
+        const totalRefunded = refundBreakdown
+          ? Object.values(refundBreakdown).reduce((sum, val) => sum + val, 0)
+          : 0;
+        return (
+          <div className={`grid gap-6 md:grid-cols-3 ${isProcessingPayment ? 'opacity-50 pointer-events-none' : ''}`}>
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-lg">Total Paid</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold text-green-600">
+                  {formatCurrencyUtil(totalPayments, tenant?.currency_code || 'GBP')}
+                </div>
+              </CardContent>
+            </Card>
 
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-lg">Outstanding</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className={`text-2xl font-bold ${outstandingBalance > 0 ? 'text-red-600' : 'text-green-600'}`}>
-              {formatCurrencyUtil(outstandingBalance, tenant?.currency_code || 'GBP')}
-            </div>
-          </CardContent>
-        </Card>
-      </div>
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-lg">Outstanding</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className={`text-2xl font-bold ${outstandingBalance > 0 ? 'text-red-600' : 'text-green-600'}`}>
+                  {formatCurrencyUtil(outstandingBalance, tenant?.currency_code || 'GBP')}
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-lg">Total Refunded</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className={`text-2xl font-bold ${totalRefunded > 0 ? 'text-orange-500' : 'text-muted-foreground'}`}>
+                  {formatCurrencyUtil(totalRefunded, tenant?.currency_code || 'GBP')}
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        );
+      })()}
 
       {/* Payment Breakdown Table */}
       {invoiceBreakdown && (() => {
@@ -1643,7 +1675,9 @@ const RentalDetail = () => {
         // Compute which rows have unpaid charges (selectable for targeted payment)
         // Don't allow payments on cancelled/rejected rentals
         const isCancelledOrRejected = rental.status === 'Cancelled' || rental.approval_status === 'rejected';
-        const selectableCategories = isCancelledOrRejected ? [] : rows
+        const isRentalCompleted = rental.status === 'Closed' || rental.status === 'Completed';
+        const isInactive = isCancelledOrRejected || isRentalCompleted;
+        const selectableCategories = isInactive ? [] : rows
           .filter(({ category, amount }) => {
             if (amount <= 0) return false;
             const refunded = refundBreakdown?.[category] ?? 0;
@@ -1797,11 +1831,11 @@ const RentalDetail = () => {
                         </TableCell>
                         <TableCell className="text-right pr-6">
                           {isExcessMileageUnpaid && excessMileageCharge ? (
-                            <div className="flex items-center gap-2 justify-end">
+                            <div className={`flex items-center gap-2 justify-end ${isRentalCompleted ? 'opacity-40 pointer-events-none' : ''}`}>
                               {invoiceBreakdown && invoiceBreakdown.securityDeposit > 0 && (
                                 <button
                                   className="text-xs text-amber-500 hover:text-amber-400 hover:underline font-medium"
-                                  disabled={isDeductingDeposit}
+                                  disabled={isDeductingDeposit || isRentalCompleted}
                                   onClick={(e) => {
                                     e.stopPropagation();
                                     setShowDeductFromDepositDialog(true);
@@ -1812,7 +1846,7 @@ const RentalDetail = () => {
                               )}
                               <button
                                 className="text-xs text-blue-500 hover:text-blue-400 hover:underline font-medium"
-                                disabled={isSendingPaymentLink}
+                                disabled={isSendingPaymentLink || isRentalCompleted}
                                 onClick={async (e) => {
                                   e.stopPropagation();
                                   setIsSendingPaymentLink(true);
@@ -1835,15 +1869,18 @@ const RentalDetail = () => {
                           ) : nonRefundable && applied ? (
                             <span className="text-xs text-muted-foreground/50">-</span>
                           ) : (() => {
-                            // Only show Refund if category has actually been paid
+                            // Show Refund if category has been paid (dimmed for completed rentals)
                             const catPayment = paymentBreakdown?.[category];
                             const categoryHasBeenPaid = catPayment ? catPayment.paid > 0 : false;
-                            return applied && !fullyRefunded && canRefund && categoryHasBeenPaid;
+                            const wouldShowRefund = applied && !fullyRefunded && categoryHasBeenPaid && (canRefund || isRentalCompleted);
+                            return wouldShowRefund;
                           })() ? (
                             <button
-                              className="text-xs text-orange-500 hover:text-orange-400 hover:underline font-medium"
+                              className={`text-xs font-medium ${isRentalCompleted ? 'text-orange-500/40 cursor-not-allowed' : 'text-orange-500 hover:text-orange-400 hover:underline'}`}
+                              disabled={isRentalCompleted}
                               onClick={(e) => {
                                 e.stopPropagation();
+                                if (isRentalCompleted) return;
                                 setRefundCategory(category);
                                 setRefundTotalAmount(amount);
                                 const alreadyRefunded = refundBreakdown?.[category] ?? 0;
@@ -1855,11 +1892,17 @@ const RentalDetail = () => {
                             </button>
                           ) : applied && fullyRefunded ? (
                             <Check className="h-4 w-4 text-green-500 inline-block" />
-                          ) : isSelectable ? (
+                          ) : (() => {
+                            // Show Add Payment if category has remaining amount (dimmed for completed rentals)
+                            const wouldBeSelectable = isSelectable || (isRentalCompleted && applied && !fullyRefunded && (categoryRemainingAmounts[category] ?? 0) > 0);
+                            return wouldBeSelectable;
+                          })() ? (
                             <button
-                              className="text-xs text-blue-500 hover:text-blue-400 hover:underline font-medium"
+                              className={`text-xs font-medium ${isRentalCompleted ? 'text-blue-500/40 cursor-not-allowed' : 'text-blue-500 hover:text-blue-400 hover:underline'}`}
+                              disabled={isRentalCompleted}
                               onClick={(e) => {
                                 e.stopPropagation();
+                                if (isRentalCompleted) return;
                                 setSelectedCategories(new Set([category]));
                                 setShowTargetedPayment(true);
                               }}
@@ -1900,6 +1943,7 @@ const RentalDetail = () => {
       {/* Extensions Section */}
       {extensionCharges.length > 0 && (() => {
         const canRefund = totalPayments > 0 && rental.status !== 'Cancelled' && rental.status !== 'Closed';
+        const isExtRentalCompleted = rental.status === 'Closed' || rental.status === 'Completed';
         return (
           <Card>
             <CardHeader className="pb-4">
@@ -1961,18 +2005,22 @@ const RentalDetail = () => {
                         <TableCell className="text-right pr-6">
                           {!isPaid ? (
                             <button
-                              className="text-xs text-blue-500 hover:text-blue-400 hover:underline font-medium"
+                              className={`text-xs font-medium ${isExtRentalCompleted ? 'text-blue-500/40 cursor-not-allowed' : 'text-blue-500 hover:text-blue-400 hover:underline'}`}
+                              disabled={isExtRentalCompleted}
                               onClick={() => {
+                                if (isExtRentalCompleted) return;
                                 setExtensionPaymentAmount(charge.remaining_amount);
                                 setShowExtensionPayment(true);
                               }}
                             >
                               Add Payment
                             </button>
-                          ) : isPaid && !fullyRefunded && canRefund ? (
+                          ) : isPaid && !fullyRefunded && (canRefund || isExtRentalCompleted) ? (
                             <button
-                              className="text-xs text-orange-500 hover:text-orange-400 hover:underline font-medium"
+                              className={`text-xs font-medium ${isExtRentalCompleted ? 'text-orange-500/40 cursor-not-allowed' : 'text-orange-500 hover:text-orange-400 hover:underline'}`}
+                              disabled={isExtRentalCompleted}
                               onClick={() => {
+                                if (isExtRentalCompleted) return;
                                 setRefundCategory('Extension');
                                 setRefundTotalAmount(charge.amount);
                                 const alreadyRefunded = refundBreakdown?.['Extension'] ?? 0;
@@ -2173,8 +2221,55 @@ const RentalDetail = () => {
               <p className="text-sm text-muted-foreground">{rental.vehicles?.make} {rental.vehicles?.model}</p>
             </div>
             <div className="bg-muted/30 rounded-lg p-4 space-y-1">
-              <p className="text-xs uppercase tracking-wider text-muted-foreground">{rental.rental_period_type || 'Monthly'} Amount</p>
-              <p className="text-lg font-semibold">{formatCurrencyUtil(Number(rental.monthly_amount), tenant?.currency_code || 'GBP')}</p>
+              {(() => {
+                const periodType = (rental.rental_period_type || 'Monthly').toLowerCase();
+                const vehicle = rental.vehicles;
+                const currCode = tenant?.currency_code || 'GBP';
+                const totalAmount = Number(rental.monthly_amount);
+
+                // Get the per-unit rate from the vehicle
+                let unitRate = 0;
+                let unitLabel = 'month';
+                if (periodType === 'daily' && vehicle?.daily_rent) {
+                  unitRate = vehicle.daily_rent;
+                  unitLabel = 'day';
+                } else if (periodType === 'weekly' && vehicle?.weekly_rent) {
+                  unitRate = vehicle.weekly_rent;
+                  unitLabel = 'week';
+                } else if (periodType === 'monthly' && vehicle?.monthly_rent) {
+                  unitRate = vehicle.monthly_rent;
+                  unitLabel = 'month';
+                }
+
+                // Calculate number of units
+                const startDate = new Date(rental.start_date);
+                const endDate = new Date(rental.end_date);
+                const totalDays = Math.max(1, Math.ceil((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24)));
+                let units = 1;
+                if (unitLabel === 'day') units = totalDays;
+                else if (unitLabel === 'week') units = Math.ceil(totalDays / 7);
+                else units = Math.max(1, Math.round(totalDays / 30));
+
+                if (unitRate > 0) {
+                  return (
+                    <>
+                      <p className="text-xs uppercase tracking-wider text-muted-foreground">{rental.rental_period_type || 'Monthly'} Rate</p>
+                      <p className="text-lg font-semibold">{formatCurrencyUtil(unitRate, currCode)}<span className="text-sm font-normal text-muted-foreground">/{unitLabel}</span></p>
+                      <p className="text-xs text-muted-foreground">
+                        {formatCurrencyUtil(unitRate, currCode)} × {units} {unitLabel}{units !== 1 ? 's' : ''} = {formatCurrencyUtil(totalAmount, currCode)}
+                      </p>
+                    </>
+                  );
+                }
+
+                // Fallback: no vehicle rate available, show total as before
+                return (
+                  <>
+                    <p className="text-xs uppercase tracking-wider text-muted-foreground">{rental.rental_period_type || 'Monthly'} Amount</p>
+                    <p className="text-lg font-semibold">{formatCurrencyUtil(totalAmount, currCode)}</p>
+                  </>
+                );
+              })()}
             </div>
           </div>
 
@@ -2205,7 +2300,7 @@ const RentalDetail = () => {
           {/* Rental Period */}
           <div className="border rounded-lg p-4">
             <p className="text-xs uppercase tracking-wider text-muted-foreground mb-3">Rental Period</p>
-            <div className="grid grid-cols-3 gap-6">
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 sm:gap-6">
               <div>
                 <p className="text-sm text-muted-foreground">Start Date</p>
                 <p className="text-base font-medium">{new Date(rental.start_date).toLocaleDateString()}</p>
@@ -2276,7 +2371,7 @@ const RentalDetail = () => {
           {/* Status Overview */}
           <div className="border rounded-lg p-4">
             <p className="text-xs uppercase tracking-wider text-muted-foreground mb-3">Status Overview</p>
-            <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
               <div className="text-center p-3 bg-muted/20 rounded-lg">
                 <p className="text-xs text-muted-foreground mb-2">Rental</p>
                 <Badge
@@ -2339,17 +2434,6 @@ const RentalDetail = () => {
                   }
                 >
                   {rental.vehicles?.status || 'Unknown'}
-                </Badge>
-              </div>
-              <div className="text-center p-3 bg-muted/20 rounded-lg">
-                <p className="text-xs text-muted-foreground mb-2">Payment Mode</p>
-                <Badge
-                  variant="outline"
-                  className={rental.payment_mode === 'auto'
-                    ? 'bg-sky-950/50 text-sky-300 border-sky-800'
-                    : 'bg-slate-800/50 text-slate-300 border-slate-700'}
-                >
-                  {rental.payment_mode === 'auto' ? 'Auto' : 'Manual'}
                 </Badge>
               </div>
             </div>
@@ -2761,7 +2845,7 @@ const RentalDetail = () => {
 
       {/* Insurance Verification Card - Compact when no documents, full when documents exist */}
       {insuranceDocuments && insuranceDocuments.length > 0 ? (
-      <Card>
+      <Card id="insurance-section">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Shield className="h-5 w-5" />
@@ -2772,10 +2856,10 @@ const RentalDetail = () => {
           {/* Bonzah Insurance CTA - Show when no Bonzah policy exists */}
           {canEdit('rentals') && !bonzahPolicy && (
             <div
-              className={`relative overflow-hidden rounded-lg border border-[#CC004A]/20 bg-gradient-to-r from-[#CC004A]/5 via-[#CC004A]/10 to-[#CC004A]/5 dark:from-[#CC004A]/10 dark:via-[#CC004A]/15 dark:to-[#CC004A]/10 p-4 transition-all ${tenant?.bonzah_username ? 'cursor-pointer hover:border-[#CC004A]/40 group' : 'opacity-60'}`}
-              onClick={() => { if (tenant?.bonzah_username) setShowBuyInsurance(true); }}
+              className={`relative overflow-hidden rounded-lg border border-[#CC004A]/20 bg-gradient-to-r from-[#CC004A]/5 via-[#CC004A]/10 to-[#CC004A]/5 dark:from-[#CC004A]/10 dark:via-[#CC004A]/15 dark:to-[#CC004A]/10 p-4 transition-all ${tenant?.bonzah_username && isBonzahEligible ? 'cursor-pointer hover:border-[#CC004A]/40 group' : 'opacity-60'}`}
+              onClick={() => { if (tenant?.bonzah_username && isBonzahEligible) setShowBuyInsurance(true); }}
             >
-              <div className="flex items-center justify-between gap-4">
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
                 <div className="flex items-center gap-4">
                   <div className="h-10 w-16 flex-shrink-0 flex items-center">
                     <img
@@ -2792,21 +2876,26 @@ const RentalDetail = () => {
                   <div>
                     <p className="font-medium text-sm">Purchase Rental Car Insurance</p>
                     <p className="text-xs text-muted-foreground mt-0.5">
-                      CDW, Liability, Supplemental &amp; Personal Accident coverage powered by Bonzah
+                      {!isBonzahEligible
+                        ? `${rental.vehicles?.make} ${rental.vehicles?.model} is not eligible for Bonzah coverage`
+                        : 'CDW, Liability, Supplemental & Personal Accident coverage powered by Bonzah'}
                     </p>
                   </div>
                 </div>
                 {tenant?.bonzah_username ? (
                   <Button
                     size="sm"
-                    className="bg-[#CC004A] hover:bg-[#A80040] text-white flex-shrink-0 group-hover:shadow-md transition-shadow"
+                    className={!isBonzahEligible ? "flex-shrink-0 opacity-50" : "bg-[#CC004A] hover:bg-[#A80040] text-white hover:text-white flex-shrink-0 group-hover:shadow-md transition-shadow"}
+                    variant={!isBonzahEligible ? "outline" : undefined}
+                    disabled={!isBonzahEligible || isBonzahEligibilityLoading}
+                    title={!isBonzahEligible ? "This vehicle is not eligible for Bonzah insurance" : undefined}
                     onClick={(e) => {
                       e.stopPropagation();
                       setShowBuyInsurance(true);
                     }}
                   >
                     <ShieldCheck className="h-4 w-4 mr-1.5" />
-                    Get Insurance
+                    {isBonzahEligibilityLoading ? 'Checking...' : !isBonzahEligible ? 'Not Eligible' : 'Get Insurance'}
                   </Button>
                 ) : (
                   <Button
@@ -2824,10 +2913,10 @@ const RentalDetail = () => {
             </div>
           )}
 
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
             <p className="text-sm text-muted-foreground">Upload customer's insurance documents for verification</p>
             {canEdit('rentals') && (
-            <div className="flex gap-2">
+            <div className="flex flex-wrap gap-2 shrink-0">
               {hasInvalidInsuranceDoc && (
                 <Button
                   variant="outline"
@@ -2964,10 +3053,10 @@ const RentalDetail = () => {
                       )}
 
                       {/* Document Info Row */}
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                          <FileText className="h-4 w-4 text-muted-foreground" />
-                          <span className="font-medium">{doc.file_name || doc.document_name}</span>
+                      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <FileText className="h-4 w-4 text-muted-foreground shrink-0" />
+                          <span className="font-medium break-all">{doc.file_name || doc.document_name}</span>
                           {doc.isUnlinked && (
                             <Badge variant="outline" className="text-yellow-600 border-yellow-500">Unlinked</Badge>
                           )}
@@ -3280,7 +3369,7 @@ const RentalDetail = () => {
         </Card>
       ) : (
         /* Compact empty state — single-row card */
-        <Card className="px-5 py-4">
+        <Card id="insurance-section" className="px-5 py-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
               <Shield className="h-4 w-4 text-muted-foreground" />
@@ -3292,11 +3381,13 @@ const RentalDetail = () => {
                 <Button
                   size="sm"
                   variant="outline"
-                  className="h-7 text-xs border-[#CC004A]/30 text-[#CC004A] hover:bg-[#CC004A]/10"
+                  className={!isBonzahEligible ? "h-7 text-xs opacity-50" : "h-7 text-xs border-[#CC004A]/30 text-[#CC004A] hover:bg-[#CC004A]/10 hover:text-[#CC004A]"}
+                  disabled={!isBonzahEligible || isBonzahEligibilityLoading}
+                  title={!isBonzahEligible ? "This vehicle is not eligible for Bonzah insurance" : undefined}
                   onClick={() => setShowBuyInsurance(true)}
                 >
                   <ShieldCheck className="h-3 w-3 mr-1" />
-                  Get Insurance
+                  {isBonzahEligibilityLoading ? 'Checking...' : !isBonzahEligible ? 'Not Eligible' : 'Get Insurance'}
                 </Button>
               )}
               <Button
@@ -3380,8 +3471,8 @@ const RentalDetail = () => {
           {identityVerification && (
             <div className="space-y-4">
               {/* Status Row */}
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div className="flex flex-wrap items-center gap-3">
                   <span className="text-sm text-muted-foreground">Status:</span>
                   {identityVerification.review_result === 'GREEN' ? (
                     <Badge className="bg-green-600">
@@ -3510,7 +3601,7 @@ const RentalDetail = () => {
                     {identityVerification.document_type && (
                       <div>
                         <span className="text-muted-foreground">Type:</span>
-                        <p className="font-medium capitalize">{identityVerification.document_type.replace(/_/g, ' ')}</p>
+                        <p className="font-medium">{identityVerification.document_type.replace(/_/g, ' ').replace(/\bid\b/gi, 'ID').replace(/\b\w/g, c => c.toUpperCase())}</p>
                       </div>
                     )}
                     {identityVerification.document_number && (

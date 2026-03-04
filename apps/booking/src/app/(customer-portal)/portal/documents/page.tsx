@@ -121,8 +121,8 @@ function DocumentCard({
             <div className="flex items-start justify-between gap-2">
               <div>
                 <h3 className="font-semibold truncate">{document.document_name}</h3>
-                <p className="text-sm text-muted-foreground capitalize">
-                  {document.document_type.replace(/_/g, ' ')}
+                <p className="text-sm text-muted-foreground">
+                  {document.document_type.replace(/_/g, ' ').replace(/\bid\b/gi, 'ID').replace(/\b\w/g, c => c.toUpperCase())}
                 </p>
               </div>
               {document.document_type === 'Insurance Certificate' && getStatusBadge(status)}

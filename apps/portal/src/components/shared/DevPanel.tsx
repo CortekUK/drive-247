@@ -156,7 +156,6 @@ export default function DevPanel() {
             const randomSuffix = Math.random().toString(36).substring(2, 6).toUpperCase()
             const timestamp = Date.now()
             const customerData = {
-                customer_type: 'Individual' as const,
                 name: `${MOCK_DATA.name} ${randomSuffix}`, // Make name unique
                 email: `dev.${timestamp}@test.com`, // Unique email per creation
                 phone: `+1${Math.floor(Math.random() * 9000000000) + 1000000000}`, // Random phone
@@ -170,8 +169,6 @@ export default function DevPanel() {
             const { data: insertedCustomer, error } = await supabase
                 .from('customers')
                 .insert({
-                    customer_type: customerData.customer_type,
-                    type: customerData.customer_type, // Required field in database
                     name: customerData.name,
                     email: customerData.email,
                     phone: customerData.phone,

@@ -20,7 +20,7 @@ import {
 import { useTenant } from '@/contexts/TenantContext';
 import { formatCurrency } from '@/lib/format-utils';
 
-type BookingFilter = 'all' | 'current' | 'past';
+type BookingFilter = 'all' | 'active' | 'current' | 'past';
 type SortOrder = 'newest' | 'oldest';
 
 function StatCard({
@@ -83,10 +83,15 @@ export default function BookingsPage() {
 
   const getEmptyMessage = () => {
     switch (filter) {
-      case 'current':
+      case 'active':
         return {
           title: 'No active bookings',
           description: "You don't have any active rentals at the moment.",
+        };
+      case 'current':
+        return {
+          title: 'No current bookings',
+          description: "You don't have any current rentals at the moment.",
         };
       case 'past':
         return {
@@ -148,6 +153,7 @@ export default function BookingsPage() {
         <Tabs value={filter} onValueChange={(value) => setFilter(value as BookingFilter)}>
           <TabsList>
             <TabsTrigger value="all">All</TabsTrigger>
+            <TabsTrigger value="active">Active</TabsTrigger>
             <TabsTrigger value="current">Current</TabsTrigger>
             <TabsTrigger value="past">Past</TabsTrigger>
           </TabsList>

@@ -499,17 +499,17 @@ function LocationDropdown({
                 )}
               </div>
               <span className="text-xs text-muted-foreground">{selectedLocation.address}</span>
-              {selectedLocation.description && (
-                <span className="inline-flex items-center gap-1 text-[11px] text-accent/80 mt-0.5">
-                  <Info className="w-3 h-3 flex-shrink-0" />
-                  {selectedLocation.description}
-                </span>
-              )}
             </div>
           ) : (
             <span className="text-muted-foreground text-sm">{placeholder || `Select ${type} location`}</span>
           )}
         </SelectTrigger>
+        {selectedLocation?.description && (
+          <div className="flex items-center gap-1 text-[11px] text-accent/80 mt-1.5 px-4">
+            <Info className="w-3 h-3 flex-shrink-0" />
+            <span className="truncate">{selectedLocation.description}</span>
+          </div>
+        )}
         <SelectContent align="start" className="w-[var(--radix-select-trigger-width)]">
           {locations.map((location) => (
             <SelectItem key={location.id} value={location.id} className="py-3.5 cursor-pointer">
@@ -526,9 +526,9 @@ function LocationDropdown({
                 </div>
                 <span className="text-xs text-muted-foreground">{location.address}</span>
                 {location.description && (
-                  <span className="inline-flex items-center gap-1 text-[11px] text-accent/80 mt-0.5">
+                  <span className="inline-flex items-center gap-1 text-[11px] text-accent/80 mt-0.5 max-w-full">
                     <Info className="w-3 h-3 flex-shrink-0" />
-                    {location.description}
+                    <span className="truncate">{location.description}</span>
                   </span>
                 )}
               </div>

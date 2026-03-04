@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { supabase } from '@/integrations/supabase/client';
@@ -43,6 +43,8 @@ import { LockboxTemplatesSection } from '@/components/settings/lockbox-templates
 import { PricingRulesSettings } from '@/components/settings/pricing-rules-settings';
 import { formatCurrency } from '@/lib/format-utils';
 import { useManagerPermissions } from '@/hooks/use-manager-permissions';
+import { useUnsavedChangesWarning } from '@/hooks/use-unsaved-changes-warning';
+import { UnsavedChangesDialog } from '@/components/shared/unsaved-changes-dialog';
 
 const Settings = () => {
   const queryClient = useQueryClient();
@@ -312,6 +314,214 @@ const Settings = () => {
       favicon_url: b.favicon_url || '',
     });
   };
+
+  // --- Dirty tracking for unsaved changes warning ---
+  const [locationsDirty, setLocationsDirty] = useState(false);
+  const [pricingDirty, setPricingDirty] = useState(false);
+
+  const generalFormDirty = useMemo(() => {
+    if (!settings && !tenant) return false;
+    const origCurrency = settings?.currency_code || tenant?.currency_code || 'USD';
+    const origDistance = (settings?.distance_unit as string) || (tenant?.distance_unit as string) || 'miles';
+    const origPrivacy = tenant?.privacy_policy_version || '1.0';
+    const origTerms = tenant?.terms_version || '1.0';
+    return (
+      generalForm.currency_code !== origCurrency ||
+      generalForm.distance_unit !== origDistance ||
+      generalForm.privacy_policy_version !== origPrivacy ||
+      generalForm.terms_version !== origTerms
+    );
+  }, [generalForm, settings, tenant]);
+
+  const brandingFormDirty = useMemo(() => {
+    const b = tenantBranding;
+    if (!b) return false;
+    return (
+      brandingForm.app_name !== (b.app_name || 'Drive 917') ||
+      brandingForm.primary_color !== (b.primary_color || '#C6A256') ||
+      brandingForm.secondary_color !== (b.secondary_color || '#C6A256') ||
+      brandingForm.accent_color !== (b.accent_color || '#C6A256') ||
+      brandingForm.light_primary_color !== (b.light_primary_color || '') ||
+      brandingForm.light_secondary_color !== (b.light_secondary_color || '') ||
+      brandingForm.light_accent_color !== (b.light_accent_color || '') ||
+      brandingForm.dark_primary_color !== (b.dark_primary_color || '') ||
+      brandingForm.dark_secondary_color !== (b.dark_secondary_color || '') ||
+      brandingForm.dark_accent_color !== (b.dark_accent_color || '') ||
+      brandingForm.light_background_color !== (b.light_background_color || '') ||
+      brandingForm.dark_background_color !== (b.dark_background_color || '') ||
+      brandingForm.light_header_footer_color !== (b.light_header_footer_color || '') ||
+      brandingForm.dark_header_footer_color !== (b.dark_header_footer_color || '') ||
+      brandingForm.meta_title !== (b.meta_title || '') ||
+      brandingForm.meta_description !== (b.meta_description || '') ||
+      brandingForm.og_image_url !== (b.og_image_url || '') ||
+      brandingForm.favicon_url !== (b.favicon_url || '')
+    );
+  }, [brandingForm, tenantBranding]);
+
+  const rentalFormDirty = useMemo(() => {
+    if (!rentalSettings) return false;
+    const rs = rentalSettings;
+    return (
+      (rentalForm.minimum_rental_age || null) !== (rs.minimum_rental_age || null) ||
+      rentalForm.tax_enabled !== (rs.tax_enabled ?? false) ||
+      rentalForm.tax_percentage !== (rs.tax_percentage ?? 0) ||
+      rentalForm.service_fee_enabled !== (rs.service_fee_enabled ?? false) ||
+      rentalForm.service_fee_type !== ((rs.service_fee_type as string) ?? 'fixed_amount') ||
+      rentalForm.service_fee_value !== (rs.service_fee_value ?? rs.service_fee_amount ?? 0) ||
+      rentalForm.deposit_mode !== (rs.deposit_mode ?? 'global') ||
+      rentalForm.global_deposit_amount !== (rs.global_deposit_amount ?? 0) ||
+      rentalForm.installments_enabled !== (rs.installments_enabled ?? false) ||
+      rentalForm.lockbox_enabled !== (rs.lockbox_enabled ?? false) ||
+      rentalForm.lockbox_code_length !== (rs.lockbox_code_length ?? null) ||
+      rentalForm.min_rental_days !== (rs.min_rental_days ?? 0) ||
+      rentalForm.min_rental_hours !== (rs.min_rental_hours ?? 1) ||
+      rentalForm.max_rental_days !== (rs.max_rental_days ?? 90)
+    );
+  }, [rentalForm, rentalSettings]);
+
+  const hasUnsavedChanges = generalFormDirty || brandingFormDirty || rentalFormDirty || locationsDirty || pricingDirty;
+
+  // Per-tab dirty mapping for tab switch guard
+  const tabDirtyMap: Record<string, boolean> = useMemo(() => ({
+    general: generalFormDirty,
+    branding: brandingFormDirty,
+    rental: rentalFormDirty,
+    locations: locationsDirty,
+    pricing: pricingDirty,
+  }), [generalFormDirty, brandingFormDirty, rentalFormDirty, locationsDirty, pricingDirty]);
+
+  // Tab switch guard state
+  const [pendingTab, setPendingTab] = useState<string | null>(null);
+  const [showTabWarning, setShowTabWarning] = useState(false);
+
+  const handleTabChange = useCallback((newTab: string) => {
+    // Check if current tab has unsaved changes
+    if (tabDirtyMap[activeTab]) {
+      setPendingTab(newTab);
+      setShowTabWarning(true);
+    } else {
+      setActiveTab(newTab);
+    }
+  }, [activeTab, tabDirtyMap]);
+
+  const handleTabDiscardAndSwitch = useCallback(() => {
+    setShowTabWarning(false);
+    if (pendingTab) {
+      setActiveTab(pendingTab);
+      setPendingTab(null);
+    }
+  }, [pendingTab]);
+
+  const handleTabCancel = useCallback(() => {
+    setPendingTab(null);
+    setShowTabWarning(false);
+  }, []);
+
+  // Save all dirty main forms (for "Save & Leave")
+  const saveAllDirtyForms = useCallback(async (): Promise<boolean> => {
+    try {
+      const saves: Promise<void>[] = [];
+
+      if (generalFormDirty) {
+        saves.push((async () => {
+          setIsSavingGeneral(true);
+          try {
+            await updateSettingsAsync({
+              currency_code: generalForm.currency_code,
+              distance_unit: generalForm.distance_unit,
+            });
+            if (tenant?.id) {
+              const policyVersionChanged =
+                generalForm.privacy_policy_version !== (tenant?.privacy_policy_version || '1.0') ||
+                generalForm.terms_version !== (tenant?.terms_version || '1.0');
+              await supabase
+                .from('tenants')
+                .update({
+                  distance_unit: generalForm.distance_unit,
+                  currency_code: generalForm.currency_code,
+                  privacy_policy_version: generalForm.privacy_policy_version,
+                  terms_version: generalForm.terms_version,
+                  ...(policyVersionChanged ? { policies_accepted_at: null } : {}),
+                })
+                .eq('id', tenant.id);
+              await refetchTenant();
+            }
+          } finally {
+            setIsSavingGeneral(false);
+          }
+        })());
+      }
+
+      if (brandingFormDirty) {
+        saves.push((async () => {
+          setIsSavingBranding(true);
+          try {
+            const brandingData = {
+              app_name: brandingForm.app_name,
+              primary_color: brandingForm.primary_color,
+              secondary_color: brandingForm.secondary_color,
+              accent_color: brandingForm.accent_color,
+              light_primary_color: brandingForm.light_primary_color || null,
+              light_secondary_color: brandingForm.light_secondary_color || null,
+              light_accent_color: brandingForm.light_accent_color || null,
+              dark_primary_color: brandingForm.dark_primary_color || null,
+              dark_secondary_color: brandingForm.dark_secondary_color || null,
+              dark_accent_color: brandingForm.dark_accent_color || null,
+              light_background_color: brandingForm.light_background_color || null,
+              dark_background_color: brandingForm.dark_background_color || null,
+              light_header_footer_color: brandingForm.light_header_footer_color || null,
+              dark_header_footer_color: brandingForm.dark_header_footer_color || null,
+              meta_title: brandingForm.meta_title,
+              meta_description: brandingForm.meta_description,
+              og_image_url: brandingForm.og_image_url,
+              favicon_url: brandingForm.favicon_url || null,
+              logo_url: tenantBranding?.logo_url || null,
+            };
+            await updateTenantBranding(brandingData);
+            await updateOrgBranding(brandingData);
+          } finally {
+            setIsSavingBranding(false);
+          }
+        })());
+      }
+
+      await Promise.all(saves);
+      return true;
+    } catch {
+      toast({
+        title: 'Error',
+        description: 'Failed to save some settings. Please try again.',
+        variant: 'destructive',
+      });
+      return false;
+    }
+  }, [generalFormDirty, brandingFormDirty, generalForm, brandingForm, tenant, tenantBranding, updateSettingsAsync, updateTenantBranding, updateOrgBranding, refetchTenant, supabase, toast]);
+
+  const {
+    isDialogOpen: unsavedDialogOpen,
+    confirmLeave,
+    saveAndLeave,
+    cancelLeave,
+    isSaving: isSavingNav,
+  } = useUnsavedChangesWarning({ hasChanges: hasUnsavedChanges, onSave: saveAllDirtyForms });
+
+  // Save & switch tab handler (needs saveAllDirtyForms defined above)
+  const [isSavingForTab, setIsSavingForTab] = useState(false);
+  const handleTabSaveAndSwitch = useCallback(async () => {
+    setIsSavingForTab(true);
+    try {
+      const success = await saveAllDirtyForms();
+      if (success && pendingTab) {
+        setActiveTab(pendingTab);
+        setPendingTab(null);
+        setShowTabWarning(false);
+      }
+    } catch {
+      // stay on current tab
+    } finally {
+      setIsSavingForTab(false);
+    }
+  }, [pendingTab, saveAllDirtyForms]);
 
   // Maintenance run tracking
   const { data: maintenanceRuns } = useQuery({
@@ -851,7 +1061,7 @@ const Settings = () => {
       </div>
 
       {/* Settings Tabs */}
-      <Tabs value={activeTab} onValueChange={setActiveTab}>
+      <Tabs value={activeTab} onValueChange={handleTabChange}>
         <div className="flex flex-col lg:flex-row gap-6">
           {/* Mobile: Horizontal scrollable nav */}
           <div className="lg:hidden">
@@ -1015,54 +1225,57 @@ const Settings = () => {
             </CardContent>
           </Card>
 
-          {/* Policy & Terms Versioning */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Shield className="h-5 w-5 text-primary" />
-                Policy &amp; Terms Versioning
-              </CardTitle>
-              <CardDescription>
-                When you update a version, all users must re-accept on next login.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-6">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="privacy_policy_version">Privacy Policy Version</Label>
-                  <Input
-                    id="privacy_policy_version"
-                    value={generalForm.privacy_policy_version}
-                    onChange={(e) => setGeneralForm(prev => ({ ...prev, privacy_policy_version: e.target.value }))}
-                    placeholder="e.g. 1.0"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="terms_version">Terms &amp; Conditions Version</Label>
-                  <Input
-                    id="terms_version"
-                    value={generalForm.terms_version}
-                    onChange={(e) => setGeneralForm(prev => ({ ...prev, terms_version: e.target.value }))}
-                    placeholder="e.g. 1.0"
-                  />
-                </div>
-              </div>
-              <Alert>
-                <AlertTriangle className="h-4 w-4" />
-                <AlertDescription>
-                  Changing a version number will require all portal users to re-accept on their next login.
-                </AlertDescription>
-              </Alert>
-            </CardContent>
-          </Card>
-
           {/* Save Button */}
           {canEditSettings('general') && (
-            <div className="flex justify-end">
+            <div className="flex flex-col sm:flex-row justify-between items-stretch sm:items-center gap-3">
+              <AlertDialog>
+                <AlertDialogTrigger asChild>
+                  <Button variant="outline" className="text-destructive border-destructive hover:bg-destructive/10 w-full sm:w-auto">
+                    Reset to Defaults
+                  </Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>Reset General Settings?</AlertDialogTitle>
+                    <div className="text-sm text-muted-foreground">
+                      This will reset all general settings to their default values:
+                      <ul className="mt-2 list-disc list-inside space-y-1">
+                        <li>Currency: USD ($)</li>
+                        <li>Distance Unit: Miles</li>
+                      </ul>
+                    </div>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>Cancel</AlertDialogCancel>
+                    <AlertDialogAction
+                      onClick={async () => {
+                        setIsSavingGeneral(true);
+                        try {
+                          const defaults = { currency_code: 'USD', distance_unit: 'miles' as const };
+                          await updateSettingsAsync(defaults);
+                          if (tenant?.id) {
+                            await supabase.from('tenants').update(defaults).eq('id', tenant.id);
+                            await refetchTenant();
+                          }
+                          setGeneralForm(prev => ({ ...prev, ...defaults }));
+                          toast({ title: "Settings Reset", description: "General settings have been restored to defaults." });
+                        } catch (error: any) {
+                          toast({ title: "Error", description: error.message || "Failed to reset settings", variant: "destructive" });
+                        } finally {
+                          setIsSavingGeneral(false);
+                        }
+                      }}
+                    >
+                      Reset to Defaults
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
+
               <Button
                 onClick={handleSaveGeneralSettings}
                 disabled={isSavingGeneral}
-                className="min-w-[120px]"
+                className="min-w-[120px] w-full sm:w-auto"
               >
                 {isSavingGeneral ? (
                   <>
@@ -1722,7 +1935,7 @@ const Settings = () => {
 
         {/* Locations Tab */}
         <TabsContent value="locations" className="space-y-6">
-          <LocationSettings />
+          <LocationSettings onDirtyChange={setLocationsDirty} />
         </TabsContent>
 
         {/* Rental Tab */}
@@ -2866,7 +3079,7 @@ const Settings = () => {
                           <th className="p-3 text-left font-semibold">Expires</th>
                           <th className="p-3 text-left font-semibold">Max Users</th>
                           <th className="p-3 text-left font-semibold">Code</th>
-                          <th className="p-3 text-right font-semibold">Actions</th>
+                          <th className="p-3 text-center font-semibold">Actions</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -2904,8 +3117,8 @@ const Settings = () => {
                                   </Button>
                                 </div>
                               </td>
-                              <td className="p-3 text-right">
-                                <div className="flex justify-end gap-2">
+                              <td className="p-3">
+                                <div className="flex justify-center gap-2">
                                   <Button
                                     variant="ghost"
                                     size="icon"
@@ -3222,11 +3435,120 @@ const Settings = () => {
             </CardContent>
           </Card>
 
+          {/* Reset All Booking Settings to Defaults */}
+          {canEditSettings('rental') && (
+            <div className="flex justify-start">
+              <AlertDialog>
+                <AlertDialogTrigger asChild>
+                  <Button variant="outline" className="text-destructive border-destructive hover:bg-destructive/10">
+                    Reset All Booking Settings to Defaults
+                  </Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>Reset All Booking Settings?</AlertDialogTitle>
+                    <div className="text-sm text-muted-foreground">
+                      This will reset all booking/rental settings to their default values:
+                      <ul className="mt-2 list-disc list-inside space-y-1">
+                        <li>Minimum Driver Age: 21</li>
+                        <li>Tax: Disabled (0%)</li>
+                        <li>Service Fee: Disabled</li>
+                        <li>Deposit Mode: Global ($0)</li>
+                        <li>Installments: Disabled (defaults restored)</li>
+                        <li>Booking Lead Time: 24 hours</li>
+                        <li>Min Rental: 0 days, 1 hour</li>
+                        <li>Max Rental: 90 days</li>
+                        <li>Lockbox: Disabled</li>
+                      </ul>
+                    </div>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>Cancel</AlertDialogCancel>
+                    <AlertDialogAction
+                      onClick={async () => {
+                        try {
+                          const defaults = {
+                            minimum_rental_age: 21,
+                            tax_enabled: false,
+                            tax_percentage: 0,
+                            service_fee_enabled: false,
+                            service_fee_type: 'fixed_amount' as const,
+                            service_fee_value: 0,
+                            service_fee_amount: 0,
+                            deposit_mode: 'global' as const,
+                            global_deposit_amount: 0,
+                            installments_enabled: false,
+                            installment_config: {
+                              min_days_for_weekly: 7,
+                              min_days_for_monthly: 30,
+                              max_installments_weekly: 4,
+                              max_installments_monthly: 6,
+                              charge_first_upfront: true,
+                              what_gets_split: 'rental_tax' as const,
+                              grace_period_days: 3,
+                              max_retry_attempts: 3,
+                              retry_interval_days: 1,
+                            },
+                            booking_lead_time_value: 24,
+                            booking_lead_time_unit: 'hours' as const,
+                            min_rental_days: 0,
+                            min_rental_hours: 1,
+                            max_rental_days: 90,
+                            lockbox_enabled: false,
+                            lockbox_code_length: 4,
+                            lockbox_notification_methods: ['email'],
+                          };
+                          await updateRentalSettings(defaults);
+                          setRentalForm({
+                            minimum_rental_age: 21,
+                            tax_enabled: false,
+                            tax_percentage: 0,
+                            service_fee_enabled: false,
+                            service_fee_amount: 0,
+                            service_fee_type: 'fixed_amount',
+                            service_fee_value: 0,
+                            deposit_mode: 'global',
+                            global_deposit_amount: 0,
+                            installments_enabled: false,
+                            installment_config: {
+                              min_days_for_weekly: 7,
+                              min_days_for_monthly: 30,
+                              max_installments_weekly: 4,
+                              max_installments_monthly: 6,
+                              charge_first_upfront: true,
+                              what_gets_split: 'rental_tax',
+                              grace_period_days: 3,
+                              max_retry_attempts: 3,
+                              retry_interval_days: 1,
+                            },
+                            booking_lead_time_value: 24,
+                            booking_lead_time_unit: 'hours',
+                            min_rental_days: 0,
+                            min_rental_hours: 1,
+                            max_rental_days: 90,
+                            lockbox_enabled: false,
+                            lockbox_code_length: null,
+                            lockbox_notification_methods: ['email'],
+                          });
+                          toast({ title: "Settings Reset", description: "All booking settings have been restored to defaults." });
+                        } catch (error: any) {
+                          toast({ title: "Error", description: error.message || "Failed to reset booking settings", variant: "destructive" });
+                        }
+                      }}
+                    >
+                      Reset to Defaults
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
+            </div>
+          )}
+
         </TabsContent>
 
         {/* Dynamic Pricing Tab */}
         <TabsContent value="pricing" className="space-y-6">
-          <PricingRulesSettings />
+          <PricingRulesSettings onDirtyChange={setPricingDirty} />
         </TabsContent>
 
         {/* Extras Tab */}
@@ -3309,6 +3631,22 @@ const Settings = () => {
           </div>{/* end Tab Content Area */}
         </div>{/* end flex layout */}
       </Tabs>
+
+      <UnsavedChangesDialog
+        open={unsavedDialogOpen}
+        onCancel={cancelLeave}
+        onDiscard={confirmLeave}
+        onSave={saveAndLeave}
+        isSaving={isSavingNav}
+      />
+
+      <UnsavedChangesDialog
+        open={showTabWarning}
+        onCancel={handleTabCancel}
+        onDiscard={handleTabDiscardAndSwitch}
+        onSave={handleTabSaveAndSwitch}
+        isSaving={isSavingForTab}
+      />
 
       {/* Data Cleanup Dialog */}
       <DataCleanupDialog

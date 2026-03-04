@@ -44,6 +44,9 @@ export interface CustomerRental {
   delivery_method: string | null;
   delivery_address: string | null;
   delivery_fee: number | null;
+  document_status: string | null;
+  docusign_envelope_id: string | null;
+  signed_document_id: string | null;
   vehicles: {
     id: string;
     reg: string;
@@ -56,7 +59,7 @@ export interface CustomerRental {
   installment_plans: CustomerRentalInstallmentPlan[] | null;
 }
 
-export function useCustomerRentals(filter: 'all' | 'current' | 'past' = 'all') {
+export function useCustomerRentals(filter: 'all' | 'active' | 'current' | 'past' = 'all') {
   const { customerUser } = useCustomerAuthStore();
 
   return useQuery({
@@ -90,6 +93,9 @@ export function useCustomerRentals(filter: 'all' | 'current' | 'past' = 'all') {
           delivery_method,
           delivery_address,
           delivery_fee,
+          document_status,
+          docusign_envelope_id,
+          signed_document_id,
           vehicles (
             id,
             reg,
@@ -121,7 +127,10 @@ export function useCustomerRentals(filter: 'all' | 'current' | 'past' = 'all') {
         `)
         .eq('customer_id', customerUser.customer_id);
 
-      if (filter === 'current') {
+      if (filter === 'active') {
+        // Active: only rentals with status 'Active'
+        query = query.eq('status', 'Active');
+      } else if (filter === 'current') {
         // Current: end_date >= today AND status is Active/Pending/Reserved
         query = query
           .gte('end_date', today)
