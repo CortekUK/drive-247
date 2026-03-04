@@ -6,7 +6,7 @@ const BOLDSIGN_BASE_URL = process.env.BOLDSIGN_BASE_URL || 'https://api.boldsign
 
 function getBoldSignApiKey(mode: 'test' | 'live'): string {
     return mode === 'live'
-        ? (process.env.BOLDSIGN_LIVE_API_KEY || '')
+        ? (process.env.BOLDSIGN_LIVE_API_KEY || process.env.BOLDSIGN_API_KEY || '')
         : (process.env.BOLDSIGN_TEST_API_KEY || '');
 }
 

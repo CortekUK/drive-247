@@ -4,13 +4,16 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { Gauge, TrendingUp, TrendingDown, Minus, Car, DollarSign } from "lucide-react";
 import { useTenant } from "@/contexts/TenantContext";
-import { formatDistance, formatDistanceLong, getDistanceUnitShort } from "@/lib/format-utils";
+import { formatDistance, formatDistanceLong, getDistanceUnitShort, getMileageTierLabel } from "@/lib/format-utils";
 import { formatCurrency } from "@/lib/format-utils";
 import type { DistanceUnit } from "@/lib/format-utils";
+import { calculateTotalMileageAllowance, getMileageTier } from "@/lib/mileage-utils";
 
 interface MileageSummaryCardProps {
   rentalId: string;
   vehicleId: string;
+  startDate?: string | null;
+  endDate?: string | null;
 }
 
 interface KeyHandover {
@@ -22,7 +25,9 @@ interface KeyHandover {
 
 interface Vehicle {
   id: string;
-  allowed_mileage: number | null;
+  daily_mileage: number | null;
+  weekly_mileage: number | null;
+  monthly_mileage: number | null;
   current_mileage: number | null;
   excess_mileage_rate: number | null;
 }
@@ -33,7 +38,7 @@ interface ExcessMileageCharge {
   remaining_amount: number;
 }
 
-export function MileageSummaryCard({ rentalId, vehicleId }: MileageSummaryCardProps) {
+export function MileageSummaryCard({ rentalId, vehicleId, startDate, endDate }: MileageSummaryCardProps) {
   const { tenant } = useTenant();
   const distanceUnit = (tenant?.distance_unit || 'miles') as DistanceUnit;
   const currencyCode = tenant?.currency_code || 'GBP';
@@ -53,13 +58,13 @@ export function MileageSummaryCard({ rentalId, vehicleId }: MileageSummaryCardPr
     enabled: !!rentalId,
   });
 
-  // Fetch vehicle details for allowed_mileage, current_mileage, and excess_mileage_rate
+  // Fetch vehicle details for mileage fields
   const { data: vehicle } = useQuery({
     queryKey: ["vehicle-mileage", vehicleId],
     queryFn: async () => {
       let query = supabase
         .from("vehicles")
-        .select("id, allowed_mileage, current_mileage, excess_mileage_rate")
+        .select("id, daily_mileage, weekly_mileage, monthly_mileage, current_mileage, excess_mileage_rate")
         .eq("id", vehicleId);
 
       if (tenant?.id) {
@@ -97,8 +102,20 @@ export function MileageSummaryCard({ rentalId, vehicleId }: MileageSummaryCardPr
   const pickupMileage = givingHandover?.mileage;
   const returnMileage = receivingHandover?.mileage;
   const milesDriven = pickupMileage && returnMileage ? returnMileage - pickupMileage : null;
-  const allowedMileage = vehicle?.allowed_mileage;
   const currentVehicleMileage = vehicle?.current_mileage;
+
+  // Calculate rental days and tier-based allowance
+  let rentalDays = 0;
+  if (startDate && endDate) {
+    rentalDays = Math.max(1, Math.ceil((new Date(endDate).getTime() - new Date(startDate).getTime()) / (1000 * 60 * 60 * 24)));
+  }
+
+  const allowedMileage = vehicle && rentalDays > 0
+    ? calculateTotalMileageAllowance(vehicle, rentalDays)
+    : null;
+
+  const tier = rentalDays > 0 ? getMileageTier(rentalDays) : null;
+  const tierLabel = tier ? getMileageTierLabel(tier, distanceUnit) : null;
 
   // Calculate over/under allowance
   const mileageDifference = milesDriven && allowedMileage ? milesDriven - allowedMileage : null;
@@ -127,6 +144,7 @@ export function MileageSummaryCard({ rentalId, vehicleId }: MileageSummaryCardPr
         </CardTitle>
         <CardDescription>
           Odometer readings and mileage tracking for this rental
+          {tierLabel && ` (${tier} tier — ${tierLabel})`}
         </CardDescription>
       </CardHeader>
       <CardContent>

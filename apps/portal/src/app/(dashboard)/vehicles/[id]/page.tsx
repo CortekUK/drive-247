@@ -9,12 +9,12 @@ import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { ChevronLeft, Car, FileText, DollarSign, Wrench, Calendar, TrendingUp, TrendingDown, Plus, Shield, Clock, Trash2, Receipt, Users, Eye, EyeOff, Pencil, Ban, Upload, Lock, RefreshCw, Check } from "lucide-react";
+import { ChevronLeft, Car, FileText, DollarSign, Wrench, Calendar, TrendingUp, TrendingDown, Plus, Shield, Clock, Trash2, Receipt, Users, Eye, EyeOff, Pencil, Ban, Upload, Lock, RefreshCw, Check, Gauge, X } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { useRentalSettings } from "@/hooks/use-rental-settings";
 import { getContractTotal } from "@/lib/vehicle-utils";
 import { useTenant } from "@/contexts/TenantContext";
-import { formatCurrency, getPerMonthLabelLong, getUnlimitedLabel } from "@/lib/format-utils";
+import { formatCurrency, getPerDayLabelLong, getPerWeekLabelLong, getPerMonthLabelLong, getUnlimitedLabel } from "@/lib/format-utils";
 import type { DistanceUnit } from "@/lib/format-utils";
 import { format } from "date-fns";
 import { startOfMonth, endOfMonth, parseISO } from "date-fns";
@@ -72,8 +72,11 @@ interface Vehicle {
   daily_rent?: number;
   weekly_rent?: number;
   monthly_rent?: number;
-  // Mileage allowance
-  allowed_mileage?: number | null;
+  // Per-tier mileage allowance
+  daily_mileage?: number | null;
+  weekly_mileage?: number | null;
+  monthly_mileage?: number | null;
+  excess_mileage_rate?: number | null;
   // MOT & TAX fields
   mot_due_date?: string;
   tax_due_date?: string;
@@ -158,6 +161,9 @@ export default function VehicleDetail() {
   const [lockboxCode, setLockboxCode] = useState('');
   const [lockboxEditing, setLockboxEditing] = useState(false);
   const [lockboxSaving, setLockboxSaving] = useState(false);
+  const [mileageEditing, setMileageEditing] = useState(false);
+  const [mileageSaving, setMileageSaving] = useState(false);
+  const [mileageForm, setMileageForm] = useState({ daily_mileage: '', weekly_mileage: '', monthly_mileage: '', excess_mileage_rate: '' });
 
   // Get date filtering from URL params
   const monthParam = searchParams.get('month');
@@ -633,10 +639,6 @@ export default function VehicleDetail() {
                 {vehicle.year && <MetricItem label="Year" value={vehicle.year} />}
                 <MetricItem label="Color" value={vehicle.colour} />
                 {vehicle.fuel_type && <MetricItem label="Fuel Type" value={vehicle.fuel_type === 'Petrol' ? 'Gas' : vehicle.fuel_type} />}
-                <MetricItem
-                  label="Allowed Mileage"
-                  value={vehicle.allowed_mileage ? `${vehicle.allowed_mileage.toLocaleString()} ${getPerMonthLabelLong(distanceUnit)}` : getUnlimitedLabel(distanceUnit)}
-                />
                 <div className="flex items-center gap-2">
                   <span className="text-xs text-muted-foreground">Acquisition:</span>
                   <AcquisitionBadge acquisitionType={vehicle.acquisition_type} />
@@ -684,6 +686,139 @@ export default function VehicleDetail() {
                     <span className="text-xs text-muted-foreground mb-1">Description</span>
                     <p className="text-sm whitespace-pre-wrap">{vehicle.description}</p>
                   </div>
+                </div>
+              )}
+            </div>
+
+            {/* Mileage Allowance Section */}
+            <MetricDivider />
+            <div>
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="text-sm font-semibold text-muted-foreground flex items-center gap-2">
+                  <Gauge className="h-4 w-4" />
+                  Mileage Allowance
+                </h3>
+                {!mileageEditing ? (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-7 text-xs"
+                    onClick={() => {
+                      setMileageForm({
+                        daily_mileage: vehicle.daily_mileage?.toString() ?? '',
+                        weekly_mileage: vehicle.weekly_mileage?.toString() ?? '',
+                        monthly_mileage: vehicle.monthly_mileage?.toString() ?? '',
+                        excess_mileage_rate: vehicle.excess_mileage_rate?.toString() ?? '',
+                      });
+                      setMileageEditing(true);
+                    }}
+                  >
+                    <Pencil className="h-3 w-3 mr-1" />
+                    Edit
+                  </Button>
+                ) : (
+                  <div className="flex items-center gap-1">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-7 text-xs"
+                      disabled={mileageSaving}
+                      onClick={() => setMileageEditing(false)}
+                    >
+                      <X className="h-3 w-3 mr-1" />
+                      Cancel
+                    </Button>
+                    <Button
+                      size="sm"
+                      className="h-7 text-xs"
+                      disabled={mileageSaving}
+                      onClick={async () => {
+                        setMileageSaving(true);
+                        try {
+                          await supabase.from("vehicles").update({
+                            daily_mileage: mileageForm.daily_mileage ? parseInt(mileageForm.daily_mileage) : null,
+                            weekly_mileage: mileageForm.weekly_mileage ? parseInt(mileageForm.weekly_mileage) : null,
+                            monthly_mileage: mileageForm.monthly_mileage ? parseInt(mileageForm.monthly_mileage) : null,
+                            excess_mileage_rate: mileageForm.excess_mileage_rate ? parseFloat(mileageForm.excess_mileage_rate) : null,
+                          }).eq("id", vehicle.id);
+                          queryClient.invalidateQueries({ queryKey: ["vehicle", id] });
+                          setMileageEditing(false);
+                          toast({ title: "Mileage allowance updated" });
+                        } catch {
+                          toast({ title: "Failed to update mileage", variant: "destructive" });
+                        } finally {
+                          setMileageSaving(false);
+                        }
+                      }}
+                    >
+                      <Check className="h-3 w-3 mr-1" />
+                      Save
+                    </Button>
+                  </div>
+                )}
+              </div>
+              {mileageEditing ? (
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                  <div className="space-y-1">
+                    <label className="text-xs text-muted-foreground">Daily</label>
+                    <Input
+                      type="number"
+                      min="1"
+                      placeholder="Unlimited"
+                      value={mileageForm.daily_mileage}
+                      onChange={(e) => setMileageForm(prev => ({ ...prev, daily_mileage: e.target.value }))}
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-xs text-muted-foreground">Weekly</label>
+                    <Input
+                      type="number"
+                      min="1"
+                      placeholder="Unlimited"
+                      value={mileageForm.weekly_mileage}
+                      onChange={(e) => setMileageForm(prev => ({ ...prev, weekly_mileage: e.target.value }))}
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-xs text-muted-foreground">Monthly</label>
+                    <Input
+                      type="number"
+                      min="1"
+                      placeholder="Unlimited"
+                      value={mileageForm.monthly_mileage}
+                      onChange={(e) => setMileageForm(prev => ({ ...prev, monthly_mileage: e.target.value }))}
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-xs text-muted-foreground">Excess Rate</label>
+                    <Input
+                      type="number"
+                      min="0.01"
+                      step="0.01"
+                      placeholder="per mile"
+                      value={mileageForm.excess_mileage_rate}
+                      onChange={(e) => setMileageForm(prev => ({ ...prev, excess_mileage_rate: e.target.value }))}
+                    />
+                  </div>
+                </div>
+              ) : (
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-x-8 gap-y-3">
+                  <MetricItem
+                    label="Daily"
+                    value={vehicle.daily_mileage ? `${vehicle.daily_mileage.toLocaleString()} ${getPerDayLabelLong(distanceUnit)}` : getUnlimitedLabel(distanceUnit)}
+                  />
+                  <MetricItem
+                    label="Weekly"
+                    value={vehicle.weekly_mileage ? `${vehicle.weekly_mileage.toLocaleString()} ${getPerWeekLabelLong(distanceUnit)}` : getUnlimitedLabel(distanceUnit)}
+                  />
+                  <MetricItem
+                    label="Monthly"
+                    value={vehicle.monthly_mileage ? `${vehicle.monthly_mileage.toLocaleString()} ${getPerMonthLabelLong(distanceUnit)}` : getUnlimitedLabel(distanceUnit)}
+                  />
+                  <MetricItem
+                    label="Excess Rate"
+                    value={vehicle.excess_mileage_rate ? formatCurrency(vehicle.excess_mileage_rate, tenant?.currency_code || 'GBP') + `/${distanceUnit === 'miles' ? 'mile' : 'km'}` : 'Not set'}
+                  />
                 </div>
               )}
             </div>

@@ -120,7 +120,10 @@ function processTemplate(
     vehicle_weekly_rent: formatCurrency(vehicle?.weekly_rent as number),
     vehicle_monthly_rent: formatCurrency(vehicle?.monthly_rent as number),
     vehicle_mileage: vehicle?.current_mileage?.toString() || '',
-    vehicle_allowed_mileage: vehicle?.allowed_mileage?.toString() || '',
+    vehicle_daily_mileage: vehicle?.daily_mileage?.toString() || '',
+    vehicle_weekly_mileage: vehicle?.weekly_mileage?.toString() || '',
+    vehicle_monthly_mileage: vehicle?.monthly_mileage?.toString() || '',
+    vehicle_allowed_mileage: vehicle?.monthly_mileage?.toString() || '',
 
     // Rental
     rental_number: (rental?.rental_number as string) || (rental?.id as string)?.substring(0, 8)?.toUpperCase() || 'N/A',

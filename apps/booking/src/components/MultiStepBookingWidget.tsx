@@ -47,8 +47,9 @@ import { getTimezonesByRegion, findTimezone, getDetectedTimezone } from "@/lib/t
 import { useCustomerDocuments, getDocumentStatus } from "@/hooks/use-customer-documents";
 import { useGigDriverImages } from "@/hooks/use-gig-driver-images";
 import GigDriverUploadDialog from "@/components/booking/gig-driver-upload-dialog";
-import { formatCurrency, getEarthRadius, metersToUnit, getPerMonthLabel, getUnlimitedLabel, getDistanceUnitLong } from "@/lib/format-utils";
+import { formatCurrency, getEarthRadius, metersToUnit, getPerMonthLabel, getUnlimitedLabel, getDistanceUnitLong, getMileageTierLabel } from "@/lib/format-utils";
 import type { DistanceUnit } from "@/lib/format-utils";
+import { getMileageTier, getTierMileage, isUnlimitedMileage } from "@/lib/mileage-utils";
 import { useDynamicPricing } from "@/hooks/use-dynamic-pricing";
 import { calculateRentalPriceBreakdown, parseDateString as parseDateStringSafe } from "@/lib/calculate-rental-price";
 interface VehiclePhoto {
@@ -74,7 +75,9 @@ interface Vehicle {
   photo_url?: string | null;
   vehicle_photos?: VehiclePhoto[];
   description?: string | null;
-  allowed_mileage?: number | null;
+  daily_mileage?: number | null;
+  weekly_mileage?: number | null;
+  monthly_mileage?: number | null;
 }
 interface PricingExtra {
   id: string;
@@ -2223,6 +2226,24 @@ const MultiStepBookingWidget = () => {
     };
   };
 
+  // Get mileage display label based on selected dates and tier
+  const getVehicleMileageDisplay = (vehicle: Vehicle): string => {
+    if (isUnlimitedMileage(vehicle)) return getUnlimitedLabel(distanceUnit);
+    const duration = calculateRentalDuration();
+    const days = duration?.days || 0;
+    if (days > 0) {
+      const tier = getMileageTier(days);
+      const perUnit = getTierMileage(vehicle, tier);
+      if (perUnit === null) return getUnlimitedLabel(distanceUnit);
+      return `${perUnit.toLocaleString()} ${getMileageTierLabel(tier, distanceUnit)}`;
+    }
+    // No dates selected — show monthly as default, or daily, or weekly
+    const mileage = vehicle.monthly_mileage ?? vehicle.daily_mileage ?? vehicle.weekly_mileage;
+    if (mileage == null) return getUnlimitedLabel(distanceUnit);
+    const tier = vehicle.monthly_mileage != null ? 'monthly' : vehicle.daily_mileage != null ? 'daily' : 'weekly';
+    return `${mileage.toLocaleString()} ${getMileageTierLabel(tier as any, distanceUnit)}`;
+  };
+
   // Get the appropriate price display based on rental duration
   // Pricing tiers: > 30 days = monthly, 7-30 days = weekly, < 7 days = daily
   // For daily tier, applies dynamic pricing (weekend/holiday surcharges) and shows average effective rate
@@ -3875,7 +3896,7 @@ const MultiStepBookingWidget = () => {
                                   {vehicle.colour && <p className="text-xs text-muted-foreground mt-1">{vehicle.colour}</p>}
                                   <div className="flex items-center gap-1 text-xs text-muted-foreground mt-1">
                                     <Gauge className="h-3 w-3" />
-                                    <span>{vehicle.allowed_mileage ? `${vehicle.allowed_mileage.toLocaleString()} ${getPerMonthLabel(distanceUnit)}` : getUnlimitedLabel(distanceUnit)}</span>
+                                    <span>{getVehicleMileageDisplay(vehicle)}</span>
                                   </div>
                                 </div>
                                 {isSelected && <div className="w-6 h-6 bg-primary rounded-full flex items-center justify-center">
@@ -4089,9 +4110,7 @@ const MultiStepBookingWidget = () => {
                           <div className="flex items-center gap-4 text-xs text-muted-foreground pb-3 border-b border-border/50">
                             <span className="flex items-center gap-1" title="Mileage Allowance">
                               <Gauge className="h-3 w-3" />
-                              {vehicle.allowed_mileage
-                                ? `${vehicle.allowed_mileage.toLocaleString()} ${getPerMonthLabel(distanceUnit)}`
-                                : getUnlimitedLabel(distanceUnit)}
+                              {getVehicleMileageDisplay(vehicle)}
                             </span>
                           </div>
 

@@ -7,7 +7,7 @@ const BOLDSIGN_BASE_URL = process.env.BOLDSIGN_BASE_URL || 'https://api.boldsign
 
 function getBoldSignApiKey(mode: 'test' | 'live'): string {
     return mode === 'live'
-        ? (process.env.BOLDSIGN_LIVE_API_KEY || '')
+        ? (process.env.BOLDSIGN_LIVE_API_KEY || process.env.BOLDSIGN_API_KEY || '')
         : (process.env.BOLDSIGN_TEST_API_KEY || '');
 }
 
@@ -108,7 +108,10 @@ function processTemplate(template: string, rental: any, customer: any, vehicle: 
         vehicle_weekly_rent: formatCurrency(vehicle?.weekly_rent, cc),
         vehicle_monthly_rent: formatCurrency(vehicle?.monthly_rent, cc),
         vehicle_mileage: vehicle?.current_mileage?.toString() || '',
-        vehicle_allowed_mileage: vehicle?.allowed_mileage?.toString() || '',
+        vehicle_daily_mileage: vehicle?.daily_mileage?.toString() || '',
+        vehicle_weekly_mileage: vehicle?.weekly_mileage?.toString() || '',
+        vehicle_monthly_mileage: vehicle?.monthly_mileage?.toString() || '',
+        vehicle_allowed_mileage: vehicle?.monthly_mileage?.toString() || '',
 
         // Rental
         rental_number: rental?.rental_number || rental?.id?.substring(0, 8)?.toUpperCase() || '',

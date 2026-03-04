@@ -111,6 +111,45 @@ export function getUnlimitedLabel(unit: DistanceUnit = 'miles'): string {
 }
 
 /**
+ * Get per-day label ("mi/day" or "km/day").
+ */
+export function getPerDayLabel(unit: DistanceUnit = 'miles'): string {
+  return unit === 'miles' ? 'mi/day' : 'km/day';
+}
+
+/**
+ * Get per-day long label ("mi/day" or "km/day").
+ */
+export function getPerDayLabelLong(unit: DistanceUnit = 'miles'): string {
+  return unit === 'miles' ? 'mi/day' : 'km/day';
+}
+
+/**
+ * Get per-week label ("mi/wk" or "km/wk").
+ */
+export function getPerWeekLabel(unit: DistanceUnit = 'miles'): string {
+  return unit === 'miles' ? 'mi/wk' : 'km/wk';
+}
+
+/**
+ * Get per-week long label ("mi/week" or "km/week").
+ */
+export function getPerWeekLabelLong(unit: DistanceUnit = 'miles'): string {
+  return unit === 'miles' ? 'mi/week' : 'km/week';
+}
+
+/**
+ * Get mileage tier label for display.
+ */
+export function getMileageTierLabel(tier: 'daily' | 'weekly' | 'monthly', unit: DistanceUnit = 'miles'): string {
+  switch (tier) {
+    case 'daily': return getPerDayLabel(unit);
+    case 'weekly': return getPerWeekLabel(unit);
+    case 'monthly': return getPerMonthLabel(unit);
+  }
+}
+
+/**
  * Convert km (DB storage unit for radius) to the tenant's display unit.
  */
 export function kmToDisplayUnit(km: number, unit: DistanceUnit = 'miles'): number {

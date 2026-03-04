@@ -220,7 +220,9 @@ async function seedVehicles() {
     acquisition_date: daysAgo(rand(60, 365)),
     mot_due_date: daysFromNow(rand(60, 300)),
     tax_due_date: daysFromNow(rand(30, 365)),
-    allowed_mileage: v.d >= 100 ? 200 : 150,
+    daily_mileage: v.d >= 100 ? 200 : 150,
+    weekly_mileage: v.d >= 100 ? 1200 : 900,
+    monthly_mileage: v.d >= 100 ? 4000 : 3000,
   }));
 
   const { data, error } = await supabase.from('vehicles').insert(rows).select('id, reg, make, model, status, daily_rent');

@@ -71,7 +71,9 @@ export const AddVehicleDialog = ({ open, onOpenChange }: AddVehicleDialogProps) 
       security_notes: "",
       description: "",
       security_deposit: undefined,
-      allowed_mileage: undefined,
+      daily_mileage: undefined,
+      weekly_mileage: undefined,
+      monthly_mileage: undefined,
       excess_mileage_rate: undefined,
     },
   });
@@ -219,7 +221,9 @@ export const AddVehicleDialog = ({ open, onOpenChange }: AddVehicleDialogProps) 
         security_notes: data.security_notes || null,
         description: data.description || null,
         security_deposit: data.security_deposit || null,
-        allowed_mileage: data.allowed_mileage || null,
+        daily_mileage: data.daily_mileage || null,
+        weekly_mileage: data.weekly_mileage || null,
+        monthly_mileage: data.monthly_mileage || null,
         excess_mileage_rate: data.excess_mileage_rate || null,
         available_daily: data.available_daily,
         available_weekly: data.available_weekly,
@@ -852,13 +856,13 @@ export const AddVehicleDialog = ({ open, onOpenChange }: AddVehicleDialogProps) 
                   />
                 </div>
 
-                <div className="grid grid-cols-2 gap-3 items-start">
+                <div className="grid grid-cols-3 gap-3 items-start">
                   <FormField
                     control={form.control}
-                    name="allowed_mileage"
+                    name="daily_mileage"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Mileage Allowance</FormLabel>
+                        <FormLabel>Daily Mileage</FormLabel>
                         <FormControl>
                           <Input
                             type="number"
@@ -879,21 +883,44 @@ export const AddVehicleDialog = ({ open, onOpenChange }: AddVehicleDialogProps) 
 
                   <FormField
                     control={form.control}
-                    name="excess_mileage_rate"
+                    name="weekly_mileage"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Excess Mileage Rate</FormLabel>
+                        <FormLabel>Weekly Mileage</FormLabel>
                         <FormControl>
                           <Input
                             type="number"
-                            min="0.01"
-                            step="0.01"
-                            placeholder={`${currencySymbol} per mile`}
+                            min="1"
+                            placeholder="Unlimited"
                             {...field}
                             value={field.value ?? ""}
                             onChange={(e) => {
                               const value = e.target.value;
-                              field.onChange(value === "" ? undefined : parseFloat(value));
+                              field.onChange(value === "" ? undefined : parseInt(value));
+                            }}
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    control={form.control}
+                    name="monthly_mileage"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Monthly Mileage</FormLabel>
+                        <FormControl>
+                          <Input
+                            type="number"
+                            min="1"
+                            placeholder="Unlimited"
+                            {...field}
+                            value={field.value ?? ""}
+                            onChange={(e) => {
+                              const value = e.target.value;
+                              field.onChange(value === "" ? undefined : parseInt(value));
                             }}
                           />
                         </FormControl>
@@ -902,6 +929,31 @@ export const AddVehicleDialog = ({ open, onOpenChange }: AddVehicleDialogProps) 
                     )}
                   />
                 </div>
+
+                <FormField
+                  control={form.control}
+                  name="excess_mileage_rate"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Excess Mileage Rate</FormLabel>
+                      <FormControl>
+                        <Input
+                          type="number"
+                          min="0.01"
+                          step="0.01"
+                          placeholder={`${currencySymbol} per mile`}
+                          {...field}
+                          value={field.value ?? ""}
+                          onChange={(e) => {
+                            const value = e.target.value;
+                            field.onChange(value === "" ? undefined : parseFloat(value));
+                          }}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
 
                 <div className="grid grid-cols-3 gap-4">
                   <FormField

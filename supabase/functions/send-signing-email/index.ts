@@ -44,23 +44,34 @@ Deno.serve(async (req) => {
 
     console.log('Sending signing email to:', customerEmail, 'for document:', documentId);
 
-    // Get embedded signing link from BoldSign
+    // Get embedded signing link from BoldSign (with retry — document may still be processing)
     const apiKey = getBoldSignApiKey(boldsignMode);
     const baseUrl = getBoldSignBaseUrl();
 
-    const signLinkResponse = await fetch(
-      `${baseUrl}/v1/document/getEmbeddedSignLink?documentId=${documentId}&signerEmail=${encodeURIComponent(customerEmail)}`,
-      { headers: { 'X-API-KEY': apiKey } }
-    );
-
     let signingLink = '';
-    if (signLinkResponse.ok) {
-      const signLinkData = await signLinkResponse.json();
-      signingLink = signLinkData.signLink || '';
+    for (let attempt = 0; attempt < 3; attempt++) {
+      if (attempt > 0) await new Promise(r => setTimeout(r, 2000)); // wait 2s between retries
+
+      try {
+        const signLinkResponse = await fetch(
+          `${baseUrl}/v1/document/getEmbeddedSignLink?documentId=${documentId}&signerEmail=${encodeURIComponent(customerEmail)}`,
+          { headers: { 'X-API-KEY': apiKey } }
+        );
+
+        if (signLinkResponse.ok) {
+          const signLinkData = await signLinkResponse.json();
+          signingLink = signLinkData.signLink || '';
+          if (signingLink) break;
+        } else {
+          console.warn(`Embedded sign link attempt ${attempt + 1} failed:`, signLinkResponse.status);
+        }
+      } catch (e) {
+        console.warn(`Embedded sign link attempt ${attempt + 1} error:`, e);
+      }
     }
 
     if (!signingLink) {
-      console.warn('Could not get embedded signing link, email will not include direct link');
+      console.warn('Could not get embedded signing link after 3 attempts');
     }
 
     // Get tenant branding
@@ -71,7 +82,12 @@ Deno.serve(async (req) => {
       ? `<a href="${signingLink}" style="display: inline-block; background: ${branding.accentColor || '#C5A572'}; color: white; padding: 14px 32px; text-decoration: none; border-radius: 8px; font-weight: 600; font-size: 16px; margin: 16px 0;">Review and Sign</a>`
       : '<p style="color: #666;"><em>You will receive a separate signing link shortly.</em></p>';
 
+    const testBanner = boldsignMode === 'test'
+      ? `<tr><td style="padding: 0;"><div style="background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 6px; margin: 0 35px; padding: 10px 16px; text-align: center;"><span style="color: #1e40af; font-size: 12px; font-weight: 600; letter-spacing: 0.5px; text-transform: uppercase;">&#9679; Test Mode</span><span style="color: #3b82f6; font-size: 12px; display: block; margin-top: 2px;">This is a test document and is not legally binding.</span></div></td></tr>`
+      : '';
+
     const emailContent = `
+      ${testBanner}
       <tr>
         <td style="padding: 40px 35px;">
           <h1 style="color: #1a1a1a; margin: 0 0 20px; font-size: 24px;">Rental Agreement Ready to Sign</h1>

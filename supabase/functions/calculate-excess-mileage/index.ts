@@ -4,6 +4,33 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.4";
 import { handleCors, jsonResponse, errorResponse } from "../_shared/cors.ts";
 
+// Tier logic inlined (matches pricing tiers: daily <7d, weekly 7-30d, monthly >30d)
+function getMileageTier(rentalDays: number): 'daily' | 'weekly' | 'monthly' {
+  if (rentalDays > 30) return 'monthly';
+  if (rentalDays >= 7) return 'weekly';
+  return 'daily';
+}
+
+function calculateTotalMileageAllowance(
+  vehicle: { daily_mileage: number | null; weekly_mileage: number | null; monthly_mileage: number | null },
+  rentalDays: number
+): number | null {
+  const tier = getMileageTier(rentalDays);
+  let perUnit: number | null;
+  switch (tier) {
+    case 'daily': perUnit = vehicle.daily_mileage; break;
+    case 'weekly': perUnit = vehicle.weekly_mileage; break;
+    case 'monthly': perUnit = vehicle.monthly_mileage; break;
+  }
+  if (perUnit === null || perUnit === undefined) return null;
+
+  switch (tier) {
+    case 'daily': return rentalDays * perUnit;
+    case 'weekly': return Math.ceil(rentalDays / 7) * perUnit;
+    case 'monthly': return Math.ceil(rentalDays / 30) * perUnit;
+  }
+}
+
 Deno.serve(async (req) => {
   const corsResponse = handleCors(req);
   if (corsResponse) return corsResponse;
@@ -64,10 +91,10 @@ Deno.serve(async (req) => {
       return jsonResponse({ success: true, noCharge: true, reason: "Missing mileage readings" });
     }
 
-    // Fetch rental details (vehicle_id, customer_id)
+    // Fetch rental details (vehicle_id, customer_id, start_date, end_date)
     const { data: rental, error: rentalError } = await supabase
       .from("rentals")
-      .select("vehicle_id, customer_id, tenant_id")
+      .select("vehicle_id, customer_id, tenant_id, start_date, end_date")
       .eq("id", rentalId)
       .single();
 
@@ -77,10 +104,18 @@ Deno.serve(async (req) => {
 
     const effectiveTenantId = tenantId || rental.tenant_id;
 
-    // Fetch vehicle's allowed_mileage and excess_mileage_rate
+    // Calculate rental days
+    let rentalDays = 1;
+    if (rental.start_date && rental.end_date) {
+      rentalDays = Math.max(1, Math.ceil(
+        (new Date(rental.end_date).getTime() - new Date(rental.start_date).getTime()) / (1000 * 60 * 60 * 24)
+      ));
+    }
+
+    // Fetch vehicle's per-tier mileage and excess_mileage_rate
     const { data: vehicle, error: vehicleError } = await supabase
       .from("vehicles")
-      .select("allowed_mileage, excess_mileage_rate")
+      .select("daily_mileage, weekly_mileage, monthly_mileage, excess_mileage_rate")
       .eq("id", rental.vehicle_id)
       .single();
 
@@ -89,19 +124,23 @@ Deno.serve(async (req) => {
       return jsonResponse({ success: true, noCharge: true, reason: "Vehicle not found" });
     }
 
-    // If unlimited mileage or no rate set, no charge
-    if (vehicle.allowed_mileage === null || !vehicle.excess_mileage_rate || vehicle.excess_mileage_rate <= 0) {
+    // Calculate tier-based total allowance
+    const totalAllowance = calculateTotalMileageAllowance(vehicle, rentalDays);
+    const tier = getMileageTier(rentalDays);
+
+    // If unlimited mileage for this tier or no rate set, no charge
+    if (totalAllowance === null || !vehicle.excess_mileage_rate || vehicle.excess_mileage_rate <= 0) {
       await deleteExistingCharge();
       return jsonResponse({
         success: true,
         noCharge: true,
-        reason: vehicle.allowed_mileage === null ? "Unlimited mileage" : "No excess mileage rate set",
+        reason: totalAllowance === null ? `Unlimited mileage (${tier} tier)` : "No excess mileage rate set",
       });
     }
 
     // Calculate excess miles
     const milesDriven = returnMileage - pickupMileage;
-    const excessMiles = milesDriven - vehicle.allowed_mileage;
+    const excessMiles = milesDriven - totalAllowance;
 
     if (excessMiles <= 0) {
       await deleteExistingCharge();
@@ -110,14 +149,15 @@ Deno.serve(async (req) => {
         noCharge: true,
         reason: "Within allowance",
         milesDriven,
-        allowedMileage: vehicle.allowed_mileage,
+        allowedMileage: totalAllowance,
+        tier,
       });
     }
 
     // Calculate charge amount
     const chargeAmount = Math.round(excessMiles * vehicle.excess_mileage_rate * 100) / 100;
 
-    console.log("[EXCESS-MILEAGE] Excess:", excessMiles, "miles × rate:", vehicle.excess_mileage_rate, "= charge:", chargeAmount);
+    console.log("[EXCESS-MILEAGE] Tier:", tier, "Allowance:", totalAllowance, "Excess:", excessMiles, "miles × rate:", vehicle.excess_mileage_rate, "= charge:", chargeAmount);
 
     // Delete any existing excess mileage charge (idempotent recalculation)
     await deleteExistingCharge();
@@ -137,7 +177,7 @@ Deno.serve(async (req) => {
         category: "Excess Mileage",
         amount: chargeAmount,
         remaining_amount: chargeAmount,
-        reference: `${excessMiles} excess miles × ${vehicle.excess_mileage_rate}/mile`,
+        reference: `${excessMiles} excess miles (${tier} tier, ${totalAllowance} allowance) × ${vehicle.excess_mileage_rate}/mile`,
       })
       .select()
       .single();
@@ -155,7 +195,8 @@ Deno.serve(async (req) => {
       excessMiles,
       chargeAmount,
       milesDriven,
-      allowedMileage: vehicle.allowed_mileage,
+      allowedMileage: totalAllowance,
+      tier,
       rate: vehicle.excess_mileage_rate,
     });
   } catch (error: any) {

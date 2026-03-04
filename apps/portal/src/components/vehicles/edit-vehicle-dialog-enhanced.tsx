@@ -60,7 +60,9 @@ interface Vehicle {
   vin?: string | null;
   description?: string | null;
   security_deposit?: number | null;
-  allowed_mileage?: number | null;
+  daily_mileage?: number | null;
+  weekly_mileage?: number | null;
+  monthly_mileage?: number | null;
   excess_mileage_rate?: number | null;
   lockbox_code?: string | null;
   lockbox_instructions?: string | null;
@@ -131,7 +133,9 @@ export const EditVehicleDialogEnhanced = ({ vehicle, open, onOpenChange }: EditV
       security_notes: vehicle.security_notes || "",
       description: vehicle.description || "",
       security_deposit: vehicle.security_deposit ?? undefined,
-      allowed_mileage: vehicle.allowed_mileage ?? undefined,
+      daily_mileage: vehicle.daily_mileage ?? undefined,
+      weekly_mileage: vehicle.weekly_mileage ?? undefined,
+      monthly_mileage: vehicle.monthly_mileage ?? undefined,
       excess_mileage_rate: vehicle.excess_mileage_rate ?? undefined,
       available_daily: vehicle.available_daily ?? true,
       available_weekly: vehicle.available_weekly ?? true,
@@ -185,7 +189,9 @@ export const EditVehicleDialogEnhanced = ({ vehicle, open, onOpenChange }: EditV
         has_remote_immobiliser: data.has_remote_immobiliser,
         security_notes: data.security_notes || null,
         security_deposit: data.security_deposit || null,
-        allowed_mileage: data.allowed_mileage || null,
+        daily_mileage: data.daily_mileage || null,
+        weekly_mileage: data.weekly_mileage || null,
+        monthly_mileage: data.monthly_mileage || null,
         excess_mileage_rate: data.excess_mileage_rate || null,
         lockbox_code: lockboxCode || null,
         lockbox_instructions: lockboxInstructions || null,
@@ -722,13 +728,13 @@ export const EditVehicleDialogEnhanced = ({ vehicle, open, onOpenChange }: EditV
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-4 items-start">
+              <div className="grid grid-cols-3 gap-4 items-start">
                 <FormField
                   control={form.control}
-                  name="allowed_mileage"
+                  name="daily_mileage"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Mileage Allowance</FormLabel>
+                      <FormLabel>Daily Mileage</FormLabel>
                       <FormControl>
                         <Input
                           type="number"
@@ -754,24 +760,52 @@ export const EditVehicleDialogEnhanced = ({ vehicle, open, onOpenChange }: EditV
 
                 <FormField
                   control={form.control}
-                  name="excess_mileage_rate"
+                  name="weekly_mileage"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Excess Mileage Rate</FormLabel>
+                      <FormLabel>Weekly Mileage</FormLabel>
                       <FormControl>
                         <Input
                           type="number"
-                          min="0.01"
-                          step="0.01"
-                          placeholder={`${currencySymbol} per mile`}
+                          min="1"
+                          placeholder="Unlimited"
                           {...field}
                           value={field.value ?? ''}
                           onChange={(e) => {
                             const value = e.target.value;
-                            field.onChange(value === '' ? undefined : parseFloat(value));
+                            field.onChange(value === '' ? undefined : parseInt(value));
                           }}
                           onKeyDown={(e) => {
-                            if (e.key === '-' || e.key === 'e' || e.key === 'E') {
+                            if (e.key === '-' || e.key === 'e' || e.key === 'E' || e.key === '.') {
+                              e.preventDefault();
+                            }
+                          }}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="monthly_mileage"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Monthly Mileage</FormLabel>
+                      <FormControl>
+                        <Input
+                          type="number"
+                          min="1"
+                          placeholder="Unlimited"
+                          {...field}
+                          value={field.value ?? ''}
+                          onChange={(e) => {
+                            const value = e.target.value;
+                            field.onChange(value === '' ? undefined : parseInt(value));
+                          }}
+                          onKeyDown={(e) => {
+                            if (e.key === '-' || e.key === 'e' || e.key === 'E' || e.key === '.') {
                               e.preventDefault();
                             }
                           }}
@@ -782,6 +816,36 @@ export const EditVehicleDialogEnhanced = ({ vehicle, open, onOpenChange }: EditV
                   )}
                 />
               </div>
+
+              <FormField
+                control={form.control}
+                name="excess_mileage_rate"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Excess Mileage Rate</FormLabel>
+                    <FormControl>
+                      <Input
+                        type="number"
+                        min="0.01"
+                        step="0.01"
+                        placeholder={`${currencySymbol} per mile`}
+                        {...field}
+                        value={field.value ?? ''}
+                        onChange={(e) => {
+                          const value = e.target.value;
+                          field.onChange(value === '' ? undefined : parseFloat(value));
+                        }}
+                        onKeyDown={(e) => {
+                          if (e.key === '-' || e.key === 'e' || e.key === 'E') {
+                            e.preventDefault();
+                          }
+                        }}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
 
               <div className="grid grid-cols-3 gap-4">
                 <FormField

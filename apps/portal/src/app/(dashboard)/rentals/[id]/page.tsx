@@ -2383,6 +2383,8 @@ const RentalDetail = () => {
         <MileageSummaryCard
           rentalId={id}
           vehicleId={rental.vehicles.id}
+          startDate={rental.start_date}
+          endDate={rental.end_date}
         />
       )}
 

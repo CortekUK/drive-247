@@ -187,9 +187,10 @@ function AgreementTimelineItem({
                 {statusInfo.label}
               </Badge>
               {isTestMode && (
-                <Badge variant="outline" className="!bg-blue-50 !text-blue-700 !border-blue-200 text-[10px] px-1.5 py-0">
-                  TEST
-                </Badge>
+                <span className="inline-flex items-center gap-1 rounded-md bg-blue-500/10 dark:bg-blue-400/15 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-blue-600 dark:text-blue-400 ring-1 ring-inset ring-blue-500/20 dark:ring-blue-400/20">
+                  <span className="h-1.5 w-1.5 rounded-full bg-blue-500 dark:bg-blue-400" />
+                  Test
+                </span>
               )}
             </div>
 

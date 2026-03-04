@@ -7067,7 +7067,6 @@ export type Database = {
         Row: {
           acquisition_date: string | null
           acquisition_type: string | null
-          allowed_mileage: number | null
           available_daily: boolean
           available_monthly: boolean
           available_weekly: boolean
@@ -7076,6 +7075,7 @@ export type Database = {
           colour: string | null
           created_at: string | null
           current_mileage: number | null
+          daily_mileage: number | null
           daily_rent: number | null
           description: string | null
           disposal_buyer: string | null
@@ -7098,6 +7098,7 @@ export type Database = {
           lockbox_instructions: string | null
           make: string | null
           model: string | null
+          monthly_mileage: number | null
           monthly_payment: number | null
           monthly_rent: number | null
           mot_due_date: string | null
@@ -7117,13 +7118,13 @@ export type Database = {
           vin: string | null
           warranty_end_date: string | null
           warranty_start_date: string | null
+          weekly_mileage: number | null
           weekly_rent: number | null
           year: number | null
         }
         Insert: {
           acquisition_date?: string | null
           acquisition_type?: string | null
-          allowed_mileage?: number | null
           available_daily?: boolean
           available_monthly?: boolean
           available_weekly?: boolean
@@ -7132,6 +7133,7 @@ export type Database = {
           colour?: string | null
           created_at?: string | null
           current_mileage?: number | null
+          daily_mileage?: number | null
           daily_rent?: number | null
           description?: string | null
           disposal_buyer?: string | null
@@ -7154,6 +7156,7 @@ export type Database = {
           lockbox_instructions?: string | null
           make?: string | null
           model?: string | null
+          monthly_mileage?: number | null
           monthly_payment?: number | null
           monthly_rent?: number | null
           mot_due_date?: string | null
@@ -7173,13 +7176,13 @@ export type Database = {
           vin?: string | null
           warranty_end_date?: string | null
           warranty_start_date?: string | null
+          weekly_mileage?: number | null
           weekly_rent?: number | null
           year?: number | null
         }
         Update: {
           acquisition_date?: string | null
           acquisition_type?: string | null
-          allowed_mileage?: number | null
           available_daily?: boolean
           available_monthly?: boolean
           available_weekly?: boolean
@@ -7188,6 +7191,7 @@ export type Database = {
           colour?: string | null
           created_at?: string | null
           current_mileage?: number | null
+          daily_mileage?: number | null
           daily_rent?: number | null
           description?: string | null
           disposal_buyer?: string | null
@@ -7210,6 +7214,7 @@ export type Database = {
           lockbox_instructions?: string | null
           make?: string | null
           model?: string | null
+          monthly_mileage?: number | null
           monthly_payment?: number | null
           monthly_rent?: number | null
           mot_due_date?: string | null
@@ -7229,6 +7234,7 @@ export type Database = {
           vin?: string | null
           warranty_end_date?: string | null
           warranty_start_date?: string | null
+          weekly_mileage?: number | null
           weekly_rent?: number | null
           year?: number | null
         }
