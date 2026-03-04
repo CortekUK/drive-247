@@ -514,9 +514,17 @@ Deno.serve(async (req) => {
       return errorResponse('Failed to create document', 400);
     }
 
-    // Report metered usage to Stripe (only for live mode agreements)
-    if (boldsignMode === 'live' && tenantId) {
+    // Report metered usage to Stripe (for all agreements when tenant has an active subscription)
+    if (tenantId) {
       try {
+        // Resolve tenant's subscription Stripe mode (test or live)
+        const { data: tenantModeData } = await supabase
+          .from('tenants')
+          .select('subscription_stripe_mode')
+          .eq('id', tenantId)
+          .single();
+        const subStripeMode: 'test' | 'live' = tenantModeData?.subscription_stripe_mode || 'test';
+
         const { data: tenantSub } = await supabase
           .from('tenant_subscriptions')
           .select('stripe_customer_id')
@@ -525,7 +533,10 @@ Deno.serve(async (req) => {
           .maybeSingle();
 
         if (tenantSub?.stripe_customer_id) {
-          const STRIPE_KEY = Deno.env.get('STRIPE_SUBSCRIPTION_SECRET_KEY') || Deno.env.get('STRIPE_SUBSCRIPTION_TEST_SECRET_KEY') || Deno.env.get('STRIPE_TEST_SECRET_KEY') || '';
+          const STRIPE_KEY = subStripeMode === 'live'
+            ? (Deno.env.get('STRIPE_SUBSCRIPTION_LIVE_SECRET_KEY') || Deno.env.get('STRIPE_LIVE_SECRET_KEY') || '')
+            : (Deno.env.get('STRIPE_SUBSCRIPTION_TEST_SECRET_KEY') || Deno.env.get('STRIPE_SUBSCRIPTION_SECRET_KEY') || Deno.env.get('STRIPE_TEST_SECRET_KEY') || '');
+
           const meterRes = await fetch('https://api.stripe.com/v1/billing/meter_events', {
             method: 'POST',
             headers: {
@@ -539,7 +550,7 @@ Deno.serve(async (req) => {
             }),
           });
           const meterData = await meterRes.json();
-          console.log('Stripe meter event:', meterRes.ok ? meterData.identifier : 'FAILED', meterRes.status);
+          console.log('Stripe meter event:', meterRes.ok ? meterData.identifier : 'FAILED', meterRes.status, `(sub mode: ${subStripeMode})`);
 
           // Log usage for portal UI
           const usageRefId = rentalId.substring(0, 8).toUpperCase();

@@ -136,7 +136,9 @@ Deno.serve(async (req) => {
     const lineItems: Array<{ price: string; quantity?: number }> = [
       { price: priceId, quantity: 1 },
     ];
-    const meteredPriceId = Deno.env.get("STRIPE_ESIGN_METERED_PRICE_ID");
+    const meteredPriceId = mode === "live"
+      ? Deno.env.get("STRIPE_ESIGN_METERED_PRICE_ID_LIVE")
+      : (Deno.env.get("STRIPE_ESIGN_METERED_PRICE_ID_TEST") || Deno.env.get("STRIPE_ESIGN_METERED_PRICE_ID"));
     if (meteredPriceId) {
       lineItems.push({ price: meteredPriceId }); // no quantity for metered
     }
