@@ -305,7 +305,11 @@ export function AdminExtendRentalDialog({
                   customer_id: rental.customer_id || rental.customers?.id,
                   tenant_id: tenant.id,
                   trip_dates: {
-                    start: rental.end_date.split('T')[0],
+                    start: (() => {
+                      const d = rental.end_date.split('T')[0];
+                      const today = new Date().toISOString().split('T')[0];
+                      return d < today ? today : d;
+                    })(),
                     end: newEndDate.split('T')[0],
                   },
                   pickup_state: originalPolicy.pickup_state,

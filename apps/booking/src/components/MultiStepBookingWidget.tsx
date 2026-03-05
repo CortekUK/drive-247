@@ -16,7 +16,7 @@ import { Badge } from "@/components/ui/badge";
 import { supabase } from "@/integrations/supabase/client";
 import { useTenant } from "@/contexts/TenantContext";
 import { toast } from "sonner";
-import { ChevronRight, ChevronLeft, Check, Baby, Coffee, MapPin, UserCheck, Car, Crown, TrendingUp, Users as GroupIcon, Calculator, Shield, CheckCircle, CalendarIcon, Clock, Search, Grid3x3, List, SlidersHorizontal, X, AlertCircle, FileCheck, RefreshCw, Upload, Gauge, User, Loader2, Globe, Briefcase, ExternalLink, Mail, Phone as PhoneIcon } from "lucide-react";
+import { ChevronRight, ChevronLeft, Check, Baby, Coffee, MapPin, UserCheck, Car, Crown, TrendingUp, Users as GroupIcon, Calculator, Shield, CheckCircle, CalendarIcon, Clock, Search, Grid3x3, List, SlidersHorizontal, X, AlertCircle, AlertTriangle, FileCheck, RefreshCw, Upload, Gauge, User, Loader2, Globe, Briefcase, ExternalLink, Mail, Phone as PhoneIcon } from "lucide-react";
 import { format, differenceInHours } from "date-fns";
 import { cn } from "@/lib/utils";
 import BookingConfirmation from "./BookingConfirmation";
@@ -4775,8 +4775,26 @@ const MultiStepBookingWidget = () => {
                 </Button>
               </div>
 
+              {(() => {
+                const d = formData.pickupDate;
+                const todayStr = new Date().toISOString().split('T')[0];
+                if (d && d < todayStr) {
+                  return (
+                    <div className="flex items-center gap-2 p-2.5 rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 text-amber-700 dark:text-amber-400 text-xs">
+                      <AlertTriangle className="h-3.5 w-3.5 flex-shrink-0" />
+                      <span>Your rental starts {new Date(d + 'T00:00:00').toLocaleDateString()} which is in the past. Insurance coverage will begin from today.</span>
+                    </div>
+                  );
+                }
+                return null;
+              })()}
               <BonzahInsuranceSelector
-                tripStartDate={formData.pickupDate || null}
+                tripStartDate={(() => {
+                  const d = formData.pickupDate || null;
+                  if (!d) return null;
+                  const today = new Date().toISOString().split('T')[0];
+                  return d < today ? today : d;
+                })()}
                 tripEndDate={formData.dropoffDate || null}
                 pickupState={formData.addressState || "FL"}
                 onCoverageChange={handleBonzahCoverageChange}

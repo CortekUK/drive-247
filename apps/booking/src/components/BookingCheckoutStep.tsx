@@ -388,7 +388,11 @@ export default function BookingCheckoutStep({
           customer_id: customerId,
           tenant_id: tenantId,
           trip_dates: {
-            start: formData.pickupDate,
+            start: (() => {
+              const d = formData.pickupDate;
+              const today = new Date().toISOString().split('T')[0];
+              return d < today ? today : d;
+            })(),
             end: formData.dropoffDate,
           },
           pickup_state: formData.addressState || 'FL', // Use customer's state or default to FL

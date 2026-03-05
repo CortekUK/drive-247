@@ -1061,7 +1061,11 @@ const CreateRental = () => {
               customer_id: data.customer_id,
               tenant_id: tenant.id,
               trip_dates: {
-                start: data.start_date.toISOString().split('T')[0],
+                start: (() => {
+                  const d = data.start_date.toISOString().split('T')[0];
+                  const today = new Date().toISOString().split('T')[0];
+                  return d < today ? today : d;
+                })(),
                 end: data.end_date.toISOString().split('T')[0],
               },
               pickup_state: custState,
@@ -2007,8 +2011,26 @@ const CreateRental = () => {
                           </div>
                         ) : (
                           <>
+                            {(() => {
+                              const startStr = watchedStartDate ? watchedStartDate.toISOString().split('T')[0] : null;
+                              const todayStr = new Date().toISOString().split('T')[0];
+                              if (startStr && startStr < todayStr) {
+                                return (
+                                  <div className="flex items-center gap-2 p-2.5 rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 text-amber-700 dark:text-amber-400 text-xs">
+                                    <AlertTriangle className="h-3.5 w-3.5 flex-shrink-0" />
+                                    <span>Rental starts {new Date(startStr + 'T00:00:00').toLocaleDateString()} which is in the past. Insurance coverage will begin from today.</span>
+                                  </div>
+                                );
+                              }
+                              return null;
+                            })()}
                             <BonzahInsuranceSelector
-                              tripStartDate={watchedStartDate ? watchedStartDate.toISOString().split('T')[0] : null}
+                              tripStartDate={(() => {
+                                const d = watchedStartDate ? watchedStartDate.toISOString().split('T')[0] : null;
+                                if (!d) return null;
+                                const today = new Date().toISOString().split('T')[0];
+                                return d < today ? today : d;
+                              })()}
                               tripEndDate={watchedEndDate ? watchedEndDate.toISOString().split('T')[0] : null}
                               pickupState={customerDetails?.address_state || "FL"}
                               onCoverageChange={(coverage, premium) => {
