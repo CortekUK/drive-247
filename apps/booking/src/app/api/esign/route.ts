@@ -512,7 +512,11 @@ export async function POST(request: NextRequest) {
             return NextResponse.json({
                 ok: false,
                 error: 'Failed to create document',
-                detail: errorText
+                detail: errorText,
+                boldsignStatus: boldSignResponse.status,
+                boldsignMode,
+                hasApiKey: !!BOLDSIGN_API_KEY,
+                apiKeyPrefix: BOLDSIGN_API_KEY.substring(0, 8) + '...',
             }, { status: 500 });
         }
 

@@ -939,7 +939,7 @@ export async function POST(request: NextRequest) {
         if (!boldSignResponse.ok) {
             const errorText = await boldSignResponse.text();
             console.error('BoldSign error:', boldSignResponse.status, errorText);
-            return NextResponse.json({ ok: false, error: 'Failed to create document', detail: errorText }, { status: 500 });
+            return NextResponse.json({ ok: false, error: 'Failed to create document', detail: errorText, boldsignStatus: boldSignResponse.status, boldsignMode, hasApiKey: !!BOLDSIGN_API_KEY, apiKeyPrefix: BOLDSIGN_API_KEY.substring(0, 8) + '...' }, { status: 500 });
         }
 
         const boldSignResult = await boldSignResponse.json();
