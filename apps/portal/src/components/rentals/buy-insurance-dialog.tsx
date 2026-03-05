@@ -395,7 +395,11 @@ export function BuyInsuranceDialog({
                 </div>
 
                 <BonzahInsuranceSelector
-                  tripStartDate={rental.start_date}
+                  tripStartDate={(() => {
+                    const rentalStart = rental.start_date.split('T')[0];
+                    const todayStr = new Date().toISOString().split('T')[0];
+                    return rentalStart < todayStr ? todayStr : rental.start_date;
+                  })()}
                   tripEndDate={rental.end_date}
                   pickupState={customerState}
                   onCoverageChange={handleCoverageChange}
@@ -440,9 +444,25 @@ export function BuyInsuranceDialog({
                 </div>
                 <div>
                   <p className="text-muted-foreground">Coverage Period</p>
-                  <p className="font-medium">
-                    {new Date(rental.start_date).toLocaleDateString()} - {new Date(rental.end_date).toLocaleDateString()}
-                  </p>
+                  {(() => {
+                    const rentalStart = rental.start_date.split('T')[0];
+                    const todayStr = new Date().toISOString().split('T')[0];
+                    const effectiveStart = rentalStart < todayStr ? todayStr : rentalStart;
+                    const isClamped = rentalStart < todayStr;
+                    return (
+                      <>
+                        <p className="font-medium">
+                          {new Date(effectiveStart + 'T00:00:00').toLocaleDateString()} - {new Date(rental.end_date).toLocaleDateString()}
+                        </p>
+                        {isClamped && (
+                          <p className="text-xs text-amber-600 dark:text-amber-400 mt-0.5 flex items-center gap-1">
+                            <AlertTriangle className="h-3 w-3" />
+                            Rental started {new Date(rentalStart + 'T00:00:00').toLocaleDateString()} — coverage begins today (no retroactive coverage)
+                          </p>
+                        )}
+                      </>
+                    );
+                  })()}
                 </div>
                 <div>
                   <p className="text-muted-foreground">Selected Coverage</p>
