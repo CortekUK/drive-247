@@ -334,38 +334,43 @@ export const EditVehicleDialogEnhanced = ({ vehicle, open, onOpenChange }: EditV
           >
             {/* Lockbox Section - top of form when tenant has lockbox enabled */}
             {rentalSettings?.lockbox_enabled && (
-              <div className="flex items-center gap-3 p-3 border rounded-lg bg-muted/30">
-                <Lock className="h-4 w-4 text-primary flex-shrink-0" />
-                <div className="flex items-center gap-2 flex-1 min-w-0">
-                  <Input
-                    placeholder={rentalSettings.lockbox_code_length ? `${rentalSettings.lockbox_code_length}-digit code` : 'Lockbox code'}
-                    value={lockboxCode}
-                    onChange={(e) => {
-                      const val = rentalSettings.lockbox_code_length
-                        ? e.target.value.replace(/[^0-9]/g, '').slice(0, rentalSettings.lockbox_code_length)
-                        : e.target.value;
-                      setLockboxCode(val);
-                    }}
-                    className="w-36 font-mono tracking-widest text-center text-lg h-9"
-                    maxLength={rentalSettings.lockbox_code_length || undefined}
-                  />
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={generateLockboxCode}
-                    className="flex items-center gap-1.5 h-9"
-                  >
-                    <RefreshCw className="h-3.5 w-3.5" />
-                    Generate
-                  </Button>
+              <div className="p-3 border rounded-lg bg-muted/30 space-y-3">
+                <div className="flex items-center gap-2 text-sm font-medium">
+                  <Lock className="h-4 w-4 text-primary" />
+                  Lockbox
                 </div>
-                <Input
-                  placeholder="Instructions (optional)"
-                  value={lockboxInstructions}
-                  onChange={(e) => setLockboxInstructions(e.target.value)}
-                  className="flex-1 h-9 text-sm"
-                />
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="flex items-center gap-2">
+                    <Input
+                      placeholder="e.g. 12345"
+                      value={lockboxCode}
+                      onChange={(e) => {
+                        const val = rentalSettings.lockbox_code_length
+                          ? e.target.value.replace(/[^0-9]/g, '').slice(0, rentalSettings.lockbox_code_length)
+                          : e.target.value;
+                        setLockboxCode(val);
+                      }}
+                      className="font-mono tracking-widest text-center text-lg h-9"
+                      maxLength={rentalSettings.lockbox_code_length || undefined}
+                    />
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={generateLockboxCode}
+                      className="flex items-center gap-1.5 h-9 shrink-0"
+                    >
+                      <RefreshCw className="h-3.5 w-3.5" />
+                      Generate
+                    </Button>
+                  </div>
+                  <Input
+                    placeholder="Instructions (optional)"
+                    value={lockboxInstructions}
+                    onChange={(e) => setLockboxInstructions(e.target.value)}
+                    className="h-9 text-sm"
+                  />
+                </div>
               </div>
             )}
 
