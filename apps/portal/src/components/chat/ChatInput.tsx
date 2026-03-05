@@ -94,7 +94,7 @@ export function ChatInput({
           )}
         />
 
-        <div className="flex items-center gap-1 pr-2 pb-2">
+        <div className="flex items-center gap-1 pr-2 py-[5px]">
           <Button
             onClick={handleSend}
             disabled={!value.trim() || isLoading}

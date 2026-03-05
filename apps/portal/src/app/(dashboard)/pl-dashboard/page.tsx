@@ -7,16 +7,42 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, TableFooter } from '@/components/ui/table';
-import { CalendarIcon, TrendingUp, TrendingDown, DollarSign, Car, Calendar, Download, ArrowUpDown, ArrowUp, ArrowDown, BarChart3 } from 'lucide-react';
+import { CalendarIcon, TrendingUp, TrendingDown, DollarSign, Car, Calendar, Download, ArrowUpDown, ArrowUp, ArrowDown, BarChart3, Info } from 'lucide-react';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar as CalendarComponent } from '@/components/ui/calendar';
 import { cn } from '@/lib/utils';
 import { format, startOfMonth, endOfMonth, subMonths } from 'date-fns';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
+import { BarChart, Bar, AreaChart, Area, XAxis, YAxis, CartesianGrid, PieChart, Pie, Cell } from 'recharts';
+import { ChartContainer, ChartTooltip, ChartTooltipContent, type ChartConfig } from '@/components/ui/chart';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { useToast } from '@/hooks/use-toast';
 import { useTenant } from '@/contexts/TenantContext';
 import { formatCurrency, getCurrencySymbol } from '@/lib/format-utils';
+
+// --- Chart configs ---
+
+const trendChartConfig = {
+  total_revenue: { label: 'Revenue', color: '#10b981' },
+  total_costs: { label: 'Costs', color: '#ef4444' },
+} satisfies ChartConfig;
+
+const REVENUE_COLORS: Record<string, string> = {
+  Rental: '#10b981',
+  Fees: '#3b82f6',
+  Other: '#6b7280',
+};
+
+const COST_COLORS: Record<string, string> = {
+  Service: '#3b82f6',
+  Fines: '#ef4444',
+  Acquisition: '#f59e0b',
+  Other: '#6b7280',
+};
+
+const vehicleBarConfig = {
+  net_profit: { label: 'Net Profit', color: '#10b981' },
+} satisfies ChartConfig;
 
 interface PLSummary {
   total_revenue: number;
@@ -297,7 +323,6 @@ const PLDashboard: React.FC = () => {
 
       return result.sort((a, b) => a.month.localeCompare(b.month));
     },
-    enabled: groupByMonth,
   });
 
   const handleSort = (field: SortField) => {
@@ -356,6 +381,51 @@ const PLDashboard: React.FC = () => {
       net_profit: 0,
     });
   }, [vehiclePLData]);
+
+  // --- Derived chart data ---
+
+  const revenueDonutData = useMemo(() => {
+    if (!categoryTotals) return [];
+    const rental = categoryTotals.revenue_rental || 0;
+    const fees = categoryTotals.revenue_fees || 0;
+    const total = rental + fees;
+    const other = (plSummary?.total_revenue || 0) - total;
+    return [
+      { name: 'Rental', value: rental, fill: REVENUE_COLORS.Rental },
+      { name: 'Fees', value: fees, fill: REVENUE_COLORS.Fees },
+      ...(other > 0 ? [{ name: 'Other', value: other, fill: REVENUE_COLORS.Other }] : []),
+    ].filter(d => d.value > 0);
+  }, [categoryTotals, plSummary]);
+
+  const costDonutData = useMemo(() => {
+    if (!categoryTotals) return [];
+    return [
+      { name: 'Service', value: categoryTotals.cost_service || 0, fill: COST_COLORS.Service },
+      { name: 'Fines', value: categoryTotals.cost_fines || 0, fill: COST_COLORS.Fines },
+      { name: 'Acquisition', value: categoryTotals.cost_acquisition || 0, fill: COST_COLORS.Acquisition },
+      { name: 'Other', value: categoryTotals.cost_other || 0, fill: COST_COLORS.Other },
+    ].filter(d => d.value > 0);
+  }, [categoryTotals]);
+
+  const topBottomVehicles = useMemo(() => {
+    if (!vehiclePLData || vehiclePLData.length === 0) return [];
+    const sorted = [...vehiclePLData].sort((a, b) => b.net_profit - a.net_profit);
+    if (sorted.length <= 10) return sorted;
+    const top5 = sorted.slice(0, 5);
+    const bottom5 = sorted.slice(-5);
+    const ids = new Set(top5.map(v => v.vehicle_id));
+    const combined = [...top5];
+    bottom5.forEach(v => { if (!ids.has(v.vehicle_id)) combined.push(v); });
+    return combined.sort((a, b) => b.net_profit - a.net_profit);
+  }, [vehiclePLData]);
+
+  const revenueDonutConfig: ChartConfig = Object.fromEntries(
+    revenueDonutData.map(item => [item.name, { label: item.name, color: item.fill }])
+  );
+
+  const costDonutConfig: ChartConfig = Object.fromEntries(
+    costDonutData.map(item => [item.name, { label: item.name, color: item.fill }])
+  );
 
   const exportToCSV = () => {
     try {
@@ -670,6 +740,220 @@ const PLDashboard: React.FC = () => {
         ))}
       </div>
 
+      {/* Charts Section */}
+      {!isSummaryLoading && !isVehicleLoading && (plSummary?.total_revenue || 0) + (plSummary?.total_costs || 0) > 0 && (
+        <TooltipProvider>
+        <div className="space-y-6">
+          {/* Chart 1: Revenue vs Costs Monthly Trend */}
+          {monthlyPLData && monthlyPLData.length > 1 && (
+            <div className="rounded-lg border border-border/60 bg-card/50 p-4">
+              <h4 className="text-sm font-semibold text-foreground mb-3 flex items-center gap-1.5">
+                Revenue vs Costs Trend
+                <Tooltip><TooltipTrigger asChild><Info className="h-3.5 w-3.5 text-muted-foreground cursor-help" /></TooltipTrigger>
+                <TooltipContent><p>Monthly revenue and cost trends over the selected date range</p></TooltipContent></Tooltip>
+              </h4>
+              <ChartContainer config={trendChartConfig} className="aspect-[4/1] w-full">
+                <AreaChart data={monthlyPLData}>
+                  <defs>
+                    <linearGradient id="plFillRevenue" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#10b981" stopOpacity={0.3} />
+                      <stop offset="95%" stopColor="#10b981" stopOpacity={0.02} />
+                    </linearGradient>
+                    <linearGradient id="plFillCosts" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#ef4444" stopOpacity={0.3} />
+                      <stop offset="95%" stopColor="#ef4444" stopOpacity={0.02} />
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid vertical={false} strokeDasharray="3 3" stroke="hsl(var(--border))" strokeOpacity={0.5} />
+                  <XAxis dataKey="month" tickLine={false} axisLine={false} tick={{ fontSize: 10 }} />
+                  <YAxis
+                    tickLine={false}
+                    axisLine={false}
+                    tick={{ fontSize: 10 }}
+                    tickFormatter={(value) =>
+                      value >= 1000
+                        ? `${getCurrencySymbol(currencyCode)}${(value / 1000).toFixed(0)}k`
+                        : `${getCurrencySymbol(currencyCode)}${value}`
+                    }
+                    width={55}
+                  />
+                  <ChartTooltip
+                    content={
+                      <ChartTooltipContent
+                        valueFormatter={(value) => formatCurrency(value, currencyCode)}
+                      />
+                    }
+                  />
+                  <Area type="monotone" dataKey="total_revenue" stroke="#10b981" strokeWidth={2} fill="url(#plFillRevenue)" />
+                  <Area type="monotone" dataKey="total_costs" stroke="#ef4444" strokeWidth={2} fill="url(#plFillCosts)" />
+                </AreaChart>
+              </ChartContainer>
+              <div className="flex items-center justify-center gap-4 mt-2 text-xs">
+                <div className="flex items-center gap-1.5">
+                  <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: '#10b981' }} />
+                  <span className="text-muted-foreground">Revenue</span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: '#ef4444' }} />
+                  <span className="text-muted-foreground">Costs</span>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Charts 2+3: Revenue & Cost Breakdown Donuts */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {/* Revenue Breakdown */}
+            <div className="rounded-lg border border-border/60 bg-card/50 p-4">
+              <h4 className="text-sm font-semibold text-foreground mb-3 flex items-center gap-1.5">
+                Revenue Breakdown
+                <Tooltip><TooltipTrigger asChild><Info className="h-3.5 w-3.5 text-muted-foreground cursor-help" /></TooltipTrigger>
+                <TooltipContent><p>Split of total revenue between rental income and fees</p></TooltipContent></Tooltip>
+              </h4>
+              {revenueDonutData.length > 0 ? (
+                <ChartContainer config={revenueDonutConfig} className="aspect-square max-h-[250px] mx-auto">
+                  <PieChart>
+                    <ChartTooltip
+                      content={
+                        <ChartTooltipContent
+                          valueFormatter={(value) => formatCurrency(value, currencyCode)}
+                          nameKey="name"
+                        />
+                      }
+                    />
+                    <Pie data={revenueDonutData} dataKey="value" nameKey="name" innerRadius="55%" outerRadius="85%" strokeWidth={2} stroke="hsl(var(--background))">
+                      {revenueDonutData.map((entry) => (
+                        <Cell key={entry.name} fill={entry.fill} />
+                      ))}
+                    </Pie>
+                    <text x="50%" y="46%" textAnchor="middle" dominantBaseline="middle" className="fill-foreground text-xl font-bold">
+                      {formatCurrency(plSummary?.total_revenue || 0, currencyCode)}
+                    </text>
+                    <text x="50%" y="56%" textAnchor="middle" dominantBaseline="middle" className="fill-muted-foreground text-xs">
+                      Total Revenue
+                    </text>
+                  </PieChart>
+                </ChartContainer>
+              ) : (
+                <div className="aspect-square max-h-[250px] flex items-center justify-center text-muted-foreground text-sm">
+                  No revenue data
+                </div>
+              )}
+              {revenueDonutData.length > 0 && (
+                <div className="flex flex-wrap items-center justify-center gap-3 mt-2 text-xs">
+                  {revenueDonutData.map((entry) => (
+                    <div key={entry.name} className="flex items-center gap-1.5">
+                      <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: entry.fill }} />
+                      <span className="text-muted-foreground">{entry.name} ({formatCurrency(entry.value, currencyCode)})</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Cost Breakdown */}
+            <div className="rounded-lg border border-border/60 bg-card/50 p-4">
+              <h4 className="text-sm font-semibold text-foreground mb-3 flex items-center gap-1.5">
+                Cost Breakdown
+                <Tooltip><TooltipTrigger asChild><Info className="h-3.5 w-3.5 text-muted-foreground cursor-help" /></TooltipTrigger>
+                <TooltipContent><p>Distribution of costs across service, fines, and acquisition</p></TooltipContent></Tooltip>
+              </h4>
+              {costDonutData.length > 0 ? (
+                <ChartContainer config={costDonutConfig} className="aspect-square max-h-[250px] mx-auto">
+                  <PieChart>
+                    <ChartTooltip
+                      content={
+                        <ChartTooltipContent
+                          valueFormatter={(value) => formatCurrency(value, currencyCode)}
+                          nameKey="name"
+                        />
+                      }
+                    />
+                    <Pie data={costDonutData} dataKey="value" nameKey="name" innerRadius="55%" outerRadius="85%" strokeWidth={2} stroke="hsl(var(--background))">
+                      {costDonutData.map((entry) => (
+                        <Cell key={entry.name} fill={entry.fill} />
+                      ))}
+                    </Pie>
+                    <text x="50%" y="46%" textAnchor="middle" dominantBaseline="middle" className="fill-foreground text-xl font-bold">
+                      {formatCurrency(plSummary?.total_costs || 0, currencyCode)}
+                    </text>
+                    <text x="50%" y="56%" textAnchor="middle" dominantBaseline="middle" className="fill-muted-foreground text-xs">
+                      Total Costs
+                    </text>
+                  </PieChart>
+                </ChartContainer>
+              ) : (
+                <div className="aspect-square max-h-[250px] flex items-center justify-center text-muted-foreground text-sm">
+                  No cost data
+                </div>
+              )}
+              {costDonutData.length > 0 && (
+                <div className="flex flex-wrap items-center justify-center gap-3 mt-2 text-xs">
+                  {costDonutData.map((entry) => (
+                    <div key={entry.name} className="flex items-center gap-1.5">
+                      <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: entry.fill }} />
+                      <span className="text-muted-foreground">{entry.name} ({formatCurrency(entry.value, currencyCode)})</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Chart 4: Top & Bottom Vehicles by Profit */}
+          {topBottomVehicles.length > 0 && (
+            <div className="rounded-lg border border-border/60 bg-card/50 p-4">
+              <h4 className="text-sm font-semibold text-foreground mb-3 flex items-center gap-1.5">
+                Top & Bottom Vehicles by Profit
+                <Tooltip><TooltipTrigger asChild><Info className="h-3.5 w-3.5 text-muted-foreground cursor-help" /></TooltipTrigger>
+                <TooltipContent><p>Most and least profitable vehicles by net profit</p></TooltipContent></Tooltip>
+              </h4>
+              <ChartContainer config={vehicleBarConfig} className="aspect-[3/1] w-full">
+                <BarChart data={topBottomVehicles} layout="vertical" barSize={16}>
+                  <CartesianGrid horizontal={false} strokeDasharray="3 3" stroke="hsl(var(--border))" strokeOpacity={0.4} />
+                  <XAxis
+                    type="number"
+                    tickLine={false}
+                    axisLine={false}
+                    tick={{ fontSize: 10 }}
+                    tickFormatter={(value) =>
+                      value >= 1000 || value <= -1000
+                        ? `${getCurrencySymbol(currencyCode)}${(value / 1000).toFixed(0)}k`
+                        : `${getCurrencySymbol(currencyCode)}${value}`
+                    }
+                  />
+                  <YAxis
+                    type="category"
+                    dataKey="vehicle_reg"
+                    tickLine={false}
+                    axisLine={false}
+                    tick={{ fontSize: 11 }}
+                    width={80}
+                  />
+                  <ChartTooltip
+                    content={
+                      <ChartTooltipContent
+                        labelFormatter={(_: any, payload: any) => {
+                          const vehicle = payload?.[0]?.payload;
+                          return vehicle ? `${vehicle.vehicle_reg} — ${vehicle.make_model}` : '';
+                        }}
+                        valueFormatter={(value) => formatCurrency(value, currencyCode)}
+                      />
+                    }
+                  />
+                  <Bar dataKey="net_profit" radius={[0, 4, 4, 0]}>
+                    {topBottomVehicles.map((entry) => (
+                      <Cell key={entry.vehicle_id} fill={entry.net_profit >= 0 ? '#10b981' : '#ef4444'} />
+                    ))}
+                  </Bar>
+                </BarChart>
+              </ChartContainer>
+            </div>
+          )}
+        </div>
+        </TooltipProvider>
+      )}
+
       {/* Vehicle Profitability Table or Monthly View */}
       <Card className="shadow-sm">
         <CardHeader>
@@ -687,54 +971,42 @@ const PLDashboard: React.FC = () => {
           {groupByMonth ? (
             showChart ? (
               // Monthly chart view
-              <div className="h-80 w-full">
-                <ResponsiveContainer width="100%" height="100%">
-                   <LineChart
-                     data={monthlyPLData}
-                     onClick={(data) => {
-                       if (data && data.activeLabel) {
-                         // Convert month name to YYYY-MM format
-                         const monthDate = new Date(`${data.activeLabel} 1, ${new Date().getFullYear()}`);
-                         const monthStr = `${monthDate.getFullYear()}-${String(monthDate.getMonth() + 1).padStart(2, '0')}`;
-                         router.push(`/pl-dashboard/monthly/${monthStr}`);
-                       }
-                     }}
-                   >
-                    <CartesianGrid strokeDasharray="3 3" className="opacity-30" />
-                    <XAxis dataKey="month" className="text-xs" />
-                    <YAxis className="text-xs" tickFormatter={(value) => `${getCurrencySymbol(currencyCode)}${(value / 1000).toFixed(0)}k`} />
-                    <Tooltip
-                      formatter={(value: number, name: string) => [formatCurrency(value, currencyCode), name]}
-                      labelClassName="text-foreground"
-                      contentStyle={{ backgroundColor: 'hsl(var(--background))', border: '1px solid hsl(var(--border))' }}
-                    />
-                     <Line
-                       type="monotone"
-                       dataKey="total_revenue"
-                       stroke="hsl(var(--success))"
-                       strokeWidth={2}
-                       name="Revenue"
-                       className="cursor-pointer"
-                     />
-                     <Line
-                       type="monotone"
-                       dataKey="total_costs"
-                       stroke="hsl(var(--destructive))"
-                       strokeWidth={2}
-                       name="Costs"
-                       className="cursor-pointer"
-                     />
-                     <Line
-                       type="monotone"
-                       dataKey="net_profit"
-                       stroke="hsl(var(--primary))"
-                       strokeWidth={2}
-                       name="Net Profit"
-                       className="cursor-pointer"
-                     />
-                  </LineChart>
-                </ResponsiveContainer>
-              </div>
+              <ChartContainer config={trendChartConfig} className="aspect-[3/1] w-full">
+                <AreaChart data={monthlyPLData}>
+                  <defs>
+                    <linearGradient id="plMonthlyRevenue" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#10b981" stopOpacity={0.3} />
+                      <stop offset="95%" stopColor="#10b981" stopOpacity={0.02} />
+                    </linearGradient>
+                    <linearGradient id="plMonthlyCosts" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#ef4444" stopOpacity={0.3} />
+                      <stop offset="95%" stopColor="#ef4444" stopOpacity={0.02} />
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid vertical={false} strokeDasharray="3 3" stroke="hsl(var(--border))" strokeOpacity={0.5} />
+                  <XAxis dataKey="month" tickLine={false} axisLine={false} tick={{ fontSize: 10 }} />
+                  <YAxis
+                    tickLine={false}
+                    axisLine={false}
+                    tick={{ fontSize: 10 }}
+                    tickFormatter={(value) =>
+                      value >= 1000
+                        ? `${getCurrencySymbol(currencyCode)}${(value / 1000).toFixed(0)}k`
+                        : `${getCurrencySymbol(currencyCode)}${value}`
+                    }
+                    width={55}
+                  />
+                  <ChartTooltip
+                    content={
+                      <ChartTooltipContent
+                        valueFormatter={(value) => formatCurrency(value, currencyCode)}
+                      />
+                    }
+                  />
+                  <Area type="monotone" dataKey="total_revenue" stroke="#10b981" strokeWidth={2} fill="url(#plMonthlyRevenue)" />
+                  <Area type="monotone" dataKey="total_costs" stroke="#ef4444" strokeWidth={2} fill="url(#plMonthlyCosts)" />
+                </AreaChart>
+              </ChartContainer>
             ) : (
               // Monthly table view
               <div className="relative overflow-x-auto">

@@ -33,29 +33,42 @@ interface ChatResponse {
 }
 
 // System prompt for the AI assistant
-function getSystemPrompt(userName: string, metrics: Record<string, unknown>, currencyCode: string = 'GBP'): string {
+function getSystemPrompt(userName: string, metricsJson: string, currencyCode: string = 'GBP'): string {
   const sym = getCurrencySymbol(currencyCode);
-  return `You are Trax AI, a helpful AI assistant for the Drive247 car rental management portal. You help users understand their business data and answer questions about customers, vehicles, rentals, payments, and fines.
+  return `You are Trax AI, a helpful AI assistant for the Drive247 car rental management portal. You help users understand their business data and answer questions about customers, vehicles, rentals, payments, fines, invoices, expenses, P&L, reviews, leads, reminders, staff, and more.
 
-${userName ? `You're speaking with ${userName}. Be friendly and personalized.` : ''}
+${userName ? `You're speaking with ${userName}. Use their name occasionally to feel personal — maybe once every 3-4 messages or when greeting, thanking, or wrapping up. Don't use it in every response.` : ''}
 
-Current Business Metrics:
-- Total Customers: ${metrics.total_customers || 0} (${metrics.active_customers || 0} active)
-- Total Vehicles: ${metrics.total_vehicles || 0} (${metrics.available_vehicles || 0} available)
-- Active Rentals: ${metrics.active_rentals || 0} of ${metrics.total_rentals || 0} total
-- Pending Payments: ${formatCurrency(Number(metrics.pending_payments) || 0, currencyCode)}
-- Fines: ${metrics.total_fines || 0} total (${metrics.unpaid_fines || 0} unpaid)
+All data below is for the current tenant ONLY. Never reference, suggest, or imply data from other businesses or tenants.
+
+## LIVE BUSINESS METRICS
+The following JSON contains exact, real-time metrics from the database. These numbers are authoritative — use them directly. Do NOT invent, estimate, or round values.
+
+\`\`\`json
+${metricsJson}
+\`\`\`
+
+### Key fields explained:
+- **Counts**: total_customers, active_customers, inactive_customers, gig_driver_customers, blocked_customers, total_vehicles, available_vehicles, rented_vehicles, maintenance_vehicles, disposed_vehicles, total_rentals, active_rentals, pending_rentals, closed_rentals, cancelled_rentals, completed_rentals, gig_driver_rentals, lockbox_rentals, total_payments_count, pending_payments_count, refunded_payments_count, total_fines, paid_fines, unpaid_fines, waived_fines, total_invoices, pending_invoices, total_expenses_count, total_reviews, skipped_reviews, total_agreements, total_leads, total_reminders, pending_reminders, total_staff
+- **Amounts** (in ${currencyCode}): total_fleet_value, total_payments_amount, pending_payments, completed_payments_amount, refunded_payments_amount, total_fine_amount, unpaid_fine_amount, total_invoiced_amount, pending_invoiced_amount, total_revenue, total_collected, total_refunds, outstanding_balance, total_expenses_amount, average_review_rating
+- **Breakdown arrays** (pre-built chart data — use directly as the "data" array in charts): vehicles_by_make, rentals_by_status, payments_by_status, fines_by_status, revenue_by_category, expenses_by_category, leads_by_status, staff_by_role
 
 You have access to search results from the database that will be provided as context. Use this data to answer questions accurately.
 
-When users ask for data visualizations or breakdowns, you can include a chart in your response using this exact format (the system will parse and render it):
+## CHARTS
+When users ask for a chart, graph, visualization, or breakdown, include a chart in your response using this exact format:
 
 ---CHART_DATA---
-{"type":"bar","title":"Chart Title","data":[{"name":"Category 1","value":100},{"name":"Category 2","value":200}]}
+{"type":"bar","title":"Chart Title","data":[{"name":"Label","value":123}]}
 ---END_CHART---
 
-Chart types available: "bar", "pie", "line"
-Always include the chart AFTER your text explanation.
+Chart types: "bar", "pie", "line". Always include the chart AFTER your text explanation.
+
+CRITICAL CHART RULES:
+1. Copy values DIRECTLY from the metrics JSON above. For breakdown arrays (vehicles_by_make, rentals_by_status, etc.), use them directly as the "data" field — they are already in {"name","value"} format.
+2. Before outputting chart JSON, verify EVERY value matches the metrics exactly.
+3. If a metric is 0, use 0. Do not skip it or substitute another number.
+4. If you cannot find the exact value, say so in text — do NOT guess.
 
 Guidelines:
 - Be concise and helpful
@@ -209,6 +222,12 @@ serve(async (req) => {
       console.error('Get metrics error:', metricsError);
     }
 
+    // Log the raw metrics so we can debug data issues
+    console.log(`Raw metrics for tenant ${tenantId}:`, JSON.stringify(metrics));
+
+    // Serialize metrics as a clean JSON string for the system prompt
+    const metricsJson = JSON.stringify(metrics || {}, null, 2);
+
     // Step 4: Get conversation history
     const { data: history, error: historyError } = await supabase
       .rpc('get_chat_history', {
@@ -227,7 +246,7 @@ serve(async (req) => {
     // System prompt with context
     messages.push({
       role: 'system',
-      content: getSystemPrompt(userName, metrics || {}, tenantCurrencyCode),
+      content: getSystemPrompt(userName, metricsJson, tenantCurrencyCode),
     });
 
     // Add relevant context from semantic search
@@ -263,7 +282,7 @@ serve(async (req) => {
 
     // Step 6: Get AI response
     const completion = await chatCompletion(messages, {
-      temperature: 0.7,
+      temperature: 0.3,
       max_tokens: 2048,
     });
 
