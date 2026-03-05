@@ -15,8 +15,10 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { useCancelRental } from "@/hooks/use-cancel-rental";
 import { useAuth } from "@/stores/auth-store";
 import { useTenant } from "@/contexts/TenantContext";
-import { AlertTriangle, Loader2 } from "lucide-react";
+import { AlertTriangle, Loader2, Shield } from "lucide-react";
 import { formatCurrency, getCurrencySymbol } from "@/lib/format-utils";
+import { useQuery } from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase/client";
 
 interface CancelRentalDialogProps {
   open: boolean;
@@ -53,6 +55,35 @@ export function CancelRentalDialog({
   const isPreAuth = payment?.capture_status === "requires_capture";
   const currencyCode = tenant?.currency_code || 'GBP';
   const currencySymbol = getCurrencySymbol(currencyCode);
+
+  // Fetch insurance charges for this rental
+  const { data: insuranceInfo } = useQuery({
+    queryKey: ['rental-insurance-summary', rental.id],
+    queryFn: async () => {
+      // Get active insurance policies
+      const { data: policies } = await supabase
+        .from('bonzah_insurance_policies')
+        .select('id, premium_amount, status')
+        .eq('rental_id', rental.id)
+        .in('status', ['active', 'quoted', 'payment_pending']);
+
+      // Get unpaid insurance ledger charges
+      const { data: charges } = await supabase
+        .from('ledger_entries')
+        .select('id, amount, remaining_amount')
+        .eq('rental_id', rental.id)
+        .eq('category', 'Insurance')
+        .eq('type', 'Charge')
+        .gt('remaining_amount', 0);
+
+      const totalPremium = (policies || []).reduce((sum, p) => sum + (p.premium_amount || 0), 0);
+      const unpaidAmount = (charges || []).reduce((sum, c) => sum + (c.remaining_amount || 0), 0);
+      const policyCount = policies?.length || 0;
+
+      return { totalPremium, unpaidAmount, policyCount };
+    },
+    enabled: open,
+  });
 
   const handleCancel = async () => {
     if (!reason.trim()) {
@@ -184,6 +215,27 @@ export function CancelRentalDialog({
             )}
           </div>
 
+          {/* Insurance Info */}
+          {insuranceInfo && insuranceInfo.policyCount > 0 && (
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+              <div className="flex items-center gap-2 mb-1">
+                <Shield className="h-4 w-4 text-blue-600" />
+                <span className="text-sm font-medium text-blue-800">
+                  Insurance ({insuranceInfo.policyCount} {insuranceInfo.policyCount === 1 ? 'policy' : 'policies'})
+                </span>
+              </div>
+              <div className="text-sm text-blue-700 space-y-0.5">
+                <p>Total premium: <strong>{formatCurrency(insuranceInfo.totalPremium, currencyCode)}</strong></p>
+                {insuranceInfo.unpaidAmount > 0 && (
+                  <p>Unpaid insurance charges: <strong>{formatCurrency(insuranceInfo.unpaidAmount, currencyCode)}</strong> (will be written off)</p>
+                )}
+                <p className="text-xs text-blue-600 mt-1">
+                  Policies will be cancelled on Bonzah. Premium refund to tenant's Bonzah balance is subject to Bonzah approval.
+                </p>
+              </div>
+            </div>
+          )}
+
           {/* Warning */}
           <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3">
             <p className="text-sm text-yellow-800">
@@ -196,6 +248,9 @@ export function CancelRentalDialog({
                   <li>Process a {refundType} refund via Stripe</li>
                 ) : (
                   <li>Not issue any refund</li>
+                )}
+                {insuranceInfo && insuranceInfo.policyCount > 0 && (
+                  <li>Cancel {insuranceInfo.policyCount} insurance {insuranceInfo.policyCount === 1 ? 'policy' : 'policies'} on Bonzah{insuranceInfo.unpaidAmount > 0 ? ` and write off ${formatCurrency(insuranceInfo.unpaidAmount, currencyCode)} in unpaid insurance charges` : ''}</li>
                 )}
                 <li>Send a notification email to the customer</li>
               </ul>

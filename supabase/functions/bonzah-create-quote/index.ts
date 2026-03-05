@@ -50,6 +50,7 @@ interface CreateQuoteRequest {
   pickup_state: string
   coverage: CoverageTypes
   renter: RenterDetails
+  policy_type?: 'original' | 'extension'
 }
 
 // Response from /Bonzah/quote endpoint with finalize=1
@@ -237,6 +238,7 @@ serve(async (req) => {
     }
 
     // Store quote in database
+    const policyType = body.policy_type || 'original'
     const { data: policyRecord, error: dbError } = await supabase
       .from('bonzah_insurance_policies')
       .insert({
@@ -254,6 +256,7 @@ serve(async (req) => {
         premium_amount: roundedPremium,
         renter_details: body.renter,
         status: 'quoted',
+        policy_type: policyType,
       })
       .select('id')
       .single()
@@ -263,20 +266,23 @@ serve(async (req) => {
       return errorResponse('Failed to store quote in database', 500)
     }
 
-    console.log('[Bonzah Quote] Quote stored with ID:', policyRecord.id)
+    console.log('[Bonzah Quote] Quote stored with ID:', policyRecord.id, 'type:', policyType)
 
-    // Update rental with insurance premium
-    const { error: rentalError } = await supabase
-      .from('rentals')
-      .update({
-        insurance_premium: roundedPremium,
-        bonzah_policy_id: policyRecord.id,
-      })
-      .eq('id', body.rental_id)
+    // Update rental with insurance premium (only for original policies)
+    // Extension policies don't update the rental FK — it stays pointing to the original
+    if (policyType === 'original') {
+      const { error: rentalError } = await supabase
+        .from('rentals')
+        .update({
+          insurance_premium: roundedPremium,
+          bonzah_policy_id: policyRecord.id,
+        })
+        .eq('id', body.rental_id)
 
-    if (rentalError) {
-      console.error('[Bonzah Quote] Error updating rental:', rentalError)
-      // Non-fatal - the quote is still created
+      if (rentalError) {
+        console.error('[Bonzah Quote] Error updating rental:', rentalError)
+        // Non-fatal - the quote is still created
+      }
     }
 
     return jsonResponse({

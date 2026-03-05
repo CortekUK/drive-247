@@ -701,23 +701,25 @@ export default function VehicleDetail() {
                   Mileage Allowance
                 </h3>
                 {!mileageEditing ? (
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="h-7 text-xs"
-                    onClick={() => {
-                      setMileageForm({
-                        daily_mileage: vehicle.daily_mileage?.toString() ?? '',
-                        weekly_mileage: vehicle.weekly_mileage?.toString() ?? '',
-                        monthly_mileage: vehicle.monthly_mileage?.toString() ?? '',
-                        excess_mileage_rate: vehicle.excess_mileage_rate?.toString() ?? '',
-                      });
-                      setMileageEditing(true);
-                    }}
-                  >
-                    <Pencil className="h-3 w-3 mr-1" />
-                    Edit
-                  </Button>
+                  canEdit('vehicles') && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-7 text-xs"
+                      onClick={() => {
+                        setMileageForm({
+                          daily_mileage: vehicle.daily_mileage?.toString() ?? '',
+                          weekly_mileage: vehicle.weekly_mileage?.toString() ?? '',
+                          monthly_mileage: vehicle.monthly_mileage?.toString() ?? '',
+                          excess_mileage_rate: vehicle.excess_mileage_rate?.toString() ?? '',
+                        });
+                        setMileageEditing(true);
+                      }}
+                    >
+                      <Pencil className="h-3 w-3 mr-1" />
+                      Edit
+                    </Button>
+                  )
                 ) : (
                   <div className="flex items-center gap-1">
                     <Button

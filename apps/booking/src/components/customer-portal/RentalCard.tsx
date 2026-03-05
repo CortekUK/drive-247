@@ -16,6 +16,7 @@ import { EditInsuranceDialog } from './EditInsuranceDialog';
 import { ExtendRentalDialog } from './ExtendRentalDialog';
 import { CancelBookingDialog } from './CancelBookingDialog';
 import { RenewRentalDialog } from './RenewRentalDialog';
+import { RentalTimeline } from './RentalTimeline';
 
 interface RentalCardProps {
   rental: CustomerRental;
@@ -318,6 +319,9 @@ export function RentalCard({ rental, insuranceReuploadRequired }: RentalCardProp
                   )}
                 </div>
               )}
+
+              {/* Agreements & Insurance Timeline */}
+              <RentalTimeline rentalId={rental.id} />
 
               {/* Installment Info */}
               {hasInstallments ? (

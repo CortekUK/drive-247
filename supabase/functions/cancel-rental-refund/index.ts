@@ -2,6 +2,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.4";
 import Stripe from "https://esm.sh/stripe@14.21.0?target=deno";
 import { getStripeClient, getConnectAccountId, type StripeMode } from '../_shared/stripe-client.ts';
+import { getTenantBonzahCredentials, bonzahFetchWithCredentials } from '../_shared/bonzah-client.ts';
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -186,6 +187,90 @@ serve(async (req) => {
       console.error("Failed to update rental:", updateRentalError);
     }
 
+    // Cancel any associated Bonzah insurance policies
+    const { data: activePolicies } = await supabase
+      .from("bonzah_insurance_policies")
+      .select("id, policy_id, policy_no, status, premium_amount")
+      .eq("rental_id", rentalId)
+      .in("status", ["active", "quoted", "payment_pending"]);
+
+    let cancelledPolicies: typeof activePolicies = [];
+
+    if (activePolicies && activePolicies.length > 0) {
+      // Try to cancel on Bonzah's side for active policies with a policy_id
+      let bonzahCredentials = null;
+      try {
+        bonzahCredentials = await getTenantBonzahCredentials(supabase, tenantId);
+      } catch (credErr) {
+        console.warn("Could not fetch Bonzah credentials (skipping API cancellation):", credErr);
+      }
+
+      // Fetch tenant timezone for Bonzah API
+      let timezone = "America/New_York";
+      if (tenantId) {
+        const { data: tenantTz } = await supabase
+          .from("tenants")
+          .select("timezone")
+          .eq("id", tenantId)
+          .single();
+        if (tenantTz?.timezone) timezone = tenantTz.timezone;
+      }
+
+      for (const policy of activePolicies) {
+        // Call Bonzah cancellation API for issued policies
+        if (bonzahCredentials && policy.policy_id && policy.status === "active") {
+          try {
+            const cancelResult = await bonzahFetchWithCredentials(
+              "/Bonzah/newendorse_cncl",
+              {
+                endorsement_id: "",
+                eproposal_id: "",
+                policy_id: policy.policy_id,
+                endorsement_remarks: `Rental cancelled. Reason: ${reason}`,
+                endo_source: "API",
+                endo_booking_time_zone: timezone,
+                finalize: 1,
+              },
+              bonzahCredentials
+            );
+            console.log(`Bonzah cancellation endorsement submitted for policy ${policy.policy_no}:`, cancelResult);
+          } catch (bonzahErr: any) {
+            console.error(`Failed to cancel policy ${policy.policy_no} on Bonzah:`, bonzahErr.message);
+          }
+        }
+
+        // Update status in our DB regardless
+        await supabase
+          .from("bonzah_insurance_policies")
+          .update({ status: "cancelled", updated_at: new Date().toISOString() })
+          .eq("id", policy.id);
+      }
+
+      cancelledPolicies = activePolicies;
+      console.log(`Cancelled ${activePolicies.length} insurance policy(ies) for rental ${rentalId}`);
+    }
+
+    // Cancel unpaid insurance ledger entries (write off outstanding insurance charges)
+    const { data: cancelledInsuranceCharges, error: insuranceLedgerError } = await supabase
+      .from("ledger_entries")
+      .update({
+        remaining_amount: 0,
+        notes: "Auto-cancelled: rental cancelled",
+        updated_at: new Date().toISOString(),
+      })
+      .eq("rental_id", rentalId)
+      .eq("category", "Insurance")
+      .eq("type", "Charge")
+      .gt("remaining_amount", 0)
+      .select("id, amount, remaining_amount");
+
+    if (insuranceLedgerError) {
+      console.error("Failed to cancel insurance ledger entries:", insuranceLedgerError);
+    } else if (cancelledInsuranceCharges && cancelledInsuranceCharges.length > 0) {
+      const totalWrittenOff = cancelledInsuranceCharges.reduce((sum, c) => sum + (c.remaining_amount || 0), 0);
+      console.log(`Wrote off ${cancelledInsuranceCharges.length} unpaid insurance charge(s) totalling ${totalWrittenOff}`);
+    }
+
     // Update vehicle status back to Available
     if (rental.vehicle_id) {
       await supabase
@@ -252,11 +337,16 @@ serve(async (req) => {
       tenantId: tenantId,
     };
 
+    // Calculate total insurance premium that was cancelled
+    const insurancePremiumTotal = cancelledPolicies?.reduce((sum, p) => sum + (p.premium_amount || 0), 0) || 0;
+
     return new Response(
       JSON.stringify({
         success: true,
         message: "Rental cancelled successfully",
         refund: refundResult,
+        cancelledPolicies: cancelledPolicies?.length || 0,
+        insurancePremiumCancelled: insurancePremiumTotal,
         notificationData: notificationData,
       }),
       {

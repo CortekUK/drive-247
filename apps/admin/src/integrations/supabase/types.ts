@@ -406,6 +406,7 @@ export type Database = {
           policy_id: string | null
           policy_issued_at: string | null
           policy_no: string | null
+          policy_type: string
           premium_amount: number
           quote_id: string
           quote_no: string | null
@@ -427,6 +428,7 @@ export type Database = {
           policy_id?: string | null
           policy_issued_at?: string | null
           policy_no?: string | null
+          policy_type?: string
           premium_amount: number
           quote_id: string
           quote_no?: string | null
@@ -448,6 +450,7 @@ export type Database = {
           policy_id?: string | null
           policy_issued_at?: string | null
           policy_no?: string | null
+          policy_type?: string
           premium_amount?: number
           quote_id?: string
           quote_no?: string | null
@@ -712,6 +715,160 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "chat_messages_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      cmd_verifications: {
+        Row: {
+          active_status: string | null
+          applicant_verification_id: string | null
+          applicant_verification_req_guid_id: string | null
+          carrier: string | null
+          cmd_verification_id: string | null
+          consumer_email: string | null
+          consumer_first_name: string | null
+          consumer_last_name: string | null
+          consumer_phone: string | null
+          created_at: string | null
+          customer_id: string | null
+          error_message: string | null
+          id: string
+          initiated_by: string | null
+          is_monitoring: boolean | null
+          license_status: string | null
+          magic_link_generated_at: string | null
+          magic_link_url: string | null
+          policy_status: string | null
+          rental_id: string
+          status: string
+          tenant_id: string
+          updated_at: string | null
+          verification_results: Json | null
+          verification_type: string
+          webhook_payload: Json | null
+          webhook_received_at: string | null
+        }
+        Insert: {
+          active_status?: string | null
+          applicant_verification_id?: string | null
+          applicant_verification_req_guid_id?: string | null
+          carrier?: string | null
+          cmd_verification_id?: string | null
+          consumer_email?: string | null
+          consumer_first_name?: string | null
+          consumer_last_name?: string | null
+          consumer_phone?: string | null
+          created_at?: string | null
+          customer_id?: string | null
+          error_message?: string | null
+          id?: string
+          initiated_by?: string | null
+          is_monitoring?: boolean | null
+          license_status?: string | null
+          magic_link_generated_at?: string | null
+          magic_link_url?: string | null
+          policy_status?: string | null
+          rental_id: string
+          status?: string
+          tenant_id: string
+          updated_at?: string | null
+          verification_results?: Json | null
+          verification_type: string
+          webhook_payload?: Json | null
+          webhook_received_at?: string | null
+        }
+        Update: {
+          active_status?: string | null
+          applicant_verification_id?: string | null
+          applicant_verification_req_guid_id?: string | null
+          carrier?: string | null
+          cmd_verification_id?: string | null
+          consumer_email?: string | null
+          consumer_first_name?: string | null
+          consumer_last_name?: string | null
+          consumer_phone?: string | null
+          created_at?: string | null
+          customer_id?: string | null
+          error_message?: string | null
+          id?: string
+          initiated_by?: string | null
+          is_monitoring?: boolean | null
+          license_status?: string | null
+          magic_link_generated_at?: string | null
+          magic_link_url?: string | null
+          policy_status?: string | null
+          rental_id?: string
+          status?: string
+          tenant_id?: string
+          updated_at?: string | null
+          verification_results?: Json | null
+          verification_type?: string
+          webhook_payload?: Json | null
+          webhook_received_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "cmd_verifications_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "customers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cmd_verifications_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "v_customer_credit"
+            referencedColumns: ["customer_id"]
+          },
+          {
+            foreignKeyName: "cmd_verifications_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "view_aging_receivables"
+            referencedColumns: ["customer_id"]
+          },
+          {
+            foreignKeyName: "cmd_verifications_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "view_fines_export"
+            referencedColumns: ["customer_id"]
+          },
+          {
+            foreignKeyName: "cmd_verifications_initiated_by_fkey"
+            columns: ["initiated_by"]
+            isOneToOne: false
+            referencedRelation: "app_users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cmd_verifications_rental_id_fkey"
+            columns: ["rental_id"]
+            isOneToOne: false
+            referencedRelation: "rentals"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cmd_verifications_rental_id_fkey"
+            columns: ["rental_id"]
+            isOneToOne: false
+            referencedRelation: "v_rental_credit"
+            referencedColumns: ["rental_id"]
+          },
+          {
+            foreignKeyName: "cmd_verifications_rental_id_fkey"
+            columns: ["rental_id"]
+            isOneToOne: false
+            referencedRelation: "view_rentals_export"
+            referencedColumns: ["rental_id"]
+          },
+          {
+            foreignKeyName: "cmd_verifications_tenant_id_fkey"
             columns: ["tenant_id"]
             isOneToOne: false
             referencedRelation: "tenants"

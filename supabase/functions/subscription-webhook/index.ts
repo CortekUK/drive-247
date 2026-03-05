@@ -145,6 +145,20 @@ async function handleCheckoutCompleted(stripe: Stripe, supabase: any, session: a
     .eq("id", tenantId);
 
   if (tenantError) console.error("Error updating tenant plan:", tenantError);
+
+  // Auto-refund the $1 card verification charge if present
+  if (session.metadata?.setup_fee === "true" && session.payment_intent) {
+    try {
+      const refund = await stripe.refunds.create({
+        payment_intent: session.payment_intent as string,
+        reason: "requested_by_customer",
+      });
+      console.log(`Auto-refunded $1 verification charge (refund: ${refund.id}) for tenant ${tenantId}`);
+    } catch (refundErr) {
+      console.warn(`Failed to auto-refund verification charge for tenant ${tenantId}:`, refundErr.message);
+    }
+  }
+
   console.log(`Subscription ${subscription.id} activated for tenant ${tenantId}, plan: ${resolvedPlanName}`);
 }
 

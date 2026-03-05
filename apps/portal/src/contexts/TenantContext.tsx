@@ -15,6 +15,7 @@ interface Tenant {
   bonzah_username: string | null;
   bonzah_mode: 'test' | 'live' | null;
   boldsign_mode: 'test' | 'live' | null;
+  subscription_stripe_mode: 'test' | 'live' | null;
   timezone: string | null;
   currency_code: string | null;
   distance_unit: 'km' | 'miles' | null;
@@ -127,7 +128,7 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
       // Query the tenants table by slug
       const { data, error: queryError } = await supabase
         .from('tenants')
-        .select('id, slug, company_name, status, contact_email, admin_name, integration_veriff, integration_bonzah, bonzah_username, bonzah_mode, boldsign_mode, timezone, currency_code, distance_unit, privacy_policy_version, terms_version, policies_accepted_at')
+        .select('id, slug, company_name, status, contact_email, admin_name, integration_veriff, integration_bonzah, bonzah_username, bonzah_mode, boldsign_mode, subscription_stripe_mode, timezone, currency_code, distance_unit, privacy_policy_version, terms_version, policies_accepted_at, auth_logo_url')
         .eq('slug', slug)
         .eq('status', 'active')
         .single();
@@ -147,7 +148,7 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
 
       console.log(`[TenantContext] Loaded tenant: ${data.company_name} (${data.id})`);
       console.log('[TenantContext] tenant_id:', data.id);
-      setTenant(data);
+      setTenant(data as Tenant);
       setError(null);
     } catch (err: any) {
       console.error('[TenantContext] Unexpected error:', err);

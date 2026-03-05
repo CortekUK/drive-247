@@ -276,6 +276,7 @@ export function BuyInsuranceDialog({
       // 7. Invalidate queries
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ['rental-bonzah-policy', rental.id] }),
+        queryClient.invalidateQueries({ queryKey: ['rental-insurance-policies', rental.id] }),
         queryClient.invalidateQueries({ queryKey: ['rental-charges', rental.id] }),
         queryClient.invalidateQueries({ queryKey: ['rental-totals', rental.id] }),
         queryClient.invalidateQueries({ queryKey: ['rental-payment-breakdown', rental.id] }),

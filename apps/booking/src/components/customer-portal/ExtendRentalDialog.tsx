@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef, useMemo, useEffect } from 'react';
+import { useState, useRef } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import {
   Dialog,
@@ -13,12 +13,14 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Loader2, Calendar, AlertCircle, AlertTriangle, CreditCard } from 'lucide-react';
+import { Loader2, Calendar, AlertCircle, AlertTriangle, CreditCard, Ban } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { useTenant } from '@/contexts/TenantContext';
+import { useExtensionConflicts } from '@/hooks/use-extension-conflicts';
+import { useExtensionPricing } from '@/hooks/use-extension-pricing';
 import { formatCurrency } from '@/lib/format-utils';
-import { format, addDays, parseISO, differenceInDays } from 'date-fns';
+import { format, addDays, parseISO } from 'date-fns';
 import type { CustomerRental } from '@/hooks/use-customer-rentals';
 
 interface ExtendRentalDialogProps {
@@ -35,38 +37,27 @@ export function ExtendRentalDialog({ open, onOpenChange, rental }: ExtendRentalD
   const [showConfirmation, setShowConfirmation] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const isSubmittingRef = useRef(false);
-  const [dailyRate, setDailyRate] = useState<number | null>(null);
-  const [loadingRate, setLoadingRate] = useState(false);
 
   // Calculate minimum date (must be after current end date)
   const currentEndDate = parseISO(rental.end_date);
   const minDate = format(addDays(currentEndDate, 1), 'yyyy-MM-dd');
 
-  // Calculate extension days
   const selectedDate = newEndDate ? parseISO(newEndDate) : null;
-  const extensionDays = selectedDate ? differenceInDays(selectedDate, currentEndDate) : 0;
 
-  const extensionCost = useMemo(() => {
-    if (!dailyRate || extensionDays <= 0) return 0;
-    return Math.round(dailyRate * extensionDays * 100) / 100;
-  }, [dailyRate, extensionDays]);
+  const { extensionCost, extensionDays, dailyRate, hasSurcharges, dayBreakdown, isLoading: loadingRate } = useExtensionPricing({
+    vehicleId: rental.vehicles?.id,
+    currentEndDate: rental.end_date,
+    newEndDate: newEndDate || undefined,
+  });
 
   const currencyCode = tenant?.currency_code || 'GBP';
 
-  // Fetch vehicle daily rate when dialog opens
-  useEffect(() => {
-    if (!open || !rental.vehicles?.id) return;
-    setLoadingRate(true);
-    supabase
-      .from('vehicles')
-      .select('daily_rent')
-      .eq('id', rental.vehicles.id)
-      .single()
-      .then(({ data }) => {
-        setDailyRate(data?.daily_rent ?? null);
-      })
-      .finally(() => setLoadingRate(false));
-  }, [open, rental.vehicles?.id]);
+  const { hasConflicts, isChecking: isCheckingConflicts } = useExtensionConflicts({
+    vehicleId: rental.vehicles?.id,
+    currentEndDate: rental.end_date,
+    newEndDate: newEndDate || undefined,
+    excludeRentalId: rental.id,
+  });
 
   const handleRequestClick = () => {
     if (!newEndDate) {
@@ -202,9 +193,30 @@ export function ExtendRentalDialog({ open, onOpenChange, rental }: ExtendRentalD
                       <p className="text-lg font-bold text-blue-700 dark:text-blue-300">
                         {formatCurrency(extensionCost, currencyCode)}
                       </p>
-                      <p className="text-xs text-blue-600 dark:text-blue-400">
-                        {extensionDays} day{extensionDays !== 1 ? 's' : ''} x {formatCurrency(dailyRate, currencyCode)}/day
-                      </p>
+                      {hasSurcharges ? (
+                        <div className="space-y-0.5 mt-1">
+                          {(() => {
+                            const groups: Record<string, { count: number; rate: number; label: string }> = {};
+                            dayBreakdown.forEach((d) => {
+                              const key = `${d.type}-${d.effectiveRate}`;
+                              if (!groups[key]) {
+                                const label = d.type === 'holiday' ? (d.holidayName || 'Holiday') : d.type === 'weekend' ? 'Weekend' : 'Weekday';
+                                groups[key] = { count: 0, rate: d.effectiveRate, label };
+                              }
+                              groups[key].count++;
+                            });
+                            return Object.values(groups).map((g, i) => (
+                              <p key={i} className="text-xs text-blue-600 dark:text-blue-400">
+                                {g.label} — {formatCurrency(g.rate, currencyCode)}/day x {g.count} day{g.count !== 1 ? 's' : ''}
+                              </p>
+                            ));
+                          })()}
+                        </div>
+                      ) : (
+                        <p className="text-xs text-blue-600 dark:text-blue-400">
+                          {extensionDays} day{extensionDays !== 1 ? 's' : ''} x {formatCurrency(dailyRate, currencyCode)}/day
+                        </p>
+                      )}
                     </div>
                   ) : (
                     <p className="text-sm text-muted-foreground">
@@ -212,6 +224,22 @@ export function ExtendRentalDialog({ open, onOpenChange, rental }: ExtendRentalD
                     </p>
                   )}
                 </div>
+              )}
+
+              {/* Availability Conflict */}
+              {extensionDays > 0 && isCheckingConflicts && (
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <Loader2 className="h-3 w-3 animate-spin" />
+                  Checking availability...
+                </div>
+              )}
+              {extensionDays > 0 && hasConflicts && !isCheckingConflicts && (
+                <Alert variant="destructive">
+                  <Ban className="h-4 w-4" />
+                  <AlertDescription>
+                    This vehicle is not available for the selected dates. Please choose different dates.
+                  </AlertDescription>
+                </Alert>
               )}
 
               {/* Info Alert */}
@@ -233,7 +261,7 @@ export function ExtendRentalDialog({ open, onOpenChange, rental }: ExtendRentalD
                 </Button>
                 <Button
                   onClick={handleRequestClick}
-                  disabled={!newEndDate}
+                  disabled={!newEndDate || hasConflicts || isCheckingConflicts}
                   className="flex-1 h-9"
                 >
                   Request Extension
@@ -298,7 +326,7 @@ export function ExtendRentalDialog({ open, onOpenChange, rental }: ExtendRentalD
                 </Button>
                 <Button
                   onClick={handleConfirmSubmit}
-                  disabled={submitting}
+                  disabled={submitting || hasConflicts || isCheckingConflicts}
                   className="flex-1 h-9 bg-amber-600 hover:bg-amber-700"
                 >
                   {submitting ? (

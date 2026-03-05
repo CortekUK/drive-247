@@ -47,6 +47,8 @@ import { ApprovalReviewSummary } from "@/components/reviews/approval-review-summ
 import { CustomerReviewSummaryCard } from "@/components/reviews/customer-review-summary-card";
 import { useRentalAgreements } from "@/hooks/use-rental-agreements";
 import { AgreementTimeline } from "@/components/rentals/AgreementTimeline";
+import { useRentalInsurancePolicies } from "@/hooks/use-rental-insurance-policies";
+import { InsuranceTimeline } from "@/components/rentals/InsuranceTimeline";
 
 interface Rental {
   id: string;
@@ -218,10 +220,8 @@ const RentalDetail = () => {
   const { canEdit } = useManagerPermissions();
   const { balanceNumber: bonzahCdBalance, isBonzahConnected, portalUrl: bonzahPortalUrl } = useBonzahBalance();
   const { data: rentalAgreements = [], isLoading: loadingAgreements } = useRentalAgreements(id);
+  const { data: insurancePolicies = [], isLoading: isLoadingInsurancePolicies } = useRentalInsurancePolicies(id);
   // skipInsurance removed — insurance doc upload is always visible; only Bonzah selector is gated on integration_bonzah
-  const [downloadingPdf, setDownloadingPdf] = useState<string | null>(null);
-  const [refreshingPolicy, setRefreshingPolicy] = useState(false);
-  const [issuingPolicy, setIssuingPolicy] = useState(false);
   const [showAddPayment, setShowAddPayment] = useState(false);
   const [sendingDocuSign, setSendingDocuSign] = useState(false);
   const [checkingDocuSignStatus, setCheckingDocuSignStatus] = useState(false);
@@ -765,6 +765,7 @@ const RentalDetail = () => {
         .from("bonzah_insurance_policies")
         .select("*")
         .eq("rental_id", id)
+        .eq("policy_type", "original")
         .maybeSingle();
 
       if (error) {
@@ -2484,364 +2485,20 @@ const RentalDetail = () => {
         onViewAgreement={handleViewAgreementById}
       />
 
-      {/* Bonzah Insurance Policy Card - Show if policy exists for this rental */}
-      {bonzahPolicy && (() => {
-        const ct = bonzahPolicy.coverage_types as any;
-        const rd = bonzahPolicy.renter_details as any;
-        const pdfIds = ct?.pdf_ids as Record<string, string> | undefined;
-        const bonzahMode = tenant?.bonzah_mode || 'test';
-        const portalUrl = bonzahMode === 'live' ? 'https://bonzah.insillion.com/bb1/' : 'https://bonzah.sb.insillion.com/bb1/';
-
-        const coverageLabels: Record<string, string> = {
-          cdw: 'Collision Damage Waiver (CDW)',
-          rcli: "Renter's Contingent Liability Insurance (RCLI)",
-          sli: 'Supplemental Liability Insurance (SLI)',
-          pai: 'Personal Accident Insurance (PAI)',
-        };
-
-        const handleDownloadPdf = async (type: string, pdfId: string) => {
-          setDownloadingPdf(type);
-          try {
-            const { data, error } = await supabase.functions.invoke('bonzah-download-pdf', {
-              body: { tenant_id: tenant?.id, pdf_id: String(pdfId), policy_id: bonzahPolicy.policy_id },
-            });
-            if (error || !data?.documentBase64) {
-              toast({ title: "Error", description: "Failed to download PDF", variant: "destructive" });
-              return;
-            }
-            const byteCharacters = atob(data.documentBase64);
-            const byteNumbers = new Array(byteCharacters.length);
-            for (let i = 0; i < byteCharacters.length; i++) {
-              byteNumbers[i] = byteCharacters.charCodeAt(i);
-            }
-            const byteArray = new Uint8Array(byteNumbers);
-            const blob = new Blob([byteArray], { type: 'application/pdf' });
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = `bonzah-${type}-${bonzahPolicy.policy_no || bonzahPolicy.quote_id}.pdf`;
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
-            URL.revokeObjectURL(url);
-          } catch (err) {
-            toast({ title: "Error", description: "Failed to download PDF", variant: "destructive" });
-          } finally {
-            setDownloadingPdf(null);
-          }
-        };
-
-        return (
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between gap-4">
-            <div className="flex items-center gap-3">
-              <img src="/bonzah-logo.svg" alt="Bonzah" className="h-10 w-auto dark:hidden" />
-              <img src="/bonzah-logo-dark.svg" alt="Bonzah" className="h-10 w-auto hidden dark:block" />
-            </div>
-            <div className="flex items-center gap-2">
-              {bonzahPolicy.policy_id && (
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-8 w-8"
-                  disabled={refreshingPolicy}
-                  title="Refresh policy data"
-                  onClick={async () => {
-                    setRefreshingPolicy(true);
-                    try {
-                      const { data, error } = await supabase.functions.invoke('bonzah-view-policy', {
-                        body: { tenant_id: tenant?.id, policy_id: bonzahPolicy.policy_id },
-                      });
-                      if (error) throw error;
-                      queryClient.invalidateQueries({ queryKey: ['rental-bonzah-policy'] });
-                      toast({ title: "Policy Refreshed", description: "Latest policy data has been fetched from Bonzah." });
-                    } catch (err) {
-                      toast({ title: "Error", description: "Failed to refresh policy data", variant: "destructive" });
-                    } finally {
-                      setRefreshingPolicy(false);
-                    }
-                  }}
-                >
-                  {refreshingPolicy ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
-                </Button>
-              )}
-              <Badge
-                className={
-                  bonzahPolicy.status === 'active' ? 'bg-emerald-400 text-black font-semibold hover:bg-emerald-400 shadow-[0_0_12px_rgba(52,211,153,0.6)]' :
-                  bonzahPolicy.status === 'quoted' ? 'bg-amber-400 text-black font-semibold hover:bg-amber-400 shadow-[0_0_12px_rgba(251,191,36,0.6)]' :
-                  bonzahPolicy.status === 'failed' ? 'bg-red-400 text-black font-semibold hover:bg-red-400 shadow-[0_0_12px_rgba(248,113,113,0.6)]' :
-                  bonzahPolicy.status === 'insufficient_balance' ? 'bg-[#CC004A] text-white font-semibold hover:bg-[#CC004A] shadow-[0_0_12px_rgba(204,0,74,0.6)]' :
-                  'bg-sky-400 text-black font-semibold hover:bg-sky-400 shadow-[0_0_12px_rgba(56,189,248,0.6)]'
-                }
-              >
-                {bonzahPolicy.status === 'active' ? 'Active' : bonzahPolicy.status === 'quoted' ? 'Quoted' : bonzahPolicy.status === 'payment_confirmed' ? 'Payment Confirmed' : bonzahPolicy.status === 'failed' ? 'Failed' : bonzahPolicy.status === 'insufficient_balance' ? 'Quoted — Pending Allocation' : bonzahPolicy.status}
-              </Badge>
-            </div>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {/* Bonzah Balance */}
-            {isBonzahConnected && bonzahCdBalance != null && (
-              <div className="flex items-center justify-between rounded-md px-4 py-2.5 bg-muted/50 border border-border">
-                <span className="text-sm font-medium text-muted-foreground">Bonzah Balance (Broker Total)</span>
-                <span className="text-base font-bold tabular-nums text-foreground">
-                  ${bonzahCdBalance.toFixed(2)}
-                </span>
-              </div>
-            )}
-
-            {/* Insufficient balance warning — mode-aware messaging */}
-            {bonzahPolicy.status === 'insufficient_balance' && (
-              <div className="rounded-lg border border-[#CC004A]/30 bg-[#CC004A]/5 p-4 space-y-3">
-                <div className="flex items-start gap-2">
-                  <AlertTriangle className="h-4 w-4 text-[#CC004A] mt-0.5 flex-shrink-0" />
-                  <div className="text-sm space-y-2">
-                    <p className="font-medium text-[#CC004A]">
-                      {bonzahMode === 'live'
-                        ? 'Insurance quoted — insufficient available balance'
-                        : 'Insurance quoted — insufficient allocated balance'}
-                    </p>
-                    <p className="text-muted-foreground">
-                      {bonzahMode === 'live' ? (
-                        <>
-                          This insurance has been quoted but could not be activated because your Bonzah <strong>available balance</strong> is too low.
-                          {bonzahCdBalance != null && <> Your balance is <strong>${bonzahCdBalance.toFixed(2)}</strong>.</>}
-                          {' '}You need at least <strong>${bonzahPolicy.premium_amount}</strong> to activate this policy. Please top up your Bonzah account.
-                        </>
-                      ) : (
-                        <>
-                          This insurance has been quoted but could not be activated because your Bonzah <strong>allocated balance</strong> is too low.
-                          {bonzahCdBalance != null && <> Your Bonzah balance is <strong>${bonzahCdBalance.toFixed(2)}</strong>.</>}
-                          {' '}Please allocate at least <strong>${bonzahPolicy.premium_amount}</strong> more to activate this policy.
-                        </>
-                      )}
-                    </p>
-                    <p className="text-muted-foreground">
-                      The customer is not affected — their booking is confirmed normally.
-                    </p>
-                  </div>
-                </div>
-                <a
-                  href={portalUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex items-center gap-1.5 text-sm font-medium text-[#CC004A] hover:underline ml-6"
-                >
-                  <ExternalLink className="h-3.5 w-3.5" />
-                  {bonzahMode === 'live' ? 'Top Up Balance on Bonzah Portal' : 'Allocate Funds on Bonzah Portal'}
-                </a>
-              </div>
-            )}
-
-            {/* Action buttons if needed */}
-            {canEdit('rentals') && (bonzahPolicy.status === 'quoted' || bonzahPolicy.status === 'failed' || bonzahPolicy.status === 'insufficient_balance' || bonzahPolicy.policy_id) && (
-            <div className="flex items-center gap-2">
-              {(bonzahPolicy.status === 'quoted' || bonzahPolicy.status === 'failed' || bonzahPolicy.status === 'insufficient_balance') && (
-                <Button
-                  size="sm"
-                  disabled={issuingPolicy}
-                  className="bg-green-600 hover:bg-green-700 text-white"
-                  onClick={async () => {
-                    setIssuingPolicy(true);
-                    try {
-                      const { data, error } = await supabase.functions.invoke('bonzah-confirm-payment', {
-                        body: {
-                          policy_record_id: bonzahPolicy.id,
-                          stripe_payment_intent_id: `portal-manual-${id}`,
-                        },
-                      });
-                      if (error) throw error;
-                      if (data?.error === 'insufficient_balance') {
-                        const mode = data?.bonzah_mode || bonzahMode;
-                        const title = mode === 'live' ? 'Available balance still insufficient' : 'Allocated balance still insufficient';
-                        const desc = mode === 'live'
-                          ? `Your Bonzah available balance is still too low (premium: $${data.premium}). Top up your Bonzah account and retry.`
-                          : `Your Bonzah allocated balance is still too low (premium: $${data.premium}). Allocate more funds in the Bonzah portal and retry.`;
-                        toast({ title, description: desc, variant: "destructive" });
-                      } else {
-                        await Promise.all([
-                          queryClient.invalidateQueries({ queryKey: ['rental-bonzah-policy', id] }),
-                          queryClient.invalidateQueries({ queryKey: ['bonzah-balance'] }),
-                          queryClient.invalidateQueries({ queryKey: ['bonzah-insufficient-balance-count'] }),
-                          queryClient.invalidateQueries({ queryKey: ['bonzah-pending-policies'] }),
-                        ]);
-                        toast({ title: "Policy Issued", description: `Bonzah policy ${data?.policy_no || ''} has been issued successfully.` });
-                      }
-                    } catch (err: any) {
-                      const isBalanceErr = err.message?.includes('insufficient') || err.message?.includes('balance');
-                      const msg = isBalanceErr
-                        ? (bonzahMode === 'live'
-                          ? 'Available balance still insufficient. Top up your Bonzah account and retry.'
-                          : 'Allocated balance still insufficient. Allocate more funds in the Bonzah portal and retry.')
-                        : err.message || "Failed to issue policy. Please try again.";
-                      toast({ title: "Error", description: msg, variant: "destructive" });
-                    } finally {
-                      setIssuingPolicy(false);
-                    }
-                  }}
-                >
-                  {issuingPolicy ? (
-                    <Loader2 className="h-4 w-4 mr-1.5 animate-spin" />
-                  ) : (
-                    <ShieldCheck className="h-4 w-4 mr-1.5" />
-                  )}
-                  {bonzahPolicy.status === 'failed' || bonzahPolicy.status === 'insufficient_balance' ? 'Retry Purchase' : 'Complete Purchase'}
-                </Button>
-              )}
-            </div>
-            )}
-
-            {/* Section: Policy Information */}
-            <div className="rounded-lg border overflow-hidden">
-              <div className="bg-primary/10 px-4 py-2">
-                <h4 className="text-sm font-semibold">Policy Information</h4>
-              </div>
-              <div className="p-4">
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-y-3 gap-x-6 text-sm">
-                  <div>
-                    <p className="text-muted-foreground">Policy Number</p>
-                    <p className="font-semibold font-mono">{bonzahPolicy.policy_no || 'Pending'}</p>
-                  </div>
-                  <div>
-                    <p className="text-muted-foreground">Quote ID</p>
-                    <p className="font-medium font-mono">{bonzahPolicy.quote_id}</p>
-                  </div>
-                  <div>
-                    <p className="text-muted-foreground">Status</p>
-                    <p className="font-medium capitalize">{bonzahPolicy.status}</p>
-                  </div>
-                  <div>
-                    <p className="text-muted-foreground">Purchase Date</p>
-                    <p className="font-medium">{bonzahPolicy.policy_issued_at ? new Date(bonzahPolicy.policy_issued_at).toLocaleString() : new Date(bonzahPolicy.created_at).toLocaleString()}</p>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Section: Policy Holder */}
-            {rd && (
-              <div className="rounded-lg border overflow-hidden">
-                <div className="bg-primary/10 px-4 py-2">
-                  <h4 className="text-sm font-semibold">Policy Holder</h4>
-                </div>
-                <div className="p-4">
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-y-3 gap-x-6 text-sm">
-                    <div>
-                      <p className="text-muted-foreground">Name</p>
-                      <p className="font-medium">{rd.first_name} {rd.last_name}</p>
-                    </div>
-                    <div>
-                      <p className="text-muted-foreground">Date of Birth</p>
-                      <p className="font-medium">{rd.dob ? new Date(rd.dob).toLocaleDateString() : '—'}</p>
-                    </div>
-                    <div>
-                      <p className="text-muted-foreground">Email</p>
-                      <p className="font-medium truncate">{rd.email || '—'}</p>
-                    </div>
-                    <div>
-                      <p className="text-muted-foreground">Phone</p>
-                      <p className="font-medium">{rd.phone || '—'}</p>
-                    </div>
-                    <div>
-                      <p className="text-muted-foreground">Address</p>
-                      <p className="font-medium">{rd.address?.street || '—'}</p>
-                    </div>
-                    <div>
-                      <p className="text-muted-foreground">City / State</p>
-                      <p className="font-medium">{rd.address?.city || '—'}, {rd.address?.state || '—'}</p>
-                    </div>
-                    <div>
-                      <p className="text-muted-foreground">Zip Code</p>
-                      <p className="font-medium">{rd.address?.zip || '—'}</p>
-                    </div>
-                    <div>
-                      <p className="text-muted-foreground">License</p>
-                      <p className="font-medium">{rd.license?.number || '—'} ({rd.license?.state || '—'})</p>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* Section: Travel Details */}
-            <div className="rounded-lg border overflow-hidden">
-              <div className="bg-primary/10 px-4 py-2">
-                <h4 className="text-sm font-semibold">Travel Details</h4>
-              </div>
-              <div className="p-4">
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-y-3 gap-x-6 text-sm">
-                  <div>
-                    <p className="text-muted-foreground">Departure Date</p>
-                    <p className="font-medium">{new Date(bonzahPolicy.trip_start_date).toLocaleDateString()}</p>
-                  </div>
-                  <div>
-                    <p className="text-muted-foreground">Return Date</p>
-                    <p className="font-medium">{new Date(bonzahPolicy.trip_end_date).toLocaleDateString()}</p>
-                  </div>
-                  <div>
-                    <p className="text-muted-foreground">Pickup State</p>
-                    <p className="font-medium">{bonzahPolicy.pickup_state}</p>
-                  </div>
-                  <div>
-                    <p className="text-muted-foreground">Residence State</p>
-                    <p className="font-medium">{rd?.address?.state || bonzahPolicy.pickup_state}</p>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Section: Coverages */}
-            <div className="rounded-lg border overflow-hidden">
-              <div className="bg-primary/10 px-4 py-2">
-                <h4 className="text-sm font-semibold">Coverages</h4>
-              </div>
-              <div className="divide-y">
-                {['cdw', 'rcli', 'sli', 'pai'].filter(key => ct?.[key]).map((key) => (
-                  <div key={key} className="flex items-center justify-between px-4 py-2.5 text-sm">
-                    <div className="flex items-center gap-2">
-                      <CheckCircle className="h-4 w-4 text-green-600 shrink-0" />
-                      <span className="font-medium">{coverageLabels[key]}</span>
-                    </div>
-                    {pdfIds?.[key] && (
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="h-7 text-xs"
-                        disabled={downloadingPdf === key}
-                        onClick={() => handleDownloadPdf(key, pdfIds[key])}
-                      >
-                        {downloadingPdf === key ? (
-                          <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" />
-                        ) : (
-                          <Download className="h-3.5 w-3.5 mr-1" />
-                        )}
-                        Download PDF
-                      </Button>
-                    )}
-                  </div>
-                ))}
-                <div className="flex items-center justify-between px-4 py-2.5 bg-muted/30">
-                  <span className="text-sm font-semibold">Total Premium</span>
-                  <span className="text-sm font-bold text-green-600">{formatCurrency(bonzahPolicy.premium_amount)}</span>
-                </div>
-              </div>
-            </div>
-
-            {/* Footer Actions */}
-            <div className="flex items-center gap-3">
-              <a
-                href={portalUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center gap-1.5 text-sm text-blue-600 hover:underline"
-              >
-                <ExternalLink className="h-4 w-4" />
-                View in Bonzah Portal
-              </a>
-            </div>
-          </CardContent>
-        </Card>
-        );
-      })()}
+      {/* Insurance Policies Timeline */}
+      {(insurancePolicies.length > 0 || isLoadingInsurancePolicies) && (
+        <InsuranceTimeline
+          rentalId={id}
+          rental={rental}
+          policies={insurancePolicies}
+          isLoading={isLoadingInsurancePolicies}
+          canEdit={canEdit('rentals')}
+          tenantId={tenant?.id}
+          isBonzahConnected={isBonzahConnected}
+          bonzahCdBalance={bonzahCdBalance}
+          onBuyInsurance={() => setShowBuyInsurance(true)}
+        />
+      )}
 
       {/* Insurance Verification Card - Compact when no documents, full when documents exist */}
       {insuranceDocuments && insuranceDocuments.length > 0 ? (
@@ -4022,6 +3679,7 @@ const RentalDetail = () => {
           onOpenChange={setShowExtensionDialog}
           rental={{
             id: rental.id,
+            start_date: rental.start_date,
             end_date: rental.end_date,
             previous_end_date: rental.previous_end_date || null,
             has_installment_plan: rental.has_installment_plan,
@@ -4041,6 +3699,7 @@ const RentalDetail = () => {
           onOpenChange={setShowAdminExtendDialog}
           rental={{
             id: rental.id,
+            start_date: rental.start_date,
             end_date: rental.end_date,
             has_installment_plan: rental.has_installment_plan,
             bonzah_policy_id: rental.bonzah_policy_id,

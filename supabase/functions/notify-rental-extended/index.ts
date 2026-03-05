@@ -23,6 +23,8 @@ interface NotifyRequest {
   extensionAmount: number;
   paymentUrl?: string;
   tenantId: string;
+  newMileageAllowance?: string;
+  distanceUnit?: string;
 }
 
 const getFallbackHtml = (data: NotifyRequest, currencyCode: string = 'GBP') => {
@@ -64,7 +66,8 @@ const getFallbackHtml = (data: NotifyRequest, currencyCode: string = 'GBP') => {
                 <tr><td style="padding: 12px 20px; color: #666; font-size: 14px;">Previous End Date:</td><td style="padding: 12px 20px; color: #f59e0b; font-weight: 600; font-size: 14px; text-align: right;">${data.previousEndDate}</td></tr>
                 <tr><td style="padding: 12px 20px; color: #666; font-size: 14px;">New End Date:</td><td style="padding: 12px 20px; color: #10b981; font-weight: 600; font-size: 14px; text-align: right;">${data.newEndDate}</td></tr>
                 <tr><td style="padding: 12px 20px; color: #666; font-size: 14px;">Extension:</td><td style="padding: 12px 20px; color: #1a1a1a; font-weight: 600; font-size: 14px; text-align: right;">+${data.extensionDays} days</td></tr>
-                <tr><td style="padding: 12px 20px; color: #666; font-size: 14px;">Extension Cost:</td><td style="padding: 12px 20px; color: #1a1a1a; font-weight: 600; font-size: 14px; text-align: right;">${formatCurrency(data.extensionAmount, currencyCode)}</td></tr>
+                <tr><td style="padding: 12px 20px; color: #666; font-size: 14px;">Extension Cost:</td><td style="padding: 12px 20px; color: #1a1a1a; font-weight: 600; font-size: 14px; text-align: right;">${formatCurrency(data.extensionAmount, currencyCode)}</td></tr>${data.newMileageAllowance ? `
+                <tr><td style="padding: 12px 20px; color: #666; font-size: 14px;">Mileage Allowance:</td><td style="padding: 12px 20px; color: #10b981; font-weight: 600; font-size: 14px; text-align: right;">${data.newMileageAllowance} ${data.distanceUnit || 'miles'}</td></tr>` : ''}
               </table>
               ${paymentSection}
               <p style="margin: 0; color: #444; line-height: 1.6; font-size: 16px;">If you have any questions, please contact support.</p>
@@ -167,6 +170,8 @@ Deno.serve(async (req) => {
           extension_days: String(data.extensionDays),
           extension_amount: formatCurrency(data.extensionAmount, currencyCode),
           payment_url: data.paymentUrl || '',
+          new_mileage_allowance: data.newMileageAllowance || '',
+          distance_unit: data.distanceUnit || 'miles',
         };
 
         const rendered = await renderEmail(supabase, data.tenantId, 'rental_extended', templateData);
@@ -190,7 +195,7 @@ Deno.serve(async (req) => {
     if (data.customerPhone) {
       results.customerSMS = await sendSMS(
         data.customerPhone,
-        `Your rental has been extended by ${data.extensionDays} day(s). New end date: ${data.newEndDate}. Extension fee: ${formatCurrency(data.extensionAmount, currencyCode)}.${data.paymentUrl ? ' Pay here: ' + data.paymentUrl : ''}`
+        `Your rental has been extended by ${data.extensionDays} day(s). New end date: ${data.newEndDate}. Extension fee: ${formatCurrency(data.extensionAmount, currencyCode)}.${data.newMileageAllowance ? ` New mileage allowance: ${data.newMileageAllowance} ${data.distanceUnit || 'miles'}.` : ''}${data.paymentUrl ? ' Pay here: ' + data.paymentUrl : ''}`
       );
       console.log('Customer SMS result:', results.customerSMS);
     }

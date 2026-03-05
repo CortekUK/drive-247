@@ -132,8 +132,8 @@ Deno.serve(async (req) => {
     // If the plan has a longer trial configured, use that instead.
     const trialDays = Math.max(2, plan.trial_days || 0);
 
-    // Build line items: fixed plan price + optional metered e-sign price
-    const lineItems: Array<{ price: string; quantity?: number }> = [
+    // Build line items: fixed plan price + optional metered e-sign price + $1 card verification
+    const lineItems: Array<any> = [
       { price: priceId, quantity: 1 },
     ];
     const meteredPriceId = mode === "live"
@@ -143,13 +143,26 @@ Deno.serve(async (req) => {
       lineItems.push({ price: meteredPriceId }); // no quantity for metered
     }
 
+    // Add a one-time $1 card verification fee to the checkout.
+    // Stripe charges one-time items immediately even during trial, which validates
+    // the card properly (some banks reject the $0 auth on trial subscriptions).
+    // This $1 is auto-refunded in the subscription webhook on checkout.session.completed.
+    lineItems.push({
+      price_data: {
+        currency: (plan.currency || "usd").toLowerCase(),
+        product_data: { name: "Card verification (refunded automatically)" },
+        unit_amount: 100, // $1.00
+      },
+      quantity: 1,
+    });
+
     const session = await stripe.checkout.sessions.create({
       mode: "subscription",
       customer: stripeCustomerId,
       line_items: lineItems,
       success_url: successUrl,
       cancel_url: cancelUrl,
-      metadata: { tenant_id: tenantId, plan_id: planId, plan_name: plan.name, source: "platform_subscription" },
+      metadata: { tenant_id: tenantId, plan_id: planId, plan_name: plan.name, source: "platform_subscription", setup_fee: "true" },
       subscription_data: {
         metadata: { tenant_id: tenantId, plan_id: planId, plan_name: plan.name },
         trial_period_days: trialDays,

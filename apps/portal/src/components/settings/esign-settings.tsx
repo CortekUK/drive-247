@@ -29,9 +29,19 @@ export function ESignSettings() {
 
   const currentMode = tenant?.boldsign_mode || 'test';
   const isLive = currentMode === 'live';
+  const subscriptionStripeMode = tenant?.subscription_stripe_mode || 'test';
+  const canGoLive = subscriptionStripeMode === 'live';
 
   const handleToggleMode = async (wantLive: boolean) => {
     if (wantLive) {
+      if (!canGoLive) {
+        toast({
+          title: 'Stripe must be in live mode first',
+          description: 'Your subscription Stripe mode must be set to live before enabling live e-signatures. Contact your administrator.',
+          variant: 'destructive',
+        });
+        return;
+      }
       setShowLiveConfirm(true);
       return;
     }
@@ -126,7 +136,9 @@ export function ESignSettings() {
                 {isLive ? 'Live Mode Enabled' : 'Test Mode Enabled'}
               </Label>
               <p className="text-xs text-muted-foreground mt-0.5">
-                Toggle to switch between test and live environments
+                {!isLive && !canGoLive
+                  ? 'Stripe subscription must be in live mode to enable live e-signatures'
+                  : 'Toggle to switch between test and live environments'}
               </p>
             </div>
             {isUpdating ? (
@@ -136,6 +148,7 @@ export function ESignSettings() {
                 id="boldsign-mode-toggle"
                 checked={isLive}
                 onCheckedChange={handleToggleMode}
+                disabled={!isLive && !canGoLive}
               />
             )}
           </div>

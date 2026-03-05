@@ -21,6 +21,7 @@ export interface TenantBranding {
   dark_header_footer_color: string | null;
   logo_url: string | null;
   dark_logo_url: string | null;
+  auth_logo_url: string | null;
   favicon_url: string | null;
   hero_background_url: string | null;
   // SEO
@@ -55,6 +56,7 @@ const DEFAULT_BRANDING: TenantBranding = {
   dark_header_footer_color: null,
   logo_url: null,
   dark_logo_url: null,
+  auth_logo_url: null,
   favicon_url: null,
   hero_background_url: null,
   meta_title: null,
@@ -115,6 +117,7 @@ export const useTenantBranding = () => {
           dark_header_footer_color,
           logo_url,
           dark_logo_url,
+          auth_logo_url,
           favicon_url,
           hero_background_url,
           meta_title,
@@ -175,6 +178,7 @@ export const useTenantBranding = () => {
           dark_header_footer_color,
           logo_url,
           dark_logo_url,
+          auth_logo_url,
           favicon_url,
           hero_background_url,
           meta_title,
@@ -242,6 +246,7 @@ export const useTenantBranding = () => {
     dark_header_footer_color: tenant.dark_header_footer_color,
     logo_url: tenant.logo_url,
     dark_logo_url: tenant.dark_logo_url,
+    auth_logo_url: (tenant as any).auth_logo_url ?? null,
     favicon_url: tenant.favicon_url,
     hero_background_url: tenant.hero_background_url,
     meta_title: tenant.meta_title,

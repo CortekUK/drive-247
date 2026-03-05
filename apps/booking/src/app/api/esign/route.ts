@@ -111,7 +111,18 @@ function processTemplate(template: string, rental: any, customer: any, vehicle: 
         vehicle_daily_mileage: vehicle?.daily_mileage?.toString() || '',
         vehicle_weekly_mileage: vehicle?.weekly_mileage?.toString() || '',
         vehicle_monthly_mileage: vehicle?.monthly_mileage?.toString() || '',
-        vehicle_allowed_mileage: vehicle?.monthly_mileage?.toString() || '',
+        vehicle_allowed_mileage: (() => {
+            if (!vehicle?.daily_mileage && !vehicle?.weekly_mileage && !vehicle?.monthly_mileage) return 'Unlimited';
+            if (rental?.start_date && rental?.end_date) {
+                const days = Math.max(1, Math.ceil((new Date(rental.end_date).getTime() - new Date(rental.start_date).getTime()) / (1000 * 60 * 60 * 24)));
+                let tier: 'daily' | 'weekly' | 'monthly' = days > 30 ? 'monthly' : days >= 7 ? 'weekly' : 'daily';
+                const perUnit = tier === 'daily' ? vehicle.daily_mileage : tier === 'weekly' ? vehicle.weekly_mileage : vehicle.monthly_mileage;
+                if (perUnit == null) return 'Unlimited';
+                const total = tier === 'daily' ? days * perUnit : tier === 'weekly' ? Math.ceil(days / 7) * perUnit : Math.ceil(days / 30) * perUnit;
+                return total.toString();
+            }
+            return vehicle?.monthly_mileage?.toString() || '';
+        })(),
 
         // Rental
         rental_number: rental?.rental_number || rental?.id?.substring(0, 8)?.toUpperCase() || '',
@@ -557,62 +568,22 @@ export async function POST(request: NextRequest) {
             }
         }
 
-        // Report metered usage to Stripe (for all agreements when tenant has an active subscription)
+        // Report metered usage via edge function (fire-and-forget — does not block e-sign flow)
         if (tenantId) {
-            try {
-                // Resolve tenant's subscription Stripe mode (test or live)
-                const { data: tenantModeData } = await supabase
-                    .from('tenants')
-                    .select('subscription_stripe_mode')
-                    .eq('id', tenantId)
-                    .single();
-                const subStripeMode: 'test' | 'live' = tenantModeData?.subscription_stripe_mode || 'test';
-
-                const { data: tenantSub } = await supabase
-                    .from('tenant_subscriptions')
-                    .select('stripe_customer_id')
-                    .eq('tenant_id', tenantId)
-                    .in('status', ['active', 'trialing', 'past_due'])
-                    .maybeSingle();
-
-                if (tenantSub?.stripe_customer_id) {
-                    const STRIPE_KEY = subStripeMode === 'live'
-                        ? (process.env.STRIPE_SUBSCRIPTION_LIVE_SECRET_KEY || process.env.STRIPE_LIVE_SECRET_KEY || '')
-                        : (process.env.STRIPE_SUBSCRIPTION_TEST_SECRET_KEY || process.env.STRIPE_SUBSCRIPTION_SECRET_KEY || process.env.STRIPE_TEST_SECRET_KEY || '');
-
-                    const meterRes = await fetch('https://api.stripe.com/v1/billing/meter_events', {
-                        method: 'POST',
-                        headers: {
-                            'Authorization': `Bearer ${STRIPE_KEY}`,
-                            'Content-Type': 'application/x-www-form-urlencoded',
-                        },
-                        body: new URLSearchParams({
-                            'event_name': 'esign_sent',
-                            'payload[stripe_customer_id]': tenantSub.stripe_customer_id,
-                            'payload[value]': '1',
-                        }),
-                    });
-                    const meterData = await meterRes.json();
-                    console.log('Stripe meter event:', meterRes.ok ? meterData.identifier : 'FAILED', meterRes.status, `(sub mode: ${subStripeMode})`);
-
-                    // Log usage for portal UI
-                    const usageRefId = body.rentalId.substring(0, 8).toUpperCase();
-                    await supabase.from('esign_usage_log').insert({
-                        tenant_id: tenantId,
-                        rental_id: body.rentalId,
-                        customer_id: rental?.customer_id || null,
-                        customer_name: body.customerName,
-                        rental_ref: usageRefId,
-                        unit_cost: 1.00,
-                        currency: 'usd',
-                        stripe_event_id: meterRes.ok ? meterData.identifier : null,
-                    });
-                } else {
-                    console.log('No active subscription for tenant, skipping meter event');
-                }
-            } catch (e) {
-                console.warn('Stripe meter event error (non-blocking):', e);
-            }
+            fetch(`${supabaseUrl}/functions/v1/report-usage-event`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${supabaseServiceKey}`,
+                },
+                body: JSON.stringify({
+                    tenant_id: tenantId,
+                    rental_id: body.rentalId,
+                    customer_id: rental?.customer_id || null,
+                    customer_name: body.customerName,
+                    category: 'esign',
+                }),
+            }).catch((e) => console.warn('Usage report fire-and-forget error:', e));
         }
 
         // Send signing email (we handle emails ourselves since DisableEmails is true)

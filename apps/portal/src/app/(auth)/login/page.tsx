@@ -80,6 +80,7 @@ function LoginPageContent() {
 
   // Get logo from tenant branding or use default
   const { resolvedTheme } = useTheme();
+  const authLogoUrl = branding?.auth_logo_url;
   const logoUrl = (resolvedTheme === 'dark' && branding?.dark_logo_url ? branding.dark_logo_url : branding?.logo_url) || "/logo.png";
   const appName = branding?.app_name || "Drive247";
 
@@ -296,8 +297,14 @@ function LoginPageContent() {
       <Card className="w-full max-w-md border-primary">
         <CardHeader className="text-center space-y-4">
           <div className="flex justify-center py-4">
-            <div className="bg-white dark:bg-[hsl(159,21%,15%)]/30 rounded-2xl p-8 border border-primary/40 transition-all duration-300 hover:border-primary/60 hover:shadow-[0_0_20px_rgba(198,162,86,0.15)]">
-              {logoUrl && logoUrl !== "/logo.png" ? (
+            <div className={`rounded-2xl p-8 border border-primary/40 transition-all duration-300 hover:border-primary/60 hover:shadow-[0_0_20px_rgba(198,162,86,0.15)] ${authLogoUrl ? 'bg-black' : 'bg-white dark:bg-[hsl(159,21%,15%)]/30'}`}>
+              {authLogoUrl ? (
+                <img
+                  src={authLogoUrl}
+                  alt={appName}
+                  className="h-64 w-64 object-contain transition-transform duration-300 hover:scale-105"
+                />
+              ) : logoUrl && logoUrl !== "/logo.png" ? (
                 <img
                   src={logoUrl}
                   alt={appName}

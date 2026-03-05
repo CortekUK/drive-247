@@ -514,7 +514,7 @@ Deno.serve(async (req) => {
       return errorResponse('Failed to create document', 400);
     }
 
-    // Report metered usage to Stripe (for all agreements when tenant has an active subscription)
+    // Report metered usage to Stripe (test mode → test Stripe, live mode → live Stripe)
     if (tenantId) {
       try {
         // Resolve tenant's subscription Stripe mode (test or live)
