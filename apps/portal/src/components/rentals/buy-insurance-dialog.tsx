@@ -446,18 +446,32 @@ export function BuyInsuranceDialog({
                   <p className="text-muted-foreground">Coverage Period</p>
                   {(() => {
                     const rentalStart = rental.start_date.split('T')[0];
+                    const rentalEnd = rental.end_date.split('T')[0];
                     const todayStr = new Date().toISOString().split('T')[0];
                     const effectiveStart = rentalStart < todayStr ? todayStr : rentalStart;
                     const isClamped = rentalStart < todayStr;
+                    // Bonzah max 30 days
+                    const startD = new Date(effectiveStart + 'T00:00:00');
+                    const maxEndD = new Date(startD);
+                    maxEndD.setDate(maxEndD.getDate() + 30);
+                    const maxEndStr = maxEndD.toISOString().split('T')[0];
+                    const effectiveEnd = rentalEnd > maxEndStr ? maxEndStr : rentalEnd;
+                    const isCapped = rentalEnd > maxEndStr;
                     return (
                       <>
                         <p className="font-medium">
-                          {new Date(effectiveStart + 'T00:00:00').toLocaleDateString()} - {new Date(rental.end_date).toLocaleDateString()}
+                          {new Date(effectiveStart + 'T00:00:00').toLocaleDateString()} - {new Date(effectiveEnd + 'T00:00:00').toLocaleDateString()}
                         </p>
                         {isClamped && (
                           <p className="text-xs text-amber-600 dark:text-amber-400 mt-0.5 flex items-center gap-1">
                             <AlertTriangle className="h-3 w-3" />
-                            Rental started {new Date(rentalStart + 'T00:00:00').toLocaleDateString()} — coverage begins today (no retroactive coverage)
+                            Rental started {new Date(rentalStart + 'T00:00:00').toLocaleDateString()} — coverage begins today
+                          </p>
+                        )}
+                        {isCapped && (
+                          <p className="text-xs text-amber-600 dark:text-amber-400 mt-0.5 flex items-center gap-1">
+                            <AlertTriangle className="h-3 w-3" />
+                            Bonzah max policy is 30 days — coverage ends {new Date(effectiveEnd + 'T00:00:00').toLocaleDateString()} (rental ends {new Date(rentalEnd + 'T00:00:00').toLocaleDateString()})
                           </p>
                         )}
                       </>

@@ -2013,16 +2013,32 @@ const CreateRental = () => {
                           <>
                             {(() => {
                               const startStr = watchedStartDate ? watchedStartDate.toISOString().split('T')[0] : null;
+                              const endStr = watchedEndDate ? watchedEndDate.toISOString().split('T')[0] : null;
                               const todayStr = new Date().toISOString().split('T')[0];
+                              const effectiveStart = startStr && startStr < todayStr ? todayStr : startStr;
+                              const warnings: string[] = [];
                               if (startStr && startStr < todayStr) {
-                                return (
-                                  <div className="flex items-center gap-2 p-2.5 rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 text-amber-700 dark:text-amber-400 text-xs">
-                                    <AlertTriangle className="h-3.5 w-3.5 flex-shrink-0" />
-                                    <span>Rental starts {new Date(startStr + 'T00:00:00').toLocaleDateString()} which is in the past. Insurance coverage will begin from today.</span>
-                                  </div>
-                                );
+                                warnings.push(`Rental starts ${new Date(startStr + 'T00:00:00').toLocaleDateString()} which is in the past. Insurance coverage will begin from today.`);
                               }
-                              return null;
+                              if (effectiveStart && endStr) {
+                                const s = new Date(effectiveStart + 'T00:00:00');
+                                const maxEnd = new Date(s);
+                                maxEnd.setDate(maxEnd.getDate() + 30);
+                                if (new Date(endStr + 'T00:00:00') > maxEnd) {
+                                  warnings.push(`Bonzah max policy is 30 days. Coverage will end ${maxEnd.toLocaleDateString()} — rental ends ${new Date(endStr + 'T00:00:00').toLocaleDateString()}.`);
+                                }
+                              }
+                              if (warnings.length === 0) return null;
+                              return (
+                                <div className="space-y-1.5">
+                                  {warnings.map((w, i) => (
+                                    <div key={i} className="flex items-center gap-2 p-2.5 rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 text-amber-700 dark:text-amber-400 text-xs">
+                                      <AlertTriangle className="h-3.5 w-3.5 flex-shrink-0" />
+                                      <span>{w}</span>
+                                    </div>
+                                  ))}
+                                </div>
+                              );
                             })()}
                             <BonzahInsuranceSelector
                               tripStartDate={(() => {

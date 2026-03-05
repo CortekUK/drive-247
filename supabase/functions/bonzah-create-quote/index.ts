@@ -139,6 +139,13 @@ serve(async (req) => {
     const today = new Date().toISOString().split('T')[0]
     const tripStart = body.trip_dates.start < today ? today : body.trip_dates.start
 
+    // Cap trip end to start + 30 days (Bonzah max policy duration)
+    const startDate = new Date(tripStart + 'T00:00:00')
+    const maxEnd = new Date(startDate)
+    maxEnd.setDate(maxEnd.getDate() + 30)
+    const maxEndStr = maxEnd.toISOString().split('T')[0]
+    const tripEnd = body.trip_dates.end > maxEndStr ? maxEndStr : body.trip_dates.end
+
     // Field names verified against Bonzah API docs (03 Quote Save_Finalize.md)
     const createQuoteRequest: Record<string, unknown> = {
       product_id: PRODUCT_ID,
@@ -147,7 +154,7 @@ serve(async (req) => {
       policy_booking_time_zone: 'America/Los_Angeles',
       // Trip details (format: MM/DD/YYYY HH:mm:ss)
       trip_start_date: `${formatDateForBonzah(tripStart)} 10:00:00`,
-      trip_end_date: `${formatDateForBonzah(body.trip_dates.end)} 10:00:00`,
+      trip_end_date: `${formatDateForBonzah(tripEnd)} 10:00:00`,
       pickup_state: pickupStateFull,
       pickup_country: 'United States',
       drop_off_time: 'Same',
@@ -255,7 +262,7 @@ serve(async (req) => {
         policy_id: null,  // Will be set after payment
         coverage_types: coverageTypesWithPdfs,
         trip_start_date: tripStart,
-        trip_end_date: body.trip_dates.end,
+        trip_end_date: tripEnd,
         pickup_state: body.pickup_state,
         premium_amount: roundedPremium,
         renter_details: body.renter,
