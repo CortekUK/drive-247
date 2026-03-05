@@ -135,6 +135,10 @@ serve(async (req) => {
     })()
 
     // Use the correct /Bonzah/quote endpoint with finalize=1
+    // Clamp trip start to today if it's in the past (Bonzah rejects past start dates)
+    const today = new Date().toISOString().split('T')[0]
+    const tripStart = body.trip_dates.start < today ? today : body.trip_dates.start
+
     // Field names verified against Bonzah API docs (03 Quote Save_Finalize.md)
     const createQuoteRequest: Record<string, unknown> = {
       product_id: PRODUCT_ID,
@@ -142,7 +146,7 @@ serve(async (req) => {
       source: 'API',
       policy_booking_time_zone: 'America/Los_Angeles',
       // Trip details (format: MM/DD/YYYY HH:mm:ss)
-      trip_start_date: `${formatDateForBonzah(body.trip_dates.start)} 10:00:00`,
+      trip_start_date: `${formatDateForBonzah(tripStart)} 10:00:00`,
       trip_end_date: `${formatDateForBonzah(body.trip_dates.end)} 10:00:00`,
       pickup_state: pickupStateFull,
       pickup_country: 'United States',
@@ -250,7 +254,7 @@ serve(async (req) => {
         payment_id: paymentId,  // Store the payment_id from Bonzah
         policy_id: null,  // Will be set after payment
         coverage_types: coverageTypesWithPdfs,
-        trip_start_date: body.trip_dates.start,
+        trip_start_date: tripStart,
         trip_end_date: body.trip_dates.end,
         pickup_state: body.pickup_state,
         premium_amount: roundedPremium,

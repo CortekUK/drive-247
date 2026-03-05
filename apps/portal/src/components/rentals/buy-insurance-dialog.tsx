@@ -164,7 +164,11 @@ export function BuyInsuranceDialog({
           customer_id: rental.customers.id,
           tenant_id: tenant.id,
           trip_dates: {
-            start: rental.start_date.split('T')[0],
+            start: (() => {
+              const rentalStart = rental.start_date.split('T')[0];
+              const today = new Date().toISOString().split('T')[0];
+              return rentalStart < today ? today : rentalStart;
+            })(),
             end: rental.end_date.split('T')[0],
           },
           pickup_state: pickupState,
