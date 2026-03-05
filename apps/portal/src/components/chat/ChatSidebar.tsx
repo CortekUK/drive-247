@@ -1,7 +1,11 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
+import dynamic from 'next/dynamic';
 import { Trash2, Bot } from 'lucide-react';
+
+const Lottie = dynamic(() => import('lottie-react'), { ssr: false });
+import traxBotAnimation from './trax-bot-animation.json';
 import {
   Sheet,
   SheetContent,
@@ -39,14 +43,15 @@ export function ChatSidebar() {
 
   return (
     <Sheet open={isOpen} onOpenChange={setIsOpen}>
-      {/* Floating trigger button with glow effect */}
+      {/* Floating trigger button with glow effect — hidden when chat is open */}
       <SheetTrigger asChild>
         <button
           className={cn(
             "fixed bottom-6 right-6 z-[9999] h-14 w-14 rounded-full",
             "shadow-lg transition-all duration-300 hover:scale-110",
             "border border-white/20 flex items-center justify-center",
-            "group cursor-pointer"
+            "group cursor-pointer",
+            isOpen && "hidden"
           )}
           style={{
             background: `linear-gradient(135deg, ${accentColor}, ${accentColor}dd)`,
@@ -178,60 +183,63 @@ function EmptyState({
   appName?: string | null;
 }) {
   const suggestions = [
-    { label: "Active rentals", query: "How many active rentals do we have?" },
-    { label: "Available vehicles", query: "Show me vehicles that are available" },
-    { label: "Revenue this month", query: "What's our revenue this month?" },
-    { label: "Pending payments", query: "What's our pending payment total?" },
+    { icon: '🚗', label: "Fleet overview", query: "Give me a fleet overview with a chart" },
+    { icon: '📊', label: "Revenue breakdown", query: "Show me revenue breakdown by category" },
+    { icon: '📋', label: "Active rentals", query: "How many active rentals do we have?" },
+    { icon: '💰', label: "Pending payments", query: "What's our pending payment total?" },
+    { icon: '🔧', label: "Vehicles by make", query: "Show me vehicles grouped by make" },
+    { icon: '⚠️', label: "Unpaid fines", query: "How many unpaid fines do we have?" },
   ];
 
   return (
-    <div className="flex flex-col items-center justify-center py-12 text-center">
-      {/* Animated gradient orb */}
-      <div className="relative mb-6">
+    <div className="flex flex-col items-center px-4 py-6">
+      {/* Lottie bot animation */}
+      <div className="relative mb-3 h-28 w-28">
+        <Lottie
+          animationData={traxBotAnimation}
+          loop
+          autoplay
+          className="h-full w-full"
+        />
         <div
-          className="h-20 w-20 rounded-2xl border flex items-center justify-center animate-float"
-          style={{
-            background: `${accentColor}20`,
-            borderColor: `${accentColor}50`,
-          }}
-        >
-          <Bot className="h-10 w-10 animate-pulse" style={{ color: accentColor }} />
-        </div>
-        <div
-          className="absolute -inset-1 -z-10 rounded-2xl blur-xl animate-glow"
-          style={{ background: `${accentColor}30` }}
+          className="absolute inset-4 -z-10 rounded-full blur-2xl opacity-30 animate-pulse"
+          style={{ background: accentColor }}
         />
       </div>
 
-      <h3 className="text-xl font-semibold tracking-tight">How can I help?</h3>
-      <p className="mt-2 max-w-[280px] text-sm text-muted-foreground">
-        Ask me anything about your customers, vehicles, rentals, payments, or business metrics.
+      <h3 className="text-lg font-semibold tracking-tight">How can I help?</h3>
+      <p className="mt-1 max-w-[260px] text-xs text-muted-foreground text-center">
+        Ask about your fleet, rentals, payments, fines, or any business metric.
       </p>
 
-      {/* Suggestion chips */}
-      <div className="mt-6 flex flex-wrap justify-center gap-2">
+      {/* Suggestion cards — stacked list */}
+      <div className="mt-5 flex w-full flex-col gap-2">
         {suggestions.map((suggestion) => (
           <button
             key={suggestion.label}
             onClick={() => onSuggestionClick(suggestion.query)}
             className={cn(
-              "rounded-full px-4 py-2 text-sm",
-              "bg-secondary/50 hover:bg-secondary",
-              "border border-border/50",
-              "text-muted-foreground hover:text-foreground",
-              "transition-all duration-200 hover:shadow-sm hover:scale-105"
+              "group flex items-center gap-3 rounded-xl px-4 py-3 text-left",
+              "bg-secondary/30 hover:bg-secondary/60",
+              "border border-border/30 hover:border-border/60",
+              "transition-all duration-200"
             )}
-            style={{
-              '--hover-border-color': `${accentColor}50`,
-            } as React.CSSProperties}
             onMouseEnter={(e) => {
-              e.currentTarget.style.borderColor = `${accentColor}50`;
+              e.currentTarget.style.borderColor = `${accentColor}40`;
+              e.currentTarget.style.boxShadow = `0 0 12px -4px ${accentColor}30`;
             }}
             onMouseLeave={(e) => {
               e.currentTarget.style.borderColor = '';
+              e.currentTarget.style.boxShadow = '';
             }}
           >
-            {suggestion.label}
+            <span className="text-base">{suggestion.icon}</span>
+            <span className="text-sm text-muted-foreground group-hover:text-foreground transition-colors">
+              {suggestion.label}
+            </span>
+            <svg className="ml-auto h-4 w-4 text-muted-foreground/40 group-hover:text-muted-foreground transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+            </svg>
           </button>
         ))}
       </div>
