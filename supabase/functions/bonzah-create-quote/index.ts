@@ -127,17 +127,23 @@ async function createSingleQuote(
   pdfIds: Record<string, string>
 }> {
   // Bonzah validates the full datetime against America/Los_Angeles timezone.
-  // - Must use the SAME time for start and end so duration = exact number of days
-  // - Must not use 23:59 — Bonzah rounds to midnight causing 0-day duration
-  // - Must not use 10:00 — rejected as "in the past" when it's past 10 AM Pacific
-  // Using 15:00 (3 PM Pacific = 11 PM UK) — works for all normal business hours,
-  // no midnight rounding, and same for both dates gives exact day intervals.
-  const TRIP_TIME = '15:00:00'
+  // Same time for both start and end ensures exact day intervals.
+  // If start is today in Pacific, use current Pacific hour + 2 to stay in the future.
+  // Otherwise use 15:00 (safe default for future dates).
+  const pacificDate = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Los_Angeles', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date())
+  let tripTime: string
+  if (chunk.start === pacificDate) {
+    const pacificHour = parseInt(new Intl.DateTimeFormat('en-US', { timeZone: 'America/Los_Angeles', hour: 'numeric', hour12: false }).format(new Date()), 10)
+    const safeHour = Math.min(pacificHour + 2, 23)
+    tripTime = `${String(safeHour).padStart(2, '0')}:00:00`
+  } else {
+    tripTime = '15:00:00'
+  }
 
   const quoteRequest: Record<string, unknown> = {
     ...commonFields,
-    trip_start_date: `${formatDateForBonzah(chunk.start)} ${TRIP_TIME}`,
-    trip_end_date: `${formatDateForBonzah(chunk.end)} ${TRIP_TIME}`,
+    trip_start_date: `${formatDateForBonzah(chunk.start)} ${tripTime}`,
+    trip_end_date: `${formatDateForBonzah(chunk.end)} ${tripTime}`,
   }
 
   console.log(`[Bonzah Quote] Creating quote for chunk ${chunk.start} → ${chunk.end}`)
@@ -240,10 +246,22 @@ serve(async (req) => {
       return phoneDigits || '10000000000'
     })()
 
-    // Clamp trip start to today if it's in the past (Bonzah rejects past start dates)
-    const today = new Date().toISOString().split('T')[0]
-    const tripStart = body.trip_dates.start < today ? today : body.trip_dates.start
-    const tripEnd = body.trip_dates.end
+    // Clamp trip start using Pacific timezone (Bonzah validates against America/Los_Angeles)
+    const pacificNow = (() => {
+      const now = new Date()
+      const date = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Los_Angeles', year: 'numeric', month: '2-digit', day: '2-digit' }).format(now)
+      const hour = parseInt(new Intl.DateTimeFormat('en-US', { timeZone: 'America/Los_Angeles', hour: 'numeric', hour12: false }).format(now), 10)
+      return { date, hour }
+    })()
+
+    let tripStart = body.trip_dates.start < pacificNow.date ? pacificNow.date : body.trip_dates.start
+    // If start is today but past 10 PM Pacific, bump to tomorrow (no safe same-day time left)
+    if (tripStart === pacificNow.date && pacificNow.hour >= 22) {
+      const tomorrow = new Date(Date.now() + 86400000)
+      tripStart = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Los_Angeles', year: 'numeric', month: '2-digit', day: '2-digit' }).format(tomorrow)
+    }
+    // Ensure end date is not before start date (in case start was bumped)
+    const tripEnd = body.trip_dates.end < tripStart ? tripStart : body.trip_dates.end
 
     // Split into 30-day chunks (Bonzah max policy duration)
     const chunks = splitDateRange(tripStart, tripEnd)

@@ -103,14 +103,34 @@ async function recoverPaymentId(
 
   console.log('[Bonzah Payment] Recovery using state:', residenceStateFull, 'zip:', zip, 'street:', street)
 
+  // Clamp start date to today (Pacific) if in the past, with dynamic time
+  const pacificDate = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Los_Angeles', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date())
+  const pacificHour = parseInt(new Intl.DateTimeFormat('en-US', { timeZone: 'America/Los_Angeles', hour: 'numeric', hour12: false }).format(new Date()), 10)
+
+  let recoveryStart = policyRecord.trip_start_date
+  if (recoveryStart < pacificDate) recoveryStart = pacificDate
+  if (recoveryStart === pacificDate && pacificHour >= 22) {
+    recoveryStart = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Los_Angeles', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date(Date.now() + 86400000))
+  }
+  let recoveryEnd = policyRecord.trip_end_date
+  if (recoveryEnd < recoveryStart) recoveryEnd = recoveryStart
+
+  // If start is today, use current hour + 2 to ensure time is in the future
+  let tripTime: string
+  if (recoveryStart === pacificDate) {
+    const safeHour = Math.min(pacificHour + 2, 23)
+    tripTime = `${String(safeHour).padStart(2, '0')}:00:00`
+  } else {
+    tripTime = '15:00:00'
+  }
+
   const quoteRequest: Record<string, unknown> = {
     product_id: PRODUCT_ID,
     finalize: 1,
     source: 'API',
     policy_booking_time_zone: 'America/Los_Angeles',
-    // Use 15:00 (3 PM Pacific) for both — avoids "in the past" and midnight rounding
-    trip_start_date: `${formatDateForBonzah(policyRecord.trip_start_date)} 15:00:00`,
-    trip_end_date: `${formatDateForBonzah(policyRecord.trip_end_date)} 15:00:00`,
+    trip_start_date: `${formatDateForBonzah(recoveryStart)} ${tripTime}`,
+    trip_end_date: `${formatDateForBonzah(recoveryEnd)} ${tripTime}`,
     pickup_state: pickupStateFull,
     pickup_country: 'United States',
     drop_off_time: 'Same',

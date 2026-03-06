@@ -1091,7 +1091,19 @@ const CreateRental = () => {
           });
           if (quoteError) {
             console.error('[Bonzah] Quote creation failed:', quoteError);
-            // Non-fatal - rental is already created
+            // Parse error body from Response context
+            let errMsg = quoteError.message || 'Unknown error';
+            try {
+              if (quoteError.context instanceof Response) {
+                const body = await quoteError.context.json();
+                errMsg = body?.error || body?.message || errMsg;
+              }
+            } catch { /* ignore */ }
+            toast({
+              title: 'Insurance Quote Failed',
+              description: errMsg.replace(/^Bonzah API error:\s*/gi, ''),
+              variant: 'destructive',
+            });
           }
 
           // Step 2: Confirm payment to activate the policy
@@ -1105,7 +1117,18 @@ const CreateRental = () => {
             });
             if (confirmError) {
               console.error('[Bonzah] Payment confirmation failed:', confirmError);
-              // Non-fatal — policy stays as quoted, can be retried from rental detail page
+              let errMsg = confirmError.message || 'Unknown error';
+              try {
+                if (confirmError.context instanceof Response) {
+                  const body = await confirmError.context.json();
+                  errMsg = body?.error || body?.message || errMsg;
+                }
+              } catch { /* ignore */ }
+              toast({
+                title: 'Insurance Activation Failed',
+                description: `Quote created but activation failed: ${errMsg.replace(/^Bonzah API error:\s*/gi, '')}. You can retry from the rental detail page.`,
+                variant: 'destructive',
+              });
             } else if (confirmResult?.policy_issued) {
               console.log('[Bonzah] Policy activated:', confirmResult.policy_no);
             }
