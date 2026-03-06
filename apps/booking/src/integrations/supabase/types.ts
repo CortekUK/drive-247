@@ -6688,6 +6688,7 @@ export type Database = {
           integration_canopy: boolean | null
           integration_twilio_sms: boolean | null
           integration_veriff: boolean | null
+          integration_whatsapp: boolean | null
           light_accent_color: string | null
           light_background_color: string | null
           light_header_footer_color: string | null
@@ -6703,6 +6704,10 @@ export type Database = {
           max_rental_days: number | null
           meta_description: string | null
           meta_title: string | null
+          meta_whatsapp_access_token: string | null
+          meta_whatsapp_phone_number: string | null
+          meta_whatsapp_phone_number_id: string | null
+          meta_whatsapp_waba_id: string | null
           min_rental_days: number | null
           min_rental_hours: number
           minimum_rental_age: number | null
@@ -6832,6 +6837,7 @@ export type Database = {
           integration_canopy?: boolean | null
           integration_twilio_sms?: boolean | null
           integration_veriff?: boolean | null
+          integration_whatsapp?: boolean | null
           light_accent_color?: string | null
           light_background_color?: string | null
           light_header_footer_color?: string | null
@@ -6847,6 +6853,10 @@ export type Database = {
           max_rental_days?: number | null
           meta_description?: string | null
           meta_title?: string | null
+          meta_whatsapp_access_token?: string | null
+          meta_whatsapp_phone_number?: string | null
+          meta_whatsapp_phone_number_id?: string | null
+          meta_whatsapp_waba_id?: string | null
           min_rental_days?: number | null
           min_rental_hours?: number
           minimum_rental_age?: number | null
@@ -6976,6 +6986,7 @@ export type Database = {
           integration_canopy?: boolean | null
           integration_twilio_sms?: boolean | null
           integration_veriff?: boolean | null
+          integration_whatsapp?: boolean | null
           light_accent_color?: string | null
           light_background_color?: string | null
           light_header_footer_color?: string | null
@@ -6991,6 +7002,10 @@ export type Database = {
           max_rental_days?: number | null
           meta_description?: string | null
           meta_title?: string | null
+          meta_whatsapp_access_token?: string | null
+          meta_whatsapp_phone_number?: string | null
+          meta_whatsapp_phone_number_id?: string | null
+          meta_whatsapp_waba_id?: string | null
           min_rental_days?: number | null
           min_rental_hours?: number
           minimum_rental_age?: number | null
