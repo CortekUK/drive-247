@@ -1490,7 +1490,7 @@ const CreateRental = () => {
                                       {vehicles?.map((vehicle: any) => (
                                         <CommandItem
                                           key={vehicle.id}
-                                          value={`${vehicle.make} ${vehicle.model}`}
+                                          value={`${vehicle.reg} ${vehicle.make} ${vehicle.model}`}
                                           onSelect={() => {
                                             field.onChange(vehicle.id);
                                             setVehicleOpen(false);
