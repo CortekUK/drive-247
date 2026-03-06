@@ -1051,91 +1051,127 @@ const CreateRental = () => {
         try {
           // Get customer details for the quote
           const customer = customerDetails;
+
+          // Use verification data for accurate name/DOB (matches buy-insurance-dialog flow)
+          const verification = customerVerification;
           const nameParts = (customer?.name || 'N/A').split(' ');
-          const firstName = nameParts[0] || 'N/A';
-          const lastName = nameParts.slice(1).join(' ') || 'N/A';
-          const custState = customer?.address_state || 'FL';
-          const { data: quoteResult, error: quoteError } = await supabase.functions.invoke('bonzah-create-quote', {
-            body: {
-              rental_id: rental.id,
-              customer_id: data.customer_id,
-              tenant_id: tenant.id,
-              trip_dates: {
-                start: (() => {
-                  const d = data.start_date.toISOString().split('T')[0];
-                  const today = new Date().toISOString().split('T')[0];
-                  return d < today ? today : d;
-                })(),
-                end: data.end_date.toISOString().split('T')[0],
-              },
-              pickup_state: custState,
-              coverage: bonzahCoverage,
-              renter: {
-                first_name: firstName,
-                last_name: lastName,
-                dob: customer?.date_of_birth || '1990-01-01',
-                email: customer?.email || '',
-                phone: customer?.phone || '',
-                address: {
-                  street: customer?.address_street || '',
-                  city: customer?.address_city || '',
-                  state: custState,
-                  zip: customer?.address_zip || '',
-                },
-                license: {
-                  number: customer?.license_number || '',
-                  state: customer?.license_state || custState,
-                },
-              },
-            },
-          });
-          if (quoteError) {
-            console.error('[Bonzah] Quote creation failed:', quoteError);
-            // Parse error body from Response context
-            let errMsg = quoteError.message || 'Unknown error';
-            try {
-              if (quoteError.context instanceof Response) {
-                const body = await quoteError.context.json();
-                errMsg = body?.error || body?.message || errMsg;
-              }
-            } catch { /* ignore */ }
+          const firstName = verification?.first_name || nameParts[0] || 'N/A';
+          const lastName = verification?.last_name || nameParts.slice(1).join(' ') || 'N/A';
+          const dob = customer?.date_of_birth;
+
+          if (!dob) {
             toast({
-              title: 'Insurance Quote Failed',
-              description: errMsg.replace(/^Bonzah API error:\s*/gi, ''),
+              title: 'Missing Information',
+              description: 'Customer must have a date of birth on file before purchasing insurance. Complete identity verification first.',
               variant: 'destructive',
             });
-          }
-
-          // Step 2: Confirm payment to activate the policy
-          const policyRecordId = quoteResult?.policy_record_id;
-          if (policyRecordId) {
-            const { data: confirmResult, error: confirmError } = await supabase.functions.invoke('bonzah-confirm-payment', {
+            // Skip insurance but don't fail rental creation
+          } else {
+            const custState = customer?.address_state || 'FL';
+            const { data: quoteResult, error: quoteError } = await supabase.functions.invoke('bonzah-create-quote', {
               body: {
-                policy_record_id: policyRecordId,
-                stripe_payment_intent_id: `portal-admin-${rental.id}`,
+                rental_id: rental.id,
+                customer_id: data.customer_id,
+                tenant_id: tenant.id,
+                trip_dates: {
+                  start: (() => {
+                    const d = data.start_date.toISOString().split('T')[0];
+                    const today = new Date().toISOString().split('T')[0];
+                    return d < today ? today : d;
+                  })(),
+                  end: data.end_date.toISOString().split('T')[0],
+                },
+                pickup_state: custState,
+                coverage: bonzahCoverage,
+                renter: {
+                  first_name: firstName,
+                  last_name: lastName,
+                  dob: dob,
+                  email: customer?.email || '',
+                  phone: customer?.phone || '',
+                  address: {
+                    street: customer?.address_street || '',
+                    city: customer?.address_city || '',
+                    state: custState,
+                    zip: customer?.address_zip || '',
+                  },
+                  license: {
+                    number: customer?.license_number || '',
+                    state: customer?.license_state || custState,
+                  },
+                },
               },
             });
-            if (confirmError) {
-              console.error('[Bonzah] Payment confirmation failed:', confirmError);
-              let errMsg = confirmError.message || 'Unknown error';
+
+            if (quoteError) {
+              console.error('[Bonzah] Quote creation failed:', quoteError);
+              let errMsg = quoteError.message || 'Unknown error';
               try {
-                if (confirmError.context instanceof Response) {
-                  const body = await confirmError.context.json();
+                if (quoteError.context instanceof Response) {
+                  const body = await quoteError.context.json();
                   errMsg = body?.error || body?.message || errMsg;
                 }
               } catch { /* ignore */ }
               toast({
-                title: 'Insurance Activation Failed',
-                description: `Quote created but activation failed: ${errMsg.replace(/^Bonzah API error:\s*/gi, '')}. You can retry from the rental detail page.`,
+                title: 'Insurance Quote Failed',
+                description: errMsg.replace(/^Bonzah API error:\s*/gi, ''),
                 variant: 'destructive',
               });
-            } else if (confirmResult?.policy_issued) {
-              console.log('[Bonzah] Policy activated:', confirmResult.policy_no);
+              // Don't proceed to confirm if quote failed
+            } else {
+              // Step 2: Confirm payment to activate the policy
+              const policyRecordId = quoteResult?.policy_record_id;
+              if (policyRecordId) {
+                const { data: confirmResult, error: confirmError } = await supabase.functions.invoke('bonzah-confirm-payment', {
+                  body: {
+                    policy_record_id: policyRecordId,
+                    stripe_payment_intent_id: `portal-admin-${rental.id}`,
+                  },
+                });
+                if (confirmError) {
+                  console.error('[Bonzah] Payment confirmation failed:', confirmError);
+                  let errMsg = confirmError.message || 'Unknown error';
+                  try {
+                    if (confirmError.context instanceof Response) {
+                      const body = await confirmError.context.json();
+                      errMsg = body?.error || body?.message || errMsg;
+                    }
+                  } catch { /* ignore */ }
+                  toast({
+                    title: 'Insurance Activation Failed',
+                    description: `Quote created but activation failed: ${errMsg.replace(/^Bonzah API error:\s*/gi, '')}. You can retry from the rental detail page.`,
+                    variant: 'destructive',
+                  });
+                } else if (confirmResult?.policy_issued) {
+                  console.log('[Bonzah] Policy activated:', confirmResult.policy_no);
+                }
+
+                // Step 3: Create ledger entry for insurance charge (matches buy-insurance-dialog)
+                const { error: ledgerError } = await supabase
+                  .from('ledger_entries')
+                  .insert({
+                    type: 'Charge',
+                    category: 'Insurance',
+                    amount: bonzahPremium,
+                    remaining_amount: bonzahPremium,
+                    reference: `BONZAH-${policyRecordId}`,
+                    rental_id: rental.id,
+                    customer_id: data.customer_id,
+                    vehicle_id: data.vehicle_id,
+                    tenant_id: tenant.id,
+                    entry_date: new Date().toISOString().split('T')[0],
+                    due_date: new Date().toISOString().split('T')[0],
+                  });
+
+                if (ledgerError) {
+                  console.error('[Bonzah] Ledger entry error:', ledgerError);
+                }
+              }
             }
           }
         } catch (bonzahError) {
           console.error('[Bonzah] Error creating quote:', bonzahError);
-          // Non-fatal
+          // Non-fatal — rental is already created
         }
       }
 
