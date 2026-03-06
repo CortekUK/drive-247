@@ -164,16 +164,8 @@ async function createSingleQuote(
 }> {
   // Bonzah validates the full datetime against America/Los_Angeles timezone.
   // Same time for both start and end ensures exact day intervals.
-  // If start is today in Pacific, use current Pacific hour + 2 to stay in the future.
-  // Otherwise use 15:00 (safe default for future dates).
-  const pacific = getPacificNow()
-  let tripTime: string
-  if (chunk.start === pacific.date) {
-    const safeHour = Math.min(pacific.hour + 2, 23)
-    tripTime = `${String(safeHour).padStart(2, '0')}:00:00`
-  } else {
-    tripTime = '15:00:00'
-  }
+  // Start is always tomorrow+ (clamped upstream), so 15:00 is always safe.
+  const tripTime = '15:00:00'
 
   const quoteRequest: Record<string, unknown> = {
     ...commonFields,
@@ -281,17 +273,16 @@ serve(async (req) => {
       return phoneDigits || '10000000000'
     })()
 
-    // Clamp trip start using Pacific timezone (Bonzah validates against America/Los_Angeles)
+    // Bonzah rejects same-day trip starts — minimum start date is TOMORROW in Pacific timezone.
+    // Successful policies always have trip_start >= tomorrow; today's date gets rejected with
+    // "Invalid Policy Start date" even with a future time component.
     const pacificNow = getPacificNow()
-    console.log(`[Bonzah Quote] Pacific now: ${pacificNow.date} ${pacificNow.hour}:00, input start: ${body.trip_dates.start}`)
+    const pacificTomorrow = getPacificTomorrow()
+    console.log(`[Bonzah Quote] Pacific now: ${pacificNow.date}, tomorrow: ${pacificTomorrow}, input start: ${body.trip_dates.start}`)
 
-    let tripStart = body.trip_dates.start < pacificNow.date ? pacificNow.date : body.trip_dates.start
-    // If start is today but past 10 PM Pacific, bump to tomorrow (no safe same-day time left)
-    if (tripStart === pacificNow.date && pacificNow.hour >= 22) {
-      tripStart = getPacificTomorrow()
-    }
+    const tripStart = body.trip_dates.start <= pacificNow.date ? pacificTomorrow : body.trip_dates.start
     // Ensure end date is not before start date (in case start was bumped)
-    const tripEnd = body.trip_dates.end < tripStart ? tripStart : body.trip_dates.end
+    const tripEnd = body.trip_dates.end <= tripStart ? tripStart : body.trip_dates.end
 
     // Split into 30-day chunks (Bonzah max policy duration)
     const chunks = splitDateRange(tripStart, tripEnd)
@@ -353,7 +344,8 @@ serve(async (req) => {
         if (i === 0) {
           // Don't double-wrap "Bonzah API error:" — the shared client already adds that prefix
           const errMsg = apiError instanceof Error ? apiError.message : 'Unknown API error'
-          return errorResponse(errMsg, 500)
+          // Include sent dates in error for debugging
+          return errorResponse(`${errMsg} [sent: ${formatDateForBonzah(chunk.start)} 15:00:00, pacific_now: ${pacificNow.date}]`, 500)
         }
         // If a subsequent chunk fails, we still have earlier quotes — log and break
         console.error(`[Bonzah Quote] Chunk ${i + 1} failed, ${i} policies created successfully`)

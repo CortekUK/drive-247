@@ -137,25 +137,13 @@ async function recoverPaymentId(
 
   console.log('[Bonzah Payment] Recovery using state:', residenceStateFull, 'zip:', zip, 'street:', street)
 
-  // Clamp start date to today (Pacific) if in the past, with dynamic time
+  // Bonzah rejects same-day trip starts — minimum is tomorrow in Pacific timezone
   const pacific = getPacificNow()
+  const pacificTomorrow = getPacificTomorrow()
 
-  let recoveryStart = policyRecord.trip_start_date
-  if (recoveryStart < pacific.date) recoveryStart = pacific.date
-  if (recoveryStart === pacific.date && pacific.hour >= 22) {
-    recoveryStart = getPacificTomorrow()
-  }
-  let recoveryEnd = policyRecord.trip_end_date
-  if (recoveryEnd < recoveryStart) recoveryEnd = recoveryStart
-
-  // If start is today, use current hour + 2 to ensure time is in the future
-  let tripTime: string
-  if (recoveryStart === pacific.date) {
-    const safeHour = Math.min(pacific.hour + 2, 23)
-    tripTime = `${String(safeHour).padStart(2, '0')}:00:00`
-  } else {
-    tripTime = '15:00:00'
-  }
+  const recoveryStart = policyRecord.trip_start_date <= pacific.date ? pacificTomorrow : policyRecord.trip_start_date
+  const recoveryEnd = policyRecord.trip_end_date <= recoveryStart ? recoveryStart : policyRecord.trip_end_date
+  const tripTime = '15:00:00'
 
   const quoteRequest: Record<string, unknown> = {
     product_id: PRODUCT_ID,
