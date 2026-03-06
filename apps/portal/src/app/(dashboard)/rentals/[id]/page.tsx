@@ -735,6 +735,7 @@ const RentalDetail = () => {
           .select("*")
           .eq("customer_id", rental.customers.id)
           .eq("document_type", "Insurance Certificate")
+          .eq("tenant_id", tenant!.id)
           .is("rental_id", null)
           .order("uploaded_at", { ascending: false });
 

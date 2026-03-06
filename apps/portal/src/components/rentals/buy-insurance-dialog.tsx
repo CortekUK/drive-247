@@ -214,12 +214,13 @@ export function BuyInsuranceDialog({
         if (confirmError) {
           console.error('Bonzah confirm payment error:', confirmError);
           // Parse the error body to check for insufficient_balance
+          // confirmError.context is a Response object — must call .json() to get parsed body
           let errorBody: any = null;
           try {
-            if (confirmError.context && typeof confirmError.context === 'object') {
-              errorBody = confirmError.context;
-            } else if (confirmError.context?.json) {
+            if (confirmError.context instanceof Response) {
               errorBody = await confirmError.context.json();
+            } else if (confirmError.context && typeof confirmError.context === 'object') {
+              errorBody = confirmError.context;
             }
           } catch { /* ignore parse errors */ }
 

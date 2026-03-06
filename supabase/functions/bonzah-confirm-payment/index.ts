@@ -412,6 +412,9 @@ serve(async (req) => {
   const corsResponse = handleCors(req)
   if (corsResponse) return corsResponse
 
+  // Hoist so the outer catch can update the policy status on crash
+  let policyRecordId: string | undefined
+
   try {
     const supabase = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
@@ -419,10 +422,11 @@ serve(async (req) => {
     )
 
     const body: ConfirmPaymentRequest = await req.json()
+    policyRecordId = body.policy_record_id
 
-    console.log('[Bonzah Payment] Confirming payment for policy:', body.policy_record_id)
+    console.log('[Bonzah Payment] Confirming payment for policy:', policyRecordId)
 
-    if (!body.policy_record_id) {
+    if (!policyRecordId) {
       return errorResponse('Missing policy_record_id')
     }
 
@@ -430,7 +434,7 @@ serve(async (req) => {
     const { data: policyRecord, error: fetchError } = await supabase
       .from('bonzah_insurance_policies')
       .select('*')
-      .eq('id', body.policy_record_id)
+      .eq('id', policyRecordId)
       .single()
 
     if (fetchError || !policyRecord) {
@@ -607,19 +611,18 @@ serve(async (req) => {
   } catch (error) {
     console.error('[Bonzah Payment] Error:', error)
 
-    // Try to update status to failed
+    // Try to update status to failed using the stored policyRecordId
+    // (req body is already consumed so req.clone().json() would fail)
     try {
-      const supabase = createClient(
-        Deno.env.get('SUPABASE_URL') ?? '',
-        Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
-      )
-
-      const reqBody = await req.clone().json().catch(() => ({}))
-      if (reqBody.policy_record_id) {
+      if (policyRecordId) {
+        const supabase = createClient(
+          Deno.env.get('SUPABASE_URL') ?? '',
+          Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+        )
         await supabase
           .from('bonzah_insurance_policies')
           .update({ status: 'failed' })
-          .eq('id', reqBody.policy_record_id)
+          .eq('id', policyRecordId)
       }
     } catch {
       // Ignore cleanup errors
