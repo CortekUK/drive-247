@@ -22,6 +22,8 @@ interface Tenant {
   privacy_policy_version: string | null;
   terms_version: string | null;
   policies_accepted_at: string | null;
+  integration_twilio_sms: boolean | null;
+  twilio_phone_number: string | null;
 }
 
 interface TenantContextType {
@@ -128,7 +130,7 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
       // Query the tenants table by slug
       const { data, error: queryError } = await supabase
         .from('tenants')
-        .select('id, slug, company_name, status, contact_email, admin_name, integration_veriff, integration_bonzah, bonzah_username, bonzah_mode, boldsign_mode, subscription_stripe_mode, timezone, currency_code, distance_unit, privacy_policy_version, terms_version, policies_accepted_at, auth_logo_url')
+        .select('id, slug, company_name, status, contact_email, admin_name, integration_veriff, integration_bonzah, bonzah_username, bonzah_mode, boldsign_mode, subscription_stripe_mode, timezone, currency_code, distance_unit, privacy_policy_version, terms_version, policies_accepted_at, auth_logo_url, integration_twilio_sms, twilio_phone_number')
         .eq('slug', slug)
         .eq('status', 'active')
         .single();
