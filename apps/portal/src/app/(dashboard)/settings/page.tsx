@@ -38,6 +38,8 @@ import { LocationSettings } from '@/components/settings/location-settings';
 import { ExtrasSettings } from '@/components/settings/extras-settings';
 import { BonzahSettings } from '@/components/settings/bonzah-settings';
 import { ESignSettings } from '@/components/settings/esign-settings';
+import { TwilioSmsSettings } from '@/components/settings/twilio-sms-settings';
+import { WhatsAppMetaSettings } from '@/components/settings/whatsapp-meta-settings';
 import { SubscriptionSettings } from '@/components/settings/subscription-settings';
 import { LockboxTemplatesSection } from '@/components/settings/lockbox-templates-section';
 import { PricingRulesSettings } from '@/components/settings/pricing-rules-settings';
@@ -3655,8 +3657,10 @@ const Settings = () => {
           <LockboxTemplatesSection />
         </TabsContent>
 
-        {/* Integrations Tab (Bonzah + E-Sign + Blacklist) */}
+        {/* Integrations Tab (SMS + E-Sign + Bonzah + Blacklist) */}
         <TabsContent value="integrations" className="space-y-6">
+          <TwilioSmsSettings />
+          <WhatsAppMetaSettings />
           <ESignSettings />
           <BonzahSettings />
 

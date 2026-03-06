@@ -1,11 +1,7 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.4";
-import {
-  corsHeaders,
-  signedAWSRequest,
-  parseXMLValue,
-  isAWSConfigured
-} from "../_shared/aws-config.ts";
+import { corsHeaders } from "../_shared/cors.ts";
+import { getTenantTwilioCredentials, sendTenantSMS, normalizePhoneNumber } from '../_shared/twilio-sms-client.ts';
 import { sendEmail } from "../_shared/resend-service.ts";
 import { renderEmail, EmailTemplateData } from "../_shared/email-template-service.ts";
 
@@ -110,44 +106,27 @@ const getRejectionEmailHtml = (data: NotifyRequest) => `
 
 // sendEmail is now imported from resend-service.ts
 
-async function sendSMS(phoneNumber: string, message: string) {
-  if (!isAWSConfigured() || !phoneNumber) {
-    console.log('AWS not configured or no phone, simulating SMS send');
-    return { success: true, simulated: true };
+async function sendSMS(phoneNumber: string, message: string, supabaseClient?: any, tenantId?: string) {
+  if (!phoneNumber) {
+    console.log('[SMS] No phone number provided, skipping');
+    return { success: true, skipped: true };
   }
-
-  let phone = phoneNumber.replace(/[^+\d]/g, '');
-  if (!phone.startsWith('+')) {
-    phone = '+1' + phone;
+  if (!supabaseClient || !tenantId) {
+    console.log('[SMS] No supabase client or tenantId, skipping SMS');
+    return { success: true, skipped: true };
   }
-
-  const params: Record<string, string> = {
-    'Action': 'Publish',
-    'Version': '2010-03-31',
-    'PhoneNumber': phone,
-    'Message': message,
-    'MessageAttributes.entry.1.Name': 'AWS.SNS.SMS.SMSType',
-    'MessageAttributes.entry.1.Value.DataType': 'String',
-    'MessageAttributes.entry.1.Value.StringValue': 'Transactional',
-  };
-
-  const body = Object.entries(params)
-    .map(([key, value]) => `${encodeURIComponent(key)}=${encodeURIComponent(value)}`)
-    .join('&');
-
-  const response = await signedAWSRequest({
-    service: 'sns',
-    method: 'POST',
-    body,
-  });
-
-  const responseText = await response.text();
-  if (!response.ok) {
-    console.error('SNS Error:', responseText);
-    return { success: false, error: parseXMLValue(responseText, 'Message') };
+  try {
+    const creds = await getTenantTwilioCredentials(supabaseClient, tenantId);
+    if (!creds.isConfigured) {
+      console.log(`[SMS] Twilio not configured for tenant ${tenantId}, skipping`);
+      return { success: true, skipped: true };
+    }
+    const normalized = normalizePhoneNumber(phoneNumber);
+    return await sendTenantSMS(creds, normalized, message);
+  } catch (err: any) {
+    console.error('[SMS] Error sending via Twilio:', err.message);
+    return { success: false, error: err.message };
   }
-
-  return { success: true, messageId: parseXMLValue(responseText, 'MessageId') };
 }
 
 serve(async (req) => {
@@ -164,6 +143,11 @@ serve(async (req) => {
       customerSMS: null as any,
     };
 
+    // Create supabase client for tenant-specific operations
+    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+    const supabase = createClient(supabaseUrl, supabaseServiceKey);
+
     // Build customer email - use pre-rendered if provided, otherwise render from template
     let customerSubject: string;
     let customerHtml: string;
@@ -176,9 +160,6 @@ serve(async (req) => {
     } else if (data.tenantId) {
       // Render from template service
       try {
-        const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
-        const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-        const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
         const templateData: EmailTemplateData = {
           customer_name: data.customerName,
@@ -220,7 +201,9 @@ serve(async (req) => {
     if (data.customerPhone) {
       results.customerSMS = await sendSMS(
         data.customerPhone,
-        `DRIVE 247: Your booking ${data.bookingRef} was not approved. No charge was made to your card. The hold will be released within 1-3 days. Contact us with questions.`
+        `DRIVE 247: Your booking ${data.bookingRef} was not approved. No charge was made to your card. The hold will be released within 1-3 days. Contact us with questions.`,
+        supabase,
+        data.tenantId
       );
       console.log('Customer SMS result:', results.customerSMS);
     }

@@ -1059,6 +1059,7 @@ export async function POST(request: NextRequest) {
                     body: JSON.stringify({
                         customerPhone: customerPhone,
                         message: message,
+                        tenantId: body.tenantId,
                     }),
                 });
 

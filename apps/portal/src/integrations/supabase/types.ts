@@ -1140,6 +1140,167 @@ export type Database = {
           },
         ]
       }
+      credit_costs: {
+        Row: {
+          category: string
+          cost_credits: number
+          created_at: string
+          description: string | null
+          id: string
+          is_active: boolean
+          label: string
+          updated_at: string
+        }
+        Insert: {
+          category: string
+          cost_credits?: number
+          created_at?: string
+          description?: string | null
+          id?: string
+          is_active?: boolean
+          label: string
+          updated_at?: string
+        }
+        Update: {
+          category?: string
+          cost_credits?: number
+          created_at?: string
+          description?: string | null
+          id?: string
+          is_active?: boolean
+          label?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      credit_packages: {
+        Row: {
+          bonus_credits: number
+          created_at: string
+          credits: number
+          currency: string
+          id: string
+          is_active: boolean
+          is_popular: boolean
+          name: string
+          price_cents: number
+          sort_order: number
+          stripe_price_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          bonus_credits?: number
+          created_at?: string
+          credits: number
+          currency?: string
+          id?: string
+          is_active?: boolean
+          is_popular?: boolean
+          name: string
+          price_cents: number
+          sort_order?: number
+          stripe_price_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          bonus_credits?: number
+          created_at?: string
+          credits?: number
+          currency?: string
+          id?: string
+          is_active?: boolean
+          is_popular?: boolean
+          name?: string
+          price_cents?: number
+          sort_order?: number
+          stripe_price_id?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      credit_transactions: {
+        Row: {
+          amount: number
+          balance_after: number
+          category: string | null
+          created_at: string
+          description: string | null
+          id: string
+          is_test_mode: boolean
+          package_id: string | null
+          performed_by: string | null
+          reference_id: string | null
+          reference_type: string | null
+          stripe_payment_id: string | null
+          tenant_id: string
+          type: Database["public"]["Enums"]["credit_transaction_type"]
+          wallet_id: string
+        }
+        Insert: {
+          amount: number
+          balance_after: number
+          category?: string | null
+          created_at?: string
+          description?: string | null
+          id?: string
+          is_test_mode?: boolean
+          package_id?: string | null
+          performed_by?: string | null
+          reference_id?: string | null
+          reference_type?: string | null
+          stripe_payment_id?: string | null
+          tenant_id: string
+          type: Database["public"]["Enums"]["credit_transaction_type"]
+          wallet_id: string
+        }
+        Update: {
+          amount?: number
+          balance_after?: number
+          category?: string | null
+          created_at?: string
+          description?: string | null
+          id?: string
+          is_test_mode?: boolean
+          package_id?: string | null
+          performed_by?: string | null
+          reference_id?: string | null
+          reference_type?: string | null
+          stripe_payment_id?: string | null
+          tenant_id?: string
+          type?: Database["public"]["Enums"]["credit_transaction_type"]
+          wallet_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "credit_transactions_package_id_fkey"
+            columns: ["package_id"]
+            isOneToOne: false
+            referencedRelation: "credit_packages"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "credit_transactions_performed_by_fkey"
+            columns: ["performed_by"]
+            isOneToOne: false
+            referencedRelation: "app_users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "credit_transactions_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "credit_transactions_wallet_id_fkey"
+            columns: ["wallet_id"]
+            isOneToOne: false
+            referencedRelation: "tenant_credit_wallets"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       customer_documents: {
         Row: {
           ai_confidence_score: number | null
@@ -6178,6 +6339,78 @@ export type Database = {
           },
         ]
       }
+      tenant_credit_wallets: {
+        Row: {
+          auto_refill_amount: number
+          auto_refill_enabled: boolean
+          auto_refill_package_id: string | null
+          auto_refill_threshold: number
+          balance: number
+          created_at: string
+          id: string
+          lifetime_purchased: number
+          lifetime_used: number
+          low_balance_threshold: number
+          stripe_payment_method_id: string | null
+          tenant_id: string
+          test_balance: number
+          test_lifetime_purchased: number
+          test_lifetime_used: number
+          updated_at: string
+        }
+        Insert: {
+          auto_refill_amount?: number
+          auto_refill_enabled?: boolean
+          auto_refill_package_id?: string | null
+          auto_refill_threshold?: number
+          balance?: number
+          created_at?: string
+          id?: string
+          lifetime_purchased?: number
+          lifetime_used?: number
+          low_balance_threshold?: number
+          stripe_payment_method_id?: string | null
+          tenant_id: string
+          test_balance?: number
+          test_lifetime_purchased?: number
+          test_lifetime_used?: number
+          updated_at?: string
+        }
+        Update: {
+          auto_refill_amount?: number
+          auto_refill_enabled?: boolean
+          auto_refill_package_id?: string | null
+          auto_refill_threshold?: number
+          balance?: number
+          created_at?: string
+          id?: string
+          lifetime_purchased?: number
+          lifetime_used?: number
+          low_balance_threshold?: number
+          stripe_payment_method_id?: string | null
+          tenant_id?: string
+          test_balance?: number
+          test_lifetime_purchased?: number
+          test_lifetime_used?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tenant_credit_wallets_auto_refill_package_id_fkey"
+            columns: ["auto_refill_package_id"]
+            isOneToOne: false
+            referencedRelation: "credit_packages"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tenant_credit_wallets_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: true
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       tenant_holidays: {
         Row: {
           created_at: string | null
@@ -6410,6 +6643,7 @@ export type Database = {
           area_center_lat: number | null
           area_center_lon: number | null
           area_delivery_fee: number | null
+          auth_logo_url: string | null
           boldsign_live_brand_id: string | null
           boldsign_mode: string
           boldsign_test_brand_id: string | null
@@ -6452,7 +6686,9 @@ export type Database = {
           installments_enabled: boolean | null
           integration_bonzah: boolean | null
           integration_canopy: boolean | null
+          integration_twilio_sms: boolean | null
           integration_veriff: boolean | null
+          integration_whatsapp: boolean | null
           light_accent_color: string | null
           light_background_color: string | null
           light_header_footer_color: string | null
@@ -6468,6 +6704,10 @@ export type Database = {
           max_rental_days: number | null
           meta_description: string | null
           meta_title: string | null
+          meta_whatsapp_access_token: string | null
+          meta_whatsapp_phone_number: string | null
+          meta_whatsapp_phone_number_id: string | null
+          meta_whatsapp_waba_id: string | null
           min_rental_days: number | null
           min_rental_hours: number
           minimum_rental_age: number | null
@@ -6526,6 +6766,10 @@ export type Database = {
           tuesday_close: string | null
           tuesday_enabled: boolean | null
           tuesday_open: string | null
+          twilio_phone_number: string | null
+          twilio_phone_number_sid: string | null
+          twilio_subaccount_auth_token: string | null
+          twilio_subaccount_sid: string | null
           twitter_url: string | null
           updated_at: string | null
           wednesday_close: string | null
@@ -6548,6 +6792,7 @@ export type Database = {
           area_center_lat?: number | null
           area_center_lon?: number | null
           area_delivery_fee?: number | null
+          auth_logo_url?: string | null
           boldsign_live_brand_id?: string | null
           boldsign_mode?: string
           boldsign_test_brand_id?: string | null
@@ -6590,7 +6835,9 @@ export type Database = {
           installments_enabled?: boolean | null
           integration_bonzah?: boolean | null
           integration_canopy?: boolean | null
+          integration_twilio_sms?: boolean | null
           integration_veriff?: boolean | null
+          integration_whatsapp?: boolean | null
           light_accent_color?: string | null
           light_background_color?: string | null
           light_header_footer_color?: string | null
@@ -6606,6 +6853,10 @@ export type Database = {
           max_rental_days?: number | null
           meta_description?: string | null
           meta_title?: string | null
+          meta_whatsapp_access_token?: string | null
+          meta_whatsapp_phone_number?: string | null
+          meta_whatsapp_phone_number_id?: string | null
+          meta_whatsapp_waba_id?: string | null
           min_rental_days?: number | null
           min_rental_hours?: number
           minimum_rental_age?: number | null
@@ -6664,6 +6915,10 @@ export type Database = {
           tuesday_close?: string | null
           tuesday_enabled?: boolean | null
           tuesday_open?: string | null
+          twilio_phone_number?: string | null
+          twilio_phone_number_sid?: string | null
+          twilio_subaccount_auth_token?: string | null
+          twilio_subaccount_sid?: string | null
           twitter_url?: string | null
           updated_at?: string | null
           wednesday_close?: string | null
@@ -6686,6 +6941,7 @@ export type Database = {
           area_center_lat?: number | null
           area_center_lon?: number | null
           area_delivery_fee?: number | null
+          auth_logo_url?: string | null
           boldsign_live_brand_id?: string | null
           boldsign_mode?: string
           boldsign_test_brand_id?: string | null
@@ -6728,7 +6984,9 @@ export type Database = {
           installments_enabled?: boolean | null
           integration_bonzah?: boolean | null
           integration_canopy?: boolean | null
+          integration_twilio_sms?: boolean | null
           integration_veriff?: boolean | null
+          integration_whatsapp?: boolean | null
           light_accent_color?: string | null
           light_background_color?: string | null
           light_header_footer_color?: string | null
@@ -6744,6 +7002,10 @@ export type Database = {
           max_rental_days?: number | null
           meta_description?: string | null
           meta_title?: string | null
+          meta_whatsapp_access_token?: string | null
+          meta_whatsapp_phone_number?: string | null
+          meta_whatsapp_phone_number_id?: string | null
+          meta_whatsapp_waba_id?: string | null
           min_rental_days?: number | null
           min_rental_hours?: number
           minimum_rental_age?: number | null
@@ -6802,6 +7064,10 @@ export type Database = {
           tuesday_close?: string | null
           tuesday_enabled?: boolean | null
           tuesday_open?: string | null
+          twilio_phone_number?: string | null
+          twilio_phone_number_sid?: string | null
+          twilio_subaccount_auth_token?: string | null
+          twilio_subaccount_sid?: string | null
           twitter_url?: string | null
           updated_at?: string | null
           wednesday_close?: string | null
@@ -7943,6 +8209,34 @@ export type Database = {
       }
     }
     Functions: {
+      add_credits:
+        | {
+            Args: {
+              p_amount: number
+              p_category?: string
+              p_description?: string
+              p_package_id?: string
+              p_performed_by?: string
+              p_stripe_payment_id?: string
+              p_tenant_id: string
+              p_type: Database["public"]["Enums"]["credit_transaction_type"]
+            }
+            Returns: Json
+          }
+        | {
+            Args: {
+              p_amount: number
+              p_category?: string
+              p_description?: string
+              p_is_test_mode?: boolean
+              p_package_id?: string
+              p_performed_by?: string
+              p_stripe_payment_id?: string
+              p_tenant_id: string
+              p_type: Database["public"]["Enums"]["credit_transaction_type"]
+            }
+            Returns: Json
+          }
       app_login: {
         Args: { p_password: string; p_username: string }
         Returns: {
@@ -8043,6 +8337,17 @@ export type Database = {
             }
             Returns: string
           }
+      deduct_credits: {
+        Args: {
+          p_category: string
+          p_description?: string
+          p_is_test_mode?: boolean
+          p_reference_id?: string
+          p_reference_type?: string
+          p_tenant_id: string
+        }
+        Returns: Json
+      }
       delete_rental_cascade: {
         Args: { rental_uuid: string }
         Returns: undefined
@@ -8440,6 +8745,13 @@ export type Database = {
     }
     Enums: {
       acquisition_type: "purchase" | "finance" | "lease"
+      credit_transaction_type:
+        | "purchase"
+        | "usage"
+        | "refund"
+        | "gift"
+        | "adjustment"
+        | "auto_refill"
       customer_status: "active" | "inactive"
       customer_type: "individual" | "company"
       entry_type: "charge" | "payment" | "adjustment"
@@ -8599,6 +8911,14 @@ export const Constants = {
   public: {
     Enums: {
       acquisition_type: ["purchase", "finance", "lease"],
+      credit_transaction_type: [
+        "purchase",
+        "usage",
+        "refund",
+        "gift",
+        "adjustment",
+        "auto_refill",
+      ],
       customer_status: ["active", "inactive"],
       customer_type: ["individual", "company"],
       entry_type: ["charge", "payment", "adjustment"],
