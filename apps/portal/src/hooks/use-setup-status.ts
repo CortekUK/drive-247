@@ -51,7 +51,7 @@ export function useSetupStatus() {
     !!data?.stripe_onboarding_complete &&
     data?.stripe_account_status === "active";
   const bonzahComplete =
-    !!data?.integration_bonzah && !!data?.bonzah_username;
+    (data?.bonzah_mode === 'test') || (!!data?.integration_bonzah && !!data?.bonzah_username);
 
   const setupItems: SetupItem[] = [
     {

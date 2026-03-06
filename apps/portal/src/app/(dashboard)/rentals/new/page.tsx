@@ -103,8 +103,8 @@ const CreateRental = () => {
   const renewFromId = searchParams?.get("renew_from");
   const { toast } = useToast();
   const { tenant } = useTenant();
-  const skipInsurance = !tenant?.integration_bonzah;
-  const { balanceNumber: bonzahCdBalance, portalUrl: bonzahPortalUrl } = useBonzahBalance();
+  const { balanceNumber: bonzahCdBalance, isBonzahConnected, portalUrl: bonzahPortalUrl } = useBonzahBalance();
+  const skipInsurance = !isBonzahConnected;
   const queryClient = useQueryClient();
   const { isManager, canEdit } = useManagerPermissions();
   const [loading, setLoading] = useState(false);

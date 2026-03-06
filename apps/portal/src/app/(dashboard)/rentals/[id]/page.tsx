@@ -311,7 +311,7 @@ const RentalDetail = () => {
   const { isEligible: isBonzahEligible, isLoading: isBonzahEligibilityLoading } = useBonzahVehicleEligibility({
     vehicleMake: rental?.vehicles?.make || null,
     vehicleModel: rental?.vehicles?.model || null,
-    enabled: !!rental?.vehicles && !!tenant?.bonzah_username,
+    enabled: !!rental?.vehicles && isBonzahConnected,
   });
 
   const { data: rentalTotals } = useRentalTotals(id);
@@ -2516,8 +2516,8 @@ const RentalDetail = () => {
           {/* Bonzah Insurance CTA - Show when no Bonzah policy exists */}
           {canEdit('rentals') && !bonzahPolicy && (
             <div
-              className={`relative overflow-hidden rounded-lg border border-[#CC004A]/20 bg-gradient-to-r from-[#CC004A]/5 via-[#CC004A]/10 to-[#CC004A]/5 dark:from-[#CC004A]/10 dark:via-[#CC004A]/15 dark:to-[#CC004A]/10 p-4 transition-all ${tenant?.bonzah_username && isBonzahEligible ? 'cursor-pointer hover:border-[#CC004A]/40 group' : 'opacity-60'}`}
-              onClick={() => { if (tenant?.bonzah_username && isBonzahEligible) setShowBuyInsurance(true); }}
+              className={`relative overflow-hidden rounded-lg border border-[#CC004A]/20 bg-gradient-to-r from-[#CC004A]/5 via-[#CC004A]/10 to-[#CC004A]/5 dark:from-[#CC004A]/10 dark:via-[#CC004A]/15 dark:to-[#CC004A]/10 p-4 transition-all ${isBonzahConnected && isBonzahEligible ? 'cursor-pointer hover:border-[#CC004A]/40 group' : 'opacity-60'}`}
+              onClick={() => { if (isBonzahConnected && isBonzahEligible) setShowBuyInsurance(true); }}
             >
               <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
                 <div className="flex items-center gap-4">
@@ -2542,7 +2542,7 @@ const RentalDetail = () => {
                     </p>
                   </div>
                 </div>
-                {tenant?.bonzah_username ? (
+                {isBonzahConnected ? (
                   <Button
                     size="sm"
                     className={!isBonzahEligible ? "flex-shrink-0 opacity-50" : "bg-[#CC004A] hover:bg-[#A80040] text-white hover:text-white flex-shrink-0 group-hover:shadow-md transition-shadow"}
@@ -3037,7 +3037,7 @@ const RentalDetail = () => {
               <span className="text-xs text-muted-foreground">No documents uploaded</span>
             </div>
             <div className="flex items-center gap-2">
-              {!bonzahPolicy && tenant?.bonzah_username && (
+              {!bonzahPolicy && isBonzahConnected && (
                 <Button
                   size="sm"
                   variant="outline"

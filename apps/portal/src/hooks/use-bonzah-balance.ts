@@ -33,7 +33,8 @@ export function useBonzahBalance() {
     enabled: !!tenant?.id,
   });
 
-  const isBonzahConnected = !!bonzahStatus?.integration_bonzah && !!bonzahStatus?.bonzah_username;
+  // Test mode uses platform shared credentials — no tenant bonzah_username needed
+  const isBonzahConnected = bonzahMode === 'test' || (!!bonzahStatus?.integration_bonzah && !!bonzahStatus?.bonzah_username);
 
   // Fetch Bonzah balance (auto-refresh every 60s when connected)
   const {
