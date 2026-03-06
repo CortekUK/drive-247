@@ -310,9 +310,12 @@ export function BuyInsuranceDialog({
       onPurchaseComplete(premium);
     } catch (error: any) {
       console.error('Buy insurance error:', error);
+      // Clean up error message — strip "Bonzah API error:" prefix for user-friendly display
+      let errorMsg = error.message || 'Failed to purchase insurance. Please try again.';
+      errorMsg = errorMsg.replace(/^Bonzah API error:\s*/gi, '');
       toast({
-        title: 'Error',
-        description: error.message || 'Failed to purchase insurance. Please try again.',
+        title: 'Insurance Error',
+        description: errorMsg,
         variant: 'destructive',
       });
     } finally {

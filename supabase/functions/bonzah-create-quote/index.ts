@@ -126,9 +126,14 @@ async function createSingleQuote(
   premium: number
   pdfIds: Record<string, string>
 }> {
+  // Use 23:59 for start time so "today" is never considered "in the past" by Bonzah
+  // (Bonzah checks the full datetime against America/Los_Angeles timezone)
+  const today = new Date().toISOString().split('T')[0]
+  const startTime = chunk.start === today ? '23:59:00' : '10:00:00'
+
   const quoteRequest: Record<string, unknown> = {
     ...commonFields,
-    trip_start_date: `${formatDateForBonzah(chunk.start)} 10:00:00`,
+    trip_start_date: `${formatDateForBonzah(chunk.start)} ${startTime}`,
     trip_end_date: `${formatDateForBonzah(chunk.end)} 10:00:00`,
   }
 
@@ -295,10 +300,9 @@ serve(async (req) => {
         console.error(`[Bonzah Quote] API call failed for chunk ${i + 1}/${chunks.length}:`, apiError)
         // If the first chunk fails, abort everything
         if (i === 0) {
-          return errorResponse(
-            `Bonzah API error: ${apiError instanceof Error ? apiError.message : 'Unknown API error'}`,
-            500
-          )
+          // Don't double-wrap "Bonzah API error:" — the shared client already adds that prefix
+          const errMsg = apiError instanceof Error ? apiError.message : 'Unknown API error'
+          return errorResponse(errMsg, 500)
         }
         // If a subsequent chunk fails, we still have earlier quotes — log and break
         console.error(`[Bonzah Quote] Chunk ${i + 1} failed, ${i} policies created successfully`)
