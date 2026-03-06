@@ -229,7 +229,7 @@ function InsuranceTimelineItem({
               </span>
             ))}
             <span className="text-sm font-semibold text-green-600 dark:text-green-400 ml-1">
-              {formatCurrency(policy.premium_amount)}
+              {formatCurrency(policy.premium_amount, 'USD')}
             </span>
           </div>
 
@@ -412,7 +412,7 @@ export function InsuranceTimeline({
                     </div>
                   </div>
                   <span className="text-sm font-bold tabular-nums text-emerald-700 dark:text-emerald-300">
-                    {formatCurrency(originalTotal)}
+                    {formatCurrency(originalTotal, 'USD')}
                   </span>
                 </div>
                 <div className="space-y-2.5">
@@ -461,7 +461,7 @@ export function InsuranceTimeline({
                     </div>
                   </div>
                   <span className="text-sm font-bold tabular-nums text-amber-700 dark:text-amber-300">
-                    {formatCurrency(extensionTotal)}
+                    {formatCurrency(extensionTotal, 'USD')}
                   </span>
                 </div>
                 <div className="space-y-2.5">
