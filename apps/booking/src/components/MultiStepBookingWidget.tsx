@@ -4789,7 +4789,9 @@ const MultiStepBookingWidget = () => {
                   const maxEnd = new Date(s);
                   maxEnd.setDate(maxEnd.getDate() + 30);
                   if (new Date(e + 'T00:00:00') > maxEnd) {
-                    warnings.push(`Bonzah max policy is 30 days. Coverage will end ${maxEnd.toLocaleDateString()}.`);
+                    const totalDays = Math.ceil((new Date(e + 'T00:00:00').getTime() - s.getTime()) / (1000 * 60 * 60 * 24));
+                    const policyCount = Math.ceil(totalDays / 30);
+                    warnings.push(`${policyCount} insurance policies will be created to cover your full rental (Bonzah max 30 days per policy).`);
                   }
                 }
                 if (warnings.length === 0) return null;

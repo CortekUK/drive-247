@@ -6,11 +6,15 @@ import {
   formatDateForBonzah,
   type CoverageTypes,
   type RenterDetails,
+  type TenantBonzahCredentials,
 } from '../_shared/bonzah-client.ts'
 import { corsHeaders, handleCors, jsonResponse, errorResponse } from '../_shared/cors.ts'
 
 // Bonzah Auto Rental Insurance product ID
 const PRODUCT_ID = 'M000000000006'
+
+// Bonzah max policy duration in days
+const MAX_POLICY_DAYS = 30
 
 // Insurance rates per 24 hours (fallback calculation)
 const RATES = {
@@ -68,12 +72,106 @@ interface BonzahQuoteApiResponse {
   }
 }
 
+interface DateChunk {
+  start: string  // YYYY-MM-DD
+  end: string    // YYYY-MM-DD
+}
+
 function calculateDays(startDate: string, endDate: string): number {
   const start = new Date(startDate)
   const end = new Date(endDate)
   const diffTime = Math.abs(end.getTime() - start.getTime())
   const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24))
   return Math.max(diffDays, 1)
+}
+
+/**
+ * Split a date range into chunks of MAX_POLICY_DAYS (30 days) each.
+ * E.g. 2026-03-06 to 2026-05-15 (70 days) → [Mar6-Apr5, Apr5-May5, May5-May15]
+ */
+function splitDateRange(start: string, end: string): DateChunk[] {
+  const chunks: DateChunk[] = []
+  let chunkStart = new Date(start + 'T00:00:00')
+  const finalEnd = new Date(end + 'T00:00:00')
+
+  while (chunkStart < finalEnd) {
+    const chunkEnd = new Date(chunkStart)
+    chunkEnd.setDate(chunkEnd.getDate() + MAX_POLICY_DAYS)
+
+    // If chunk end exceeds the final end, clamp it
+    const effectiveEnd = chunkEnd > finalEnd ? finalEnd : chunkEnd
+
+    chunks.push({
+      start: chunkStart.toISOString().split('T')[0],
+      end: effectiveEnd.toISOString().split('T')[0],
+    })
+
+    chunkStart = effectiveEnd
+  }
+
+  return chunks
+}
+
+/**
+ * Create a single Bonzah quote for one date chunk.
+ */
+async function createSingleQuote(
+  chunk: DateChunk,
+  body: CreateQuoteRequest,
+  credentials: TenantBonzahCredentials,
+  commonFields: Record<string, unknown>,
+): Promise<{
+  quoteId: string
+  paymentId: string
+  premium: number
+  pdfIds: Record<string, string>
+}> {
+  const quoteRequest: Record<string, unknown> = {
+    ...commonFields,
+    trip_start_date: `${formatDateForBonzah(chunk.start)} 10:00:00`,
+    trip_end_date: `${formatDateForBonzah(chunk.end)} 10:00:00`,
+  }
+
+  console.log(`[Bonzah Quote] Creating quote for chunk ${chunk.start} → ${chunk.end}`)
+
+  const response = await bonzahFetchWithCredentials<BonzahQuoteApiResponse>(
+    '/Bonzah/quote',
+    quoteRequest,
+    credentials
+  )
+
+  if (response.status !== 0 || !response.data?.quote_id) {
+    throw new Error(`Failed to create Bonzah quote for ${chunk.start}-${chunk.end}: ${response.txt || 'Unknown error'}`)
+  }
+
+  const pdfIds: Record<string, string> = {}
+  if (response.data.cdw_pdf_id) pdfIds.cdw = response.data.cdw_pdf_id
+  if (response.data.rcli_pdf_id) pdfIds.rcli = response.data.rcli_pdf_id
+  if (response.data.sli_pdf_id) pdfIds.sli = response.data.sli_pdf_id
+  if (response.data.pai_pdf_id) pdfIds.pai = response.data.pai_pdf_id
+
+  // Use API premium if available, otherwise calculate locally
+  let premium: number
+  if (response.data.total_amount && response.data.total_amount > 0) {
+    premium = Math.round(response.data.total_amount * 100) / 100
+  } else {
+    const days = calculateDays(chunk.start, chunk.end)
+    premium =
+      (body.coverage.cdw ? RATES.CDW * days : 0) +
+      (body.coverage.rcli ? RATES.RCLI * days : 0) +
+      (body.coverage.sli ? RATES.SLI * days : 0) +
+      (body.coverage.pai ? RATES.PAI * days : 0)
+    premium = Math.round(premium * 100) / 100
+  }
+
+  console.log(`[Bonzah Quote] Chunk ${chunk.start}-${chunk.end}: quote=${response.data.quote_id}, premium=$${premium}`)
+
+  return {
+    quoteId: response.data.quote_id,
+    paymentId: response.data.payment_id,
+    premium,
+    pdfIds,
+  }
 }
 
 serve(async (req) => {
@@ -134,159 +232,140 @@ serve(async (req) => {
       return phoneDigits || '10000000000'
     })()
 
-    // Use the correct /Bonzah/quote endpoint with finalize=1
     // Clamp trip start to today if it's in the past (Bonzah rejects past start dates)
     const today = new Date().toISOString().split('T')[0]
     const tripStart = body.trip_dates.start < today ? today : body.trip_dates.start
+    const tripEnd = body.trip_dates.end
 
-    // Cap trip end to start + 30 days (Bonzah max policy duration)
-    const startDate = new Date(tripStart + 'T00:00:00')
-    const maxEnd = new Date(startDate)
-    maxEnd.setDate(maxEnd.getDate() + 30)
-    const maxEndStr = maxEnd.toISOString().split('T')[0]
-    const tripEnd = body.trip_dates.end > maxEndStr ? maxEndStr : body.trip_dates.end
+    // Split into 30-day chunks (Bonzah max policy duration)
+    const chunks = splitDateRange(tripStart, tripEnd)
+    console.log(`[Bonzah Quote] Date range ${tripStart} → ${tripEnd}: ${chunks.length} chunk(s)`)
 
-    // Field names verified against Bonzah API docs (03 Quote Save_Finalize.md)
-    const createQuoteRequest: Record<string, unknown> = {
+    // Common fields for all quotes (everything except trip dates)
+    const commonFields: Record<string, unknown> = {
       product_id: PRODUCT_ID,
-      finalize: 1,  // Important: finalize=1 generates payment_id
+      finalize: 1,
       source: 'API',
       policy_booking_time_zone: 'America/Los_Angeles',
-      // Trip details (format: MM/DD/YYYY HH:mm:ss)
-      trip_start_date: `${formatDateForBonzah(tripStart)} 10:00:00`,
-      trip_end_date: `${formatDateForBonzah(tripEnd)} 10:00:00`,
       pickup_state: pickupStateFull,
       pickup_country: 'United States',
       drop_off_time: 'Same',
-      // Coverage selections (must be boolean, not string)
       cdw_cover: body.coverage.cdw,
       rcli_cover: body.coverage.rcli,
       sli_cover: body.coverage.sli,
       pai_cover: body.coverage.pai,
-      // Renter details
       first_name: body.renter.first_name,
       last_name: body.renter.last_name,
       dob: formatDateForBonzah(body.renter.dob),
       pri_email_address: body.renter.email,
       phone_no: formattedPhone,
-      // Address (defaulted if empty — Bonzah won't finalize without valid address)
       address_line_1: street,
       zip_code: zip,
-      // Residence
       residence_country: 'United States',
       residence_state: residenceStateFull,
-      // License
       license_no: body.renter.license.number || 'N/A',
       drivers_license_state: licenseStateFull,
     }
 
     // CDW requires inspection_done field
     if (body.coverage.cdw) {
-      createQuoteRequest.inspection_done = 'Rental Agency'
+      commonFields.inspection_done = 'Rental Agency'
     }
-
-    console.log('[Bonzah Quote] Creating finalized quote via /Bonzah/quote')
-    console.log('[Bonzah Quote] Request payload:', JSON.stringify(createQuoteRequest, null, 2))
 
     // Get per-tenant Bonzah credentials
     const credentials = await getTenantBonzahCredentials(supabase, body.tenant_id)
 
-    let createResponse: BonzahQuoteApiResponse
-    try {
-      createResponse = await bonzahFetchWithCredentials<BonzahQuoteApiResponse>('/Bonzah/quote', createQuoteRequest, credentials)
-    } catch (apiError) {
-      console.error('[Bonzah Quote] API call failed:', apiError)
-      return errorResponse(
-        `Bonzah API error: ${apiError instanceof Error ? apiError.message : 'Unknown API error'}`,
-        500
-      )
-    }
+    // Generate a chain_id if we have multiple chunks
+    const chainId = chunks.length > 1 ? crypto.randomUUID() : null
 
-    if (createResponse.status !== 0 || !createResponse.data?.quote_id) {
-      console.error('[Bonzah Quote] Failed to create quote:', createResponse)
-      return errorResponse(`Failed to create Bonzah quote: ${createResponse.txt || 'Unknown error'}`, 500)
-    }
-
-    const quoteId = createResponse.data.quote_id
-    const paymentId = createResponse.data.payment_id
-    const apiPremium = createResponse.data.total_amount
-
-    console.log('[Bonzah Quote] Quote created:', quoteId)
-    console.log('[Bonzah Quote] Payment ID:', paymentId)
-    console.log('[Bonzah Quote] API Premium:', apiPremium)
-
-    // Capture PDF IDs from the quote response (if returned)
-    const pdfIds: Record<string, string> = {}
-    if (createResponse.data.cdw_pdf_id) pdfIds.cdw = createResponse.data.cdw_pdf_id
-    if (createResponse.data.rcli_pdf_id) pdfIds.rcli = createResponse.data.rcli_pdf_id
-    if (createResponse.data.sli_pdf_id) pdfIds.sli = createResponse.data.sli_pdf_id
-    if (createResponse.data.pai_pdf_id) pdfIds.pai = createResponse.data.pai_pdf_id
-
-    if (Object.keys(pdfIds).length > 0) {
-      console.log('[Bonzah Quote] PDF IDs from quote:', pdfIds)
-    }
-
-    // Build coverage_types with pdf_ids included
-    const coverageTypesWithPdfs = {
-      ...body.coverage,
-      ...(Object.keys(pdfIds).length > 0 ? { pdf_ids: pdfIds } : {}),
-    }
-
-    // Use API premium if available, otherwise calculate locally
-    let roundedPremium: number
-    if (apiPremium && apiPremium > 0) {
-      roundedPremium = Math.round(apiPremium * 100) / 100
-    } else {
-      // Fallback: Calculate premium locally
-      const days = calculateDays(body.trip_dates.start, body.trip_dates.end)
-      const premium =
-        (body.coverage.cdw ? RATES.CDW * days : 0) +
-        (body.coverage.rcli ? RATES.RCLI * days : 0) +
-        (body.coverage.sli ? RATES.SLI * days : 0) +
-        (body.coverage.pai ? RATES.PAI * days : 0)
-      roundedPremium = Math.round(premium * 100) / 100
-      console.log('[Bonzah Quote] Calculated premium locally:', roundedPremium, 'for', days, 'days')
-    }
-
-    // Store quote in database
+    // Create quotes for each chunk sequentially
     const policyType = body.policy_type || 'original'
-    const { data: policyRecord, error: dbError } = await supabase
-      .from('bonzah_insurance_policies')
-      .insert({
-        rental_id: body.rental_id,
-        tenant_id: body.tenant_id,
-        customer_id: body.customer_id,
-        quote_id: quoteId,
-        quote_no: null,
-        payment_id: paymentId,  // Store the payment_id from Bonzah
-        policy_id: null,  // Will be set after payment
-        coverage_types: coverageTypesWithPdfs,
-        trip_start_date: tripStart,
-        trip_end_date: tripEnd,
-        pickup_state: body.pickup_state,
-        premium_amount: roundedPremium,
-        renter_details: body.renter,
-        status: 'quoted',
-        policy_type: policyType,
-      })
-      .select('id')
-      .single()
+    let firstPolicyRecordId: string | null = null
+    let firstQuoteId: string | null = null
+    let firstPaymentId: string | null = null
+    let totalPremium = 0
 
-    if (dbError) {
-      console.error('[Bonzah Quote] Database error:', dbError)
-      return errorResponse('Failed to store quote in database', 500)
+    for (let i = 0; i < chunks.length; i++) {
+      const chunk = chunks[i]
+
+      let quoteResult
+      try {
+        quoteResult = await createSingleQuote(chunk, body, credentials, commonFields)
+      } catch (apiError) {
+        console.error(`[Bonzah Quote] API call failed for chunk ${i + 1}/${chunks.length}:`, apiError)
+        // If the first chunk fails, abort everything
+        if (i === 0) {
+          return errorResponse(
+            `Bonzah API error: ${apiError instanceof Error ? apiError.message : 'Unknown API error'}`,
+            500
+          )
+        }
+        // If a subsequent chunk fails, we still have earlier quotes — log and break
+        console.error(`[Bonzah Quote] Chunk ${i + 1} failed, ${i} policies created successfully`)
+        break
+      }
+
+      // Build coverage_types with pdf_ids included
+      const coverageTypesWithPdfs = {
+        ...body.coverage,
+        ...(Object.keys(quoteResult.pdfIds).length > 0 ? { pdf_ids: quoteResult.pdfIds } : {}),
+      }
+
+      // Store quote in database
+      const { data: policyRecord, error: dbError } = await supabase
+        .from('bonzah_insurance_policies')
+        .insert({
+          rental_id: body.rental_id,
+          tenant_id: body.tenant_id,
+          customer_id: body.customer_id,
+          quote_id: quoteResult.quoteId,
+          quote_no: null,
+          payment_id: quoteResult.paymentId,
+          policy_id: null,
+          coverage_types: coverageTypesWithPdfs,
+          trip_start_date: chunk.start,
+          trip_end_date: chunk.end,
+          pickup_state: body.pickup_state,
+          premium_amount: quoteResult.premium,
+          renter_details: body.renter,
+          status: 'quoted',
+          policy_type: policyType,
+          chain_id: chainId,
+        })
+        .select('id')
+        .single()
+
+      if (dbError) {
+        console.error('[Bonzah Quote] Database error:', dbError)
+        if (i === 0) {
+          return errorResponse('Failed to store quote in database', 500)
+        }
+        break
+      }
+
+      console.log(`[Bonzah Quote] Chunk ${i + 1}/${chunks.length} stored: ${policyRecord.id} (${chunk.start} → ${chunk.end}, $${quoteResult.premium})`)
+
+      totalPremium += quoteResult.premium
+
+      if (i === 0) {
+        firstPolicyRecordId = policyRecord.id
+        firstQuoteId = quoteResult.quoteId
+        firstPaymentId = quoteResult.paymentId
+      }
     }
 
-    console.log('[Bonzah Quote] Quote stored with ID:', policyRecord.id, 'type:', policyType)
+    totalPremium = Math.round(totalPremium * 100) / 100
 
-    // Update rental with insurance premium (only for original policies)
+    console.log(`[Bonzah Quote] Total premium across ${chunks.length} policies: $${totalPremium}`)
+
+    // Update rental with total insurance premium (only for original policies)
     // Extension policies don't update the rental FK — it stays pointing to the original
-    if (policyType === 'original') {
+    if (policyType === 'original' && firstPolicyRecordId) {
       const { error: rentalError } = await supabase
         .from('rentals')
         .update({
-          insurance_premium: roundedPremium,
-          bonzah_policy_id: policyRecord.id,
+          insurance_premium: totalPremium,
+          bonzah_policy_id: firstPolicyRecordId,
         })
         .eq('id', body.rental_id)
 
@@ -297,10 +376,12 @@ serve(async (req) => {
     }
 
     return jsonResponse({
-      policy_record_id: policyRecord.id,
-      quote_id: quoteId,
-      payment_id: paymentId,
-      total_premium: roundedPremium,
+      policy_record_id: firstPolicyRecordId,
+      quote_id: firstQuoteId,
+      payment_id: firstPaymentId,
+      total_premium: totalPremium,
+      policy_count: chunks.length,
+      chain_id: chainId,
     })
 
   } catch (error) {

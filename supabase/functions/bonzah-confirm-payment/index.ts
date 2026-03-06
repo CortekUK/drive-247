@@ -56,6 +56,17 @@ interface BonzahPaymentResponse {
   }
 }
 
+interface SinglePolicyResult {
+  success: boolean
+  policyRecordId: string
+  policyNo: string | null
+  policyId: string | null
+  policyIssued: boolean
+  pdfIds: Record<string, string>
+  error?: string
+  isBalanceError?: boolean
+}
+
 /**
  * Re-create a finalized Bonzah quote to recover a missing payment_id.
  * Uses the renter_details, coverage_types, and trip dates stored in the policy record.
@@ -144,15 +155,154 @@ async function recoverPaymentId(
 }
 
 /**
+ * Process payment for a single policy record.
+ * Returns result with success/failure and policy details.
+ */
+async function processSinglePayment(
+  supabase: any,
+  policyRecord: any,
+  credentials: TenantBonzahCredentials,
+): Promise<SinglePolicyResult> {
+  const recordId = policyRecord.id
+
+  // Skip if already active
+  if (policyRecord.status === 'active') {
+    console.log(`[Bonzah Payment] Policy ${recordId} already active: ${policyRecord.policy_no}`)
+    return {
+      success: true,
+      policyRecordId: recordId,
+      policyNo: policyRecord.policy_no,
+      policyId: policyRecord.policy_id,
+      policyIssued: true,
+      pdfIds: {},
+    }
+  }
+
+  // Update status to payment_pending
+  await supabase
+    .from('bonzah_insurance_policies')
+    .update({ status: 'payment_pending' })
+    .eq('id', recordId)
+
+  // If payment_id is missing, try to recover it
+  let paymentId = policyRecord.payment_id
+  if (!paymentId) {
+    console.warn(`[Bonzah Payment] No payment_id for ${recordId} - attempting recovery...`)
+    const recovered = await recoverPaymentId(policyRecord, credentials)
+    if (!recovered) {
+      await supabase
+        .from('bonzah_insurance_policies')
+        .update({ status: 'failed' })
+        .eq('id', recordId)
+      return {
+        success: false,
+        policyRecordId: recordId,
+        policyNo: null,
+        policyId: null,
+        policyIssued: false,
+        pdfIds: {},
+        error: 'No payment_id found and recovery failed',
+      }
+    }
+    paymentId = recovered.paymentId
+    await supabase
+      .from('bonzah_insurance_policies')
+      .update({ payment_id: paymentId, quote_id: recovered.quoteId })
+      .eq('id', recordId)
+    console.log(`[Bonzah Payment] payment_id recovered for ${recordId}:`, paymentId)
+  }
+
+  // Call the /Bonzah/payment endpoint
+  const amount = String(policyRecord.premium_amount)
+  console.log(`[Bonzah Payment] Processing payment for ${recordId}: payment_id=${paymentId}, amount=$${amount}`)
+
+  const paymentResponse = await bonzahFetchWithCredentials<BonzahPaymentResponse>(
+    '/Bonzah/payment',
+    {
+      payment_id: paymentId,
+      amount: amount,
+    },
+    credentials
+  )
+
+  console.log(`[Bonzah Payment] Payment response for ${recordId}: status=${paymentResponse.status}`)
+
+  if (paymentResponse.status === 0 && paymentResponse.data) {
+    const policyNo = paymentResponse.data.policy_no
+    const policyId = paymentResponse.data.policy_id
+    const policyIssued = !!policyNo
+
+    const pdfIds: Record<string, string> = {}
+    if (paymentResponse.data.cdw_pdf_id) pdfIds.cdw = paymentResponse.data.cdw_pdf_id
+    if (paymentResponse.data.rcli_pdf_id) pdfIds.rcli = paymentResponse.data.rcli_pdf_id
+    if (paymentResponse.data.sli_pdf_id) pdfIds.sli = paymentResponse.data.sli_pdf_id
+    if (paymentResponse.data.pai_pdf_id) pdfIds.pai = paymentResponse.data.pai_pdf_id
+
+    // Update policy record with results
+    const updateData: Record<string, unknown> = {
+      status: policyIssued ? 'active' : 'payment_confirmed',
+      policy_issued_at: policyIssued ? new Date().toISOString() : null,
+    }
+    if (policyNo) updateData.policy_no = policyNo
+    if (policyId) updateData.policy_id = policyId
+    if (Object.keys(pdfIds).length > 0) {
+      updateData.coverage_types = {
+        ...policyRecord.coverage_types,
+        pdf_ids: pdfIds,
+      }
+    }
+
+    await supabase
+      .from('bonzah_insurance_policies')
+      .update(updateData)
+      .eq('id', recordId)
+
+    console.log(`[Bonzah Payment] Policy ${recordId} issued: ${policyNo}`)
+
+    return {
+      success: true,
+      policyRecordId: recordId,
+      policyNo,
+      policyId,
+      policyIssued,
+      pdfIds,
+    }
+  }
+
+  // Payment failed
+  const errorMsg = paymentResponse.txt || `Bonzah payment returned status ${paymentResponse.status}`
+  const balanceKeywords = ['insufficient', 'balance', 'fund', 'credit', 'bonzah balance', 'allocat']
+  const isBalanceError = balanceKeywords.some(kw => errorMsg.toLowerCase().includes(kw))
+  const newStatus = isBalanceError ? 'insufficient_balance' : 'failed'
+
+  await supabase
+    .from('bonzah_insurance_policies')
+    .update({ status: newStatus })
+    .eq('id', recordId)
+
+  return {
+    success: false,
+    policyRecordId: recordId,
+    policyNo: null,
+    policyId: null,
+    policyIssued: false,
+    pdfIds: {},
+    error: errorMsg,
+    isBalanceError,
+  }
+}
+
+/**
  * Send notifications (in-app + email) to tenant admins when Bonzah balance is insufficient.
  */
 async function sendInsufficientBalanceNotifications(
   supabase: any,
   policyRecord: any,
   cdBalance: number | null,
+  totalPremium?: number,
 ) {
   const tenantId = policyRecord.tenant_id
-  const premium = policyRecord.premium_amount
+  const premium = totalPremium ?? policyRecord.premium_amount
 
   // Get rental info for context
   const { data: rental } = await supabase
@@ -275,7 +425,7 @@ serve(async (req) => {
       return errorResponse('Missing policy_record_id')
     }
 
-    // Get the policy record from database
+    // Get the primary policy record from database
     const { data: policyRecord, error: fetchError } = await supabase
       .from('bonzah_insurance_policies')
       .select('*')
@@ -287,224 +437,170 @@ serve(async (req) => {
       return errorResponse('Policy record not found', 404)
     }
 
-    // Check if already processed
-    if (policyRecord.status === 'active') {
-      console.log('[Bonzah Payment] Policy already active:', policyRecord.policy_no)
+    // Build the list of all policies to confirm (primary + chain siblings)
+    let policiesToConfirm = [policyRecord]
+
+    if (policyRecord.chain_id) {
+      // Fetch all policies in this chain, ordered by trip_start_date
+      const { data: chainPolicies, error: chainError } = await supabase
+        .from('bonzah_insurance_policies')
+        .select('*')
+        .eq('chain_id', policyRecord.chain_id)
+        .order('trip_start_date', { ascending: true })
+
+      if (!chainError && chainPolicies && chainPolicies.length > 1) {
+        policiesToConfirm = chainPolicies
+        console.log(`[Bonzah Payment] Found chain with ${chainPolicies.length} policies (chain_id: ${policyRecord.chain_id})`)
+      }
+    }
+
+    // Check if ALL policies in chain are already active
+    const allActive = policiesToConfirm.every((p: any) => p.status === 'active')
+    if (allActive) {
+      console.log('[Bonzah Payment] All policies already active')
       return jsonResponse({
         success: true,
         policy_no: policyRecord.policy_no,
         already_processed: true,
+        chain_confirmed: policiesToConfirm.length,
       })
     }
 
-    // Update status to payment_pending
-    await supabase
-      .from('bonzah_insurance_policies')
-      .update({ status: 'payment_pending' })
-      .eq('id', body.policy_record_id)
-
-    // Make payment to Bonzah using the correct /Bonzah/payment endpoint
-    console.log('[Bonzah Payment] Attempting payment...')
-    console.log('[Bonzah Payment] Payment ID:', policyRecord.payment_id)
-    console.log('[Bonzah Payment] Amount:', policyRecord.premium_amount)
-
-    let policyNo: string | null = null
-    let policyId: string | null = null
-    let policyIssued = false
-    let pdfIds: Record<string, string> = {}
-    let cdBalance: number | null = null
+    // Get per-tenant Bonzah credentials (once for all policies)
     let bonzahMode: 'test' | 'live' = 'test'
+    let cdBalance: number | null = null
+    let credentials: TenantBonzahCredentials
 
     try {
-      // Get per-tenant Bonzah credentials
-      const credentials = await getTenantBonzahCredentials(supabase, policyRecord.tenant_id)
+      credentials = await getTenantBonzahCredentials(supabase, policyRecord.tenant_id)
       bonzahMode = credentials.mode
+    } catch (credError) {
+      console.error('[Bonzah Payment] Failed to get credentials:', credError)
+      return errorResponse('Failed to get Bonzah credentials', 500)
+    }
 
-      // If payment_id is missing, try to recover it by re-creating the finalized quote
-      let paymentId = policyRecord.payment_id
-      if (!paymentId) {
-        console.warn('[Bonzah Payment] No payment_id found - attempting recovery via re-quote...')
-        const recovered = await recoverPaymentId(policyRecord, credentials)
-        if (!recovered) {
-          await supabase
-            .from('bonzah_insurance_policies')
-            .update({ status: 'failed' })
-            .eq('id', body.policy_record_id)
-          return errorResponse('No payment_id found and recovery failed. Quote may need to be re-created manually.', 400)
-        }
-        paymentId = recovered.paymentId
-        // Update the policy record with the recovered payment_id and new quote_id
-        await supabase
-          .from('bonzah_insurance_policies')
-          .update({ payment_id: paymentId, quote_id: recovered.quoteId })
-          .eq('id', body.policy_record_id)
-        console.log('[Bonzah Payment] payment_id recovered and saved:', paymentId)
-      }
-
-      // Check Bonzah balance first (captured in outer scope for error handling)
-      try {
-        const balanceResponse = await bonzahFetchWithCredentials<{ status: number; data: { amount: string } }>(
-          '/Bonzah/cdBalance',
-          {},
-          credentials,
-          'GET'
-        )
-        cdBalance = balanceResponse?.data?.amount != null ? Number(balanceResponse.data.amount) : null
-        console.log('[Bonzah Payment] Bonzah Balance:', cdBalance)
-      } catch (balErr) {
-        console.log('[Bonzah Payment] Could not check Bonzah balance:', balErr)
-      }
-
-      // Call the /Bonzah/payment endpoint to complete payment and issue policy
-      // Amount sent as string to match Bonzah Postman collection format
-      const amount = String(policyRecord.premium_amount)
-      console.log('[Bonzah Payment] Sending amount as string:', amount)
-
-      const paymentResponse = await bonzahFetchWithCredentials<BonzahPaymentResponse>(
-        '/Bonzah/payment',
-        {
-          payment_id: paymentId,
-          amount: amount,
-        },
-        credentials
+    // Check Bonzah balance once
+    try {
+      const balanceResponse = await bonzahFetchWithCredentials<{ status: number; data: { amount: string } }>(
+        '/Bonzah/cdBalance',
+        {},
+        credentials,
+        'GET'
       )
+      cdBalance = balanceResponse?.data?.amount != null ? Number(balanceResponse.data.amount) : null
+      console.log('[Bonzah Payment] Bonzah Balance:', cdBalance)
+    } catch (balErr) {
+      console.log('[Bonzah Payment] Could not check Bonzah balance:', balErr)
+    }
 
-      console.log('[Bonzah Payment] Payment response status:', paymentResponse.status)
+    // Calculate total premium across all policies to confirm
+    const totalPremium = policiesToConfirm
+      .filter((p: any) => p.status !== 'active')
+      .reduce((sum: number, p: any) => sum + (p.premium_amount || 0), 0)
 
-      if (paymentResponse.status === 0 && paymentResponse.data) {
-        policyNo = paymentResponse.data.policy_no
-        policyId = paymentResponse.data.policy_id
-        policyIssued = !!policyNo
+    // Process each policy in the chain
+    const results: SinglePolicyResult[] = []
+    let firstFailure: SinglePolicyResult | null = null
 
-        // Collect PDF IDs if available
-        if (paymentResponse.data.cdw_pdf_id) pdfIds.cdw = paymentResponse.data.cdw_pdf_id
-        if (paymentResponse.data.rcli_pdf_id) pdfIds.rcli = paymentResponse.data.rcli_pdf_id
-        if (paymentResponse.data.sli_pdf_id) pdfIds.sli = paymentResponse.data.sli_pdf_id
-        if (paymentResponse.data.pai_pdf_id) pdfIds.pai = paymentResponse.data.pai_pdf_id
+    for (const policy of policiesToConfirm) {
+      try {
+        const result = await processSinglePayment(supabase, policy, credentials)
+        results.push(result)
 
-        console.log('[Bonzah Payment] Policy issued:', policyNo)
-        console.log('[Bonzah Payment] PDF IDs:', pdfIds)
-      } else if (paymentResponse.status !== 0) {
-        // Non-zero status indicates a Bonzah-side error (e.g. insufficient balance)
-        const errorMsg = paymentResponse.txt || `Bonzah payment returned status ${paymentResponse.status}`
-        console.error('[Bonzah Payment] Non-zero payment status:', paymentResponse.status, errorMsg)
-
-        // Detect balance errors by keyword only — Bonzah balance is broker-level, not allocated
+        if (!result.success && !firstFailure) {
+          firstFailure = result
+          // If it's a balance error, stop processing further policies
+          if (result.isBalanceError) {
+            console.error(`[Bonzah Payment] Balance error on policy ${policy.id}, stopping chain`)
+            // Mark remaining policies as insufficient_balance too
+            const remaining = policiesToConfirm.slice(results.length)
+            for (const rem of remaining) {
+              if (rem.status !== 'active') {
+                await supabase
+                  .from('bonzah_insurance_policies')
+                  .update({ status: 'insufficient_balance' })
+                  .eq('id', rem.id)
+              }
+            }
+            break
+          }
+        }
+      } catch (err) {
+        console.error(`[Bonzah Payment] Error processing policy ${policy.id}:`, err)
+        const errorMsg = err instanceof Error ? err.message : 'Unknown error'
         const balanceKeywords = ['insufficient', 'balance', 'fund', 'credit', 'bonzah balance', 'allocat']
         const isBalanceError = balanceKeywords.some(kw => errorMsg.toLowerCase().includes(kw))
 
         const newStatus = isBalanceError ? 'insufficient_balance' : 'failed'
-
         await supabase
           .from('bonzah_insurance_policies')
           .update({ status: newStatus })
-          .eq('id', body.policy_record_id)
+          .eq('id', policy.id)
 
-        // Only send notifications on first insufficient_balance detection (not retries)
-        if (isBalanceError && policyRecord.status !== 'insufficient_balance') {
-          try {
-            await sendInsufficientBalanceNotifications(supabase, policyRecord, cdBalance)
-          } catch (notifyErr) {
-            console.error('[Bonzah Payment] Error sending insufficient balance notifications:', notifyErr)
-          }
+        const failResult: SinglePolicyResult = {
+          success: false,
+          policyRecordId: policy.id,
+          policyNo: null,
+          policyId: null,
+          policyIssued: false,
+          pdfIds: {},
+          error: errorMsg,
+          isBalanceError,
         }
+        results.push(failResult)
 
-        if (isBalanceError) {
-          return jsonResponse({
-            success: false,
-            error: 'insufficient_balance',
-            cd_balance: cdBalance,
-            premium: policyRecord.premium_amount,
-            message: errorMsg,
-            bonzah_mode: bonzahMode,
-          }, 422)
-        }
-
-        return errorResponse(`Bonzah payment failed: ${errorMsg}`, 500)
+        if (!firstFailure) firstFailure = failResult
+        if (isBalanceError) break
       }
-    } catch (bonzahError) {
-      console.error('[Bonzah Payment] Error calling Bonzah API:', bonzahError)
-      const errorMsg = bonzahError instanceof Error ? bonzahError.message : 'Unknown error'
+    }
 
-      // Detect balance errors by keyword only — Bonzah balance is broker-level, not allocated
-      const balanceKeywords = ['insufficient', 'balance', 'fund', 'credit', 'bonzah balance', 'allocat']
-      const isBalanceError = balanceKeywords.some(kw => errorMsg.toLowerCase().includes(kw))
+    const successCount = results.filter(r => r.success).length
+    const failCount = results.filter(r => !r.success).length
+    const firstSuccess = results.find(r => r.success)
 
-      const newStatus = isBalanceError ? 'insufficient_balance' : 'failed'
-      console.log(`[Bonzah Payment] Setting status to '${newStatus}' (balance error: ${isBalanceError}, Bonzah balance: ${cdBalance}, premium: ${policyRecord.premium_amount})`)
+    console.log(`[Bonzah Payment] Chain results: ${successCount} succeeded, ${failCount} failed out of ${policiesToConfirm.length}`)
 
-      await supabase
-        .from('bonzah_insurance_policies')
-        .update({ status: newStatus })
-        .eq('id', body.policy_record_id)
-
-      // Only send notifications on first insufficient_balance detection (not retries)
-      if (isBalanceError && policyRecord.status !== 'insufficient_balance') {
+    // Handle insufficient balance error (send notifications only once)
+    if (firstFailure?.isBalanceError) {
+      if (policyRecord.status !== 'insufficient_balance') {
         try {
-          await sendInsufficientBalanceNotifications(
-            supabase,
-            policyRecord,
-            cdBalance,
-          )
+          await sendInsufficientBalanceNotifications(supabase, policyRecord, cdBalance, totalPremium)
         } catch (notifyErr) {
           console.error('[Bonzah Payment] Error sending insufficient balance notifications:', notifyErr)
         }
       }
 
-      if (isBalanceError) {
-        return jsonResponse({
-          success: false,
-          error: 'insufficient_balance',
-          cd_balance: cdBalance,
-          premium: policyRecord.premium_amount,
-          message: errorMsg,
-          bonzah_mode: bonzahMode,
-        }, 422)
-      }
-
-      return errorResponse(`Bonzah payment failed: ${errorMsg}`, 500)
+      return jsonResponse({
+        success: false,
+        error: 'insufficient_balance',
+        cd_balance: cdBalance,
+        premium: totalPremium,
+        message: firstFailure.error,
+        bonzah_mode: bonzahMode,
+        chain_confirmed: successCount,
+        chain_total: policiesToConfirm.length,
+      }, 422)
     }
 
-    // Update policy record with results
-    const updateData: Record<string, unknown> = {
-      status: policyIssued ? 'active' : 'payment_confirmed',
-      policy_issued_at: policyIssued ? new Date().toISOString() : null,
+    // If all failed (non-balance error)
+    if (successCount === 0 && firstFailure) {
+      return errorResponse(`Bonzah payment failed: ${firstFailure.error}`, 500)
     }
 
-    if (policyNo) updateData.policy_no = policyNo
-    if (policyId) updateData.policy_id = policyId
-    if (Object.keys(pdfIds).length > 0) {
-      // Store PDF IDs in coverage_types alongside existing data
-      updateData.coverage_types = {
-        ...policyRecord.coverage_types,
-        pdf_ids: pdfIds,
-      }
-    }
-
-    const { error: updateError } = await supabase
-      .from('bonzah_insurance_policies')
-      .update(updateData)
-      .eq('id', body.policy_record_id)
-
-    if (updateError) {
-      console.error('[Bonzah Payment] Failed to update policy record:', updateError)
-    }
-
-    // Log the result
-    if (policyIssued) {
-      console.log('[Bonzah Payment] Policy fully issued:', policyNo)
-    } else {
-      console.log('[Bonzah Payment] Payment confirmed, policy pending')
-    }
+    // Success (full or partial)
+    const primaryResult = results.find(r => r.policyRecordId === body.policy_record_id)
+    const effectiveResult = primaryResult || firstSuccess
 
     return jsonResponse({
       success: true,
-      policy_no: policyNo,
-      policy_id: policyId,
-      policy_issued: policyIssued,
-      pdf_ids: pdfIds,
-      status: policyIssued ? 'active' : 'payment_confirmed',
+      policy_no: effectiveResult?.policyNo,
+      policy_id: effectiveResult?.policyId,
+      policy_issued: effectiveResult?.policyIssued ?? false,
+      pdf_ids: effectiveResult?.pdfIds ?? {},
+      status: effectiveResult?.policyIssued ? 'active' : 'payment_confirmed',
       bonzah_mode: bonzahMode,
+      chain_confirmed: successCount,
+      chain_total: policiesToConfirm.length,
     })
 
   } catch (error) {

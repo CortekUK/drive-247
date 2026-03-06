@@ -397,6 +397,7 @@ export type Database = {
       }
       bonzah_insurance_policies: {
         Row: {
+          chain_id: string | null
           coverage_types: Json
           created_at: string | null
           customer_id: string
@@ -419,6 +420,7 @@ export type Database = {
           updated_at: string | null
         }
         Insert: {
+          chain_id?: string | null
           coverage_types: Json
           created_at?: string | null
           customer_id: string
@@ -441,6 +443,7 @@ export type Database = {
           updated_at?: string | null
         }
         Update: {
+          chain_id?: string | null
           coverage_types?: Json
           created_at?: string | null
           customer_id?: string

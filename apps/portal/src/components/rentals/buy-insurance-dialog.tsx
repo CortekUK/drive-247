@@ -450,17 +450,14 @@ export function BuyInsuranceDialog({
                     const todayStr = new Date().toISOString().split('T')[0];
                     const effectiveStart = rentalStart < todayStr ? todayStr : rentalStart;
                     const isClamped = rentalStart < todayStr;
-                    // Bonzah max 30 days
-                    const startD = new Date(effectiveStart + 'T00:00:00');
-                    const maxEndD = new Date(startD);
-                    maxEndD.setDate(maxEndD.getDate() + 30);
-                    const maxEndStr = maxEndD.toISOString().split('T')[0];
-                    const effectiveEnd = rentalEnd > maxEndStr ? maxEndStr : rentalEnd;
-                    const isCapped = rentalEnd > maxEndStr;
+                    // Bonzah max 30 days per policy — auto-chains multiple policies
+                    const totalDays = Math.ceil((new Date(rentalEnd + 'T00:00:00').getTime() - new Date(effectiveStart + 'T00:00:00').getTime()) / (1000 * 60 * 60 * 24));
+                    const policyCount = Math.ceil(totalDays / 30);
+                    const isChained = policyCount > 1;
                     return (
                       <>
                         <p className="font-medium">
-                          {new Date(effectiveStart + 'T00:00:00').toLocaleDateString()} - {new Date(effectiveEnd + 'T00:00:00').toLocaleDateString()}
+                          {new Date(effectiveStart + 'T00:00:00').toLocaleDateString()} - {new Date(rentalEnd + 'T00:00:00').toLocaleDateString()}
                         </p>
                         {isClamped && (
                           <p className="text-xs text-amber-600 dark:text-amber-400 mt-0.5 flex items-center gap-1">
@@ -468,10 +465,10 @@ export function BuyInsuranceDialog({
                             Rental started {new Date(rentalStart + 'T00:00:00').toLocaleDateString()} — coverage begins today
                           </p>
                         )}
-                        {isCapped && (
-                          <p className="text-xs text-amber-600 dark:text-amber-400 mt-0.5 flex items-center gap-1">
-                            <AlertTriangle className="h-3 w-3" />
-                            Bonzah max policy is 30 days — coverage ends {new Date(effectiveEnd + 'T00:00:00').toLocaleDateString()} (rental ends {new Date(rentalEnd + 'T00:00:00').toLocaleDateString()})
+                        {isChained && (
+                          <p className="text-xs text-blue-600 dark:text-blue-400 mt-0.5 flex items-center gap-1">
+                            <Info className="h-3 w-3" />
+                            {policyCount} sequential policies will be created (Bonzah max 30 days per policy)
                           </p>
                         )}
                       </>
