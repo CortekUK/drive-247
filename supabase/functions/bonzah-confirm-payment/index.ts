@@ -108,9 +108,9 @@ async function recoverPaymentId(
     finalize: 1,
     source: 'API',
     policy_booking_time_zone: 'America/Los_Angeles',
-    // Use 23:59 for start time when start date is today to avoid Bonzah "past date" rejection
-    trip_start_date: `${formatDateForBonzah(policyRecord.trip_start_date)} ${policyRecord.trip_start_date === new Date().toISOString().split('T')[0] ? '23:59:00' : '10:00:00'}`,
-    trip_end_date: `${formatDateForBonzah(policyRecord.trip_end_date)} 10:00:00`,
+    // Use 23:59 for both so duration = exact days and today is never "in the past"
+    trip_start_date: `${formatDateForBonzah(policyRecord.trip_start_date)} 23:59:00`,
+    trip_end_date: `${formatDateForBonzah(policyRecord.trip_end_date)} 23:59:00`,
     pickup_state: pickupStateFull,
     pickup_country: 'United States',
     drop_off_time: 'Same',

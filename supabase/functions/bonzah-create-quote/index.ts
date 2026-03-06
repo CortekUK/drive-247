@@ -126,15 +126,15 @@ async function createSingleQuote(
   premium: number
   pdfIds: Record<string, string>
 }> {
-  // Use 23:59 for start time so "today" is never considered "in the past" by Bonzah
-  // (Bonzah checks the full datetime against America/Los_Angeles timezone)
-  const today = new Date().toISOString().split('T')[0]
-  const startTime = chunk.start === today ? '23:59:00' : '10:00:00'
+  // Use 23:59 so "today" is never considered "in the past" by Bonzah
+  // (Bonzah validates the full datetime against America/Los_Angeles timezone)
+  // IMPORTANT: both start and end must use the same time so duration = exact days
+  const TRIP_TIME = '23:59:00'
 
   const quoteRequest: Record<string, unknown> = {
     ...commonFields,
-    trip_start_date: `${formatDateForBonzah(chunk.start)} ${startTime}`,
-    trip_end_date: `${formatDateForBonzah(chunk.end)} 10:00:00`,
+    trip_start_date: `${formatDateForBonzah(chunk.start)} ${TRIP_TIME}`,
+    trip_end_date: `${formatDateForBonzah(chunk.end)} ${TRIP_TIME}`,
   }
 
   console.log(`[Bonzah Quote] Creating quote for chunk ${chunk.start} → ${chunk.end}`)
