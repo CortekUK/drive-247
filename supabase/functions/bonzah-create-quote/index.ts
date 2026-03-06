@@ -126,10 +126,13 @@ async function createSingleQuote(
   premium: number
   pdfIds: Record<string, string>
 }> {
-  // Use 23:59 so "today" is never considered "in the past" by Bonzah
-  // (Bonzah validates the full datetime against America/Los_Angeles timezone)
-  // IMPORTANT: both start and end must use the same time so duration = exact days
-  const TRIP_TIME = '23:59:00'
+  // Bonzah validates the full datetime against America/Los_Angeles timezone.
+  // - Must use the SAME time for start and end so duration = exact number of days
+  // - Must not use 23:59 — Bonzah rounds to midnight causing 0-day duration
+  // - Must not use 10:00 — rejected as "in the past" when it's past 10 AM Pacific
+  // Using 15:00 (3 PM Pacific = 11 PM UK) — works for all normal business hours,
+  // no midnight rounding, and same for both dates gives exact day intervals.
+  const TRIP_TIME = '15:00:00'
 
   const quoteRequest: Record<string, unknown> = {
     ...commonFields,
