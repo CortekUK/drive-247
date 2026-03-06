@@ -26,6 +26,40 @@ function getStateName(stateCode: string): string {
   return STATE_NAMES[stateCode.toUpperCase()] || stateCode
 }
 
+/**
+ * Get current date and hour in Pacific timezone using formatToParts (locale-independent).
+ */
+function getPacificNow(): { date: string; hour: number } {
+  const now = new Date()
+  const dateParts = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'America/Los_Angeles',
+    year: 'numeric', month: '2-digit', day: '2-digit',
+  }).formatToParts(now)
+  const y = dateParts.find(p => p.type === 'year')!.value
+  const m = dateParts.find(p => p.type === 'month')!.value
+  const d = dateParts.find(p => p.type === 'day')!.value
+
+  const timeParts = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'America/Los_Angeles',
+    hour: 'numeric', hour12: false,
+  }).formatToParts(now)
+  const hour = parseInt(timeParts.find(p => p.type === 'hour')!.value, 10)
+
+  return { date: `${y}-${m}-${d}`, hour }
+}
+
+function getPacificTomorrow(): string {
+  const tomorrow = new Date(Date.now() + 86400000)
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'America/Los_Angeles',
+    year: 'numeric', month: '2-digit', day: '2-digit',
+  }).formatToParts(tomorrow)
+  const y = parts.find(p => p.type === 'year')!.value
+  const m = parts.find(p => p.type === 'month')!.value
+  const d = parts.find(p => p.type === 'day')!.value
+  return `${y}-${m}-${d}`
+}
+
 interface ConfirmPaymentRequest {
   policy_record_id: string
   stripe_payment_intent_id: string
@@ -104,21 +138,20 @@ async function recoverPaymentId(
   console.log('[Bonzah Payment] Recovery using state:', residenceStateFull, 'zip:', zip, 'street:', street)
 
   // Clamp start date to today (Pacific) if in the past, with dynamic time
-  const pacificDate = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Los_Angeles', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date())
-  const pacificHour = parseInt(new Intl.DateTimeFormat('en-US', { timeZone: 'America/Los_Angeles', hour: 'numeric', hour12: false }).format(new Date()), 10)
+  const pacific = getPacificNow()
 
   let recoveryStart = policyRecord.trip_start_date
-  if (recoveryStart < pacificDate) recoveryStart = pacificDate
-  if (recoveryStart === pacificDate && pacificHour >= 22) {
-    recoveryStart = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Los_Angeles', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date(Date.now() + 86400000))
+  if (recoveryStart < pacific.date) recoveryStart = pacific.date
+  if (recoveryStart === pacific.date && pacific.hour >= 22) {
+    recoveryStart = getPacificTomorrow()
   }
   let recoveryEnd = policyRecord.trip_end_date
   if (recoveryEnd < recoveryStart) recoveryEnd = recoveryStart
 
   // If start is today, use current hour + 2 to ensure time is in the future
   let tripTime: string
-  if (recoveryStart === pacificDate) {
-    const safeHour = Math.min(pacificHour + 2, 23)
+  if (recoveryStart === pacific.date) {
+    const safeHour = Math.min(pacific.hour + 2, 23)
     tripTime = `${String(safeHour).padStart(2, '0')}:00:00`
   } else {
     tripTime = '15:00:00'

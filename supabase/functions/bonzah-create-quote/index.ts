@@ -43,6 +43,42 @@ function getStateName(stateCode: string): string {
   return STATE_NAMES[stateCode.toUpperCase()] || stateCode
 }
 
+/**
+ * Get current date and hour in Pacific timezone using formatToParts (locale-independent).
+ * Returns { date: 'YYYY-MM-DD', hour: number }
+ */
+function getPacificNow(): { date: string; hour: number } {
+  const now = new Date()
+  const dateParts = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'America/Los_Angeles',
+    year: 'numeric', month: '2-digit', day: '2-digit',
+  }).formatToParts(now)
+  const y = dateParts.find(p => p.type === 'year')!.value
+  const m = dateParts.find(p => p.type === 'month')!.value
+  const d = dateParts.find(p => p.type === 'day')!.value
+
+  const timeParts = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'America/Los_Angeles',
+    hour: 'numeric', hour12: false,
+  }).formatToParts(now)
+  const hour = parseInt(timeParts.find(p => p.type === 'hour')!.value, 10)
+
+  return { date: `${y}-${m}-${d}`, hour }
+}
+
+/** Get tomorrow's date in Pacific timezone as YYYY-MM-DD */
+function getPacificTomorrow(): string {
+  const tomorrow = new Date(Date.now() + 86400000)
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'America/Los_Angeles',
+    year: 'numeric', month: '2-digit', day: '2-digit',
+  }).formatToParts(tomorrow)
+  const y = parts.find(p => p.type === 'year')!.value
+  const m = parts.find(p => p.type === 'month')!.value
+  const d = parts.find(p => p.type === 'day')!.value
+  return `${y}-${m}-${d}`
+}
+
 interface CreateQuoteRequest {
   rental_id: string
   customer_id: string
@@ -130,11 +166,10 @@ async function createSingleQuote(
   // Same time for both start and end ensures exact day intervals.
   // If start is today in Pacific, use current Pacific hour + 2 to stay in the future.
   // Otherwise use 15:00 (safe default for future dates).
-  const pacificDate = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Los_Angeles', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date())
+  const pacific = getPacificNow()
   let tripTime: string
-  if (chunk.start === pacificDate) {
-    const pacificHour = parseInt(new Intl.DateTimeFormat('en-US', { timeZone: 'America/Los_Angeles', hour: 'numeric', hour12: false }).format(new Date()), 10)
-    const safeHour = Math.min(pacificHour + 2, 23)
+  if (chunk.start === pacific.date) {
+    const safeHour = Math.min(pacific.hour + 2, 23)
     tripTime = `${String(safeHour).padStart(2, '0')}:00:00`
   } else {
     tripTime = '15:00:00'
@@ -247,18 +282,13 @@ serve(async (req) => {
     })()
 
     // Clamp trip start using Pacific timezone (Bonzah validates against America/Los_Angeles)
-    const pacificNow = (() => {
-      const now = new Date()
-      const date = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Los_Angeles', year: 'numeric', month: '2-digit', day: '2-digit' }).format(now)
-      const hour = parseInt(new Intl.DateTimeFormat('en-US', { timeZone: 'America/Los_Angeles', hour: 'numeric', hour12: false }).format(now), 10)
-      return { date, hour }
-    })()
+    const pacificNow = getPacificNow()
+    console.log(`[Bonzah Quote] Pacific now: ${pacificNow.date} ${pacificNow.hour}:00, input start: ${body.trip_dates.start}`)
 
     let tripStart = body.trip_dates.start < pacificNow.date ? pacificNow.date : body.trip_dates.start
     // If start is today but past 10 PM Pacific, bump to tomorrow (no safe same-day time left)
     if (tripStart === pacificNow.date && pacificNow.hour >= 22) {
-      const tomorrow = new Date(Date.now() + 86400000)
-      tripStart = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Los_Angeles', year: 'numeric', month: '2-digit', day: '2-digit' }).format(tomorrow)
+      tripStart = getPacificTomorrow()
     }
     // Ensure end date is not before start date (in case start was bumped)
     const tripEnd = body.trip_dates.end < tripStart ? tripStart : body.trip_dates.end
