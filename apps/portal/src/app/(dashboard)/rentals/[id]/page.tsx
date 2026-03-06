@@ -766,6 +766,8 @@ const RentalDetail = () => {
         .select("*")
         .eq("rental_id", id)
         .eq("policy_type", "original")
+        .order("created_at", { ascending: false })
+        .limit(1)
         .maybeSingle();
 
       if (error) {
