@@ -40,6 +40,18 @@ Deno.serve(async (req) => {
     }
 
     const mode = tenant.bonzah_mode || 'test'
+
+    // Test mode: platform shared credentials — no verification needed
+    if (mode === 'test') {
+      console.log('[Bonzah Verify] Test mode — using platform shared credentials, skipping verification')
+      return jsonResponse({
+        valid: true,
+        mode: 'test',
+        platform: true,
+      })
+    }
+
+    // Live mode: verify tenant's own credentials
     const apiUrl = getBonzahApiUrl(mode)
 
     console.log('[Bonzah Verify] Verifying credentials against', mode, 'API for:', body.username)

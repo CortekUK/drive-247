@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import {
   ShieldCheck,
   Shield,
+  ShieldPlus,
   CheckCircle,
   Clock,
   AlertTriangle,
@@ -15,6 +16,7 @@ import {
   Download,
   RefreshCw,
   ExternalLink,
+  Link2,
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { useToast } from '@/hooks/use-toast';
@@ -82,6 +84,7 @@ function InsuranceTimelineItem({
   tenantId,
   rentalId,
   bonzahMode,
+  extensionIndex,
 }: {
   policy: InsurancePolicy;
   isLast: boolean;
@@ -89,6 +92,7 @@ function InsuranceTimelineItem({
   tenantId: string | undefined;
   rentalId: string;
   bonzahMode: string;
+  extensionIndex?: number;
 }) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -185,112 +189,112 @@ function InsuranceTimelineItem({
     }
   };
 
+  const isExtension = policy.policy_type === 'extension';
+
   return (
-    <div className="relative flex gap-3">
-      {/* Timeline line and dot */}
-      <div className="flex flex-col items-center">
-        <div className={`w-3 h-3 rounded-full mt-1 flex-shrink-0 ${statusInfo.dotClass}`} />
-        {!isLast && <div className="w-px flex-1 bg-border mt-1" />}
-      </div>
+    <div className={`rounded-sm border-l-4 border bg-card p-4 ${
+      isExtension
+        ? 'border-l-amber-500 dark:border-l-amber-400'
+        : 'border-l-emerald-500 dark:border-l-emerald-400'
+    }`}>
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0 flex-1">
+          {/* Extension number label */}
+          {isExtension && extensionIndex != null && (
+            <span className="inline-flex items-center gap-1 text-[11px] font-semibold uppercase tracking-wider text-amber-600 dark:text-amber-400 mb-1.5">
+              Extension #{extensionIndex}
+            </span>
+          )}
 
-      {/* Content */}
-      <div className="flex-1 pb-6">
-        <div className="flex items-start justify-between gap-2">
-          <div className="min-w-0 flex-1">
-            <div className="flex items-center gap-2 flex-wrap">
-              <span className="font-medium text-sm">
-                {policy.policy_type === 'extension' ? 'Extension Policy' : 'Original Policy'}
-              </span>
-              <Badge className={statusInfo.badgeClass} variant={statusInfo.badgeClass ? 'default' : 'outline'}>
-                <statusInfo.icon className="h-3 w-3 mr-1" />
-                {statusInfo.label}
-              </Badge>
-            </div>
-
-            {/* Trip dates */}
-            <p className="text-sm text-muted-foreground mt-0.5">
+          {/* Header row: dates + status */}
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-sm font-medium">
               {format(new Date(policy.trip_start_date), 'MMM d, yyyy')} – {format(new Date(policy.trip_end_date), 'MMM d, yyyy')}
-            </p>
+            </span>
+            <Badge className={statusInfo.badgeClass} variant={statusInfo.badgeClass ? 'default' : 'outline'}>
+              <statusInfo.icon className="h-3 w-3 mr-1" />
+              {statusInfo.label}
+            </Badge>
+          </div>
 
-            {/* Coverage badges */}
-            <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
-              {coverageKeys.map((key) => (
-                <span
-                  key={key}
-                  className="inline-flex items-center rounded-md bg-primary/10 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-primary ring-1 ring-inset ring-primary/20"
-                  title={COVERAGE_FULL_LABELS[key]}
-                >
-                  {COVERAGE_SHORT_LABELS[key]}
-                </span>
-              ))}
-              <span className="text-sm font-semibold text-green-600 ml-1">
-                {formatCurrency(policy.premium_amount)}
+          {/* Coverage badges + premium */}
+          <div className="flex items-center gap-1.5 mt-2 flex-wrap">
+            {coverageKeys.map((key) => (
+              <span
+                key={key}
+                className="inline-flex items-center rounded-md bg-primary/10 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-primary ring-1 ring-inset ring-primary/20"
+                title={COVERAGE_FULL_LABELS[key]}
+              >
+                {COVERAGE_SHORT_LABELS[key]}
               </span>
+            ))}
+            <span className="text-sm font-semibold text-green-600 dark:text-green-400 ml-1">
+              {formatCurrency(policy.premium_amount)}
+            </span>
+          </div>
+
+          {/* Policy number */}
+          {policy.policy_no && (
+            <p className="text-xs text-muted-foreground mt-1.5">
+              Policy #: <span className="font-mono">{policy.policy_no}</span>
+            </p>
+          )}
+        </div>
+
+        {/* Action buttons */}
+        <div className="flex gap-1 flex-shrink-0">
+          {policy.policy_id && (
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8"
+              disabled={refreshingPolicy}
+              title="Refresh policy data"
+              onClick={handleRefreshPolicy}
+            >
+              {refreshingPolicy ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+            </Button>
+          )}
+
+          {canEdit && isRetryable && (
+            <Button
+              size="sm"
+              disabled={issuingPolicy}
+              className="bg-green-600 hover:bg-green-700 text-white"
+              onClick={handleRetryPurchase}
+            >
+              {issuingPolicy ? (
+                <Loader2 className="h-4 w-4 mr-1.5 animate-spin" />
+              ) : (
+                <ShieldCheck className="h-4 w-4 mr-1.5" />
+              )}
+              {policy.status === 'failed' || policy.status === 'insufficient_balance' ? 'Retry' : 'Complete'}
+            </Button>
+          )}
+
+          {/* PDF downloads for active policies */}
+          {policy.status === 'active' && pdfIds && Object.keys(pdfIds).length > 0 && (
+            <div className="flex gap-1">
+              {Object.entries(pdfIds).map(([type, pdfId]) => (
+                <Button
+                  key={type}
+                  variant="ghost"
+                  size="sm"
+                  className="h-8 text-xs"
+                  disabled={downloadingPdf === type}
+                  onClick={() => handleDownloadPdf(type, pdfId)}
+                  title={`Download ${COVERAGE_SHORT_LABELS[type] || type} PDF`}
+                >
+                  {downloadingPdf === type ? (
+                    <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" />
+                  ) : (
+                    <Download className="h-3.5 w-3.5 mr-1" />
+                  )}
+                  {COVERAGE_SHORT_LABELS[type] || type}
+                </Button>
+              ))}
             </div>
-
-            {/* Policy number */}
-            {policy.policy_no && (
-              <p className="text-xs text-muted-foreground mt-1">
-                Policy #: <span className="font-mono">{policy.policy_no}</span>
-              </p>
-            )}
-          </div>
-
-          {/* Action buttons */}
-          <div className="flex gap-1 flex-shrink-0">
-            {policy.policy_id && (
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-8 w-8"
-                disabled={refreshingPolicy}
-                title="Refresh policy data"
-                onClick={handleRefreshPolicy}
-              >
-                {refreshingPolicy ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
-              </Button>
-            )}
-
-            {canEdit && isRetryable && (
-              <Button
-                size="sm"
-                disabled={issuingPolicy}
-                className="bg-green-600 hover:bg-green-700 text-white"
-                onClick={handleRetryPurchase}
-              >
-                {issuingPolicy ? (
-                  <Loader2 className="h-4 w-4 mr-1.5 animate-spin" />
-                ) : (
-                  <ShieldCheck className="h-4 w-4 mr-1.5" />
-                )}
-                {policy.status === 'failed' || policy.status === 'insufficient_balance' ? 'Retry' : 'Complete'}
-              </Button>
-            )}
-
-            {/* PDF downloads for active policies */}
-            {policy.status === 'active' && pdfIds && Object.keys(pdfIds).length > 0 && (
-              <div className="flex gap-1">
-                {Object.entries(pdfIds).map(([type, pdfId]) => (
-                  <Button
-                    key={type}
-                    variant="ghost"
-                    size="sm"
-                    className="h-8 text-xs"
-                    disabled={downloadingPdf === type}
-                    onClick={() => handleDownloadPdf(type, pdfId)}
-                    title={`Download ${COVERAGE_SHORT_LABELS[type] || type} PDF`}
-                  >
-                    {downloadingPdf === type ? (
-                      <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" />
-                    ) : (
-                      <Download className="h-3.5 w-3.5 mr-1" />
-                    )}
-                    {COVERAGE_SHORT_LABELS[type] || type}
-                  </Button>
-                ))}
-              </div>
-            )}
-          </div>
+          )}
         </div>
       </div>
     </div>
@@ -312,6 +316,13 @@ export function InsuranceTimeline({
   const portalUrl = bonzahMode === 'live' ? 'https://bonzah.insillion.com/bb1/' : 'https://bonzah.sb.insillion.com/bb1/';
   const hasOriginal = policies.some((p) => p.policy_type === 'original');
   const hasInsufficientBalance = policies.some((p) => p.status === 'insufficient_balance');
+
+  // Split policies into original and extension groups
+  const originalPolicies = policies.filter((p) => p.policy_type !== 'extension');
+  const extensionPolicies = policies.filter((p) => p.policy_type === 'extension');
+
+  const originalTotal = originalPolicies.reduce((sum, p) => sum + (p.premium_amount || 0), 0);
+  const extensionTotal = extensionPolicies.reduce((sum, p) => sum + (p.premium_amount || 0), 0);
 
   return (
     <Card>
@@ -373,7 +384,7 @@ export function InsuranceTimeline({
           </div>
         )}
 
-        {/* Timeline */}
+        {/* Policies */}
         {isLoading ? (
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
             <Loader2 className="h-4 w-4 animate-spin" />
@@ -384,18 +395,91 @@ export function InsuranceTimeline({
             No insurance policies for this rental.
           </p>
         ) : (
-          <div>
-            {policies.map((policy, index) => (
-              <InsuranceTimelineItem
-                key={policy.id}
-                policy={policy}
-                isLast={index === policies.length - 1}
-                canEdit={canEdit}
-                tenantId={tenantId}
-                rentalId={rentalId}
-                bonzahMode={bonzahMode}
-              />
-            ))}
+          <div className="space-y-6">
+            {/* Original Policies Section */}
+            {originalPolicies.length > 0 && (
+              <div className="border border-emerald-200 dark:border-emerald-800/50 bg-emerald-50/40 dark:bg-emerald-950/10 p-4">
+                <div className="flex items-center justify-between mb-3">
+                  <div className="flex items-center gap-2.5">
+                    <div className="flex items-center justify-center w-7 h-7 rounded-lg bg-emerald-100 dark:bg-emerald-900/50">
+                      <Shield className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+                    </div>
+                    <div>
+                      <h4 className="text-sm font-semibold text-emerald-900 dark:text-emerald-200">Original Coverage</h4>
+                      <span className="text-xs text-emerald-600 dark:text-emerald-400">
+                        {originalPolicies.length} {originalPolicies.length === 1 ? 'policy' : 'policies'}
+                      </span>
+                    </div>
+                  </div>
+                  <span className="text-sm font-bold tabular-nums text-emerald-700 dark:text-emerald-300">
+                    {formatCurrency(originalTotal)}
+                  </span>
+                </div>
+                <div className="space-y-2.5">
+                  {originalPolicies.map((policy) => (
+                    <InsuranceTimelineItem
+                      key={policy.id}
+                      policy={policy}
+                      isLast={false}
+                      canEdit={canEdit}
+                      tenantId={tenantId}
+                      rentalId={rentalId}
+                      bonzahMode={bonzahMode}
+                    />
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Connector between sections */}
+            {originalPolicies.length > 0 && extensionPolicies.length > 0 && (
+              <div className="flex items-center gap-2 -my-2">
+                <div className="h-px flex-1 bg-border" />
+                <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-muted/80 border">
+                  <Link2 className="h-3 w-3 text-muted-foreground" />
+                  <span className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">Extended</span>
+                </div>
+                <div className="h-px flex-1 bg-border" />
+              </div>
+            )}
+
+            {/* Extension Policies Section */}
+            {extensionPolicies.length > 0 && (
+              <div className="border border-amber-200 dark:border-amber-800/50 bg-amber-50/40 dark:bg-amber-950/10 p-4">
+                <div className="flex items-center justify-between mb-3">
+                  <div className="flex items-center gap-2.5">
+                    <div className="flex items-center justify-center w-7 h-7 rounded-lg bg-amber-100 dark:bg-amber-900/50">
+                      <ShieldPlus className="h-4 w-4 text-amber-600 dark:text-amber-400" />
+                    </div>
+                    <div>
+                      <h4 className="text-sm font-semibold text-amber-900 dark:text-amber-200">Extension Coverage</h4>
+                      <span className="text-xs text-amber-600 dark:text-amber-400">
+                        {extensionPolicies.length === 1
+                          ? 'Rental extended once'
+                          : `Rental extended ${extensionPolicies.length} times`}
+                      </span>
+                    </div>
+                  </div>
+                  <span className="text-sm font-bold tabular-nums text-amber-700 dark:text-amber-300">
+                    {formatCurrency(extensionTotal)}
+                  </span>
+                </div>
+                <div className="space-y-2.5">
+                  {extensionPolicies.map((policy, index) => (
+                    <InsuranceTimelineItem
+                      key={policy.id}
+                      policy={policy}
+                      isLast={false}
+                      canEdit={canEdit}
+                      tenantId={tenantId}
+                      rentalId={rentalId}
+                      bonzahMode={bonzahMode}
+                      extensionIndex={index + 1}
+                    />
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         )}
 

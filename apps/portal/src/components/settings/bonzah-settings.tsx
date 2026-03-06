@@ -231,6 +231,22 @@ export function BonzahSettings() {
     }
   };
 
+  const currentMode = tenantContext?.bonzah_mode || bonzahStatus?.bonzah_mode || 'test';
+  const isTestMode = currentMode === 'test';
+  const isConnected = isTestMode || (bonzahStatus?.integration_bonzah && !!bonzahStatus?.bonzah_username);
+  const pendingCount = pendingPolicies?.length || 0;
+  const pendingTotal = pendingPolicies?.reduce((sum, p) => sum + (p.premium_amount || 0), 0) || 0;
+
+  // Auto-enable integration_bonzah in test mode (platform shared account)
+  useEffect(() => {
+    if (bonzahStatus && isTestMode && tenantContext?.id && !bonzahStatus?.integration_bonzah) {
+      supabase.from('tenants').update({ integration_bonzah: true }).eq('id', tenantContext.id).then(() => {
+        queryClient.invalidateQueries({ queryKey: ['tenant-bonzah-status'] });
+        refetchTenant();
+      });
+    }
+  }, [isTestMode, tenantContext?.id, bonzahStatus?.integration_bonzah]);
+
   if (isLoading) {
     return (
       <Card>
@@ -241,11 +257,6 @@ export function BonzahSettings() {
       </Card>
     );
   }
-
-  const isConnected = bonzahStatus?.integration_bonzah && !!bonzahStatus?.bonzah_username;
-  const currentMode = tenantContext?.bonzah_mode || bonzahStatus?.bonzah_mode || 'test';
-  const pendingCount = pendingPolicies?.length || 0;
-  const pendingTotal = pendingPolicies?.reduce((sum, p) => sum + (p.premium_amount || 0), 0) || 0;
 
   return (
     <div className="space-y-6">
@@ -288,8 +299,8 @@ export function BonzahSettings() {
         </CardContent>
       </Card>
 
-      {/* Card 2: How Bonzah Insurance Works */}
-      <Card>
+      {/* Card 2: How Bonzah Insurance Works (live mode only — test mode explains itself in Card 4) */}
+      {!isTestMode && <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Shield className="h-5 w-5 text-primary" />
@@ -340,10 +351,10 @@ export function BonzahSettings() {
             </div>
           </div>
         </CardContent>
-      </Card>
+      </Card>}
 
-      {/* Card 3: Onboarding */}
-      <Card>
+      {/* Card 3: Onboarding (live mode only — test mode uses platform account) */}
+      {!isTestMode && <Card>
         <CardHeader>
           <CardTitle>Bonzah Onboarding</CardTitle>
           <CardDescription>
@@ -371,7 +382,7 @@ export function BonzahSettings() {
             </a>
           </p>
         </CardContent>
-      </Card>
+      </Card>}
 
       {/* Card 4: Credentials */}
       <Card>
@@ -385,7 +396,9 @@ export function BonzahSettings() {
             )}
           </CardTitle>
           <CardDescription>
-            Enter your Bonzah portal credentials to enable insurance for your customers
+            {isTestMode
+              ? 'Using Drive247 shared test account — no credentials needed'
+              : 'Enter your Bonzah portal credentials to enable insurance for your customers'}
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -420,7 +433,9 @@ export function BonzahSettings() {
                     ? 'text-green-700 dark:text-green-400'
                     : 'text-gray-600 dark:text-gray-400'
                 }`}>
-                  {isConnected
+                  {isTestMode
+                    ? 'Using Drive247 shared test account. Insurance is enabled for your customers.'
+                    : isConnected
                     ? `Connected as ${bonzahStatus?.bonzah_username}. Insurance is enabled for your customers.`
                     : 'Enter your Bonzah credentials below to enable insurance.'}
                 </p>
@@ -549,63 +564,87 @@ export function BonzahSettings() {
             </div>
           )}
 
-          {/* Credential Form */}
-          <div className="space-y-3">
-            <div className="space-y-2">
-              <Label htmlFor="bonzah-email">Email</Label>
-              <Input
-                id="bonzah-email"
-                type="email"
-                placeholder="your-bonzah-email@example.com"
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
-              />
+          {/* Test mode info */}
+          {isTestMode && (
+            <div className="p-4 rounded-lg border bg-blue-50 border-blue-200 dark:bg-blue-950/30 dark:border-blue-800">
+              <div className="flex items-start gap-3">
+                <div className="w-10 h-10 rounded-full bg-blue-100 dark:bg-blue-900/50 flex items-center justify-center">
+                  <TestTube2 className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+                </div>
+                <div>
+                  <h4 className="font-medium text-blue-800 dark:text-blue-300">Shared Test Account</h4>
+                  <p className="text-sm text-blue-700 dark:text-blue-400 mt-1">
+                    In test mode, all tenants use Drive247's shared Bonzah test account. No credentials are needed — insurance is automatically enabled for testing.
+                  </p>
+                  <p className="text-sm text-blue-700 dark:text-blue-400 mt-1">
+                    When you're ready to go live, Drive247 will switch you to live mode and you'll need to enter your own Bonzah credentials.
+                  </p>
+                </div>
+              </div>
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="bonzah-password">Password</Label>
-              <Input
-                id="bonzah-password"
-                type="password"
-                placeholder="Your Bonzah password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-              />
-            </div>
-            <p className="text-xs text-muted-foreground">
-              These credentials are verified against your current API mode ({currentMode}).
-            </p>
-          </div>
+          )}
 
-          {/* Actions */}
-          <div className="flex flex-wrap gap-3">
-            <Button
-              onClick={handleVerifyAndConnect}
-              disabled={isVerifying || !username || !password}
-            >
-              {isVerifying ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Verifying...
-                </>
-              ) : (
-                <>
-                  <CheckCircle2 className="mr-2 h-4 w-4" />
-                  Verify & Connect
-                </>
-              )}
-            </Button>
+          {/* Credential Form (live mode only) */}
+          {!isTestMode && (
+            <>
+              <div className="space-y-3">
+                <div className="space-y-2">
+                  <Label htmlFor="bonzah-email">Email</Label>
+                  <Input
+                    id="bonzah-email"
+                    type="email"
+                    placeholder="your-bonzah-email@example.com"
+                    value={username}
+                    onChange={(e) => setUsername(e.target.value)}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="bonzah-password">Password</Label>
+                  <Input
+                    id="bonzah-password"
+                    type="password"
+                    placeholder="Your Bonzah password"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                  />
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Enter your live Bonzah credentials to enable insurance for your customers.
+                </p>
+              </div>
 
-            {isConnected && (
-              <Button
-                variant="outline"
-                className="text-red-600 hover:text-red-700 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-950/30"
-                onClick={() => setShowDisconnectWarning(true)}
-              >
-                <Unplug className="mr-2 h-4 w-4" />
-                Disconnect
-              </Button>
-            )}
-          </div>
+              {/* Actions */}
+              <div className="flex flex-wrap gap-3">
+                <Button
+                  onClick={handleVerifyAndConnect}
+                  disabled={isVerifying || !username || !password}
+                >
+                  {isVerifying ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Verifying...
+                    </>
+                  ) : (
+                    <>
+                      <CheckCircle2 className="mr-2 h-4 w-4" />
+                      Verify & Connect
+                    </>
+                  )}
+                </Button>
+
+                {isConnected && (
+                  <Button
+                    variant="outline"
+                    className="text-red-600 hover:text-red-700 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-950/30"
+                    onClick={() => setShowDisconnectWarning(true)}
+                  >
+                    <Unplug className="mr-2 h-4 w-4" />
+                    Disconnect
+                  </Button>
+                )}
+              </div>
+            </>
+          )}
         </CardContent>
       </Card>
 

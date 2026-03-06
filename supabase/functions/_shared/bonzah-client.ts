@@ -52,14 +52,27 @@ export async function getTenantBonzahCredentials(
     throw new Error(`Failed to fetch tenant Bonzah credentials: ${error.message}`);
   }
 
+  const mode = (data?.bonzah_mode || 'test') as 'test' | 'live';
+
+  // Test mode: use platform shared credentials (mirrors Stripe shared test account pattern)
+  if (mode === 'test') {
+    const platformUsername = BONZAH_USERNAME;
+    const platformPassword = BONZAH_PASSWORD;
+    if (!platformUsername || !platformPassword) {
+      throw new Error('Platform Bonzah test credentials not configured');
+    }
+    return { username: platformUsername, password: platformPassword, mode: 'test' };
+  }
+
+  // Live mode: require tenant's own credentials
   if (!data?.bonzah_username || !data?.bonzah_password) {
-    throw new Error('Tenant does not have Bonzah credentials configured');
+    throw new Error('Tenant does not have Bonzah credentials configured. Please add your live Bonzah credentials in Settings.');
   }
 
   return {
     username: data.bonzah_username,
     password: data.bonzah_password,
-    mode: data.bonzah_mode as 'test' | 'live',
+    mode: 'live',
   };
 }
 
