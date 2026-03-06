@@ -47,9 +47,15 @@ Deno.serve(async (req) => {
 
   try {
     switch (event.type) {
-      case "checkout.session.completed":
-        await handleCheckoutCompleted(stripe, supabase, event.data.object);
+      case "checkout.session.completed": {
+        const sessionObj = event.data.object as any;
+        if (sessionObj.metadata?.type === "credit_purchase") {
+          await handleCreditPurchase(supabase, sessionObj);
+        } else {
+          await handleCheckoutCompleted(stripe, supabase, sessionObj);
+        }
         break;
+      }
       case "customer.subscription.updated":
         await handleSubscriptionUpdated(stripe, supabase, event.data.object);
         break;
@@ -336,4 +342,58 @@ async function handleInvoicePaymentFailed(supabase: any, invoice: any) {
     }, { onConflict: "stripe_invoice_id" });
 
   console.log(`Invoice payment failed for tenant ${tenant.id} (${tenant.company_name})`);
+}
+
+async function handleCreditPurchase(supabase: any, session: any) {
+  const tenantId = session.metadata?.tenant_id;
+  const packageId = session.metadata?.package_id;
+  const credits = parseInt(session.metadata?.credits || "0", 10);
+  const packageName = session.metadata?.package_name || "Credits";
+
+  if (!tenantId || !credits) {
+    console.error("Missing tenant_id or credits in credit purchase metadata");
+    return;
+  }
+
+  // Determine if this was a test or live purchase based on Stripe's livemode
+  const isTestPurchase = !session.livemode;
+
+  // Add credits to wallet (test credits go to test_balance, live to balance)
+  const { data, error } = await supabase.rpc("add_credits", {
+    p_tenant_id: tenantId,
+    p_amount: credits,
+    p_type: "purchase",
+    p_description: `Purchased ${packageName} package (${credits} ${isTestPurchase ? "test " : ""}credits)`,
+    p_package_id: packageId || null,
+    p_stripe_payment_id: session.payment_intent || null,
+    p_is_test_mode: isTestPurchase,
+  });
+
+  if (error) {
+    console.error("Error adding credits after purchase:", error);
+    throw error;
+  }
+
+  // Save the payment method for future auto-refill
+  if (session.payment_intent) {
+    try {
+      // The payment_intent has setup_future_usage so the PM is saved on the customer
+      // Store the PM ID on the wallet for auto-refill
+      const { data: piData } = await supabase
+        .from("tenant_credit_wallets")
+        .select("stripe_payment_method_id")
+        .eq("tenant_id", tenantId)
+        .single();
+
+      if (piData && !piData.stripe_payment_method_id) {
+        // We'll update this when we can resolve the PM from the PI
+        // For now, auto-refill will fall back to customer's default PM
+        console.log("Payment method will be resolved from customer default for auto-refill");
+      }
+    } catch (pmErr) {
+      console.warn("Could not save payment method for auto-refill:", pmErr);
+    }
+  }
+
+  console.log(`Credit purchase completed: ${credits} ${isTestPurchase ? "TEST" : "LIVE"} credits added for tenant ${tenantId} (package: ${packageName})`);
 }

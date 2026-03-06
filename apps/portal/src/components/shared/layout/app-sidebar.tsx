@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Clock, ChevronRight, Layers, Timer, Zap } from "lucide-react";
+import { Clock, ChevronRight, CircleDollarSign, Layers, Timer, Zap } from "lucide-react";
 import { EarthIcon } from "@/components/ui/earth";
 import { CarIcon } from "@/components/ui/car";
 import { BlocksIcon } from "@/components/ui/blocks";
@@ -131,6 +131,7 @@ export function AppSidebar() {
         { name: "Payments", href: "/payments", icon: AnimatedCreditCard },
         { name: "Invoices", href: "/invoices", icon: AnimatedReceipt },
         { name: "Fines", href: "/fines", icon: AnimatedBadgeAlert },
+        { name: "Credits", href: "/credits", icon: CircleDollarSign },
       ],
     },
     {

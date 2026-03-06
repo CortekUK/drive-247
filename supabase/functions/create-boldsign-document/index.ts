@@ -514,61 +514,41 @@ Deno.serve(async (req) => {
       return errorResponse('Failed to create document', 400);
     }
 
-    // Report metered usage to Stripe (test mode → test Stripe, live mode → live Stripe)
+    // Deduct credits for e-sign usage (test mode = free, live mode = charged)
     if (tenantId) {
       try {
-        // Resolve tenant's subscription Stripe mode (test or live)
-        const { data: tenantModeData } = await supabase
-          .from('tenants')
-          .select('subscription_stripe_mode')
-          .eq('id', tenantId)
-          .single();
-        const subStripeMode: 'test' | 'live' = tenantModeData?.subscription_stripe_mode || 'test';
+        const isTestMode = boldsignMode === 'test';
+        const { data: deductResult, error: deductError } = await supabase.rpc('deduct_credits', {
+          p_tenant_id: tenantId,
+          p_category: 'esign',
+          p_description: `E-sign agreement: ${name} (Ref: ${rentalId.substring(0, 8).toUpperCase()})`,
+          p_reference_id: rentalId,
+          p_reference_type: 'rental',
+          p_is_test_mode: isTestMode,
+        });
 
-        const { data: tenantSub } = await supabase
-          .from('tenant_subscriptions')
-          .select('stripe_customer_id')
-          .eq('tenant_id', tenantId)
-          .in('status', ['active', 'trialing', 'past_due'])
-          .maybeSingle();
-
-        if (tenantSub?.stripe_customer_id) {
-          const STRIPE_KEY = subStripeMode === 'live'
-            ? (Deno.env.get('STRIPE_SUBSCRIPTION_LIVE_SECRET_KEY') || Deno.env.get('STRIPE_LIVE_SECRET_KEY') || '')
-            : (Deno.env.get('STRIPE_SUBSCRIPTION_TEST_SECRET_KEY') || Deno.env.get('STRIPE_SUBSCRIPTION_SECRET_KEY') || Deno.env.get('STRIPE_TEST_SECRET_KEY') || '');
-
-          const meterRes = await fetch('https://api.stripe.com/v1/billing/meter_events', {
-            method: 'POST',
-            headers: {
-              'Authorization': `Bearer ${STRIPE_KEY}`,
-              'Content-Type': 'application/x-www-form-urlencoded',
-            },
-            body: new URLSearchParams({
-              'event_name': 'esign_sent',
-              'payload[stripe_customer_id]': tenantSub.stripe_customer_id,
-              'payload[value]': '1',
-            }),
-          });
-          const meterData = await meterRes.json();
-          console.log('Stripe meter event:', meterRes.ok ? meterData.identifier : 'FAILED', meterRes.status, `(sub mode: ${subStripeMode})`);
-
-          // Log usage for portal UI
-          const usageRefId = rentalId.substring(0, 8).toUpperCase();
-          await supabase.from('esign_usage_log').insert({
-            tenant_id: tenantId,
-            rental_id: rentalId,
-            customer_id: custId || null,
-            customer_name: name,
-            rental_ref: usageRefId,
-            unit_cost: 1.00,
-            currency: 'usd',
-            stripe_event_id: meterRes.ok ? meterData.identifier : null,
-          });
+        if (deductError) {
+          console.warn('Credit deduction error (non-blocking):', deductError.message);
+        } else if (deductResult?.success === false) {
+          console.warn('Credit deduction failed:', deductResult.error);
+          // Don't block the e-sign — just log the warning
         } else {
-          console.log('No active subscription for tenant, skipping meter event');
+          console.log(`Credits deducted: ${deductResult?.amount_deducted || 0} (test: ${isTestMode}, balance: ${deductResult?.balance_after})`);
+
+          // Trigger auto-refill if needed
+          if (deductResult?.auto_refill_needed) {
+            try {
+              await supabase.functions.invoke('manage-credit-wallet', {
+                body: { action: 'auto_refill', tenantId },
+              });
+              console.log('Auto-refill triggered for tenant', tenantId);
+            } catch (refillErr) {
+              console.warn('Auto-refill trigger failed (non-blocking):', refillErr);
+            }
+          }
         }
       } catch (e) {
-        console.warn('Stripe meter event error (non-blocking):', e);
+        console.warn('Credit deduction error (non-blocking):', e);
       }
     }
 

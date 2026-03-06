@@ -12,6 +12,7 @@ import { HeaderSearch } from "@/components/shared/layout/header-search";
 import { UserMenu } from "@/components/shared/layout/user-menu";
 import { AppSidebar } from "@/components/shared/layout/app-sidebar";
 import { NotificationBell } from "@/components/shared/layout/notification-bell";
+import { CreditBalance } from "@/components/shared/layout/credit-balance";
 import { DynamicThemeProvider } from "@/components/shared/layout/dynamic-theme-provider";
 import {
   SidebarProvider,
@@ -65,7 +66,7 @@ export default function DashboardLayout({
   const { isSubscribed, isLoading: subscriptionLoading } = useTenantSubscription();
   const { isManager, canAccessRoute, isLoading: permissionsLoading } = useManagerPermissions();
   const { data: plans, isLoading: plansLoading } = useSubscriptionPlans();
-  const isSubscriptionPage = pathname === "/subscription" || pathname?.startsWith("/settings");
+  const isSubscriptionPage = pathname === "/subscription" || pathname === "/credits" || pathname?.startsWith("/settings");
   const hasActivePlans = !!plans && plans.length > 0;
   const showSetupGate = !subscriptionLoading && !plansLoading && !isSubscribed && hasActivePlans && !isSubscriptionPage;
 
@@ -113,6 +114,7 @@ export default function DashboardLayout({
               <HeaderSearch />
             </div>
             <div className="ml-auto flex items-center gap-1 sm:gap-2 flex-shrink-0">
+              <CreditBalance />
               <NotificationBell />
               <ThemeToggle />
               <UserMenu />
