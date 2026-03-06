@@ -1055,7 +1055,7 @@ const CreateRental = () => {
           const firstName = nameParts[0] || 'N/A';
           const lastName = nameParts.slice(1).join(' ') || 'N/A';
           const custState = customer?.address_state || 'FL';
-          const { error: quoteError } = await supabase.functions.invoke('bonzah-create-quote', {
+          const { data: quoteResult, error: quoteError } = await supabase.functions.invoke('bonzah-create-quote', {
             body: {
               rental_id: rental.id,
               customer_id: data.customer_id,
@@ -1092,6 +1092,23 @@ const CreateRental = () => {
           if (quoteError) {
             console.error('[Bonzah] Quote creation failed:', quoteError);
             // Non-fatal - rental is already created
+          }
+
+          // Step 2: Confirm payment to activate the policy
+          const policyRecordId = quoteResult?.policy_record_id;
+          if (policyRecordId) {
+            const { data: confirmResult, error: confirmError } = await supabase.functions.invoke('bonzah-confirm-payment', {
+              body: {
+                policy_record_id: policyRecordId,
+                stripe_payment_intent_id: `portal-admin-${rental.id}`,
+              },
+            });
+            if (confirmError) {
+              console.error('[Bonzah] Payment confirmation failed:', confirmError);
+              // Non-fatal — policy stays as quoted, can be retried from rental detail page
+            } else if (confirmResult?.policy_issued) {
+              console.log('[Bonzah] Policy activated:', confirmResult.policy_no);
+            }
           }
         } catch (bonzahError) {
           console.error('[Bonzah] Error creating quote:', bonzahError);
