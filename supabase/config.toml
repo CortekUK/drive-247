@@ -29,3 +29,6 @@ verify_jwt = false
 
 [functions.stripe-webhook-live]
 verify_jwt = false
+
+[functions.cmd-webhook]
+verify_jwt = false

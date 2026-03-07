@@ -46,6 +46,9 @@ import { ApprovalReviewSummary } from "@/components/reviews/approval-review-summ
 import { CustomerReviewSummaryCard } from "@/components/reviews/customer-review-summary-card";
 import { useRentalAgreements } from "@/hooks/use-rental-agreements";
 import { AgreementTimeline } from "@/components/rentals/AgreementTimeline";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { CmdInsuranceVerification } from "@/components/rentals/cmd-insurance-verification";
+import { CmdLicenseVerification } from "@/components/rentals/cmd-license-verification";
 
 interface Rental {
   id: string;
@@ -2759,599 +2762,544 @@ const RentalDetail = () => {
         );
       })()}
 
-      {/* Insurance Verification Card - Compact when no documents, full when documents exist */}
-      {insuranceDocuments && insuranceDocuments.length > 0 ? (
+      {/* Insurance Verification Card with Tabs */}
       <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Shield className="h-5 w-5" />
-              Insurance Verification
-            </CardTitle>
-          </CardHeader>
-        <CardContent className="space-y-4">
-          {/* Bonzah Insurance CTA - Show when no Bonzah policy exists */}
-          {canEdit('rentals') && !bonzahPolicy && (
-            <div
-              className={`relative overflow-hidden rounded-lg border border-[#CC004A]/20 bg-gradient-to-r from-[#CC004A]/5 via-[#CC004A]/10 to-[#CC004A]/5 dark:from-[#CC004A]/10 dark:via-[#CC004A]/15 dark:to-[#CC004A]/10 p-4 transition-all ${tenant?.bonzah_username ? 'cursor-pointer hover:border-[#CC004A]/40 group' : 'opacity-60'}`}
-              onClick={() => { if (tenant?.bonzah_username) setShowBuyInsurance(true); }}
-            >
-              <div className="flex items-center justify-between gap-4">
-                <div className="flex items-center gap-4">
-                  <div className="h-10 w-16 flex-shrink-0 flex items-center">
-                    <img
-                      src="/bonzah-logo.svg"
-                      alt="Bonzah"
-                      className="h-8 w-auto dark:hidden"
-                    />
-                    <img
-                      src="/bonzah-logo-dark.svg"
-                      alt="Bonzah"
-                      className="h-8 w-auto hidden dark:block"
-                    />
-                  </div>
-                  <div>
-                    <p className="font-medium text-sm">Purchase Rental Car Insurance</p>
-                    <p className="text-xs text-muted-foreground mt-0.5">
-                      CDW, Liability, Supplemental &amp; Personal Accident coverage powered by Bonzah
-                    </p>
-                  </div>
-                </div>
-                {tenant?.bonzah_username ? (
-                  <Button
-                    size="sm"
-                    className="bg-[#CC004A] hover:bg-[#A80040] text-white flex-shrink-0 group-hover:shadow-md transition-shadow"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setShowBuyInsurance(true);
-                    }}
-                  >
-                    <ShieldCheck className="h-4 w-4 mr-1.5" />
-                    Get Insurance
-                  </Button>
-                ) : (
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    disabled
-                    className="flex-shrink-0 pointer-events-none"
-                    title="Connect Bonzah in Settings → Integrations first"
-                  >
-                    <ShieldCheck className="h-4 w-4 mr-1.5" />
-                    Get Insurance
-                  </Button>
-                )}
-              </div>
-            </div>
-          )}
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Shield className="h-5 w-5" />
+            Insurance Verification
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <Tabs defaultValue="documents">
+            <TabsList variant="evenly-spaced" className="mb-4">
+              <TabsTrigger value="documents" variant="evenly-spaced">Documents</TabsTrigger>
+              <TabsTrigger value="checkmydriver" variant="evenly-spaced">CheckMyDriver</TabsTrigger>
+            </TabsList>
 
-          <div className="flex items-center justify-between">
-            <p className="text-sm text-muted-foreground">Upload customer's insurance documents for verification</p>
-            {canEdit('rentals') && (
-            <div className="flex gap-2">
-              {hasInvalidInsuranceDoc && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="text-amber-600 hover:text-amber-700 hover:bg-amber-50 border-amber-300 dark:text-amber-400 dark:hover:bg-amber-900/20 dark:border-amber-700"
-                  onClick={() => notifyInsuranceReuploadMutation.mutate()}
-                  disabled={notifyInsuranceReuploadMutation.isPending}
-                >
-                  {notifyInsuranceReuploadMutation.isPending ? (
-                    <Loader2 className="h-4 w-4 mr-1 animate-spin" />
-                  ) : (
-                    <Send className="h-4 w-4 mr-1" />
-                  )}
-                  Request Re-Upload
-                </Button>
-              )}
-            <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => {
-                    const input = document.createElement('input');
-                    input.type = 'file';
-                    input.accept = 'image/*,.pdf';
-                    input.onchange = async (e) => {
-                      const file = (e.target as HTMLInputElement).files?.[0];
-                      if (!file) return;
-
-                      try {
-                        toast({ title: "Uploading...", description: "Uploading insurance document" });
-
-                        const fileName = `${rental.customer_id}/${Date.now()}_${file.name}`;
-                        const { error: uploadError } = await supabase.storage
-                          .from('customer-documents')
-                          .upload(fileName, file);
-
-                        if (uploadError) throw uploadError;
-
-                        const { data: docData, error: docError } = await supabase
-                          .from('customer_documents')
-                          .insert({
-                            customer_id: rental.customer_id,
-                            rental_id: id,
-                            document_type: 'Insurance Certificate',
-                            document_name: file.name,
-                            file_name: file.name,
-                            file_url: fileName,
-                            status: 'Pending',
-                            ai_scan_status: 'pending',
-                            tenant_id: tenant?.id,
-                          })
-                          .select()
-                          .single();
-
-                        if (docError) throw docError;
-
-                        // Trigger AI scan with documentId and fileUrl
-                        supabase.functions.invoke('scan-insurance-document', {
-                          body: { documentId: docData.id, fileUrl: fileName }
-                        });
-
-                        toast({ title: "Success", description: "Insurance document uploaded and AI scan initiated" });
-                        queryClient.invalidateQueries({ queryKey: ["rental-insurance-docs", id] });
-                      } catch (error: any) {
-                        toast({
-                          title: "Upload Failed",
-                          description: error.message || "Failed to upload document",
-                          variant: "destructive"
-                        });
-                      }
-                    };
-                    input.click();
-                  }}
-                >
-                  <Plus className="h-4 w-4 mr-1" />
-                  Upload Document
-                </Button>
-            </div>
-            )}
-          </div>
-
-          {/* Document List */}
-            {insuranceDocuments && insuranceDocuments.length > 0 ? (
+            <TabsContent value="documents">
               <div className="space-y-4">
-                {insuranceDocuments.map((doc: any) => {
-                  const validationScore = doc.ai_validation_score || 0;
-                  const confidenceScore = doc.ai_confidence_score || 0;
-                  const extractedData = doc.ai_extracted_data || {};
-                  const verificationDecision = doc.verification_decision || extractedData?.verificationDecision;
-                  const reviewReasons = doc.review_reasons || extractedData?.reviewReasons || [];
-                  const fraudRiskScore = doc.fraud_risk_score ?? extractedData?.fraudRiskScore;
-
-                  const getScoreColor = (score: number) => {
-                    if (score >= 0.85) return 'green';
-                    if (score >= 0.60) return 'yellow';
-                    return 'red';
-                  };
-
-                  const getScoreLabel = (score: number) => {
-                    if (score >= 0.85) return 'Verified';
-                    if (score >= 0.60) return 'Review Needed';
-                    return 'Low Confidence';
-                  };
-
-                  const getDecisionDisplay = (decision: string | undefined) => {
-                    switch (decision) {
-                      case 'auto_approved':
-                        return { label: 'Auto-Approved', color: 'bg-green-600', icon: CheckCircle };
-                      case 'auto_rejected':
-                        return { label: 'Rejected', color: 'bg-red-600', icon: XCircle };
-                      case 'pending_review':
-                        return { label: 'Pending Review', color: 'bg-yellow-600', icon: AlertTriangle };
-                      case 'manually_approved':
-                        return { label: 'Manually Approved', color: 'bg-green-600', icon: CheckCircle };
-                      case 'manually_rejected':
-                        return { label: 'Manually Rejected', color: 'bg-red-600', icon: XCircle };
-                      default:
-                        return null;
-                    }
-                  };
-
-                  const decisionDisplay = getDecisionDisplay(verificationDecision);
-                  const scoreColor = getScoreColor(validationScore);
-
-                  return (
-                    <div key={doc.id} className={`border rounded-lg p-4 space-y-3 ${doc.isUnlinked ? 'border-yellow-500/50 bg-yellow-500/5' : ''}`}>
-                      {/* Unlinked Warning */}
-                      {doc.isUnlinked && (
-                        <Alert className="mb-3 border-yellow-500/50 bg-yellow-500/10">
-                          <AlertTriangle className="h-4 w-4 text-yellow-600" />
-                          <AlertDescription className="text-sm">
-                            This document is not linked to any rental. Click "Link to Rental" to associate it with this booking.
-                          </AlertDescription>
-                        </Alert>
-                      )}
-
-                      {/* Document Info Row */}
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                          <FileText className="h-4 w-4 text-muted-foreground" />
-                          <span className="font-medium">{doc.file_name || doc.document_name}</span>
-                          {doc.isUnlinked && (
-                            <Badge variant="outline" className="text-yellow-600 border-yellow-500">Unlinked</Badge>
-                          )}
-                          {/* Verification Decision Badge */}
-                          {decisionDisplay && (
-                            <Badge className={decisionDisplay.color}>
-                              <decisionDisplay.icon className="h-3 w-3 mr-1" />
-                              {decisionDisplay.label}
-                            </Badge>
-                          )}
+                {/* Bonzah Insurance CTA - Show when no Bonzah policy exists */}
+                {canEdit('rentals') && !bonzahPolicy && (
+                  <div
+                    className={`relative overflow-hidden rounded-lg border border-[#CC004A]/20 bg-gradient-to-r from-[#CC004A]/5 via-[#CC004A]/10 to-[#CC004A]/5 dark:from-[#CC004A]/10 dark:via-[#CC004A]/15 dark:to-[#CC004A]/10 p-4 transition-all ${tenant?.bonzah_username ? 'cursor-pointer hover:border-[#CC004A]/40 group' : 'opacity-60'}`}
+                    onClick={() => { if (tenant?.bonzah_username) setShowBuyInsurance(true); }}
+                  >
+                    <div className="flex items-center justify-between gap-4">
+                      <div className="flex items-center gap-4">
+                        <div className="h-10 w-16 flex-shrink-0 flex items-center">
+                          <img
+                            src="/bonzah-logo.svg"
+                            alt="Bonzah"
+                            className="h-8 w-auto dark:hidden"
+                          />
+                          <img
+                            src="/bonzah-logo-dark.svg"
+                            alt="Bonzah"
+                            className="h-8 w-auto hidden dark:block"
+                          />
                         </div>
-                        <span className="text-sm text-muted-foreground">
-                          Uploaded: {doc.uploaded_at ? new Date(doc.uploaded_at).toLocaleDateString() : 'N/A'}
-                        </span>
+                        <div>
+                          <p className="font-medium text-sm">Purchase Rental Car Insurance</p>
+                          <p className="text-xs text-muted-foreground mt-0.5">
+                            CDW, Liability, Supplemental &amp; Personal Accident coverage powered by Bonzah
+                          </p>
+                        </div>
                       </div>
-
-                      {/* Fraud Risk Warning */}
-                      {fraudRiskScore !== undefined && fraudRiskScore >= 0.5 && (
-                        <Alert className="border-red-500/50 bg-red-500/10">
-                          <AlertTriangle className="h-4 w-4 text-red-600" />
-                          <AlertDescription className="text-sm text-red-700">
-                            <strong>High Fraud Risk ({Math.round(fraudRiskScore * 100)}%):</strong> This document has been flagged for additional verification.
-                          </AlertDescription>
-                        </Alert>
-                      )}
-
-                      {/* Review Reasons */}
-                      {reviewReasons && reviewReasons.length > 0 && (
-                        <Alert className="border-yellow-500/50 bg-yellow-500/10">
-                          <AlertTriangle className="h-4 w-4 text-yellow-600" />
-                          <AlertDescription className="text-sm">
-                            <strong className="text-yellow-700">Review Required:</strong>
-                            <ul className="list-disc list-inside mt-1 text-yellow-700">
-                              {reviewReasons.map((reason: string, i: number) => (
-                                <li key={i}>{reason}</li>
-                              ))}
-                            </ul>
-                          </AlertDescription>
-                        </Alert>
-                      )}
-
-                      {/* Validation Score Card - similar to Face Match Score */}
-                      {doc.ai_scan_status === 'completed' && doc.ai_validation_score !== null && (
-                        <div className="border border-border rounded-lg p-4 bg-card">
-                          <div className="flex items-center justify-between mb-3">
-                            <div className="flex items-center gap-3">
-                              <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${
-                                scoreColor === 'green' ? 'bg-green-500/10' :
-                                scoreColor === 'yellow' ? 'bg-yellow-500/10' : 'bg-red-500/10'
-                              }`}>
-                                <Shield className={`h-5 w-5 ${
-                                  scoreColor === 'green' ? 'text-green-500' :
-                                  scoreColor === 'yellow' ? 'text-yellow-500' : 'text-red-500'
-                                }`} />
-                              </div>
-                              <div>
-                                <p className="text-sm font-medium">Validation Score</p>
-                                <p className="text-xs text-muted-foreground">AI Document Verification</p>
-                              </div>
-                            </div>
-                            <div className="text-right">
-                              <p className={`text-2xl font-bold ${
-                                scoreColor === 'green' ? 'text-green-500' :
-                                scoreColor === 'yellow' ? 'text-yellow-500' : 'text-red-500'
-                              }`}>
-                                {(validationScore * 100).toFixed(0)}%
-                              </p>
-                              <p className={`text-xs font-medium ${
-                                scoreColor === 'green' ? 'text-green-500' :
-                                scoreColor === 'yellow' ? 'text-yellow-500' : 'text-red-500'
-                              }`}>
-                                {getScoreLabel(validationScore)}
-                              </p>
-                            </div>
-                          </div>
-                          <div className="relative h-2 bg-muted rounded-full overflow-hidden">
-                            <div
-                              className={`absolute left-0 top-0 h-full rounded-full transition-all ${
-                                scoreColor === 'green' ? 'bg-green-500' :
-                                scoreColor === 'yellow' ? 'bg-yellow-500' : 'bg-red-500'
-                              }`}
-                              style={{ width: `${validationScore * 100}%` }}
-                            />
-                          </div>
-                        </div>
-                      )}
-
-                      {/* Scan Status Indicators */}
-                      {doc.ai_scan_status === 'pending' && (
-                        <div className="flex items-center gap-2">
-                          <Badge variant="outline">Pending Scan</Badge>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => retryScanMutation.mutate(doc.id)}
-                            disabled={retryScanMutation.isPending}
-                            title="Start AI scan"
-                          >
-                            {retryScanMutation.isPending ? (
-                              <Loader2 className="h-3 w-3 animate-spin" />
-                            ) : (
-                              <RefreshCw className="h-3 w-3" />
-                            )}
-                          </Button>
-                        </div>
-                      )}
-                      {doc.ai_scan_status === 'processing' && (
-                        <div className="flex items-center gap-2">
-                          <Badge variant="outline">
-                            <Loader2 className="h-3 w-3 animate-spin mr-1" />
-                            Scanning...
-                          </Badge>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => retryScanMutation.mutate(doc.id)}
-                            disabled={retryScanMutation.isPending}
-                            title="Retry scan if stuck"
-                          >
-                            <RefreshCw className={`h-3 w-3 ${retryScanMutation.isPending ? 'animate-spin' : ''}`} />
-                          </Button>
-                        </div>
-                      )}
-                      {doc.ai_scan_status === 'failed' && (
-                        <div className="flex items-center gap-2">
-                          <Badge variant="destructive">Scan Failed</Badge>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => retryScanMutation.mutate(doc.id)}
-                            disabled={retryScanMutation.isPending}
-                            title="Retry scan"
-                          >
-                            <RefreshCw className={`h-3 w-3 ${retryScanMutation.isPending ? 'animate-spin' : ''}`} />
-                          </Button>
-                        </div>
-                      )}
-
-                    {/* AI Extracted Data */}
-                    {doc.ai_scan_status === 'completed' && extractedData && Object.keys(extractedData).length > 0 && (
-                      <div className="bg-muted/50 rounded-lg p-3 space-y-2">
-                        <h4 className="text-sm font-semibold mb-2">AI Extracted Information</h4>
-                        <div className="grid grid-cols-2 gap-2 text-sm">
-                          {extractedData.provider && (
-                            <div>
-                              <span className="text-muted-foreground">Provider:</span>{' '}
-                              <span className="font-medium">{extractedData.provider}</span>
-                            </div>
-                          )}
-                          {extractedData.policyNumber && (
-                            <div>
-                              <span className="text-muted-foreground">Policy #:</span>{' '}
-                              <span className="font-medium">{extractedData.policyNumber}</span>
-                            </div>
-                          )}
-                          {extractedData.policyHolderName && (
-                            <div>
-                              <span className="text-muted-foreground">Policy Holder:</span>{' '}
-                              <span className="font-medium">{extractedData.policyHolderName}</span>
-                            </div>
-                          )}
-                          {extractedData.coverageType && (
-                            <div>
-                              <span className="text-muted-foreground">Coverage Type:</span>{' '}
-                              <span className="font-medium">{extractedData.coverageType}</span>
-                            </div>
-                          )}
-                          {(extractedData.effectiveDate || extractedData.startDate) && (
-                            <div>
-                              <span className="text-muted-foreground">Effective Date:</span>{' '}
-                              <span className="font-medium">{extractedData.effectiveDate || extractedData.startDate}</span>
-                            </div>
-                          )}
-                          {(extractedData.expirationDate || extractedData.endDate) && (
-                            <div className="flex items-center gap-1">
-                              <span className="text-muted-foreground">Expiration Date:</span>{' '}
-                              <span className="font-medium">{extractedData.expirationDate || extractedData.endDate}</span>
-                              {extractedData.isExpired && (
-                                <Badge variant="destructive" className="text-xs ml-1">EXPIRED</Badge>
-                              )}
-                            </div>
-                          )}
-                          {extractedData.documentType && (
-                            <div>
-                              <span className="text-muted-foreground">Document Type:</span>{' '}
-                              <span className="font-medium">{extractedData.documentType}</span>
-                            </div>
-                          )}
-                          {extractedData.coverageLimits?.liability && (
-                            <div>
-                              <span className="text-muted-foreground">Liability:</span>{' '}
-                              <span className="font-medium">{formatCurrencyUtil(extractedData.coverageLimits.liability, tenant?.currency_code || 'GBP')}</span>
-                            </div>
-                          )}
-                          {extractedData.coverageLimits?.collision && (
-                            <div>
-                              <span className="text-muted-foreground">Collision:</span>{' '}
-                              <span className="font-medium">{formatCurrencyUtil(extractedData.coverageLimits.collision, tenant?.currency_code || 'GBP')}</span>
-                            </div>
-                          )}
-                          {extractedData.coverageLimits?.comprehensive && (
-                            <div>
-                              <span className="text-muted-foreground">Comprehensive:</span>{' '}
-                              <span className="font-medium">{formatCurrencyUtil(extractedData.coverageLimits.comprehensive, tenant?.currency_code || 'GBP')}</span>
-                            </div>
-                          )}
-                        </div>
-                        {/* Confidence and validation notes */}
-                        <div className="flex items-center justify-between pt-2 border-t text-xs text-muted-foreground">
-                          {confidenceScore > 0 && (
-                            <span>Extraction Confidence: {Math.round(confidenceScore * 100)}%</span>
-                          )}
-                          {extractedData.isValidDocument !== undefined && (
-                            <span className={extractedData.isValidDocument ? 'text-green-600' : 'text-red-600'}>
-                              {extractedData.isValidDocument ? 'Valid Document' : 'Document Issues Detected'}
-                            </span>
-                          )}
-                        </div>
-                        {/* Validation Notes */}
-                        {extractedData.validationNotes && Array.isArray(extractedData.validationNotes) && extractedData.validationNotes.length > 0 && (
-                          <div className="text-xs text-muted-foreground pt-1">
-                            <span className="font-medium">Notes:</span> {extractedData.validationNotes.join(', ')}
-                          </div>
-                        )}
-                      </div>
-                    )}
-
-                    {/* AI Scan Errors */}
-                    {doc.ai_scan_errors && Array.isArray(doc.ai_scan_errors) && doc.ai_scan_errors.length > 0 && (
-                      <Alert variant="destructive">
-                        <AlertTriangle className="h-4 w-4" />
-                        <AlertDescription className="text-xs">
-                          <strong>Scan Errors:</strong> {doc.ai_scan_errors.join(', ')}
-                        </AlertDescription>
-                      </Alert>
-                    )}
-
-                    {/* Action Buttons */}
-                    <div className="pt-3 border-t flex items-center justify-between">
-                      <div className="flex gap-2">
+                      {tenant?.bonzah_username ? (
                         <Button
-                          variant="outline"
                           size="sm"
-                          onClick={() => {
-                            let url = doc.file_url;
-                            if (!url.startsWith('http')) {
-                              const { data } = supabase.storage
-                                .from('customer-documents')
-                                .getPublicUrl(doc.file_url);
-                              url = data.publicUrl;
-                            }
-                            window.open(url, '_blank');
+                          className="bg-[#CC004A] hover:bg-[#A80040] text-white flex-shrink-0 group-hover:shadow-md transition-shadow"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setShowBuyInsurance(true);
                           }}
                         >
-                          <ExternalLink className="h-3 w-3 mr-1" />
-                          View Document
+                          <ShieldCheck className="h-4 w-4 mr-1.5" />
+                          Get Insurance
                         </Button>
-                        {canEdit('rentals') && (
+                      ) : (
                         <Button
-                          variant="outline"
                           size="sm"
-                          className="text-red-600 hover:text-red-700 hover:bg-red-50 border-red-300"
-                          onClick={() => {
-                            if (confirm('Are you sure you want to delete this document?')) {
-                              deleteDocumentMutation.mutate({ id: doc.id, file_url: doc.file_url });
-                            }
-                          }}
-                          disabled={deleteDocumentMutation.isPending}
+                          variant="outline"
+                          disabled
+                          className="flex-shrink-0 pointer-events-none"
+                          title="Connect Bonzah in Settings → Integrations first"
                         >
-                          {deleteDocumentMutation.isPending ? (
-                            <Loader2 className="h-3 w-3 mr-1 animate-spin" />
-                          ) : (
-                            <Trash2 className="h-3 w-3 mr-1" />
-                          )}
-                          Delete
+                          <ShieldCheck className="h-4 w-4 mr-1.5" />
+                          Get Insurance
                         </Button>
-                        )}
-                        {/* Link to Rental button for unlinked documents */}
-                        {canEdit('rentals') && doc.isUnlinked && (
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            className="text-blue-600 hover:text-blue-700 hover:bg-blue-50 border-blue-300"
-                            onClick={() => linkDocumentMutation.mutate(doc.id)}
-                            disabled={linkDocumentMutation.isPending}
-                          >
-                            {linkDocumentMutation.isPending ? (
-                              <Loader2 className="h-3 w-3 mr-1 animate-spin" />
-                            ) : (
-                              <CheckCircle className="h-3 w-3 mr-1" />
-                            )}
-                            Link to Rental
-                          </Button>
-                        )}
-                      </div>
-
-                      {doc.status?.toLowerCase() === 'expired' && (
-                        <Badge variant="destructive">
-                          <XCircle className="h-3 w-3 mr-1" />
-                          Expired
-                        </Badge>
                       )}
                     </div>
                   </div>
-                );
-              })}
-            </div>
-          ) : null}
+                )}
+
+                <div className="flex items-center justify-between">
+                  <p className="text-sm text-muted-foreground">Upload customer's insurance documents for verification</p>
+                  {canEdit('rentals') && (
+                  <div className="flex gap-2">
+                    {hasInvalidInsuranceDoc && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="text-amber-600 hover:text-amber-700 hover:bg-amber-50 border-amber-300 dark:text-amber-400 dark:hover:bg-amber-900/20 dark:border-amber-700"
+                        onClick={() => notifyInsuranceReuploadMutation.mutate()}
+                        disabled={notifyInsuranceReuploadMutation.isPending}
+                      >
+                        {notifyInsuranceReuploadMutation.isPending ? (
+                          <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+                        ) : (
+                          <Send className="h-4 w-4 mr-1" />
+                        )}
+                        Request Re-Upload
+                      </Button>
+                    )}
+                  <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          const input = document.createElement('input');
+                          input.type = 'file';
+                          input.accept = 'image/*,.pdf';
+                          input.onchange = async (e) => {
+                            const file = (e.target as HTMLInputElement).files?.[0];
+                            if (!file) return;
+
+                            try {
+                              toast({ title: "Uploading...", description: "Uploading insurance document" });
+
+                              const fileName = `${rental.customer_id}/${Date.now()}_${file.name}`;
+                              const { error: uploadError } = await supabase.storage
+                                .from('customer-documents')
+                                .upload(fileName, file);
+
+                              if (uploadError) throw uploadError;
+
+                              const { data: docData, error: docError } = await supabase
+                                .from('customer_documents')
+                                .insert({
+                                  customer_id: rental.customer_id,
+                                  rental_id: id,
+                                  document_type: 'Insurance Certificate',
+                                  document_name: file.name,
+                                  file_name: file.name,
+                                  file_url: fileName,
+                                  status: 'Pending',
+                                  ai_scan_status: 'pending',
+                                  tenant_id: tenant?.id,
+                                })
+                                .select()
+                                .single();
+
+                              if (docError) throw docError;
+
+                              // Trigger AI scan with documentId and fileUrl
+                              supabase.functions.invoke('scan-insurance-document', {
+                                body: { documentId: docData.id, fileUrl: fileName }
+                              });
+
+                              toast({ title: "Success", description: "Insurance document uploaded and AI scan initiated" });
+                              queryClient.invalidateQueries({ queryKey: ["rental-insurance-docs", id] });
+                            } catch (error: any) {
+                              toast({
+                                title: "Upload Failed",
+                                description: error.message || "Failed to upload document",
+                                variant: "destructive"
+                              });
+                            }
+                          };
+                          input.click();
+                        }}
+                      >
+                        <Plus className="h-4 w-4 mr-1" />
+                        Upload Document
+                      </Button>
+                  </div>
+                  )}
+                </div>
+
+                {/* Document List */}
+                  {insuranceDocuments && insuranceDocuments.length > 0 ? (
+                    <div className="space-y-4">
+                      {insuranceDocuments.map((doc: any) => {
+                        const validationScore = doc.ai_validation_score || 0;
+                        const confidenceScore = doc.ai_confidence_score || 0;
+                        const extractedData = doc.ai_extracted_data || {};
+                        const verificationDecision = doc.verification_decision || extractedData?.verificationDecision;
+                        const reviewReasons = doc.review_reasons || extractedData?.reviewReasons || [];
+                        const fraudRiskScore = doc.fraud_risk_score ?? extractedData?.fraudRiskScore;
+
+                        const getScoreColor = (score: number) => {
+                          if (score >= 0.85) return 'green';
+                          if (score >= 0.60) return 'yellow';
+                          return 'red';
+                        };
+
+                        const getScoreLabel = (score: number) => {
+                          if (score >= 0.85) return 'Verified';
+                          if (score >= 0.60) return 'Review Needed';
+                          return 'Low Confidence';
+                        };
+
+                        const getDecisionDisplay = (decision: string | undefined) => {
+                          switch (decision) {
+                            case 'auto_approved':
+                              return { label: 'Auto-Approved', color: 'bg-green-600', icon: CheckCircle };
+                            case 'auto_rejected':
+                              return { label: 'Rejected', color: 'bg-red-600', icon: XCircle };
+                            case 'pending_review':
+                              return { label: 'Pending Review', color: 'bg-yellow-600', icon: AlertTriangle };
+                            case 'manually_approved':
+                              return { label: 'Manually Approved', color: 'bg-green-600', icon: CheckCircle };
+                            case 'manually_rejected':
+                              return { label: 'Manually Rejected', color: 'bg-red-600', icon: XCircle };
+                            default:
+                              return null;
+                          }
+                        };
+
+                        const decisionDisplay = getDecisionDisplay(verificationDecision);
+                        const scoreColor = getScoreColor(validationScore);
+
+                        return (
+                          <div key={doc.id} className={`border rounded-lg p-4 space-y-3 ${doc.isUnlinked ? 'border-yellow-500/50 bg-yellow-500/5' : ''}`}>
+                            {/* Unlinked Warning */}
+                            {doc.isUnlinked && (
+                              <Alert className="mb-3 border-yellow-500/50 bg-yellow-500/10">
+                                <AlertTriangle className="h-4 w-4 text-yellow-600" />
+                                <AlertDescription className="text-sm">
+                                  This document is not linked to any rental. Click "Link to Rental" to associate it with this booking.
+                                </AlertDescription>
+                              </Alert>
+                            )}
+
+                            {/* Document Info Row */}
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center gap-2">
+                                <FileText className="h-4 w-4 text-muted-foreground" />
+                                <span className="font-medium">{doc.file_name || doc.document_name}</span>
+                                {doc.isUnlinked && (
+                                  <Badge variant="outline" className="text-yellow-600 border-yellow-500">Unlinked</Badge>
+                                )}
+                                {/* Verification Decision Badge */}
+                                {decisionDisplay && (
+                                  <Badge className={decisionDisplay.color}>
+                                    <decisionDisplay.icon className="h-3 w-3 mr-1" />
+                                    {decisionDisplay.label}
+                                  </Badge>
+                                )}
+                              </div>
+                              <span className="text-sm text-muted-foreground">
+                                Uploaded: {doc.uploaded_at ? new Date(doc.uploaded_at).toLocaleDateString() : 'N/A'}
+                              </span>
+                            </div>
+
+                            {/* Fraud Risk Warning */}
+                            {fraudRiskScore !== undefined && fraudRiskScore >= 0.5 && (
+                              <Alert className="border-red-500/50 bg-red-500/10">
+                                <AlertTriangle className="h-4 w-4 text-red-600" />
+                                <AlertDescription className="text-sm text-red-700">
+                                  <strong>High Fraud Risk ({Math.round(fraudRiskScore * 100)}%):</strong> This document has been flagged for additional verification.
+                                </AlertDescription>
+                              </Alert>
+                            )}
+
+                            {/* Review Reasons */}
+                            {reviewReasons && reviewReasons.length > 0 && (
+                              <Alert className="border-yellow-500/50 bg-yellow-500/10">
+                                <AlertTriangle className="h-4 w-4 text-yellow-600" />
+                                <AlertDescription className="text-sm">
+                                  <strong className="text-yellow-700">Review Required:</strong>
+                                  <ul className="list-disc list-inside mt-1 text-yellow-700">
+                                    {reviewReasons.map((reason: string, i: number) => (
+                                      <li key={i}>{reason}</li>
+                                    ))}
+                                  </ul>
+                                </AlertDescription>
+                              </Alert>
+                            )}
+
+                            {/* Validation Score Card - similar to Face Match Score */}
+                            {doc.ai_scan_status === 'completed' && doc.ai_validation_score !== null && (
+                              <div className="border border-border rounded-lg p-4 bg-card">
+                                <div className="flex items-center justify-between mb-3">
+                                  <div className="flex items-center gap-3">
+                                    <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${
+                                      scoreColor === 'green' ? 'bg-green-500/10' :
+                                      scoreColor === 'yellow' ? 'bg-yellow-500/10' : 'bg-red-500/10'
+                                    }`}>
+                                      <Shield className={`h-5 w-5 ${
+                                        scoreColor === 'green' ? 'text-green-500' :
+                                        scoreColor === 'yellow' ? 'text-yellow-500' : 'text-red-500'
+                                      }`} />
+                                    </div>
+                                    <div>
+                                      <p className="text-sm font-medium">Validation Score</p>
+                                      <p className="text-xs text-muted-foreground">AI Document Verification</p>
+                                    </div>
+                                  </div>
+                                  <div className="text-right">
+                                    <p className={`text-2xl font-bold ${
+                                      scoreColor === 'green' ? 'text-green-500' :
+                                      scoreColor === 'yellow' ? 'text-yellow-500' : 'text-red-500'
+                                    }`}>
+                                      {(validationScore * 100).toFixed(0)}%
+                                    </p>
+                                    <p className={`text-xs font-medium ${
+                                      scoreColor === 'green' ? 'text-green-500' :
+                                      scoreColor === 'yellow' ? 'text-yellow-500' : 'text-red-500'
+                                    }`}>
+                                      {getScoreLabel(validationScore)}
+                                    </p>
+                                  </div>
+                                </div>
+                                <div className="relative h-2 bg-muted rounded-full overflow-hidden">
+                                  <div
+                                    className={`absolute left-0 top-0 h-full rounded-full transition-all ${
+                                      scoreColor === 'green' ? 'bg-green-500' :
+                                      scoreColor === 'yellow' ? 'bg-yellow-500' : 'bg-red-500'
+                                    }`}
+                                    style={{ width: `${validationScore * 100}%` }}
+                                  />
+                                </div>
+                              </div>
+                            )}
+
+                            {/* Scan Status Indicators */}
+                            {doc.ai_scan_status === 'pending' && (
+                              <div className="flex items-center gap-2">
+                                <Badge variant="outline">Pending Scan</Badge>
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => retryScanMutation.mutate(doc.id)}
+                                  disabled={retryScanMutation.isPending}
+                                  title="Start AI scan"
+                                >
+                                  {retryScanMutation.isPending ? (
+                                    <Loader2 className="h-3 w-3 animate-spin" />
+                                  ) : (
+                                    <RefreshCw className="h-3 w-3" />
+                                  )}
+                                </Button>
+                              </div>
+                            )}
+                            {doc.ai_scan_status === 'processing' && (
+                              <div className="flex items-center gap-2">
+                                <Badge variant="outline">
+                                  <Loader2 className="h-3 w-3 animate-spin mr-1" />
+                                  Scanning...
+                                </Badge>
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => retryScanMutation.mutate(doc.id)}
+                                  disabled={retryScanMutation.isPending}
+                                  title="Retry scan if stuck"
+                                >
+                                  <RefreshCw className={`h-3 w-3 ${retryScanMutation.isPending ? 'animate-spin' : ''}`} />
+                                </Button>
+                              </div>
+                            )}
+                            {doc.ai_scan_status === 'failed' && (
+                              <div className="flex items-center gap-2">
+                                <Badge variant="destructive">Scan Failed</Badge>
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => retryScanMutation.mutate(doc.id)}
+                                  disabled={retryScanMutation.isPending}
+                                  title="Retry scan"
+                                >
+                                  <RefreshCw className={`h-3 w-3 ${retryScanMutation.isPending ? 'animate-spin' : ''}`} />
+                                </Button>
+                              </div>
+                            )}
+
+                          {/* AI Extracted Data */}
+                          {doc.ai_scan_status === 'completed' && extractedData && Object.keys(extractedData).length > 0 && (
+                            <div className="bg-muted/50 rounded-lg p-3 space-y-2">
+                              <h4 className="text-sm font-semibold mb-2">AI Extracted Information</h4>
+                              <div className="grid grid-cols-2 gap-2 text-sm">
+                                {extractedData.provider && (
+                                  <div>
+                                    <span className="text-muted-foreground">Provider:</span>{' '}
+                                    <span className="font-medium">{extractedData.provider}</span>
+                                  </div>
+                                )}
+                                {extractedData.policyNumber && (
+                                  <div>
+                                    <span className="text-muted-foreground">Policy #:</span>{' '}
+                                    <span className="font-medium">{extractedData.policyNumber}</span>
+                                  </div>
+                                )}
+                                {extractedData.policyHolderName && (
+                                  <div>
+                                    <span className="text-muted-foreground">Policy Holder:</span>{' '}
+                                    <span className="font-medium">{extractedData.policyHolderName}</span>
+                                  </div>
+                                )}
+                                {extractedData.coverageType && (
+                                  <div>
+                                    <span className="text-muted-foreground">Coverage Type:</span>{' '}
+                                    <span className="font-medium">{extractedData.coverageType}</span>
+                                  </div>
+                                )}
+                                {(extractedData.effectiveDate || extractedData.startDate) && (
+                                  <div>
+                                    <span className="text-muted-foreground">Effective Date:</span>{' '}
+                                    <span className="font-medium">{extractedData.effectiveDate || extractedData.startDate}</span>
+                                  </div>
+                                )}
+                                {(extractedData.expirationDate || extractedData.endDate) && (
+                                  <div className="flex items-center gap-1">
+                                    <span className="text-muted-foreground">Expiration Date:</span>{' '}
+                                    <span className="font-medium">{extractedData.expirationDate || extractedData.endDate}</span>
+                                    {extractedData.isExpired && (
+                                      <Badge variant="destructive" className="text-xs ml-1">EXPIRED</Badge>
+                                    )}
+                                  </div>
+                                )}
+                                {extractedData.documentType && (
+                                  <div>
+                                    <span className="text-muted-foreground">Document Type:</span>{' '}
+                                    <span className="font-medium">{extractedData.documentType}</span>
+                                  </div>
+                                )}
+                                {extractedData.coverageLimits?.liability && (
+                                  <div>
+                                    <span className="text-muted-foreground">Liability:</span>{' '}
+                                    <span className="font-medium">{formatCurrencyUtil(extractedData.coverageLimits.liability, tenant?.currency_code || 'GBP')}</span>
+                                  </div>
+                                )}
+                                {extractedData.coverageLimits?.collision && (
+                                  <div>
+                                    <span className="text-muted-foreground">Collision:</span>{' '}
+                                    <span className="font-medium">{formatCurrencyUtil(extractedData.coverageLimits.collision, tenant?.currency_code || 'GBP')}</span>
+                                  </div>
+                                )}
+                                {extractedData.coverageLimits?.comprehensive && (
+                                  <div>
+                                    <span className="text-muted-foreground">Comprehensive:</span>{' '}
+                                    <span className="font-medium">{formatCurrencyUtil(extractedData.coverageLimits.comprehensive, tenant?.currency_code || 'GBP')}</span>
+                                  </div>
+                                )}
+                              </div>
+                              {/* Confidence and validation notes */}
+                              <div className="flex items-center justify-between pt-2 border-t text-xs text-muted-foreground">
+                                {confidenceScore > 0 && (
+                                  <span>Extraction Confidence: {Math.round(confidenceScore * 100)}%</span>
+                                )}
+                                {extractedData.isValidDocument !== undefined && (
+                                  <span className={extractedData.isValidDocument ? 'text-green-600' : 'text-red-600'}>
+                                    {extractedData.isValidDocument ? 'Valid Document' : 'Document Issues Detected'}
+                                  </span>
+                                )}
+                              </div>
+                              {/* Validation Notes */}
+                              {extractedData.validationNotes && Array.isArray(extractedData.validationNotes) && extractedData.validationNotes.length > 0 && (
+                                <div className="text-xs text-muted-foreground pt-1">
+                                  <span className="font-medium">Notes:</span> {extractedData.validationNotes.join(', ')}
+                                </div>
+                              )}
+                            </div>
+                          )}
+
+                          {/* AI Scan Errors */}
+                          {doc.ai_scan_errors && Array.isArray(doc.ai_scan_errors) && doc.ai_scan_errors.length > 0 && (
+                            <Alert variant="destructive">
+                              <AlertTriangle className="h-4 w-4" />
+                              <AlertDescription className="text-xs">
+                                <strong>Scan Errors:</strong> {doc.ai_scan_errors.join(', ')}
+                              </AlertDescription>
+                            </Alert>
+                          )}
+
+                          {/* Action Buttons */}
+                          <div className="pt-3 border-t flex items-center justify-between">
+                            <div className="flex gap-2">
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => {
+                                  let url = doc.file_url;
+                                  if (!url.startsWith('http')) {
+                                    const { data } = supabase.storage
+                                      .from('customer-documents')
+                                      .getPublicUrl(doc.file_url);
+                                    url = data.publicUrl;
+                                  }
+                                  window.open(url, '_blank');
+                                }}
+                              >
+                                <ExternalLink className="h-3 w-3 mr-1" />
+                                View Document
+                              </Button>
+                              {canEdit('rentals') && (
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="text-red-600 hover:text-red-700 hover:bg-red-50 border-red-300"
+                                onClick={() => {
+                                  if (confirm('Are you sure you want to delete this document?')) {
+                                    deleteDocumentMutation.mutate({ id: doc.id, file_url: doc.file_url });
+                                  }
+                                }}
+                                disabled={deleteDocumentMutation.isPending}
+                              >
+                                {deleteDocumentMutation.isPending ? (
+                                  <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+                                ) : (
+                                  <Trash2 className="h-3 w-3 mr-1" />
+                                )}
+                                Delete
+                              </Button>
+                              )}
+                              {/* Link to Rental button for unlinked documents */}
+                              {canEdit('rentals') && doc.isUnlinked && (
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  className="text-blue-600 hover:text-blue-700 hover:bg-blue-50 border-blue-300"
+                                  onClick={() => linkDocumentMutation.mutate(doc.id)}
+                                  disabled={linkDocumentMutation.isPending}
+                                >
+                                  {linkDocumentMutation.isPending ? (
+                                    <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+                                  ) : (
+                                    <CheckCircle className="h-3 w-3 mr-1" />
+                                  )}
+                                  Link to Rental
+                                </Button>
+                              )}
+                            </div>
+
+                            {doc.status?.toLowerCase() === 'expired' && (
+                              <Badge variant="destructive">
+                                <XCircle className="h-3 w-3 mr-1" />
+                                Expired
+                              </Badge>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <div className="text-center py-4 text-muted-foreground">
+                    <Shield className="h-10 w-10 mx-auto mb-2 opacity-50" />
+                    <p className="text-sm">No insurance documents uploaded</p>
+                  </div>
+                )}
+              </div>
+            </TabsContent>
+
+            <TabsContent value="checkmydriver">
+              <CmdInsuranceVerification rentalId={id} rental={rental} />
+            </TabsContent>
+          </Tabs>
         </CardContent>
-        </Card>
-      ) : (
-        /* Compact empty state — single-row card */
-        <Card className="px-5 py-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <Shield className="h-4 w-4 text-muted-foreground" />
-              <span className="text-sm font-medium">Insurance Verification</span>
-              <span className="text-xs text-muted-foreground">No documents uploaded</span>
-            </div>
-            <div className="flex items-center gap-2">
-              {!bonzahPolicy && tenant?.bonzah_username && (
-                <Button
-                  size="sm"
-                  variant="outline"
-                  className="h-7 text-xs border-[#CC004A]/30 text-[#CC004A] hover:bg-[#CC004A]/10"
-                  onClick={() => setShowBuyInsurance(true)}
-                >
-                  <ShieldCheck className="h-3 w-3 mr-1" />
-                  Get Insurance
-                </Button>
-              )}
-              <Button
-                variant="outline"
-                size="sm"
-                className="h-7 text-xs"
-                onClick={() => {
-                  const input = document.createElement('input');
-                  input.type = 'file';
-                  input.accept = 'image/*,.pdf';
-                  input.onchange = async (e) => {
-                    const file = (e.target as HTMLInputElement).files?.[0];
-                    if (!file) return;
-                    try {
-                      toast({ title: "Uploading...", description: "Uploading insurance document" });
-                      const fileName = `${rental.customer_id}/${Date.now()}_${file.name}`;
-                      const { error: uploadError } = await supabase.storage
-                        .from('customer-documents')
-                        .upload(fileName, file);
-                      if (uploadError) throw uploadError;
-                      const { data: docData, error: docError } = await supabase
-                        .from('customer_documents')
-                        .insert({
-                          customer_id: rental.customer_id,
-                          rental_id: id,
-                          document_type: 'Insurance Certificate',
-                          document_name: file.name,
-                          file_name: file.name,
-                          file_url: fileName,
-                          status: 'Pending',
-                          ai_scan_status: 'pending',
-                          tenant_id: tenant?.id,
-                        })
-                        .select()
-                        .single();
-                      if (docError) throw docError;
-                      supabase.functions.invoke('scan-insurance-document', {
-                        body: { documentId: docData.id, fileUrl: fileName }
-                      });
-                      toast({ title: "Success", description: "Insurance document uploaded and AI scan initiated" });
-                      queryClient.invalidateQueries({ queryKey: ["rental-insurance-docs", id] });
-                    } catch (error: any) {
-                      toast({ title: "Upload Failed", description: error.message || "Failed to upload document", variant: "destructive" });
-                    }
-                  };
-                  input.click();
-                }}
-              >
-                <Plus className="h-3 w-3 mr-1" />
-                Upload
-              </Button>
-            </div>
-          </div>
-        </Card>
-      )}
+      </Card>
 
       {/* Identity Verification Section - Always show */}
       <Card>
@@ -3377,295 +3325,308 @@ const RentalDetail = () => {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          {identityVerification && (
-            <div className="space-y-4">
-              {/* Status Row */}
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <span className="text-sm text-muted-foreground">Status:</span>
-                  {identityVerification.review_result === 'GREEN' ? (
-                    <Badge className="bg-green-600">
-                      <CheckCircle className="h-3 w-3 mr-1" />
-                      Verified
-                    </Badge>
-                  ) : identityVerification.review_result === 'RED' ? (
-                    <Badge variant="destructive">
-                      <XCircle className="h-3 w-3 mr-1" />
-                      Declined
-                    </Badge>
-                  ) : identityVerification.review_result === 'RETRY' ? (
-                    <Badge className="bg-yellow-600">
-                      <AlertTriangle className="h-3 w-3 mr-1" />
-                      Resubmission Required
-                    </Badge>
-                  ) : (
-                    <Badge variant="outline">
-                      <Loader2 className="h-3 w-3 mr-1 animate-spin" />
-                      Pending
-                    </Badge>
-                  )}
-                  {/* Provider Badge */}
-                  {identityVerification.verification_provider === 'ai' ? (
-                    <Badge variant="outline" className="border-purple-500 text-purple-600">
-                      AI Verified
-                    </Badge>
-                  ) : (
-                    <Badge variant="secondary">
-                      Veriff
-                    </Badge>
-                  )}
-                </div>
-                {identityVerification.verification_completed_at && (
-                  <span className="text-sm text-muted-foreground">
-                    Verified: {new Date(identityVerification.verification_completed_at).toLocaleDateString()}
-                  </span>
-                )}
-              </div>
+          <Tabs defaultValue="ai">
+            <TabsList variant="evenly-spaced" className="mb-4">
+              <TabsTrigger value="ai" variant="evenly-spaced">AI / Veriff</TabsTrigger>
+              <TabsTrigger value="checkmydriver" variant="evenly-spaced">CheckMyDriver</TabsTrigger>
+            </TabsList>
 
-              {/* AI Face Match Score - only show for AI verifications */}
-              {identityVerification.verification_provider === 'ai' && identityVerification.ai_face_match_score && (
-                <div className="border border-border rounded-lg p-4 bg-card">
-                  <div className="flex items-center justify-between mb-3">
+            <TabsContent value="ai">
+              {identityVerification && (
+                <div className="space-y-4">
+                  {/* Status Row */}
+                  <div className="flex items-center justify-between">
                     <div className="flex items-center gap-3">
-                      <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${
-                        identityVerification.ai_face_match_score >= 0.9 ? 'bg-green-500/10' :
-                        identityVerification.ai_face_match_score >= 0.7 ? 'bg-yellow-500/10' : 'bg-red-500/10'
-                      }`}>
-                        <Camera className={`h-5 w-5 ${
-                          identityVerification.ai_face_match_score >= 0.9 ? 'text-green-500' :
-                          identityVerification.ai_face_match_score >= 0.7 ? 'text-yellow-500' : 'text-red-500'
-                        }`} />
+                      <span className="text-sm text-muted-foreground">Status:</span>
+                      {identityVerification.review_result === 'GREEN' ? (
+                        <Badge className="bg-green-600">
+                          <CheckCircle className="h-3 w-3 mr-1" />
+                          Verified
+                        </Badge>
+                      ) : identityVerification.review_result === 'RED' ? (
+                        <Badge variant="destructive">
+                          <XCircle className="h-3 w-3 mr-1" />
+                          Declined
+                        </Badge>
+                      ) : identityVerification.review_result === 'RETRY' ? (
+                        <Badge className="bg-yellow-600">
+                          <AlertTriangle className="h-3 w-3 mr-1" />
+                          Resubmission Required
+                        </Badge>
+                      ) : (
+                        <Badge variant="outline">
+                          <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+                          Pending
+                        </Badge>
+                      )}
+                      {/* Provider Badge */}
+                      {identityVerification.verification_provider === 'ai' ? (
+                        <Badge variant="outline" className="border-purple-500 text-purple-600">
+                          AI Verified
+                        </Badge>
+                      ) : (
+                        <Badge variant="secondary">
+                          Veriff
+                        </Badge>
+                      )}
+                    </div>
+                    {identityVerification.verification_completed_at && (
+                      <span className="text-sm text-muted-foreground">
+                        Verified: {new Date(identityVerification.verification_completed_at).toLocaleDateString()}
+                      </span>
+                    )}
+                  </div>
+
+                  {/* AI Face Match Score - only show for AI verifications */}
+                  {identityVerification.verification_provider === 'ai' && identityVerification.ai_face_match_score && (
+                    <div className="border border-border rounded-lg p-4 bg-card">
+                      <div className="flex items-center justify-between mb-3">
+                        <div className="flex items-center gap-3">
+                          <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${
+                            identityVerification.ai_face_match_score >= 0.9 ? 'bg-green-500/10' :
+                            identityVerification.ai_face_match_score >= 0.7 ? 'bg-yellow-500/10' : 'bg-red-500/10'
+                          }`}>
+                            <Camera className={`h-5 w-5 ${
+                              identityVerification.ai_face_match_score >= 0.9 ? 'text-green-500' :
+                              identityVerification.ai_face_match_score >= 0.7 ? 'text-yellow-500' : 'text-red-500'
+                            }`} />
+                          </div>
+                          <div>
+                            <p className="text-sm font-medium">Face Match Score</p>
+                            <p className="text-xs text-muted-foreground">AI Biometric Verification</p>
+                          </div>
+                        </div>
+                        <div className="text-right">
+                          <p className={`text-2xl font-bold ${
+                            identityVerification.ai_face_match_score >= 0.9 ? 'text-green-500' :
+                            identityVerification.ai_face_match_score >= 0.7 ? 'text-yellow-500' : 'text-red-500'
+                          }`}>
+                            {(identityVerification.ai_face_match_score * 100).toFixed(1)}%
+                          </p>
+                          <p className={`text-xs font-medium ${
+                            identityVerification.ai_face_match_score >= 0.9 ? 'text-green-500' :
+                            identityVerification.ai_face_match_score >= 0.7 ? 'text-yellow-500' : 'text-red-500'
+                          }`}>
+                            {identityVerification.ai_face_match_score >= 0.9 ? 'Excellent Match' :
+                             identityVerification.ai_face_match_score >= 0.7 ? 'Needs Review' : 'Low Match'}
+                          </p>
+                        </div>
                       </div>
-                      <div>
-                        <p className="text-sm font-medium">Face Match Score</p>
-                        <p className="text-xs text-muted-foreground">AI Biometric Verification</p>
+                      <div className="relative h-2 bg-muted rounded-full overflow-hidden">
+                        <div
+                          className={`absolute left-0 top-0 h-full rounded-full transition-all ${
+                            identityVerification.ai_face_match_score >= 0.9 ? 'bg-green-500' :
+                            identityVerification.ai_face_match_score >= 0.7 ? 'bg-yellow-500' : 'bg-red-500'
+                          }`}
+                          style={{ width: `${identityVerification.ai_face_match_score * 100}%` }}
+                        />
                       </div>
                     </div>
-                    <div className="text-right">
-                      <p className={`text-2xl font-bold ${
-                        identityVerification.ai_face_match_score >= 0.9 ? 'text-green-500' :
-                        identityVerification.ai_face_match_score >= 0.7 ? 'text-yellow-500' : 'text-red-500'
-                      }`}>
-                        {(identityVerification.ai_face_match_score * 100).toFixed(1)}%
-                      </p>
-                      <p className={`text-xs font-medium ${
-                        identityVerification.ai_face_match_score >= 0.9 ? 'text-green-500' :
-                        identityVerification.ai_face_match_score >= 0.7 ? 'text-yellow-500' : 'text-red-500'
-                      }`}>
-                        {identityVerification.ai_face_match_score >= 0.9 ? 'Excellent Match' :
-                         identityVerification.ai_face_match_score >= 0.7 ? 'Needs Review' : 'Low Match'}
-                      </p>
+                  )}
+
+                  {/* Extracted Person Info */}
+                  {(identityVerification.first_name || identityVerification.last_name || identityVerification.date_of_birth) && (
+                    <div className="bg-muted/50 rounded-lg p-4">
+                      <h4 className="text-sm font-semibold mb-3 flex items-center gap-2">
+                        <IdCard className="h-4 w-4" />
+                        Verified Identity
+                      </h4>
+                      <div className="grid grid-cols-2 md:grid-cols-3 gap-4 text-sm">
+                        {identityVerification.first_name && (
+                          <div>
+                            <span className="text-muted-foreground">First Name:</span>
+                            <p className="font-medium">{identityVerification.first_name}</p>
+                          </div>
+                        )}
+                        {identityVerification.last_name && (
+                          <div>
+                            <span className="text-muted-foreground">Last Name:</span>
+                            <p className="font-medium">{identityVerification.last_name}</p>
+                          </div>
+                        )}
+                        {identityVerification.date_of_birth && (
+                          <div>
+                            <span className="text-muted-foreground">Date of Birth:</span>
+                            <p className="font-medium">{new Date(identityVerification.date_of_birth).toLocaleDateString()}</p>
+                          </div>
+                        )}
+                      </div>
                     </div>
-                  </div>
-                  <div className="relative h-2 bg-muted rounded-full overflow-hidden">
-                    <div
-                      className={`absolute left-0 top-0 h-full rounded-full transition-all ${
-                        identityVerification.ai_face_match_score >= 0.9 ? 'bg-green-500' :
-                        identityVerification.ai_face_match_score >= 0.7 ? 'bg-yellow-500' : 'bg-red-500'
-                      }`}
-                      style={{ width: `${identityVerification.ai_face_match_score * 100}%` }}
-                    />
-                  </div>
-                </div>
-              )}
+                  )}
 
-              {/* Extracted Person Info */}
-              {(identityVerification.first_name || identityVerification.last_name || identityVerification.date_of_birth) && (
-                <div className="bg-muted/50 rounded-lg p-4">
-                  <h4 className="text-sm font-semibold mb-3 flex items-center gap-2">
-                    <IdCard className="h-4 w-4" />
-                    Verified Identity
-                  </h4>
-                  <div className="grid grid-cols-2 md:grid-cols-3 gap-4 text-sm">
-                    {identityVerification.first_name && (
-                      <div>
-                        <span className="text-muted-foreground">First Name:</span>
-                        <p className="font-medium">{identityVerification.first_name}</p>
+                  {/* Document Info */}
+                  {(identityVerification.document_type || identityVerification.document_number || identityVerification.document_country) && (
+                    <div className="bg-muted/50 rounded-lg p-4">
+                      <h4 className="text-sm font-semibold mb-3 flex items-center gap-2">
+                        <FileText className="h-4 w-4" />
+                        Document Details
+                      </h4>
+                      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                        {identityVerification.document_type && (
+                          <div>
+                            <span className="text-muted-foreground">Type:</span>
+                            <p className="font-medium capitalize">{identityVerification.document_type.replace(/_/g, ' ')}</p>
+                          </div>
+                        )}
+                        {identityVerification.document_number && (
+                          <div>
+                            <span className="text-muted-foreground">Number:</span>
+                            <p className="font-medium font-mono">{identityVerification.document_number}</p>
+                          </div>
+                        )}
+                        {identityVerification.document_country && (
+                          <div>
+                            <span className="text-muted-foreground">Country:</span>
+                            <p className="font-medium">{identityVerification.document_country}</p>
+                          </div>
+                        )}
+                        {identityVerification.document_expiry_date && (
+                          <div>
+                            <span className="text-muted-foreground">Expiry:</span>
+                            <p className="font-medium">{new Date(identityVerification.document_expiry_date).toLocaleDateString()}</p>
+                          </div>
+                        )}
                       </div>
-                    )}
-                    {identityVerification.last_name && (
-                      <div>
-                        <span className="text-muted-foreground">Last Name:</span>
-                        <p className="font-medium">{identityVerification.last_name}</p>
-                      </div>
-                    )}
-                    {identityVerification.date_of_birth && (
-                      <div>
-                        <span className="text-muted-foreground">Date of Birth:</span>
-                        <p className="font-medium">{new Date(identityVerification.date_of_birth).toLocaleDateString()}</p>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              )}
+                    </div>
+                  )}
 
-              {/* Document Info */}
-              {(identityVerification.document_type || identityVerification.document_number || identityVerification.document_country) && (
-                <div className="bg-muted/50 rounded-lg p-4">
-                  <h4 className="text-sm font-semibold mb-3 flex items-center gap-2">
-                    <FileText className="h-4 w-4" />
-                    Document Details
-                  </h4>
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-                    {identityVerification.document_type && (
-                      <div>
-                        <span className="text-muted-foreground">Type:</span>
-                        <p className="font-medium capitalize">{identityVerification.document_type.replace(/_/g, ' ')}</p>
+                  {/* Document Images */}
+                  {(identityVerification.document_front_url || identityVerification.document_back_url || identityVerification.selfie_image_url) && (
+                    <div className="bg-muted/50 rounded-lg p-4">
+                      <h4 className="text-sm font-semibold mb-3 flex items-center gap-2">
+                        <Camera className="h-4 w-4" />
+                        Verification Images
+                      </h4>
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        {identityVerification.document_front_url && (
+                          <div className="space-y-2">
+                            <span className="text-sm text-muted-foreground">ID Front</span>
+                            <div className="relative aspect-square rounded-lg overflow-hidden border">
+                              <img
+                                src={identityVerification.document_front_url}
+                                alt="ID Front"
+                                className="w-full h-full object-cover"
+                                onError={(e) => {
+                                  (e.target as HTMLImageElement).style.display = 'none';
+                                  (e.target as HTMLImageElement).nextElementSibling?.classList.remove('hidden');
+                                }}
+                              />
+                              <div className="hidden absolute inset-0 flex items-center justify-center bg-muted text-muted-foreground text-sm">
+                                Image unavailable
+                              </div>
+                            </div>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="w-full"
+                              onClick={() => window.open(identityVerification.document_front_url, '_blank')}
+                            >
+                              <ExternalLink className="h-3 w-3 mr-1" />
+                              View Full Size
+                            </Button>
+                          </div>
+                        )}
+                        {identityVerification.document_back_url && (
+                          <div className="space-y-2">
+                            <span className="text-sm text-muted-foreground">ID Back</span>
+                            <div className="relative aspect-square rounded-lg overflow-hidden border">
+                              <img
+                                src={identityVerification.document_back_url}
+                                alt="ID Back"
+                                className="w-full h-full object-cover"
+                                onError={(e) => {
+                                  (e.target as HTMLImageElement).style.display = 'none';
+                                  (e.target as HTMLImageElement).nextElementSibling?.classList.remove('hidden');
+                                }}
+                              />
+                              <div className="hidden absolute inset-0 flex items-center justify-center bg-muted text-muted-foreground text-sm">
+                                Image unavailable
+                              </div>
+                            </div>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="w-full"
+                              onClick={() => window.open(identityVerification.document_back_url, '_blank')}
+                            >
+                              <ExternalLink className="h-3 w-3 mr-1" />
+                              View Full Size
+                            </Button>
+                          </div>
+                        )}
+                        {identityVerification.selfie_image_url && (
+                          <div className="space-y-2">
+                            <span className="text-sm text-muted-foreground">Selfie</span>
+                            <div className="relative aspect-square rounded-lg overflow-hidden border">
+                              <img
+                                src={identityVerification.selfie_image_url}
+                                alt="Selfie"
+                                className="w-full h-full object-cover"
+                                onError={(e) => {
+                                  (e.target as HTMLImageElement).style.display = 'none';
+                                  (e.target as HTMLImageElement).nextElementSibling?.classList.remove('hidden');
+                                }}
+                              />
+                              <div className="hidden absolute inset-0 flex items-center justify-center bg-muted text-muted-foreground text-sm">
+                                Image unavailable
+                              </div>
+                            </div>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="w-full"
+                              onClick={() => window.open(identityVerification.selfie_image_url, '_blank')}
+                            >
+                              <ExternalLink className="h-3 w-3 mr-1" />
+                              View Full Size
+                            </Button>
+                          </div>
+                        )}
                       </div>
-                    )}
-                    {identityVerification.document_number && (
-                      <div>
-                        <span className="text-muted-foreground">Number:</span>
-                        <p className="font-medium font-mono">{identityVerification.document_number}</p>
-                      </div>
-                    )}
-                    {identityVerification.document_country && (
-                      <div>
-                        <span className="text-muted-foreground">Country:</span>
-                        <p className="font-medium">{identityVerification.document_country}</p>
-                      </div>
-                    )}
-                    {identityVerification.document_expiry_date && (
-                      <div>
-                        <span className="text-muted-foreground">Expiry:</span>
-                        <p className="font-medium">{new Date(identityVerification.document_expiry_date).toLocaleDateString()}</p>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              )}
+                      {identityVerification.media_fetched_at && (
+                        <p className="text-xs text-muted-foreground mt-3">
+                          Images fetched: {new Date(identityVerification.media_fetched_at).toLocaleString()}
+                        </p>
+                      )}
+                    </div>
+                  )}
 
-              {/* Document Images */}
-              {(identityVerification.document_front_url || identityVerification.document_back_url || identityVerification.selfie_image_url) && (
-                <div className="bg-muted/50 rounded-lg p-4">
-                  <h4 className="text-sm font-semibold mb-3 flex items-center gap-2">
-                    <Camera className="h-4 w-4" />
-                    Verification Images
-                  </h4>
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    {identityVerification.document_front_url && (
-                      <div className="space-y-2">
-                        <span className="text-sm text-muted-foreground">ID Front</span>
-                        <div className="relative aspect-square rounded-lg overflow-hidden border">
-                          <img
-                            src={identityVerification.document_front_url}
-                            alt="ID Front"
-                            className="w-full h-full object-cover"
-                            onError={(e) => {
-                              (e.target as HTMLImageElement).style.display = 'none';
-                              (e.target as HTMLImageElement).nextElementSibling?.classList.remove('hidden');
-                            }}
-                          />
-                          <div className="hidden absolute inset-0 flex items-center justify-center bg-muted text-muted-foreground text-sm">
-                            Image unavailable
-                          </div>
-                        </div>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          className="w-full"
-                          onClick={() => window.open(identityVerification.document_front_url, '_blank')}
-                        >
-                          <ExternalLink className="h-3 w-3 mr-1" />
-                          View Full Size
-                        </Button>
-                      </div>
-                    )}
-                    {identityVerification.document_back_url && (
-                      <div className="space-y-2">
-                        <span className="text-sm text-muted-foreground">ID Back</span>
-                        <div className="relative aspect-square rounded-lg overflow-hidden border">
-                          <img
-                            src={identityVerification.document_back_url}
-                            alt="ID Back"
-                            className="w-full h-full object-cover"
-                            onError={(e) => {
-                              (e.target as HTMLImageElement).style.display = 'none';
-                              (e.target as HTMLImageElement).nextElementSibling?.classList.remove('hidden');
-                            }}
-                          />
-                          <div className="hidden absolute inset-0 flex items-center justify-center bg-muted text-muted-foreground text-sm">
-                            Image unavailable
-                          </div>
-                        </div>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          className="w-full"
-                          onClick={() => window.open(identityVerification.document_back_url, '_blank')}
-                        >
-                          <ExternalLink className="h-3 w-3 mr-1" />
-                          View Full Size
-                        </Button>
-                      </div>
-                    )}
-                    {identityVerification.selfie_image_url && (
-                      <div className="space-y-2">
-                        <span className="text-sm text-muted-foreground">Selfie</span>
-                        <div className="relative aspect-square rounded-lg overflow-hidden border">
-                          <img
-                            src={identityVerification.selfie_image_url}
-                            alt="Selfie"
-                            className="w-full h-full object-cover"
-                            onError={(e) => {
-                              (e.target as HTMLImageElement).style.display = 'none';
-                              (e.target as HTMLImageElement).nextElementSibling?.classList.remove('hidden');
-                            }}
-                          />
-                          <div className="hidden absolute inset-0 flex items-center justify-center bg-muted text-muted-foreground text-sm">
-                            Image unavailable
-                          </div>
-                        </div>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          className="w-full"
-                          onClick={() => window.open(identityVerification.selfie_image_url, '_blank')}
-                        >
-                          <ExternalLink className="h-3 w-3 mr-1" />
-                          View Full Size
-                        </Button>
-                      </div>
-                    )}
-                  </div>
-                  {identityVerification.media_fetched_at && (
-                    <p className="text-xs text-muted-foreground mt-3">
-                      Images fetched: {new Date(identityVerification.media_fetched_at).toLocaleString()}
-                    </p>
+                  {/* Rejection Reason */}
+                  {identityVerification.rejection_reason && (
+                    <Alert variant="destructive">
+                      <AlertTriangle className="h-4 w-4" />
+                      <AlertDescription>
+                        <strong>Rejection Reason:</strong> {identityVerification.rejection_reason}
+                      </AlertDescription>
+                    </Alert>
                   )}
                 </div>
               )}
 
-              {/* Rejection Reason */}
-              {identityVerification.rejection_reason && (
-                <Alert variant="destructive">
-                  <AlertTriangle className="h-4 w-4" />
-                  <AlertDescription>
-                    <strong>Rejection Reason:</strong> {identityVerification.rejection_reason}
-                  </AlertDescription>
-                </Alert>
+              {/* Empty state when no verification data */}
+              {!identityVerification && !isLoadingVerification && (
+                <div className="text-center py-4 text-muted-foreground">
+                  <UserCheck className="h-12 w-12 mx-auto mb-3 opacity-50" />
+                  <p className="font-medium">No identity verification found</p>
+                  <p className="text-sm mt-1">
+                    This customer hasn't completed identity verification yet.
+                  </p>
+                </div>
               )}
-            </div>
-          )}
 
-          {/* Empty state when no verification data */}
-          {!identityVerification && !isLoadingVerification && (
-            <div className="text-center py-4 text-muted-foreground">
-              <UserCheck className="h-12 w-12 mx-auto mb-3 opacity-50" />
-              <p className="font-medium">No identity verification found</p>
-              <p className="text-sm mt-1">
-                This customer hasn't completed identity verification yet.
-              </p>
-            </div>
-          )}
+              {/* Loading state */}
+              {isLoadingVerification && (
+                <div className="text-center py-8 text-muted-foreground">
+                  <Loader2 className="h-8 w-8 mx-auto mb-3 animate-spin" />
+                  <p className="text-sm">Loading verification data...</p>
+                </div>
+              )}
+            </TabsContent>
 
-          {/* Loading state */}
-          {isLoadingVerification && (
-            <div className="text-center py-8 text-muted-foreground">
-              <Loader2 className="h-8 w-8 mx-auto mb-3 animate-spin" />
-              <p className="text-sm">Loading verification data...</p>
-            </div>
-          )}
+            <TabsContent value="checkmydriver">
+              <CmdLicenseVerification rentalId={id} rental={rental} />
+            </TabsContent>
+          </Tabs>
         </CardContent>
       </Card>
 
