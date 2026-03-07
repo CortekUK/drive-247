@@ -65,10 +65,9 @@ CREATE TRIGGER set_credit_costs_updated_at
 
 -- Seed default costs
 INSERT INTO credit_costs (category, cost_credits, label, description) VALUES
-  ('esign', 1.0, 'E-Sign Agreement', 'Cost per e-signature agreement sent'),
-  ('sms', 0.5, 'SMS Notification', 'Cost per SMS message sent'),
-  ('ocr', 2.0, 'Document OCR', 'Cost per document OCR scan'),
-  ('verification', 3.0, 'Identity Verification', 'Cost per identity verification check')
+  ('esign', 7.0, 'E-Sign Agreement', 'Cost per e-signature agreement sent'),
+  ('sms', 2.0, 'SMS Notification', 'Cost per SMS message sent'),
+  ('verification', 31.0, 'License Verification', 'Cost per license verification check')
 ON CONFLICT (category) DO NOTHING;
 
 -- =============================================================================
