@@ -4,6 +4,7 @@ import {
   getSubscriptionStripeClient,
   getSubscriptionStripeMode,
 } from "../_shared/subscription-stripe.ts";
+import { CREDIT_CONFIG } from "../_shared/credit-config.ts";
 
 Deno.serve(async (req) => {
   const corsResponse = handleCors(req);
@@ -37,7 +38,7 @@ Deno.serve(async (req) => {
     if (isNaN(creditAmount) || creditAmount < 1 || creditAmount > 10000)
       return errorResponse("credits must be between 1 and 10,000");
 
-    const priceCents = creditAmount * 100; // 1 credit = $1
+    const priceCents = Math.round(creditAmount * CREDIT_CONFIG.CREDIT_PRICE_USD * 100); // $0.20/credit
 
     // Get tenant's Stripe mode and customer ID
     const mode = await getSubscriptionStripeMode(supabaseAdmin, tenantId);

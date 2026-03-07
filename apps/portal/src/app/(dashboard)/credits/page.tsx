@@ -16,7 +16,13 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import {
   ChartContainer,
   ChartTooltip,
@@ -33,7 +39,6 @@ import {
   Minus,
   FileSignature,
   MessageSquare,
-  ScanText,
   ShieldCheck,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -55,22 +60,18 @@ function formatMonthLabel(monthStr: string) {
   return date.toLocaleDateString("en-GB", { month: "short", year: "2-digit" });
 }
 
-function getLastNMonths(n: number): string[] {
-  const months: string[] = [];
-  const now = new Date();
-  for (let i = n - 1; i >= 0; i--) {
-    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
-    months.push(
-      `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`
-    );
-  }
-  return months;
+function formatDayLabel(dayStr: string) {
+  const d = new Date(dayStr);
+  return d.toLocaleDateString("en-GB", { month: "short", day: "numeric" });
 }
+
+type TimeRange = "7d" | "30d" | "3m" | "6m" | "12m";
+type IntegrationFilter = "all" | "esign" | "twilio" | "verification";
 
 const CATEGORY_ICONS: Record<string, any> = {
   esign: FileSignature,
+  twilio: MessageSquare,
   sms: MessageSquare,
-  ocr: ScanText,
   verification: ShieldCheck,
 };
 
@@ -118,10 +119,11 @@ export default function CreditsPage() {
   } = useCreditWallet();
 
   const [liveBuyAmount, setLiveBuyAmount] = useState(10);
-  const [testBuyAmount, setTestBuyAmount] = useState(10);
   const [autoRefillEnabled, setAutoRefillEnabled] = useState(false);
   const [autoRefillThreshold, setAutoRefillThreshold] = useState(10);
   const [autoRefillAmount, setAutoRefillAmount] = useState(50);
+  const [timeRange, setTimeRange] = useState<TimeRange>("6m");
+  const [integrationFilter, setIntegrationFilter] = useState<IntegrationFilter>("all");
 
   useEffect(() => {
     if (wallet) {
@@ -140,27 +142,49 @@ export default function CreditsPage() {
     }
   }, [searchParams]);
 
-  // Chart data — last 6 months of credit usage
+  // Chart data — live usage only, with time range and integration filter
   const chartConfig = useMemo<ChartConfig>(() => ({
-    live: { label: "Live Usage", color: "hsl(var(--primary))" },
-    test: { label: "Test Usage", color: "#f59e0b" },
+    usage: { label: "Credit Usage", color: "hsl(var(--primary))" },
   }), []);
 
   const chartData = useMemo(() => {
-    const months = getLastNMonths(6);
-    return months.map((month) => {
-      let liveCount = 0;
-      let testCount = 0;
-      for (const tx of transactions) {
-        if (tx.type !== "usage") continue;
-        const txMonth = tx.created_at.substring(0, 7);
-        if (txMonth !== month) continue;
-        if (tx.is_test_mode) testCount++;
-        else liveCount++;
+    const now = new Date();
+    const usageTransactions = transactions.filter(
+      (tx) =>
+        tx.type === "usage" &&
+        !tx.is_test_mode &&
+        (integrationFilter === "all" || tx.category === integrationFilter)
+    );
+
+    if (timeRange === "7d" || timeRange === "30d") {
+      const days = timeRange === "7d" ? 7 : 30;
+      const result: { label: string; usage: number }[] = [];
+      for (let i = days - 1; i >= 0; i--) {
+        const d = new Date(now.getFullYear(), now.getMonth(), now.getDate() - i);
+        const dayStr = d.toISOString().substring(0, 10);
+        let count = 0;
+        for (const tx of usageTransactions) {
+          if (tx.created_at.substring(0, 10) === dayStr) count++;
+        }
+        result.push({ label: formatDayLabel(dayStr), usage: count });
       }
-      return { month: formatMonthLabel(month), live: liveCount, test: testCount };
-    });
-  }, [transactions]);
+      return result;
+    }
+
+    // Monthly grouping
+    const months = timeRange === "3m" ? 3 : timeRange === "6m" ? 6 : 12;
+    const result: { label: string; usage: number }[] = [];
+    for (let i = months - 1; i >= 0; i--) {
+      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      const monthKey = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+      let count = 0;
+      for (const tx of usageTransactions) {
+        if (tx.created_at.substring(0, 7) === monthKey) count++;
+      }
+      result.push({ label: formatMonthLabel(monthKey), usage: count });
+    }
+    return result;
+  }, [transactions, timeRange, integrationFilter]);
 
   const handleSaveAutoRefill = () => {
     updateAutoRefill.mutate({
@@ -199,345 +223,301 @@ export default function CreditsPage() {
         </Button>
       </div>
 
-      {/* ── Credit Cards ── */}
-      <div className="grid gap-6 grid-cols-1 md:grid-cols-2">
-        {/* Live Credits */}
-        <Card className="overflow-hidden transition-all duration-200 hover:shadow-md border-emerald-500/30 bg-emerald-500/[0.06] dark:bg-emerald-500/[0.08]">
-          <CardContent className="p-6">
-            <div className="flex items-start justify-between">
-              <div className="space-y-1">
-                <p className="text-sm font-semibold text-emerald-600 dark:text-emerald-400">Live Credits</p>
-                <div className="flex items-baseline gap-2">
-                  <span className="text-4xl font-bold tracking-tight text-emerald-700 dark:text-emerald-300">{balance.toFixed(0)}</span>
-                  <span className="text-sm text-emerald-600/60 dark:text-emerald-400/60">remaining</span>
+      {/* ── Balance Cards + Transaction History ── */}
+      <div className="grid gap-6 grid-cols-1 lg:grid-cols-[1fr_1.5fr]">
+        {/* Left: Balance Cards */}
+        <div className="space-y-6">
+          {/* Live Credits */}
+          <Card className="overflow-hidden transition-all duration-200 hover:shadow-md border-emerald-500/30 bg-emerald-500/[0.06] dark:bg-emerald-500/[0.08]">
+            <CardContent className="p-6">
+              <div className="flex items-start justify-between">
+                <div className="space-y-1">
+                  <p className="text-sm font-semibold text-emerald-600 dark:text-emerald-400">Live Credits</p>
+                  <div className="flex items-baseline gap-2">
+                    <span className={`text-4xl font-bold tracking-tight ${isLowBalance ? "text-red-600 dark:text-red-400" : "text-emerald-700 dark:text-emerald-300"}`}>
+                      {balance.toFixed(0)}
+                    </span>
+                    <span className="text-sm text-emerald-600/60 dark:text-emerald-400/60">remaining</span>
+                  </div>
+                </div>
+                <div className="flex h-12 w-12 items-center justify-center rounded-full bg-emerald-500/15">
+                  <CircleDollarSign className="h-6 w-6 text-emerald-500" />
                 </div>
               </div>
-              <div className="flex h-12 w-12 items-center justify-center rounded-full bg-emerald-500/15">
-                <CircleDollarSign className="h-6 w-6 text-emerald-500" />
-              </div>
-            </div>
 
-            <div className="mt-5 pt-5 border-t">
-              <p className="text-xs font-medium text-muted-foreground mb-3">Buy live credits</p>
-              <div className="flex items-center gap-3">
-                <div className="flex items-center rounded-lg border bg-background">
-                  <button
-                    type="button"
-                    onClick={() => setLiveBuyAmount((v) => Math.max(1, v - 5))}
-                    className="flex h-9 w-9 items-center justify-center text-muted-foreground hover:text-foreground transition-colors"
+              <div className="mt-5 pt-5 border-t">
+                <p className="text-xs font-medium text-muted-foreground mb-3">Buy live credits</p>
+                <div className="flex items-center gap-3">
+                  <div className="flex items-center rounded-lg border bg-background">
+                    <button
+                      type="button"
+                      onClick={() => setLiveBuyAmount((v) => Math.max(1, v - 5))}
+                      className="flex h-9 w-9 items-center justify-center text-muted-foreground hover:text-foreground transition-colors"
+                    >
+                      <Minus className="h-4 w-4" />
+                    </button>
+                    <input
+                      type="number"
+                      min={1}
+                      max={10000}
+                      value={liveBuyAmount}
+                      onChange={(e) => setLiveBuyAmount(Math.max(1, parseInt(e.target.value) || 1))}
+                      className="h-9 w-16 border-x bg-transparent text-center text-sm font-semibold focus:outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setLiveBuyAmount((v) => Math.min(10000, v + 5))}
+                      className="flex h-9 w-9 items-center justify-center text-muted-foreground hover:text-foreground transition-colors"
+                    >
+                      <Plus className="h-4 w-4" />
+                    </button>
+                  </div>
+                  <Button
+                    size="sm"
+                    onClick={() => buyCredits.mutate(liveBuyAmount)}
+                    disabled={buyCredits.isPending}
+                    className="ml-auto"
                   >
-                    <Minus className="h-4 w-4" />
-                  </button>
-                  <input
-                    type="number"
-                    min={1}
-                    max={10000}
-                    value={liveBuyAmount}
-                    onChange={(e) => setLiveBuyAmount(Math.max(1, parseInt(e.target.value) || 1))}
-                    className="h-9 w-16 border-x bg-transparent text-center text-sm font-semibold focus:outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setLiveBuyAmount((v) => Math.min(10000, v + 5))}
-                    className="flex h-9 w-9 items-center justify-center text-muted-foreground hover:text-foreground transition-colors"
-                  >
-                    <Plus className="h-4 w-4" />
-                  </button>
+                    {buyCredits.isPending ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      "Buy Now"
+                    )}
+                  </Button>
                 </div>
-                <span className="text-sm text-muted-foreground">=&nbsp;${liveBuyAmount}</span>
-                <Button
-                  size="sm"
-                  onClick={() => buyCredits.mutate(liveBuyAmount)}
-                  disabled={buyCredits.isPending}
-                  className="ml-auto"
-                >
-                  {buyCredits.isPending ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Test Credits */}
+          <Card className="overflow-hidden transition-all duration-200 hover:shadow-md border-yellow-500/30 bg-yellow-500/[0.06] dark:bg-yellow-500/[0.08]">
+            <CardContent className="p-6">
+              <div className="flex items-start justify-between">
+                <div className="space-y-1">
+                  <p className="text-sm font-semibold text-yellow-600 dark:text-yellow-400">Test Credits</p>
+                  <div className="flex items-baseline gap-2">
+                    <span className="text-4xl font-bold tracking-tight text-yellow-700 dark:text-yellow-300">{testBalance.toFixed(0)}</span>
+                    <span className="text-sm text-yellow-600/60 dark:text-yellow-400/60">remaining</span>
+                  </div>
+                </div>
+                <div className="flex h-12 w-12 items-center justify-center rounded-full bg-yellow-500/15">
+                  <FlaskConical className="h-6 w-6 text-yellow-500" />
+                </div>
+              </div>
+
+              <div className="mt-5 pt-5 border-t">
+                <p className="text-xs text-muted-foreground">
+                  Free sandbox credits for testing integrations in test mode. Cannot be purchased.
+                </p>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Service Costs — compact cards */}
+          <div>
+            <h3 className="text-sm font-medium mb-1.5">Service Costs</h3>
+            <p className="text-xs text-muted-foreground mb-3">
+              Credits per service — test mode uses test credits, live mode uses live credits
+            </p>
+            <div className="grid gap-2">
+              {costs.map((cost) => {
+                const Icon = CATEGORY_ICONS[cost.category] || CircleDollarSign;
+                return (
+                  <div key={cost.id} className="flex items-center gap-3 rounded-lg border p-3">
+                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-primary/10">
+                      <Icon className="h-4 w-4 text-primary" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium">{cost.label}</p>
+                      <p className="text-xs text-muted-foreground truncate">{cost.description || "\u2014"}</p>
+                    </div>
+                    <span className="text-sm font-semibold shrink-0">
+                      {cost.cost_credits} {cost.cost_credits === 1 ? "cr" : "cr"}
+                    </span>
+                  </div>
+                );
+              })}
+              {costs.length === 0 && (
+                <p className="text-sm text-muted-foreground py-4 text-center">No service costs configured</p>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* Right: Transaction History */}
+        <Card className="h-fit">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium">Transaction History</CardTitle>
+            <CardDescription>All credit activity including purchases, usage, refunds, and gifts</CardDescription>
+          </CardHeader>
+          <CardContent className="p-0">
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead>
+                  <tr className="border-b bg-primary/5">
+                    <th className="text-left py-2.5 px-3 text-xs font-semibold text-primary">Date</th>
+                    <th className="text-left py-2.5 px-3 text-xs font-semibold text-primary">Type</th>
+                    <th className="text-left py-2.5 px-3 text-xs font-semibold text-primary">Description</th>
+                    <th className="text-left py-2.5 px-3 text-xs font-semibold text-primary">Category</th>
+                    <th className="text-right py-2.5 px-3 text-xs font-semibold text-primary">Amount</th>
+                    <th className="text-right py-2.5 px-3 text-xs font-semibold text-primary">Balance</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {transactions.length === 0 ? (
+                    <tr>
+                      <td colSpan={6} className="text-center py-8 text-sm text-muted-foreground">
+                        No transactions yet
+                      </td>
+                    </tr>
                   ) : (
-                    "Buy Now"
+                    transactions.map((tx) => (
+                      <tr key={tx.id} className="border-b last:border-0">
+                        <td className="py-2.5 px-3 text-sm text-muted-foreground whitespace-nowrap">
+                          {formatDateTime(tx.created_at)}
+                        </td>
+                        <td className="py-2.5 px-3">
+                          <TransactionTypeBadge type={tx.type} isTest={tx.is_test_mode} />
+                        </td>
+                        <td className="py-2.5 px-3 text-sm text-muted-foreground max-w-[200px] truncate">
+                          {tx.description || "\u2014"}
+                        </td>
+                        <td className="py-2.5 px-3 text-sm text-muted-foreground capitalize">
+                          {tx.category || "\u2014"}
+                        </td>
+                        <td className={`py-2.5 px-3 text-sm font-medium text-right ${
+                          tx.amount > 0 ? "text-green-500" : tx.amount < 0 ? "text-red-500" : "text-muted-foreground"
+                        }`}>
+                          {tx.amount > 0 ? "+" : ""}{tx.amount}
+                        </td>
+                        <td className="py-2.5 px-3 text-sm text-right text-muted-foreground">
+                          {tx.balance_after}
+                        </td>
+                      </tr>
+                    ))
                   )}
-                </Button>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Test Credits */}
-        <Card className="overflow-hidden transition-all duration-200 hover:shadow-md border-yellow-500/30 bg-yellow-500/[0.06] dark:bg-yellow-500/[0.08]">
-          <CardContent className="p-6">
-            <div className="flex items-start justify-between">
-              <div className="space-y-1">
-                <p className="text-sm font-semibold text-yellow-600 dark:text-yellow-400">Test Credits</p>
-                <div className="flex items-baseline gap-2">
-                  <span className="text-4xl font-bold tracking-tight text-yellow-700 dark:text-yellow-300">{testBalance.toFixed(0)}</span>
-                  <span className="text-sm text-yellow-600/60 dark:text-yellow-400/60">remaining</span>
-                </div>
-              </div>
-              <div className="flex h-12 w-12 items-center justify-center rounded-full bg-yellow-500/15">
-                <CircleDollarSign className="h-6 w-6 text-yellow-500" />
-              </div>
-            </div>
-
-            <div className="mt-5 pt-5 border-t">
-              <p className="text-xs font-medium text-muted-foreground mb-3">Buy test credits</p>
-              <div className="flex items-center gap-3">
-                <div className="flex items-center rounded-lg border bg-background">
-                  <button
-                    type="button"
-                    onClick={() => setTestBuyAmount((v) => Math.max(1, v - 5))}
-                    className="flex h-9 w-9 items-center justify-center text-muted-foreground hover:text-foreground transition-colors"
-                  >
-                    <Minus className="h-4 w-4" />
-                  </button>
-                  <input
-                    type="number"
-                    min={1}
-                    max={10000}
-                    value={testBuyAmount}
-                    onChange={(e) => setTestBuyAmount(Math.max(1, parseInt(e.target.value) || 1))}
-                    className="h-9 w-16 border-x bg-transparent text-center text-sm font-semibold focus:outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setTestBuyAmount((v) => Math.min(10000, v + 5))}
-                    className="flex h-9 w-9 items-center justify-center text-muted-foreground hover:text-foreground transition-colors"
-                  >
-                    <Plus className="h-4 w-4" />
-                  </button>
-                </div>
-                <span className="text-sm text-muted-foreground">=&nbsp;${testBuyAmount}</span>
-                <Button
-                  size="sm"
-                  onClick={() => buyCredits.mutate(testBuyAmount)}
-                  disabled={buyCredits.isPending}
-                  className="ml-auto"
-                >
-                  {buyCredits.isPending ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                  ) : (
-                    "Buy Now"
-                  )}
-                </Button>
-              </div>
+                </tbody>
+              </table>
             </div>
           </CardContent>
         </Card>
       </div>
 
-      {/* ── Usage History Chart ── */}
+      {/* ── Usage History Chart (live only) ── */}
       <Card>
         <CardHeader className="pb-2">
-          <CardTitle className="text-sm font-medium">Usage History</CardTitle>
-          <CardDescription>Monthly credit usage over the last 6 months</CardDescription>
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle className="text-sm font-medium">Usage History</CardTitle>
+              <CardDescription>Live credit usage over time</CardDescription>
+            </div>
+            <div className="flex items-center gap-2">
+              <Select value={integrationFilter} onValueChange={(v) => setIntegrationFilter(v as IntegrationFilter)}>
+                <SelectTrigger className="w-[140px] h-8 text-xs">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Services</SelectItem>
+                  <SelectItem value="esign">E-Sign</SelectItem>
+                  <SelectItem value="twilio">Twilio</SelectItem>
+                  <SelectItem value="verification">Verification</SelectItem>
+                </SelectContent>
+              </Select>
+              <Select value={timeRange} onValueChange={(v) => setTimeRange(v as TimeRange)}>
+                <SelectTrigger className="w-[110px] h-8 text-xs">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="7d">7 days</SelectItem>
+                  <SelectItem value="30d">30 days</SelectItem>
+                  <SelectItem value="3m">3 months</SelectItem>
+                  <SelectItem value="6m">6 months</SelectItem>
+                  <SelectItem value="12m">12 months</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
         </CardHeader>
         <CardContent>
           <ChartContainer config={chartConfig} className="h-[280px] w-full">
             <BarChart data={chartData} margin={{ top: 5, right: 5, bottom: 5, left: 5 }}>
               <CartesianGrid strokeDasharray="3 3" vertical={false} className="stroke-border" />
-              <XAxis dataKey="month" tickLine={false} axisLine={false} tick={{ fontSize: 12 }} />
+              <XAxis dataKey="label" tickLine={false} axisLine={false} tick={{ fontSize: 12 }} />
               <YAxis tickLine={false} axisLine={false} tick={{ fontSize: 12 }} allowDecimals={false} />
               <ChartTooltip content={<ChartTooltipContent />} />
-              <Bar dataKey="live" stackId="usage" fill="var(--color-live)" radius={[0, 0, 0, 0]} maxBarSize={48} />
-              <Bar dataKey="test" stackId="usage" fill="var(--color-test)" radius={[4, 4, 0, 0]} maxBarSize={48} />
+              <Bar dataKey="usage" fill="var(--color-usage)" radius={[4, 4, 0, 0]} maxBarSize={48} />
             </BarChart>
           </ChartContainer>
         </CardContent>
       </Card>
 
-      {/* ── Tabs ── */}
-      <Tabs defaultValue="transactions" className="space-y-4">
-        <TabsList>
-          <TabsTrigger value="transactions">Transactions</TabsTrigger>
-          <TabsTrigger value="auto-refill">Auto-Refill</TabsTrigger>
-          <TabsTrigger value="costs">Service Costs</TabsTrigger>
-        </TabsList>
+      {/* ── Auto-Refill Settings ── */}
+      <Card className="max-w-lg">
+        <CardHeader>
+          <CardTitle className="text-sm font-medium">Auto-Refill Settings</CardTitle>
+          <CardDescription>
+            Automatically top up live credits when balance drops below a threshold
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-6">
+          <div className="flex items-center justify-between">
+            <div>
+              <Label className="text-sm font-medium">Enable Auto-Refill</Label>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                Charge your saved payment method automatically
+              </p>
+            </div>
+            <Switch
+              checked={autoRefillEnabled}
+              onCheckedChange={setAutoRefillEnabled}
+            />
+          </div>
 
-        {/* ── Transactions ── */}
-        <TabsContent value="transactions">
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium">Transaction History</CardTitle>
-              <CardDescription>Recent credit activity across live and test modes</CardDescription>
-            </CardHeader>
-            <CardContent className="p-0">
-              <div className="overflow-x-auto">
-                <table className="w-full">
-                  <thead>
-                    <tr className="border-b bg-primary/5">
-                      <th className="text-left py-2.5 px-3 text-xs font-semibold text-primary">Date</th>
-                      <th className="text-left py-2.5 px-3 text-xs font-semibold text-primary">Type</th>
-                      <th className="text-left py-2.5 px-3 text-xs font-semibold text-primary">Description</th>
-                      <th className="text-left py-2.5 px-3 text-xs font-semibold text-primary">Category</th>
-                      <th className="text-right py-2.5 px-3 text-xs font-semibold text-primary">Amount</th>
-                      <th className="text-right py-2.5 px-3 text-xs font-semibold text-primary">Balance</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {transactions.length === 0 ? (
-                      <tr>
-                        <td colSpan={6} className="text-center py-8 text-sm text-muted-foreground">
-                          No transactions yet
-                        </td>
-                      </tr>
-                    ) : (
-                      transactions.map((tx) => (
-                        <tr key={tx.id} className="border-b last:border-0">
-                          <td className="py-2.5 px-3 text-sm text-muted-foreground">
-                            {formatDateTime(tx.created_at)}
-                          </td>
-                          <td className="py-2.5 px-3">
-                            <TransactionTypeBadge type={tx.type} isTest={tx.is_test_mode} />
-                          </td>
-                          <td className="py-2.5 px-3 text-sm text-muted-foreground max-w-[300px] truncate">
-                            {tx.description || "\u2014"}
-                          </td>
-                          <td className="py-2.5 px-3 text-sm text-muted-foreground capitalize">
-                            {tx.category || "\u2014"}
-                          </td>
-                          <td className={`py-2.5 px-3 text-sm font-medium text-right ${
-                            tx.amount > 0 ? "text-green-500" : tx.amount < 0 ? "text-red-500" : "text-muted-foreground"
-                          }`}>
-                            {tx.amount > 0 ? "+" : ""}{tx.amount}
-                          </td>
-                          <td className="py-2.5 px-3 text-sm text-right text-muted-foreground">
-                            {tx.balance_after}
-                          </td>
-                        </tr>
-                      ))
-                    )}
-                  </tbody>
-                </table>
-              </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        {/* ── Auto-Refill ── */}
-        <TabsContent value="auto-refill">
-          <Card className="max-w-lg">
-            <CardHeader>
-              <CardTitle className="text-sm font-medium">Auto-Refill Settings</CardTitle>
-              <CardDescription>
-                Automatically top up live credits when balance drops below a threshold
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <Label className="text-sm font-medium">Enable Auto-Refill</Label>
-                  <p className="text-xs text-muted-foreground mt-0.5">
-                    Charge your saved payment method automatically
-                  </p>
+          {autoRefillEnabled && (
+            <>
+              <div className="space-y-2">
+                <Label className="text-sm font-medium">When balance drops below</Label>
+                <div className="flex items-center gap-2">
+                  <Input
+                    type="number"
+                    min={1}
+                    max={100}
+                    value={autoRefillThreshold}
+                    onChange={(e) => setAutoRefillThreshold(parseInt(e.target.value) || 10)}
+                    className="w-24"
+                  />
+                  <span className="text-sm text-muted-foreground">credits</span>
                 </div>
-                <Switch
-                  checked={autoRefillEnabled}
-                  onCheckedChange={setAutoRefillEnabled}
-                />
               </div>
 
-              {autoRefillEnabled && (
-                <>
-                  <div className="space-y-2">
-                    <Label className="text-sm font-medium">When balance drops below</Label>
-                    <div className="flex items-center gap-2">
-                      <Input
-                        type="number"
-                        min={1}
-                        max={100}
-                        value={autoRefillThreshold}
-                        onChange={(e) => setAutoRefillThreshold(parseInt(e.target.value) || 10)}
-                        className="w-24"
-                      />
-                      <span className="text-sm text-muted-foreground">credits</span>
-                    </div>
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label className="text-sm font-medium">Top up amount</Label>
-                    <div className="flex items-center gap-2">
-                      <Input
-                        type="number"
-                        min={10}
-                        max={1000}
-                        step={10}
-                        value={autoRefillAmount}
-                        onChange={(e) => setAutoRefillAmount(parseInt(e.target.value) || 50)}
-                        className="w-24"
-                      />
-                      <span className="text-sm text-muted-foreground">
-                        credits (${autoRefillAmount})
-                      </span>
-                    </div>
-                  </div>
-                </>
-              )}
-
-              <Button
-                onClick={handleSaveAutoRefill}
-                disabled={updateAutoRefill.isPending}
-              >
-                {updateAutoRefill.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-                Save Settings
-              </Button>
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        {/* ── Service Costs ── */}
-        <TabsContent value="costs">
-          <Card className="max-w-2xl">
-            <CardHeader>
-              <CardTitle className="text-sm font-medium">Service Costs</CardTitle>
-              <CardDescription>
-                Credits charged per service usage — test mode services use test credits, live mode uses live credits
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="p-0">
-              <div className="overflow-x-auto">
-                <table className="w-full">
-                  <thead>
-                    <tr className="border-b bg-primary/5">
-                      <th className="text-left py-2.5 px-4 text-xs font-semibold text-primary">Service</th>
-                      <th className="text-left py-2.5 px-4 text-xs font-semibold text-primary">Description</th>
-                      <th className="text-right py-2.5 px-4 text-xs font-semibold text-primary">Cost</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {costs.map((cost) => {
-                      const Icon = CATEGORY_ICONS[cost.category] || CircleDollarSign;
-                      return (
-                        <tr key={cost.id} className="border-b last:border-0">
-                          <td className="py-3 px-4">
-                            <div className="flex items-center gap-2.5">
-                              <div className="flex h-7 w-7 items-center justify-center rounded-md bg-primary/10">
-                                <Icon className="h-3.5 w-3.5 text-primary" />
-                              </div>
-                              <span className="text-sm font-medium">{cost.label}</span>
-                            </div>
-                          </td>
-                          <td className="py-3 px-4 text-sm text-muted-foreground">
-                            {cost.description || "\u2014"}
-                          </td>
-                          <td className="py-3 px-4 text-sm text-right font-medium">
-                            {cost.cost_credits} {cost.cost_credits === 1 ? "credit" : "credits"}
-                          </td>
-                        </tr>
-                      );
-                    })}
-                    {costs.length === 0 && (
-                      <tr>
-                        <td colSpan={3} className="text-center py-8 text-sm text-muted-foreground">
-                          No service costs configured
-                        </td>
-                      </tr>
-                    )}
-                  </tbody>
-                </table>
+              <div className="space-y-2">
+                <Label className="text-sm font-medium">Top up amount</Label>
+                <div className="flex items-center gap-2">
+                  <Input
+                    type="number"
+                    min={10}
+                    max={1000}
+                    step={10}
+                    value={autoRefillAmount}
+                    onChange={(e) => setAutoRefillAmount(parseInt(e.target.value) || 50)}
+                    className="w-24"
+                  />
+                  <span className="text-sm text-muted-foreground">credits</span>
+                </div>
               </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
-      </Tabs>
+            </>
+          )}
+
+          <Button
+            onClick={handleSaveAutoRefill}
+            disabled={updateAutoRefill.isPending}
+          >
+            {updateAutoRefill.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+            Save Settings
+          </Button>
+        </CardContent>
+      </Card>
+
     </div>
   );
 }

@@ -929,6 +929,49 @@ export async function POST(request: NextRequest) {
         const fileBlob = new Blob([pdfBytes], { type: 'application/pdf' });
         formData.append('Files', fileBlob, 'Rental-Agreement.pdf');
 
+        // ── Blocking credit check BEFORE sending to BoldSign ──
+        const isTestMode = boldsignMode === 'test';
+        let creditDeductionResult: any = null;
+        if (body.tenantId) {
+            const { data: deductResult, error: deductError } = await supabase.rpc('deduct_credits', {
+                p_tenant_id: body.tenantId,
+                p_category: 'esign',
+                p_description: `E-sign agreement: ${body.customerName} (Ref: ${body.rentalId.substring(0, 8).toUpperCase()})`,
+                p_reference_id: body.rentalId,
+                p_reference_type: 'rental',
+                p_is_test_mode: isTestMode,
+            });
+
+            if (deductError) {
+                console.error('Credit deduction RPC error:', deductError.message);
+                return NextResponse.json({ ok: false, error: 'Credit check failed', detail: deductError.message }, { status: 500 });
+            }
+
+            if (deductResult?.success === false) {
+                console.warn('Insufficient credits for esign:', deductResult);
+                // Record the failed agreement
+                const agreementType = body.agreementType || 'original';
+                await supabase.from('rental_agreements').insert({
+                    rental_id: body.rentalId,
+                    tenant_id: body.tenantId,
+                    agreement_type: agreementType,
+                    document_status: 'credit_failed',
+                    boldsign_mode: boldsignMode,
+                    period_start_date: agreementType === 'extension' && body.extensionPreviousEndDate
+                        ? body.extensionPreviousEndDate : rental?.start_date || null,
+                    period_end_date: agreementType === 'extension' && body.extensionNewEndDate
+                        ? body.extensionNewEndDate : rental?.end_date || null,
+                });
+                if (agreementType === 'original') {
+                    await supabase.from('rentals').update({ document_status: 'credit_failed' }).eq('id', body.rentalId);
+                }
+                return NextResponse.json({ ok: false, error: 'insufficient_credits', balance: deductResult.balance, required: deductResult.required }, { status: 402 });
+            }
+
+            creditDeductionResult = deductResult;
+            console.log(`Credits deducted: ${deductResult.amount_deducted} (test: ${isTestMode}, balance: ${deductResult.balance_after})`);
+        }
+
         console.log('Sending document to BoldSign...');
         const boldSignResponse = await fetch(`${BOLDSIGN_BASE_URL}/v1/document/send`, {
             method: 'POST',
@@ -939,6 +982,22 @@ export async function POST(request: NextRequest) {
         if (!boldSignResponse.ok) {
             const errorText = await boldSignResponse.text();
             console.error('BoldSign error:', boldSignResponse.status, errorText);
+            // Refund credits since BoldSign failed
+            if (body.tenantId && creditDeductionResult?.success) {
+                try {
+                    await supabase.rpc('add_credits', {
+                        p_tenant_id: body.tenantId,
+                        p_amount: creditDeductionResult.amount_deducted,
+                        p_type: 'refund',
+                        p_description: `Refund: BoldSign send failed (Ref: ${body.rentalId.substring(0, 8).toUpperCase()})`,
+                        p_category: 'esign',
+                        p_is_test_mode: isTestMode,
+                    });
+                    console.log('Credits refunded after BoldSign failure');
+                } catch (refundErr) {
+                    console.error('Failed to refund credits:', refundErr);
+                }
+            }
             return NextResponse.json({ ok: false, error: 'Failed to create document', detail: errorText, boldsignStatus: boldSignResponse.status, boldsignMode, hasApiKey: !!BOLDSIGN_API_KEY, apiKeyPrefix: BOLDSIGN_API_KEY.substring(0, 8) + '...' }, { status: 500 });
         }
 
@@ -990,22 +1049,16 @@ export async function POST(request: NextRequest) {
                 .eq('id', body.rentalId);
         }
 
-        // Report metered usage via edge function (fire-and-forget — does not block e-sign flow)
-        if (body.tenantId) {
-            fetch(`${supabaseUrl}/functions/v1/report-usage-event`, {
+        // Trigger auto-refill if needed (non-blocking)
+        if (creditDeductionResult?.auto_refill_needed && body.tenantId) {
+            fetch(`${supabaseUrl}/functions/v1/manage-credit-wallet`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
                     'Authorization': `Bearer ${supabaseServiceKey}`,
                 },
-                body: JSON.stringify({
-                    tenant_id: body.tenantId,
-                    rental_id: body.rentalId,
-                    customer_id: rental?.customer_id || null,
-                    customer_name: body.customerName,
-                    category: 'esign',
-                }),
-            }).catch((e) => console.warn('Usage report fire-and-forget error:', e));
+                body: JSON.stringify({ action: 'auto_refill', tenantId: body.tenantId }),
+            }).catch((e) => console.warn('Auto-refill trigger error:', e));
         }
 
         // Send signing email (we handle emails ourselves since DisableEmails is true)

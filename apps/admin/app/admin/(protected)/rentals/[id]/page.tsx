@@ -6,6 +6,7 @@ import { supabase } from '@/lib/supabase';
 import { toast } from '@/components/ui/sonner';
 import { ArrowLeft, Pencil, Trash2, Copy, ExternalLink, Download } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { TenantCreditsTab } from '@/components/admin/tenant-credits-tab';
 
 interface Tenant {
   id: string;
@@ -732,6 +733,7 @@ export default function TenantDetailsPage() {
         <TabsList>
           <TabsTrigger value="details">Details</TabsTrigger>
           <TabsTrigger value="subscription">Subscription</TabsTrigger>
+          <TabsTrigger value="credits">Credits</TabsTrigger>
         </TabsList>
 
         {/* Details Tab */}
@@ -1438,6 +1440,11 @@ export default function TenantDetailsPage() {
               </div>
             </div>
           )}
+        </TabsContent>
+
+        {/* Credits Tab */}
+        <TabsContent value="credits">
+          <TenantCreditsTab tenantId={params.id as string} />
         </TabsContent>
       </Tabs>
 

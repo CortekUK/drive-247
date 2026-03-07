@@ -63,6 +63,7 @@
     "date-fns": "^3.6.0",
     "date-fns-tz": "^3.2.0",
     "docusign-esign": "^8.4.0",
+    "dotenv": "^17.3.1",
     "embla-carousel-react": "^8.6.0",
     "input-otp": "^1.4.2",
     "lottie-react": "^2.4.1",

@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import Link from 'next/link';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -13,6 +14,7 @@ import {
   ExternalLink,
   RefreshCw,
   Loader2,
+  AlertCircle,
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { useToast } from '@/hooks/use-toast';
@@ -49,6 +51,14 @@ function getStatusInfo(agreement: RentalAgreement) {
       color: 'green' as const,
       icon: CheckCircle,
       dotClass: 'bg-green-500',
+    };
+  }
+  if (status === 'credit_failed') {
+    return {
+      label: 'Failed - Low Credits',
+      color: 'red' as const,
+      icon: AlertCircle,
+      dotClass: 'bg-red-500',
     };
   }
   if (status === 'sent' || status === 'delivered') {
@@ -93,6 +103,7 @@ function AgreementTimelineItem({
 
   const statusInfo = getStatusInfo(agreement);
   const isSigned = statusInfo.label === 'Signed';
+  const isCreditFailed = agreement.document_status === 'credit_failed';
   const isExtension = agreement.agreement_type === 'extension';
   const hasSentDoc = !!agreement.document_id;
   const isTestMode = agreement.boldsign_mode === 'test';
@@ -145,6 +156,10 @@ function AgreementTimelineItem({
       const data = await response.json();
       if (data?.ok) {
         toast({ title: 'Agreement Resent', description: 'A new agreement has been sent for signing' });
+        queryClient.invalidateQueries({ queryKey: ['rental-agreements', rentalId] });
+        queryClient.invalidateQueries({ queryKey: ['rental', rentalId] });
+      } else if (data?.error === 'insufficient_credits') {
+        toast({ title: 'Insufficient Credits', description: 'Top up your credits to send this agreement', variant: 'destructive' });
         queryClient.invalidateQueries({ queryKey: ['rental-agreements', rentalId] });
         queryClient.invalidateQueries({ queryKey: ['rental', rentalId] });
       } else {
@@ -209,6 +224,18 @@ function AgreementTimelineItem({
               {agreement.envelope_sent_at && agreement.envelope_completed_at && ' · '}
               {agreement.envelope_completed_at && `Signed: ${format(new Date(agreement.envelope_completed_at), 'MMM d, yyyy')}`}
             </p>
+
+            {/* Credit failed alert */}
+            {agreement.document_status === 'credit_failed' && (
+              <div className="mt-2 rounded-md bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800 p-2.5">
+                <p className="text-xs text-red-700 dark:text-red-400">
+                  Agreement could not be sent due to insufficient credits.{' '}
+                  <Link href="/credits" className="font-medium underline hover:no-underline">
+                    Top up from here
+                  </Link>
+                </p>
+              </div>
+            )}
           </div>
 
           {/* Action buttons */}
@@ -224,7 +251,7 @@ function AgreementTimelineItem({
               </Button>
             )}
 
-            {hasSentDoc && !isSigned && (
+            {hasSentDoc && !isSigned && !isCreditFailed && (
               <Button
                 variant="ghost"
                 size="sm"
@@ -236,7 +263,7 @@ function AgreementTimelineItem({
               </Button>
             )}
 
-            {canEdit && hasSentDoc && !isSigned && (
+            {canEdit && (hasSentDoc || isCreditFailed) && !isSigned && (
               <Button
                 variant="ghost"
                 size="sm"
@@ -244,7 +271,7 @@ function AgreementTimelineItem({
                 disabled={resending}
               >
                 <Send className={`h-3.5 w-3.5 mr-1`} />
-                {resending ? 'Sending...' : 'Resend'}
+                {resending ? 'Sending...' : isCreditFailed ? 'Retry' : 'Resend'}
               </Button>
             )}
           </div>
@@ -286,7 +313,15 @@ export function AgreementTimeline({
       });
 
       const data = await response.json();
-      if (!response.ok || !data?.ok) {
+      if (data?.error === 'insufficient_credits') {
+        toast({
+          title: 'Insufficient Credits',
+          description: 'Top up your credits to send this agreement',
+          variant: 'destructive',
+        });
+        queryClient.invalidateQueries({ queryKey: ['rental-agreements', rentalId] });
+        queryClient.invalidateQueries({ queryKey: ['rental', rentalId] });
+      } else if (!response.ok || !data?.ok) {
         toast({
           title: 'Agreement Error',
           description: data?.detail || data?.error || 'Failed to send agreement.',
