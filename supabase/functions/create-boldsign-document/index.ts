@@ -499,6 +499,33 @@ Deno.serve(async (req) => {
       doc = generateDefaultTemplate(rental || {}, customer, vehicle, null);
     }
 
+    // Blocking credit check BEFORE sending to BoldSign
+    const isTestMode = boldsignMode === 'test';
+    let creditDeductionResult: any = null;
+    if (tenantId) {
+      const { data: deductResult, error: deductError } = await supabase.rpc('deduct_credits', {
+        p_tenant_id: tenantId,
+        p_category: 'esign',
+        p_description: `E-sign agreement: ${name} (Ref: ${rentalId.substring(0, 8).toUpperCase()})`,
+        p_reference_id: rentalId,
+        p_reference_type: 'rental',
+        p_is_test_mode: isTestMode,
+      });
+
+      if (deductError) {
+        console.error('Credit deduction RPC error:', deductError.message);
+        return errorResponse('Credit check failed: ' + deductError.message, 500);
+      }
+
+      if (deductResult?.success === false) {
+        console.warn('Insufficient credits for esign:', deductResult);
+        return errorResponse('insufficient_credits', 402);
+      }
+
+      creditDeductionResult = deductResult;
+      console.log(`Credits deducted: ${deductResult.amount_deducted} (test: ${isTestMode}, balance: ${deductResult.balance_after})`);
+    }
+
     // Send via BoldSign
     const result = await sendBoldSignDocument(
       BOLDSIGN_API_KEY,
@@ -511,44 +538,34 @@ Deno.serve(async (req) => {
     );
 
     if (!result) {
+      // Refund credits since BoldSign failed
+      if (tenantId && creditDeductionResult?.success) {
+        try {
+          await supabase.rpc('add_credits', {
+            p_tenant_id: tenantId,
+            p_amount: creditDeductionResult.amount_deducted,
+            p_type: 'refund',
+            p_description: `Refund: BoldSign send failed (Ref: ${rentalId.substring(0, 8).toUpperCase()})`,
+            p_category: 'esign',
+            p_is_test_mode: isTestMode,
+          });
+          console.log('Credits refunded after BoldSign failure');
+        } catch (refundErr) {
+          console.error('Failed to refund credits:', refundErr);
+        }
+      }
       return errorResponse('Failed to create document', 400);
     }
 
-    // Deduct credits for e-sign usage (test mode = free, live mode = charged)
-    if (tenantId) {
+    // Trigger auto-refill if needed (non-blocking)
+    if (creditDeductionResult?.auto_refill_needed && tenantId) {
       try {
-        const isTestMode = boldsignMode === 'test';
-        const { data: deductResult, error: deductError } = await supabase.rpc('deduct_credits', {
-          p_tenant_id: tenantId,
-          p_category: 'esign',
-          p_description: `E-sign agreement: ${name} (Ref: ${rentalId.substring(0, 8).toUpperCase()})`,
-          p_reference_id: rentalId,
-          p_reference_type: 'rental',
-          p_is_test_mode: isTestMode,
+        await supabase.functions.invoke('manage-credit-wallet', {
+          body: { action: 'auto_refill', tenantId },
         });
-
-        if (deductError) {
-          console.warn('Credit deduction error (non-blocking):', deductError.message);
-        } else if (deductResult?.success === false) {
-          console.warn('Credit deduction failed:', deductResult.error);
-          // Don't block the e-sign — just log the warning
-        } else {
-          console.log(`Credits deducted: ${deductResult?.amount_deducted || 0} (test: ${isTestMode}, balance: ${deductResult?.balance_after})`);
-
-          // Trigger auto-refill if needed
-          if (deductResult?.auto_refill_needed) {
-            try {
-              await supabase.functions.invoke('manage-credit-wallet', {
-                body: { action: 'auto_refill', tenantId },
-              });
-              console.log('Auto-refill triggered for tenant', tenantId);
-            } catch (refillErr) {
-              console.warn('Auto-refill trigger failed (non-blocking):', refillErr);
-            }
-          }
-        }
-      } catch (e) {
-        console.warn('Credit deduction error (non-blocking):', e);
+        console.log('Auto-refill triggered for tenant', tenantId);
+      } catch (refillErr) {
+        console.warn('Auto-refill trigger failed:', refillErr);
       }
     }
 
