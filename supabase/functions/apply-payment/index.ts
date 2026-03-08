@@ -278,7 +278,10 @@ async function applyPayment(supabase: any, paymentId: string, targetCategories?:
       // Universal FIFO allocation order: Initial Fees → Extension → Rentals → Fines → Other
       const defaultAllocationOrder = [
         { category: 'Initial Fees', description: 'initial fees' },
-        { category: 'Extension', description: 'extension charges' },
+        { category: 'Extension', description: 'extension charges (legacy)' },
+        { category: 'Extension Rental', description: 'extension rental fee' },
+        { category: 'Extension Tax', description: 'extension tax' },
+        { category: 'Extension Service Fee', description: 'extension service fee' },
         { category: 'Rental', description: 'rental charges' },
         { category: 'Fines', description: 'fine charges' },
         { category: 'Other', description: 'other charges' }

@@ -170,16 +170,49 @@ serve(async (req) => {
         .single();
       payment = paymentData;
     } else {
-      // Find the most recent payment for this rental with a Stripe payment intent
-      const { data: paymentData } = await supabase
-        .from("payments")
-        .select("*")
-        .eq("rental_id", rentalId)
-        .not("stripe_payment_intent_id", "is", null)
-        .order("created_at", { ascending: false })
-        .limit(1)
-        .single();
-      payment = paymentData;
+      // For extension categories, find the payment that was actually allocated to this charge
+      if (category.startsWith('Extension')) {
+        const { data: extCharges } = await supabase
+          .from("ledger_entries")
+          .select("id")
+          .eq("rental_id", rentalId)
+          .eq("type", "Charge")
+          .eq("category", category);
+
+        if (extCharges && extCharges.length > 0) {
+          const chargeIds = extCharges.map(c => c.id);
+          const { data: apps } = await supabase
+            .from("payment_applications")
+            .select("payment_id")
+            .in("charge_entry_id", chargeIds);
+
+          if (apps && apps.length > 0) {
+            const { data: paymentData } = await supabase
+              .from("payments")
+              .select("*")
+              .in("id", apps.map(a => a.payment_id))
+              .not("stripe_payment_intent_id", "is", null)
+              .order("created_at", { ascending: false })
+              .limit(1)
+              .maybeSingle();
+            payment = paymentData;
+          }
+        }
+        console.log(`Extension refund: found ${payment ? 'Stripe' : 'no Stripe'} payment for ${category}`);
+      }
+
+      // Fallback for non-extension categories: find the most recent Stripe payment for this rental
+      if (!payment && !category.startsWith('Extension')) {
+        const { data: paymentData } = await supabase
+          .from("payments")
+          .select("*")
+          .eq("rental_id", rentalId)
+          .not("stripe_payment_intent_id", "is", null)
+          .order("created_at", { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        payment = paymentData;
+      }
     }
 
     let refundResult = null;

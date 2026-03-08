@@ -12,6 +12,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { FileText, ArrowLeft, DollarSign, Plus, X, Send, Download, Ban, Check, AlertTriangle, Loader2, Shield, ShieldCheck, CheckCircle, XCircle, ExternalLink, UserCheck, IdCard, Camera, FileSignature, Clock, Mail, RefreshCw, Trash2, Receipt, Percent, Car, Undo2, Truck, MapPin, Key, KeyRound, CalendarPlus, Package, Banknote, CreditCard, Calendar, Info, Copy, Gauge, Briefcase } from "lucide-react";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Progress } from "@/components/ui/progress";
@@ -250,6 +251,7 @@ const RentalDetail = () => {
   // Extension payment state
   const [showExtensionPayment, setShowExtensionPayment] = useState(false);
   const [extensionPaymentAmount, setExtensionPaymentAmount] = useState<number | undefined>();
+  const [extensionPaymentCategories, setExtensionPaymentCategories] = useState<string[]>([]);
 
   // Review dialog state
   const [showReviewDialog, setShowReviewDialog] = useState(false);
@@ -1109,10 +1111,44 @@ const RentalDetail = () => {
   const totalCharges = rentalTotals?.totalCharges || 0;
   const totalPayments = rentalTotals?.totalPayments || 0;
 
-  // Filter extension charges for the Extensions section
-  const extensionCharges = (rentalCharges || [])
-    .filter(c => c.category === 'Extension')
-    .sort((a, b) => new Date(a.entry_date).getTime() - new Date(b.entry_date).getTime());
+  // Group extension charges by extension number for display
+  // Supports both legacy 'Extension' category and new multi-category ('Extension Rental', 'Extension Tax', 'Extension Service Fee')
+  // Also matches extension insurance policies by order
+  const extensionGroups = (() => {
+    const allExtCharges = (rentalCharges || []).filter(c =>
+      c.category === 'Extension' || c.category === 'Extension Rental' || c.category === 'Extension Tax' || c.category === 'Extension Service Fee'
+    );
+    // Group by extension number extracted from reference (e.g. "Extension #1: ...")
+    // Legacy entries without a number get assigned based on order
+    const groups: Record<number, typeof allExtCharges> = {};
+    let nextLegacyNum = 1;
+    allExtCharges.forEach(charge => {
+      const numMatch = charge.reference?.match(/Extension #(\d+)/);
+      const extNum = numMatch ? parseInt(numMatch[1], 10) : nextLegacyNum++;
+      if (!groups[extNum]) groups[extNum] = [];
+      groups[extNum].push(charge);
+    });
+
+    // Match extension insurance policies by order (1st extension → 1st extension policy, etc.)
+    const extInsurancePolicies = (insurancePolicies || [])
+      .filter(p => p.policy_type === 'extension')
+      .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+
+    // Return sorted by extension number
+    return Object.entries(groups)
+      .sort(([a], [b]) => parseInt(a) - parseInt(b))
+      .map(([num, charges], idx) => ({
+        extensionNumber: parseInt(num),
+        charges,
+        totalAmount: charges.reduce((sum, c) => sum + c.amount, 0),
+        totalRemaining: charges.reduce((sum, c) => sum + c.remaining_amount, 0),
+        entryDate: charges[0]?.entry_date || '',
+        // Get the rental fee charge for date reference info
+        rentalCharge: charges.find(c => c.category === 'Extension Rental' || c.category === 'Extension'),
+        // Matched extension insurance policy (by order)
+        insurancePolicy: extInsurancePolicies[idx] || null,
+      }));
+  })();
 
   // Compute rental status based on approval_status, payment_status, AND key handover
   const computeStatus = (rental: Rental): string => {
@@ -1629,7 +1665,7 @@ const RentalDetail = () => {
         );
       })()}
 
-      {/* Payment Breakdown Table */}
+      {/* Payment Breakdown */}
       {invoiceBreakdown && (() => {
         const canRefund = totalPayments > 0 && rental.status !== 'Cancelled' && rental.status !== 'Closed';
         // Determine insurance amount: prefer ledger charge, fall back to invoice
@@ -1718,333 +1754,495 @@ const RentalDetail = () => {
           }
         };
 
-        return (
-          <Card className={isProcessingPayment ? 'opacity-50 pointer-events-none' : ''}>
-            <CardHeader className="pb-4">
-              <CardTitle className="text-base font-medium">Payment Breakdown</CardTitle>
-            </CardHeader>
-            <CardContent className="p-0">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    {selectableCategories.length > 0 && (
-                      <TableHead className="pl-6 w-10">
-                        <Checkbox
-                          checked={allUnpaidSelected ? true : someUnpaidSelected ? "indeterminate" : false}
-                          onCheckedChange={toggleAllUnpaid}
-                          aria-label="Select all unpaid"
-                        />
-                      </TableHead>
-                    )}
-                    <TableHead className={selectableCategories.length > 0 ? "" : "pl-6"}>Category</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead className="text-right">Amount</TableHead>
-                    <TableHead className="text-right">Refunded</TableHead>
-                    <TableHead className="text-right pr-6">Action</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {rows.map(({ label, category, amount, detail, icon: Icon, color, bg, nonRefundable, onClick }) => {
-                    const refunded = refundBreakdown?.[category] ?? 0;
-                    const applied = amount > 0;
-                    const fullyRefunded = applied && refunded >= amount;
-                    const net = amount - refunded;
-                    // Check if insurance charge is unpaid
-                    const isInsuranceUnpaid = category === 'Insurance' && insuranceCharge && insuranceCharge.remaining_amount > 0;
-                    // Check if excess mileage charge is unpaid
-                    const isExcessMileageUnpaid = category === 'Excess Mileage' && excessMileageCharge && excessMileageCharge.remaining_amount > 0;
-                    const isSelectable = selectableCategories.includes(category);
-                    const isSelected = selectedCategories.has(category);
+        // Render the original breakdown table (reused in both accordion and standalone)
+        const renderOriginalBreakdownTable = () => (
+          <>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  {selectableCategories.length > 0 && (
+                    <TableHead className="pl-6 w-10">
+                      <Checkbox
+                        checked={allUnpaidSelected ? true : someUnpaidSelected ? "indeterminate" : false}
+                        onCheckedChange={toggleAllUnpaid}
+                        aria-label="Select all unpaid"
+                      />
+                    </TableHead>
+                  )}
+                  <TableHead className={selectableCategories.length > 0 ? "" : "pl-6"}>Category</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead className="text-right">Amount</TableHead>
+                  <TableHead className="text-right">Refunded</TableHead>
+                  <TableHead className="text-right pr-6">Action</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {rows.map(({ label, category, amount, detail, icon: Icon, color, bg, nonRefundable, onClick }) => {
+                  const refunded = refundBreakdown?.[category] ?? 0;
+                  const applied = amount > 0;
+                  const fullyRefunded = applied && refunded >= amount;
+                  const net = amount - refunded;
+                  // Check if insurance charge is unpaid
+                  const isInsuranceUnpaid = category === 'Insurance' && insuranceCharge && insuranceCharge.remaining_amount > 0;
+                  // Check if excess mileage charge is unpaid
+                  const isExcessMileageUnpaid = category === 'Excess Mileage' && excessMileageCharge && excessMileageCharge.remaining_amount > 0;
+                  const isSelectable = selectableCategories.includes(category);
+                  const isSelected = selectedCategories.has(category);
 
-                    return (
-                      <TableRow key={category} className={`${!applied ? 'opacity-40' : ''} ${onClick ? 'cursor-pointer hover:bg-muted/30' : ''}`} onClick={onClick}>
-                        {selectableCategories.length > 0 && (
-                          <TableCell className="pl-6 w-10">
-                            {isSelectable ? (
-                              <Checkbox
-                                checked={isSelected}
-                                onCheckedChange={() => toggleCategory(category)}
-                                onClick={(e) => e.stopPropagation()}
-                                aria-label={`Select ${label}`}
-                              />
-                            ) : null}
-                          </TableCell>
-                        )}
-                        <TableCell className={selectableCategories.length > 0 ? "" : "pl-6"}>
-                          <div className="flex items-center gap-3">
-                            <div className={`h-7 w-7 rounded-full flex items-center justify-center ${applied ? bg : 'bg-muted/30'}`}>
-                              <Icon className={`h-3.5 w-3.5 ${applied ? color : 'text-muted-foreground/50'}`} />
-                            </div>
-                            <div>
-                              <p className="text-sm font-medium">
-                                {label}
-                                {onClick && <ExternalLink className="h-3 w-3 inline-block ml-1.5 text-muted-foreground" />}
-                              </p>
-                              <p className="text-xs text-muted-foreground">{applied ? detail : 'Not applied'}</p>
-                            </div>
-                          </div>
+                  return (
+                    <TableRow key={category} className={`${!applied ? 'opacity-40' : ''} ${onClick ? 'cursor-pointer hover:bg-muted/30' : ''}`} onClick={onClick}>
+                      {selectableCategories.length > 0 && (
+                        <TableCell className="pl-6 w-10">
+                          {isSelectable ? (
+                            <Checkbox
+                              checked={isSelected}
+                              onCheckedChange={() => toggleCategory(category)}
+                              onClick={(e) => e.stopPropagation()}
+                              aria-label={`Select ${label}`}
+                            />
+                          ) : null}
                         </TableCell>
-                        <TableCell>
-                          {(() => {
-                            if (!applied) {
-                              return <Badge variant="outline" className="text-muted-foreground/60 border-muted-foreground/20 text-[11px]">Not Applied</Badge>;
-                            }
-                            if (fullyRefunded) {
-                              return <Badge variant="outline" className="text-green-500 border-green-500/30 bg-green-500/10 text-[11px]">Refunded</Badge>;
-                            }
-                            if (refunded > 0) {
-                              return <Badge variant="outline" className="text-amber-500 border-amber-500/30 bg-amber-500/10 text-[11px]">Partial Refund</Badge>;
-                            }
-                            // Check payment status from ledger breakdown
-                            const catPayment = paymentBreakdown?.[category];
-                            if (catPayment) {
-                              if (catPayment.remaining <= 0) {
-                                return <Badge variant="outline" className="text-emerald-500 border-emerald-500/30 bg-emerald-500/10 text-[11px]">Paid</Badge>;
-                              }
-                              if (catPayment.paid > 0) {
-                                return <Badge variant="outline" className="text-amber-500 border-amber-500/30 bg-amber-500/10 text-[11px]">Partially Paid</Badge>;
-                              }
-                              // On cancelled/rejected rental, show "Cancelled" instead of "Not Paid"
-                              if (isCancelledOrRejected) {
-                                return <Badge variant="outline" className="text-muted-foreground border-muted-foreground/30 text-[11px]">Cancelled</Badge>;
-                              }
-                              return <Badge variant="outline" className="text-red-500 border-red-500/30 bg-red-500/10 text-[11px]">Not Paid</Badge>;
-                            }
-                            // No ledger entry for this category — check overall payment status
-                            if (totalPayments >= (invoiceBreakdown?.totalAmount || 0) && totalPayments > 0) {
+                      )}
+                      <TableCell className={selectableCategories.length > 0 ? "" : "pl-6"}>
+                        <div className="flex items-center gap-3">
+                          <div className={`h-7 w-7 rounded-full flex items-center justify-center ${applied ? bg : 'bg-muted/30'}`}>
+                            <Icon className={`h-3.5 w-3.5 ${applied ? color : 'text-muted-foreground/50'}`} />
+                          </div>
+                          <div>
+                            <p className="text-sm font-medium">
+                              {label}
+                              {onClick && <ExternalLink className="h-3 w-3 inline-block ml-1.5 text-muted-foreground" />}
+                            </p>
+                            <p className="text-xs text-muted-foreground">{applied ? detail : 'Not applied'}</p>
+                          </div>
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        {(() => {
+                          if (!applied) {
+                            return <Badge variant="outline" className="text-muted-foreground/60 border-muted-foreground/20 text-[11px]">Not Applied</Badge>;
+                          }
+                          if (fullyRefunded) {
+                            return <Badge variant="outline" className="text-green-500 border-green-500/30 bg-green-500/10 text-[11px]">Refunded</Badge>;
+                          }
+                          if (refunded > 0) {
+                            return <Badge variant="outline" className="text-amber-500 border-amber-500/30 bg-amber-500/10 text-[11px]">Partial Refund</Badge>;
+                          }
+                          // Check payment status from ledger breakdown
+                          const catPayment = paymentBreakdown?.[category];
+                          if (catPayment) {
+                            if (catPayment.remaining <= 0) {
                               return <Badge variant="outline" className="text-emerald-500 border-emerald-500/30 bg-emerald-500/10 text-[11px]">Paid</Badge>;
+                            }
+                            if (catPayment.paid > 0) {
+                              return <Badge variant="outline" className="text-amber-500 border-amber-500/30 bg-amber-500/10 text-[11px]">Partially Paid</Badge>;
                             }
                             // On cancelled/rejected rental, show "Cancelled" instead of "Not Paid"
                             if (isCancelledOrRejected) {
                               return <Badge variant="outline" className="text-muted-foreground border-muted-foreground/30 text-[11px]">Cancelled</Badge>;
                             }
                             return <Badge variant="outline" className="text-red-500 border-red-500/30 bg-red-500/10 text-[11px]">Not Paid</Badge>;
-                          })()}
-                        </TableCell>
-                        <TableCell className="text-right">
-                          <span className={`text-sm font-semibold ${!applied ? 'text-muted-foreground/50' : ''}`}>
-                            {formatCurrencyUtil(amount, tenant?.currency_code || 'USD')}
-                          </span>
-                        </TableCell>
-                        <TableCell className="text-right">
-                          {refunded > 0 ? (
-                            <span className="text-sm text-green-500 font-medium">{formatCurrencyUtil(refunded, tenant?.currency_code || 'USD')}</span>
-                          ) : (
-                            <span className="text-sm text-muted-foreground/40">-</span>
-                          )}
-                        </TableCell>
-                        <TableCell className="text-right pr-6">
-                          {isExcessMileageUnpaid && excessMileageCharge ? (
-                            <div className={`flex items-center gap-2 justify-end ${isRentalCompleted ? 'opacity-40 pointer-events-none' : ''}`}>
-                              {invoiceBreakdown && invoiceBreakdown.securityDeposit > 0 && (
-                                <button
-                                  className="text-xs text-amber-500 hover:text-amber-400 hover:underline font-medium"
-                                  disabled={isDeductingDeposit || isRentalCompleted}
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    setShowDeductFromDepositDialog(true);
-                                  }}
-                                >
-                                  {isDeductingDeposit ? 'Deducting...' : 'Deduct Deposit'}
-                                </button>
-                              )}
+                          }
+                          // No ledger entry for this category — check overall payment status
+                          if (totalPayments >= (invoiceBreakdown?.totalAmount || 0) && totalPayments > 0) {
+                            return <Badge variant="outline" className="text-emerald-500 border-emerald-500/30 bg-emerald-500/10 text-[11px]">Paid</Badge>;
+                          }
+                          // On cancelled/rejected rental, show "Cancelled" instead of "Not Paid"
+                          if (isCancelledOrRejected) {
+                            return <Badge variant="outline" className="text-muted-foreground border-muted-foreground/30 text-[11px]">Cancelled</Badge>;
+                          }
+                          return <Badge variant="outline" className="text-red-500 border-red-500/30 bg-red-500/10 text-[11px]">Not Paid</Badge>;
+                        })()}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <span className={`text-sm font-semibold ${!applied ? 'text-muted-foreground/50' : ''}`}>
+                          {formatCurrencyUtil(amount, tenant?.currency_code || 'USD')}
+                        </span>
+                      </TableCell>
+                      <TableCell className="text-right">
+                        {refunded > 0 ? (
+                          <span className="text-sm text-green-500 font-medium">{formatCurrencyUtil(refunded, tenant?.currency_code || 'USD')}</span>
+                        ) : (
+                          <span className="text-sm text-muted-foreground/40">-</span>
+                        )}
+                      </TableCell>
+                      <TableCell className="text-right pr-6">
+                        {isExcessMileageUnpaid && excessMileageCharge ? (
+                          <div className={`flex items-center gap-2 justify-end ${isRentalCompleted ? 'opacity-40 pointer-events-none' : ''}`}>
+                            {invoiceBreakdown && invoiceBreakdown.securityDeposit > 0 && (
                               <button
-                                className="text-xs text-blue-500 hover:text-blue-400 hover:underline font-medium"
-                                disabled={isSendingPaymentLink || isRentalCompleted}
-                                onClick={async (e) => {
+                                className="text-xs text-amber-500 hover:text-amber-400 hover:underline font-medium"
+                                disabled={isDeductingDeposit || isRentalCompleted}
+                                onClick={(e) => {
                                   e.stopPropagation();
-                                  setIsSendingPaymentLink(true);
-                                  try {
-                                    const { data: result, error } = await supabase.functions.invoke('send-excess-mileage-payment-link', {
-                                      body: { rentalId: rental.id, amount: excessMileageCharge.remaining_amount, tenantId: tenant?.id },
-                                    });
-                                    if (error) throw error;
-                                    toast({ title: 'Payment Link Sent', description: 'The customer has been emailed a payment link.' });
-                                  } catch (err: any) {
-                                    toast({ title: 'Failed to send payment link', description: err.message, variant: 'destructive' });
-                                  } finally {
-                                    setIsSendingPaymentLink(false);
-                                  }
+                                  setShowDeductFromDepositDialog(true);
                                 }}
                               >
-                                {isSendingPaymentLink ? 'Sending...' : 'Send Pay Link'}
+                                {isDeductingDeposit ? 'Deducting...' : 'Deduct Deposit'}
                               </button>
-                            </div>
-                          ) : nonRefundable && applied ? (
-                            <span className="text-xs text-muted-foreground/50">-</span>
-                          ) : (() => {
-                            // Show Refund if category has been paid (dimmed for completed rentals)
-                            const catPayment = paymentBreakdown?.[category];
-                            const categoryHasBeenPaid = catPayment ? catPayment.paid > 0 : false;
-                            const wouldShowRefund = applied && !fullyRefunded && categoryHasBeenPaid && (canRefund || isRentalCompleted);
-                            return wouldShowRefund;
-                          })() ? (
+                            )}
                             <button
-                              className={`text-xs font-medium ${isRentalCompleted ? 'text-orange-500/40 cursor-not-allowed' : 'text-orange-500 hover:text-orange-400 hover:underline'}`}
-                              disabled={isRentalCompleted}
-                              onClick={(e) => {
+                              className="text-xs text-blue-500 hover:text-blue-400 hover:underline font-medium"
+                              disabled={isSendingPaymentLink || isRentalCompleted}
+                              onClick={async (e) => {
                                 e.stopPropagation();
-                                if (isRentalCompleted) return;
-                                setRefundCategory(category);
-                                setRefundTotalAmount(amount);
-                                const alreadyRefunded = refundBreakdown?.[category] ?? 0;
-                                setRefundPaidAmount(Math.max(0, amount - alreadyRefunded));
-                                setShowRefundDialog(true);
+                                setIsSendingPaymentLink(true);
+                                try {
+                                  const { data: result, error } = await supabase.functions.invoke('send-excess-mileage-payment-link', {
+                                    body: { rentalId: rental.id, amount: excessMileageCharge.remaining_amount, tenantId: tenant?.id },
+                                  });
+                                  if (error) throw error;
+                                  toast({ title: 'Payment Link Sent', description: 'The customer has been emailed a payment link.' });
+                                } catch (err: any) {
+                                  toast({ title: 'Failed to send payment link', description: err.message, variant: 'destructive' });
+                                } finally {
+                                  setIsSendingPaymentLink(false);
+                                }
                               }}
                             >
-                              {refunded > 0 ? 'Refund More' : 'Refund'}
+                              {isSendingPaymentLink ? 'Sending...' : 'Send Pay Link'}
                             </button>
-                          ) : applied && fullyRefunded ? (
-                            <Check className="h-4 w-4 text-green-500 inline-block" />
-                          ) : (() => {
-                            // Show Add Payment if category has remaining amount (dimmed for completed rentals)
-                            const wouldBeSelectable = isSelectable || (isRentalCompleted && applied && !fullyRefunded && (categoryRemainingAmounts[category] ?? 0) > 0);
-                            return wouldBeSelectable;
-                          })() ? (
-                            <button
-                              className={`text-xs font-medium ${isRentalCompleted ? 'text-blue-500/40 cursor-not-allowed' : 'text-blue-500 hover:text-blue-400 hover:underline'}`}
-                              disabled={isRentalCompleted}
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                if (isRentalCompleted) return;
-                                setSelectedCategories(new Set([category]));
-                                setShowTargetedPayment(true);
-                              }}
-                            >
-                              Add Payment
-                            </button>
-                          ) : (
-                            <span className="text-muted-foreground/30">-</span>
-                          )}
-                        </TableCell>
-                      </TableRow>
-                    );
-                  })}
-                </TableBody>
-              </Table>
+                          </div>
+                        ) : nonRefundable && applied ? (
+                          <span className="text-xs text-muted-foreground/50">-</span>
+                        ) : (() => {
+                          // Show Refund if category has been paid (dimmed for completed rentals)
+                          const catPayment = paymentBreakdown?.[category];
+                          const categoryHasBeenPaid = catPayment ? catPayment.paid > 0 : false;
+                          const wouldShowRefund = applied && !fullyRefunded && categoryHasBeenPaid && (canRefund || isRentalCompleted);
+                          return wouldShowRefund;
+                        })() ? (
+                          <button
+                            className={`text-xs font-medium ${isRentalCompleted ? 'text-orange-500/40 cursor-not-allowed' : 'text-orange-500 hover:text-orange-400 hover:underline'}`}
+                            disabled={isRentalCompleted}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              if (isRentalCompleted) return;
+                              setRefundCategory(category);
+                              setRefundTotalAmount(amount);
+                              const alreadyRefunded = refundBreakdown?.[category] ?? 0;
+                              setRefundPaidAmount(Math.max(0, amount - alreadyRefunded));
+                              setShowRefundDialog(true);
+                            }}
+                          >
+                            {refunded > 0 ? 'Refund More' : 'Refund'}
+                          </button>
+                        ) : applied && fullyRefunded ? (
+                          <Check className="h-4 w-4 text-green-500 inline-block" />
+                        ) : (() => {
+                          // Show Add Payment if category has remaining amount (dimmed for completed rentals)
+                          const wouldBeSelectable = isSelectable || (isRentalCompleted && applied && !fullyRefunded && (categoryRemainingAmounts[category] ?? 0) > 0);
+                          return wouldBeSelectable;
+                        })() ? (
+                          <button
+                            className={`text-xs font-medium ${isRentalCompleted ? 'text-blue-500/40 cursor-not-allowed' : 'text-blue-500 hover:text-blue-400 hover:underline'}`}
+                            disabled={isRentalCompleted}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              if (isRentalCompleted) return;
+                              setSelectedCategories(new Set([category]));
+                              setShowTargetedPayment(true);
+                            }}
+                          >
+                            Add Payment
+                          </button>
+                        ) : (
+                          <span className="text-muted-foreground/30">-</span>
+                        )}
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
+              </TableBody>
+            </Table>
 
-              {/* Selection footer for targeted payment */}
-              {selectedCategories.size > 0 && (
-                <div className="sticky bottom-0 border-t bg-primary/20 border-primary/40 px-6 py-3 flex items-center justify-between">
-                  <p className="text-sm text-muted-foreground">
-                    {selectedCategories.size} item{selectedCategories.size > 1 ? 's' : ''} selected &mdash;{' '}
-                    <span className="font-semibold text-foreground">{formatCurrencyUtil(selectedTotal, tenant?.currency_code || 'USD')}</span>
-                  </p>
-                  <Button
-                    size="sm"
-                    onClick={() => setShowTargetedPayment(true)}
-                  >
-                    <DollarSign className="h-3.5 w-3.5 mr-1.5" />
-                    Add Payment
-                  </Button>
-                </div>
-              )}
-            </CardContent>
-          </Card>
+            {/* Selection footer for targeted payment */}
+            {selectedCategories.size > 0 && (
+              <div className="sticky bottom-0 border-t bg-primary/20 border-primary/40 px-6 py-3 flex items-center justify-between">
+                <p className="text-sm text-muted-foreground">
+                  {selectedCategories.size} item{selectedCategories.size > 1 ? 's' : ''} selected &mdash;{' '}
+                  <span className="font-semibold text-foreground">{formatCurrencyUtil(selectedTotal, tenant?.currency_code || 'USD')}</span>
+                </p>
+                <Button
+                  size="sm"
+                  onClick={() => setShowTargetedPayment(true)}
+                >
+                  <DollarSign className="h-3.5 w-3.5 mr-1.5" />
+                  Add Payment
+                </Button>
+              </div>
+            )}
+          </>
         );
-      })()}
 
-      {/* Extensions Section */}
-      {extensionCharges.length > 0 && (() => {
-        const canRefund = totalPayments > 0 && rental.status !== 'Cancelled' && rental.status !== 'Closed';
-        const isExtRentalCompleted = rental.status === 'Closed' || rental.status === 'Completed';
+        // Render extension breakdown table — mirrors original table structure
+        // Applicable rows: Rental Fee, Tax, Insurance, Service Fee
+        // Not applicable for extensions: Security Deposit, Delivery Fee, Collection Fee, Extras
+        const renderExtensionBreakdownTable = (group: typeof extensionGroups[0]) => {
+          const isCancelledOrRejected = rental.status === 'Cancelled' || rental.approval_status === 'rejected';
+          const isExtRentalCompleted = rental.status === 'Closed' || rental.status === 'Completed';
+          const isInactive = isCancelledOrRejected || isExtRentalCompleted;
+
+          // Parse dates from the rental charge reference
+          const refCharge = group.rentalCharge;
+          const dateMatch = refCharge?.reference?.match(/\((.+?) → (.+?)\)/);
+          const fromDate = dateMatch?.[1] || '';
+          const toDate = dateMatch?.[2] || '';
+          const daysMatch = refCharge?.reference?.match(/(\d+) day/);
+          const extDays = daysMatch?.[1] || '';
+          const dateDetail = extDays ? `${extDays} day${extDays !== '1' ? 's' : ''} (${fromDate} → ${toDate})` : (refCharge?.reference || `Extension #${group.extensionNumber}`);
+
+          // Find ledger charges by category
+          const extRentalCharge = group.charges.find(c => c.category === 'Extension Rental' || c.category === 'Extension');
+          const taxCharge = group.charges.find(c => c.category === 'Extension Tax');
+          const serviceFeeCharge = group.charges.find(c => c.category === 'Extension Service Fee');
+
+          // Extension insurance from bonzah_insurance_policies
+          const extInsurance = group.insurancePolicy;
+          const insuranceAmount = extInsurance?.premium_amount ?? 0;
+          const insuranceActive = extInsurance?.status === 'active' || extInsurance?.status === 'policy_issued';
+          // Insurance ledger entry (for payment tracking)
+          const insuranceLedgerCharge = (rentalCharges || []).find(c =>
+            c.category === 'Insurance' && c.reference?.includes(`Extension #${group.extensionNumber}`)
+          );
+
+          // Build rows — 1:1 with original table's applicable categories
+          const extRows: { label: string; category: string; amount: number; remaining_amount: number; detail: string; icon: any; color: string; bg: string }[] = [
+            {
+              label: 'Rental',
+              category: extRentalCharge?.category || 'Extension Rental',
+              amount: extRentalCharge?.amount ?? 0,
+              remaining_amount: extRentalCharge?.remaining_amount ?? 0,
+              detail: dateDetail,
+              icon: Car,
+              color: 'text-green-500',
+              bg: 'bg-green-500/10',
+            },
+            {
+              label: 'Tax',
+              category: taxCharge?.category || 'Extension Tax',
+              amount: taxCharge?.amount ?? 0,
+              remaining_amount: taxCharge?.remaining_amount ?? 0,
+              detail: (taxCharge && extRentalCharge) ? `${((taxCharge.amount / extRentalCharge.amount) * 100).toFixed(1)}% rate` : 'Tax on rental',
+              icon: Percent,
+              color: 'text-blue-500',
+              bg: 'bg-blue-500/10',
+            },
+            {
+              label: extInsurance ? 'Bonzah Insurance' : 'Insurance',
+              category: 'Extension Insurance',
+              amount: insuranceAmount,
+              remaining_amount: insuranceLedgerCharge?.remaining_amount ?? (insuranceActive ? 0 : insuranceAmount),
+              detail: extInsurance
+                ? `${extInsurance.coverage_types ? Object.entries(extInsurance.coverage_types).filter(([, v]) => v).map(([k]) => k.toUpperCase()).join(', ') : 'Bonzah Insurance'}`
+                : "Customer's own",
+              icon: ShieldCheck,
+              color: 'text-teal-500',
+              bg: 'bg-teal-500/10',
+            },
+            {
+              label: 'Service Fee',
+              category: serviceFeeCharge?.category || 'Extension Service Fee',
+              amount: serviceFeeCharge?.amount ?? 0,
+              remaining_amount: serviceFeeCharge?.remaining_amount ?? 0,
+              detail: 'Platform fee',
+              icon: Receipt,
+              color: 'text-purple-500',
+              bg: 'bg-purple-500/10',
+            },
+          ];
+
+          return (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="pl-6">Category</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead className="text-right">Amount</TableHead>
+                  <TableHead className="text-right">Refunded</TableHead>
+                  <TableHead className="text-right pr-6">Action</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {extRows.map(({ label, category, amount, remaining_amount, detail, icon: Icon, color, bg }) => {
+                  const applied = amount > 0;
+                  const refunded = refundBreakdown?.[category] ?? 0;
+                  const fullyRefunded = applied && refunded >= amount;
+                  const isInsuranceRow = category === 'Extension Insurance';
+                  const isPaid = isInsuranceRow
+                    ? (applied && insuranceActive)
+                    : (applied && remaining_amount === 0);
+                  const isPartial = !isInsuranceRow && applied && remaining_amount > 0 && remaining_amount < amount;
+                  const hasUnpaid = applied && !isPaid && !fullyRefunded;
+
+                  return (
+                    <TableRow key={category} className={!applied ? 'opacity-40' : ''}>
+                      <TableCell className="pl-6">
+                        <div className="flex items-center gap-3">
+                          <div className={`h-7 w-7 rounded-full flex items-center justify-center ${applied ? bg : 'bg-muted/30'}`}>
+                            <Icon className={`h-3.5 w-3.5 ${applied ? color : 'text-muted-foreground/50'}`} />
+                          </div>
+                          <div>
+                            <p className="text-sm font-medium">{label}</p>
+                            <p className="text-xs text-muted-foreground">{applied ? detail : 'Not applied'}</p>
+                          </div>
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        {(() => {
+                          if (!applied) {
+                            return <Badge variant="outline" className="text-muted-foreground/60 border-muted-foreground/20 text-[11px]">Not Applied</Badge>;
+                          }
+                          if (fullyRefunded) {
+                            return <Badge variant="outline" className="text-green-500 border-green-500/30 bg-green-500/10 text-[11px]">Refunded</Badge>;
+                          }
+                          if (refunded > 0) {
+                            return <Badge variant="outline" className="text-amber-500 border-amber-500/30 bg-amber-500/10 text-[11px]">Partial Refund</Badge>;
+                          }
+                          if (isPaid) {
+                            return <Badge variant="outline" className="text-emerald-500 border-emerald-500/30 bg-emerald-500/10 text-[11px]">Paid</Badge>;
+                          }
+                          if (isPartial) {
+                            return <Badge variant="outline" className="text-amber-500 border-amber-500/30 bg-amber-500/10 text-[11px]">Partially Paid</Badge>;
+                          }
+                          if (isCancelledOrRejected) {
+                            return <Badge variant="outline" className="text-muted-foreground border-muted-foreground/30 text-[11px]">Cancelled</Badge>;
+                          }
+                          return <Badge variant="outline" className="text-red-500 border-red-500/30 bg-red-500/10 text-[11px]">Not Paid</Badge>;
+                        })()}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <span className={`text-sm font-semibold ${!applied ? 'text-muted-foreground/50' : ''}`}>
+                          {formatCurrencyUtil(amount, tenant?.currency_code || 'USD')}
+                        </span>
+                        {isPartial && (
+                          <p className="text-xs text-muted-foreground">
+                            {formatCurrencyUtil(remaining_amount, tenant?.currency_code || 'USD')} remaining
+                          </p>
+                        )}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        {refunded > 0 ? (
+                          <span className="text-sm text-green-500 font-medium">{formatCurrencyUtil(refunded, tenant?.currency_code || 'USD')}</span>
+                        ) : (
+                          <span className="text-sm text-muted-foreground/40">-</span>
+                        )}
+                      </TableCell>
+                      <TableCell className="text-right pr-6">
+                        {!applied ? (
+                          <span className="text-muted-foreground/30">-</span>
+                        ) : hasUnpaid && !isInactive ? (
+                          <button
+                            className="text-xs font-medium text-blue-500 hover:text-blue-400 hover:underline"
+                            onClick={() => {
+                              setExtensionPaymentAmount(remaining_amount > 0 ? remaining_amount : amount);
+                              setExtensionPaymentCategories([category]);
+                              setShowExtensionPayment(true);
+                            }}
+                          >
+                            Add Payment
+                          </button>
+                        ) : isPaid && !fullyRefunded && (canRefund || isExtRentalCompleted) ? (
+                          <button
+                            className={`text-xs font-medium ${isExtRentalCompleted ? 'text-orange-500/40 cursor-not-allowed' : 'text-orange-500 hover:text-orange-400 hover:underline'}`}
+                            disabled={isExtRentalCompleted}
+                            onClick={() => {
+                              if (isExtRentalCompleted) return;
+                              setRefundCategory(category);
+                              setRefundTotalAmount(amount);
+                              const alreadyRefunded = refundBreakdown?.[category] ?? 0;
+                              setRefundPaidAmount(Math.max(0, amount - alreadyRefunded));
+                              setShowRefundDialog(true);
+                            }}
+                          >
+                            {refunded > 0 ? 'Refund More' : 'Refund'}
+                          </button>
+                        ) : fullyRefunded ? (
+                          <Check className="h-4 w-4 text-green-500 inline-block" />
+                        ) : (
+                          <span className="text-muted-foreground/30">-</span>
+                        )}
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
+              </TableBody>
+            </Table>
+          );
+        };
+
+        const hasExtensions = extensionGroups.length > 0;
+
+        // No extensions: single card, no accordion
+        if (!hasExtensions) {
+          return (
+            <Card className={isProcessingPayment ? 'opacity-50 pointer-events-none' : ''}>
+              <CardHeader className="pb-4">
+                <CardTitle className="text-base font-medium">Payment Breakdown</CardTitle>
+              </CardHeader>
+              <CardContent className="p-0">
+                {renderOriginalBreakdownTable()}
+              </CardContent>
+            </Card>
+          );
+        }
+
+        // With extensions: one big Card → Accordion inside
         return (
-          <Card>
-            <CardHeader className="pb-4">
-              <CardTitle className="text-base font-medium flex items-center gap-2">
-                <CalendarPlus className="h-4 w-4 text-blue-500" />
-                Extensions
-              </CardTitle>
+          <Card className={isProcessingPayment ? 'opacity-50 pointer-events-none' : ''}>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-base font-medium">Payment Breakdown</CardTitle>
             </CardHeader>
             <CardContent className="p-0">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead className="pl-6 w-10">#</TableHead>
-                    <TableHead>Details</TableHead>
-                    <TableHead className="text-right">Amount</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead className="text-right pr-6">Action</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {extensionCharges.map((charge, index) => {
-                    const isPaid = charge.remaining_amount === 0;
-                    const isPartial = charge.remaining_amount > 0 && charge.remaining_amount < charge.amount;
-                    const refunded = refundBreakdown?.['Extension'] ?? 0;
-                    const fullyRefunded = isPaid && refunded >= charge.amount;
+              <Accordion type="single" defaultValue="original" collapsible className="w-full space-y-3 px-4 pb-4">
+                {/* Original Rental */}
+                <AccordionItem value="original" className="border rounded-lg overflow-hidden">
+                  <AccordionTrigger className="px-4 py-3 hover:no-underline">
+                    <div className="flex items-center gap-2">
+                      <div className="h-6 w-6 rounded-full bg-green-500/10 flex items-center justify-center">
+                        <Car className="h-3 w-3 text-green-500" />
+                      </div>
+                      <span className="text-sm font-medium">Original Rental</span>
+                      <Badge variant="outline" className="text-[10px] ml-1">
+                        {formatCurrencyUtil(invoiceBreakdown.totalAmount, tenant?.currency_code || 'USD')}
+                      </Badge>
+                    </div>
+                  </AccordionTrigger>
+                  <AccordionContent className="px-0 pb-0">
+                    {renderOriginalBreakdownTable()}
+                  </AccordionContent>
+                </AccordionItem>
 
-                    return (
-                      <TableRow key={charge.id}>
-                        <TableCell className="pl-6 text-sm text-muted-foreground">{index + 1}</TableCell>
-                        <TableCell>
-                          <p className="text-sm font-medium">
-                            {charge.reference || `Extension #${index + 1}`}
-                          </p>
-                          <p className="text-xs text-muted-foreground">
-                            Charged on {new Date(charge.entry_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
-                          </p>
-                        </TableCell>
-                        <TableCell className="text-right">
-                          <span className="text-sm font-semibold">
-                            {formatCurrencyUtil(charge.amount, tenant?.currency_code || 'USD')}
-                          </span>
-                          {isPartial && (
+                {/* Extension sections */}
+                {extensionGroups.map((group) => {
+                  const extInsuranceAmt = group.insurancePolicy?.premium_amount ?? 0;
+                  const extTotalWithInsurance = group.totalAmount + extInsuranceAmt;
+
+                  return (
+                    <AccordionItem key={`ext-${group.extensionNumber}`} value={`extension-${group.extensionNumber}`} className="border rounded-lg overflow-hidden">
+                      <AccordionTrigger className="px-4 py-3 hover:no-underline">
+                        <div className="flex items-center gap-2">
+                          <div className="h-6 w-6 rounded-full bg-blue-500/10 flex items-center justify-center">
+                            <CalendarPlus className="h-3 w-3 text-blue-500" />
+                          </div>
+                          <div className="text-left">
+                            <span className="text-sm font-medium">Extension #{group.extensionNumber}</span>
                             <p className="text-xs text-muted-foreground">
-                              {formatCurrencyUtil(charge.remaining_amount, tenant?.currency_code || 'USD')} remaining
+                              {new Date(group.entryDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
                             </p>
-                          )}
-                        </TableCell>
-                        <TableCell>
-                          {fullyRefunded ? (
-                            <Badge variant="outline" className="text-green-500 border-green-500/30 bg-green-500/10 text-[11px]">Refunded</Badge>
-                          ) : isPaid ? (
-                            <Badge variant="outline" className="text-green-500 border-green-500/30 bg-green-500/10 text-[11px]">Paid</Badge>
-                          ) : isPartial ? (
-                            <Badge variant="outline" className="text-amber-500 border-amber-500/30 bg-amber-500/10 text-[11px]">Partial</Badge>
-                          ) : (
-                            <Badge variant="outline" className="text-red-500 border-red-500/30 bg-red-500/10 text-[11px]">Unpaid</Badge>
-                          )}
-                        </TableCell>
-                        <TableCell className="text-right pr-6">
-                          {!isPaid ? (
-                            <button
-                              className={`text-xs font-medium ${isExtRentalCompleted ? 'text-blue-500/40 cursor-not-allowed' : 'text-blue-500 hover:text-blue-400 hover:underline'}`}
-                              disabled={isExtRentalCompleted}
-                              onClick={() => {
-                                if (isExtRentalCompleted) return;
-                                setExtensionPaymentAmount(charge.remaining_amount);
-                                setShowExtensionPayment(true);
-                              }}
-                            >
-                              Add Payment
-                            </button>
-                          ) : isPaid && !fullyRefunded && (canRefund || isExtRentalCompleted) ? (
-                            <button
-                              className={`text-xs font-medium ${isExtRentalCompleted ? 'text-orange-500/40 cursor-not-allowed' : 'text-orange-500 hover:text-orange-400 hover:underline'}`}
-                              disabled={isExtRentalCompleted}
-                              onClick={() => {
-                                if (isExtRentalCompleted) return;
-                                setRefundCategory('Extension');
-                                setRefundTotalAmount(charge.amount);
-                                const alreadyRefunded = refundBreakdown?.['Extension'] ?? 0;
-                                setRefundPaidAmount(Math.max(0, charge.amount - alreadyRefunded));
-                                setShowRefundDialog(true);
-                              }}
-                            >
-                              Refund
-                            </button>
-                          ) : fullyRefunded ? (
-                            <Check className="h-4 w-4 text-green-500 inline-block" />
-                          ) : (
-                            <span className="text-muted-foreground/30">-</span>
-                          )}
-                        </TableCell>
-                      </TableRow>
-                    );
-                  })}
-                </TableBody>
-              </Table>
+                          </div>
+                          <Badge variant="outline" className="text-[10px] ml-1">
+                            {formatCurrencyUtil(extTotalWithInsurance, tenant?.currency_code || 'USD')}
+                          </Badge>
+                        </div>
+                      </AccordionTrigger>
+                      <AccordionContent className="px-0 pb-0">
+                        {renderExtensionBreakdownTable(group)}
+                      </AccordionContent>
+                    </AccordionItem>
+                  );
+                })}
+              </Accordion>
             </CardContent>
           </Card>
         );
@@ -2485,6 +2683,26 @@ const RentalDetail = () => {
         canEdit={canEdit('rentals')}
         tenantId={tenant?.id}
         displayStatus={displayStatus}
+        extensionGroups={extensionGroups.map((g) => {
+          // Extract dates from rental charge reference e.g. "Extension #1: 5 days (Jul 19 → Jul 24, 2026)"
+          const ref = g.rentalCharge?.reference || '';
+          const dateMatch = ref.match(/\((.+?) → (.+?)\)/);
+          // Convert display dates to ISO — append current year if missing
+          const parseRefDate = (d: string | undefined) => {
+            if (!d) return undefined;
+            const parsed = new Date(d);
+            if (!isNaN(parsed.getTime())) return parsed.toISOString().split('T')[0];
+            return undefined;
+          };
+          // Also check extension insurance policy for more reliable dates
+          const extInsurance = g.insurancePolicy;
+          return {
+            extensionNumber: g.extensionNumber,
+            entryDate: g.entryDate,
+            previousEndDate: extInsurance?.trip_start_date || parseRefDate(dateMatch?.[1]) || undefined,
+            newEndDate: extInsurance?.trip_end_date || parseRefDate(dateMatch?.[2]) || undefined,
+          };
+        })}
         onViewAgreement={handleViewAgreementById}
       />
 
@@ -3467,11 +3685,15 @@ const RentalDetail = () => {
       {rental && (
         <AddPaymentDialog
           open={showExtensionPayment}
-          onOpenChange={setShowExtensionPayment}
+          onOpenChange={(open) => {
+            setShowExtensionPayment(open);
+            if (!open) setExtensionPaymentCategories([]);
+          }}
           customer_id={rental.customers?.id}
           vehicle_id={rental.vehicles?.id}
           rental_id={rental.id}
           defaultAmount={extensionPaymentAmount}
+          targetCategories={extensionPaymentCategories.length > 0 ? extensionPaymentCategories : undefined}
         />
       )}
 
@@ -3687,6 +3909,7 @@ const RentalDetail = () => {
             previous_end_date: rental.previous_end_date || null,
             has_installment_plan: rental.has_installment_plan,
             bonzah_policy_id: rental.bonzah_policy_id,
+            rental_period_type: rental.rental_period_type,
             customer_id: rental.customer_id,
             vehicle_id: rental.vehicles?.id,
             customers: rental.customers,
@@ -3706,6 +3929,7 @@ const RentalDetail = () => {
             end_date: rental.end_date,
             has_installment_plan: rental.has_installment_plan,
             bonzah_policy_id: rental.bonzah_policy_id,
+            rental_period_type: rental.rental_period_type,
             customer_id: rental.customer_id,
             vehicle_id: rental.vehicles?.id,
             customers: rental.customers,

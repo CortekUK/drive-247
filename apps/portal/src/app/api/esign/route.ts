@@ -8,7 +8,7 @@ const BOLDSIGN_BASE_URL = process.env.BOLDSIGN_BASE_URL || 'https://api.boldsign
 function getBoldSignApiKey(mode: 'test' | 'live'): string {
     return mode === 'live'
         ? (process.env.BOLDSIGN_LIVE_API_KEY || process.env.BOLDSIGN_API_KEY || '')
-        : (process.env.BOLDSIGN_TEST_API_KEY || '');
+        : (process.env.BOLDSIGN_TEST_API_KEY || process.env.BOLDSIGN_API_KEY || '');
 }
 
 // Supabase
@@ -23,6 +23,7 @@ interface ESignRequest {
     agreementType?: 'original' | 'extension';
     extensionPreviousEndDate?: string;
     extensionNewEndDate?: string;
+    extensionNumber?: number;
 }
 
 // ============================================================================
@@ -51,7 +52,7 @@ function formatCurrency(amount: number | null, currencyCode: string = 'GBP'): st
 // TEMPLATE PROCESSING
 // ============================================================================
 
-function processTemplate(template: string, rental: any, customer: any, vehicle: any, tenant: any, currencyCode: string = 'GBP', verification?: any, extensionData?: { previousEndDate?: string; newEndDate?: string }): string {
+function processTemplate(template: string, rental: any, customer: any, vehicle: any, tenant: any, currencyCode: string = 'GBP', verification?: any, extensionData?: { previousEndDate?: string; newEndDate?: string; extensionNumber?: number }): string {
     // Compose full address from separate fields (DB stores street/city/state/zip separately)
     const customerAddress = [
         customer?.address_street,
@@ -123,14 +124,20 @@ function processTemplate(template: string, rental: any, customer: any, vehicle: 
             return vehicle?.monthly_mileage?.toString() || '';
         })(),
 
-        // Rental
+        // Rental — for extensions, show extension period dates instead of original
         rental_number: rental?.rental_number || rental?.id?.substring(0, 8)?.toUpperCase() || '',
         rental_id: rental?.id || '',
-        rental_start_date: formatDate(rental?.start_date),
-        rental_end_date: rental?.end_date ? formatDate(rental.end_date) : 'Ongoing',
+        rental_start_date: extensionData?.previousEndDate
+            ? formatDate(extensionData.previousEndDate)
+            : formatDate(rental?.start_date),
+        rental_end_date: extensionData?.newEndDate
+            ? formatDate(extensionData.newEndDate)
+            : (rental?.end_date ? formatDate(rental.end_date) : 'Ongoing'),
         rental_days: (() => {
-            if (rental?.start_date && rental?.end_date) {
-                const diff = Math.ceil((new Date(rental.end_date).getTime() - new Date(rental.start_date).getTime()) / (1000 * 60 * 60 * 24));
+            const start = extensionData?.previousEndDate || rental?.start_date;
+            const end = extensionData?.newEndDate || rental?.end_date;
+            if (start && end) {
+                const diff = Math.ceil((new Date(end).getTime() - new Date(start).getTime()) / (1000 * 60 * 60 * 24));
                 return diff > 0 ? diff.toString() : '1';
             }
             return '';
@@ -174,6 +181,7 @@ function processTemplate(template: string, rental: any, customer: any, vehicle: 
             }
             return '';
         })(),
+        extension_number: extensionData?.extensionNumber ? extensionData.extensionNumber.toString() : '',
     };
 
     let result = template;
@@ -608,16 +616,22 @@ function renderTextToPdf(ctx: PdfCtx, text: string) {
 // DEFAULT TEXT TEMPLATE (when tenant has no custom template)
 // ============================================================================
 
-function generateDefaultAgreement(rental: any, customer: any, vehicle: any, tenant: any, currencyCode: string = 'GBP'): string {
+function generateDefaultAgreement(rental: any, customer: any, vehicle: any, tenant: any, currencyCode: string = 'GBP', extensionData?: { previousEndDate?: string; newEndDate?: string; extensionNumber?: number }): string {
     const companyName = tenant?.company_name || 'Drive 247';
     const line = (label: string, value: string | null | undefined) => value ? `${label}: ${value}` : '';
     const lines = (...parts: string[]) => parts.filter(Boolean).join('\n');
 
+    const isExtension = !!extensionData?.extensionNumber;
+    const agreementTitle = isExtension
+        ? `RENTAL EXTENSION AGREEMENT - Extension #${extensionData!.extensionNumber}`
+        : 'RENTAL AGREEMENT';
+
     return `
-RENTAL AGREEMENT
+${agreementTitle}
 ${'='.repeat(70)}
 
 Date: ${formatDate(new Date())}
+${isExtension ? `Agreement Type: Extension #${extensionData!.extensionNumber}` : 'Agreement Type: Original Rental Agreement'}
 Reference: ${rental?.id?.substring(0, 8)?.toUpperCase() || 'N/A'}
 
 ${'='.repeat(70)}
@@ -646,14 +660,34 @@ ${'='.repeat(70)}
 
 RENTAL TERMS:
 ${lines(
-    line('Start Date', formatDate(rental?.start_date)),
-    line('End Date', rental?.end_date ? formatDate(rental.end_date) : 'Ongoing'),
+    line('Start Date', isExtension && extensionData?.previousEndDate
+        ? formatDate(extensionData.previousEndDate)
+        : formatDate(rental?.start_date)),
+    line('End Date', isExtension && extensionData?.newEndDate
+        ? formatDate(extensionData.newEndDate)
+        : (rental?.end_date ? formatDate(rental.end_date) : 'Ongoing')),
     line('Rental Price', (() => {
         const type = rental?.rental_period_type || 'Monthly';
         const rate = type === 'Daily' ? vehicle?.daily_rent : type === 'Weekly' ? vehicle?.weekly_rent : vehicle?.monthly_rent;
         return `${formatCurrency(rate, currencyCode)} (${type})`;
     })())
 )}
+${isExtension ? `
+${'='.repeat(70)}
+
+EXTENSION DETAILS:
+${lines(
+    `Extension Number: #${extensionData!.extensionNumber}`,
+    line('Previous End Date', extensionData!.previousEndDate ? formatDate(extensionData!.previousEndDate) : ''),
+    line('New End Date', extensionData!.newEndDate ? formatDate(extensionData!.newEndDate) : ''),
+    (() => {
+        if (extensionData!.previousEndDate && extensionData!.newEndDate) {
+            const diff = Math.ceil((new Date(extensionData!.newEndDate).getTime() - new Date(extensionData!.previousEndDate).getTime()) / (1000 * 60 * 60 * 24));
+            return diff > 0 ? `Extension Duration: ${diff} day${diff !== 1 ? 's' : ''}` : '';
+        }
+        return '';
+    })()
+)}` : ''}
 
 ${'='.repeat(70)}
 
@@ -765,6 +799,34 @@ export async function POST(request: NextRequest) {
         let hasCustomTemplate = false;
         let processedHtml = '';
 
+        // ── Hardcoded Agreement Type banner at the top of every PDF ──
+        const isExtensionAgreement = body.agreementType === 'extension' && body.extensionNumber;
+        const agreementTypeLabel = isExtensionAgreement
+            ? `EXTENSION AGREEMENT #${body.extensionNumber}`
+            : 'ORIGINAL RENTAL AGREEMENT';
+        // Draw a visible banner box
+        const bannerHeight = 32;
+        const bannerY = ctx.y - bannerHeight;
+        ctx.page.drawRectangle({
+            x: MARGIN,
+            y: bannerY,
+            width: CONTENT_W,
+            height: bannerHeight,
+            color: rgb(0.93, 0.94, 0.98), // light indigo bg
+            borderColor: rgb(0.39, 0.4, 0.95), // indigo border
+            borderWidth: 1,
+        });
+        const labelFontSize = 11;
+        const labelWidth = ctx.boldFont.widthOfTextAtSize(agreementTypeLabel, labelFontSize);
+        ctx.page.drawText(agreementTypeLabel, {
+            x: MARGIN + (CONTENT_W - labelWidth) / 2,
+            y: bannerY + (bannerHeight - labelFontSize) / 2 + 1,
+            size: labelFontSize,
+            font: ctx.boldFont,
+            color: rgb(0.24, 0.25, 0.59), // dark indigo text
+        });
+        ctx.y = bannerY - 16; // spacing after banner
+
         if (body.tenantId) {
             const { data: templateData } = await supabase
                 .from('agreement_templates')
@@ -777,7 +839,7 @@ export async function POST(request: NextRequest) {
                 console.log('Using admin template (structured HTML → PDF)');
                 hasCustomTemplate = true;
                 processedHtml = removeEmptyFields(
-                    processTemplate(templateData.template_content, rental, customer, vehicle, tenant, currencyCode, verification, body.extensionPreviousEndDate ? { previousEndDate: body.extensionPreviousEndDate, newEndDate: body.extensionNewEndDate } : undefined)
+                    processTemplate(templateData.template_content, rental, customer, vehicle, tenant, currencyCode, verification, body.extensionPreviousEndDate ? { previousEndDate: body.extensionPreviousEndDate, newEndDate: body.extensionNewEndDate, extensionNumber: body.extensionNumber } : undefined)
                 );
 
                 // Ensure a signature tag exists
@@ -794,7 +856,7 @@ export async function POST(request: NextRequest) {
 
         if (!hasCustomTemplate) {
             console.log('Using default template (text → PDF)');
-            let textContent = generateDefaultAgreement(rental, customer, vehicle, tenant, currencyCode);
+            let textContent = generateDefaultAgreement(rental, customer, vehicle, tenant, currencyCode, body.extensionPreviousEndDate ? { previousEndDate: body.extensionPreviousEndDate, newEndDate: body.extensionNewEndDate, extensionNumber: body.extensionNumber } : undefined);
 
             // Inject sig tag
             const hasSig = /\{\{@sig1\}\}/.test(textContent);

@@ -13,13 +13,15 @@ import {
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
-import { Loader2, CalendarPlus, Check, X, AlertCircle, AlertTriangle, Calendar, CreditCard, Shield, Gauge } from 'lucide-react';
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
+import { Loader2, CalendarPlus, Check, X, AlertCircle, AlertTriangle, Calendar, CreditCard, Shield, ShieldCheck, Upload, Gauge } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useTenant } from '@/contexts/TenantContext';
 import { useToast } from '@/hooks/use-toast';
 import { useAuditLog } from '@/hooks/use-audit-log';
 import { useExtensionConflicts } from '@/hooks/use-extension-conflicts';
 import { useExtensionPricing } from '@/hooks/use-extension-pricing';
+import { useRentalSettings } from '@/hooks/use-rental-settings';
 import { format } from 'date-fns';
 import { getCurrencySymbol } from '@/lib/format-utils';
 import { useQuery } from '@tanstack/react-query';
@@ -35,6 +37,7 @@ interface ExtensionRequestDialogProps {
     previous_end_date: string | null;
     has_installment_plan?: boolean;
     bonzah_policy_id?: string | null;
+    rental_period_type?: string;
     customer_id?: string;
     vehicle_id?: string;
     customers?: { id: string; name: string; email?: string };
@@ -54,6 +57,9 @@ export function ExtensionRequestDialog({
 
   const [isApproving, setIsApproving] = useState(false);
   const [isRejecting, setIsRejecting] = useState(false);
+  const [extensionInsuranceType, setExtensionInsuranceType] = useState<'bonzah' | 'own'>(
+    rental.bonzah_policy_id ? 'bonzah' : 'own'
+  );
 
   const currentEndDate = new Date(rental.end_date);
   const requestedEndDate = rental.previous_end_date
@@ -64,9 +70,24 @@ export function ExtensionRequestDialog({
     vehicleId: rental.vehicle_id || rental.vehicles?.id,
     currentEndDate: rental.end_date,
     newEndDate: rental.previous_end_date || undefined,
+    rentalPeriodType: rental.rental_period_type,
   });
 
   const currencySymbol = getCurrencySymbol(tenant?.currency_code || 'USD');
+  const { settings: rentalSettings } = useRentalSettings();
+
+  // Compute tax and service fee for the extension
+  const extensionTaxAmount = rentalSettings?.tax_enabled && rentalSettings?.tax_percentage
+    ? Math.round(extensionCost * (rentalSettings.tax_percentage / 100) * 100) / 100
+    : 0;
+  const extensionServiceFee = (() => {
+    if (!rentalSettings?.service_fee_enabled) return 0;
+    if (rentalSettings.service_fee_type === 'percentage' && rentalSettings.service_fee_value) {
+      return Math.round(extensionCost * (rentalSettings.service_fee_value / 100) * 100) / 100;
+    }
+    return rentalSettings.service_fee_value || rentalSettings.service_fee_amount || 0;
+  })();
+  const extensionTotalAmount = extensionCost + extensionTaxAmount + extensionServiceFee;
 
   // Fetch vehicle mileage data for mileage impact display
   const vId = rental.vehicle_id || rental.vehicles?.id;
@@ -94,6 +115,28 @@ export function ExtensionRequestDialog({
     const newAllowance = calculateTotalMileageAllowance(vehicleMileage, newDays);
     return { currentAllowance, newAllowance, currentTier: getMileageTier(currentDays), newTier: getMileageTier(newDays) };
   })();
+
+  // Count existing extensions to determine the next extension number
+  const { data: existingExtensionCount } = useQuery({
+    queryKey: ['extension-count', rental.id, tenant?.id],
+    queryFn: async () => {
+      // Count both legacy 'Extension' and new 'Extension Rental' categories
+      const { count: legacyCount } = await supabase
+        .from('ledger_entries')
+        .select('id', { count: 'exact', head: true })
+        .eq('rental_id', rental.id)
+        .eq('type', 'Charge')
+        .eq('category', 'Extension');
+      const { count: newCount } = await supabase
+        .from('ledger_entries')
+        .select('id', { count: 'exact', head: true })
+        .eq('rental_id', rental.id)
+        .eq('type', 'Charge')
+        .eq('category', 'Extension Rental');
+      return (legacyCount || 0) + (newCount || 0);
+    },
+    enabled: !!rental.id && !!tenant?.id,
+  });
 
   const { rentalConflicts, blockedDateConflicts, hasConflicts, isChecking: isCheckingConflicts } = useExtensionConflicts({
     vehicleId: rental.vehicle_id || rental.vehicles?.id,
@@ -123,29 +166,37 @@ export function ExtensionRequestDialog({
         throw new Error(`Failed to approve extension: ${updateError.message}`);
       }
 
-      // Insert ledger charge for extension
+      // Insert ledger charges for extension (rental fee + tax + service fee)
       if (extensionCost > 0) {
+        const extNum = (existingExtensionCount || 0) + 1;
+        const extRef = `Extension #${extNum}: ${extensionDays} day${extensionDays !== 1 ? 's' : ''} (${format(currentEndDate, 'MMM dd')} → ${format(requestedEndDate, 'MMM dd, yyyy')})`;
+        const baseLedger = {
+          rental_id: rental.id,
+          customer_id: rental.customer_id || rental.customers?.id,
+          vehicle_id: rental.vehicle_id || rental.vehicles?.id,
+          tenant_id: tenant.id,
+          type: 'Charge' as const,
+          entry_date: new Date().toISOString().split('T')[0],
+          due_date: new Date().toISOString().split('T')[0],
+        };
+        const ledgerEntries: any[] = [
+          { ...baseLedger, category: 'Extension Rental', reference: extRef, amount: extensionCost, remaining_amount: extensionCost },
+        ];
+        if (extensionTaxAmount > 0) {
+          ledgerEntries.push({ ...baseLedger, category: 'Extension Tax', reference: `Extension #${extNum}: Tax`, amount: extensionTaxAmount, remaining_amount: extensionTaxAmount });
+        }
+        if (extensionServiceFee > 0) {
+          ledgerEntries.push({ ...baseLedger, category: 'Extension Service Fee', reference: `Extension #${extNum}: Service Fee`, amount: extensionServiceFee, remaining_amount: extensionServiceFee });
+        }
         const { error: ledgerError } = await supabase
           .from('ledger_entries')
-          .insert({
-            rental_id: rental.id,
-            customer_id: rental.customer_id || rental.customers?.id,
-            vehicle_id: rental.vehicle_id || rental.vehicles?.id,
-            tenant_id: tenant.id,
-            type: 'Charge',
-            category: 'Extension',
-            reference: `Rental extension: ${extensionDays} day${extensionDays !== 1 ? 's' : ''} (${format(currentEndDate, 'MMM dd')} → ${format(requestedEndDate, 'MMM dd, yyyy')})`,
-            amount: extensionCost,
-            remaining_amount: extensionCost,
-            entry_date: new Date().toISOString().split('T')[0],
-            due_date: new Date().toISOString().split('T')[0],
-          });
-        if (ledgerError) console.error('Failed to create ledger entry:', ledgerError);
+          .insert(ledgerEntries);
+        if (ledgerError) console.error('Failed to create ledger entries:', ledgerError);
       }
 
       // Create Stripe checkout for extension payment
       let checkoutUrl: string | undefined;
-      if (extensionCost > 0) {
+      if (extensionTotalAmount > 0) {
         try {
           const { data: session } = await supabase.auth.getSession();
           const res = await fetch(
@@ -162,7 +213,7 @@ export function ExtensionRequestDialog({
                 vehicleId: rental.vehicle_id || rental.vehicles?.id,
                 customerEmail: rental.customers?.email,
                 customerName: rental.customers?.name,
-                extensionAmount: extensionCost,
+                extensionAmount: extensionTotalAmount,
                 extensionDays,
                 newEndDate: rental.previous_end_date,
                 previousEndDate: rental.end_date,
@@ -210,7 +261,7 @@ export function ExtensionRequestDialog({
               previousEndDate: format(currentEndDate, 'MMM dd, yyyy'),
               newEndDate: format(requestedEndDate, 'MMM dd, yyyy'),
               extensionDays,
-              extensionAmount: extensionCost,
+              extensionAmount: extensionTotalAmount,
               paymentUrl: checkoutUrl,
               tenantId: tenant.id,
               newMileageAllowance: mileageImpact?.newAllowance?.toLocaleString() || '',
@@ -235,7 +286,7 @@ export function ExtensionRequestDialog({
             customer_user_id: customerUser.id,
             tenant_id: tenant.id,
             title: 'Extension Approved',
-            message: `Your extension request for ${rental.vehicles?.make} ${rental.vehicles?.model} has been approved. New end date: ${format(requestedEndDate, 'MMM dd, yyyy')}.${extensionCost > 0 ? ` Extension fee: ${currencySymbol}${extensionCost.toFixed(2)}. A payment link has been sent to your email.` : ''}${mileageImpact?.newAllowance ? ` Your new mileage allowance is ${mileageImpact.newAllowance.toLocaleString()} ${tenant?.distance_unit || 'miles'}.` : ''}`,
+            message: `Your extension request for ${rental.vehicles?.make} ${rental.vehicles?.model} has been approved. New end date: ${format(requestedEndDate, 'MMM dd, yyyy')}.${extensionTotalAmount > 0 ? ` Extension total: ${currencySymbol}${extensionTotalAmount.toFixed(2)}. A payment link has been sent to your email.` : ''}${mileageImpact?.newAllowance ? ` Your new mileage allowance is ${mileageImpact.newAllowance.toLocaleString()} ${tenant?.distance_unit || 'miles'}.` : ''}`,
             type: 'success',
             link: '/portal/bookings',
           });
@@ -255,6 +306,7 @@ export function ExtensionRequestDialog({
             agreementType: 'extension',
             extensionPreviousEndDate: rental.end_date,
             extensionNewEndDate: rental.previous_end_date,
+            extensionNumber: (existingExtensionCount || 0) + 1,
           }),
         }).then(res => {
           if (!res.ok) console.error('Extension agreement send failed:', res.status);
@@ -264,8 +316,8 @@ export function ExtensionRequestDialog({
         console.error('Failed to trigger extension agreement:', e);
       }
 
-      // Auto-create extension insurance (fire-and-forget)
-      if (rental.bonzah_policy_id) {
+      // Auto-create extension insurance (fire-and-forget) — only if Bonzah selected
+      if (extensionInsuranceType === 'bonzah' && rental.bonzah_policy_id) {
         try {
           const { data: originalPolicy } = await supabase
             .from('bonzah_insurance_policies')
@@ -319,13 +371,17 @@ export function ExtensionRequestDialog({
 
       toast({
         title: 'Extension Approved',
-        description: `Rental extended to ${format(requestedEndDate, 'MMMM dd, yyyy')}.${extensionCost > 0 ? ` Extension charge of ${currencySymbol}${extensionCost.toFixed(2)} created with payment link sent to customer.` : ' Customer has been notified.'} An extension agreement has been sent for signing.`,
+        description: `Rental extended to ${format(requestedEndDate, 'MMMM dd, yyyy')}.${extensionTotalAmount > 0 ? ` Extension charge of ${currencySymbol}${extensionTotalAmount.toFixed(2)} created with payment link sent to customer.` : ' Customer has been notified.'} An extension agreement has been sent for signing.`,
       });
 
       queryClient.invalidateQueries({ queryKey: ['rental', rental.id, tenant.id] });
       queryClient.invalidateQueries({ queryKey: ['rentals-list'] });
       queryClient.invalidateQueries({ queryKey: ['enhanced-rentals'] });
       queryClient.invalidateQueries({ queryKey: ['ledger-entries'] });
+      queryClient.invalidateQueries({ queryKey: ['rental-charges'] });
+      queryClient.invalidateQueries({ queryKey: ['rental-payment-breakdown'] });
+      queryClient.invalidateQueries({ queryKey: ['rental-totals'] });
+      queryClient.invalidateQueries({ queryKey: ['extension-count', rental.id] });
       queryClient.invalidateQueries({ queryKey: ['rental-agreements', rental.id] });
       queryClient.invalidateQueries({ queryKey: ['rental-insurance-policies', rental.id] });
 
@@ -333,7 +389,7 @@ export function ExtensionRequestDialog({
         action: "rental_extension_approved",
         entityType: "rental",
         entityId: rental.id,
-        details: { newEndDate: rental.previous_end_date, previousEndDate: rental.end_date, extensionDays, extensionCost },
+        details: { newEndDate: rental.previous_end_date, previousEndDate: rental.end_date, extensionDays, extensionCost, extensionTaxAmount, extensionServiceFee, extensionTotalAmount },
       });
 
       onOpenChange(false);
@@ -519,12 +575,14 @@ export function ExtensionRequestDialog({
                   Calculating...
                 </div>
               ) : dailyRate ? (
-                <div>
-                  <p className="text-lg font-bold text-blue-700 dark:text-blue-300">
-                    {currencySymbol}{extensionCost.toFixed(2)}
-                  </p>
+                <div className="space-y-1">
+                  {/* Rental Fee */}
+                  <div className="flex justify-between text-sm">
+                    <span className="text-blue-600 dark:text-blue-400">Rental Fee</span>
+                    <span className="font-medium text-blue-700 dark:text-blue-300">{currencySymbol}{extensionCost.toFixed(2)}</span>
+                  </div>
                   {hasSurcharges ? (
-                    <div className="space-y-0.5 mt-1">
+                    <div className="space-y-0.5 pl-2 mb-1">
                       {(() => {
                         const groups: Record<string, { count: number; rate: number; label: string }> = {};
                         dayBreakdown.forEach((d) => {
@@ -536,16 +594,39 @@ export function ExtensionRequestDialog({
                           groups[key].count++;
                         });
                         return Object.values(groups).map((g, i) => (
-                          <p key={i} className="text-xs text-blue-600 dark:text-blue-400">
+                          <p key={i} className="text-xs text-blue-500 dark:text-blue-400">
                             {g.label} — {currencySymbol}{g.rate.toFixed(2)}/day x {g.count} day{g.count !== 1 ? 's' : ''}
                           </p>
                         ));
                       })()}
                     </div>
                   ) : (
-                    <p className="text-xs text-blue-600 dark:text-blue-400">
+                    <p className="text-xs text-blue-500 dark:text-blue-400 pl-2 mb-1">
                       {extensionDays} day{extensionDays !== 1 ? 's' : ''} x {currencySymbol}{dailyRate.toFixed(2)}/day
                     </p>
+                  )}
+                  {/* Tax */}
+                  {extensionTaxAmount > 0 && (
+                    <div className="flex justify-between text-sm">
+                      <span className="text-blue-600 dark:text-blue-400">Tax ({rentalSettings?.tax_percentage}%)</span>
+                      <span className="font-medium text-blue-700 dark:text-blue-300">{currencySymbol}{extensionTaxAmount.toFixed(2)}</span>
+                    </div>
+                  )}
+                  {/* Service Fee */}
+                  {extensionServiceFee > 0 && (
+                    <div className="flex justify-between text-sm">
+                      <span className="text-blue-600 dark:text-blue-400">
+                        Service Fee{rentalSettings?.service_fee_type === 'percentage' ? ` (${rentalSettings?.service_fee_value}%)` : ''}
+                      </span>
+                      <span className="font-medium text-blue-700 dark:text-blue-300">{currencySymbol}{extensionServiceFee.toFixed(2)}</span>
+                    </div>
+                  )}
+                  {/* Total */}
+                  {(extensionTaxAmount > 0 || extensionServiceFee > 0) && (
+                    <div className="flex justify-between text-sm pt-1 border-t border-blue-200 dark:border-blue-700 mt-1">
+                      <span className="font-semibold text-blue-700 dark:text-blue-300">Total</span>
+                      <span className="font-bold text-blue-700 dark:text-blue-300">{currencySymbol}{extensionTotalAmount.toFixed(2)}</span>
+                    </div>
                   )}
                 </div>
               ) : (
@@ -592,14 +673,60 @@ export function ExtensionRequestDialog({
             </Alert>
           )}
 
-          {/* Insurance Info */}
-          {rental.bonzah_policy_id && extensionDays > 0 && (
-            <Alert className="border-blue-300 bg-blue-50 dark:bg-blue-900/20">
-              <Shield className="h-4 w-4 text-blue-600" />
-              <AlertDescription className="text-blue-700 dark:text-blue-400">
-                An extension insurance policy will be auto-created for the gap period using the same coverage as the original policy.
-              </AlertDescription>
-            </Alert>
+          {/* Extension Insurance Type */}
+          {extensionDays > 0 && (
+            <div className="border rounded-lg p-3 space-y-3">
+              <div className="flex items-center gap-2 mb-1">
+                <Shield className="h-4 w-4 text-muted-foreground" />
+                <span className="text-xs text-muted-foreground uppercase tracking-wider font-medium">
+                  Extension Insurance
+                </span>
+              </div>
+              <RadioGroup
+                value={extensionInsuranceType}
+                onValueChange={(v) => setExtensionInsuranceType(v as 'bonzah' | 'own')}
+                className="space-y-2"
+              >
+                <label
+                  className={`flex items-start gap-3 p-2.5 rounded-md border cursor-pointer transition-colors ${
+                    extensionInsuranceType === 'bonzah'
+                      ? 'border-blue-300 bg-blue-50 dark:bg-blue-900/20'
+                      : 'border-border hover:bg-muted/30'
+                  }`}
+                >
+                  <RadioGroupItem value="bonzah" className="mt-0.5" />
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <ShieldCheck className="h-4 w-4 text-blue-600" />
+                      <span className="text-sm font-medium">Bonzah Insurance</span>
+                    </div>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      {rental.bonzah_policy_id
+                        ? 'Auto-create extension policy with same coverage as original'
+                        : 'Purchase Bonzah insurance from the rental page after approving'}
+                    </p>
+                  </div>
+                </label>
+                <label
+                  className={`flex items-start gap-3 p-2.5 rounded-md border cursor-pointer transition-colors ${
+                    extensionInsuranceType === 'own'
+                      ? 'border-blue-300 bg-blue-50 dark:bg-blue-900/20'
+                      : 'border-border hover:bg-muted/30'
+                  }`}
+                >
+                  <RadioGroupItem value="own" className="mt-0.5" />
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <Upload className="h-4 w-4 text-amber-600" />
+                      <span className="text-sm font-medium">Customer's Own Insurance</span>
+                    </div>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      Customer will upload their own insurance documents
+                    </p>
+                  </div>
+                </label>
+              </RadioGroup>
+            </div>
           )}
         </div>
 
