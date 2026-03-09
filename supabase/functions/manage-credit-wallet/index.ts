@@ -4,6 +4,7 @@ import {
   getSubscriptionStripeClient,
   getSubscriptionStripeMode,
 } from "../_shared/subscription-stripe.ts";
+import { CREDIT_CONFIG } from "../_shared/credit-config.ts";
 
 Deno.serve(async (req) => {
   const corsResponse = handleCors(req);
@@ -56,7 +57,7 @@ Deno.serve(async (req) => {
 
       // ─── Super Admin: Gift credits ───
       case "gift": {
-        const { tenantId, amount, note, performedBy } = body;
+        const { tenantId, amount, note, performedBy, isTestMode } = body;
         if (!tenantId || !amount || !note)
           return errorResponse("tenantId, amount, and note are required");
 
@@ -66,6 +67,7 @@ Deno.serve(async (req) => {
           p_type: "gift",
           p_description: note,
           p_performed_by: performedBy || null,
+          p_is_test_mode: isTestMode || false,
         });
 
         if (error) return errorResponse(error.message, 500);
@@ -80,6 +82,7 @@ Deno.serve(async (req) => {
           note: refundNote,
           category: refundCategory,
           performedBy: refundBy,
+          isTestMode: refundTestMode,
         } = body;
         if (!tenantId || !refundAmount || !refundNote)
           return errorResponse("tenantId, amount, and note are required");
@@ -91,6 +94,7 @@ Deno.serve(async (req) => {
           p_description: refundNote,
           p_category: refundCategory || null,
           p_performed_by: refundBy || null,
+          p_is_test_mode: refundTestMode || false,
         });
 
         if (error) return errorResponse(error.message, 500);
@@ -104,6 +108,7 @@ Deno.serve(async (req) => {
           amount: adjustAmount,
           note: adjustNote,
           performedBy: adjustBy,
+          isTestMode: adjustTestMode,
         } = body;
         if (!tenantId || adjustAmount === undefined || !adjustNote)
           return errorResponse("tenantId, amount, and note are required");
@@ -114,6 +119,7 @@ Deno.serve(async (req) => {
           p_type: "adjustment",
           p_description: adjustNote,
           p_performed_by: adjustBy || null,
+          p_is_test_mode: adjustTestMode || false,
         });
 
         if (error) return errorResponse(error.message, 500);
@@ -164,8 +170,8 @@ Deno.serve(async (req) => {
         if (!paymentMethodId)
           return errorResponse("No saved payment method for auto-refill");
 
-        // Calculate charge: refill_amount credits at $1/credit
-        const chargeAmountCents = wallet.auto_refill_amount * 100;
+        // Calculate charge using configured exchange rate
+        const chargeAmountCents = Math.round(wallet.auto_refill_amount * CREDIT_CONFIG.CREDIT_PRICE_USD * 100);
 
         // Create PaymentIntent for auto-refill
         const paymentIntent = await stripe.paymentIntents.create({
