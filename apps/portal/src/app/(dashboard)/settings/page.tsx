@@ -3659,8 +3659,9 @@ const Settings = () => {
 
         {/* Integrations Tab (SMS + E-Sign + Bonzah + Blacklist) */}
         <TabsContent value="integrations" className="space-y-6">
-          <TwilioSmsSettings />
-          <WhatsAppMetaSettings />
+          {/* TODO: Re-enable when SMS & WhatsApp integrations are complete */}
+          {/* <TwilioSmsSettings /> */}
+          {/* <WhatsAppMetaSettings /> */}
           <ESignSettings />
           <BonzahSettings />
 

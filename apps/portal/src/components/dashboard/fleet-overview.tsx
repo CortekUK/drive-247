@@ -149,9 +149,9 @@ export const FleetOverview = () => {
       </CardHeader>
       <CardContent>
         {vehicles && vehicles.length > 0 ? (
-          <div className="overflow-x-auto">
+          <div className="overflow-x-auto max-h-[420px] overflow-y-auto">
             <Table>
-              <TableHeader>
+              <TableHeader className="sticky top-0 z-10 bg-background">
                 <TableRow>
                   <TableHead className="w-[50px]">Photo</TableHead>
                   <TableHead>Vehicle</TableHead>

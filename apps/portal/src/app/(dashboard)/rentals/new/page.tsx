@@ -14,7 +14,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage, FormDescription } from "@/components/ui/form";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
-import { ArrowLeft, FileText, Save, AlertTriangle, MapPin, Clock, Shield, Upload, CheckCircle2, XCircle, Loader2, RefreshCw, QrCode, Smartphone, Copy, Check, Plus, Minus, Receipt, ImageIcon, ExternalLink, Info, CalendarDays, StickyNote, ChevronsUpDown } from "lucide-react";
+import { ArrowLeft, FileText, Save, AlertTriangle, MapPin, Clock, Shield, Upload, CheckCircle2, XCircle, Loader2, RefreshCw, QrCode, Smartphone, Copy, Check, Plus, Minus, Receipt, ImageIcon, ExternalLink, Info, CalendarDays, StickyNote, ChevronsUpDown, Link2, Star, ShieldCheck } from "lucide-react";
+import { GenerateInviteDialog } from "@/components/customers/generate-invite-dialog";
 import { cn } from "@/lib/utils";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
@@ -52,6 +53,9 @@ import { toast as sonnerToast } from "sonner";
 import { useRentalExtras, type RentalExtra } from "@/hooks/use-rental-extras";
 import { formatCurrency } from "@/lib/format-utils";
 import { useManagerPermissions } from "@/hooks/use-manager-permissions";
+import { useCustomerReviewSummary } from "@/hooks/use-customer-review-summary";
+import { useCustomerReviews } from "@/hooks/use-customer-reviews";
+import { useCustomerInsurance } from "@/hooks/use-customer-insurance";
 import { useWeekendPricing } from "@/hooks/use-weekend-pricing";
 import { useTenantHolidays } from "@/hooks/use-tenant-holidays";
 import { useVehiclePricingOverrides } from "@/hooks/use-vehicle-pricing-overrides";
@@ -73,25 +77,11 @@ const rentalSchema = z.object({
   insurance_status: z.enum(["pending", "uploaded", "verified", "bonzah", "not_required"]).optional(),
   notes: z.string().optional(),
 }).refine((data) => {
-  let minEndDate: Date;
-
-  // Calculate minimum end date based on rental period type
-  switch (data.rental_period_type) {
-    case "Daily":
-      minEndDate = addDays(data.start_date, 1);
-      break;
-    case "Weekly":
-      minEndDate = addWeeks(data.start_date, 1);
-      break;
-    case "Monthly":
-    default:
-      minEndDate = addMonths(data.start_date, 1);
-      break;
-  }
-
+  // End date must be at least 1 day after start date
+  const minEndDate = addDays(data.start_date, 1);
   return isAfter(data.end_date, minEndDate) || data.end_date.getTime() === minEndDate.getTime();
 }, {
-  message: "End date must be at least the minimum rental period after start date",
+  message: "End date must be at least 1 day after start date",
   path: ["end_date"],
 });
 
@@ -109,6 +99,8 @@ const CreateRental = () => {
   const { isManager, canEdit } = useManagerPermissions();
   const [loading, setLoading] = useState(false);
   const [vehicleOpen, setVehicleOpen] = useState(false);
+  const [customerOpen, setCustomerOpen] = useState(false);
+  const [inviteDialogOpen, setInviteDialogOpen] = useState(false);
 
   // Bonzah insurance state
   const [bonzahCoverage, setBonzahCoverage] = useState<CoverageOptions>({
@@ -384,6 +376,26 @@ const CreateRental = () => {
   const watchedMonthlyAmount = form.watch("monthly_amount");
   const watchedPickupLocation = form.watch("pickup_location");
   const watchedPromoCode = form.watch("promo_code");
+
+  // Auto-determine rental period type from date range (same logic as booking side)
+  // > 30 days = Monthly, 7-30 days = Weekly, < 7 days = Daily
+  useEffect(() => {
+    if (watchedStartDate && watchedEndDate) {
+      const days = Math.max(1, differenceInDays(watchedEndDate, watchedStartDate));
+      let periodType: "Daily" | "Weekly" | "Monthly";
+      if (days > 30) {
+        periodType = "Monthly";
+      } else if (days >= 7) {
+        periodType = "Weekly";
+      } else {
+        periodType = "Daily";
+      }
+      if (periodType !== watchedRentalPeriodType) {
+        form.setValue("rental_period_type", periodType, { shouldValidate: true });
+      }
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [watchedStartDate?.getTime(), watchedEndDate?.getTime()]);
   const watchedInsuranceStatus = form.watch("insurance_status");
   const watchedDriverAgeRange = form.watch("driver_age_range");
 
@@ -565,6 +577,11 @@ const CreateRental = () => {
   // Get active rentals count for selected customer to enforce rules
   const { data: activeRentalsCount } = useCustomerActiveRentals(selectedCustomerId);
 
+  // Customer review summary + insurance for the selected customer
+  const { data: reviewSummary } = useCustomerReviewSummary(selectedCustomerId || undefined);
+  const { data: customerReviews } = useCustomerReviews(selectedCustomerId || undefined);
+  const { data: customerInsurance } = useCustomerInsurance(selectedCustomerId || "");
+
   // Get customer details including DOB for verification
   const { data: customerDetails } = useQuery({
     queryKey: ["customer-details-for-rental", tenant?.id, selectedCustomerId],
@@ -644,98 +661,96 @@ const CreateRental = () => {
     }
   }, [isBonzahEligible, isBonzahEligibilityLoading]);
 
-  // Auto-populate rental amount based on selected vehicle and period type
-  // For Daily rentals with dates, applies dynamic pricing (weekend/holiday surcharges)
+  // Auto-populate rental amount based on selected vehicle, dates, and auto-determined period type
+  // Uses pro-rata calculation matching booking side:
+  // > 30 days: (days/30) × monthly_rent
+  // 7-30 days: (days/7) × weekly_rent
+  // < 7 days: days × daily_rent (with dynamic pricing for weekend/holiday surcharges)
   useEffect(() => {
-    if (selectedVehicleId && vehicles) {
+    if (selectedVehicleId && vehicles && watchedStartDate && watchedEndDate) {
       const vehicle = vehicles.find(v => v.id === selectedVehicleId);
-      if (vehicle) {
-        const periodType = watchedRentalPeriodType || "Monthly";
-        let amount: number | undefined;
+      if (!vehicle) return;
 
-        if (periodType === "Daily" && vehicle.daily_rent) {
-          // Apply dynamic pricing for daily rentals when dates are available
-          if (watchedStartDate && watchedEndDate) {
-            const startStr = format(watchedStartDate, 'yyyy-MM-dd');
-            const endStr = format(watchedEndDate, 'yyyy-MM-dd');
-            const days = Math.max(1, differenceInDays(watchedEndDate, watchedStartDate));
-            const baseDaily = vehicle.daily_rent;
+      const days = Math.max(1, differenceInDays(watchedEndDate, watchedStartDate));
+      const dailyRent = vehicle.daily_rent || 0;
+      const weeklyRent = vehicle.weekly_rent || 0;
+      const monthlyRent = vehicle.monthly_rent || 0;
+      let amount: number | undefined;
 
-            // Only apply dynamic pricing for < 7 days (daily tier)
-            if (days < 7) {
-              const weekendConfig = weekendPricingSettings.weekend_surcharge_percent > 0
-                ? weekendPricingSettings : null;
-              let total = 0;
+      if (days > 30 && monthlyRent > 0) {
+        // Monthly tier: pro-rata
+        amount = Math.round(((days / 30) * monthlyRent) * 100) / 100;
+      } else if (days >= 7 && days <= 30 && weeklyRent > 0) {
+        // Weekly tier: pro-rata
+        amount = Math.round(((days / 7) * weeklyRent) * 100) / 100;
+      } else if (dailyRent > 0) {
+        // Daily tier: apply dynamic pricing (weekend/holiday surcharges)
+        const weekendConfig = weekendPricingSettings.weekend_surcharge_percent > 0
+          ? weekendPricingSettings : null;
+        let total = 0;
 
-              for (let i = 0; i < days; i++) {
-                const currentDate = addDays(watchedStartDate, i);
-                const dayOfWeek = currentDate.getDay();
-                let dayRate = baseDaily;
+        for (let i = 0; i < days; i++) {
+          const currentDate = addDays(watchedStartDate, i);
+          const dayOfWeek = currentDate.getDay();
+          let dayRate = dailyRent;
 
-                // 1. Check holiday match (priority over weekend)
-                const holiday = tenantHolidays.find(h => {
-                  const dateStr = format(currentDate, 'yyyy-MM-dd');
-                  if (h.excluded_vehicle_ids?.includes(selectedVehicleId)) return false;
-                  if (h.recurs_annually) {
-                    const hStart = new Date(h.start_date + 'T00:00:00');
-                    const hEnd = new Date(h.end_date + 'T00:00:00');
-                    const m = currentDate.getMonth(), d = currentDate.getDate();
-                    return (m === hStart.getMonth() && d >= hStart.getDate() && (hStart.getMonth() === hEnd.getMonth() ? d <= hEnd.getDate() : true))
-                      || (m === hEnd.getMonth() && d <= hEnd.getDate() && hStart.getMonth() !== hEnd.getMonth())
-                      || (m > hStart.getMonth() && m < hEnd.getMonth());
-                  }
-                  return dateStr >= h.start_date && dateStr <= h.end_date;
-                });
-
-                if (holiday) {
-                  const override = vehiclePricingOverrides.find(
-                    o => o.rule_type === 'holiday' && o.holiday_id === holiday.id
-                  );
-                  if (override?.override_type === 'excluded') {
-                    dayRate = baseDaily;
-                  } else if (override?.override_type === 'fixed_price' && override.fixed_price != null) {
-                    dayRate = override.fixed_price;
-                  } else if (override?.override_type === 'custom_percent' && override.custom_percent != null) {
-                    dayRate = baseDaily * (1 + override.custom_percent / 100);
-                  } else {
-                    dayRate = baseDaily * (1 + holiday.surcharge_percent / 100);
-                  }
-                } else if (weekendConfig && weekendConfig.weekend_days?.includes(dayOfWeek)) {
-                  // 2. Weekend match
-                  const override = vehiclePricingOverrides.find(o => o.rule_type === 'weekend');
-                  if (override?.override_type === 'excluded') {
-                    dayRate = baseDaily;
-                  } else if (override?.override_type === 'fixed_price' && override.fixed_price != null) {
-                    dayRate = override.fixed_price;
-                  } else if (override?.override_type === 'custom_percent' && override.custom_percent != null) {
-                    dayRate = baseDaily * (1 + override.custom_percent / 100);
-                  } else {
-                    dayRate = baseDaily * (1 + weekendConfig.weekend_surcharge_percent / 100);
-                  }
-                }
-
-                total += dayRate;
-              }
-              amount = Math.round(total * 100) / 100;
-            } else {
-              amount = vehicle.daily_rent;
+          // 1. Check holiday match (priority over weekend)
+          const holiday = tenantHolidays.find(h => {
+            const dateStr = format(currentDate, 'yyyy-MM-dd');
+            if (h.excluded_vehicle_ids?.includes(selectedVehicleId)) return false;
+            if (h.recurs_annually) {
+              const hStart = new Date(h.start_date + 'T00:00:00');
+              const hEnd = new Date(h.end_date + 'T00:00:00');
+              const m = currentDate.getMonth(), d = currentDate.getDate();
+              return (m === hStart.getMonth() && d >= hStart.getDate() && (hStart.getMonth() === hEnd.getMonth() ? d <= hEnd.getDate() : true))
+                || (m === hEnd.getMonth() && d <= hEnd.getDate() && hStart.getMonth() !== hEnd.getMonth())
+                || (m > hStart.getMonth() && m < hEnd.getMonth());
             }
-          } else {
-            amount = vehicle.daily_rent;
-          }
-        } else if (periodType === "Weekly" && vehicle.weekly_rent) {
-          amount = vehicle.weekly_rent;
-        } else if (periodType === "Monthly" && vehicle.monthly_rent) {
-          amount = vehicle.monthly_rent;
-        }
+            return dateStr >= h.start_date && dateStr <= h.end_date;
+          });
 
-        if (amount !== undefined && amount !== watchedMonthlyAmount) {
-          form.setValue("monthly_amount", amount, { shouldValidate: true });
+          if (holiday) {
+            const override = vehiclePricingOverrides.find(
+              o => o.rule_type === 'holiday' && o.holiday_id === holiday.id
+            );
+            if (override?.override_type === 'excluded') {
+              dayRate = dailyRent;
+            } else if (override?.override_type === 'fixed_price' && override.fixed_price != null) {
+              dayRate = override.fixed_price;
+            } else if (override?.override_type === 'custom_percent' && override.custom_percent != null) {
+              dayRate = dailyRent * (1 + override.custom_percent / 100);
+            } else {
+              dayRate = dailyRent * (1 + holiday.surcharge_percent / 100);
+            }
+          } else if (weekendConfig && weekendConfig.weekend_days?.includes(dayOfWeek)) {
+            // 2. Weekend match
+            const override = vehiclePricingOverrides.find(o => o.rule_type === 'weekend');
+            if (override?.override_type === 'excluded') {
+              dayRate = dailyRent;
+            } else if (override?.override_type === 'fixed_price' && override.fixed_price != null) {
+              dayRate = override.fixed_price;
+            } else if (override?.override_type === 'custom_percent' && override.custom_percent != null) {
+              dayRate = dailyRent * (1 + override.custom_percent / 100);
+            } else {
+              dayRate = dailyRent * (1 + weekendConfig.weekend_surcharge_percent / 100);
+            }
+          }
+
+          total += dayRate;
         }
+        amount = Math.round(total * 100) / 100;
+      } else if (weeklyRent > 0) {
+        amount = Math.round(((days / 7) * weeklyRent) * 100) / 100;
+      } else if (monthlyRent > 0) {
+        amount = Math.round(((days / 30) * monthlyRent) * 100) / 100;
+      }
+
+      if (amount !== undefined && amount !== watchedMonthlyAmount) {
+        form.setValue("monthly_amount", amount, { shouldValidate: true });
       }
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedVehicleId, watchedRentalPeriodType, watchedStartDate?.getTime(), watchedEndDate?.getTime(), vehicles, weekendPricingSettings.weekend_surcharge_percent, tenantHolidays.length, vehiclePricingOverrides.length]);
+  }, [selectedVehicleId, watchedStartDate?.getTime(), watchedEndDate?.getTime(), vehicles, weekendPricingSettings.weekend_surcharge_percent, tenantHolidays.length, vehiclePricingOverrides.length]);
 
   // DEV MODE: Listen for dev panel fill events (only in development)
   useEffect(() => {
@@ -1497,32 +1512,86 @@ const CreateRental = () => {
                     <FormField
                       control={form.control}
                       name="customer_id"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Customer <span className="text-red-500">*</span></FormLabel>
-                          <Select onValueChange={field.onChange} value={field.value}>
-                            <FormControl>
-                              <SelectTrigger className={form.formState.errors.customer_id ? "border-destructive" : ""}>
-                                <SelectValue placeholder="Select customer" />
-                              </SelectTrigger>
-                            </FormControl>
-                            <SelectContent className="max-w-[calc(100vw-2rem)]">
-                              {customers?.map((customer) => {
-                                const contact = customer.email || customer.phone;
-                                return (
-                                  <SelectItem key={customer.id} value={customer.id} className="whitespace-normal break-words">
-                                    <div className="flex flex-col gap-0.5">
-                                      <span className="font-medium">{customer.name}</span>
-                                      {contact && <span className="text-xs text-muted-foreground">{contact}</span>}
-                                    </div>
-                                  </SelectItem>
-                                );
-                              })}
-                            </SelectContent>
-                          </Select>
-                          <FormMessage />
-                        </FormItem>
-                      )}
+                      render={({ field }) => {
+                        const selectedCustomerOption = customers?.find((c: any) => c.id === field.value);
+                        return (
+                          <FormItem className="flex flex-col">
+                            <div className="flex items-center justify-between">
+                              <FormLabel>Customer <span className="text-red-500">*</span></FormLabel>
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                className="h-auto py-0.5 px-2 text-xs text-primary hover:text-primary/80"
+                                onClick={() => setInviteDialogOpen(true)}
+                              >
+                                <Link2 className="h-3 w-3 mr-1" />
+                                Invite Link
+                              </Button>
+                            </div>
+                            <Popover open={customerOpen} onOpenChange={setCustomerOpen}>
+                              <PopoverTrigger asChild>
+                                <FormControl>
+                                  <Button
+                                    variant="outline"
+                                    role="combobox"
+                                    aria-expanded={customerOpen}
+                                    className={cn(
+                                      "w-full justify-between font-normal",
+                                      !field.value && "text-muted-foreground",
+                                      form.formState.errors.customer_id && "border-destructive"
+                                    )}
+                                  >
+                                    {selectedCustomerOption ? (
+                                      <span className="truncate">
+                                        {selectedCustomerOption.name}
+                                      </span>
+                                    ) : (
+                                      "Select customer"
+                                    )}
+                                    <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                                  </Button>
+                                </FormControl>
+                              </PopoverTrigger>
+                              <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
+                                <Command>
+                                  <CommandInput placeholder="Search by name or email..." />
+                                  <CommandList>
+                                    <CommandEmpty>No customer found.</CommandEmpty>
+                                    <CommandGroup>
+                                      {customers?.map((customer: any) => {
+                                        const contact = customer.email || customer.phone;
+                                        return (
+                                          <CommandItem
+                                            key={customer.id}
+                                            value={`${customer.name} ${customer.email || ''} ${customer.phone || ''}`}
+                                            onSelect={() => {
+                                              field.onChange(customer.id);
+                                              setCustomerOpen(false);
+                                            }}
+                                          >
+                                            <Check
+                                              className={cn(
+                                                "mr-2 h-4 w-4",
+                                                field.value === customer.id ? "opacity-100" : "opacity-0"
+                                              )}
+                                            />
+                                            <div className="flex flex-col gap-0.5">
+                                              <span className="font-medium">{customer.name}</span>
+                                              {contact && <span className="text-xs text-muted-foreground">{contact}</span>}
+                                            </div>
+                                          </CommandItem>
+                                        );
+                                      })}
+                                    </CommandGroup>
+                                  </CommandList>
+                                </Command>
+                              </PopoverContent>
+                            </Popover>
+                            <FormMessage />
+                          </FormItem>
+                        );
+                      }}
                     />
 
                     <FormField
@@ -1698,6 +1767,129 @@ const CreateRental = () => {
                       )}
                     </div>
                   )}
+
+                  {/* Customer Reviews & Insurance — shown when customer selected */}
+                  {selectedCustomerId && (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      {/* Reviews Card */}
+                      <div className="p-4 border rounded-lg bg-muted/30 space-y-3">
+                        <div className="flex items-center gap-2">
+                          <Star className="h-4 w-4 text-amber-500" />
+                          <h3 className="font-medium text-sm">Customer Reviews</h3>
+                        </div>
+
+                        {reviewSummary ? (
+                          <div className="space-y-2">
+                            <div className="flex items-center gap-3">
+                              <div className="flex items-center gap-1">
+                                {Array.from({ length: 10 }, (_, i) => (
+                                  <div
+                                    key={i}
+                                    className={cn(
+                                      "h-2 w-2 rounded-full",
+                                      i < Math.round(reviewSummary.average_rating || 0)
+                                        ? "bg-amber-500"
+                                        : "bg-muted-foreground/20"
+                                    )}
+                                  />
+                                ))}
+                              </div>
+                              <span className="text-sm font-semibold">
+                                {(reviewSummary.average_rating || 0).toFixed(1)}/10
+                              </span>
+                              <span className="text-xs text-muted-foreground">
+                                ({reviewSummary.total_reviews} {reviewSummary.total_reviews === 1 ? 'review' : 'reviews'})
+                              </span>
+                            </div>
+                            {reviewSummary.summary && (
+                              <p className="text-xs text-muted-foreground leading-relaxed italic">
+                                "{reviewSummary.summary}"
+                              </p>
+                            )}
+                            {customerReviews && customerReviews.length > 0 && (
+                              <div className="flex flex-wrap gap-1.5">
+                                {[...new Set(customerReviews.flatMap(r => r.tags))].slice(0, 6).map(tag => (
+                                  <Badge key={tag} variant="secondary" className="text-[10px] px-1.5 py-0">
+                                    {tag}
+                                  </Badge>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        ) : customerReviews && customerReviews.length > 0 ? (
+                          <div className="space-y-2">
+                            <div className="text-xs text-muted-foreground">
+                              {customerReviews.length} {customerReviews.length === 1 ? 'review' : 'reviews'} — avg{' '}
+                              {(customerReviews.reduce((sum, r) => sum + (r.rating || 0), 0) / customerReviews.length).toFixed(1)}/10
+                            </div>
+                            <div className="flex flex-wrap gap-1.5">
+                              {[...new Set(customerReviews.flatMap(r => r.tags))].slice(0, 6).map(tag => (
+                                <Badge key={tag} variant="secondary" className="text-[10px] px-1.5 py-0">
+                                  {tag}
+                                </Badge>
+                              ))}
+                            </div>
+                          </div>
+                        ) : (
+                          <p className="text-xs text-muted-foreground">
+                            No reviews yet. Reviews will appear here after completed rentals are reviewed.
+                          </p>
+                        )}
+                      </div>
+
+                      {/* Insurance Card */}
+                      <div className="p-4 border rounded-lg bg-muted/30 space-y-3">
+                        <div className="flex items-center gap-2">
+                          <ShieldCheck className="h-4 w-4 text-emerald-500" />
+                          <h3 className="font-medium text-sm">Uploaded Insurance</h3>
+                        </div>
+
+                        {customerInsurance && customerInsurance.length > 0 ? (
+                          <div className="space-y-2">
+                            {customerInsurance.slice(0, 3).map(policy => {
+                              const isActive = policy.status === "Active";
+                              const isExpired = policy.status === "Expired";
+                              return (
+                                <div key={policy.id} className="flex items-center justify-between text-xs">
+                                  <div className="flex items-center gap-2 min-w-0">
+                                    <div className={cn(
+                                      "h-1.5 w-1.5 rounded-full shrink-0",
+                                      isActive ? "bg-emerald-500" : isExpired ? "bg-red-500" : "bg-amber-500"
+                                    )} />
+                                    <span className="font-medium truncate">{policy.policy_number}</span>
+                                  </div>
+                                  <div className="flex items-center gap-2 shrink-0 ml-2">
+                                    {policy.vehicles && (
+                                      <span className="text-muted-foreground">{policy.vehicles.reg}</span>
+                                    )}
+                                    <Badge
+                                      variant="outline"
+                                      className={cn(
+                                        "text-[10px] px-1.5 py-0",
+                                        isActive && "border-emerald-500/30 text-emerald-600",
+                                        isExpired && "border-red-500/30 text-red-600"
+                                      )}
+                                    >
+                                      {policy.status}
+                                    </Badge>
+                                  </div>
+                                </div>
+                              );
+                            })}
+                            {customerInsurance.length > 3 && (
+                              <p className="text-[10px] text-muted-foreground">
+                                +{customerInsurance.length - 3} more {customerInsurance.length - 3 === 1 ? 'policy' : 'policies'}
+                              </p>
+                            )}
+                          </div>
+                        ) : (
+                          <p className="text-xs text-muted-foreground">
+                            No uploaded insurance on record. Customer-provided policies will appear here once uploaded.
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
 
@@ -1708,35 +1900,7 @@ const CreateRental = () => {
                   <h2 className="font-semibold text-sm">Rental Period & Pricing</h2>
                 </div>
                 <div className="p-5 space-y-5">
-                  <div className="grid grid-cols-1 gap-4">
-                    <FormField
-                      control={form.control}
-                      name="rental_period_type"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Rental Period Type <span className="text-red-500">*</span></FormLabel>
-                          <Select onValueChange={field.onChange} value={field.value}>
-                            <FormControl>
-                              <SelectTrigger>
-                                <SelectValue placeholder="Select rental period" />
-                              </SelectTrigger>
-                            </FormControl>
-                            <SelectContent>
-                              <SelectItem value="Daily">Daily</SelectItem>
-                              <SelectItem value="Weekly">Weekly</SelectItem>
-                              <SelectItem value="Monthly">Monthly</SelectItem>
-                            </SelectContent>
-                          </Select>
-                          <FormMessage />
-                          <FormDescription>
-                            Choose how often the rental will be charged
-                          </FormDescription>
-                        </FormItem>
-                      )}
-                    />
-                  </div>
-
-                  {/* Dates */}
+                  {/* Dates first — period type is auto-determined from date range */}
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <FormField
                       control={form.control}
@@ -1750,13 +1914,10 @@ const CreateRental = () => {
                               onSelect={field.onChange}
                               placeholder="Select start date"
                               disabled={(date) => {
-                                // Disable dates more than a year ago
                                 if (isBefore(date, yearAgo)) return true;
-                                // Disable globally blocked dates
                                 if (globalBlockedDatesArray.some(
                                   blockedDate => blockedDate.toDateString() === date.toDateString()
                                 )) return true;
-                                // Disable vehicle-specific blocked dates if vehicle is selected
                                 if (selectedVehicleId) {
                                   const vehicleBlockedDates = getVehicleBlockedDates(selectedVehicleId);
                                   if (vehicleBlockedDates.some(
@@ -1784,23 +1945,7 @@ const CreateRental = () => {
                       control={form.control}
                       name="end_date"
                       render={({ field }) => {
-                        const periodType = watchedRentalPeriodType || "Monthly";
-                        const getMinEndDate = (startDate: Date) => {
-                          switch (periodType) {
-                            case "Daily":
-                              return addDays(startDate, 1);
-                            case "Weekly":
-                              return addWeeks(startDate, 1);
-                            case "Monthly":
-                            default:
-                              return addMonths(startDate, 1);
-                          }
-                        };
-                        const descriptionText = periodType === "Daily"
-                          ? "Must be at least 1 day after start date"
-                          : periodType === "Weekly"
-                            ? "Must be at least 1 week after start date"
-                            : "Must be at least 1 month after start date";
+                        const getMinEndDate = (startDate: Date) => addDays(startDate, 1);
 
                         return (
                           <FormItem>
@@ -1811,22 +1956,18 @@ const CreateRental = () => {
                                 onSelect={field.onChange}
                                 placeholder="Select end date"
                                 disabled={(date) => {
-                                  // Disable dates before minimum end date
                                   if (watchedStartDate && isBefore(date, getMinEndDate(watchedStartDate))) {
                                     return true;
                                   }
-                                  // Disable globally blocked dates
                                   if (globalBlockedDatesArray.some(
                                     blockedDate => blockedDate.toDateString() === date.toDateString()
                                   )) return true;
-                                  // Disable vehicle-specific blocked dates if vehicle is selected
                                   if (selectedVehicleId) {
                                     const vehicleBlockedDates = getVehicleBlockedDates(selectedVehicleId);
                                     if (vehicleBlockedDates.some(
                                       blockedDate => blockedDate.toDateString() === date.toDateString()
                                     )) return true;
                                   }
-                                  // Disable end dates that would span across a blocked period
                                   if (watchedStartDate && selectedVehicleId) {
                                     const blockCheck = checkBlockedDatesOverlap(watchedStartDate, date, selectedVehicleId);
                                     if (blockCheck.blocked) return true;
@@ -1838,12 +1979,39 @@ const CreateRental = () => {
                               />
                             </FormControl>
                             <FormMessage />
-                            <FormDescription>
-                              {descriptionText}
-                            </FormDescription>
+                            {watchedStartDate && watchedEndDate && (
+                              <FormDescription>
+                                {Math.max(1, differenceInDays(watchedEndDate, watchedStartDate))} days
+                              </FormDescription>
+                            )}
                           </FormItem>
                         );
                       }}
+                    />
+                  </div>
+
+                  {/* Rental Period Type — auto-determined, read-only display */}
+                  <div className="grid grid-cols-1 gap-4">
+                    <FormField
+                      control={form.control}
+                      name="rental_period_type"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Rental Period Type</FormLabel>
+                          <FormControl>
+                            <div className={cn(
+                              "flex h-10 w-full items-center rounded-md border border-input bg-muted/50 px-3 py-2 text-sm cursor-not-allowed",
+                            )}>
+                              <Badge variant="outline" className="font-medium">
+                                {field.value}
+                              </Badge>
+                              <span className="ml-2 text-muted-foreground text-xs">
+                                Auto-determined from date range
+                              </span>
+                            </div>
+                          </FormControl>
+                        </FormItem>
+                      )}
                     />
                   </div>
 
@@ -1871,12 +2039,9 @@ const CreateRental = () => {
                       name="monthly_amount"
                       render={({ field }) => {
                         const periodType = watchedRentalPeriodType || "Monthly";
-                        const labelText = periodType === "Daily" ? "Daily Amount" :
-                          periodType === "Weekly" ? "Weekly Amount" :
+                        const labelText = periodType === "Daily" ? "Total Amount" :
+                          periodType === "Weekly" ? "Total Amount" :
                             "Monthly Amount";
-                        const placeholder = periodType === "Daily" ? "Daily rental amount" :
-                          periodType === "Weekly" ? "Weekly rental amount" :
-                            "Monthly rental amount";
                         return (
                           <FormItem>
                             <FormLabel>{labelText} <span className="text-red-500">*</span></FormLabel>
@@ -1884,13 +2049,16 @@ const CreateRental = () => {
                               <CurrencyInput
                                 value={field.value}
                                 onChange={field.onChange}
-                                placeholder={placeholder}
+                                placeholder="Rental amount"
                                 min={1}
                                 step={1}
                                 error={!!form.formState.errors.monthly_amount}
                                 disabled={false}
                               />
                             </FormControl>
+                            <FormDescription>
+                              Auto-calculated from vehicle rates. You can adjust if needed.
+                            </FormDescription>
                             <FormMessage />
                           </FormItem>
                         );
@@ -2621,6 +2789,12 @@ const CreateRental = () => {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Generate Invite Link Dialog */}
+      <GenerateInviteDialog
+        open={inviteDialogOpen}
+        onOpenChange={setInviteDialogOpen}
+      />
     </div>
   );
 };
