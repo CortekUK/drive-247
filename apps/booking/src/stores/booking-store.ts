@@ -179,6 +179,10 @@ interface BookingState {
   clearPendingGigDriverFiles: () => void;
   getPendingGigDriverFiles: () => PendingGigDriverFile[];
 
+  // Highest step the user has legitimately reached via "Next" buttons
+  highestStepReached: number;
+  setHighestStepReached: (step: number) => void;
+
   // Widget state setters — support both direct value and callback (like useState)
   setFormData: (updater: FormDataUpdater) => void;
   setCurrentStep: (updater: StepUpdater) => void;
@@ -230,6 +234,7 @@ export const useBookingStore = create<BookingState>()(
       pendingGigDriverFiles: [],
       formData: initialWidgetFormData,
       currentStep: 1,
+      highestStepReached: 1,
       selectedExtras: [],
 
       setContext: (context) => set({ context: { ...initialContext, ...context } }),
@@ -269,6 +274,11 @@ export const useBookingStore = create<BookingState>()(
           currentStep: typeof updater === 'function' ? updater(state.currentStep) : updater,
         })),
 
+      setHighestStepReached: (step) =>
+        set((state) => ({
+          highestStepReached: Math.max(state.highestStepReached, step),
+        })),
+
       setSelectedExtras: (updater) =>
         set((state) => ({
           selectedExtras: typeof updater === 'function' ? updater(state.selectedExtras) : updater,
@@ -281,6 +291,7 @@ export const useBookingStore = create<BookingState>()(
           pendingGigDriverFiles: [],
           formData: initialWidgetFormData,
           currentStep: 1,
+          highestStepReached: 1,
           selectedExtras: [],
         });
 
@@ -311,6 +322,7 @@ export const useBookingStore = create<BookingState>()(
       partialize: (state) => ({
         formData: state.formData,
         currentStep: state.currentStep,
+        highestStepReached: state.highestStepReached,
         selectedExtras: state.selectedExtras,
       }),
     }

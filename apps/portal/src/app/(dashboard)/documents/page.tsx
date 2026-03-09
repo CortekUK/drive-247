@@ -5,43 +5,15 @@ import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { ChartContainer, ChartTooltip, type ChartConfig } from "@/components/ui/chart";
-import {
-  BarChart, Bar, PieChart, Pie, Cell, CartesianGrid, XAxis, YAxis,
-  RadialBarChart, RadialBar, PolarAngleAxis,
-} from "recharts";
-import { FileText, Download, ExternalLink, X, Info } from "lucide-react";
+import { FileText, Download, ExternalLink, X, BarChart3 } from "lucide-react";
+import Link from "next/link";
 import { EmptyState } from "@/components/shared/data-display/empty-state";
-import { format, subMonths, startOfMonth } from "date-fns";
-import { useState, useMemo } from "react";
+import { format } from "date-fns";
+import { useState } from "react";
 import { useTenant } from "@/contexts/TenantContext";
 import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
-
-// --- Chart configs ---
-const TYPE_COLORS: Record<string, string> = {
-  "Insurance Certificate": "#6366f1",
-  "Driving Licence": "#22c55e",
-  "National Insurance": "#f59e0b",
-  "Address Proof": "#06b6d4",
-  "ID Card/Passport": "#8b5cf6",
-  "Agreement": "#ec4899",
-  "Other": "#94a3b8",
-};
-
-const typeChartConfig = Object.fromEntries(
-  Object.entries(TYPE_COLORS).map(([k, v]) => [k, { label: k, color: v }])
-) as ChartConfig;
-
-const monthlyConfig: ChartConfig = {
-  count: { label: "Documents", color: "#6366f1" },
-};
-
-const verifiedRadialConfig: ChartConfig = {
-  rate: { label: "Verified", color: "#22c55e" },
-};
 
 interface Document {
   id: string;
@@ -248,51 +220,6 @@ export default function DocumentsList() {
     window.open(publicUrl, "_blank");
   };
 
-  // --- Chart data derivations ---
-  const typeDonutData = useMemo(() => {
-    const counts: Record<string, number> = {};
-    allDocuments.forEach((doc) => {
-      const type = doc.document_type || "Other";
-      counts[type] = (counts[type] || 0) + 1;
-    });
-    return Object.entries(counts)
-      .map(([name, value]) => ({ name, value, fill: TYPE_COLORS[name] || TYPE_COLORS["Other"] }))
-      .sort((a, b) => b.value - a.value);
-  }, [allDocuments]);
-
-  const monthlyUploadData = useMemo(() => {
-    const now = new Date();
-    const months: { month: string; count: number }[] = [];
-    for (let i = 5; i >= 0; i--) {
-      const d = subMonths(now, i);
-      const key = format(startOfMonth(d), "yyyy-MM");
-      const label = format(d, "MMM");
-      const count = allDocuments.filter((doc) => doc.created_at?.startsWith(key)).length;
-      months.push({ month: label, count });
-    }
-    return months;
-  }, [allDocuments]);
-
-  const verifiedRadialData = useMemo(() => {
-    const verifiable = completedDocuments.filter((d) => d.verified !== undefined);
-    const verified = verifiable.filter((d) => d.verified === true).length;
-    const total = verifiable.length;
-    const rate = total > 0 ? Math.round((verified / total) * 100) : 0;
-    return { rate, verified, total, unverified: total - verified };
-  }, [completedDocuments]);
-
-  const topCustomersData = useMemo(() => {
-    const counts: Record<string, number> = {};
-    allDocuments.forEach((doc) => {
-      const name = doc.customers?.name || "Unknown";
-      counts[name] = (counts[name] || 0) + 1;
-    });
-    return Object.entries(counts)
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, 5)
-      .map(([name, count]) => ({ name: name.length > 12 ? name.slice(0, 12) + "…" : name, count, fullName: name }));
-  }, [allDocuments]);
-
   if (isLoading) {
     return (
       <div className="space-y-6">
@@ -349,149 +276,17 @@ export default function DocumentsList() {
         </button>
       </div>
 
-      {/* Charts */}
-      <TooltipProvider>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-          {/* Document Types Donut */}
-          <div className="rounded-lg border border-border/60 bg-card/50 p-4">
-            <div className="flex items-center gap-1.5 mb-3">
-              <h3 className="text-sm font-medium">Document Types</h3>
-              <Tooltip>
-                <TooltipTrigger><Info className="h-3.5 w-3.5 text-muted-foreground" /></TooltipTrigger>
-                <TooltipContent>Breakdown by document category</TooltipContent>
-              </Tooltip>
-            </div>
-            {typeDonutData.length > 0 ? (
-              <ChartContainer config={typeChartConfig} className="h-[180px] w-full">
-                <PieChart>
-                  <Pie data={typeDonutData} dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius={45} outerRadius={70} paddingAngle={2}>
-                    {typeDonutData.map((entry) => (
-                      <Cell key={entry.name} fill={entry.fill} />
-                    ))}
-                  </Pie>
-                  <ChartTooltip content={({ active, payload }) => {
-                    if (!active || !payload?.length) return null;
-                    const d = payload[0].payload;
-                    return (
-                      <div className="rounded-lg border bg-background px-3 py-2 shadow-md">
-                        <div className="flex items-center gap-2">
-                          <span className="h-2.5 w-2.5 rounded-full" style={{ background: d.fill }} />
-                          <span className="text-sm font-medium">{d.name}</span>
-                        </div>
-                        <p className="text-sm text-muted-foreground mt-0.5">{d.value} document{d.value !== 1 ? "s" : ""}</p>
-                      </div>
-                    );
-                  }} />
-                </PieChart>
-              </ChartContainer>
-            ) : (
-              <p className="text-sm text-muted-foreground text-center py-10">No data</p>
-            )}
-            {/* Legend */}
-            <div className="flex flex-wrap gap-x-3 gap-y-1 mt-2">
-              {typeDonutData.slice(0, 4).map((d) => (
-                <div key={d.name} className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                  <span className="h-2 w-2 rounded-full" style={{ background: d.fill }} />
-                  {d.name.length > 16 ? d.name.slice(0, 16) + "…" : d.name}
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* Monthly Upload Trend */}
-          <div className="rounded-lg border border-border/60 bg-card/50 p-4">
-            <div className="flex items-center gap-1.5 mb-3">
-              <h3 className="text-sm font-medium">Monthly Uploads</h3>
-              <Tooltip>
-                <TooltipTrigger><Info className="h-3.5 w-3.5 text-muted-foreground" /></TooltipTrigger>
-                <TooltipContent>Document uploads over last 6 months</TooltipContent>
-              </Tooltip>
-            </div>
-            <ChartContainer config={monthlyConfig} className="h-[180px] w-full">
-              <BarChart data={monthlyUploadData}>
-                <CartesianGrid vertical={false} strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                <XAxis dataKey="month" tickLine={false} axisLine={false} tick={{ fontSize: 11 }} />
-                <YAxis allowDecimals={false} tickLine={false} axisLine={false} tick={{ fontSize: 11 }} width={28} />
-                <Bar dataKey="count" fill="#6366f1" radius={[4, 4, 0, 0]} />
-                <ChartTooltip cursor={{ fill: "hsl(var(--muted-foreground))", opacity: 0.08 }} content={({ active, payload }) => {
-                  if (!active || !payload?.length) return null;
-                  const d = payload[0].payload;
-                  return (
-                    <div className="rounded-lg border bg-background px-3 py-2 shadow-md">
-                      <p className="text-xs text-muted-foreground">{d.month}</p>
-                      <p className="text-sm font-semibold">{d.count} document{d.count !== 1 ? "s" : ""}</p>
-                    </div>
-                  );
-                }} />
-              </BarChart>
-            </ChartContainer>
-          </div>
-
-          {/* Verification Rate Radial */}
-          <div className="rounded-lg border border-border/60 bg-card/50 p-4">
-            <div className="flex items-center gap-1.5 mb-3">
-              <h3 className="text-sm font-medium">Verification Rate</h3>
-              <Tooltip>
-                <TooltipTrigger><Info className="h-3.5 w-3.5 text-muted-foreground" /></TooltipTrigger>
-                <TooltipContent>Percentage of documents verified</TooltipContent>
-              </Tooltip>
-            </div>
-            <ChartContainer config={verifiedRadialConfig} className="h-[180px] w-full">
-              <RadialBarChart
-                innerRadius="70%"
-                outerRadius="100%"
-                data={[{ rate: verifiedRadialData.rate, fill: "#22c55e" }]}
-                startAngle={180}
-                endAngle={0}
-                cx="50%"
-                cy="65%"
-              >
-                <PolarAngleAxis type="number" domain={[0, 100]} angleAxisId={0} tick={false} />
-                <RadialBar background dataKey="rate" cornerRadius={6} />
-                <text x="50%" y="55%" textAnchor="middle" dominantBaseline="middle" className="fill-foreground text-2xl font-bold">
-                  {verifiedRadialData.rate}%
-                </text>
-                <text x="50%" y="70%" textAnchor="middle" className="fill-muted-foreground text-xs">
-                  {verifiedRadialData.verified}/{verifiedRadialData.total} verified
-                </text>
-              </RadialBarChart>
-            </ChartContainer>
-          </div>
-
-          {/* Top Customers by Docs */}
-          <div className="rounded-lg border border-border/60 bg-card/50 p-4">
-            <div className="flex items-center gap-1.5 mb-3">
-              <h3 className="text-sm font-medium">Top Customers</h3>
-              <Tooltip>
-                <TooltipTrigger><Info className="h-3.5 w-3.5 text-muted-foreground" /></TooltipTrigger>
-                <TooltipContent>Customers with most documents</TooltipContent>
-              </Tooltip>
-            </div>
-            {topCustomersData.length > 0 ? (
-              <ChartContainer config={{ count: { label: "Documents", color: "#6366f1" } }} className="h-[180px] w-full">
-                <BarChart data={topCustomersData} layout="vertical" margin={{ left: 0, right: 8 }}>
-                  <CartesianGrid horizontal={false} strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                  <XAxis type="number" allowDecimals={false} tickLine={false} axisLine={false} tick={{ fontSize: 11 }} />
-                  <YAxis type="category" dataKey="name" tickLine={false} axisLine={false} tick={{ fontSize: 11 }} width={80} />
-                  <Bar dataKey="count" fill="#6366f1" radius={[0, 4, 4, 0]} />
-                  <ChartTooltip cursor={{ fill: "hsl(var(--muted-foreground))", opacity: 0.08 }} content={({ active, payload }) => {
-                    if (!active || !payload?.length) return null;
-                    const d = payload[0].payload;
-                    return (
-                      <div className="rounded-lg border bg-background px-3 py-2 shadow-md">
-                        <p className="text-sm font-medium">{d.fullName}</p>
-                        <p className="text-sm text-muted-foreground">{d.count} document{d.count !== 1 ? "s" : ""}</p>
-                      </div>
-                    );
-                  }} />
-                </BarChart>
-              </ChartContainer>
-            ) : (
-              <p className="text-sm text-muted-foreground text-center py-10">No data</p>
-            )}
-          </div>
+      {/* Analytics Button */}
+      {allDocuments.length > 0 && (
+        <div className="flex justify-end">
+          <Link href="/documents/analytics">
+            <Button variant="outline" className="border-primary/20 hover:border-primary/40 hover:bg-primary/5">
+              <BarChart3 className="h-4 w-4 mr-2" />
+              View Analytics
+            </Button>
+          </Link>
         </div>
-      </TooltipProvider>
+      )}
 
       {/* Documents Table */}
       {paginatedDocuments.length === 0 ? (
