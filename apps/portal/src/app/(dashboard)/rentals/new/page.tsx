@@ -72,7 +72,7 @@ const rentalSchema = z.object({
   return_location: z.string().min(1, "Return location is required"),
   pickup_time: z.string().regex(/^\d{2}:\d{2}$/, "Pickup time is required"),
   return_time: z.string().regex(/^\d{2}:\d{2}$/, "Return time is required"),
-  driver_age_range: z.enum(["under_25", "25_70", "over_70"]).optional(),
+  driver_age: z.coerce.number().min(1, "Driver age is required"),
   promo_code: z.string().optional(),
   insurance_status: z.enum(["pending", "uploaded", "verified", "bonzah", "not_required"]).optional(),
   notes: z.string().optional(),
@@ -100,6 +100,7 @@ const CreateRental = () => {
   const [loading, setLoading] = useState(false);
   const [vehicleOpen, setVehicleOpen] = useState(false);
   const [customerOpen, setCustomerOpen] = useState(false);
+  const [promoCodeOpen, setPromoCodeOpen] = useState(false);
   const [inviteDialogOpen, setInviteDialogOpen] = useState(false);
 
   // Bonzah insurance state
@@ -349,7 +350,7 @@ const CreateRental = () => {
       return_location: "",
       pickup_time: "",
       return_time: "",
-      driver_age_range: undefined,
+      driver_age: undefined,
       promo_code: "",
       insurance_status: "pending",
       notes: "",
@@ -397,7 +398,7 @@ const CreateRental = () => {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [watchedStartDate?.getTime(), watchedEndDate?.getTime()]);
   const watchedInsuranceStatus = form.watch("insurance_status");
-  const watchedDriverAgeRange = form.watch("driver_age_range");
+  const watchedDriverAge = form.watch("driver_age");
 
   // Dynamic pricing: vehicle-specific overrides
   const { overrides: vehiclePricingOverrides } = useVehiclePricingOverrides(selectedVehicleId || undefined);
@@ -489,7 +490,7 @@ const CreateRental = () => {
       if (draft.return_location) form.setValue("return_location", draft.return_location);
       if (draft.pickup_time) form.setValue("pickup_time", draft.pickup_time);
       if (draft.return_time) form.setValue("return_time", draft.return_time);
-      if (draft.driver_age_range) form.setValue("driver_age_range", draft.driver_age_range);
+      if (draft.driver_age) form.setValue("driver_age", draft.driver_age);
       if (draft.promo_code) form.setValue("promo_code", draft.promo_code);
       if (draft.insurance_status) form.setValue("insurance_status", draft.insurance_status);
       if (draft.notes) form.setValue("notes", draft.notes);
@@ -524,7 +525,7 @@ const CreateRental = () => {
         return_location: values.return_location,
         pickup_time: values.pickup_time,
         return_time: values.return_time,
-        driver_age_range: values.driver_age_range,
+        driver_age: values.driver_age,
         promo_code: values.promo_code,
         insurance_status: values.insurance_status,
         notes: values.notes,
@@ -542,7 +543,7 @@ const CreateRental = () => {
   }, [
     selectedCustomerId, selectedVehicleId, watchedStartDate, watchedEndDate,
     watchedRentalPeriodType, watchedMonthlyAmount, watchedPickupLocation,
-    watchedPromoCode, watchedInsuranceStatus, watchedDriverAgeRange,
+    watchedPromoCode, watchedInsuranceStatus, watchedDriverAge,
     sameAsPickup, selectedExtras, pickupLocationId, returnLocationId,
     renewFromId,
   ]);
@@ -638,6 +639,23 @@ const CreateRental = () => {
       const { data, error } = await query;
       if (error) throw error;
       return data;
+    },
+    enabled: !!tenant,
+  });
+
+  // Fetch available promo codes for this tenant
+  const { data: promoCodes } = useQuery({
+    queryKey: ["promo-codes", tenant?.id],
+    queryFn: async () => {
+      const { data, error } = await (supabase as any)
+        .from("promocodes")
+        .select("id, code, type, value, expires_at")
+        .eq("tenant_id", tenant!.id)
+        .order("code", { ascending: true });
+      if (error) throw error;
+      // Filter out expired codes
+      const now = new Date();
+      return (data || []).filter((p: any) => !p.expires_at || new Date(p.expires_at) >= now);
     },
     enabled: !!tenant,
   });
@@ -1048,7 +1066,7 @@ const CreateRental = () => {
           return_location_id: sameAsPickup ? pickupLocationId : returnLocationId || null,
           pickup_time: data.pickup_time || null,
           return_time: data.return_time || null,
-          driver_age_range: data.driver_age_range || null,
+          driver_age_range: data.driver_age ? String(data.driver_age) : null,
           promo_code: promoDetails?.code || null,
           discount_applied: discountAmount > 0 ? discountAmount : null,
           insurance_status: bonzahPremium > 0 ? "bonzah" : (data.insurance_status || "pending"),
@@ -2472,56 +2490,124 @@ const CreateRental = () => {
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <FormField
                         control={form.control}
-                        name="driver_age_range"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>Driver Age Range</FormLabel>
-                            <Select onValueChange={field.onChange} value={field.value}>
+                        name="driver_age"
+                        render={({ field }) => {
+                          const minAge = rentalSettings?.minimum_rental_age || 18;
+                          const exceedsLimit = field.value != null && field.value > minAge;
+                          return (
+                            <FormItem>
+                              <FormLabel>Driver Age <span className="text-red-500">*</span></FormLabel>
                               <FormControl>
-                                <SelectTrigger>
-                                  <SelectValue placeholder="Select age range" />
-                                </SelectTrigger>
+                                <Input
+                                  type="number"
+                                  min={16}
+                                  max={100}
+                                  placeholder="Enter driver age"
+                                  value={field.value ?? ""}
+                                  onChange={(e) => {
+                                    const val = e.target.value;
+                                    field.onChange(val === "" ? undefined : parseInt(val));
+                                  }}
+                                />
                               </FormControl>
-                              <SelectContent>
-                                <SelectItem value="under_25">Under 25</SelectItem>
-                                <SelectItem value="25_70">25 - 70</SelectItem>
-                                <SelectItem value="over_70">Over 70</SelectItem>
-                              </SelectContent>
-                            </Select>
-                            <FormMessage />
-                          </FormItem>
-                        )}
+                              {exceedsLimit && (
+                                <div className="flex items-center gap-1 text-amber-600 text-sm">
+                                  <AlertTriangle className="h-3 w-3" />
+                                  Driver age exceeds the set limit of {minAge}. Admin override allowed.
+                                </div>
+                              )}
+                              <FormMessage />
+                            </FormItem>
+                          );
+                        }}
                       />
                       <FormField
                         control={form.control}
                         name="promo_code"
                         render={({ field }) => (
-                          <FormItem>
+                          <FormItem className="flex flex-col">
                             <FormLabel>Promo Code</FormLabel>
                             <div className="flex gap-2">
-                              <FormControl>
-                                <Input
-                                  {...field}
-                                  placeholder="Enter promo code"
-                                  className={cn(
-                                    promoError ? "border-destructive" : promoDetails ? "border-green-500" : ""
-                                  )}
-                                  onChange={(e) => {
-                                    field.onChange(e);
+                              <Popover open={promoCodeOpen} onOpenChange={setPromoCodeOpen}>
+                                <PopoverTrigger asChild>
+                                  <FormControl>
+                                    <Button
+                                      variant="outline"
+                                      role="combobox"
+                                      aria-expanded={promoCodeOpen}
+                                      className={cn(
+                                        "flex-1 justify-between font-normal",
+                                        !field.value && "text-muted-foreground",
+                                        promoError ? "border-destructive" : promoDetails ? "border-green-500" : ""
+                                      )}
+                                    >
+                                      {field.value || "Select promo code"}
+                                      <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                                    </Button>
+                                  </FormControl>
+                                </PopoverTrigger>
+                                <PopoverContent className="w-[300px] p-0" align="start">
+                                  <Command>
+                                    <CommandInput placeholder="Search promo codes..." />
+                                    <CommandList>
+                                      <CommandEmpty>No promo codes found</CommandEmpty>
+                                      <CommandGroup>
+                                        {promoCodes?.map((promo: any) => (
+                                          <CommandItem
+                                            key={promo.id}
+                                            value={promo.code}
+                                            onSelect={() => {
+                                              field.onChange(promo.code);
+                                              setPromoCodeOpen(false);
+                                              setPromoError(null);
+                                              setPromoDetails(null);
+                                              // Auto-validate the selected promo code
+                                              validatePromoCode(promo.code);
+                                            }}
+                                          >
+                                            <div className="flex flex-col">
+                                              <span className="font-medium">{promo.code}</span>
+                                              <span className="text-xs text-muted-foreground">
+                                                {promo.type === 'percentage'
+                                                  ? `${promo.value}% off`
+                                                  : `${formatCurrency(promo.value, tenant?.currency_code || 'GBP')} off`}
+                                                {promo.expires_at && ` · Expires ${format(new Date(promo.expires_at), "MMM d, yyyy")}`}
+                                              </span>
+                                            </div>
+                                            <Check
+                                              className={cn(
+                                                "ml-auto h-4 w-4",
+                                                field.value === promo.code ? "opacity-100" : "opacity-0"
+                                              )}
+                                            />
+                                          </CommandItem>
+                                        ))}
+                                      </CommandGroup>
+                                    </CommandList>
+                                  </Command>
+                                </PopoverContent>
+                              </Popover>
+                              {field.value && (
+                                <Button
+                                  type="button"
+                                  variant="outline"
+                                  size="icon"
+                                  onClick={() => {
+                                    field.onChange("");
+                                    setPromoDetails(null);
                                     setPromoError(null);
-                                    if (!e.target.value) setPromoDetails(null);
                                   }}
-                                />
-                              </FormControl>
-                              <Button
-                                type="button"
-                                variant="outline"
-                                onClick={() => validatePromoCode(field.value || "")}
-                                disabled={promoLoading || !field.value}
-                              >
-                                {promoLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : "Apply"}
-                              </Button>
+                                >
+                                  <XCircle className="h-4 w-4" />
+                                </Button>
+                              )}
                             </div>
+                            {promoLoading && (
+                              <p className="text-sm text-muted-foreground flex items-center gap-1">
+                                <Loader2 className="h-3 w-3 animate-spin" />
+                                Validating...
+                              </p>
+                            )}
                             {promoError && <p className="text-sm text-destructive">{promoError}</p>}
                             {promoDetails && (
                               <p className="text-sm text-green-600 font-medium flex items-center gap-1">
@@ -2534,33 +2620,7 @@ const CreateRental = () => {
                         )}
                       />
                     </div>
-                    {/* Notes / Special Requests */}
-                    <FormField
-                      control={form.control}
-                      name="notes"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Notes / Special Requests</FormLabel>
-                          <FormControl>
-                            <Textarea
-                              {...field}
-                              placeholder="Any special requirements or notes for this rental"
-                              rows={3}
-                            />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
                 </div>
-              </div>
-
-              {/* Helper Info */}
-              <div className="rounded-lg bg-muted/50 border border-dashed p-4">
-                <p className="text-sm text-muted-foreground">
-                  <strong>Note:</strong> Rental will start as &quot;Pending&quot;. It becomes &quot;Active&quot; once approved and key handover is completed.
-                  The vehicle will be marked as &quot;Rented&quot; immediately.
-                </p>
               </div>
 
               {/* Submit */}

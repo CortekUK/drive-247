@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { useAuth } from '@/stores/auth-store';
 import { useTenant } from '@/contexts/TenantContext';
 import { supabase } from '@/integrations/supabase/client';
@@ -14,10 +14,11 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { User, Settings, LogOut, Key, Shield, Pencil } from 'lucide-react';
+import { User, Settings, LogOut, Key, Shield, Pencil, Camera, Loader2 } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
 
 export const UserMenu = () => {
@@ -30,8 +31,63 @@ export const UserMenu = () => {
   const [adminName, setAdminName] = useState('');
   const [isUpdating, setIsUpdating] = useState(false);
   const [isUpdatingName, setIsUpdatingName] = useState(false);
+  const [isUploadingAvatar, setIsUploadingAvatar] = useState(false);
+  const avatarInputRef = useRef<HTMLInputElement>(null);
 
   if (!appUser) return null;
+
+  const userInitials = (appUser.name || appUser.email || 'U')
+    .split(' ')
+    .map((n) => n[0])
+    .join('')
+    .toUpperCase()
+    .slice(0, 2);
+
+  const handleAvatarUpload = async (file: File) => {
+    if (!file.type.startsWith('image/')) {
+      toast({ title: "Error", description: "Please upload an image file", variant: "destructive" });
+      return;
+    }
+    if (file.size > 2 * 1024 * 1024) {
+      toast({ title: "Error", description: "Image must be less than 2MB", variant: "destructive" });
+      return;
+    }
+
+    setIsUploadingAvatar(true);
+    try {
+      const fileExt = file.name.split('.').pop();
+      const filePath = `avatars/${appUser.id}-${Date.now()}.${fileExt}`;
+
+      const { error: uploadError } = await supabase.storage
+        .from('cms-media')
+        .upload(filePath, file, { upsert: true });
+
+      if (uploadError) throw uploadError;
+
+      const { data: { publicUrl } } = supabase.storage
+        .from('cms-media')
+        .getPublicUrl(filePath);
+
+      const { error: updateError } = await (supabase as any)
+        .from('app_users')
+        .update({ avatar_url: publicUrl })
+        .eq('id', appUser.id);
+
+      if (updateError) throw updateError;
+
+      // Update local state
+      useAuth.setState({
+        appUser: { ...appUser, avatar_url: publicUrl },
+      });
+
+      toast({ title: "Success", description: "Profile photo updated" });
+    } catch (error: any) {
+      console.error('Avatar upload error:', error);
+      toast({ title: "Error", description: error.message || "Failed to upload photo", variant: "destructive" });
+    } finally {
+      setIsUploadingAvatar(false);
+    }
+  };
 
   const getRoleBadgeVariant = (role: string) => {
     switch (role) {
@@ -199,7 +255,12 @@ export const UserMenu = () => {
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <Button variant="ghost" size="icon" className="relative hover:bg-accent transition-colors">
-            <User className="h-5 w-5" />
+            <Avatar className="h-8 w-8">
+              <AvatarImage src={appUser.avatar_url || undefined} alt={appUser.name || 'User'} />
+              <AvatarFallback className="bg-primary/10 text-primary text-xs font-medium">
+                {userInitials}
+              </AvatarFallback>
+            </Avatar>
             {appUser.must_change_password && (
               <div className="absolute -top-1 -right-1 h-3 w-3 bg-destructive rounded-full" />
             )}
@@ -208,9 +269,12 @@ export const UserMenu = () => {
         <DropdownMenuContent align="end" className="w-64">
           <DropdownMenuLabel className="flex flex-col gap-2 p-3">
             <div className="flex items-center gap-3">
-              <div className="h-10 w-10 rounded-lg bg-muted flex items-center justify-center">
-                <User className="h-5 w-5 text-muted-foreground" />
-              </div>
+              <Avatar className="h-10 w-10">
+                <AvatarImage src={appUser.avatar_url || undefined} alt={appUser.name || 'User'} />
+                <AvatarFallback className="bg-primary/10 text-primary font-medium">
+                  {userInitials}
+                </AvatarFallback>
+              </Avatar>
               <div className="flex-1 min-w-0">
                 <div className="font-semibold text-sm truncate">{appUser.name || 'User'}</div>
                 <div className="text-xs text-muted-foreground truncate">{appUser.email}</div>
@@ -222,6 +286,29 @@ export const UserMenu = () => {
             </Badge>
           </DropdownMenuLabel>
           <DropdownMenuSeparator />
+          <DropdownMenuItem
+            onClick={() => avatarInputRef.current?.click()}
+            disabled={isUploadingAvatar}
+            className="cursor-pointer"
+          >
+            {isUploadingAvatar ? (
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            ) : (
+              <Camera className="mr-2 h-4 w-4" />
+            )}
+            <span>{isUploadingAvatar ? 'Uploading...' : 'Upload Photo'}</span>
+          </DropdownMenuItem>
+          <input
+            ref={avatarInputRef}
+            type="file"
+            accept="image/*"
+            className="hidden"
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              if (file) handleAvatarUpload(file);
+              e.target.value = '';
+            }}
+          />
           {!appUser.is_super_admin && (
             <DropdownMenuItem onClick={() => setShowPasswordDialog(true)} className="cursor-pointer">
               <Key className="mr-2 h-4 w-4" />
