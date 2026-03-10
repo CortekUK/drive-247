@@ -8,14 +8,15 @@ interface CurrencyInputProps extends Omit<React.ComponentProps<typeof Input>, 'o
   min?: number;
   step?: number;
   error?: boolean;
+  currencySymbol?: string;
 }
 
 export const CurrencyInput = React.forwardRef<HTMLInputElement, CurrencyInputProps>(
-  ({ value, onChange, min = 0, step = 0.01, error, className, ...props }, ref) => {
+  ({ value, onChange, min = 0, step = 0.01, error, currencySymbol = '$', className, ...props }, ref) => {
     return (
       <div className="relative">
         <div className="absolute left-3 top-1/2 -translate-y-1/2 text-sm font-medium text-muted-foreground">
-          $
+          {currencySymbol}
         </div>
         <Input
           ref={ref}

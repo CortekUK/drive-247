@@ -51,7 +51,7 @@ import { Progress } from "@/components/ui/progress";
 import { Textarea } from "@/components/ui/textarea";
 import { toast as sonnerToast } from "sonner";
 import { useRentalExtras, type RentalExtra } from "@/hooks/use-rental-extras";
-import { formatCurrency } from "@/lib/format-utils";
+import { formatCurrency, getCurrencySymbol } from "@/lib/format-utils";
 import { useManagerPermissions } from "@/hooks/use-manager-permissions";
 import { useCustomerReviewSummary } from "@/hooks/use-customer-review-summary";
 import { useCustomerReviews } from "@/hooks/use-customer-reviews";
@@ -93,6 +93,7 @@ const CreateRental = () => {
   const renewFromId = searchParams?.get("renew_from");
   const { toast } = useToast();
   const { tenant } = useTenant();
+  const currencySymbol = getCurrencySymbol(tenant?.currency_code || 'USD');
   const { balanceNumber: bonzahCdBalance, isBonzahConnected, portalUrl: bonzahPortalUrl } = useBonzahBalance();
   const skipInsurance = !isBonzahConnected;
   const queryClient = useQueryClient();
@@ -2207,6 +2208,7 @@ const CreateRental = () => {
                                 min={1}
                                 step={0.01}
                                 error={!!form.formState.errors.monthly_amount}
+                                currencySymbol={currencySymbol}
                                 disabled={false}
                               />
                             </FormControl>
@@ -2299,6 +2301,7 @@ const CreateRental = () => {
                                 placeholder="Tax amount"
                                 min={0}
                                 step={0.01}
+                                currencySymbol={currencySymbol}
                               />
                             </div>
                             <Button
@@ -2339,6 +2342,7 @@ const CreateRental = () => {
                                 placeholder="Service fee"
                                 min={0}
                                 step={0.01}
+                                currencySymbol={currencySymbol}
                               />
                             </div>
                             <Button
@@ -2377,6 +2381,7 @@ const CreateRental = () => {
                                 placeholder="Deposit"
                                 min={0}
                                 step={0.01}
+                                currencySymbol={currencySymbol}
                               />
                             </div>
                             <Button
@@ -2550,6 +2555,7 @@ const CreateRental = () => {
                                   placeholder="Amount"
                                   min={0}
                                   step={0.01}
+                                  currencySymbol={currencySymbol}
                                 />
                               </div>
                               <Button

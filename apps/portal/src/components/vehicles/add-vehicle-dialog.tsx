@@ -941,7 +941,7 @@ export const AddVehicleDialog = ({ open, onOpenChange }: AddVehicleDialogProps) 
                           type="number"
                           min="0.01"
                           step="0.01"
-                          placeholder={`${currencySymbol} per mile`}
+                          placeholder={`${currencySymbol} per ${tenant?.distance_unit === 'km' ? 'km' : 'mile'}`}
                           {...field}
                           value={field.value ?? ""}
                           onChange={(e) => {

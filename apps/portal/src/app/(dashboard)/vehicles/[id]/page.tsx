@@ -799,7 +799,7 @@ export default function VehicleDetail() {
                       type="number"
                       min="0.01"
                       step="0.01"
-                      placeholder="per mile"
+                      placeholder={`per ${distanceUnit === 'miles' ? 'mile' : 'km'}`}
                       value={mileageForm.excess_mileage_rate}
                       onChange={(e) => setMileageForm(prev => ({ ...prev, excess_mileage_rate: e.target.value }))}
                     />
