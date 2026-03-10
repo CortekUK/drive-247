@@ -12,6 +12,8 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { useVehicleDisposal } from "@/hooks/use-vehicle-disposal";
+import { useAuditLogOnOpen } from "@/hooks/use-audit-log-on-open";
+import { useAuditLog } from "@/hooks/use-audit-log";
 
 interface Vehicle {
   id: string;
@@ -28,10 +30,20 @@ interface VehicleUndoDisposalDialogProps {
 export function VehicleUndoDisposalDialog({ vehicle, onUndo }: VehicleUndoDisposalDialogProps) {
   const [open, setOpen] = useState(false);
   const { undoDisposal, isUndoing } = useVehicleDisposal(vehicle.id);
+  const { logAction } = useAuditLog();
+
+  useAuditLogOnOpen({
+    open,
+    action: "vehicle_undo_dispose_warning_shown",
+    entityType: "vehicle",
+    entityId: vehicle?.id,
+    details: { reg: vehicle?.reg },
+  });
 
   const handleUndo = async () => {
     try {
       await undoDisposal();
+      logAction({ action: "vehicle_status_changed", entityType: "vehicle", entityId: vehicle.id, details: { status: "Available", operation: "undo_disposal", reg: vehicle.reg } });
       setOpen(false);
       onUndo?.();
     } catch (error) {

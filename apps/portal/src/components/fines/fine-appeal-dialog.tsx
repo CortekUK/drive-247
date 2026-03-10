@@ -9,6 +9,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { useToast } from "@/hooks/use-toast";
 import { useAuditLog } from "@/hooks/use-audit-log";
+import { useAuditLogOnOpen } from "@/hooks/use-audit-log-on-open";
 import { fineAppealSchema, type FineAppealFormValues } from "@/client-schemas/fines/fine-appeal";
 
 type AppealFormData = FineAppealFormValues;
@@ -33,7 +34,15 @@ export const FineAppealDialog = ({
   const queryClient = useQueryClient();
   const { tenant } = useTenant();
   const { logAction } = useAuditLog();
-  
+
+  useAuditLogOnOpen({
+    open,
+    action: "fine_appeal_warning_shown",
+    entityType: "fine",
+    entityId: fineId,
+    details: { fine_amount: fineAmount },
+  });
+
   const form = useForm<AppealFormData>({
     resolver: zodResolver(fineAppealSchema),
     defaultValues: {

@@ -17,6 +17,7 @@ import { useAuth } from "@/stores/auth-store";
 import { useTenant } from "@/contexts/TenantContext";
 import { AlertTriangle, Loader2, Shield } from "lucide-react";
 import { formatCurrency, getCurrencySymbol } from "@/lib/format-utils";
+import { useAuditLogOnOpen } from "@/hooks/use-audit-log-on-open";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -46,6 +47,14 @@ export function CancelRentalDialog({
   const { user } = useAuth();
   const { tenant } = useTenant();
   const cancelRental = useCancelRental();
+
+  useAuditLogOnOpen({
+    open,
+    action: "rental_cancel_warning_shown",
+    entityType: "rental",
+    entityId: rental?.id,
+    details: { customer: rental?.customer?.name, vehicle: `${rental?.vehicle?.make} ${rental?.vehicle?.model}` },
+  });
 
   const [refundType, setRefundType] = useState<"full" | "partial" | "none">("full");
   const [refundAmount, setRefundAmount] = useState<string>("");

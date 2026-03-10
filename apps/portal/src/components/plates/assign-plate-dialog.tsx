@@ -29,6 +29,8 @@ import {
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { assignPlateSchema, type AssignPlateFormValues } from "@/client-schemas/plates/assign-plate";
+import { useAuditLog } from "@/hooks/use-audit-log";
+import { useAuditLogOnOpen } from "@/hooks/use-audit-log-on-open";
 
 type AssignFormData = AssignPlateFormValues;
 
@@ -64,6 +66,13 @@ export const AssignPlateDialog = ({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const { toast } = useToast();
   const { tenant } = useTenant();
+  const { logAction } = useAuditLog();
+  useAuditLogOnOpen({
+    open,
+    action: "plate_assign_dialog_shown",
+    entityType: "plate",
+    entityId: plate?.id || plate?.assigned_vehicle_id,
+  });
 
   const form = useForm<AssignFormData>({
     resolver: zodResolver(assignPlateSchema),
@@ -133,6 +142,7 @@ export const AssignPlateDialog = ({
         title: "Success",
         description: "Plate assigned successfully",
       });
+      logAction({ action: "plate_assigned", entityType: "plate", entityId: plate.id, details: { plate_number: plate.plate_number, vehicle_id: data.vehicle_id } });
 
       form.reset();
       onOpenChange(false);

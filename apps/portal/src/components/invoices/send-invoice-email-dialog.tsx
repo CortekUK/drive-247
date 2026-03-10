@@ -13,6 +13,7 @@ import {
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { useToast } from "@/hooks/use-toast";
 import { useAuditLog } from "@/hooks/use-audit-log";
+import { useAuditLogOnOpen } from "@/hooks/use-audit-log-on-open";
 import { useTenant } from "@/contexts/TenantContext";
 import { useTenantBranding } from "@/hooks/use-tenant-branding";
 import { formatCurrency } from "@/lib/format-utils";
@@ -59,6 +60,14 @@ export const SendInvoiceEmailDialog = ({
   const { tenant } = useTenant();
   const { branding } = useTenantBranding();
   const { logAction } = useAuditLog();
+
+  useAuditLogOnOpen({
+    open,
+    action: "invoice_send_dialog_shown",
+    entityType: "invoice",
+    entityId: invoice?.id,
+  });
+
   const printRef = useRef<HTMLDivElement>(null);
   const companyName = branding?.app_name || tenant?.company_name || 'Invoice';
   const logoUrl = branding?.logo_url;

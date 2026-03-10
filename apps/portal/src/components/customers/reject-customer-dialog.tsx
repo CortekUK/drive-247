@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { XCircle } from "lucide-react";
+import { useAuditLogOnOpen } from "@/hooks/use-audit-log-on-open";
 
 interface Customer {
   id: string;
@@ -35,6 +36,14 @@ export function RejectCustomerDialog({
   isLoading = false,
 }: RejectCustomerDialogProps) {
   const [reason, setReason] = useState("");
+
+  useAuditLogOnOpen({
+    open,
+    action: "customer_reject_warning_shown",
+    entityType: "customer",
+    entityId: customer?.id,
+    details: { customer_name: customer?.name },
+  });
 
   const handleConfirm = () => {
     if (reason.trim()) {

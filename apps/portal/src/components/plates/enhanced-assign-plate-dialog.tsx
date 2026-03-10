@@ -32,6 +32,8 @@ import { useToast } from "@/hooks/use-toast";
 import { useTenant } from "@/contexts/TenantContext";
 import { AlertTriangle, Car } from "lucide-react";
 import { enhancedAssignPlateSchema, type EnhancedAssignPlateFormValues } from "@/client-schemas/plates/enhanced-assign-plate";
+import { useAuditLog } from "@/hooks/use-audit-log";
+import { useAuditLogOnOpen } from "@/hooks/use-audit-log-on-open";
 
 type AssignFormData = EnhancedAssignPlateFormValues;
 
@@ -75,6 +77,13 @@ export const EnhancedAssignPlateDialog = ({
   const [conflictVehicle, setConflictVehicle] = useState<VehicleWithPlate | null>(null);
   const { toast } = useToast();
   const { tenant } = useTenant();
+  const { logAction } = useAuditLog();
+  useAuditLogOnOpen({
+    open,
+    action: "plate_assign_dialog_shown",
+    entityType: "plate",
+    entityId: plate?.id || plate?.vehicle_id,
+  });
 
   const form = useForm<AssignFormData>({
     resolver: zodResolver(enhancedAssignPlateSchema),
@@ -198,6 +207,7 @@ export const EnhancedAssignPlateDialog = ({
         title: "Success",
         description: `Plate ${plate.plate_number} assigned to ${vehicle?.reg || 'vehicle'}`,
       });
+      logAction({ action: "plate_assigned", entityType: "plate", entityId: plate.id, details: { plate_number: plate.plate_number, vehicle_id: data.vehicle_id } });
 
       form.reset();
       setConflictMode(null);

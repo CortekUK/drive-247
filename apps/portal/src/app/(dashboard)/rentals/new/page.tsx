@@ -59,6 +59,7 @@ import { useCustomerInsurance } from "@/hooks/use-customer-insurance";
 import { useWeekendPricing } from "@/hooks/use-weekend-pricing";
 import { useTenantHolidays } from "@/hooks/use-tenant-holidays";
 import { useVehiclePricingOverrides } from "@/hooks/use-vehicle-pricing-overrides";
+import { useAuditLog } from "@/hooks/use-audit-log";
 
 const rentalSchema = z.object({
   customer_id: z.string().min(1, "Customer is required"),
@@ -98,6 +99,7 @@ const CreateRental = () => {
   const skipInsurance = !isBonzahConnected;
   const queryClient = useQueryClient();
   const { isManager, canEdit } = useManagerPermissions();
+  const { logAction } = useAuditLog();
   const [loading, setLoading] = useState(false);
   const [vehicleOpen, setVehicleOpen] = useState(false);
   const [customerOpen, setCustomerOpen] = useState(false);
@@ -1485,6 +1487,8 @@ const CreateRental = () => {
 
       // Clear the persisted draft since rental was created successfully
       localStorage.removeItem(PORTAL_RENTAL_STORAGE_KEY);
+
+      logAction({ action: "rental_created", entityType: "rental", entityId: rental.id, details: { rental_number: rental.rental_number, customer_id: data.customer_id, vehicle_id: data.vehicle_id } });
 
       // Store rental data for invoice dialog
       setCreatedRentalData({

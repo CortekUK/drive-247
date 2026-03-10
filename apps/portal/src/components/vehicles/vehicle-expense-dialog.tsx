@@ -12,15 +12,24 @@ import { ExpenseFormData } from "@/hooks/use-vehicle-expenses";
 import { vehicleExpenseSchema } from "@/client-schemas/vehicles/vehicle-expense";
 import { getCurrencySymbol } from "@/lib/format-utils";
 import { useTenant } from "@/contexts/TenantContext";
+import { useAuditLogOnOpen } from "@/hooks/use-audit-log-on-open";
 
 interface VehicleExpenseDialogProps {
   onSubmit: (data: ExpenseFormData) => void;
   isLoading?: boolean;
+  vehicleId?: string;
 }
 
-export const VehicleExpenseDialog = ({ onSubmit, isLoading }: VehicleExpenseDialogProps) => {
+export const VehicleExpenseDialog = ({ onSubmit, isLoading, vehicleId }: VehicleExpenseDialogProps) => {
   const [open, setOpen] = useState(false);
   const { tenant } = useTenant();
+
+  useAuditLogOnOpen({
+    open,
+    action: "vehicle_expense_dialog_shown",
+    entityType: "vehicle",
+    entityId: vehicleId,
+  });
   const currencySymbol = getCurrencySymbol(tenant?.currency_code || 'GBP');
 
   const form = useForm<ExpenseFormData>({

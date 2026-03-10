@@ -6,6 +6,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { useTenant } from "@/contexts/TenantContext";
 import { useAuditLog } from "@/hooks/use-audit-log";
+import { useAuditLogOnOpen } from "@/hooks/use-audit-log-on-open";
 
 import {
   Dialog,
@@ -58,6 +59,15 @@ export default function AddCustomerDocumentDialog({
   const queryClient = useQueryClient();
   const { tenant } = useTenant();
   const { logAction } = useAuditLog();
+
+  useAuditLogOnOpen({
+    open,
+    action: "customer_document_upload_dialog_shown",
+    entityType: "document",
+    entityId: customerId,
+    details: { customer_id: customerId },
+  });
+
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [dragActive, setDragActive] = useState(false);
 

@@ -28,6 +28,8 @@ import {
   Plus,
   Info,
 } from 'lucide-react';
+import { useAuditLogOnOpen } from '@/hooks/use-audit-log-on-open';
+import { useTenant } from '@/contexts/TenantContext';
 import {
   useTemplateSelection,
   type TemplateType,
@@ -54,7 +56,16 @@ export default function AgreementTemplatesPage() {
     isClearing,
   } = useTemplateSelection();
 
+  const { tenant } = useTenant();
   const [initialized, setInitialized] = useState(false);
+  const [clearDialogOpen, setClearDialogOpen] = useState(false);
+
+  useAuditLogOnOpen({
+    open: clearDialogOpen,
+    action: "agreement_template_clear_warning_shown",
+    entityType: "settings",
+    entityId: tenant?.id,
+  });
 
   // Initialize templates if they don't exist
   useEffect(() => {
@@ -253,7 +264,7 @@ export default function AgreementTemplatesPage() {
               </div>
               <div className="flex items-center gap-2 shrink-0">
                 {!customTemplateIsEmpty && (
-                  <AlertDialog>
+                  <AlertDialog open={clearDialogOpen} onOpenChange={setClearDialogOpen}>
                     <AlertDialogTrigger asChild>
                       <Button
                         variant="ghost"

@@ -26,6 +26,8 @@ import {
 } from "@/components/ui/form";
 import { toast } from "sonner";
 import { Plus, Edit, Trash2, Search, Tag, Calendar, Percent, DollarSign, Image, Loader2, Crown } from "lucide-react";
+import { useAuditLogOnOpen } from "@/hooks/use-audit-log-on-open";
+import { useAuditLog } from "@/hooks/use-audit-log";
 import { format, isBefore, isAfter } from "date-fns";
 
 interface Promotion {
@@ -73,6 +75,7 @@ const defaultFormData: PromotionFormValues = {
 
 export default function PromotionsManager() {
   const { tenant } = useTenant();
+  const { logAction } = useAuditLog();
   const [promotions, setPromotions] = useState<Promotion[]>([]);
   const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -80,6 +83,13 @@ export default function PromotionsManager() {
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [editingPromotion, setEditingPromotion] = useState<Promotion | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
+
+  useAuditLogOnOpen({
+    open: deleteDialogOpen,
+    action: "promotion_delete_warning_shown",
+    entityType: "settings",
+    entityId: deletingId,
+  });
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
@@ -224,13 +234,15 @@ export default function PromotionsManager() {
         return;
       }
       toast.success("Promotion updated");
+      logAction({ action: "promotion_updated", entityType: "promotion", entityId: editingPromotion.id, details: {} });
     } else {
-      const { error } = await (supabase as any)
+      const { data: insertedData, error } = await (supabase as any)
         .from("promotions")
         .insert({
           ...promoData,
           tenant_id: tenant?.id || null,
-        });
+        })
+        .select();
 
       if (error) {
         console.error("Insert error:", error);
@@ -239,6 +251,7 @@ export default function PromotionsManager() {
         return;
       }
       toast.success("Promotion created");
+      logAction({ action: "promotion_created", entityType: "promotion", entityId: insertedData?.[0]?.id || "unknown", details: { code: data.promo_code } });
     }
 
     setSaving(false);
@@ -269,6 +282,7 @@ export default function PromotionsManager() {
     }
 
     toast.success("Promotion deleted");
+    logAction({ action: "promotion_deleted", entityType: "promotion", entityId: deletingId, details: {} });
     setDeleteDialogOpen(false);
     setDeletingId(null);
     loadPromotions();

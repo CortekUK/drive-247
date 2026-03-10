@@ -36,6 +36,7 @@ import { format } from "date-fns";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import { useAuditLog } from "@/hooks/use-audit-log";
+import { useAuditLogOnOpen } from "@/hooks/use-audit-log-on-open";
 import { authorityPaymentSchema, type AuthorityPaymentFormValues } from "@/client-schemas/fines/authority-payment";
 import { formatCurrency } from "@/lib/format-utils";
 import { useTenant } from "@/contexts/TenantContext";
@@ -59,6 +60,14 @@ export function AuthorityPaymentDialog({
   const queryClient = useQueryClient();
   const { logAction } = useAuditLog();
   const { tenant } = useTenant();
+
+  useAuditLogOnOpen({
+    open,
+    action: "fine_authority_payment_dialog_shown",
+    entityType: "fine",
+    entityId: fineId,
+    details: { fine_id: fineId },
+  });
 
   const form = useForm<AuthorityPaymentFormValues>({
     resolver: zodResolver(authorityPaymentSchema),

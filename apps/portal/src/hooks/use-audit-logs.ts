@@ -202,6 +202,65 @@ export function formatActionName(action: string): string {
     plate_deleted: "Plate Deleted",
     plate_assigned: "Plate Assigned",
     plate_unassigned: "Plate Unassigned",
+    // Warning dialog shown actions
+    rental_delete_warning_shown: "Delete Rental Warning Shown",
+    rental_cancel_warning_shown: "Cancel Rental Warning Shown",
+    rental_close_warning_shown: "Close Rental Warning Shown",
+    rental_reject_warning_shown: "Reject Booking Warning Shown",
+    vehicle_dispose_warning_shown: "Dispose Vehicle Warning Shown",
+    vehicle_undo_dispose_warning_shown: "Undo Disposal Warning Shown",
+    invoice_delete_warning_shown: "Delete Invoice Warning Shown",
+    customer_reject_warning_shown: "Reject Customer Warning Shown",
+    payment_refund_warning_shown: "Refund Warning Shown",
+    data_cleanup_warning_shown: "Data Cleanup Warning Shown",
+    fine_appeal_warning_shown: "Fine Appeal Warning Shown",
+    blocked_date_delete_warning_shown: "Delete Blocked Date Warning Shown",
+    working_hours_update_warning_shown: "Working Hours Update Warning Shown",
+    fine_bulk_charge_warning_shown: "Bulk Charge Fines Warning Shown",
+    fine_bulk_waive_warning_shown: "Bulk Waive Fines Warning Shown",
+    customer_unblock_warning_shown: "Unblock Customer Warning Shown",
+    identity_remove_warning_shown: "Remove Identity Warning Shown",
+    settings_reset_warning_shown: "Reset Settings Warning Shown",
+    agreement_template_clear_warning_shown: "Clear Template Warning Shown",
+    location_delete_warning_shown: "Delete Location Warning Shown",
+    holiday_delete_warning_shown: "Delete Holiday Warning Shown",
+    testimonial_delete_warning_shown: "Delete Testimonial Warning Shown",
+    faq_delete_warning_shown: "Delete FAQ Warning Shown",
+    promotion_delete_warning_shown: "Delete Promotion Warning Shown",
+    payment_create_dialog_shown: "Record Payment Dialog Shown",
+    customer_form_dialog_shown: "Customer Form Dialog Shown",
+    customer_document_upload_dialog_shown: "Document Upload Dialog Shown",
+    user_create_dialog_shown: "Create User Dialog Shown",
+    fine_create_dialog_shown: "Create Fine Dialog Shown",
+    fine_authority_payment_dialog_shown: "Authority Payment Dialog Shown",
+    invoice_send_dialog_shown: "Send Invoice Dialog Shown",
+    insurance_document_upload_dialog_shown: "Insurance Document Upload Dialog Shown",
+    insurance_policy_dialog_shown: "Insurance Policy Dialog Shown",
+    buy_insurance_dialog_shown: "Buy Insurance Dialog Shown",
+    rental_review_dialog_shown: "Rental Review Dialog Shown",
+    vehicle_expense_dialog_shown: "Vehicle Expense Dialog Shown",
+    service_record_dialog_shown: "Service Record Dialog Shown",
+    vehicle_form_dialog_shown: "Vehicle Form Dialog Shown",
+    plate_form_dialog_shown: "Plate Form Dialog Shown",
+    plate_assign_dialog_shown: "Plate Assign Dialog Shown",
+    // CRUD completion actions
+    promotion_created: "Promotion Created",
+    promotion_updated: "Promotion Updated",
+    promotion_deleted: "Promotion Deleted",
+    testimonial_created: "Testimonial Created",
+    testimonial_updated: "Testimonial Updated",
+    testimonial_deleted: "Testimonial Deleted",
+    faq_created: "FAQ Created",
+    faq_updated: "FAQ Updated",
+    faq_deleted: "FAQ Deleted",
+    location_created: "Location Created",
+    location_updated: "Location Updated",
+    location_deleted: "Location Deleted",
+    holiday_created: "Holiday Created",
+    holiday_updated: "Holiday Updated",
+    holiday_deleted: "Holiday Deleted",
+    rental_deleted: "Rental Deleted",
+    fine_appeal_successful: "Fine Appeal Successful",
   };
 
   if (actionMap[action]) {
@@ -217,6 +276,10 @@ export function formatActionName(action: string): string {
 
 // Helper to get action color
 export function getActionColor(action: string): string {
+  // Warning dialog shown actions (orange) — must be checked first
+  if (action.includes("warning_shown") || action.includes("dialog_shown")) {
+    return "text-orange-600 bg-orange-50 dark:bg-orange-950/20";
+  }
   // Destructive actions (red)
   if (
     action.includes("rejected") ||

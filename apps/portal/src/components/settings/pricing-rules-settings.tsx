@@ -16,6 +16,7 @@ import { toast } from '@/hooks/use-toast';
 import { useWeekendPricing } from '@/hooks/use-weekend-pricing';
 import { useTenantHolidays, type TenantHolidayInsert, type TenantHolidayUpdate } from '@/hooks/use-tenant-holidays';
 import { format } from 'date-fns';
+import { useAuditLogOnOpen } from '@/hooks/use-audit-log-on-open';
 
 const DAY_LABELS = [
   { value: 0, label: 'Sun' },
@@ -66,6 +67,13 @@ export function PricingRulesSettings({ onDirtyChange }: PricingRulesSettingsProp
   const [editingHolidayId, setEditingHolidayId] = useState<string | null>(null);
   const [holidayForm, setHolidayForm] = useState<HolidayFormState>(emptyHolidayForm);
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
+
+  useAuditLogOnOpen({
+    open: !!deleteConfirmId,
+    action: "holiday_delete_warning_shown",
+    entityType: "settings",
+    entityId: deleteConfirmId,
+  });
 
   // Sync weekend form when data loads
   React.useEffect(() => {

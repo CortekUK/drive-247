@@ -36,6 +36,8 @@ import { Card, CardContent } from "@/components/ui/card";
 import { vehicleDisposalSchema, type VehicleDisposalFormValues } from "@/client-schemas/vehicles/vehicle-disposal";
 import { useTenant } from "@/contexts/TenantContext";
 import { formatCurrency } from "@/lib/format-utils";
+import { useAuditLogOnOpen } from "@/hooks/use-audit-log-on-open";
+import { useAuditLog } from "@/hooks/use-audit-log";
 
 type DisposalFormData = VehicleDisposalFormValues;
 
@@ -74,6 +76,15 @@ export function VehicleDisposalDialog({ vehicle, onDisposal, open: controlledOpe
   const [gainLoss, setGainLoss] = useState<number | null>(null);
 
   const { disposeVehicle, calculateBookCost, isDisposing, isCalculatingBookCost } = useVehicleDisposal(vehicle.id);
+  const { logAction } = useAuditLog();
+
+  useAuditLogOnOpen({
+    open,
+    action: "vehicle_dispose_warning_shown",
+    entityType: "vehicle",
+    entityId: vehicle?.id,
+    details: { reg: vehicle?.reg, make: vehicle?.make, model: vehicle?.model },
+  });
 
   const form = useForm<DisposalFormData>({
     resolver: zodResolver(vehicleDisposalSchema),
@@ -116,6 +127,7 @@ export function VehicleDisposalDialog({ vehicle, onDisposal, open: controlledOpe
       };
 
       await disposeVehicle(disposalData);
+      logAction({ action: "vehicle_status_changed", entityType: "vehicle", entityId: vehicle.id, details: { status: "Disposed", reg: vehicle.reg, make: vehicle.make, model: vehicle.model } });
       handleOpenChange(false);
       setShowConfirm(false);
       onDisposal?.();

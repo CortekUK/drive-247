@@ -26,22 +26,32 @@ import { ServiceRecord, ServiceFormData } from "@/hooks/use-vehicle-services";
 import { addServiceRecordSchema } from "@/client-schemas/vehicles/add-service-record";
 import { getCurrencySymbol } from "@/lib/format-utils";
 import { useTenant } from "@/contexts/TenantContext";
+import { useAuditLogOnOpen } from "@/hooks/use-audit-log-on-open";
 
 interface AddServiceRecordDialogProps {
   onSubmit: (data: ServiceFormData) => void;
   isLoading: boolean;
   editingRecord?: ServiceRecord;
   trigger?: React.ReactNode;
+  vehicleId?: string;
 }
 
 export function AddServiceRecordDialog({
   onSubmit,
   isLoading,
   editingRecord,
-  trigger
+  trigger,
+  vehicleId,
 }: AddServiceRecordDialogProps) {
   const [open, setOpen] = useState(false);
   const { tenant } = useTenant();
+
+  useAuditLogOnOpen({
+    open,
+    action: "service_record_dialog_shown",
+    entityType: "vehicle",
+    entityId: vehicleId,
+  });
   const currencySymbol = getCurrencySymbol(tenant?.currency_code || 'GBP');
 
   const form = useForm<ServiceFormData>({

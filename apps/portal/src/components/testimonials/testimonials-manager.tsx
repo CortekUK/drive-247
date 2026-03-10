@@ -11,6 +11,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Trash2, Star, MessageSquareQuote, Edit, AlertTriangle } from "lucide-react";
 import { useTestimonials } from "@/hooks/use-testimonials";
 import { EmptyState } from "@/components/shared/data-display/empty-state";
+import { useAuditLogOnOpen } from "@/hooks/use-audit-log-on-open";
 
 export interface TestimonialsManagerRef {
   openDialog: () => void;
@@ -35,6 +36,13 @@ export const TestimonialsManager = forwardRef<TestimonialsManagerRef>((props, re
     isUpdating,
     isDeleting
   } = useTestimonials();
+
+  useAuditLogOnOpen({
+    open: !!deletingId,
+    action: "testimonial_delete_warning_shown",
+    entityType: "settings",
+    entityId: deletingId,
+  });
 
   const handleOpenDialog = (testimonial?: any) => {
     if (testimonial) {

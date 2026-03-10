@@ -25,7 +25,6 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-  AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
 import {
   MapPin,
@@ -49,6 +48,7 @@ import {
 } from '@/hooks/use-pickup-locations';
 import { useTenant } from '@/contexts/TenantContext';
 import { cn } from '@/lib/utils';
+import { useAuditLogOnOpen } from '@/hooks/use-audit-log-on-open';
 import {
   formatCurrency,
   getCurrencySymbol,
@@ -136,6 +136,15 @@ export function LocationSettings({ onDirtyChange }: LocationSettingsProps = {}) 
   const [editingLocation, setEditingLocation] = useState<PickupLocation | null>(null);
   const [formData, setFormData] = useState<LocationFormData>(EMPTY_FORM);
   const [dialogMode, setDialogMode] = useState<'pickup' | 'return'>('pickup');
+  const [deleteLocationId, setDeleteLocationId] = useState<string | null>(null);
+  const [deleteLocationName, setDeleteLocationName] = useState<string>('');
+
+  useAuditLogOnOpen({
+    open: !!deleteLocationId,
+    action: "location_delete_warning_shown",
+    entityType: "settings",
+    entityId: deleteLocationId,
+  });
 
   // Sync local state with fetched settings
   useEffect(() => {
@@ -471,6 +480,7 @@ export function LocationSettings({ onDirtyChange }: LocationSettingsProps = {}) 
                     onAdd={() => handleOpenAddDialog('pickup')}
                     onEdit={(loc) => handleOpenEditDialog(loc, 'pickup')}
                     onDelete={handleDeleteLocation}
+                    onConfirmDelete={(id, name) => { setDeleteLocationId(id); setDeleteLocationName(name); }}
                     onToggleActive={handleToggleActive}
                     isUpdating={isUpdating}
                     currencyCode={currencyCode}
@@ -639,6 +649,7 @@ export function LocationSettings({ onDirtyChange }: LocationSettingsProps = {}) 
                     onAdd={() => handleOpenAddDialog('return')}
                     onEdit={(loc) => handleOpenEditDialog(loc, 'return')}
                     onDelete={handleDeleteLocation}
+                    onConfirmDelete={(id, name) => { setDeleteLocationId(id); setDeleteLocationName(name); }}
                     onToggleActive={handleToggleActive}
                     isUpdating={isUpdating}
                     currencyCode={currencyCode}
@@ -885,6 +896,30 @@ export function LocationSettings({ onDirtyChange }: LocationSettingsProps = {}) 
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Delete Location Confirmation */}
+      <AlertDialog open={!!deleteLocationId} onOpenChange={(open) => !open && setDeleteLocationId(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete &ldquo;{deleteLocationName}&rdquo;?</AlertDialogTitle>
+            <AlertDialogDescription>This cannot be undone.</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                if (deleteLocationId) {
+                  handleDeleteLocation(deleteLocationId);
+                  setDeleteLocationId(null);
+                }
+              }}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
@@ -895,6 +930,7 @@ function LocationsGrid({
   onAdd,
   onEdit,
   onDelete,
+  onConfirmDelete,
   onToggleActive,
   isUpdating,
   currencyCode,
@@ -903,6 +939,7 @@ function LocationsGrid({
   onAdd: () => void;
   onEdit: (location: PickupLocation) => void;
   onDelete: (id: string) => void;
+  onConfirmDelete?: (id: string, name: string) => void;
   onToggleActive: (location: PickupLocation) => void;
   isUpdating: boolean;
   currencyCode: string;
@@ -948,28 +985,14 @@ function LocationsGrid({
                   <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => onEdit(location)}>
                     <Pencil className="h-3.5 w-3.5" />
                   </Button>
-                  <AlertDialog>
-                    <AlertDialogTrigger asChild>
-                      <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:text-destructive">
-                        <Trash2 className="h-3.5 w-3.5" />
-                      </Button>
-                    </AlertDialogTrigger>
-                    <AlertDialogContent>
-                      <AlertDialogHeader>
-                        <AlertDialogTitle>Delete &ldquo;{location.name}&rdquo;?</AlertDialogTitle>
-                        <AlertDialogDescription>This cannot be undone.</AlertDialogDescription>
-                      </AlertDialogHeader>
-                      <AlertDialogFooter>
-                        <AlertDialogCancel>Cancel</AlertDialogCancel>
-                        <AlertDialogAction
-                          onClick={() => onDelete(location.id)}
-                          className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                        >
-                          Delete
-                        </AlertDialogAction>
-                      </AlertDialogFooter>
-                    </AlertDialogContent>
-                  </AlertDialog>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-8 w-8 text-destructive hover:text-destructive"
+                    onClick={() => onConfirmDelete ? onConfirmDelete(location.id, location.name) : onDelete(location.id)}
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </Button>
                 </div>
               </div>
             ))}

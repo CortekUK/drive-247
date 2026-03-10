@@ -36,6 +36,8 @@ import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { format } from "date-fns";
 import { enhancedAddPlateSchema, type EnhancedAddPlateFormValues } from "@/client-schemas/plates/enhanced-add-plate";
+import { useAuditLog } from "@/hooks/use-audit-log";
+import { useAuditLogOnOpen } from "@/hooks/use-audit-log-on-open";
 
 type PlateFormData = EnhancedAddPlateFormValues;
 
@@ -74,8 +76,16 @@ export const EnhancedAddPlateDialog = ({
   const [existingDocumentName, setExistingDocumentName] = useState(editPlate?.document_name || null);
   const { toast } = useToast();
   const { tenant } = useTenant();
+  const { logAction } = useAuditLog();
 
   const isEditing = !!editPlate;
+  useAuditLogOnOpen({
+    open,
+    action: "plate_form_dialog_shown",
+    entityType: "plate",
+    entityId: editPlate?.id || "new",
+    details: { mode: isEditing ? "edit" : "create" },
+  });
 
   const form = useForm<PlateFormData>({
     resolver: zodResolver(enhancedAddPlateSchema),
@@ -298,6 +308,7 @@ export const EnhancedAddPlateDialog = ({
           title: "Success",
           description: "Plate updated successfully",
         });
+        logAction({ action: "plate_updated", entityType: "plate", entityId: editPlate.id, details: { plate_number: data.plate_number } });
       } else {
         // Create new plate
         const { data: newPlate, error } = await supabase
@@ -327,6 +338,7 @@ export const EnhancedAddPlateDialog = ({
           title: "Success",
           description: "Plate added successfully",
         });
+        logAction({ action: "plate_created", entityType: "plate", entityId: newPlate.id, details: { plate_number: data.plate_number } });
       }
 
       form.reset();

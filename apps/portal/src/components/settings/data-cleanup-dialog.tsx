@@ -16,6 +16,9 @@ import { Label } from '@/components/ui/label';
 import { Loader2, Trash2, AlertTriangle, CheckCircle2 } from 'lucide-react';
 import { useDataCleanup } from '@/hooks/use-data-cleanup';
 import { toast } from '@/hooks/use-toast';
+import { useAuditLogOnOpen } from '@/hooks/use-audit-log-on-open';
+import { useAuditLog } from '@/hooks/use-audit-log';
+import { useTenant } from '@/contexts/TenantContext';
 
 interface DataCleanupDialogProps {
   open: boolean;
@@ -23,9 +26,19 @@ interface DataCleanupDialogProps {
 }
 
 export function DataCleanupDialog({ open, onOpenChange }: DataCleanupDialogProps) {
+  const { tenant } = useTenant();
   const [confirmationChecked, setConfirmationChecked] = useState(false);
   const [showConfirmation, setShowConfirmation] = useState(false);
   const { cleanupTestData, isLoading, result } = useDataCleanup();
+  const { logAction } = useAuditLog();
+
+  useAuditLogOnOpen({
+    open,
+    action: "data_cleanup_warning_shown",
+    entityType: "settings",
+    entityId: tenant?.id,
+    details: { dialog: "Clean Test Data" },
+  });
 
   const handleInitialConfirm = () => {
     if (!confirmationChecked) return;
@@ -43,6 +56,7 @@ export function DataCleanupDialog({ open, onOpenChange }: DataCleanupDialogProps
           description: `Cleared ${cleanupResult.tablesCleared.length} tables and deleted ${totalDeleted} records.`,
           variant: "default",
         });
+        logAction({ action: "settings_updated", entityType: "settings", entityId: tenant?.id || "unknown", details: { operation: "data_cleanup", tables_cleared: cleanupResult.tablesCleared.length } });
       } else {
         toast({
           title: "Cleanup Failed",

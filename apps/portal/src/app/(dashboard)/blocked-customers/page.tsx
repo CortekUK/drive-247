@@ -32,6 +32,7 @@ import { format } from "date-fns";
 import { useToast } from "@/hooks/use-toast";
 import { useTenant } from "@/contexts/TenantContext";
 import { useManagerPermissions } from "@/hooks/use-manager-permissions";
+import { useAuditLogOnOpen } from "@/hooks/use-audit-log-on-open";
 
 interface BlockedCustomer {
   id: string;
@@ -68,6 +69,20 @@ const BlockedCustomers = () => {
 
   const { unblockCustomer, addBlockedIdentity, removeBlockedIdentity, isLoading } = useCustomerBlockingActions();
   const { canEdit } = useManagerPermissions();
+
+  useAuditLogOnOpen({
+    open: !!unblockCustomerDialog,
+    action: "customer_unblock_warning_shown",
+    entityType: "customer",
+    entityId: unblockCustomerDialog?.id,
+  });
+
+  useAuditLogOnOpen({
+    open: !!removeIdentityDialog,
+    action: "identity_remove_warning_shown",
+    entityType: "identity",
+    entityId: removeIdentityDialog?.id,
+  });
 
   // Fetch all customers for combobox (with license/ID for pre-fill)
   const { data: allCustomers = [] } = useQuery({

@@ -10,6 +10,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Loader2, SkipForward } from "lucide-react";
 import { useRentalReview, useSubmitRentalReview, useSkipRentalReview } from "@/hooks/use-rental-review";
 import { POSITIVE_TAGS, NEGATIVE_TAGS, getRatingColor, getSliderColor } from "./review-tags";
+import { useAuditLogOnOpen } from "@/hooks/use-audit-log-on-open";
 
 interface RentalReviewDialogProps {
   open: boolean;
@@ -31,6 +32,13 @@ export function RentalReviewDialog({
   const { data: existingReview, isLoading: loadingReview } = useRentalReview(open ? rentalId : undefined);
   const submitReview = useSubmitRentalReview();
   const skipReview = useSkipRentalReview();
+
+  useAuditLogOnOpen({
+    open,
+    action: "rental_review_dialog_shown",
+    entityType: "rental",
+    entityId: rentalId,
+  });
 
   const [rating, setRating] = useState<number>(5);
   const [comment, setComment] = useState("");

@@ -24,6 +24,8 @@ import {
 import { toast } from "sonner";
 import { useTenant } from "@/contexts/TenantContext";
 import { Plus, Edit, Trash2, GripVertical, Search, HelpCircle, ChevronUp, ChevronDown } from "lucide-react";
+import { useAuditLogOnOpen } from "@/hooks/use-audit-log-on-open";
+import { useAuditLog } from "@/hooks/use-audit-log";
 
 interface FAQ {
   id: string;
@@ -47,6 +49,7 @@ type FAQFormValues = z.infer<typeof faqFormSchema>;
 
 export function FAQsManager() {
   const { tenant } = useTenant();
+  const { logAction } = useAuditLog();
   const [faqs, setFaqs] = useState<FAQ[]>([]);
   const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -54,6 +57,13 @@ export function FAQsManager() {
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [editingFAQ, setEditingFAQ] = useState<FAQ | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
+
+  useAuditLogOnOpen({
+    open: deleteDialogOpen,
+    action: "faq_delete_warning_shown",
+    entityType: "settings",
+    entityId: deletingId,
+  });
 
   const form = useForm<FAQFormValues>({
     resolver: zodResolver(faqFormSchema),
@@ -190,9 +200,10 @@ export function FAQsManager() {
         return;
       }
       toast.success("FAQ updated");
+      logAction({ action: "faq_updated", entityType: "faq", entityId: editingFAQ.id, details: {} });
     } else {
       const maxOrder = faqs.reduce((max, f) => Math.max(max, f.display_order || 0), 0);
-      const { error } = await supabase
+      const { data: inserted, error } = await supabase
         .from("faqs")
         .insert({
           question: data.question,
@@ -200,7 +211,8 @@ export function FAQsManager() {
           is_active: data.is_active,
           display_order: maxOrder + 1,
           tenant_id: tenant?.id || null,
-        });
+        })
+        .select();
 
       if (error) {
         console.error("FAQ insert error:", error);
@@ -208,6 +220,7 @@ export function FAQsManager() {
         return;
       }
       toast.success("FAQ added successfully");
+      logAction({ action: "faq_created", entityType: "faq", entityId: inserted?.[0]?.id || "unknown", details: { question: data.question } });
     }
 
     setDialogOpen(false);
@@ -237,6 +250,7 @@ export function FAQsManager() {
     }
 
     toast.success("FAQ removed");
+    logAction({ action: "faq_deleted", entityType: "faq", entityId: deletingId, details: {} });
     setDeleteDialogOpen(false);
     setDeletingId(null);
     loadFAQs();

@@ -2,6 +2,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useTenant } from '@/contexts/TenantContext';
 import { toast } from '@/hooks/use-toast';
+import { useAuditLog } from '@/hooks/use-audit-log';
 
 export interface PickupLocation {
   id: string;
@@ -99,6 +100,7 @@ const DEFAULT_LOCATION_SETTINGS: LocationSettings = {
 export const usePickupLocations = () => {
   const { tenant } = useTenant();
   const queryClient = useQueryClient();
+  const { logAction } = useAuditLog();
 
   // ============================================
   // Fetch location settings from tenants table
@@ -333,12 +335,13 @@ export const usePickupLocations = () => {
 
       return data as PickupLocation;
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['pickup-locations', tenant?.id] });
       toast({
         title: "Location Added",
         description: "New pickup location has been added successfully.",
       });
+      logAction({ action: "location_created", entityType: "location", entityId: data.id, details: { name: data.name } });
     },
     onError: (error: Error) => {
       toast({
@@ -372,12 +375,13 @@ export const usePickupLocations = () => {
 
       return data as PickupLocation;
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['pickup-locations', tenant?.id] });
       toast({
         title: "Location Updated",
         description: "Pickup location has been updated successfully.",
       });
+      logAction({ action: "location_updated", entityType: "location", entityId: data.id, details: {} });
     },
     onError: (error: Error) => {
       toast({
@@ -394,7 +398,7 @@ export const usePickupLocations = () => {
   // Delete location mutation
   // ============================================
   const deleteLocationMutation = useMutation({
-    mutationFn: async (id: string): Promise<void> => {
+    mutationFn: async (id: string): Promise<string> => {
       const { error } = await supabase
         .from('pickup_locations')
         .delete()
@@ -404,13 +408,15 @@ export const usePickupLocations = () => {
         console.error('[PickupLocations] Delete error:', error);
         throw error;
       }
+      return id;
     },
-    onSuccess: () => {
+    onSuccess: (id) => {
       queryClient.invalidateQueries({ queryKey: ['pickup-locations', tenant?.id] });
       toast({
         title: "Location Deleted",
         description: "Pickup location has been removed.",
       });
+      logAction({ action: "location_deleted", entityType: "location", entityId: id, details: {} });
     },
     onError: (error: Error) => {
       toast({

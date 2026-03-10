@@ -16,6 +16,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Calendar } from "@/components/ui/calendar";
 import { useToast } from "@/hooks/use-toast";
 import { useAuditLog } from "@/hooks/use-audit-log";
+import { useAuditLogOnOpen } from "@/hooks/use-audit-log-on-open";
 import { useTenant } from "@/contexts/TenantContext";
 import { useCustomerVehicleRental } from "@/hooks/use-customer-vehicle-rental";
 import { useCustomerBalanceWithStatus, useRentalChargesAndPayments } from "@/hooks/use-customer-balance";
@@ -73,6 +74,14 @@ export const AddPaymentDialog = ({
   const { tenant } = useTenant();
   const { logAction } = useAuditLog();
   const queryClient = useQueryClient();
+
+  useAuditLogOnOpen({
+    open,
+    action: "payment_create_dialog_shown",
+    entityType: "payment",
+    entityId: propRentalId || customer_id || "unknown",
+    details: { rental_id: propRentalId, customer_id, defaultAmount },
+  });
 
   const form = useForm<PaymentFormData>({
     resolver: zodResolver(paymentSchema),

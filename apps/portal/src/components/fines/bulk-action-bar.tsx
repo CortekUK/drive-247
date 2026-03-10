@@ -9,6 +9,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { formatCurrency } from "@/lib/format-utils";
 import { useTenant } from "@/contexts/TenantContext";
+import { useAuditLogOnOpen } from "@/hooks/use-audit-log-on-open";
 
 interface Fine {
   id: string;
@@ -32,6 +33,22 @@ export const BulkActionBar = ({ selectedFines, onClearSelection }: BulkActionBar
   // Filter eligible fines for each action
   const chargeableFines = selectedFines.filter(fine => fine.status === 'Open');
   const waivableFines = selectedFines.filter(fine => fine.status === 'Open');
+
+  useAuditLogOnOpen({
+    open: showChargeDialog,
+    action: "fine_bulk_charge_warning_shown",
+    entityType: "fine",
+    entityId: "bulk",
+    details: { count: chargeableFines.length },
+  });
+
+  useAuditLogOnOpen({
+    open: showWaiveDialog,
+    action: "fine_bulk_waive_warning_shown",
+    entityType: "fine",
+    entityId: "bulk",
+    details: { count: waivableFines.length },
+  });
 
   const bulkChargeMutation = useMutation({
     mutationFn: async (fineIds: string[]) => {

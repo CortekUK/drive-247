@@ -52,6 +52,7 @@ import { CalendarIcon, AlertTriangle } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useInsuranceValidation } from "@/hooks/use-insurance-data";
 import { insurancePolicySchema, type InsurancePolicyFormValues } from "@/client-schemas/insurance/insurance-policy";
+import { useAuditLogOnOpen } from "@/hooks/use-audit-log-on-open";
 
 type PolicyFormData = InsurancePolicyFormValues;
 
@@ -71,6 +72,14 @@ export function InsurancePolicyDialog({
   const queryClient = useQueryClient();
   const { tenant } = useTenant();
   const isEditing = Boolean(policyId);
+
+  useAuditLogOnOpen({
+    open,
+    action: "insurance_policy_dialog_shown",
+    entityType: "insurance",
+    entityId: policyId || customerId,
+  });
+
   const [showOverlapDialog, setShowOverlapDialog] = useState(false);
   const [overlapData, setOverlapData] = useState<any[]>([]);
   const { checkPolicyOverlap, checkPolicyNumberUnique } = useInsuranceValidation();

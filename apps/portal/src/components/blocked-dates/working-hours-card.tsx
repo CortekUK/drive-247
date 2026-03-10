@@ -16,6 +16,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuditLog } from '@/hooks/use-audit-log';
 import { getTimezonesByRegion, findTimezone } from '@/lib/timezones';
 import { useManagerPermissions } from '@/hooks/use-manager-permissions';
+import { useAuditLogOnOpen } from '@/hooks/use-audit-log-on-open';
 
 const DAYS_OF_WEEK = [
   { key: 'monday', label: 'Monday' },
@@ -171,6 +172,14 @@ export function WorkingHoursCard() {
   const { logAction } = useAuditLog();
   const { canEdit } = useManagerPermissions();
   const [isSaving, setIsSaving] = useState(false);
+  const [resetDialogOpen, setResetDialogOpen] = useState(false);
+
+  useAuditLogOnOpen({
+    open: resetDialogOpen,
+    action: "working_hours_update_warning_shown",
+    entityType: "working_hours",
+    entityId: tenant?.id,
+  });
 
   // Fetch working hours data directly
   const { data: workingHoursData, isLoading } = useQuery({
@@ -480,7 +489,7 @@ export function WorkingHoursCard() {
 
         {canEdit('availability') && (
           <div className="flex flex-col sm:flex-row justify-between items-stretch sm:items-center gap-3">
-            <AlertDialog>
+            <AlertDialog open={resetDialogOpen} onOpenChange={setResetDialogOpen}>
               <AlertDialogTrigger asChild>
                 <Button variant="outline" className="text-destructive border-destructive hover:bg-destructive/10 w-full sm:w-auto">
                   Reset to Defaults
@@ -544,6 +553,7 @@ export function WorkingHoursCard() {
                         queryClient.invalidateQueries({ queryKey: ['working-hours', tenant.id] });
                         queryClient.invalidateQueries({ queryKey: ['tenant'] });
                         toast({ title: "Settings Reset", description: "Working hours have been restored to defaults." });
+                        logAction({ action: "working_hours_updated", entityType: "working_hours", entityId: tenant?.id || "unknown", details: { operation: "reset_to_defaults" } });
                       } catch (error) {
                         console.error('Failed to reset working hours:', error);
                         toast({ title: "Error", description: "Failed to reset working hours", variant: "destructive" });

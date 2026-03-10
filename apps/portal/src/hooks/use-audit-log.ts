@@ -85,6 +85,68 @@ export type AuditAction =
   | "message_sent"
   // Settings actions
   | "settings_updated"
+  // Promotion actions
+  | "promotion_created"
+  | "promotion_updated"
+  | "promotion_deleted"
+  // Testimonial actions
+  | "testimonial_created"
+  | "testimonial_updated"
+  | "testimonial_deleted"
+  // FAQ actions
+  | "faq_created"
+  | "faq_updated"
+  | "faq_deleted"
+  // Location actions
+  | "location_created"
+  | "location_updated"
+  | "location_deleted"
+  // Holiday actions
+  | "holiday_created"
+  | "holiday_updated"
+  | "holiday_deleted"
+  // Warning dialog shown actions
+  | "rental_delete_warning_shown"
+  | "rental_cancel_warning_shown"
+  | "rental_close_warning_shown"
+  | "rental_reject_warning_shown"
+  | "vehicle_dispose_warning_shown"
+  | "vehicle_undo_dispose_warning_shown"
+  | "invoice_delete_warning_shown"
+  | "customer_reject_warning_shown"
+  | "payment_refund_warning_shown"
+  | "data_cleanup_warning_shown"
+  | "fine_appeal_warning_shown"
+  | "blocked_date_delete_warning_shown"
+  | "working_hours_update_warning_shown"
+  | "fine_bulk_charge_warning_shown"
+  | "fine_bulk_waive_warning_shown"
+  | "customer_unblock_warning_shown"
+  | "identity_remove_warning_shown"
+  | "settings_reset_warning_shown"
+  | "agreement_template_clear_warning_shown"
+  | "location_delete_warning_shown"
+  | "holiday_delete_warning_shown"
+  | "testimonial_delete_warning_shown"
+  | "faq_delete_warning_shown"
+  | "promotion_delete_warning_shown"
+  | "payment_create_dialog_shown"
+  // Form/creation dialog shown actions
+  | "customer_form_dialog_shown"
+  | "customer_document_upload_dialog_shown"
+  | "user_create_dialog_shown"
+  | "fine_create_dialog_shown"
+  | "fine_authority_payment_dialog_shown"
+  | "invoice_send_dialog_shown"
+  | "insurance_document_upload_dialog_shown"
+  | "insurance_policy_dialog_shown"
+  | "buy_insurance_dialog_shown"
+  | "rental_review_dialog_shown"
+  | "vehicle_expense_dialog_shown"
+  | "service_record_dialog_shown"
+  | "vehicle_form_dialog_shown"
+  | "plate_form_dialog_shown"
+  | "plate_assign_dialog_shown"
   // Other
   | string;
 
@@ -108,6 +170,12 @@ export type EntityType =
   | "cms_section"
   | "cms_media"
   | "message"
+  | "promotion"
+  | "testimonial"
+  | "faq"
+  | "location"
+  | "holiday"
+  | "insurance"
   | string;
 
 export interface AuditLogParams {
@@ -128,15 +196,12 @@ export function useAuditLog() {
     entityId,
     details = {},
   }: AuditLogParams) => {
-    if (!tenant?.id) {
-      console.warn("No tenant context for audit log");
-      return;
-    }
+    if (!tenant?.id || !appUser?.id) return;
 
     try {
       const { error } = await supabase.from("audit_logs").insert({
         action,
-        actor_id: appUser?.id || null,
+        actor_id: appUser.id,
         entity_type: entityType,
         entity_id: entityId,
         details,
@@ -144,14 +209,13 @@ export function useAuditLog() {
       });
 
       if (error) {
-        console.error("Failed to create audit log:", error);
+        console.error(`[AuditLog] Failed: "${action}"`, error);
       } else {
-        // Invalidate audit logs cache
         queryClient.invalidateQueries({ queryKey: ["audit-logs"] });
         queryClient.invalidateQueries({ queryKey: ["audit-log-actions"] });
       }
     } catch (err) {
-      console.error("Error creating audit log:", err);
+      console.error("[AuditLog] Error:", err);
     }
   };
 

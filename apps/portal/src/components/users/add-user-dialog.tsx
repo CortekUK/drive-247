@@ -10,6 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { UserPlus } from "lucide-react";
 import { addUserSchema, type AddUserFormValues } from "@/client-schemas/users/add-user";
 import { ManagerPermissionsSelector } from "@/components/users/manager-permissions-selector";
+import { useAuditLogOnOpen } from "@/hooks/use-audit-log-on-open";
 
 interface AddUserDialogProps {
   open: boolean;
@@ -19,6 +20,13 @@ interface AddUserDialogProps {
 }
 
 export function AddUserDialog({ open, onOpenChange, onSubmit, isLoading }: AddUserDialogProps) {
+  useAuditLogOnOpen({
+    open,
+    action: "user_create_dialog_shown",
+    entityType: "user",
+    entityId: "new",
+  });
+
   const form = useForm<AddUserFormValues>({
     resolver: zodResolver(addUserSchema),
     defaultValues: {

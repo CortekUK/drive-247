@@ -47,6 +47,7 @@ import { AddUserDialog } from '@/components/users/add-user-dialog';
 import { CredentialsModal } from '@/components/users/credentials-modal';
 import { ManagerPermissionsSelector } from '@/components/users/manager-permissions-selector';
 import type { AddUserFormValues, PermissionEntry } from '@/client-schemas/users/add-user';
+import { useAuditLog } from '@/hooks/use-audit-log';
 
 interface UserCredentials {
   name: string;
@@ -58,6 +59,7 @@ export default function UsersManagement() {
   const { appUser } = useAuth();
   const { tenant } = useTenant();
   const queryClient = useQueryClient();
+  const { logAction } = useAuditLog();
 
   // Dialog states
   const [showAddDialog, setShowAddDialog] = useState(false);
@@ -172,6 +174,7 @@ export default function UsersManagement() {
         title: "Success",
         description: "User created successfully. A welcome email has been sent.",
       });
+      logAction({ action: "user_created", entityType: "user", entityId: data.user_id || "unknown", details: { email: data.email, role: data.role } });
     },
     onError: (error: any) => {
       toast({
@@ -224,8 +227,9 @@ export default function UsersManagement() {
 
       return data;
     },
-    onSuccess: () => {
+    onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: ['users', tenant?.id] });
+      logAction({ action: "user_updated", entityType: "user", entityId: variables.userId, details: { newRole: variables.newRole } });
       setShowRoleDialog(false);
       setSelectedUser(null);
       setSelectedRole('');
@@ -287,8 +291,9 @@ export default function UsersManagement() {
 
       return data;
     },
-    onSuccess: () => {
+    onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: ['users', tenant?.id] });
+      logAction({ action: "user_updated", entityType: "user", entityId: variables.userId, details: { isActive: variables.isActive } });
       toast({
         title: "Success",
         description: "User status updated successfully",
