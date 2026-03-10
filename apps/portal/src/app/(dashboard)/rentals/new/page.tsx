@@ -820,62 +820,8 @@ const CreateRental = () => {
     return () => window.removeEventListener('dev-fill-rental-form', handleDevFillRental as EventListener);
   }, [form]);
 
-  // Auto-update end date based on rental period type and start date
-  // Use a ref to track previous values and prevent unnecessary updates
-  const prevStartDateRef = useRef<Date | null>(null);
-  const prevPeriodTypeRef = useRef<string | null>(null);
-
-  useEffect(() => {
-    const startDate = watchedStartDate;
-    const periodType = watchedRentalPeriodType;
-
-    if (startDate && periodType) {
-      // Check if values actually changed to prevent infinite loops
-      const startDateChanged = !prevStartDateRef.current ||
-        startDate.getTime() !== prevStartDateRef.current.getTime();
-      const periodTypeChanged = prevPeriodTypeRef.current !== periodType;
-
-      if (startDateChanged || periodTypeChanged) {
-        let newEndDate: Date;
-
-        switch (periodType) {
-          case "Daily":
-            newEndDate = addDays(startDate, 1);
-            break;
-          case "Weekly":
-            newEndDate = addWeeks(startDate, 1);
-            break;
-          case "Monthly":
-          default:
-            newEndDate = addMonths(startDate, 1);
-            break;
-        }
-
-        // If auto-calculated end date would span a blocked period, find the next valid end date
-        if (selectedVehicleId) {
-          const blockCheck = checkBlockedDatesOverlap(startDate, newEndDate, selectedVehicleId);
-          if (blockCheck.blocked) {
-            // Find the first blocked date after start and set end date to day before it
-            const allBlocked = [...globalBlockedDatesArray, ...(selectedVehicleId ? getVehicleBlockedDates(selectedVehicleId) : [])];
-            const blockedAfterStart = allBlocked
-              .filter(d => d > startDate)
-              .sort((a, b) => a.getTime() - b.getTime());
-            if (blockedAfterStart.length > 0) {
-              const dayBeforeBlock = new Date(blockedAfterStart[0]);
-              dayBeforeBlock.setDate(dayBeforeBlock.getDate() - 1);
-              if (dayBeforeBlock > startDate) {
-                newEndDate = dayBeforeBlock;
-              }
-            }
-          }
-        }
-
-        prevStartDateRef.current = startDate;
-        prevPeriodTypeRef.current = periodType;
-        form.setValue("end_date", newEndDate);
-      }
-    }
-  }, [watchedRentalPeriodType, watchedStartDate, form]);
+  // Note: End date is no longer auto-calculated from period type since period type
+  // is now auto-determined from the date range. The admin picks both start and end dates manually.
 
   const selectedCustomer = customers?.find(c => c.id === selectedCustomerId);
   const selectedVehicle = vehicles?.find(v => v.id === selectedVehicleId);
@@ -1463,6 +1409,57 @@ const CreateRental = () => {
   // Check if start date is in the past
   const isPastStartDate = watchedStartDate && isBefore(watchedStartDate, todayAtMidnight);
 
+  // Soft warnings for booking notice & rental duration limits (matching booking-side logic)
+  const leadTimeHours = rentalSettings?.booking_lead_time_hours ?? 24;
+  const leadTimeUnit = rentalSettings?.booking_lead_time_unit ?? 'hours';
+  const minRentalHours = Math.max(1, ((rentalSettings?.min_rental_days ?? 0) * 24) + (rentalSettings?.min_rental_hours ?? 1));
+  const maxRentalDays = rentalSettings?.max_rental_days ?? 90;
+
+  // Booking lead time warning
+  const leadTimeWarning = (() => {
+    if (!watchedStartDate || leadTimeHours <= 0) return null;
+    const pickupTime = form.getValues("pickup_time") || "10:00";
+    const pickup = new Date(`${format(watchedStartDate, "yyyy-MM-dd")}T${pickupTime}`);
+    const now = new Date();
+    const hoursUntilPickup = (pickup.getTime() - now.getTime()) / (1000 * 60 * 60);
+    if (hoursUntilPickup < leadTimeHours) {
+      const display = leadTimeUnit === 'days'
+        ? `${Math.round(leadTimeHours / 24)} day${Math.round(leadTimeHours / 24) !== 1 ? 's' : ''}`
+        : `${leadTimeHours} hour${leadTimeHours !== 1 ? 's' : ''}`;
+      return `Pickup is within the minimum booking notice of ${display}`;
+    }
+    return null;
+  })();
+
+  // Min rental duration warning
+  const minDurationWarning = (() => {
+    if (!watchedStartDate || !watchedEndDate) return null;
+    const pickupTime = form.getValues("pickup_time") || "10:00";
+    const returnTime = form.getValues("return_time") || "10:00";
+    const pickup = new Date(`${format(watchedStartDate, "yyyy-MM-dd")}T${pickupTime}`);
+    const returnDt = new Date(`${format(watchedEndDate, "yyyy-MM-dd")}T${returnTime}`);
+    const hoursDiff = (returnDt.getTime() - pickup.getTime()) / (1000 * 60 * 60);
+    if (hoursDiff < minRentalHours) {
+      const days = Math.floor(minRentalHours / 24);
+      const hours = minRentalHours % 24;
+      const parts: string[] = [];
+      if (days > 0) parts.push(`${days} day${days !== 1 ? 's' : ''}`);
+      if (hours > 0) parts.push(`${hours} hour${hours !== 1 ? 's' : ''}`);
+      return `Rental duration is below the minimum of ${parts.join(' ')}`;
+    }
+    return null;
+  })();
+
+  // Max rental duration warning
+  const maxDurationWarning = (() => {
+    if (!watchedStartDate || !watchedEndDate) return null;
+    const daysDiff = differenceInDays(watchedEndDate, watchedStartDate);
+    if (daysDiff > maxRentalDays) {
+      return `Rental duration exceeds the maximum of ${maxRentalDays} day${maxRentalDays !== 1 ? 's' : ''}`;
+    }
+    return null;
+  })();
+
   // Redirect managers without edit permission
   useEffect(() => {
     if (isManager && !canEdit('rentals')) {
@@ -1954,6 +1951,12 @@ const CreateRental = () => {
                               Warning: Start date is in the past
                             </div>
                           )}
+                          {leadTimeWarning && (
+                            <div className="flex items-center gap-1 text-amber-600 text-sm">
+                              <AlertTriangle className="h-3 w-3" />
+                              {leadTimeWarning}. Admin override allowed.
+                            </div>
+                          )}
                           <FormMessage />
                         </FormItem>
                       )}
@@ -2001,6 +2004,18 @@ const CreateRental = () => {
                               <FormDescription>
                                 {Math.max(1, differenceInDays(watchedEndDate, watchedStartDate))} days
                               </FormDescription>
+                            )}
+                            {minDurationWarning && (
+                              <div className="flex items-center gap-1 text-amber-600 text-sm">
+                                <AlertTriangle className="h-3 w-3" />
+                                {minDurationWarning}. Admin override allowed.
+                              </div>
+                            )}
+                            {maxDurationWarning && (
+                              <div className="flex items-center gap-1 text-amber-600 text-sm">
+                                <AlertTriangle className="h-3 w-3" />
+                                {maxDurationWarning}. Admin override allowed.
+                              </div>
                             )}
                           </FormItem>
                         );
