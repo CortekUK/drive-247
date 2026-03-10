@@ -35,20 +35,24 @@ export function VersionHistoryDialog({
   onOpenChange,
   pageSlug,
 }: VersionHistoryDialogProps) {
-  const { versions, isLoading, rollback, isRollingBack } = useCMSVersions(pageSlug);
+  const { versions, isLoading, rollbackAsync, isRollingBack } = useCMSVersions(pageSlug);
   const [confirmRollback, setConfirmRollback] = useState<string | null>(null);
 
   const handleRollback = async () => {
-    if (confirmRollback) {
-      await rollback(confirmRollback);
+    if (!confirmRollback) return;
+    try {
+      await rollbackAsync(confirmRollback);
       setConfirmRollback(null);
       onOpenChange(false);
+    } catch {
+      // Error toast is handled by the mutation's onError
+      setConfirmRollback(null);
     }
   };
 
   return (
     <>
-      <Dialog open={open} onOpenChange={onOpenChange}>
+      <Dialog open={open && !confirmRollback} onOpenChange={onOpenChange}>
         <DialogContent className="max-w-2xl">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
@@ -118,8 +122,15 @@ export function VersionHistoryDialog({
         </DialogContent>
       </Dialog>
 
-      {/* Rollback Confirmation */}
-      <AlertDialog open={!!confirmRollback} onOpenChange={() => setConfirmRollback(null)}>
+      {/* Rollback Confirmation — shown alone, never stacked on top of the Dialog */}
+      <AlertDialog
+        open={!!confirmRollback}
+        onOpenChange={(isOpen) => {
+          if (!isOpen && !isRollingBack) {
+            setConfirmRollback(null);
+          }
+        }}
+      >
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Restore this version?</AlertDialogTitle>
@@ -130,7 +141,7 @@ export function VersionHistoryDialog({
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel disabled={isRollingBack}>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={handleRollback} disabled={isRollingBack}>
+            <AlertDialogAction onClick={(e) => { e.preventDefault(); handleRollback(); }} disabled={isRollingBack}>
               {isRollingBack ? (
                 <>
                   <Loader2 className="h-4 w-4 mr-2 animate-spin" />
