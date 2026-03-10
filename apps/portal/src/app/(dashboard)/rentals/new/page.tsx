@@ -14,7 +14,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage, FormDescription } from "@/components/ui/form";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
-import { ArrowLeft, FileText, Save, AlertTriangle, MapPin, Clock, Shield, Upload, CheckCircle2, XCircle, Loader2, RefreshCw, QrCode, Smartphone, Copy, Check, Plus, Minus, Receipt, ImageIcon, ExternalLink, Info, CalendarDays, StickyNote, ChevronsUpDown, Link2, Star, ShieldCheck } from "lucide-react";
+import { ArrowLeft, FileText, Save, AlertTriangle, MapPin, Clock, Shield, Upload, CheckCircle2, XCircle, Loader2, RefreshCw, QrCode, Smartphone, Copy, Check, Plus, Minus, Receipt, ImageIcon, ExternalLink, Info, CalendarDays, StickyNote, ChevronsUpDown, Link2, Star, ShieldCheck, Lock, Banknote, CreditCard } from "lucide-react";
 import { GenerateInviteDialog } from "@/components/customers/generate-invite-dialog";
 import { cn } from "@/lib/utils";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -130,6 +130,18 @@ const CreateRental = () => {
     id: string;
   } | null>(null);
 
+  // Fee override state — admin can override per-rental
+  const [taxOverride, setTaxOverride] = useState<number | null>(null);
+  const [serviceFeeOverride, setServiceFeeOverride] = useState<number | null>(null);
+  const [depositOverride, setDepositOverride] = useState<number | null>(null);
+
+  // Installment plan state
+  const [installmentPlanType, setInstallmentPlanType] = useState<'full' | 'weekly' | 'monthly'>('full');
+  const [installmentAmountOverride, setInstallmentAmountOverride] = useState<number | null>(null);
+
+  // Lockbox / delivery method state
+  const [deliveryMethod, setDeliveryMethod] = useState<'in_person' | 'lockbox'>('in_person');
+
   // Verification state
   const [creatingVerification, setCreatingVerification] = useState(false);
   const [showQRModal, setShowQRModal] = useState(false);
@@ -157,12 +169,17 @@ const CreateRental = () => {
     return amount * (rentalSettings.tax_percentage / 100);
   };
 
-  // Service fee calculation helper
-  const calculateServiceFee = (): number => {
-    if (!rentalSettings?.service_fee_enabled || !rentalSettings?.service_fee_amount) {
-      return 0;
+  // Service fee calculation helper (supports fixed_amount and percentage)
+  const calculateServiceFee = (baseAmount?: number): number => {
+    if (!rentalSettings?.service_fee_enabled) return 0;
+    const feeType = rentalSettings?.service_fee_type || 'fixed_amount';
+    const feeValue = rentalSettings?.service_fee_value ?? rentalSettings?.service_fee_amount ?? 0;
+    if (!feeValue) return 0;
+    if (feeType === 'percentage') {
+      const amount = baseAmount ?? 0;
+      return (amount * feeValue) / 100;
     }
-    return rentalSettings.service_fee_amount;
+    return feeValue;
   };
 
   // Security deposit calculation helper
@@ -1012,13 +1029,15 @@ const CreateRental = () => {
           return_location_id: sameAsPickup ? pickupLocationId : returnLocationId || null,
           pickup_time: data.pickup_time || null,
           return_time: data.return_time || null,
-          driver_age_range: data.driver_age ? String(data.driver_age) : null,
+          driver_age_range: data.driver_age ? (data.driver_age < 25 ? 'under_25' : data.driver_age > 70 ? 'over_70' : '25_70') : null,
           promo_code: promoDetails?.code || null,
           discount_applied: discountAmount > 0 ? discountAmount : null,
           insurance_status: bonzahPremium > 0 ? "bonzah" : (data.insurance_status || "pending"),
           insurance_premium: bonzahPremium > 0 ? bonzahPremium : null,
           renewed_from_rental_id: renewFromId || null,
-        })
+          delivery_method: rentalSettings?.lockbox_enabled ? deliveryMethod : null,
+          has_installment_plan: installmentPlanType !== 'full' && rentalSettings?.installments_enabled,
+        } as any)
         .select()
         .single();
 
@@ -1258,9 +1277,10 @@ const CreateRental = () => {
         const invoiceNotes = `Monthly rental fee for ${selectedVehicle?.make} ${selectedVehicle?.model} (${vehicleReg})`;
         // Apply discount to the rental amount
         const discountedAmount = data.monthly_amount - discountAmount;
-        const taxAmount = calculateTaxAmount(discountedAmount);
-        const serviceFee = calculateServiceFee();
-        const securityDeposit = calculateSecurityDeposit(data.vehicle_id);
+        // Use admin overrides if set, otherwise use auto-calculated values
+        const taxAmount = taxOverride !== null ? taxOverride : calculateTaxAmount(discountedAmount);
+        const serviceFee = serviceFeeOverride !== null ? serviceFeeOverride : calculateServiceFee(discountedAmount);
+        const securityDeposit = depositOverride !== null ? depositOverride : calculateSecurityDeposit(data.vehicle_id);
         const insurancePremium = bonzahPremium > 0 ? bonzahPremium : 0;
         const totalAmount = discountedAmount + taxAmount + serviceFee + securityDeposit + insurancePremium;
 
@@ -1290,6 +1310,107 @@ const CreateRental = () => {
       } catch (invoiceError) {
         console.error('Error creating invoice:', invoiceError);
         // If invoice fails, still continue with the flow - skip invoice and go to DocuSign
+      }
+
+      // Create installment plan if selected
+      if (installmentPlanType !== 'full' && rentalSettings?.installments_enabled && rentalSettings?.installment_config) {
+        try {
+          const instConfig = rentalSettings.installment_config;
+          const whatGetsSplit = instConfig.what_gets_split || 'rental_tax';
+          const chargeFirst = instConfig.charge_first_upfront !== false;
+
+          let installableAmt = discountedAmount;
+          if (whatGetsSplit === 'rental_tax' || whatGetsSplit === 'rental_tax_extras') {
+            installableAmt += taxAmount;
+          }
+
+          const rentalDaysCalc = differenceInDays(data.end_date, data.start_date);
+          let numInstallments = 1;
+          if (installmentPlanType === 'weekly') {
+            numInstallments = Math.min(Math.floor(rentalDaysCalc / 7), instConfig.max_installments_weekly);
+          } else if (installmentPlanType === 'monthly') {
+            numInstallments = Math.min(Math.ceil(rentalDaysCalc / 30), instConfig.max_installments_monthly);
+          }
+
+          const autoInstAmt = Math.floor((installableAmt / numInstallments) * 100) / 100;
+          const effectiveInstAmt = installmentAmountOverride !== null ? installmentAmountOverride : autoInstAmt;
+          const firstAmt = chargeFirst ? effectiveInstAmt : 0;
+          const scheduledCount = chargeFirst ? numInstallments - 1 : numInstallments;
+
+          // Create installment plan record
+          const { data: plan, error: planError } = await (supabase as any)
+            .from('installment_plans')
+            .insert({
+              rental_id: rental.id,
+              tenant_id: tenant?.id,
+              customer_id: data.customer_id,
+              plan_type: installmentPlanType,
+              total_installable_amount: installableAmt,
+              number_of_installments: numInstallments,
+              installment_amount: effectiveInstAmt,
+              upfront_amount: securityDeposit + serviceFee + firstAmt,
+              upfront_paid: false,
+              status: 'pending',
+              paid_installments: 0,
+              total_paid: 0,
+              next_due_date: (installmentPlanType === 'weekly'
+                ? addWeeks(data.start_date, 1)
+                : addMonths(data.start_date, 1)
+              ).toISOString().split('T')[0],
+              config: {
+                charge_first_upfront: chargeFirst,
+                what_gets_split: whatGetsSplit,
+                grace_period_days: instConfig.grace_period_days ?? 3,
+                max_retry_attempts: instConfig.max_retry_attempts ?? 3,
+                retry_interval_days: instConfig.retry_interval_days ?? 1,
+              },
+            })
+            .select()
+            .single();
+
+          if (planError) {
+            console.error('Error creating installment plan:', planError);
+          } else if (plan) {
+            // Create scheduled installments
+            const installments = Array.from({ length: numInstallments }, (_, i) => {
+              const isFirst = i === 0;
+              const isLast = i === numInstallments - 1;
+              const dueDate = installmentPlanType === 'weekly'
+                ? addWeeks(data.start_date, chargeFirst ? i : i + 1)
+                : addMonths(data.start_date, chargeFirst ? i : i + 1);
+              const lastAmt = Math.round((installableAmt - (effectiveInstAmt * (numInstallments - 1))) * 100) / 100;
+
+              return {
+                installment_plan_id: plan.id,
+                tenant_id: tenant?.id,
+                rental_id: rental.id,
+                customer_id: data.customer_id,
+                installment_number: i + 1,
+                amount: isLast ? lastAmt : effectiveInstAmt,
+                due_date: dueDate.toISOString().split('T')[0],
+                status: (isFirst && chargeFirst) ? 'processing' : 'scheduled',
+                failure_count: 0,
+              };
+            });
+
+            const { error: schedError } = await (supabase as any)
+              .from('scheduled_installments')
+              .insert(installments);
+
+            if (schedError) {
+              console.error('Error creating scheduled installments:', schedError);
+            }
+
+            // Link plan to rental
+            await supabase
+              .from('rentals')
+              .update({ installment_plan_id: plan.id } as any)
+              .eq('id', rental.id);
+          }
+        } catch (installmentError) {
+          console.error('Error setting up installment plan:', installmentError);
+          // Non-fatal — rental is already created
+        }
       }
 
       // Send booking notification emails
@@ -2084,7 +2205,7 @@ const CreateRental = () => {
                                 onChange={field.onChange}
                                 placeholder="Rental amount"
                                 min={1}
-                                step={1}
+                                step={0.01}
                                 error={!!form.formState.errors.monthly_amount}
                                 disabled={false}
                               />
@@ -2101,6 +2222,392 @@ const CreateRental = () => {
                   </div>
                 </div>
               </div>
+
+              {/* ── Fees & Charges (auto-calculated, admin-overridable) ── */}
+              {(() => {
+                const rentalAmount = watchedMonthlyAmount || 0;
+                const discountAmt = promoDetails ? calculateDiscount(rentalAmount) : 0;
+                const discountedAmount = rentalAmount - discountAmt;
+
+                const autoTax = Math.round(calculateTaxAmount(discountedAmount) * 100) / 100;
+                const autoServiceFee = Math.round(calculateServiceFee(discountedAmount) * 100) / 100;
+                const autoDeposit = calculateSecurityDeposit(form.getValues("vehicle_id"));
+
+                const showTax = rentalSettings?.tax_enabled && (rentalSettings?.tax_percentage ?? 0) > 0;
+                const showServiceFee = rentalSettings?.service_fee_enabled && autoServiceFee > 0;
+                const showDeposit = autoDeposit > 0;
+
+                if (!showTax && !showServiceFee && !showDeposit) return null;
+
+                const effectiveTax = taxOverride !== null ? taxOverride : autoTax;
+                const effectiveServiceFee = serviceFeeOverride !== null ? serviceFeeOverride : autoServiceFee;
+                const effectiveDeposit = depositOverride !== null ? depositOverride : autoDeposit;
+                const feesTotal = (showTax ? effectiveTax : 0) + (showServiceFee ? effectiveServiceFee : 0) + (showDeposit ? effectiveDeposit : 0);
+                const grandTotal = discountedAmount + feesTotal + bonzahPremium;
+                const currency = tenant?.currency_code || 'GBP';
+                const feeType = rentalSettings?.service_fee_type || 'fixed_amount';
+                const feeValue = rentalSettings?.service_fee_value ?? rentalSettings?.service_fee_amount ?? 0;
+
+                return (
+                  <div className="rounded-xl border bg-card shadow-sm">
+                    <div className="flex items-center gap-3 px-5 py-3.5 border-b bg-muted/40">
+                      <div className="flex items-center justify-center h-6 w-6 rounded-md bg-primary/10 text-primary">
+                        <Receipt className="h-3.5 w-3.5" />
+                      </div>
+                      <h2 className="font-semibold text-sm">Fees & Charges</h2>
+                      <span className="ml-auto text-xs text-muted-foreground">Auto-calculated from settings. Override for this rental only.</span>
+                    </div>
+                    <div className="p-5 space-y-4">
+                      {/* Summary lines */}
+                      {discountAmt > 0 && (
+                        <>
+                          <div className="flex items-center justify-between text-sm">
+                            <span className="text-muted-foreground">Rental Amount</span>
+                            <span className="font-medium">{formatCurrency(rentalAmount, currency)}</span>
+                          </div>
+                          <div className="flex items-center justify-between text-sm text-green-600">
+                            <span>Promo Discount ({promoDetails?.type === 'percentage' ? `${promoDetails.value}%` : 'fixed'})</span>
+                            <span className="font-medium">-{formatCurrency(discountAmt, currency)}</span>
+                          </div>
+                        </>
+                      )}
+                      <div className="flex items-center justify-between text-sm">
+                        <span className="text-muted-foreground">{discountAmt > 0 ? 'After Discount' : 'Rental Amount'}</span>
+                        <span className="font-medium">{formatCurrency(discountedAmount, currency)}</span>
+                      </div>
+
+                      {showTax && (
+                        <div className="flex items-center justify-between gap-4">
+                          <div className="flex-1 min-w-0">
+                            <Label className="text-sm">Tax ({rentalSettings?.tax_percentage}%)</Label>
+                            <p className="text-xs text-muted-foreground mt-0.5">
+                              Auto: {formatCurrency(autoTax, currency)}
+                            </p>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <div className="w-36">
+                              <CurrencyInput
+                                value={taxOverride !== null ? taxOverride : autoTax}
+                                onChange={(val) => {
+                                  const numVal = typeof val === 'string' ? parseFloat(val) : val;
+                                  if (numVal === autoTax || (isNaN(numVal) && autoTax === 0)) {
+                                    setTaxOverride(null);
+                                  } else {
+                                    setTaxOverride(isNaN(numVal) ? 0 : numVal);
+                                  }
+                                }}
+                                placeholder="Tax amount"
+                                min={0}
+                                step={0.01}
+                              />
+                            </div>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              className={cn("text-xs px-2 h-8 w-14 shrink-0", taxOverride === null && "invisible")}
+                              onClick={() => setTaxOverride(null)}
+                            >
+                              Reset
+                            </Button>
+                          </div>
+                        </div>
+                      )}
+
+                      {showServiceFee && (
+                        <div className="flex items-center justify-between gap-4">
+                          <div className="flex-1 min-w-0">
+                            <Label className="text-sm">
+                              Service Fee{feeType === 'percentage' ? ` (${feeValue}%)` : ''}
+                            </Label>
+                            <p className="text-xs text-muted-foreground mt-0.5">
+                              Auto: {formatCurrency(autoServiceFee, currency)}
+                            </p>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <div className="w-36">
+                              <CurrencyInput
+                                value={serviceFeeOverride !== null ? serviceFeeOverride : autoServiceFee}
+                                onChange={(val) => {
+                                  const numVal = typeof val === 'string' ? parseFloat(val) : val;
+                                  if (numVal === autoServiceFee || (isNaN(numVal) && autoServiceFee === 0)) {
+                                    setServiceFeeOverride(null);
+                                  } else {
+                                    setServiceFeeOverride(isNaN(numVal) ? 0 : numVal);
+                                  }
+                                }}
+                                placeholder="Service fee"
+                                min={0}
+                                step={0.01}
+                              />
+                            </div>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              className={cn("text-xs px-2 h-8 w-14 shrink-0", serviceFeeOverride === null && "invisible")}
+                              onClick={() => setServiceFeeOverride(null)}
+                            >
+                              Reset
+                            </Button>
+                          </div>
+                        </div>
+                      )}
+
+                      {showDeposit && (
+                        <div className="flex items-center justify-between gap-4">
+                          <div className="flex-1 min-w-0">
+                            <Label className="text-sm">Security Deposit</Label>
+                            <p className="text-xs text-muted-foreground mt-0.5">
+                              Auto: {formatCurrency(autoDeposit, currency)}{rentalSettings?.deposit_mode === 'per_vehicle' ? ' (per-vehicle)' : ' (global)'}
+                            </p>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <div className="w-36">
+                              <CurrencyInput
+                                value={depositOverride !== null ? depositOverride : autoDeposit}
+                                onChange={(val) => {
+                                  const numVal = typeof val === 'string' ? parseFloat(val) : val;
+                                  if (numVal === autoDeposit || (isNaN(numVal) && autoDeposit === 0)) {
+                                    setDepositOverride(null);
+                                  } else {
+                                    setDepositOverride(isNaN(numVal) ? 0 : numVal);
+                                  }
+                                }}
+                                placeholder="Deposit"
+                                min={0}
+                                step={0.01}
+                              />
+                            </div>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              className={cn("text-xs px-2 h-8 w-14 shrink-0", depositOverride === null && "invisible")}
+                              onClick={() => setDepositOverride(null)}
+                            >
+                              Reset
+                            </Button>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Divider + Grand Total */}
+                      <div className="border-t pt-3 flex items-center justify-between">
+                        <span className="font-semibold text-sm">Estimated Total</span>
+                        <span className="font-semibold text-base">{formatCurrency(grandTotal, currency)}</span>
+                      </div>
+
+                      {(taxOverride !== null || serviceFeeOverride !== null || depositOverride !== null) && (
+                        <div className="flex items-center gap-1 text-amber-600 text-xs">
+                          <AlertTriangle className="h-3 w-3" />
+                          Custom fees applied — changes only affect this rental.
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                );
+              })()}
+
+              {/* ── Installment Plan ──────────────────────────────── */}
+              {(() => {
+                const installmentConfig = rentalSettings?.installment_config;
+                const installmentsEnabled = rentalSettings?.installments_enabled && installmentConfig;
+                if (!installmentsEnabled) return null;
+
+                if (!watchedStartDate || !watchedEndDate) return null;
+
+                const rentalDays = differenceInDays(watchedEndDate, watchedStartDate);
+                if (rentalDays < 1) return null;
+
+                // Calculate what gets split (same as booking side)
+                const rentalAmount = watchedMonthlyAmount || 0;
+                const discountAmt = promoDetails ? calculateDiscount(rentalAmount) : 0;
+                const discountedAmount = rentalAmount - discountAmt;
+                const autoTax = calculateTaxAmount(discountedAmount);
+                const autoServiceFee = calculateServiceFee(discountedAmount);
+                const autoDeposit = calculateSecurityDeposit(form.getValues("vehicle_id"));
+                const effectiveTax = taxOverride !== null ? taxOverride : autoTax;
+                const effectiveServiceFee = serviceFeeOverride !== null ? serviceFeeOverride : autoServiceFee;
+                const effectiveDeposit = depositOverride !== null ? depositOverride : autoDeposit;
+
+                const whatGetsSplit = installmentConfig.what_gets_split || 'rental_tax';
+                let installableAmount = discountedAmount;
+                let upfrontOnlyAmount = effectiveDeposit + effectiveServiceFee;
+
+                if (whatGetsSplit === 'rental_tax' || whatGetsSplit === 'rental_tax_extras') {
+                  installableAmount += effectiveTax;
+                } else {
+                  upfrontOnlyAmount += effectiveTax;
+                }
+
+                const chargeFirstUpfront = installmentConfig.charge_first_upfront !== false;
+                const currency = tenant?.currency_code || 'GBP';
+
+                // Calculate installments helper
+                const calcInstallments = (total: number, count: number) => {
+                  const base = Math.floor((total / count) * 100) / 100;
+                  const last = Math.round((total - (base * (count - 1))) * 100) / 100;
+                  return { base, last };
+                };
+
+                // Build available plans
+                type PlanOption = { type: 'full' | 'weekly' | 'monthly'; count: number; amount: number; scheduled: number; firstAmount: number; upfrontTotal: number; label: string };
+                const plans: PlanOption[] = [
+                  { type: 'full', count: 1, amount: installableAmount + upfrontOnlyAmount, scheduled: 0, firstAmount: installableAmount + upfrontOnlyAmount, upfrontTotal: installableAmount + upfrontOnlyAmount, label: 'Pay in Full' }
+                ];
+
+                // Weekly
+                if (rentalDays >= installmentConfig.min_days_for_weekly) {
+                  const maxW = Math.min(Math.floor(rentalDays / 7), installmentConfig.max_installments_weekly);
+                  if (maxW >= 2) {
+                    const { base } = calcInstallments(installableAmount, maxW);
+                    const first = chargeFirstUpfront ? base : 0;
+                    const sched = chargeFirstUpfront ? maxW - 1 : maxW;
+                    plans.push({ type: 'weekly', count: maxW, amount: base, scheduled: sched, firstAmount: first, upfrontTotal: upfrontOnlyAmount + first, label: `Weekly (${maxW} payments)` });
+                  }
+                }
+                // Monthly
+                if (rentalDays >= installmentConfig.min_days_for_monthly) {
+                  const maxM = Math.min(Math.ceil(rentalDays / 30), installmentConfig.max_installments_monthly);
+                  if (maxM >= 2) {
+                    const { base } = calcInstallments(installableAmount, maxM);
+                    const first = chargeFirstUpfront ? base : 0;
+                    const sched = chargeFirstUpfront ? maxM - 1 : maxM;
+                    plans.push({ type: 'monthly', count: maxM, amount: base, scheduled: sched, firstAmount: first, upfrontTotal: upfrontOnlyAmount + first, label: `Monthly (${maxM} payments)` });
+                  }
+                }
+
+                if (plans.length <= 1) return null; // Only "Pay in Full" — no installment options
+
+                const selectedPlan = plans.find(p => p.type === installmentPlanType) || plans[0];
+                const effectiveInstallmentAmount = installmentAmountOverride !== null ? installmentAmountOverride : selectedPlan.amount;
+
+                return (
+                  <div className="rounded-xl border bg-card shadow-sm">
+                    <div className="flex items-center gap-3 px-5 py-3.5 border-b bg-muted/40">
+                      <div className="flex items-center justify-center h-6 w-6 rounded-md bg-primary/10 text-primary">
+                        <CreditCard className="h-3.5 w-3.5" />
+                      </div>
+                      <h2 className="font-semibold text-sm">Payment Plan</h2>
+                      <span className="ml-auto text-xs text-muted-foreground">Admin can adjust installment amounts per-rental.</span>
+                    </div>
+                    <div className="p-5 space-y-4">
+                      <RadioGroup
+                        value={installmentPlanType}
+                        onValueChange={(val) => {
+                          setInstallmentPlanType(val as 'full' | 'weekly' | 'monthly');
+                          setInstallmentAmountOverride(null); // reset override on plan change
+                        }}
+                        className="space-y-2"
+                      >
+                        {plans.map((plan) => (
+                          <label
+                            key={plan.type}
+                            className={cn(
+                              "flex items-center gap-3 rounded-lg border p-3 cursor-pointer transition-colors",
+                              installmentPlanType === plan.type ? "border-primary bg-primary/5" : "hover:bg-muted/50"
+                            )}
+                          >
+                            <RadioGroupItem value={plan.type} id={`plan-${plan.type}`} />
+                            <div className="flex-1 min-w-0">
+                              <span className="text-sm font-medium">{plan.label}</span>
+                              <p className="text-xs text-muted-foreground mt-0.5">
+                                {plan.type === 'full'
+                                  ? `Pay ${formatCurrency(plan.upfrontTotal, currency)} now`
+                                  : chargeFirstUpfront
+                                    ? `Pay ${formatCurrency(plan.upfrontTotal, currency)} today, then ${formatCurrency(plan.amount, currency)}/${plan.type === 'weekly' ? 'week' : 'month'} × ${plan.scheduled}`
+                                    : `Pay ${formatCurrency(upfrontOnlyAmount, currency)} today, then ${formatCurrency(plan.amount, currency)}/${plan.type === 'weekly' ? 'week' : 'month'} × ${plan.scheduled}`
+                                }
+                              </p>
+                            </div>
+                          </label>
+                        ))}
+                      </RadioGroup>
+
+                      {/* Installment amount override (only for weekly/monthly) */}
+                      {selectedPlan.type !== 'full' && (
+                        <div className="border-t pt-4 space-y-3">
+                          <div className="flex items-center justify-between gap-4">
+                            <div className="flex-1 min-w-0">
+                              <Label className="text-sm">Installment Amount</Label>
+                              <p className="text-xs text-muted-foreground mt-0.5">
+                                Auto: {formatCurrency(selectedPlan.amount, currency)} × {selectedPlan.count} installments
+                              </p>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <div className="w-36">
+                                <CurrencyInput
+                                  value={effectiveInstallmentAmount}
+                                  onChange={(val) => {
+                                    const numVal = typeof val === 'string' ? parseFloat(val) : val;
+                                    if (numVal === selectedPlan.amount || (isNaN(numVal) && selectedPlan.amount === 0)) {
+                                      setInstallmentAmountOverride(null);
+                                    } else {
+                                      setInstallmentAmountOverride(isNaN(numVal) ? 0 : numVal);
+                                    }
+                                  }}
+                                  placeholder="Amount"
+                                  min={0}
+                                  step={0.01}
+                                />
+                              </div>
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                className={cn("text-xs px-2 h-8 w-14 shrink-0", installmentAmountOverride === null && "invisible")}
+                                onClick={() => setInstallmentAmountOverride(null)}
+                              >
+                                Reset
+                              </Button>
+                            </div>
+                          </div>
+
+                          {/* Schedule preview */}
+                          <div className="rounded-md bg-muted/50 p-3 text-xs space-y-1.5">
+                            <p className="font-medium text-sm mb-2">Payment Schedule</p>
+                            <div className="flex justify-between">
+                              <span className="text-muted-foreground">Today (deposit + fees{chargeFirstUpfront ? ' + 1st installment' : ''})</span>
+                              <span className="font-medium">
+                                {formatCurrency(
+                                  chargeFirstUpfront ? upfrontOnlyAmount + effectiveInstallmentAmount : upfrontOnlyAmount,
+                                  currency
+                                )}
+                              </span>
+                            </div>
+                            {Array.from({ length: selectedPlan.scheduled }, (_, i) => {
+                              const dueDate = selectedPlan.type === 'weekly'
+                                ? addWeeks(watchedStartDate, chargeFirstUpfront ? i + 1 : i + 1)
+                                : addMonths(watchedStartDate, chargeFirstUpfront ? i + 1 : i + 1);
+                              const isLast = i === selectedPlan.scheduled - 1;
+                              // Last installment absorbs rounding difference
+                              const amt = isLast && installmentAmountOverride === null
+                                ? Math.round((installableAmount - (selectedPlan.amount * (selectedPlan.count - 1))) * 100) / 100
+                                : effectiveInstallmentAmount;
+                              return (
+                                <div key={i} className="flex justify-between">
+                                  <span className="text-muted-foreground">
+                                    {selectedPlan.type === 'weekly' ? `Week ${chargeFirstUpfront ? i + 2 : i + 1}` : `Month ${chargeFirstUpfront ? i + 2 : i + 1}`} — {format(dueDate, 'MMM d, yyyy')}
+                                  </span>
+                                  <span>{formatCurrency(amt, currency)}</span>
+                                </div>
+                              );
+                            })}
+                          </div>
+
+                          {installmentAmountOverride !== null && (
+                            <div className="flex items-center gap-1 text-amber-600 text-xs">
+                              <AlertTriangle className="h-3 w-3" />
+                              Custom installment amount — applies only to this rental.
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                );
+              })()}
 
               {/* ── Section 3: Pickup & Return ────────────────────── */}
               <div className="rounded-xl border bg-card shadow-sm">
@@ -2228,6 +2735,52 @@ const CreateRental = () => {
                       />
                     </div>
                   </div>
+
+                  {/* Lockbox / Delivery Method */}
+                  {rentalSettings?.lockbox_enabled && (
+                    <div className="border-t pt-4">
+                      <Label className="text-sm font-medium mb-3 block">Key Handover Method</Label>
+                      <RadioGroup
+                        value={deliveryMethod}
+                        onValueChange={(val) => setDeliveryMethod(val as 'in_person' | 'lockbox')}
+                        className="flex gap-4"
+                      >
+                        <label
+                          className={cn(
+                            "flex items-center gap-2.5 rounded-lg border p-3 flex-1 cursor-pointer transition-colors",
+                            deliveryMethod === 'in_person' ? "border-primary bg-primary/5" : "hover:bg-muted/50"
+                          )}
+                        >
+                          <RadioGroupItem value="in_person" id="handover-in-person" />
+                          <div>
+                            <span className="text-sm font-medium">In Person</span>
+                            <p className="text-xs text-muted-foreground">Hand keys directly to customer</p>
+                          </div>
+                        </label>
+                        <label
+                          className={cn(
+                            "flex items-center gap-2.5 rounded-lg border p-3 flex-1 cursor-pointer transition-colors",
+                            deliveryMethod === 'lockbox' ? "border-primary bg-primary/5" : "hover:bg-muted/50"
+                          )}
+                        >
+                          <RadioGroupItem value="lockbox" id="handover-lockbox" />
+                          <div className="flex items-center gap-1.5">
+                            <Lock className="h-3.5 w-3.5 text-muted-foreground" />
+                            <div>
+                              <span className="text-sm font-medium">Lockbox</span>
+                              <p className="text-xs text-muted-foreground">Keys placed in secure lockbox</p>
+                            </div>
+                          </div>
+                        </label>
+                      </RadioGroup>
+                      {deliveryMethod === 'lockbox' && (
+                        <p className="text-xs text-muted-foreground mt-2 flex items-center gap-1">
+                          <Info className="h-3 w-3" />
+                          Lockbox code and instructions will be sent to the customer after rental creation via the Key Handover section.
+                        </p>
+                      )}
+                    </div>
+                  )}
 
                 </div>
               </div>

@@ -313,9 +313,9 @@ const RentalsList = () => {
       rentals.length > 0 ? (
         <>
           <Card>
-            <CardContent className="p-0 overflow-x-auto">
+            <CardContent className="p-0 overflow-x-auto max-h-[520px] overflow-y-auto relative">
               <Table className="min-w-[700px]">
-                  <TableHeader>
+                  <TableHeader className="sticky top-0 z-10 bg-card">
                     <TableRow>
                       <TableHead>Rental #</TableHead>
                       <TableHead>Created</TableHead>
