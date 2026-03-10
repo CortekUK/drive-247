@@ -223,116 +223,116 @@ export default function CreditsPage() {
         </Button>
       </div>
 
-      {/* ── Balance Cards + Transaction History ── */}
-      <div className="grid gap-6 grid-cols-1 lg:grid-cols-[1fr_1.5fr]">
-        {/* Left: Balance Cards */}
-        <div className="space-y-6">
-          {/* Live Credits */}
-          <Card className="overflow-hidden transition-all duration-200 hover:shadow-md border-emerald-500/30 bg-emerald-500/[0.06] dark:bg-emerald-500/[0.08]">
-            <CardContent className="p-6">
-              <div className="flex items-start justify-between">
-                <div className="space-y-1">
-                  <p className="text-sm font-semibold text-emerald-600 dark:text-emerald-400">Live Credits</p>
-                  <div className="flex items-baseline gap-2">
-                    <span className={`text-4xl font-bold tracking-tight ${isLowBalance ? "text-red-600 dark:text-red-400" : "text-emerald-700 dark:text-emerald-300"}`}>
-                      {balance.toFixed(0)}
-                    </span>
-                    <span className="text-sm text-emerald-600/60 dark:text-emerald-400/60">remaining</span>
-                  </div>
-                </div>
-                <div className="flex h-12 w-12 items-center justify-center rounded-full bg-emerald-500/15">
-                  <CircleDollarSign className="h-6 w-6 text-emerald-500" />
+      {/* ── Balance Cards ── */}
+      <div className="grid gap-6 grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
+        {/* Live Credits */}
+        <Card className="overflow-hidden transition-all duration-200 hover:shadow-md border-emerald-500/30 bg-emerald-500/[0.06] dark:bg-emerald-500/[0.08]">
+          <CardContent className="p-6">
+            <div className="flex items-start justify-between">
+              <div className="space-y-1">
+                <p className="text-sm font-semibold text-emerald-600 dark:text-emerald-400">Live Credits</p>
+                <div className="flex items-baseline gap-2">
+                  <span className="text-4xl font-bold tracking-tight text-emerald-700 dark:text-emerald-300">
+                    {balance.toFixed(0)}
+                  </span>
+                  <span className="text-sm text-emerald-600/60 dark:text-emerald-400/60">remaining</span>
                 </div>
               </div>
+              <div className="flex h-12 w-12 items-center justify-center rounded-full bg-emerald-500/15">
+                <CircleDollarSign className="h-6 w-6 text-emerald-500" />
+              </div>
+            </div>
 
-              <div className="mt-5 pt-5 border-t">
-                <p className="text-xs font-medium text-muted-foreground mb-3">Buy live credits</p>
-                <div className="flex items-center gap-3">
-                  <div className="flex items-center rounded-lg border bg-background">
-                    <button
-                      type="button"
-                      onClick={() => setLiveBuyAmount((v) => Math.max(1, v - 5))}
-                      className="flex h-9 w-9 items-center justify-center text-muted-foreground hover:text-foreground transition-colors"
-                    >
-                      <Minus className="h-4 w-4" />
-                    </button>
-                    <input
-                      type="number"
-                      min={1}
-                      max={10000}
-                      value={liveBuyAmount}
-                      onChange={(e) => setLiveBuyAmount(Math.max(1, parseInt(e.target.value) || 1))}
-                      className="h-9 w-16 border-x bg-transparent text-center text-sm font-semibold focus:outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setLiveBuyAmount((v) => Math.min(10000, v + 5))}
-                      className="flex h-9 w-9 items-center justify-center text-muted-foreground hover:text-foreground transition-colors"
-                    >
-                      <Plus className="h-4 w-4" />
-                    </button>
-                  </div>
-                  <Button
-                    size="sm"
-                    onClick={() => buyCredits.mutate(liveBuyAmount)}
-                    disabled={buyCredits.isPending}
-                    className="ml-auto"
+            <div className="mt-5 pt-5 border-t">
+              <p className="text-xs font-medium text-muted-foreground mb-3">Buy live credits</p>
+              <div className="flex items-center gap-3">
+                <div className="flex items-center rounded-lg border bg-background">
+                  <button
+                    type="button"
+                    onClick={() => setLiveBuyAmount((v) => Math.max(1, v - 5))}
+                    className="flex h-9 w-9 items-center justify-center text-muted-foreground hover:text-foreground transition-colors"
                   >
-                    {buyCredits.isPending ? (
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                    ) : (
-                      "Buy Now"
-                    )}
-                  </Button>
+                    <Minus className="h-4 w-4" />
+                  </button>
+                  <input
+                    type="number"
+                    min={1}
+                    max={10000}
+                    value={liveBuyAmount}
+                    onChange={(e) => setLiveBuyAmount(Math.max(1, parseInt(e.target.value) || 1))}
+                    className="h-9 w-16 border-x bg-transparent text-center text-sm font-semibold focus:outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setLiveBuyAmount((v) => Math.min(10000, v + 5))}
+                    className="flex h-9 w-9 items-center justify-center text-muted-foreground hover:text-foreground transition-colors"
+                  >
+                    <Plus className="h-4 w-4" />
+                  </button>
+                </div>
+                <Button
+                  size="sm"
+                  onClick={() => buyCredits.mutate(liveBuyAmount)}
+                  disabled={buyCredits.isPending}
+                  className="ml-auto"
+                >
+                  {buyCredits.isPending ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    "Buy Now"
+                  )}
+                </Button>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Test Credits */}
+        <Card className="overflow-hidden transition-all duration-200 hover:shadow-md border-yellow-500/30 bg-yellow-500/[0.06] dark:bg-yellow-500/[0.08]">
+          <CardContent className="p-6">
+            <div className="flex items-start justify-between">
+              <div className="space-y-1">
+                <p className="text-sm font-semibold text-yellow-600 dark:text-yellow-400">Test Credits</p>
+                <div className="flex items-baseline gap-2">
+                  <span className="text-4xl font-bold tracking-tight text-yellow-700 dark:text-yellow-300">{testBalance.toFixed(0)}</span>
+                  <span className="text-sm text-yellow-600/60 dark:text-yellow-400/60">remaining</span>
                 </div>
               </div>
-            </CardContent>
-          </Card>
-
-          {/* Test Credits */}
-          <Card className="overflow-hidden transition-all duration-200 hover:shadow-md border-yellow-500/30 bg-yellow-500/[0.06] dark:bg-yellow-500/[0.08]">
-            <CardContent className="p-6">
-              <div className="flex items-start justify-between">
-                <div className="space-y-1">
-                  <p className="text-sm font-semibold text-yellow-600 dark:text-yellow-400">Test Credits</p>
-                  <div className="flex items-baseline gap-2">
-                    <span className="text-4xl font-bold tracking-tight text-yellow-700 dark:text-yellow-300">{testBalance.toFixed(0)}</span>
-                    <span className="text-sm text-yellow-600/60 dark:text-yellow-400/60">remaining</span>
-                  </div>
-                </div>
-                <div className="flex h-12 w-12 items-center justify-center rounded-full bg-yellow-500/15">
-                  <FlaskConical className="h-6 w-6 text-yellow-500" />
-                </div>
+              <div className="flex h-12 w-12 items-center justify-center rounded-full bg-yellow-500/15">
+                <FlaskConical className="h-6 w-6 text-yellow-500" />
               </div>
+            </div>
 
-              <div className="mt-5 pt-5 border-t">
-                <p className="text-xs text-muted-foreground">
-                  Free sandbox credits for testing integrations in test mode. Cannot be purchased.
-                </p>
-              </div>
-            </CardContent>
-          </Card>
+            <div className="mt-5 pt-5 border-t">
+              <p className="text-xs text-muted-foreground">
+                Free sandbox credits for testing integrations in test mode. Cannot be purchased.
+              </p>
+            </div>
+          </CardContent>
+        </Card>
 
-          {/* Service Costs — compact cards */}
-          <div>
-            <h3 className="text-sm font-medium mb-1.5">Service Costs</h3>
-            <p className="text-xs text-muted-foreground mb-3">
-              Credits per service — test mode uses test credits, live mode uses live credits
-            </p>
+        {/* Service Costs */}
+        <Card className="overflow-hidden">
+          <CardContent className="p-6">
+            <div className="mb-4">
+              <h3 className="text-sm font-semibold">Service Costs</h3>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                Credits per service
+              </p>
+            </div>
             <div className="grid gap-2">
               {costs.map((cost) => {
                 const Icon = CATEGORY_ICONS[cost.category] || CircleDollarSign;
                 return (
-                  <div key={cost.id} className="flex items-center gap-3 rounded-lg border p-3">
-                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-primary/10">
-                      <Icon className="h-4 w-4 text-primary" />
+                  <div key={cost.id} className="flex items-center gap-3 rounded-lg border p-2.5">
+                    <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-primary/10">
+                      <Icon className="h-3.5 w-3.5 text-primary" />
                     </div>
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium">{cost.label}</p>
-                      <p className="text-xs text-muted-foreground truncate">{cost.description || "\u2014"}</p>
+                      <p className="text-sm font-medium leading-tight">{cost.label}</p>
                     </div>
                     <span className="text-sm font-semibold shrink-0">
-                      {cost.cost_credits} {cost.cost_credits === 1 ? "cr" : "cr"}
+                      {cost.cost_credits} cr
                     </span>
                   </div>
                 );
@@ -341,67 +341,67 @@ export default function CreditsPage() {
                 <p className="text-sm text-muted-foreground py-4 text-center">No service costs configured</p>
               )}
             </div>
-          </div>
-        </div>
-
-        {/* Right: Transaction History */}
-        <Card className="h-fit">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium">Transaction History</CardTitle>
-            <CardDescription>All credit activity including purchases, usage, refunds, and gifts</CardDescription>
-          </CardHeader>
-          <CardContent className="p-0">
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead>
-                  <tr className="border-b bg-primary/5">
-                    <th className="text-left py-2.5 px-3 text-xs font-semibold text-primary">Date</th>
-                    <th className="text-left py-2.5 px-3 text-xs font-semibold text-primary">Type</th>
-                    <th className="text-left py-2.5 px-3 text-xs font-semibold text-primary">Description</th>
-                    <th className="text-left py-2.5 px-3 text-xs font-semibold text-primary">Category</th>
-                    <th className="text-right py-2.5 px-3 text-xs font-semibold text-primary">Amount</th>
-                    <th className="text-right py-2.5 px-3 text-xs font-semibold text-primary">Balance</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {transactions.length === 0 ? (
-                    <tr>
-                      <td colSpan={6} className="text-center py-8 text-sm text-muted-foreground">
-                        No transactions yet
-                      </td>
-                    </tr>
-                  ) : (
-                    transactions.map((tx) => (
-                      <tr key={tx.id} className="border-b last:border-0">
-                        <td className="py-2.5 px-3 text-sm text-muted-foreground whitespace-nowrap">
-                          {formatDateTime(tx.created_at)}
-                        </td>
-                        <td className="py-2.5 px-3">
-                          <TransactionTypeBadge type={tx.type} isTest={tx.is_test_mode} />
-                        </td>
-                        <td className="py-2.5 px-3 text-sm text-muted-foreground max-w-[200px] truncate">
-                          {tx.description || "\u2014"}
-                        </td>
-                        <td className="py-2.5 px-3 text-sm text-muted-foreground capitalize">
-                          {tx.category || "\u2014"}
-                        </td>
-                        <td className={`py-2.5 px-3 text-sm font-medium text-right ${
-                          tx.amount > 0 ? "text-green-500" : tx.amount < 0 ? "text-red-500" : "text-muted-foreground"
-                        }`}>
-                          {tx.amount > 0 ? "+" : ""}{tx.amount}
-                        </td>
-                        <td className="py-2.5 px-3 text-sm text-right text-muted-foreground">
-                          {tx.balance_after}
-                        </td>
-                      </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
-            </div>
           </CardContent>
         </Card>
       </div>
+
+      {/* ── Transaction History (full width) ── */}
+      <Card>
+        <CardHeader className="pb-2">
+          <CardTitle className="text-sm font-medium">Transaction History</CardTitle>
+          <CardDescription>All credit activity including purchases, usage, refunds, and gifts</CardDescription>
+        </CardHeader>
+        <CardContent className="p-0">
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead>
+                <tr className="border-b bg-primary/5">
+                  <th className="text-left py-2.5 px-4 text-xs font-semibold text-primary">Date</th>
+                  <th className="text-left py-2.5 px-4 text-xs font-semibold text-primary">Type</th>
+                  <th className="text-left py-2.5 px-4 text-xs font-semibold text-primary">Description</th>
+                  <th className="text-left py-2.5 px-4 text-xs font-semibold text-primary">Category</th>
+                  <th className="text-right py-2.5 px-4 text-xs font-semibold text-primary">Amount</th>
+                  <th className="text-right py-2.5 px-4 text-xs font-semibold text-primary">Balance</th>
+                </tr>
+              </thead>
+              <tbody>
+                {transactions.length === 0 ? (
+                  <tr>
+                    <td colSpan={6} className="text-center py-8 text-sm text-muted-foreground">
+                      No transactions yet
+                    </td>
+                  </tr>
+                ) : (
+                  transactions.map((tx) => (
+                    <tr key={tx.id} className="border-b last:border-0">
+                      <td className="py-2.5 px-4 text-sm text-muted-foreground whitespace-nowrap">
+                        {formatDateTime(tx.created_at)}
+                      </td>
+                      <td className="py-2.5 px-4">
+                        <TransactionTypeBadge type={tx.type} isTest={tx.is_test_mode} />
+                      </td>
+                      <td className="py-2.5 px-4 text-sm text-muted-foreground max-w-[300px] truncate">
+                        {tx.description || "\u2014"}
+                      </td>
+                      <td className="py-2.5 px-4 text-sm text-muted-foreground capitalize">
+                        {tx.category || "\u2014"}
+                      </td>
+                      <td className={`py-2.5 px-4 text-sm font-medium text-right ${
+                        tx.amount > 0 ? "text-green-500" : tx.amount < 0 ? "text-red-500" : "text-muted-foreground"
+                      }`}>
+                        {tx.amount > 0 ? "+" : ""}{tx.amount}
+                      </td>
+                      <td className="py-2.5 px-4 text-sm text-right text-muted-foreground">
+                        {tx.balance_after}
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        </CardContent>
+      </Card>
 
       {/* ── Usage History Chart (live only) ── */}
       <Card>

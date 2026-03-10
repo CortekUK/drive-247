@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { User, Session } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
+import { isGloballyBlacklisted, isIdentityBlocked } from '@/lib/tenantQueries';
 
 export interface CustomerData {
   id: string;
@@ -19,6 +20,7 @@ export interface CustomerData {
   address_zip: string | null;
   license_number: string | null;
   license_state: string | null;
+  is_blocked: boolean | null;
 }
 
 export interface CustomerUser {
@@ -55,9 +57,9 @@ interface CustomerAuthState {
       customerName?: string;
       customerPhone?: string;
     }
-  ) => Promise<{ error: any; data?: any }>;
+  ) => Promise<{ error: any; data?: any; isBlocked?: boolean }>;
 
-  signIn: (email: string, password: string, tenantId?: string) => Promise<{ error: any }>;
+  signIn: (email: string, password: string, tenantId?: string) => Promise<{ error: any; isBlocked?: boolean }>;
   signOut: () => Promise<void>;
   resetPassword: (email: string) => Promise<{ error: any }>;
   initialize: () => Promise<void>;
@@ -87,7 +89,8 @@ const fetchCustomerUser = async (authUser: User, tenantId?: string): Promise<Cus
           address_zip,
           license_number,
           license_state,
-          is_gig_driver
+          is_gig_driver,
+          is_blocked
         )
       `)
       .eq('auth_user_id', authUser.id);
@@ -177,6 +180,21 @@ export const useCustomerAuthStore = create<CustomerAuthState>()((set, get) => ({
             message: 'An account with this email already exists. Please sign in instead.'
           }
         };
+      }
+
+      // Check if email is blocked before creating customer record
+      const globalCheck = await isGloballyBlacklisted(email);
+      if (globalCheck.isBlacklisted) {
+        await supabase.auth.signOut();
+        return { error: { message: 'Your account has been blocked. Please contact support.' }, isBlocked: true };
+      }
+
+      if (options.tenantId) {
+        const identityCheck = await isIdentityBlocked(options.tenantId, email);
+        if (identityCheck.isBlocked) {
+          await supabase.auth.signOut();
+          return { error: { message: 'Your account has been blocked. Please contact support.' }, isBlocked: true };
+        }
       }
 
       // Create customer record if we have a customer ID from booking
@@ -316,6 +334,28 @@ export const useCustomerAuthStore = create<CustomerAuthState>()((set, get) => ({
           }
         }
 
+        // Check if customer is blocked (tenant-level)
+        if (customerUser.customer?.is_blocked) {
+          await supabase.auth.signOut();
+          return { error: { message: 'Your account has been blocked. Please contact support.' }, isBlocked: true };
+        }
+
+        // Check global blacklist
+        const globalCheck = await isGloballyBlacklisted(email);
+        if (globalCheck.isBlacklisted) {
+          await supabase.auth.signOut();
+          return { error: { message: 'Your account has been blocked. Please contact support.' }, isBlocked: true };
+        }
+
+        // Check email in blocked_identities (tenant-level)
+        if (effectiveTenantId) {
+          const identityCheck = await isIdentityBlocked(effectiveTenantId, email);
+          if (identityCheck.isBlocked) {
+            await supabase.auth.signOut();
+            return { error: { message: 'Your account has been blocked. Please contact support.' }, isBlocked: true };
+          }
+        }
+
         set({
           user: data.user,
           session: data.session,
@@ -385,6 +425,26 @@ export const useCustomerAuthStore = create<CustomerAuthState>()((set, get) => ({
         setTimeout(async () => {
           try {
             const customerUser = await fetchCustomerUser(session.user, get().tenantId || undefined);
+
+            // If customer is blocked, sign them out
+            if (customerUser && customerUser.customer?.is_blocked) {
+              console.log('Blocked customer session detected, signing out');
+              await supabase.auth.signOut();
+              set({ user: null, session: null, customerUser: null, loading: false });
+              return;
+            }
+
+            // Check global blacklist
+            if (session.user.email) {
+              const globalCheck = await isGloballyBlacklisted(session.user.email);
+              if (globalCheck.isBlacklisted) {
+                console.log('Globally blacklisted customer session detected, signing out');
+                await supabase.auth.signOut();
+                set({ user: null, session: null, customerUser: null, loading: false });
+                return;
+              }
+            }
+
             set({ customerUser, loading: false });
           } catch (error) {
             console.error('Error fetching customer user in auth state change:', error);

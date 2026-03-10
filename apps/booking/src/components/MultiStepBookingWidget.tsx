@@ -43,6 +43,7 @@ import { useCustomerAuthStore } from "@/stores/customer-auth-store";
 import { useBookingStore } from "@/stores/booking-store";
 import { useCustomerVerification } from "@/hooks/use-customer-verification";
 import { AuthPromptDialog } from "@/components/booking/AuthPromptDialog";
+import { BlockedAccountDialog } from "@/components/BlockedAccountDialog";
 import { getTimezonesByRegion, findTimezone, getDetectedTimezone } from "@/lib/timezones";
 import { useCustomerDocuments, getDocumentStatus } from "@/hooks/use-customer-documents";
 import { useGigDriverImages } from "@/hooks/use-gig-driver-images";
@@ -146,6 +147,7 @@ const MultiStepBookingWidget = () => {
   const { data: customerVerification, isLoading: verificationLoading } = useCustomerVerification();
   const { data: customerDocuments } = useCustomerDocuments();
   const [showAuthDialog, setShowAuthDialog] = useState(false);
+  const [showBlockedDialog, setShowBlockedDialog] = useState(false);
 
   // Gig driver state (restored from localStorage)
   const [isGigDriver, setIsGigDriver] = useState(() => {
@@ -1795,7 +1797,7 @@ const MultiStepBookingWidget = () => {
         );
 
         if (!blockCheck.canBook) {
-          toast.error(blockCheck.reason || "You are not allowed to make a booking. Please contact support.");
+          setShowBlockedDialog(true);
           setLoading(false);
           return;
         }
@@ -5851,6 +5853,12 @@ const MultiStepBookingWidget = () => {
         }
         console.log('🔐 Auth success, triggering data re-sync');
       }}
+    />
+
+    {/* Blocked Account Dialog */}
+    <BlockedAccountDialog
+      open={showBlockedDialog}
+      onOpenChange={setShowBlockedDialog}
     />
   </>;
 };

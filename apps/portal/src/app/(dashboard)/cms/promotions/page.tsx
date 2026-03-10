@@ -35,7 +35,6 @@ import {
   CheckCircle,
   Clock,
   Loader2,
-  LayoutTemplate,
   ListOrdered,
   FileText,
   AlertCircle,
@@ -63,14 +62,12 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import { PromotionsHeroEditor } from "@/components/website-content/promotions-hero-editor";
 import { HowItWorksEditor } from "@/components/website-content/how-it-works-editor";
 import { TermsEditor } from "@/components/website-content/terms-editor";
 import { EmptyStateEditor } from "@/components/website-content/empty-state-editor";
 import { SEOEditor } from "@/components/website-content/seo-editor";
 import { VersionHistoryDialog } from "@/components/website-content/version-history-dialog";
 import type {
-  PromotionsHeroContent,
   HowItWorksContent,
   TermsContent,
   EmptyStateContent,
@@ -410,7 +407,6 @@ export default function CMSPromotionsEditor() {
     try {
       const defaults = CMS_DEFAULTS.promotions;
       await Promise.all([
-        updateSection({ sectionKey: "promotions_hero", content: defaults.hero }),
         updateSection({ sectionKey: "how_it_works", content: defaults.how_it_works }),
         updateSection({ sectionKey: "empty_state", content: defaults.empty_state }),
         updateSection({ sectionKey: "terms", content: defaults.terms }),
@@ -454,14 +450,6 @@ export default function CMSPromotionsEditor() {
     const section = page.cms_page_sections?.find((s) => s.section_key === key);
     return (section?.content as T) || defaultValue;
   };
-
-  const heroContent = getSectionContent<PromotionsHeroContent>("promotions_hero", {
-    headline: "",
-    subheading: "",
-    primary_cta_text: "",
-    primary_cta_href: "",
-    secondary_cta_text: "",
-  });
 
   const howItWorksContent = getSectionContent<HowItWorksContent>("how_it_works", {
     title: "",
@@ -580,14 +568,10 @@ export default function CMSPromotionsEditor() {
             </div>
           )}
           <Tabs value={activeTab} onValueChange={setActiveTab}>
-            <TabsList className="grid w-full grid-cols-6">
+            <TabsList className="grid w-full grid-cols-5">
               <TabsTrigger value="manage" className="flex items-center gap-2">
                 <Crown className="h-4 w-4" />
                 <span className="hidden lg:inline">Manage</span>
-              </TabsTrigger>
-              <TabsTrigger value="hero" className="flex items-center gap-2">
-                <LayoutTemplate className="h-4 w-4" />
-                <span className="hidden lg:inline">Hero</span>
               </TabsTrigger>
               <TabsTrigger value="how_it_works" className="flex items-center gap-2">
                 <ListOrdered className="h-4 w-4" />
@@ -1014,14 +998,6 @@ export default function CMSPromotionsEditor() {
                     </AlertDialogFooter>
                   </AlertDialogContent>
                 </AlertDialog>
-              </TabsContent>
-
-              <TabsContent value="hero" className="mt-0">
-                <PromotionsHeroEditor
-                  content={heroContent}
-                  onSave={(content) => updateSection({ sectionKey: "promotions_hero", content })}
-                  isSaving={isUpdating}
-                />
               </TabsContent>
 
               <TabsContent value="how_it_works" className="mt-0">

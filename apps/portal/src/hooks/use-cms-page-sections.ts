@@ -63,8 +63,10 @@ export const useCMSPageSections = (pageSlug: string) => {
         .from("cms_pages")
         .update({ updated_at: new Date().toISOString(), status: "draft" })
         .eq("id", page.id);
+
+      return page.id;
     },
-    onSuccess: (_data, variables) => {
+    onSuccess: (pageId, variables) => {
       queryClient.invalidateQueries({ queryKey: ["cms-page", pageSlug] });
       toast({
         title: "Section Saved",
@@ -73,8 +75,8 @@ export const useCMSPageSections = (pageSlug: string) => {
       logAction({
         action: "cms_section_updated",
         entityType: "cms_section",
-        entityId: pageSlug,
-        details: { sectionKey: variables.sectionKey },
+        entityId: pageId,
+        details: { pageSlug, sectionKey: variables.sectionKey },
       });
     },
     onError: (error: any) => {
@@ -119,8 +121,10 @@ export const useCMSPageSections = (pageSlug: string) => {
         .from("cms_pages")
         .update({ updated_at: new Date().toISOString(), status: "draft" })
         .eq("id", page.id);
+
+      return page.id;
     },
-    onSuccess: (_data, variables) => {
+    onSuccess: (pageId, variables) => {
       queryClient.invalidateQueries({ queryKey: ["cms-page", pageSlug] });
       toast({
         title: "All Sections Saved",
@@ -129,8 +133,8 @@ export const useCMSPageSections = (pageSlug: string) => {
       logAction({
         action: "cms_section_updated",
         entityType: "cms_section",
-        entityId: pageSlug,
-        details: { sectionKeys: variables.map(s => s.sectionKey), count: variables.length },
+        entityId: pageId,
+        details: { pageSlug, sectionKeys: variables.map(s => s.sectionKey), count: variables.length },
       });
     },
     onError: (error: any) => {

@@ -13,6 +13,7 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
   const navigation = [
     { name: 'Dashboard', href: '/admin/dashboard', icon: '📊' },
     { name: 'Rental Companies', href: '/admin/rentals', icon: '🏢' },
+    { name: 'Global Blacklist', href: '/admin/blacklist', icon: '🚫' },
     { name: 'Contact Requests', href: '/admin/contacts', icon: '📧' },
   ];
 

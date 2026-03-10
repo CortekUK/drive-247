@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Clock, ChevronRight, CircleDollarSign, Layers, Timer, Zap } from "lucide-react";
+import { Clock, ChevronRight, CircleDollarSign, Layers, Timer, Zap, ShieldCheck, FileSignature } from "lucide-react";
 import { EarthIcon } from "@/components/ui/earth";
 import { CarIcon } from "@/components/ui/car";
 import { BlocksIcon } from "@/components/ui/blocks";
@@ -138,7 +138,8 @@ export function AppSidebar() {
       label: "Insights",
       icon: AnimatedChartBar,
       items: [
-        { name: "Documents", href: "/documents", icon: AnimatedFolderOpen },
+        { name: "Insurances", href: "/insurances", icon: ShieldCheck },
+        { name: "Agreements", href: "/agreements", icon: FileSignature },
         { name: "Reminders", href: "/reminders", icon: AnimatedBell, badge: reminderStats?.due || 0 },
         { name: "Reports", href: "/reports", icon: AnimatedChartBar },
         { name: "P&L Dashboard", href: "/pl-dashboard", icon: AnimatedTrendingUp },

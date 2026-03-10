@@ -16,7 +16,6 @@ import {
   CheckCircle,
   Clock,
   Loader2,
-  LayoutTemplate,
   Calendar,
   CheckSquare,
   DollarSign,
@@ -36,14 +35,12 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import { FleetHeroEditor } from "@/components/website-content/fleet-hero-editor";
 import { RentalRatesEditor } from "@/components/website-content/rental-rates-editor";
 import { InclusionsEditor } from "@/components/website-content/inclusions-editor";
 import { ExtrasEditor } from "@/components/website-content/extras-editor";
 import { SEOEditor } from "@/components/website-content/seo-editor";
 import { VersionHistoryDialog } from "@/components/website-content/version-history-dialog";
 import type {
-  FleetHeroContent,
   RentalRatesContent,
   InclusionsContent,
   ExtrasContent,
@@ -58,7 +55,7 @@ export default function CMSFleetEditor() {
   const { data: page, isLoading } = useCMSPage("fleet");
   const { publishPage, isPublishing } = useCMSPages();
   const { updateSection, isUpdating } = useCMSPageSections("fleet");
-  const [activeTab, setActiveTab] = useState("hero");
+  const [activeTab, setActiveTab] = useState("rates");
   const [versionHistoryOpen, setVersionHistoryOpen] = useState(false);
   const [isResetting, setIsResetting] = useState(false);
   const { canEdit } = useManagerPermissions();
@@ -68,7 +65,6 @@ export default function CMSFleetEditor() {
     try {
       const defaults = CMS_DEFAULTS.fleet;
       await Promise.all([
-        updateSection({ sectionKey: "fleet_hero", content: defaults.hero }),
         updateSection({ sectionKey: "rental_rates", content: defaults.rental_rates }),
         updateSection({ sectionKey: "inclusions", content: defaults.inclusions }),
         updateSection({ sectionKey: "seo", content: defaults.seo }),
@@ -110,14 +106,6 @@ export default function CMSFleetEditor() {
     const section = page.cms_page_sections?.find((s) => s.section_key === key);
     return (section?.content as T) || defaultValue;
   };
-
-  const heroContent = getSectionContent<FleetHeroContent>("fleet_hero", {
-    headline: "",
-    subheading: "",
-    background_image: "",
-    primary_cta_text: "",
-    secondary_cta_text: "",
-  });
 
   const ratesContent = getSectionContent<RentalRatesContent>("rental_rates", {
     section_title: "",
@@ -224,11 +212,7 @@ export default function CMSFleetEditor() {
             </div>
           )}
           <Tabs value={activeTab} onValueChange={setActiveTab}>
-            <TabsList className="grid w-full grid-cols-5">
-              <TabsTrigger value="hero" className="flex items-center gap-2">
-                <LayoutTemplate className="h-4 w-4" />
-                <span className="hidden lg:inline">Hero</span>
-              </TabsTrigger>
+            <TabsList className="grid w-full grid-cols-4">
               <TabsTrigger value="rates" className="flex items-center gap-2">
                 <Calendar className="h-4 w-4" />
                 <span className="hidden lg:inline">Rates</span>
@@ -249,14 +233,6 @@ export default function CMSFleetEditor() {
 
             <div className={!canEdit('cms') ? "pointer-events-none select-none" : ""}>
             <div className="mt-6">
-              <TabsContent value="hero" className="mt-0">
-                <FleetHeroEditor
-                  content={heroContent}
-                  onSave={(content) => updateSection({ sectionKey: "fleet_hero", content })}
-                  isSaving={isUpdating}
-                />
-              </TabsContent>
-
               <TabsContent value="rates" className="mt-0">
                 <RentalRatesEditor
                   content={ratesContent}

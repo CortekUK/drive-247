@@ -30,10 +30,12 @@ import {
   Loader2,
   Mail,
   Shield,
+  ShieldAlert,
   User,
   ArrowLeft,
 } from 'lucide-react';
 import { toast } from 'sonner';
+import { BlockedAccountDialog } from '@/components/BlockedAccountDialog';
 
 type AuthMode = 'prompt' | 'signup' | 'login' | 'forgot-password' | 'check-email';
 
@@ -86,6 +88,7 @@ export function AuthPromptDialog({
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [confirmationEmail, setConfirmationEmail] = useState('');
+  const [showBlockedDialog, setShowBlockedDialog] = useState(false);
 
   const { signUp, signIn, resetPassword } = useCustomerAuthStore();
   const { tenant } = useTenant();
@@ -111,14 +114,20 @@ export function AuthPromptDialog({
   const handleSignup = async (data: SignupFormData) => {
     setIsLoading(true);
     try {
-      const { error, data: signupData } = await signUp(data.email, data.password, {
+      const result = await signUp(data.email, data.password, {
         customerId,
         tenantId: tenant?.id,
         customerName: data.name,
         customerPhone,
       });
+      const { error, data: signupData } = result;
 
       if (error) {
+        if ((result as any).isBlocked) {
+          onOpenChange(false);
+          setShowBlockedDialog(true);
+          return;
+        }
         if (error.message?.includes('already')) {
           toast.error('An account with this email already exists. Please log in instead.');
           setMode('login');
@@ -149,17 +158,22 @@ export function AuthPromptDialog({
   const handleLogin = async (data: LoginFormData) => {
     setIsLoading(true);
     try {
-      const { error } = await signIn(data.email, data.password, tenant?.id);
+      const result = await signIn(data.email, data.password, tenant?.id);
 
-      if (error) {
-        if (error.message?.includes('Invalid login')) {
+      if (result.error) {
+        if (result.isBlocked) {
+          onOpenChange(false);
+          setShowBlockedDialog(true);
+          return;
+        }
+        if (result.error.message?.includes('Invalid login')) {
           toast.error('Invalid email or password');
-        } else if (error.message?.includes('No customer')) {
+        } else if (result.error.message?.includes('No customer')) {
           toast.error('No customer account found. Please create an account.');
           setMode('signup');
           signupForm.setValue('email', data.email);
         } else {
-          toast.error(error.message || 'Failed to log in');
+          toast.error(result.error.message || 'Failed to log in');
         }
         return;
       }
@@ -594,14 +608,20 @@ export function AuthPromptDialog({
   );
 
   return (
-    <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent className="sm:max-w-md">
-        {mode === 'prompt' && renderPromptMode()}
-        {mode === 'signup' && renderSignupMode()}
-        {mode === 'login' && renderLoginMode()}
-        {mode === 'forgot-password' && renderForgotPasswordMode()}
-        {mode === 'check-email' && renderCheckEmailMode()}
-      </DialogContent>
-    </Dialog>
+    <>
+      <Dialog open={open} onOpenChange={handleClose}>
+        <DialogContent className="sm:max-w-md">
+          {mode === 'prompt' && renderPromptMode()}
+          {mode === 'signup' && renderSignupMode()}
+          {mode === 'login' && renderLoginMode()}
+          {mode === 'forgot-password' && renderForgotPasswordMode()}
+          {mode === 'check-email' && renderCheckEmailMode()}
+        </DialogContent>
+      </Dialog>
+      <BlockedAccountDialog
+        open={showBlockedDialog}
+        onOpenChange={setShowBlockedDialog}
+      />
+    </>
   );
 }
