@@ -5,7 +5,6 @@ import { supabase } from "@/integrations/supabase/client";
 import { useTenant } from "@/contexts/TenantContext";
 import Navigation from "@/components/Navigation";
 import Footer from "@/components/Footer";
-import HeroCarousel from "@/components/HeroCarousel";
 import SEO from "@/components/SEO";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -16,7 +15,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Crown, Calendar, Tag, ChevronRight, Info } from "lucide-react";
 import { format, isBefore, isAfter, isToday } from "date-fns";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
-import { usePageContent, defaultPromotionsContent, mergeWithDefaults, defaultPromotionsCarouselImages } from "@/hooks/usePageContent";
+import { usePageContent, defaultPromotionsContent, mergeWithDefaults } from "@/hooks/usePageContent";
 import { useBrandingSettings } from "@/hooks/useBrandingSettings";
 import { createCompanyNameReplacer } from "@/utils/tenantName";
 
@@ -59,11 +58,6 @@ const Promotions = () => {
   // Use the tenant's app_name for dynamic titles
   const appName = branding.app_name || 'Drive 247';
   const replaceCompanyName = createCompanyNameReplacer(appName);
-
-  // Hero carousel images - use CMS images if set, otherwise use defaults
-  const heroCarouselImages = content.promotions_hero?.carousel_images?.length
-    ? content.promotions_hero.carousel_images
-    : defaultPromotionsCarouselImages;
 
   useEffect(() => {
     loadData();
@@ -185,54 +179,7 @@ const Promotions = () => {
       <div className="min-h-screen flex flex-col bg-background">
         <Navigation />
 
-        {/* Hero Section with Carousel */}
-        <section className="relative min-h-screen">
-          <HeroCarousel
-            images={heroCarouselImages}
-            autoPlayInterval={5000}
-            overlayStrength="medium"
-            showScrollIndicator={true}
-            className="min-h-screen"
-          >
-            {/* Hero Content */}
-            <div className="flex items-center justify-center min-h-screen pt-20">
-              <div className="container mx-auto px-4">
-                <div className="max-w-4xl mx-auto text-center space-y-8 animate-fade-in">
-                  {/* Headline */}
-                  <h1 className="text-4xl sm:text-5xl md:text-6xl lg:text-7xl font-display font-bold text-white leading-tight [text-wrap:balance]">
-                    {content.promotions_hero?.headline || 'Promotions & Offers'}
-                  </h1>
-
-                  {/* Subheadline */}
-                  <p className="text-lg md:text-xl lg:text-2xl text-white/90 max-w-3xl mx-auto font-light leading-relaxed">
-                    {content.promotions_hero?.subheading || 'Exclusive rental offers with transparent savings.'}
-                  </p>
-
-                  {/* CTA Buttons */}
-                  <div className="flex flex-col sm:flex-row gap-4 justify-center items-center pt-4">
-                    <a href={content.promotions_hero?.primary_cta_href || "/fleet"}>
-                      <Button size="lg" className="bg-primary hover:bg-primary/90 text-primary-foreground font-semibold text-base md:text-lg px-8 py-6 rounded-md shadow-glow hover:shadow-glow transition-all">
-                        {content.promotions_hero?.primary_cta_text || 'View Fleet & Pricing'}
-                      </Button>
-                    </a>
-                    <a href="/#booking">
-                      <Button size="lg" variant="outline" className="bg-transparent border-2 border-white text-white hover:bg-white/10 hover:border-white font-semibold text-base md:text-lg px-8 py-6 rounded-md transition-all">
-                        {content.promotions_hero?.secondary_cta_text || 'Book Now'}
-                      </Button>
-                    </a>
-                  </div>
-
-                  {/* Trust Line */}
-                  <p className="text-sm md:text-base text-white/80 font-medium pt-4">
-                    {content.promotions_hero?.trust_line || 'Exclusive Deals • Limited Time • Save Big'}
-                  </p>
-                </div>
-              </div>
-            </div>
-          </HeroCarousel>
-        </section>
-
-        <main className="flex-1">
+        <main className="flex-1 pt-20">
           {/* Filters */}
           <section className="py-8 border-b border-border/50">
             <div className="container mx-auto px-4">
@@ -463,18 +410,19 @@ const Promotions = () => {
             <>
               <DialogHeader>
                 <DialogTitle className="font-serif text-3xl">{selectedPromotion.title}</DialogTitle>
-                <DialogDescription>
-                  <div className="flex items-center gap-2 mt-2">
-                    <Badge className="bg-accent/20 text-accent border-accent/30 text-lg font-bold px-4 py-2">
-                      {getDiscountBadge(selectedPromotion)}
-                    </Badge>
-                    {selectedPromotion.promo_code && (
-                      <code className="px-3 py-2 rounded bg-accent/10 text-accent font-mono font-semibold">
-                        {selectedPromotion.promo_code}
-                      </code>
-                    )}
-                  </div>
+                <DialogDescription className="sr-only">
+                  Promotion details for {selectedPromotion.title}
                 </DialogDescription>
+                <div className="flex items-center gap-2 mt-2">
+                  <Badge className="bg-accent/20 text-accent border-accent/30 text-lg font-bold px-4 py-2">
+                    {getDiscountBadge(selectedPromotion)}
+                  </Badge>
+                  {selectedPromotion.promo_code && (
+                    <code className="px-3 py-2 rounded bg-accent/10 text-accent font-mono font-semibold">
+                      {selectedPromotion.promo_code}
+                    </code>
+                  )}
+                </div>
               </DialogHeader>
 
               <div className="space-y-6 mt-4">

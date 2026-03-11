@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import { useCustomerAuthStore } from '@/stores/customer-auth-store';
 import { useTenant } from '@/contexts/TenantContext';
@@ -13,6 +13,7 @@ import {
 } from '@/components/ui/sidebar';
 import { Skeleton } from '@/components/ui/skeleton';
 import { CustomerRealtimeChatProvider } from '@/contexts/CustomerRealtimeChatContext';
+import { BlockedAccountDialog } from '@/components/BlockedAccountDialog';
 
 function LoadingSkeleton() {
   return (
@@ -47,9 +48,14 @@ export default function CustomerPortalLayout({
   const { customerUser, session, loading, initialized } = useCustomerAuthStore();
   const { tenant } = useTenant();
 
+  const [showBlockedDialog, setShowBlockedDialog] = useState(false);
+
   // Defense-in-depth: ensure customer belongs to the current tenant
   const tenantMismatch = customerUser && tenant?.id &&
     customerUser.customer.tenant_id !== tenant.id;
+
+  // Check if customer is blocked
+  const isBlocked = !!customerUser?.customer?.is_blocked;
 
   useEffect(() => {
     // Wait for auth to initialize
@@ -60,8 +66,14 @@ export default function CustomerPortalLayout({
       // Store the intended destination
       const returnUrl = encodeURIComponent(pathname || '/portal');
       router.replace(`/?auth=login&from=${returnUrl}`);
+      return;
     }
-  }, [customerUser, session, loading, initialized, router, pathname, tenantMismatch]);
+
+    // If customer is blocked, show dialog and sign them out
+    if (isBlocked) {
+      setShowBlockedDialog(true);
+    }
+  }, [customerUser, session, loading, initialized, router, pathname, tenantMismatch, isBlocked]);
 
   // Show loading skeleton while checking auth
   if (loading || !initialized) {
@@ -71,6 +83,23 @@ export default function CustomerPortalLayout({
   // Not authenticated or tenant mismatch - show skeleton while redirecting
   if (!customerUser || !session || tenantMismatch) {
     return <LoadingSkeleton />;
+  }
+
+  // Blocked customer - show dialog and prevent portal access
+  if (isBlocked) {
+    return (
+      <BlockedAccountDialog
+        open={showBlockedDialog}
+        onOpenChange={(open) => {
+          setShowBlockedDialog(open);
+          if (!open) {
+            // Sign out and redirect when dialog is closed
+            useCustomerAuthStore.getState().signOut();
+            router.replace('/');
+          }
+        }}
+      />
+    );
   }
 
   return (

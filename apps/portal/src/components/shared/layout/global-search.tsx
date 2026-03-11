@@ -14,7 +14,7 @@ import {
   Loader2,
   Filter,
   FileText,
-  File
+  FileSignature
 } from "lucide-react";
 import {
   Command,
@@ -62,8 +62,8 @@ const getIcon = (iconName: string) => {
       return Shield;
     case "file-text":
       return FileText;
-    case "file":
-      return File;
+    case "file-signature":
+      return FileSignature;
     default:
       return Search;
   }
@@ -229,7 +229,8 @@ export const GlobalSearch = ({ open, onOpenChange }: GlobalSearchProps) => {
                 {!hideInsurance && <SelectItem value="insurance">Insurance</SelectItem>}
                 <SelectItem value="plates">Plates</SelectItem>
                 <SelectItem value="invoices">Invoices</SelectItem>
-                <SelectItem value="documents">Documents</SelectItem>
+                <SelectItem value="insurances">Insurances</SelectItem>
+                <SelectItem value="agreements">Agreements</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -280,7 +281,7 @@ export const GlobalSearch = ({ open, onOpenChange }: GlobalSearchProps) => {
               <div className="space-y-2">
                 <h3 className="text-lg font-semibold text-foreground">Search Everything</h3>
                 <p className="text-sm text-muted-foreground max-w-md mx-auto">
-                  Instantly find customers, vehicles, rentals, fines, payments{!hideInsurance ? ', insurance,' : ','} invoices, documents, and plates
+                  Instantly find customers, vehicles, rentals, fines, payments{!hideInsurance ? ', insurance,' : ','} invoices, agreements, and plates
                 </p>
               </div>
 
@@ -339,7 +340,8 @@ export const GlobalSearch = ({ open, onOpenChange }: GlobalSearchProps) => {
               {!hideInsurance && renderGroup("Insurance", results.insurance, "")}
               {renderGroup("Plates", results.plates, "")}
               {renderGroup("Invoices", results.invoices, "")}
-              {renderGroup("Documents", results.documents, "")}
+              {renderGroup("Insurances", results.insurances, "")}
+              {renderGroup("Agreements", results.agreements, "")}
             </div>
           )}
         </CommandList>

@@ -64,6 +64,36 @@ Deno.serve(async (req) => {
 
     const tenantId = invite.tenant_id;
 
+    // Check if email is globally blacklisted
+    const { data: blacklisted } = await supabase
+      .rpc('is_globally_blacklisted', { p_email: email.trim().toLowerCase() });
+
+    if (blacklisted) {
+      await supabase
+        .from('customer_registration_invites')
+        .update({ status: 'pending', completed_at: null })
+        .eq('id', invite.id);
+      return errorResponse('Registration cannot be completed. Please contact support.', 403);
+    }
+
+    // Check if email is in blocked_identities for this tenant
+    const { data: blockedEmail } = await supabase
+      .from('blocked_identities')
+      .select('id')
+      .eq('tenant_id', tenantId)
+      .eq('identity_number', email.trim().toLowerCase())
+      .eq('identity_type', 'email')
+      .eq('is_active', true)
+      .maybeSingle();
+
+    if (blockedEmail) {
+      await supabase
+        .from('customer_registration_invites')
+        .update({ status: 'pending', completed_at: null })
+        .eq('id', invite.id);
+      return errorResponse('Registration cannot be completed. Please contact support.', 403);
+    }
+
     // Check duplicate email (global unique constraint on customers.email)
     if (email) {
       const { data: dupEmail } = await supabase
@@ -134,6 +164,38 @@ Deno.serve(async (req) => {
       if (linkError) {
         console.error('Error linking verification:', linkError);
         // Non-fatal — customer was still created
+      }
+
+      // Check if the linked verification's document number is in blocked_identities
+      const { data: verification } = await supabase
+        .from('identity_verifications')
+        .select('document_number')
+        .eq('session_id', verificationSessionId)
+        .eq('tenant_id', tenantId)
+        .maybeSingle();
+
+      if (verification?.document_number) {
+        const { data: blockedIdentity } = await supabase
+          .from('blocked_identities')
+          .select('id')
+          .eq('tenant_id', tenantId)
+          .eq('identity_number', verification.document_number)
+          .eq('is_active', true)
+          .maybeSingle();
+
+        if (blockedIdentity) {
+          // Block the newly created customer
+          await supabase
+            .from('customers')
+            .update({
+              is_blocked: true,
+              blocked_at: new Date().toISOString(),
+              blocked_reason: 'Blocked identity document detected during registration',
+            })
+            .eq('id', newCustomer.id);
+
+          return errorResponse('Registration cannot be completed. Please contact support.', 403);
+        }
       }
     }
 

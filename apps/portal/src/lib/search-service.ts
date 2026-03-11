@@ -21,7 +21,8 @@ export interface SearchResults {
   plates: SearchResult[];
   insurance: SearchResult[];
   invoices: SearchResult[];
-  documents: SearchResult[];
+  insurances: SearchResult[];
+  agreements: SearchResult[];
 }
 
 // Fuzzy matching utility
@@ -83,7 +84,8 @@ export const searchService = {
         plates: [],
         insurance: [],
         invoices: [],
-        documents: [],
+        insurances: [],
+        agreements: [],
       };
     }
 
@@ -97,7 +99,8 @@ export const searchService = {
       plates: [],
       insurance: [],
       invoices: [],
-      documents: [],
+      insurances: [],
+      agreements: [],
     };
 
     try {
@@ -409,8 +412,8 @@ export const searchService = {
         }
       }
 
-      // Search documents (if not filtered out)
-      if (entityFilter === 'all' || entityFilter === 'documents') {
+      // Search documents — split into insurances and agreements
+      if (entityFilter === 'all' || entityFilter === 'insurances' || entityFilter === 'agreements') {
         try {
           const { data: documents, error: docError } = await supabase
             .from("customer_documents")
@@ -419,7 +422,8 @@ export const searchService = {
               document_name,
               document_type,
               created_at,
-              customer_id
+              customer_id,
+              insurance_provider
             `)
             .eq("tenant_id", tenantId || '')
             .order('created_at', { ascending: false })
@@ -456,16 +460,36 @@ export const searchService = {
                    customerName.includes(lowerQuery);
           });
 
-          const documentResults = filteredDocs.map((doc: any) => ({
-            id: doc.id,
-            title: doc.document_name || 'Document',
-            subtitle: `${customerMap[doc.customer_id] || 'Unknown'} • ${doc.document_type || 'Document'} • ${doc.created_at?.split('T')[0] || ''}`,
-            category: "Documents",
-            url: `/documents?doc=${doc.id}`,
-            icon: "file",
-          }));
+          // Split into insurances and agreements
+          if (entityFilter === 'all' || entityFilter === 'insurances') {
+            const insuranceDocs = filteredDocs.filter((doc: any) =>
+              doc.document_type === 'Insurance Certificate' || doc.insurance_provider
+            );
+            const insuranceResults = insuranceDocs.map((doc: any) => ({
+              id: doc.id,
+              title: doc.document_name || 'Insurance Document',
+              subtitle: `${customerMap[doc.customer_id] || 'Unknown'} • ${doc.document_type || 'Insurance'} • ${doc.created_at?.split('T')[0] || ''}`,
+              category: "Insurances",
+              url: `/insurances?doc=${doc.id}`,
+              icon: "shield",
+            }));
+            results.insurances = rankResults(insuranceResults, query);
+          }
 
-          results.documents = rankResults(documentResults, query);
+          if (entityFilter === 'all' || entityFilter === 'agreements') {
+            const agreementDocs = filteredDocs.filter((doc: any) =>
+              doc.document_type === 'Agreement'
+            );
+            const agreementResults = agreementDocs.map((doc: any) => ({
+              id: doc.id,
+              title: doc.document_name || 'Agreement',
+              subtitle: `${customerMap[doc.customer_id] || 'Unknown'} • Agreement • ${doc.created_at?.split('T')[0] || ''}`,
+              category: "Agreements",
+              url: `/agreements?doc=${doc.id}`,
+              icon: "file-signature",
+            }));
+            results.agreements = rankResults(agreementResults, query);
+          }
         } catch (err) {
           console.error('Document search failed:', err);
         }

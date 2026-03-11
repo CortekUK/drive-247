@@ -2,7 +2,6 @@
 
 import Navigation from "@/components/Navigation";
 import Footer from "@/components/Footer";
-import HeroCarousel from "@/components/HeroCarousel";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -13,7 +12,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useTenant } from "@/contexts/TenantContext";
 import Link from "next/link";
 import SEO from "@/components/SEO";
-import { usePageContent, defaultFleetContent, mergeWithDefaults, defaultFleetCarouselImages } from "@/hooks/usePageContent";
+import { usePageContent, defaultFleetContent, mergeWithDefaults } from "@/hooks/usePageContent";
 import { useBrandingSettings } from "@/hooks/useBrandingSettings";
 import { createCompanyNameReplacer } from "@/utils/tenantName";
 import { formatCurrency } from "@/lib/format-utils";
@@ -58,23 +57,6 @@ interface Vehicle {
   vehicle_photos?: VehiclePhoto[];
   created_at?: string;
   description?: string | null;
-}
-
-interface ServiceInclusion {
-  id: string;
-  title: string;
-  icon_name: string;
-  category: string;
-  display_order: number;
-  is_active: boolean;
-}
-
-interface PricingExtra {
-  id: string;
-  extra_name: string;
-  price: number;
-  description: string | null;
-  is_active: boolean;
 }
 
 // Helper to get vehicle display name
@@ -127,35 +109,10 @@ const Pricing = () => {
   const appName = branding.app_name || 'Drive 247';
   const replaceCompanyName = createCompanyNameReplacer(appName);
 
-  // Hero carousel images - use CMS images if set, otherwise use defaults
-  const heroCarouselImages = content.fleet_hero?.carousel_images?.length
-    ? content.fleet_hero.carousel_images
-    : defaultFleetCarouselImages;
-
-  // Hardcoded service inclusions
-  const serviceInclusions: ServiceInclusion[] = [
-    // Standard inclusions
-    { id: '1', title: 'Comprehensive Insurance Coverage', icon_name: 'Shield', category: 'standard', display_order: 1, is_active: true },
-    { id: '2', title: '24/7 Roadside Assistance', icon_name: 'Phone', category: 'standard', display_order: 2, is_active: true },
-    { id: '3', title: 'Unlimited Mileage', icon_name: 'MapPin', category: 'standard', display_order: 3, is_active: true },
-    { id: '4', title: 'Full Tank of Premium Fuel', icon_name: 'Fuel', category: 'standard', display_order: 4, is_active: true },
-    { id: '5', title: 'Professional Vehicle Handover', icon_name: 'User', category: 'standard', display_order: 5, is_active: true },
-    { id: '6', title: 'Vehicle Valeting & Cleaning', icon_name: 'Sparkles', category: 'standard', display_order: 6, is_active: true },
-
-    // Premium add-ons
-    { id: '7', title: 'Chauffeur Service (per hour)', icon_name: 'User', category: 'premium', display_order: 1, is_active: true },
-    { id: '8', title: 'Airport Meet & Greet', icon_name: 'Plane', category: 'premium', display_order: 2, is_active: true },
-    { id: '9', title: 'Additional Driver', icon_name: 'User', category: 'premium', display_order: 3, is_active: true },
-    { id: '10', title: 'GPS Navigation System', icon_name: 'MapPin', category: 'premium', display_order: 4, is_active: true },
-  ];
-
-  // Hardcoded pricing extras
-  const pricingExtras: PricingExtra[] = [
-    { id: '1', extra_name: 'Child Safety Seat', price: 15, description: 'Per day', is_active: true },
-    { id: '2', extra_name: 'Mobile WiFi Hotspot', price: 10, description: 'Per day', is_active: true },
-    { id: '3', extra_name: 'Delivery & Collection', price: 50, description: 'Within 25 mi', is_active: true },
-    { id: '4', extra_name: 'Extended Insurance', price: 25, description: 'Per day', is_active: true },
-  ];
+  // CMS-driven inclusions and extras
+  const standardInclusionItems = content.inclusions?.standard_items || [];
+  const premiumInclusionItems = content.inclusions?.premium_items || [];
+  const extrasItems = content.extras?.items || [];
 
   // Description helper functions
   const MAX_DESCRIPTION_LENGTH = 150;
@@ -221,8 +178,6 @@ const Pricing = () => {
     }
   };
 
-  const standardInclusions = serviceInclusions.filter((inc) => inc.category === "standard");
-  const premiumInclusions = serviceInclusions.filter((inc) => inc.category === "premium");
 
   // Get unique makes and colours for filters
   const uniqueMakes = Array.from(new Set(vehicles.map(v => v.make).filter(Boolean))).sort();
@@ -263,55 +218,8 @@ const Pricing = () => {
       />
       <Navigation />
 
-      {/* Hero Section with Carousel */}
-      <section className="relative min-h-screen">
-        <HeroCarousel
-          images={heroCarouselImages}
-          autoPlayInterval={5000}
-          overlayStrength="medium"
-          showScrollIndicator={true}
-          className="min-h-screen"
-        >
-          {/* Hero Content */}
-          <div className="flex items-center justify-center min-h-screen pt-20">
-            <div className="container mx-auto px-4">
-              <div className="max-w-4xl mx-auto text-center space-y-8 animate-fade-in">
-                {/* Headline */}
-                <h1 className="text-4xl sm:text-5xl md:text-6xl lg:text-7xl font-display font-bold text-white leading-tight [text-wrap:balance]">
-                  {content.fleet_hero?.headline || 'Fleet & Pricing'}
-                </h1>
-
-                {/* Subheadline */}
-                <p className="text-lg md:text-xl lg:text-2xl text-white/90 max-w-3xl mx-auto font-light leading-relaxed">
-                  {content.fleet_hero?.subheading || 'Browse our premium vehicles with clear daily, weekly, and monthly rates.'}
-                </p>
-
-                {/* CTA Buttons */}
-                <div className="flex flex-col sm:flex-row gap-4 justify-center items-center pt-4">
-                  <a href="/#booking">
-                    <Button size="lg" className="bg-primary hover:bg-primary/90 text-primary-foreground font-semibold text-base md:text-lg px-8 py-6 rounded-md shadow-glow hover:shadow-glow transition-all">
-                      {content.fleet_hero?.primary_cta_text || 'Book Now'}
-                    </Button>
-                  </a>
-                  <a href="#fleet-section">
-                    <Button size="lg" variant="outline" className="bg-transparent border-2 border-white text-white hover:bg-white/10 hover:border-white font-semibold text-base md:text-lg px-8 py-6 rounded-md transition-all">
-                      {content.fleet_hero?.secondary_cta_text || 'View Fleet Below'}
-                    </Button>
-                  </a>
-                </div>
-
-                {/* Trust Line */}
-                <p className="text-sm md:text-base text-white/80 font-medium pt-4">
-                  {content.fleet_hero?.trust_line || 'Premium Fleet • Flexible Rates • 24/7 Support'}
-                </p>
-              </div>
-            </div>
-          </div>
-        </HeroCarousel>
-      </section>
-
       {/* Fleet Section */}
-      <section className="py-16">
+      <section className="pt-24 pb-16">
         <div className="container mx-auto px-4" id="fleet-section">
           {/* Filter & Sort Controls */}
           <div className="flex flex-col sm:flex-row gap-4 mb-12 max-w-5xl mx-auto">
@@ -559,12 +467,12 @@ const Pricing = () => {
                   <div className="h-[1px] w-20 bg-gradient-to-r from-accent to-transparent" />
                 </div>
                 <ul className="space-y-4">
-                  {standardInclusions.map((inclusion) => {
-                    const IconComponent = getIconComponent(inclusion.icon_name);
+                  {standardInclusionItems.map((item, index) => {
+                    const IconComponent = getIconComponent(item.icon);
                     return (
-                      <li key={inclusion.id} className="flex items-start gap-3 text-muted-foreground">
+                      <li key={index} className="flex items-start gap-3 text-muted-foreground">
                         <IconComponent className="w-5 h-5 text-accent mt-0.5 flex-shrink-0" />
-                        <span>{inclusion.title}</span>
+                        <span>{item.title}</span>
                       </li>
                     );
                   })}
@@ -578,21 +486,21 @@ const Pricing = () => {
                   <div className="h-[1px] w-20 bg-gradient-to-r from-accent to-transparent" />
                 </div>
                 <ul className="space-y-4">
-                  {premiumInclusions.map((inclusion) => {
-                    const IconComponent = getIconComponent(inclusion.icon_name);
+                  {premiumInclusionItems.map((item, index) => {
+                    const IconComponent = getIconComponent(item.icon);
                     return (
-                      <li key={inclusion.id} className="flex items-start gap-3 text-muted-foreground">
+                      <li key={index} className="flex items-start gap-3 text-muted-foreground">
                         <IconComponent className="w-5 h-5 text-accent mt-0.5 flex-shrink-0" />
-                        <span>{inclusion.title}</span>
+                        <span>{item.title}</span>
                       </li>
                     );
                   })}
-                  {pricingExtras.map((extra) => (
-                    <li key={extra.id} className="flex items-start justify-between gap-3 text-muted-foreground">
+                  {extrasItems.map((extra, index) => (
+                    <li key={`extra-${index}`} className="flex items-start justify-between gap-3 text-muted-foreground">
                       <div className="flex items-start gap-3">
                         <Sparkles className="w-5 h-5 text-accent mt-0.5 flex-shrink-0" />
                         <div>
-                          <span className="block">{extra.extra_name}</span>
+                          <span className="block">{extra.name}</span>
                           {extra.description && (
                             <span className="text-xs text-muted-foreground/70">{extra.description}</span>
                           )}

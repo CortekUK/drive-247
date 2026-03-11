@@ -67,7 +67,8 @@ export const useGlobalSearch = () => {
         ...results.plates,
         ...results.insurance,
         ...results.invoices,
-        ...results.documents,
+        ...results.insurances,
+        ...results.agreements,
       ]
     : [];
 
@@ -96,7 +97,8 @@ export const useGlobalSearch = () => {
       plates: [],
       insurance: [],
       invoices: [],
-      documents: [],
+      insurances: [],
+      agreements: [],
     },
     isLoading,
     error,

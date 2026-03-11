@@ -129,6 +129,7 @@ export const useCMSPages = () => {
     },
     onSuccess: (_data, pageId) => {
       queryClient.invalidateQueries({ queryKey: ["cms-pages"] });
+      queryClient.invalidateQueries({ queryKey: ["cms-versions"] });
       toast({
         title: "Page Published",
         description: "Your changes are now live on the website.",

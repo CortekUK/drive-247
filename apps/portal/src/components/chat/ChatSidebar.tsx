@@ -9,6 +9,7 @@ import traxBotAnimation from './trax-bot-animation.json';
 import {
   Sheet,
   SheetContent,
+  SheetTitle,
   SheetTrigger,
 } from '@/components/ui/sheet';
 import { Button } from '@/components/ui/button';
@@ -82,6 +83,7 @@ export function ChatSidebar() {
           "border-l border-border/50 backdrop-blur-xl"
         )}
       >
+        <SheetTitle className="sr-only">AI Assistant</SheetTitle>
         {/* Header */}
         <div className="relative flex items-center justify-between border-b border-border/50 px-5 py-4">
           {/* Gradient accent line */}

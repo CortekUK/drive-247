@@ -140,12 +140,13 @@ export async function isGloballyBlacklisted(email: string): Promise<{ isBlacklis
 
   const { data, error } = await supabase
     .from('global_blacklist')
-    .select('id')
+    .select('id, is_whitelisted')
     .eq('email', email.trim())
     .maybeSingle();
 
   return {
-    isBlacklisted: !!data,
+    // Only blacklisted if entry exists AND not whitelisted
+    isBlacklisted: !!data && !data.is_whitelisted,
     error
   };
 }
@@ -210,6 +211,46 @@ export async function canCustomerBook(
   }
 
   return { canBook: true, reason: null };
+}
+
+/**
+ * Comprehensive login-time blocking check: global blacklist + tenant blocked identity + customer is_blocked
+ * @param tenantId - The tenant ID
+ * @param email - Customer email
+ */
+export async function isCustomerBlockedForLogin(
+  tenantId: string,
+  email: string
+): Promise<{ isBlocked: boolean }> {
+  if (!email || email.trim() === '') {
+    return { isBlocked: false };
+  }
+
+  // Check global blacklist
+  const globalCheck = await isGloballyBlacklisted(email);
+  if (globalCheck.isBlacklisted) {
+    return { isBlocked: true };
+  }
+
+  // Check email in blocked_identities for this tenant
+  const identityCheck = await isIdentityBlocked(tenantId, email);
+  if (identityCheck.isBlocked) {
+    return { isBlocked: true };
+  }
+
+  // Check customer is_blocked flag
+  const { data: customer } = await supabase
+    .from('customers')
+    .select('is_blocked')
+    .eq('tenant_id', tenantId)
+    .eq('email', email)
+    .maybeSingle();
+
+  if (customer?.is_blocked) {
+    return { isBlocked: true };
+  }
+
+  return { isBlocked: false };
 }
 
 /**
