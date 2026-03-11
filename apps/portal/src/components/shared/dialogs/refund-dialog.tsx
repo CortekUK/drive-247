@@ -16,6 +16,8 @@ import { useTenant } from "@/contexts/TenantContext";
 import { DollarSign, Percent, AlertCircle } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { formatCurrency, getCurrencySymbol } from "@/lib/format-utils";
+import { useAuditLogOnOpen } from "@/hooks/use-audit-log-on-open";
+import { useAuditLog } from "@/hooks/use-audit-log";
 
 const refundSchema = z.object({
   refundType: z.enum(["full", "partial"]),
@@ -60,6 +62,15 @@ export const RefundDialog = ({
   const { toast } = useToast();
   const { tenant } = useTenant();
   const queryClient = useQueryClient();
+  const { logAction } = useAuditLog();
+
+  useAuditLogOnOpen({
+    open,
+    action: "payment_refund_warning_shown",
+    entityType: "payment",
+    entityId: rentalId,
+    details: { category, totalAmount, paidAmount },
+  });
 
   const maxRefundAmount = Math.min(paidAmount, totalAmount);
 
@@ -142,6 +153,8 @@ export const RefundDialog = ({
         title: "Refund Processed",
         description: `${formatCurrency(finalRefundAmount, tenant?.currency_code || 'USD')} has been refunded for ${category}.`,
       });
+
+      logAction({ action: "payment_refunded", entityType: "payment", entityId: rentalId, details: { category, refund_amount: finalRefundAmount, reason: data.reason } });
 
       // Invalidate queries to refresh data
       const invalidateOptions = { refetchType: 'all' as const };

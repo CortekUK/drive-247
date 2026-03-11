@@ -47,12 +47,15 @@ import { formatCurrency } from '@/lib/format-utils';
 import { useManagerPermissions } from '@/hooks/use-manager-permissions';
 import { useUnsavedChangesWarning } from '@/hooks/use-unsaved-changes-warning';
 import { UnsavedChangesDialog } from '@/components/shared/unsaved-changes-dialog';
+import { useAuditLogOnOpen } from '@/hooks/use-audit-log-on-open';
+import { useAuditLog } from '@/hooks/use-audit-log';
 
 const Settings = () => {
   const queryClient = useQueryClient();
   const searchParams = useSearchParams();
   const router = useRouter();
   const { isManager, canViewSettings, canEditSettings } = useManagerPermissions();
+  const { logAction } = useAuditLog();
 
   // All settings tab values
   const allSettingsTabs = ['general', 'locations', 'branding', 'rental', 'pricing', 'extras', 'payments', 'reminders', 'templates', 'integrations', 'subscription'];
@@ -60,6 +63,7 @@ const Settings = () => {
   const [activeTab, setActiveTab] = useState(visibleTabs[0] || 'general');
   const [isBackfilling, setIsBackfilling] = useState(false);
   const [showDataCleanupDialog, setShowDataCleanupDialog] = useState(false);
+  const [resetGeneralDialogOpen, setResetGeneralDialogOpen] = useState(false);
   const [generalForm, setGeneralForm] = useState({
     currency_code: 'USD',
     distance_unit: 'miles' as 'km' | 'miles',
@@ -84,6 +88,13 @@ const Settings = () => {
 
   // Get tenant context for ID and refetch
   const { tenant, refetchTenant } = useTenant();
+
+  useAuditLogOnOpen({
+    open: resetGeneralDialogOpen,
+    action: "settings_reset_warning_shown",
+    entityType: "settings",
+    entityId: tenant?.id,
+  });
 
   // Use tenant branding hook for multi-tenant branding updates
   const {
@@ -652,11 +663,12 @@ const Settings = () => {
       if (error) throw error;
       return data;
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
       toast({
         title: "Success",
         description: "Promo code created successfully",
       });
+      logAction({ action: "promotion_created", entityType: "promotion", entityId: data?.[0]?.id || "unknown", details: { section: "promo_codes" } });
       // Reset form
       setPromoForm({
         name: '',
@@ -791,11 +803,12 @@ const Settings = () => {
       if (error) throw error;
       return data;
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
       toast({
         title: "Success",
         description: "Promo code updated successfully",
       });
+      logAction({ action: "promotion_updated", entityType: "promotion", entityId: data?.[0]?.id || "unknown", details: { section: "promo_codes" } });
       setEditingPromo(null);
       refetchPromos();
     },
@@ -822,11 +835,12 @@ const Settings = () => {
       if (error) throw error;
       return id;
     },
-    onSuccess: () => {
+    onSuccess: (deletedId) => {
       toast({
         title: "Success",
         description: "Promo code deleted successfully",
       });
+      logAction({ action: "promotion_deleted", entityType: "promotion", entityId: deletedId, details: { section: "promo_codes" } });
       setDeletingPromo(null);
       refetchPromos();
     },
@@ -908,6 +922,7 @@ const Settings = () => {
           await refetchTenant();
         }
       }
+      logAction({ action: "settings_updated", entityType: "settings", entityId: tenant?.id || "unknown", details: { section: "general" } });
     } catch (error: any) {
       toast({
         title: "Error",
@@ -958,6 +973,7 @@ const Settings = () => {
         title: "Branding Updated",
         description: "Your branding settings have been saved and applied.",
       });
+      logAction({ action: "settings_updated", entityType: "settings", entityId: tenant?.id || "unknown", details: { section: "branding" } });
 
       // No reload needed - useDynamicTheme will pick up changes from the query cache
     } catch (error: any) {
@@ -1278,7 +1294,7 @@ const Settings = () => {
           {/* Save Button */}
           {canEditSettings('general') && (
             <div className="flex flex-col sm:flex-row justify-between items-stretch sm:items-center gap-3">
-              <AlertDialog>
+              <AlertDialog open={resetGeneralDialogOpen} onOpenChange={setResetGeneralDialogOpen}>
                 <AlertDialogTrigger asChild>
                   <Button variant="outline" className="text-destructive border-destructive hover:bg-destructive/10 w-full sm:w-auto">
                     Reset to Defaults
@@ -3659,8 +3675,9 @@ const Settings = () => {
 
         {/* Integrations Tab (SMS + E-Sign + Bonzah + Blacklist) */}
         <TabsContent value="integrations" className="space-y-6">
-          <TwilioSmsSettings />
-          <WhatsAppMetaSettings />
+          {/* TODO: Re-enable when SMS & WhatsApp integrations are complete */}
+          {/* <TwilioSmsSettings /> */}
+          {/* <WhatsAppMetaSettings /> */}
           <ESignSettings />
           <BonzahSettings />
 

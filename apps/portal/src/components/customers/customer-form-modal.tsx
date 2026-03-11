@@ -18,6 +18,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTenant } from "@/contexts/TenantContext";
 import { useAuditLog } from "@/hooks/use-audit-log";
+import { useAuditLogOnOpen } from "@/hooks/use-audit-log-on-open";
 import { customerFormModalSchema, type CustomerFormModalFormValues } from "@/client-schemas/customers/customer-form-modal";
 import { VerificationQRModal } from "./verification-qr-modal";
 import GigDriverUploadDialog from "./gig-driver-upload-dialog";
@@ -85,6 +86,14 @@ export const CustomerFormModal = ({ open, onOpenChange, customer }: CustomerForm
   const queryClient = useQueryClient();
   const { logAction } = useAuditLog();
   const isEditing = !!customer;
+
+  useAuditLogOnOpen({
+    open,
+    action: "customer_form_dialog_shown",
+    entityType: "customer",
+    entityId: customer?.id || "new",
+    details: { mode: isEditing ? "edit" : "create" },
+  });
 
   const form = useForm<CustomerFormData>({
     resolver: zodResolver(customerFormModalSchema),

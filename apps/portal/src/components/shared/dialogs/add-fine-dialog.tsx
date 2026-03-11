@@ -8,6 +8,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useTenant } from "@/contexts/TenantContext";
 import { useAuditLog } from "@/hooks/use-audit-log";
+import { useAuditLogOnOpen } from "@/hooks/use-audit-log-on-open";
 import { toast } from "sonner";
 
 import {
@@ -74,6 +75,14 @@ export const AddFineDialog = ({ open, onOpenChange, vehicle_id, customer_id }: A
   const { tenant } = useTenant();
   const queryClient = useQueryClient();
   const { logAction } = useAuditLog();
+
+  useAuditLogOnOpen({
+    open,
+    action: "fine_create_dialog_shown",
+    entityType: "fine",
+    entityId: vehicle_id || customer_id || "new",
+    details: { rental_id: undefined, customer_id, vehicle_id },
+  });
 
   const form = useForm<FineFormValues>({
     resolver: zodResolver(fineFormSchema),

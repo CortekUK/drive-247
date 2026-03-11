@@ -168,22 +168,6 @@ const PrintableInvoice = ({ invoice, customer, vehicle, rental, protectionPlan, 
                 </td>
               </tr>
             )}
-            {protectionPlan && (
-              <tr className="border-b border-gray-300">
-                <td className="p-3 text-sm">
-                  <div className="flex items-start gap-2">
-                    <span style={{ color: accentColor }}>🛡</span>
-                    <div>
-                      <p className="font-medium">Protection Plan</p>
-                      <p className="text-xs text-gray-600">{protectionPlan.name}</p>
-                    </div>
-                  </div>
-                </td>
-                <td className="p-3 text-sm text-right font-medium" style={{ color: accentColor }}>
-                  {fc(protectionPlan.cost)}
-                </td>
-              </tr>
-            )}
             {selectedExtras && selectedExtras.map((extra, i) => (
               <tr key={i} className="border-b border-gray-300">
                 <td className="p-3 text-sm">
@@ -207,8 +191,9 @@ const PrintableInvoice = ({ invoice, customer, vehicle, rental, protectionPlan, 
             {(invoice.insurance_premium ?? 0) > 0 && (
               <tr className="border-b border-gray-300">
                 <td className="p-3 text-sm">
-                  <div className="flex items-start gap-2">
-                    <span style={{ color: '#C5A572' }}>🛡</span>
+                  <div className="flex items-center gap-2">
+                    <img src="/bonzah-logo.svg" alt="Bonzah" className="h-4 w-auto dark:hidden" />
+                    <img src="/bonzah-logo-dark.svg" alt="Bonzah" className="h-4 w-auto hidden dark:block" />
                     <p className="font-medium">Bonzah Insurance</p>
                   </div>
                 </td>
@@ -439,22 +424,6 @@ export const InvoiceDialog = ({
                       </td>
                     </tr>
                   )}
-                  {protectionPlan && (
-                    <tr className="border-b">
-                      <td className="p-3 text-sm">
-                        <div className="flex items-start gap-2">
-                          <Shield className="w-4 h-4 mt-0.5" style={{ color: accentColor }} />
-                          <div>
-                            <p className="font-medium">Protection Plan</p>
-                            <p className="text-xs text-muted-foreground">{protectionPlan.name}</p>
-                          </div>
-                        </div>
-                      </td>
-                      <td className="p-3 text-sm text-right font-medium" style={{ color: accentColor }}>
-                        {fc(protectionPlan.cost)}
-                      </td>
-                    </tr>
-                  )}
                   {selectedExtras && selectedExtras.map((extra, i) => (
                     <tr key={i} className="border-b">
                       <td className="p-3 text-sm">
@@ -478,8 +447,9 @@ export const InvoiceDialog = ({
                   {(invoice.insurance_premium ?? 0) > 0 && (
                     <tr className="border-b">
                       <td className="p-3 text-sm">
-                        <div className="flex items-start gap-2">
-                          <Shield className="w-4 h-4 text-[#C5A572] mt-0.5" />
+                        <div className="flex items-center gap-2">
+                          <img src="/bonzah-logo.svg" alt="Bonzah" className="h-4 w-auto dark:hidden" />
+                          <img src="/bonzah-logo-dark.svg" alt="Bonzah" className="h-4 w-auto hidden dark:block" />
                           <p className="font-medium">Bonzah Insurance</p>
                         </div>
                       </td>

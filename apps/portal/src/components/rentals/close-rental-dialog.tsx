@@ -12,6 +12,7 @@ import { Calendar } from "@/components/ui/calendar";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { useToast } from "@/hooks/use-toast";
 import { useAuditLog } from "@/hooks/use-audit-log";
+import { useAuditLogOnOpen } from "@/hooks/use-audit-log-on-open";
 import { cn } from "@/lib/utils";
 import { formatInTimeZone } from "date-fns-tz";
 import { closeRentalSchema, type CloseRentalFormValues } from "@/client-schemas/rentals/close-rental";
@@ -50,7 +51,15 @@ export const CloseRentalDialog = ({ open, onOpenChange, rental }: CloseRentalDia
   const { tenant } = useTenant();
   const { logAction } = useAuditLog();
   const currencyCode = tenant?.currency_code || 'GBP';
-  
+
+  useAuditLogOnOpen({
+    open,
+    action: "rental_close_warning_shown",
+    entityType: "rental",
+    entityId: rental?.id,
+    details: { rental_number: rental?.rental_number, customer: rental?.customer?.name },
+  });
+
   const form = useForm<CloseRentalFormData>({
     resolver: zodResolver(closeRentalSchema),
     defaultValues: {

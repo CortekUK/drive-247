@@ -737,7 +737,7 @@ export default function DevPanel() {
                 className="fixed top-20 right-4 z-[9999] bg-orange-500 hover:bg-orange-600 text-white p-3 rounded-full shadow-lg transition-all hover:scale-110"
                 title="Dev Panel (Ctrl+Shift+D)"
             >
-                <Bug className="w-5 h-5" />
+                <Bug className="w-5 h-5" suppressHydrationWarning />
             </button>
         )
     }

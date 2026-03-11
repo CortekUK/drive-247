@@ -15,6 +15,7 @@ import { cn } from "@/lib/utils";
 import { useBlockedDates } from "@/hooks/use-blocked-dates";
 import { EmptyState } from "@/components/shared/data-display/empty-state";
 import { useManagerPermissions } from "@/hooks/use-manager-permissions";
+import { useAuditLogOnOpen } from "@/hooks/use-audit-log-on-open";
 
 interface BlockedDatesManagerProps {
   vehicle_id?: string;
@@ -32,6 +33,13 @@ export const BlockedDatesManager = ({ vehicle_id }: BlockedDatesManagerProps) =>
 
   const { blockedDates, isLoading, addBlockedDate, deleteBlockedDate, isAdding, isDeleting } =
     useBlockedDates(vehicle_id);
+
+  useAuditLogOnOpen({
+    open: deleteDialogOpen,
+    action: "blocked_date_delete_warning_shown",
+    entityType: "blocked_date",
+    entityId: itemToDelete?.id,
+  });
 
   // Helper function to check if a date is already blocked
   const isDateBlocked = (date: Date): boolean => {

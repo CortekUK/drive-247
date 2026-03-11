@@ -2,6 +2,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useTenant } from '@/contexts/TenantContext';
 import { toast } from '@/hooks/use-toast';
+import { useAuditLog } from '@/hooks/use-audit-log';
 
 export interface TenantHoliday {
   id: string;
@@ -22,6 +23,7 @@ export type TenantHolidayUpdate = Partial<TenantHolidayInsert> & { id: string };
 export const useTenantHolidays = () => {
   const { tenant } = useTenant();
   const queryClient = useQueryClient();
+  const { logAction } = useAuditLog();
   const queryKey = ['tenant-holidays', tenant?.id];
 
   const { data: holidays, isLoading, error } = useQuery({
@@ -55,9 +57,10 @@ export const useTenantHolidays = () => {
       if (error) throw error;
       return data as TenantHoliday;
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey });
       toast({ title: 'Holiday Added', description: 'Holiday pricing rule created.' });
+      logAction({ action: "holiday_created", entityType: "holiday", entityId: data.id, details: { name: data.name } });
     },
     onError: (err: Error) => {
       toast({ title: 'Error', description: err.message, variant: 'destructive' });
@@ -76,9 +79,10 @@ export const useTenantHolidays = () => {
       if (error) throw error;
       return data as TenantHoliday;
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey });
       toast({ title: 'Holiday Updated', description: 'Holiday pricing rule updated.' });
+      logAction({ action: "holiday_updated", entityType: "holiday", entityId: data.id, details: {} });
     },
     onError: (err: Error) => {
       toast({ title: 'Error', description: err.message, variant: 'destructive' });
@@ -93,10 +97,12 @@ export const useTenantHolidays = () => {
         .eq('id', id);
 
       if (error) throw error;
+      return id;
     },
-    onSuccess: () => {
+    onSuccess: (id) => {
       queryClient.invalidateQueries({ queryKey });
       toast({ title: 'Holiday Deleted', description: 'Holiday pricing rule removed.' });
+      logAction({ action: "holiday_deleted", entityType: "holiday", entityId: id, details: {} });
     },
     onError: (err: Error) => {
       toast({ title: 'Error', description: err.message, variant: 'destructive' });

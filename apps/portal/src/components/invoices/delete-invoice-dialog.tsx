@@ -14,6 +14,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useTenant } from "@/contexts/TenantContext";
 import { formatCurrency } from "@/lib/format-utils";
 import { useAuditLog } from "@/hooks/use-audit-log";
+import { useAuditLogOnOpen } from "@/hooks/use-audit-log-on-open";
 
 interface Invoice {
   id: string;
@@ -44,6 +45,14 @@ export const DeleteInvoiceDialog = ({
   const queryClient = useQueryClient();
   const { tenant } = useTenant();
   const { logAction } = useAuditLog();
+
+  useAuditLogOnOpen({
+    open,
+    action: "invoice_delete_warning_shown",
+    entityType: "invoice",
+    entityId: invoice?.id,
+    details: { invoice_number: invoice?.invoice_number },
+  });
 
   const deleteInvoiceMutation = useMutation({
     mutationFn: async () => {

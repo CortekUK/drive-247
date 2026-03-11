@@ -24,6 +24,8 @@ import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { addPlateSchema, type AddPlateFormValues } from "@/client-schemas/plates/add-plate";
+import { useAuditLog } from "@/hooks/use-audit-log";
+import { useAuditLogOnOpen } from "@/hooks/use-audit-log-on-open";
 
 type PlateFormData = AddPlateFormValues;
 
@@ -42,6 +44,14 @@ export const AddPlateDialog = ({
 }: AddPlateDialogProps) => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const { toast } = useToast();
+  const { logAction } = useAuditLog();
+  useAuditLogOnOpen({
+    open,
+    action: "plate_form_dialog_shown",
+    entityType: "plate",
+    entityId: "new",
+    details: { mode: "create" },
+  });
 
   // Fetch vehicles for selection
   const { data: vehicles } = useQuery({
@@ -92,9 +102,11 @@ export const AddPlateDialog = ({
         notes: data.notes || null,
       };
 
-      const { error } = await supabase
+      const { data: insertedPlate, error } = await supabase
         .from("plates")
-        .insert(plateData);
+        .insert(plateData)
+        .select()
+        .single();
 
       if (error) {
         if (error.code === '23505') { // Unique constraint violation
@@ -107,6 +119,7 @@ export const AddPlateDialog = ({
         title: "Success",
         description: "Plate added successfully",
       });
+      logAction({ action: "plate_created", entityType: "plate", entityId: insertedPlate?.id || "unknown", details: { plate_number: data.plate_number } });
 
       form.reset({
         plate_number: "",

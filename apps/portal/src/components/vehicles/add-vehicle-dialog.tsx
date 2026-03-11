@@ -21,6 +21,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useQueryClient } from "@tanstack/react-query";
 import { useTenant } from "@/contexts/TenantContext";
 import { useAuditLog } from "@/hooks/use-audit-log";
+import { useAuditLogOnOpen } from "@/hooks/use-audit-log-on-open";
 import { format, startOfDay } from "date-fns";
 import { cn } from "@/lib/utils";
 import { addVehicleDialogSchema, type AddVehicleDialogFormValues } from "@/client-schemas/vehicles/add-vehicle-dialog";
@@ -45,6 +46,14 @@ export const AddVehicleDialog = ({ open, onOpenChange }: AddVehicleDialogProps) 
   const { tenant } = useTenant();
   const currencySymbol = getCurrencySymbol(tenant?.currency_code || 'GBP');
   const { logAction } = useAuditLog();
+  const currentOpen = open !== undefined ? open : isOpen;
+  useAuditLogOnOpen({
+    open: currentOpen,
+    action: "vehicle_form_dialog_shown",
+    entityType: "vehicle",
+    entityId: "new",
+    details: { mode: "create" },
+  });
 
   const form = useForm<VehicleFormData>({
     resolver: zodResolver(addVehicleDialogSchema),
@@ -134,8 +143,6 @@ export const AddVehicleDialog = ({ open, onOpenChange }: AddVehicleDialogProps) 
       setIsOpen(newOpen);
     }
   };
-
-  const currentOpen = open !== undefined ? open : isOpen;
 
   const handlePhotoSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
     const files = event.target.files;
@@ -941,7 +948,7 @@ export const AddVehicleDialog = ({ open, onOpenChange }: AddVehicleDialogProps) 
                           type="number"
                           min="0.01"
                           step="0.01"
-                          placeholder={`${currencySymbol} per mile`}
+                          placeholder={`${currencySymbol} per ${tenant?.distance_unit === 'km' ? 'km' : 'mile'}`}
                           {...field}
                           value={field.value ?? ""}
                           onChange={(e) => {

@@ -134,6 +134,7 @@ const MultiStepBookingWidget = () => {
     updateContext: updateBookingContext,
     formData, setFormData,
     currentStep, setCurrentStep,
+    highestStepReached, setHighestStepReached,
     selectedExtras, setSelectedExtras,
     clearBooking,
   } = useBookingStore();
@@ -196,6 +197,8 @@ const MultiStepBookingWidget = () => {
   const transitionTimer2Ref = useRef<NodeJS.Timeout>();
   const transitionToStep = useCallback((targetStep: number) => {
     if (targetStep === currentStep || isStepTransitioning) return;
+    // Track the highest step the user has legitimately reached
+    setHighestStepReached(targetStep);
     // Phase 1: fade out content + show overlay (300ms for CSS transition)
     setIsStepTransitioning(true);
     transitionTimerRef.current = setTimeout(() => {
@@ -206,7 +209,7 @@ const MultiStepBookingWidget = () => {
         setIsStepTransitioning(false);
       }, 600);
     }, 450);
-  }, [currentStep, setCurrentStep, isStepTransitioning]);
+  }, [currentStep, setCurrentStep, setHighestStepReached, isStepTransitioning]);
   // Cleanup transition timers on unmount
   useEffect(() => {
     return () => { clearTimeout(transitionTimerRef.current); clearTimeout(transitionTimer2Ref.current); };
@@ -518,6 +521,7 @@ const MultiStepBookingWidget = () => {
 
         // Jump to step
         setCurrentStep(step);
+        setHighestStepReached(step);
       };
 
       const handleDevVerification = (e: CustomEvent<{ verified: boolean }>) => {
@@ -3255,10 +3259,11 @@ const MultiStepBookingWidget = () => {
               fullLabel
             }, index, arr) => {
               const isCompleted = currentStep > step;
-              const isClickable = currentStep !== step;
+              const isReachable = step <= highestStepReached;
+              const isClickable = currentStep !== step && isReachable;
               return <div
                 key={step}
-                className={cn("flex flex-col items-center flex-1 relative z-10", isClickable && "cursor-pointer group")}
+                className={cn("flex flex-col items-center flex-1 relative z-10", isClickable && "cursor-pointer group", !isReachable && "opacity-50")}
                 onClick={() => { if (isClickable) setCurrentStep(step); }}
               >
                 <div className={cn("bk-step__node flex items-center justify-center w-10 h-10 sm:w-12 sm:h-12 md:w-14 md:h-14 rounded-full border-2 transition-all", currentStep >= step ? 'bg-primary border-primary shadow-glow' : 'border-border bg-muted', currentStep === step && 'bk-step__node--active shadow-glow', isClickable && 'group-hover:opacity-80')} aria-label={`Step ${displayStep} of ${arr.length}: ${fullLabel}`} aria-current={currentStep === step ? "step" : undefined}>
@@ -3284,7 +3289,6 @@ const MultiStepBookingWidget = () => {
               <span /><span /><span />
             </div>
             <div className="step-transition-bar" />
-            <span className="step-transition-label">Loading</span>
           </div>
 
           {/* Fade wrapper for step content */}
@@ -3293,10 +3297,31 @@ const MultiStepBookingWidget = () => {
         {/* Step 1: Rental Details */}
         {currentStep === 1 && <div className="space-y-8">
           {/* Header with underline */}
-          <div>
-            <h3 className="text-2xl md:text-3xl font-display font-semibold text-foreground pb-2 border-b-2 border-primary/30">
+          <div className="flex items-center justify-between pb-2 border-b-2 border-primary/30">
+            <h3 className="text-2xl md:text-3xl font-display font-semibold text-foreground">
               Rental Details
             </h3>
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <Button variant="outline" size="sm" className="text-destructive border-destructive/40 hover:text-destructive hover:bg-destructive/10 hover:border-destructive text-xs gap-1.5 shrink-0">
+                  <RefreshCw className="w-3 h-3" /> Start over
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Start a new booking?</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    This will clear all your booking details across all steps. This action cannot be undone.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                  <AlertDialogAction onClick={handleClearForm} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+                    Clear form
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
           </div>
 
           {/* Timezone Info Bar - Compact & Highlighted */}
@@ -3553,19 +3578,32 @@ const MultiStepBookingWidget = () => {
             </div>
           </div>
 
-          <div className="flex flex-col sm:flex-row sm:gap-3">
-            <Button
-              onClick={handleStep1Continue}
-              className="w-full sm:flex-1 h-14 sm:h-12 bg-primary hover:bg-primary/90 text-primary-foreground font-semibold text-base shadow-md hover:shadow-lg transition-all"
-              size="lg"
-            >
-              Continue to Vehicle Selection <ChevronRight className="ml-2 w-5 h-5" />
-            </Button>
-            <div className="flex justify-center mt-3 sm:mt-0">
+          <Button
+            onClick={handleStep1Continue}
+            className="w-full h-14 sm:h-12 bg-primary hover:bg-primary/90 text-primary-foreground font-semibold text-base shadow-md hover:shadow-lg transition-all"
+            size="lg"
+          >
+            Continue to Vehicle Selection <ChevronRight className="ml-2 w-5 h-5" />
+          </Button>
+        </div>}
+
+        {/* Step 2: Vehicle Selection */}
+        {currentStep === 2 && <div className="space-y-6">
+          {/* Back Button */}
+          <Button onClick={() => transitionToStep(1)} variant="ghost" className="text-muted-foreground hover:text-foreground -ml-2">
+            <ChevronLeft className="mr-1 w-5 h-5" /> Back to Trip Details
+          </Button>
+
+          {/* Header */}
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <h3 className="text-3xl md:text-4xl font-display font-semibold text-foreground">
+                Select Your Vehicle
+              </h3>
               <AlertDialog>
                 <AlertDialogTrigger asChild>
-                  <Button variant="outline" size="sm" className="h-8 px-3 sm:h-12 sm:px-4 text-destructive/70 hover:text-destructive border-destructive/30 hover:bg-destructive/10 hover:border-destructive/50 text-xs sm:text-sm gap-1.5">
-                    <RefreshCw className="w-3 h-3 sm:w-4 sm:h-4" /> Start over
+                  <Button variant="outline" size="sm" className="text-destructive border-destructive/40 hover:text-destructive hover:bg-destructive/10 hover:border-destructive text-xs gap-1.5 shrink-0">
+                    <RefreshCw className="w-3 h-3" /> Start over
                   </Button>
                 </AlertDialogTrigger>
                 <AlertDialogContent>
@@ -3584,21 +3622,6 @@ const MultiStepBookingWidget = () => {
                 </AlertDialogContent>
               </AlertDialog>
             </div>
-          </div>
-        </div>}
-
-        {/* Step 2: Vehicle Selection */}
-        {currentStep === 2 && <div className="space-y-6">
-          {/* Back Button */}
-          <Button onClick={() => transitionToStep(1)} variant="ghost" className="text-muted-foreground hover:text-foreground -ml-2">
-            <ChevronLeft className="mr-1 w-5 h-5" /> Back to Trip Details
-          </Button>
-
-          {/* Header */}
-          <div className="space-y-3">
-            <h3 className="text-3xl md:text-4xl font-display font-semibold text-foreground">
-              Select Your Vehicle
-            </h3>
             <p className="text-muted-foreground text-base">
               Choose from our curated fleet of premium rentals.
             </p>
@@ -4408,7 +4431,30 @@ const MultiStepBookingWidget = () => {
         {/* Step 3: Insurance Verification (skipped for insurance-exempt tenants) */}
         {currentStep === 3 && !skipInsurance && <div className="space-y-8">
           {/* Header */}
-          <div className="text-center space-y-2">
+          <div className="flex justify-end">
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <Button variant="outline" size="sm" className="text-destructive border-destructive/40 hover:text-destructive hover:bg-destructive/10 hover:border-destructive text-xs gap-1.5 shrink-0">
+                  <RefreshCw className="w-3 h-3" /> Start over
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Start a new booking?</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    This will clear all your booking details across all steps. This action cannot be undone.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                  <AlertDialogAction onClick={handleClearForm} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+                    Clear form
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+          </div>
+          <div className="text-center space-y-2 -mt-6">
             <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-primary/10 mb-4">
               <Shield className="w-8 h-8 text-primary" />
             </div>
@@ -4876,10 +4922,31 @@ const MultiStepBookingWidget = () => {
         {/* Step 4: Customer Details */}
         {currentStep === 4 && <div className="space-y-8">
           {/* Header with underline */}
-          <div>
-            <h3 className="text-2xl md:text-3xl font-display font-semibold text-foreground pb-2 border-b-2 border-primary/30">
+          <div className="flex items-center justify-between pb-2 border-b-2 border-primary/30">
+            <h3 className="text-2xl md:text-3xl font-display font-semibold text-foreground">
               Your Details
             </h3>
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <Button variant="outline" size="sm" className="text-destructive border-destructive/40 hover:text-destructive hover:bg-destructive/10 hover:border-destructive text-xs gap-1.5 shrink-0">
+                  <RefreshCw className="w-3 h-3" /> Start over
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Start a new booking?</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    This will clear all your booking details across all steps. This action cannot be undone.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                  <AlertDialogAction onClick={handleClearForm} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+                    Clear form
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
           </div>
 
           {/* Authenticated User — Read-Only Details Card */}
@@ -5740,6 +5807,33 @@ const MultiStepBookingWidget = () => {
 
         {/* Step 5: Review & Payment */}
         {currentStep === 5 && <div className="space-y-6">
+          {/* Header */}
+          <div className="flex items-center justify-between pb-2 border-b-2 border-primary/30">
+            <h3 className="text-2xl md:text-3xl font-display font-semibold text-foreground">
+              Review & Confirm
+            </h3>
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <Button variant="outline" size="sm" className="text-destructive border-destructive/40 hover:text-destructive hover:bg-destructive/10 hover:border-destructive text-xs gap-1.5 shrink-0">
+                  <RefreshCw className="w-3 h-3" /> Start over
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Start a new booking?</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    This will clear all your booking details across all steps. This action cannot be undone.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                  <AlertDialogAction onClick={handleClearForm} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+                    Clear form
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+          </div>
           {/* Optional Extras */}
           <ExtrasSelector
             extras={availableExtras}

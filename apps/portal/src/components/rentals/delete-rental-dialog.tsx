@@ -12,6 +12,7 @@ import {
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { useToast } from "@/hooks/use-toast";
 import { useAuditLog } from "@/hooks/use-audit-log";
+import { useAuditLogOnOpen } from "@/hooks/use-audit-log-on-open";
 import { useTenant } from "@/contexts/TenantContext";
 import { formatCurrency } from "@/lib/format-utils";
 
@@ -49,6 +50,14 @@ export const DeleteRentalDialog = ({
   const { logAction } = useAuditLog();
   const { tenant } = useTenant();
   const currencyCode = tenant?.currency_code || 'GBP';
+
+  useAuditLogOnOpen({
+    open,
+    action: "rental_delete_warning_shown",
+    entityType: "rental",
+    entityId: rental?.id,
+    details: { rental_number: rental?.rental_number, customer: rental?.customer?.name, vehicle_reg: rental?.vehicle?.reg },
+  });
 
   const deleteRentalMutation = useMutation({
     mutationFn: async () => {

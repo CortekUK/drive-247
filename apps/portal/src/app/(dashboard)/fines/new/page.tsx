@@ -518,6 +518,7 @@ const CreateFine = () => {
                               placeholder="Enter fine amount"
                               min={1}
                               step={1}
+                              currencySymbol={currencySymbol}
                             />
                           </FormControl>
                           <FormDescription>

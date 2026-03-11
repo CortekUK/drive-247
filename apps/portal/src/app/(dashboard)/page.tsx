@@ -12,7 +12,6 @@ import {
 } from "@/components/ui/select";
 import { CalendarIcon, Plus } from "lucide-react";
 import { DashboardKPICards } from "@/components/dashboard/dashboard-kpi-cards";
-import { RecentActivity } from "@/components/dashboard/recent-activity";
 import { FleetOverview } from "@/components/dashboard/fleet-overview";
 import { ComplianceOverviewCard } from "@/components/dashboard/compliance-overview-card";
 import { ActionItems } from "@/components/dashboard/action-items";
@@ -138,15 +137,6 @@ export default function DashboardPage() {
     return cards;
   }, [canView]);
 
-  // Build allowed activity types based on manager permissions
-  const allowedActivityTypes = useMemo(() => {
-    const types: string[] = [];
-    if (canView('payments')) types.push('payment');
-    if (canView('rentals')) types.push('rental');
-    if (canView('vehicles')) types.push('vehicle');
-    if (canView('audit_logs')) types.push('system');
-    return types.length > 0 ? types : undefined;
-  }, [canView]);
 
   return (
     <div className="container mx-auto py-4 space-y-4">
@@ -198,10 +188,6 @@ export default function DashboardPage() {
       {/* Fleet Overview */}
       {canView('vehicles') && <FleetOverview />}
 
-      {/* Recent Activity */}
-      <div className="grid gap-6">
-        <RecentActivity allowedTypes={allowedActivityTypes} />
-      </div>
     </div>
   );
 }

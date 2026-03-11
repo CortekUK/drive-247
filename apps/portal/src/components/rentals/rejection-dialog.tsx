@@ -26,6 +26,8 @@ import {
 } from "lucide-react";
 import { format } from "date-fns";
 import { formatCurrency } from "@/lib/format-utils";
+import { useAuditLogOnOpen } from "@/hooks/use-audit-log-on-open";
+import { useAuditLog } from "@/hooks/use-audit-log";
 
 interface RejectionDialogProps {
   open: boolean;
@@ -74,6 +76,16 @@ export default function RejectionDialog({
 }: RejectionDialogProps) {
   const queryClient = useQueryClient();
   const { tenant } = useTenant();
+  const { logAction } = useAuditLog();
+
+  useAuditLogOnOpen({
+    open,
+    action: "rental_reject_warning_shown",
+    entityType: "rental",
+    entityId: rental?.id,
+    details: { customer: rental?.customer?.name, vehicle: `${rental?.vehicle?.make} ${rental?.vehicle?.model}` },
+  });
+
   const [activeTab, setActiveTab] = useState("reason");
   const [rejectionReason, setRejectionReason] = useState("");
   const [selectedTemplateId, setSelectedTemplateId] = useState<string>("");
@@ -273,6 +285,8 @@ export default function RejectionDialog({
       }
 
       toast({ title: "Booking Rejected", description });
+
+      logAction({ action: "rental_cancelled", entityType: "rental", entityId: rental.id, details: { reason: rejectionReason, operation: "rejected" } });
 
       // Invalidate all relevant queries
       queryClient.invalidateQueries({ queryKey: ['rentals-list'] });

@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { Loader2, Circle, Phone, Video, MoreVertical, ChevronDown, MessageCircle, Send, ArrowLeft } from 'lucide-react';
+import { Loader2, Circle, ChevronDown, MessageCircle, Send, ArrowLeft } from 'lucide-react';
 import { useChatMessages, type ChatMessage } from '@/hooks/use-chat-messages';
 import { ChatMessageBubble, DateSeparator } from './ChatMessageBubble';
 import { CustomerChatInput } from './CustomerChatInput';
@@ -144,18 +144,6 @@ export function ChatWindow({ channelId, customerId, customerName, customerAvatar
             </div>
           </div>
 
-          {/* Action buttons */}
-          <div className="flex items-center gap-1">
-            <Button variant="ghost" size="icon" className="h-9 w-9 text-muted-foreground hover:text-foreground">
-              <Phone className="h-4 w-4" />
-            </Button>
-            <Button variant="ghost" size="icon" className="h-9 w-9 text-muted-foreground hover:text-foreground">
-              <Video className="h-4 w-4" />
-            </Button>
-            <Button variant="ghost" size="icon" className="h-9 w-9 text-muted-foreground hover:text-foreground">
-              <MoreVertical className="h-4 w-4" />
-            </Button>
-          </div>
         </div>
       </div>
 

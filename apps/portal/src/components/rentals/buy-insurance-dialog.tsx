@@ -19,6 +19,7 @@ import {
   DialogTitle,
   DialogDescription,
 } from '@/components/ui/dialog';
+import { useAuditLogOnOpen } from '@/hooks/use-audit-log-on-open';
 
 interface BuyInsuranceDialogProps {
   open: boolean;
@@ -50,6 +51,13 @@ export function BuyInsuranceDialog({
   const { tenant } = useTenant();
   const { toast } = useToast();
   const queryClient = useQueryClient();
+
+  useAuditLogOnOpen({
+    open,
+    action: "buy_insurance_dialog_shown",
+    entityType: "insurance",
+    entityId: rental.id,
+  });
   const { balanceNumber: bonzahCdBalance, portalUrl: bonzahPortalUrl } = useBonzahBalance();
   const {
     isEligible: isBonzahEligible,
