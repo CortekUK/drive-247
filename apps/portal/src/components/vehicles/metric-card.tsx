@@ -31,8 +31,7 @@ export function MetricCard({ title, icon: Icon, children, className, badge }: Me
       className
     )}>
       <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
-        <CardTitle className="text-sm font-medium flex items-center gap-2">
-          {Icon && <Icon className="h-4 w-4" />}
+        <CardTitle className="text-sm font-medium">
           {title}
         </CardTitle>
         {badge && (

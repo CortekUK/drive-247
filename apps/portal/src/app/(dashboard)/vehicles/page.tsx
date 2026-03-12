@@ -365,30 +365,27 @@ export default function VehiclesListEnhanced() {
         <div>
           <h1 className="text-3xl font-bold">Fleet Management</h1>
           <p className="text-muted-foreground">
-            Manage your vehicle fleet, track P&L performance, and monitor compliance
+            Manage your vehicle fleet and track performance
           </p>
         </div>
-        {canEdit('vehicles') && (
-          <div data-add-vehicle-trigger>
-            <AddVehicleDialog />
-          </div>
-        )}
+        <div className="flex items-center gap-2">
+          {vehicles.length > 0 && (
+            <Link href="/vehicles/analytics">
+              <Button variant="outline" size="icon" className="border-primary/20 hover:border-primary/40 hover:bg-primary/5">
+                <BarChart3 className="h-4 w-4" />
+              </Button>
+            </Link>
+          )}
+          {canEdit('vehicles') && (
+            <div data-add-vehicle-trigger>
+              <AddVehicleDialog />
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Fleet Summary Cards */}
       <FleetSummaryCards vehicles={filteredVehicles} currencyCode={currencyCode} />
-
-      {/* Analytics Button */}
-      {vehicles.length > 0 && (
-        <div className="flex justify-end">
-          <Link href="/vehicles/analytics">
-            <Button variant="outline" className="border-primary/20 hover:border-primary/40 hover:bg-primary/5">
-              <BarChart3 className="h-4 w-4 mr-2" />
-              View Analytics
-            </Button>
-          </Link>
-        </div>
-      )}
 
       {/* Filters */}
       <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
@@ -466,8 +463,9 @@ export default function VehiclesListEnhanced() {
       ) : (
         <Card>
           <CardContent className="p-0">
+            <div className="max-h-[500px] overflow-y-auto relative">
             <Table key={`${sortField || 'default'}-${sortDirection}`}>
-               <TableHeader>
+               <TableHeader className="sticky top-0 z-10 bg-background">
                  <TableRow>
                    <TableHead>Photo</TableHead>
                    <TableHead>Registration</TableHead>
@@ -534,6 +532,7 @@ export default function VehiclesListEnhanced() {
                  })}
                </TableBody>
             </Table>
+            </div>
           </CardContent>
         </Card>
       )}

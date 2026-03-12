@@ -193,14 +193,14 @@ const RentalsList = () => {
   return (
     <div className={currentView === "calendar" ? "p-4 md:p-6 space-y-6" : "container mx-auto p-4 md:p-6 space-y-6"}>
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+      <div className="flex justify-between items-start">
         <div>
-          <h1 className="text-2xl sm:text-3xl font-bold">Rentals</h1>
-          <p className="text-sm sm:text-base text-muted-foreground">
+          <h1 className="text-3xl font-bold">Rentals</h1>
+          <p className="text-muted-foreground">
             Manage rental agreements and contracts
           </p>
         </div>
-        <div className="flex gap-2 flex-wrap items-center">
+        <div className="flex items-center gap-2">
           {/* View Toggle */}
           <div className="flex rounded-md border overflow-hidden">
             <Button
@@ -220,15 +220,19 @@ const RentalsList = () => {
               <CalendarDays className="h-4 w-4" />
             </Button>
           </div>
+          <Link href="/rentals/analytics">
+            <Button variant="outline" size="icon" className="border-primary/20 hover:border-primary/40 hover:bg-primary/5">
+              <BarChart3 className="h-4 w-4" />
+            </Button>
+          </Link>
           <Button
             variant="outline"
+            size="icon"
             onClick={handleExportCSV}
             disabled={!rentals.length}
-            className="border-primary/20 hover:border-primary/40 hover:bg-primary/5 transition-all duration-200"
+            className="border-primary/20 hover:border-primary/40 hover:bg-primary/5"
           >
-            <Download className="h-4 w-4 mr-2" />
-            <span className="hidden xs:inline">Export CSV</span>
-            <span className="xs:hidden">Export</span>
+            <Download className="h-4 w-4" />
           </Button>
           {canEdit('rentals') && (
             <Button
@@ -236,8 +240,7 @@ const RentalsList = () => {
               className="bg-gradient-primary text-white hover:opacity-90 transition-all duration-200 shadow-md hover:shadow-lg"
             >
               <Plus className="h-4 w-4 mr-2" />
-              <span className="hidden xs:inline">New Rental</span>
-              <span className="xs:hidden">New</span>
+              New Rental
             </Button>
           )}
         </div>
@@ -245,7 +248,7 @@ const RentalsList = () => {
 
       {/* Quick Stats — list view only */}
       {currentView !== "calendar" && stats && (
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-4">
+        <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-4 gap-4">
           <Card className="bg-card hover:bg-accent/50 border transition-all duration-200 cursor-pointer hover:shadow-md">
             <CardContent className="p-4">
               <div className="text-2xl font-bold">{stats.total}</div>
@@ -276,24 +279,6 @@ const RentalsList = () => {
               <p className="text-sm text-muted-foreground">Pending</p>
             </CardContent>
           </Card>
-          <Card className="bg-card hover:bg-accent/50 border transition-all duration-200 cursor-pointer hover:shadow-md">
-            <CardContent className="p-4">
-              <div className="text-2xl font-bold">{stats.avgDuration}</div>
-              <p className="text-sm text-muted-foreground">Avg Duration (mo)</p>
-            </CardContent>
-          </Card>
-        </div>
-      )}
-
-      {/* Analytics Button — list view only */}
-      {currentView !== "calendar" && (
-        <div className="flex justify-end">
-          <Link href="/rentals/analytics">
-            <Button variant="outline" className="border-primary/20 hover:border-primary/40 hover:bg-primary/5">
-              <BarChart3 className="h-4 w-4 mr-2" />
-              View Analytics
-            </Button>
-          </Link>
         </div>
       )}
 

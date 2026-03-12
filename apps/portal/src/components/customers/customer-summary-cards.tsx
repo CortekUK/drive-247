@@ -1,5 +1,4 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Users, UserCheck, XCircle } from "lucide-react";
 
 interface Customer {
   id: string;
@@ -27,27 +26,23 @@ export const CustomerSummaryCards = ({ customers }: CustomerSummaryCardsProps) =
     {
       title: "Total Customers",
       value: totalCustomers,
-      icon: Users,
       description: "All customers in database"
     },
     {
       title: "Active",
       value: activeCustomers,
-      icon: UserCheck,
       description: "Currently active customers"
     },
     {
       title: "Rejected",
       value: rejectedCustomers,
-      icon: XCircle,
       description: "Customers pending review"
     }
   ];
 
   return (
-    <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+    <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
       {cards.map((card) => {
-        const Icon = card.icon;
         const getCardClassName = () => {
           let baseClasses = "transition-all duration-200 cursor-pointer hover:shadow-md ";
           if (card.title === "Active") {
@@ -61,26 +56,12 @@ export const CustomerSummaryCards = ({ customers }: CustomerSummaryCardsProps) =
           }
         };
 
-        const getIconClassName = () => {
-          let baseClasses = "h-4 w-4 ";
-          if (card.title === "Active") {
-            return baseClasses + "text-success";
-          } else if (card.title === "Rejected") {
-            return baseClasses + "text-red-500";
-          } else if (card.title === "Companies") {
-            return baseClasses + "text-blue-500";
-          } else {
-            return baseClasses + "text-primary";
-          }
-        };
-        
         return (
           <Card key={card.title} className={getCardClassName()}>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium text-muted-foreground">
                 {card.title}
               </CardTitle>
-              <Icon className={getIconClassName()} />
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">{card.value}</div>

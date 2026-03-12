@@ -210,17 +210,16 @@ export default function CreditsPage() {
   return (
     <div className="space-y-6 pt-6">
       {/* ── Header ── */}
-      <div className="flex items-center justify-between">
+      <div className="flex justify-between items-start">
         <div>
-          <h1 className="text-2xl font-bold">Credits</h1>
-          <p className="text-sm text-muted-foreground mt-0.5">
-            Buy and manage credits for platform services
-          </p>
+          <h1 className="text-3xl font-bold">Credits</h1>
+          <p className="text-muted-foreground">Buy and manage credits for platform services</p>
         </div>
-        <Button variant="outline" size="sm" onClick={() => refetch()}>
-          <RefreshCw className="h-4 w-4 mr-2" />
-          Refresh
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button variant="outline" size="icon" onClick={() => refetch()}>
+            <RefreshCw className="h-4 w-4" />
+          </Button>
+        </div>
       </div>
 
       {/* ── Balance Cards ── */}

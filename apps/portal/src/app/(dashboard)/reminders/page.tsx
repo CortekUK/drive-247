@@ -158,33 +158,33 @@ export default function RemindersPageEnhanced() {
   return (
     <div className="container mx-auto py-8 space-y-6">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row justify-between sm:items-start gap-4">
+      <div className="flex justify-between items-start">
         <div>
-          <h1 className="text-3xl font-bold mb-2">Reminders</h1>
-          <p className="text-sm text-muted-foreground">
-            Monitor and manage fleet compliance reminders and notifications
-          </p>
+          <h1 className="text-3xl font-bold">Reminders</h1>
+          <p className="text-muted-foreground">Monitor and manage fleet compliance reminders</p>
         </div>
 
-        <div className="flex items-center gap-2 w-full sm:w-auto flex-wrap">
+        <div className="flex items-center gap-2">
           <Button
             variant="outline"
-            size="sm"
+            size="icon"
             onClick={exportReminders}
             disabled={reminders.length === 0}
-            className="flex-1 sm:flex-none"
           >
-            <Download className="h-4 w-4 mr-2" />
-            Export
+            <Download className="h-4 w-4" />
           </Button>
+
+          <Link href="/reminders/analytics">
+            <Button variant="outline" size="icon">
+              <BarChart3 className="h-4 w-4" />
+            </Button>
+          </Link>
 
           {canEdit('reminders') && (
             <Button
               variant="outline"
-              size="sm"
               onClick={() => generateReminders.mutate()}
               disabled={generateReminders.isPending}
-              className="flex-1 sm:flex-none"
             >
               <Play className="h-4 w-4 mr-2" />
               {generateReminders.isPending ? 'Generating...' : 'Generate'}
@@ -225,18 +225,6 @@ export default function RemindersPageEnhanced() {
           </CardContent>
         </Card>
       </div>
-
-      {/* Analytics Button */}
-      {reminders.length > 0 && (
-        <div className="flex justify-end">
-          <Link href="/reminders/analytics">
-            <Button variant="outline" className="border-primary/20 hover:border-primary/40 hover:bg-primary/5">
-              <BarChart3 className="h-4 w-4 mr-2" />
-              View Analytics
-            </Button>
-          </Link>
-        </div>
-      )}
 
       {/* Filters Panel */}
       <Card>

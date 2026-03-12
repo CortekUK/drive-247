@@ -541,20 +541,26 @@ const CustomersList = () => {
   return (
     <div className="container mx-auto p-6 space-y-6">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      <div className="flex justify-between items-start">
         <div>
           <h1 className="text-3xl font-bold">Customers</h1>
-          <p className="text-muted-foreground">View and manage all customers with contact information and account balances</p>
+          <p className="text-muted-foreground">Manage customers and account balances</p>
         </div>
-        <div className="flex gap-2 w-full sm:w-auto">
+        <div className="flex items-center gap-2">
+          {customers && customers.length > 0 && (
+            <Link href="/customers/analytics">
+              <Button variant="outline" size="icon" className="border-primary/20 hover:border-primary/40 hover:bg-primary/5">
+                <BarChart3 className="h-4 w-4" />
+              </Button>
+            </Link>
+          )}
           {canEdit('customers') && (
-            <Button variant="outline" className="w-full sm:w-auto" onClick={() => setInviteDialogOpen(true)}>
-              <Link2 className="h-4 w-4 mr-2" />
-              Invite Link
+            <Button variant="outline" size="icon" onClick={() => setInviteDialogOpen(true)}>
+              <Link2 className="h-4 w-4" />
             </Button>
           )}
           {canEdit('customers') && (
-            <Button className="bg-gradient-primary w-full sm:w-auto" onClick={handleAddCustomer}>
+            <Button className="bg-gradient-primary" onClick={handleAddCustomer}>
               <Plus className="h-4 w-4 mr-2" />
               Add Customer
             </Button>
@@ -564,18 +570,6 @@ const CustomersList = () => {
 
       {/* Summary Cards */}
       {customers && <CustomerSummaryCards customers={customers} />}
-
-      {/* Analytics Button */}
-      {customers && customers.length > 0 && (
-        <div className="flex justify-end">
-          <Link href="/customers/analytics">
-            <Button variant="outline" className="border-primary/20 hover:border-primary/40 hover:bg-primary/5">
-              <BarChart3 className="h-4 w-4 mr-2" />
-              View Analytics
-            </Button>
-          </Link>
-        </div>
-      )}
 
       {/* Search and Filters */}
       <div className="space-y-4">

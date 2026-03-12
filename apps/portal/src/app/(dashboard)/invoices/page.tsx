@@ -230,20 +230,21 @@ const InvoicesList = () => {
   return (
     <div className="container mx-auto p-6 space-y-6">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+      <div className="flex justify-between items-start">
         <div>
-          <h1 className="text-2xl sm:text-3xl font-bold">Invoices</h1>
-          <p className="text-sm sm:text-base text-muted-foreground">View and manage rental invoices</p>
+          <h1 className="text-3xl font-bold">Invoices</h1>
+          <p className="text-muted-foreground">View and manage rental invoices</p>
         </div>
-        <Button
-          variant="outline"
-          onClick={handleExportCSV}
-          disabled={!filteredInvoices.length}
-          className="border-primary/20 hover:border-primary/40 hover:bg-primary/5 transition-all duration-200"
-        >
-          <Download className="h-4 w-4 mr-2" />
-          Export CSV
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            size="icon"
+            onClick={handleExportCSV}
+            disabled={!filteredInvoices.length}
+          >
+            <Download className="h-4 w-4" />
+          </Button>
+        </div>
       </div>
 
       {/* Filters */}

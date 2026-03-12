@@ -274,12 +274,10 @@ export default function AgreementsList() {
   return (
     <div className="container mx-auto p-6 space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex justify-between items-start">
         <div>
           <h1 className="text-3xl font-bold">Agreements</h1>
-          <p className="text-muted-foreground">
-            All rental agreements and signed documents
-          </p>
+          <p className="text-muted-foreground">Manage rental agreements and signed documents</p>
         </div>
       </div>
 

@@ -279,25 +279,29 @@ const PaymentsList = () => {
   return (
     <div className="container mx-auto p-6 space-y-6">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      <div className="flex justify-between items-start">
         <div>
           <h1 className="text-3xl font-bold">Payments</h1>
           <p className="text-muted-foreground">
-            Record customer payments — automatically allocated to outstanding charges using FIFO
+            Record and manage customer payments
           </p>
         </div>
-        <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
-          <Button variant="outline" onClick={handleExportCSV} className="w-full sm:w-auto whitespace-nowrap">
-            <Download className="h-4 w-4 mr-2 flex-shrink-0" />
-            Export CSV
+        <div className="flex items-center gap-2">
+          <Link href="/payments/analytics">
+            <Button variant="outline" size="icon" className="border-primary/20 hover:border-primary/40 hover:bg-primary/5">
+              <BarChart3 className="h-4 w-4" />
+            </Button>
+          </Link>
+          <Button variant="outline" size="icon" onClick={handleExportCSV}>
+            <Download className="h-4 w-4" />
           </Button>
           <AddPaymentDialog
             open={showAddDialog}
             onOpenChange={setShowAddDialog}
           />
           {canEdit('payments') && (
-            <Button onClick={() => setShowAddDialog(true)} className="bg-gradient-primary w-full sm:w-auto whitespace-nowrap">
-              <Plus className="h-4 w-4 mr-2 flex-shrink-0" />
+            <Button onClick={() => setShowAddDialog(true)} className="bg-gradient-primary">
+              <Plus className="h-4 w-4 mr-2" />
               Record Payment
             </Button>
           )}
@@ -306,16 +310,6 @@ const PaymentsList = () => {
 
       {/* Summary Cards */}
       <PaymentSummaryCards />
-
-      {/* Analytics Button */}
-      <div className="flex justify-end">
-        <Link href="/payments/analytics">
-          <Button variant="outline" className="border-primary/20 hover:border-primary/40 hover:bg-primary/5">
-            <BarChart3 className="h-4 w-4 mr-2" />
-            View Analytics
-          </Button>
-        </Link>
-      </div>
 
       {/* Filters */}
       <PaymentFilters onFiltersChange={(newFilters) => {
