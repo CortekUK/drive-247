@@ -223,6 +223,9 @@ const RentalDetail = () => {
   const { data: rentalAgreements = [], isLoading: loadingAgreements } = useRentalAgreements(id);
   const { data: insurancePolicies = [], isLoading: isLoadingInsurancePolicies } = useRentalInsurancePolicies(id);
   // skipInsurance removed — insurance doc upload is always visible; only Bonzah selector is gated on integration_bonzah
+  // Section tab navigation
+  const [activeTab, setActiveTab] = useState<'overview' | 'operations' | 'documents' | 'finance'>('overview');
+
   const [showAddPayment, setShowAddPayment] = useState(false);
   const [sendingDocuSign, setSendingDocuSign] = useState(false);
   const [checkingDocuSignStatus, setCheckingDocuSignStatus] = useState(false);
@@ -1488,14 +1491,23 @@ const RentalDetail = () => {
                 <Ban className="h-4 w-4 mr-2" />
                 Reject
               </Button>
-              <Button
-                variant="outline"
-                className="text-destructive"
-                onClick={() => setShowDeleteDialog(true)}
-              >
-                <Trash2 className="h-4 w-4 mr-2" />
-                Delete
-              </Button>
+              <div className="border-l pl-2 ml-1">
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        variant="outline"
+                        size="icon"
+                        className="h-9 w-9 text-destructive"
+                        onClick={() => setShowDeleteDialog(true)}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>Delete Rental</TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+              </div>
             </>
           )}
 
@@ -1524,53 +1536,82 @@ const RentalDetail = () => {
                 <Plus className="h-4 w-4 mr-2" />
                 Add Fine
               </Button>
-              <Button
-                variant="outline"
-                onClick={() => setShowCloseDialog(true)}
-              >
-                <X className="h-4 w-4 mr-2" />
-                Close
-              </Button>
-              <Button
-                variant="outline"
-                className="text-destructive"
-                onClick={() => setShowCancelDialog(true)}
-              >
-                <Ban className="h-4 w-4 mr-2" />
-                Cancel
-              </Button>
-              <Button
-                variant="outline"
-                className="text-destructive"
-                onClick={() => setShowDeleteDialog(true)}
-              >
-                <Trash2 className="h-4 w-4 mr-2" />
-                Delete
-              </Button>
+              <div className="flex items-center gap-1 border-l pl-2 ml-1">
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        variant="outline"
+                        size="icon"
+                        className="h-9 w-9"
+                        onClick={() => setShowCloseDialog(true)}
+                      >
+                        <X className="h-4 w-4" />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>Close Rental</TooltipContent>
+                  </Tooltip>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        variant="outline"
+                        size="icon"
+                        className="h-9 w-9 text-destructive"
+                        onClick={() => setShowCancelDialog(true)}
+                      >
+                        <Ban className="h-4 w-4" />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>Cancel Rental</TooltipContent>
+                  </Tooltip>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        variant="outline"
+                        size="icon"
+                        className="h-9 w-9 text-destructive"
+                        onClick={() => setShowDeleteDialog(true)}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>Delete Rental</TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+              </div>
             </>
           )}
 
-          {/* Completed Rental - Show Renew and Delete buttons */}
-          {canEdit('rentals') && displayStatus === 'Completed' && (
-            <Button
-              variant="default"
-              onClick={() => router.push(`/rentals/new?renew_from=${rental.id}`)}
-            >
-              <RefreshCw className="h-4 w-4 mr-2" />
-              Renew
-            </Button>
-          )}
-
-          {/* Completed/Cancelled/Rejected Rental - Show Delete button */}
+          {/* Completed/Cancelled/Rejected Rental - Show Renew and Delete buttons */}
           {canEdit('rentals') && (displayStatus === 'Completed' || displayStatus === 'Cancelled' || displayStatus === 'Rejected') && (
-            <Button
-              variant="outline"
-              className="text-destructive"
-              onClick={() => setShowDeleteDialog(true)}
-            >
-              <Trash2 className="h-4 w-4 mr-2" />
-              Delete
-            </Button>
+            <>
+              {displayStatus === 'Completed' && (
+                <Button
+                  variant="default"
+                  onClick={() => router.push(`/rentals/new?renew_from=${rental.id}`)}
+                >
+                  <RefreshCw className="h-4 w-4 mr-2" />
+                  Renew
+                </Button>
+              )}
+              <div className="border-l pl-2 ml-1">
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        variant="outline"
+                        size="icon"
+                        className="h-9 w-9 text-destructive"
+                        onClick={() => setShowDeleteDialog(true)}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>Delete Rental</TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+              </div>
+            </>
           )}
         </div>
       </div>
@@ -1622,6 +1663,33 @@ const RentalDetail = () => {
         </Alert>
       )}
 
+      {/* Section Tab Navigation */}
+      <div className="flex items-center gap-1 border-b">
+        {([
+          { key: 'overview', label: 'Overview' },
+          { key: 'operations', label: 'Operations' },
+          { key: 'documents', label: 'Documents' },
+          { key: 'finance', label: 'Finance' },
+        ] as const).map((tab) => (
+          <button
+            key={tab.key}
+            onClick={() => setActiveTab(tab.key)}
+            className={`px-4 py-2 text-sm font-medium transition-colors relative ${
+              activeTab === tab.key
+                ? 'text-primary'
+                : 'text-muted-foreground hover:text-foreground'
+            }`}
+          >
+            {tab.label}
+            {activeTab === tab.key && (
+              <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-primary rounded-t" />
+            )}
+          </button>
+        ))}
+      </div>
+
+      {/* === OVERVIEW TAB === */}
+      {activeTab === 'overview' && (<>
       {/* Rental Summary */}
       {(() => {
         const totalRefunded = refundBreakdown
@@ -2643,6 +2711,10 @@ const RentalDetail = () => {
         </CardContent>
       </Card>
 
+      </>)}
+
+      {/* === OPERATIONS TAB === */}
+      {activeTab === 'operations' && (<>
       {/* Key Handover Section - Operations */}
       {id && (
         <KeyHandoverSection
@@ -2674,6 +2746,10 @@ const RentalDetail = () => {
         />
       )}
 
+      </>)}
+
+      {/* === DOCUMENTS TAB === */}
+      {activeTab === 'documents' && (<>
       {/* Rental Agreements Timeline */}
       <AgreementTimeline
         rentalId={id}
@@ -3638,6 +3714,10 @@ const RentalDetail = () => {
         </CardContent>
       </Card>
 
+      </>)}
+
+      {/* === FINANCE TAB === */}
+      {activeTab === 'finance' && (<>
       {/* Installment Plan Section */}
       {id && (
         <InstallmentPlanCard
@@ -3650,6 +3730,8 @@ const RentalDetail = () => {
       <div id="ledger">
         {id && <RentalLedger rentalId={id} />}
       </div>
+
+      </>)}
 
       {/* Add Payment Dialog */}
       {rental && (

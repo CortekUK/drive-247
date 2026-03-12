@@ -27,11 +27,11 @@ export const RentalLedger = ({ rentalId }: RentalLedgerProps) => {
   const chargeTableHeaders = (
     <TableHeader>
       <TableRow>
-        <TableHead>Date</TableHead>
-        <TableHead>Category</TableHead>
-        <TableHead>Status</TableHead>
-        <TableHead>Due Date</TableHead>
-        <TableHead className="text-right">Amount</TableHead>
+        <TableHead className="w-[20%]">Date</TableHead>
+        <TableHead className="w-[25%]">Category</TableHead>
+        <TableHead className="w-[15%]">Status</TableHead>
+        <TableHead className="w-[25%]">Due Date</TableHead>
+        <TableHead className="w-[15%] text-right">Amount</TableHead>
       </TableRow>
     </TableHeader>
   );
@@ -48,7 +48,7 @@ export const RentalLedger = ({ rentalId }: RentalLedgerProps) => {
             {/* Original charges */}
             {originalCharges.length > 0 && (
               <div className="rounded-md border">
-                <Table>
+                <Table className="table-fixed">
                   {chargeTableHeaders}
                   <TableBody>
                     {originalCharges.map((charge) => (
@@ -84,7 +84,7 @@ export const RentalLedger = ({ rentalId }: RentalLedgerProps) => {
                   </div>
 
                   <div className="rounded-md border">
-                    <Table>
+                    <Table className="table-fixed">
                       {chargeTableHeaders}
                       <TableBody>
                         {groupCharges.map((charge) => (
