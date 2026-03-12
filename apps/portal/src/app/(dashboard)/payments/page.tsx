@@ -333,8 +333,9 @@ const PaymentsList = () => {
         <>
           <Card>
             <CardContent className="p-0">
+              <div className="max-h-[calc(100vh-380px)] min-h-[300px] overflow-auto relative">
               <Table>
-                  <TableHeader>
+                  <TableHeader className="sticky top-0 z-10 bg-background">
                     <TableRow>
                       <TableHead
                         className="cursor-pointer hover:bg-muted/50"
@@ -552,6 +553,7 @@ const PaymentsList = () => {
                     })}
                   </TableBody>
                 </Table>
+              </div>
             </CardContent>
           </Card>
 

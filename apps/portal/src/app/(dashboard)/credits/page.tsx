@@ -32,7 +32,6 @@ import {
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid } from "recharts";
 import {
   CircleDollarSign,
-  FlaskConical,
   Loader2,
   RefreshCw,
   Plus,
@@ -208,7 +207,7 @@ export default function CreditsPage() {
   }
 
   return (
-    <div className="space-y-6 pt-6">
+    <div className="container mx-auto p-6 space-y-6">
       {/* ── Header ── */}
       <div className="flex justify-between items-start">
         <div>
@@ -219,6 +218,18 @@ export default function CreditsPage() {
           <Button variant="outline" size="icon" onClick={() => refetch()}>
             <RefreshCw className="h-4 w-4" />
           </Button>
+          <Button
+            onClick={() => buyCredits.mutate(liveBuyAmount)}
+            disabled={buyCredits.isPending}
+            className="bg-gradient-primary"
+          >
+            {buyCredits.isPending ? (
+              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+            ) : (
+              <Plus className="h-4 w-4 mr-2" />
+            )}
+            Buy Credits
+          </Button>
         </div>
       </div>
 
@@ -227,60 +238,41 @@ export default function CreditsPage() {
         {/* Live Credits */}
         <Card className="overflow-hidden transition-all duration-200 hover:shadow-md border-emerald-500/30 bg-emerald-500/[0.06] dark:bg-emerald-500/[0.08]">
           <CardContent className="p-6">
-            <div className="flex items-start justify-between">
-              <div className="space-y-1">
-                <p className="text-sm font-semibold text-emerald-600 dark:text-emerald-400">Live Credits</p>
-                <div className="flex items-baseline gap-2">
-                  <span className="text-4xl font-bold tracking-tight text-emerald-700 dark:text-emerald-300">
-                    {balance.toFixed(0)}
-                  </span>
-                  <span className="text-sm text-emerald-600/60 dark:text-emerald-400/60">remaining</span>
-                </div>
-              </div>
-              <div className="flex h-12 w-12 items-center justify-center rounded-full bg-emerald-500/15">
-                <CircleDollarSign className="h-6 w-6 text-emerald-500" />
+            <div className="space-y-1">
+              <p className="text-sm font-semibold text-emerald-600 dark:text-emerald-400">Live Credits</p>
+              <div className="flex items-baseline gap-2">
+                <span className="text-4xl font-bold tracking-tight text-emerald-700 dark:text-emerald-300">
+                  {balance.toFixed(0)}
+                </span>
+                <span className="text-sm text-emerald-600/60 dark:text-emerald-400/60">remaining</span>
               </div>
             </div>
 
             <div className="mt-5 pt-5 border-t">
-              <p className="text-xs font-medium text-muted-foreground mb-3">Buy live credits</p>
-              <div className="flex items-center gap-3">
-                <div className="flex items-center rounded-lg border bg-background">
-                  <button
-                    type="button"
-                    onClick={() => setLiveBuyAmount((v) => Math.max(1, v - 5))}
-                    className="flex h-9 w-9 items-center justify-center text-muted-foreground hover:text-foreground transition-colors"
-                  >
-                    <Minus className="h-4 w-4" />
-                  </button>
-                  <input
-                    type="number"
-                    min={1}
-                    max={10000}
-                    value={liveBuyAmount}
-                    onChange={(e) => setLiveBuyAmount(Math.max(1, parseInt(e.target.value) || 1))}
-                    className="h-9 w-16 border-x bg-transparent text-center text-sm font-semibold focus:outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setLiveBuyAmount((v) => Math.min(10000, v + 5))}
-                    className="flex h-9 w-9 items-center justify-center text-muted-foreground hover:text-foreground transition-colors"
-                  >
-                    <Plus className="h-4 w-4" />
-                  </button>
-                </div>
-                <Button
-                  size="sm"
-                  onClick={() => buyCredits.mutate(liveBuyAmount)}
-                  disabled={buyCredits.isPending}
-                  className="ml-auto"
+              <p className="text-xs font-medium text-muted-foreground mb-3">Amount to buy</p>
+              <div className="flex items-center rounded-lg border bg-background w-fit">
+                <button
+                  type="button"
+                  onClick={() => setLiveBuyAmount((v) => Math.max(1, v - 5))}
+                  className="flex h-9 w-9 items-center justify-center text-muted-foreground hover:text-foreground transition-colors"
                 >
-                  {buyCredits.isPending ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                  ) : (
-                    "Buy Now"
-                  )}
-                </Button>
+                  <Minus className="h-4 w-4" />
+                </button>
+                <input
+                  type="number"
+                  min={1}
+                  max={10000}
+                  value={liveBuyAmount}
+                  onChange={(e) => setLiveBuyAmount(Math.max(1, parseInt(e.target.value) || 1))}
+                  className="h-9 w-16 border-x bg-transparent text-center text-sm font-semibold focus:outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                />
+                <button
+                  type="button"
+                  onClick={() => setLiveBuyAmount((v) => Math.min(10000, v + 5))}
+                  className="flex h-9 w-9 items-center justify-center text-muted-foreground hover:text-foreground transition-colors"
+                >
+                  <Plus className="h-4 w-4" />
+                </button>
               </div>
             </div>
           </CardContent>
@@ -289,16 +281,11 @@ export default function CreditsPage() {
         {/* Test Credits */}
         <Card className="overflow-hidden transition-all duration-200 hover:shadow-md border-yellow-500/30 bg-yellow-500/[0.06] dark:bg-yellow-500/[0.08]">
           <CardContent className="p-6">
-            <div className="flex items-start justify-between">
-              <div className="space-y-1">
-                <p className="text-sm font-semibold text-yellow-600 dark:text-yellow-400">Test Credits</p>
-                <div className="flex items-baseline gap-2">
-                  <span className="text-4xl font-bold tracking-tight text-yellow-700 dark:text-yellow-300">{testBalance.toFixed(0)}</span>
-                  <span className="text-sm text-yellow-600/60 dark:text-yellow-400/60">remaining</span>
-                </div>
-              </div>
-              <div className="flex h-12 w-12 items-center justify-center rounded-full bg-yellow-500/15">
-                <FlaskConical className="h-6 w-6 text-yellow-500" />
+            <div className="space-y-1">
+              <p className="text-sm font-semibold text-yellow-600 dark:text-yellow-400">Test Credits</p>
+              <div className="flex items-baseline gap-2">
+                <span className="text-4xl font-bold tracking-tight text-yellow-700 dark:text-yellow-300">{testBalance.toFixed(0)}</span>
+                <span className="text-sm text-yellow-600/60 dark:text-yellow-400/60">remaining</span>
               </div>
             </div>
 
@@ -351,9 +338,9 @@ export default function CreditsPage() {
           <CardDescription>All credit activity including purchases, usage, refunds, and gifts</CardDescription>
         </CardHeader>
         <CardContent className="p-0">
-          <div className="overflow-x-auto">
+          <div className="max-h-[calc(100vh-380px)] min-h-[300px] overflow-auto relative">
             <table className="w-full">
-              <thead>
+              <thead className="sticky top-0 z-10 bg-background">
                 <tr className="border-b bg-primary/5">
                   <th className="text-left py-2.5 px-4 text-xs font-semibold text-primary">Date</th>
                   <th className="text-left py-2.5 px-4 text-xs font-semibold text-primary">Type</th>

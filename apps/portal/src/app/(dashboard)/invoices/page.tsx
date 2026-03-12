@@ -357,8 +357,9 @@ const InvoicesList = () => {
         <>
           <Card>
             <CardContent className="p-0">
+              <div className="max-h-[calc(100vh-340px)] min-h-[300px] overflow-auto relative">
               <Table>
-                  <TableHeader>
+                  <TableHeader className="sticky top-0 z-10 bg-background">
                     <TableRow>
                       <TableHead>Invoice #</TableHead>
                       <TableHead>Customer</TableHead>
@@ -427,6 +428,7 @@ const InvoicesList = () => {
                     ))}
                   </TableBody>
                 </Table>
+              </div>
             </CardContent>
           </Card>
 

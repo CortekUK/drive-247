@@ -267,9 +267,9 @@ const FinesList = () => {
 
   // Render fines table
   const renderFinesTable = (fines: EnhancedFine[]) => (
-    <div className="rounded-md border">
+    <div className="max-h-[calc(100vh-380px)] min-h-[300px] overflow-auto relative">
       <Table>
-        <TableHeader>
+        <TableHeader className="sticky top-0 z-10 bg-background">
           <TableRow>
             <TableHead className="w-12">
               {canEdit('fines') && (

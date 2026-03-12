@@ -2,14 +2,12 @@
 
 import { useState } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
-import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { Calendar } from "@/components/ui/calendar";
+import { Calendar as CalendarComponent } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { CalendarIcon, X, Search, Filter } from "lucide-react";
+import { CalendarIcon, X, Search, ChevronDown } from "lucide-react";
 import { formatInTimeZone } from "date-fns-tz";
 import { cn } from "@/lib/utils";
 import { useQuery } from "@tanstack/react-query";
@@ -31,7 +29,7 @@ export interface PaymentFilters {
 
 export const PaymentFilters = ({ onFiltersChange }: PaymentFiltersProps) => {
   const searchParams = useSearchParams();
-  
+
   const [filters, setFilters] = useState<PaymentFilters>({
     customerSearch: searchParams?.get('customer') || '',
     vehicleSearch: searchParams?.get('vehicle') || '',
@@ -42,35 +40,14 @@ export const PaymentFilters = ({ onFiltersChange }: PaymentFiltersProps) => {
     verificationStatus: searchParams?.get('status') || 'all',
   });
 
-  const { data: customers } = useQuery({
-    queryKey: ["customers-search"],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("customers")
-        .select("id, name")
-        .order("name");
-      if (error) throw error;
-      return data;
-    },
-  });
-
-  const { data: vehicles } = useQuery({
-    queryKey: ["vehicles-search"],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("vehicles")
-        .select("id, reg, make, model")
-        .order("reg");
-      if (error) throw error;
-      return data;
-    },
-  });
+  const [methodOpen, setMethodOpen] = useState(false);
+  const [statusOpen, setStatusOpen] = useState(false);
+  const [dateOpen, setDateOpen] = useState(false);
 
   const updateFilters = (newFilters: Partial<PaymentFilters>) => {
     const updatedFilters = { ...filters, ...newFilters };
     setFilters(updatedFilters);
-    
-    // Update URL params
+
     const params = new URLSearchParams();
     if (updatedFilters.customerSearch) params.set('customer', updatedFilters.customerSearch);
     if (updatedFilters.vehicleSearch) params.set('vehicle', updatedFilters.vehicleSearch);
@@ -124,152 +101,201 @@ export const PaymentFilters = ({ onFiltersChange }: PaymentFiltersProps) => {
     filters.method !== 'all' || filters.dateFrom || filters.dateTo ||
     filters.quickFilter !== 'thisMonth' || filters.verificationStatus !== 'all';
 
+  const hasDateFilter = filters.dateFrom || filters.dateTo;
+
+  const methodOptions = [
+    { value: 'all', label: 'All Methods' },
+    { value: 'Cash', label: 'Cash' },
+    { value: 'Card', label: 'Card' },
+    { value: 'Bank Transfer', label: 'Bank Transfer' },
+    { value: 'Other', label: 'Other' },
+  ];
+
+  const statusOptions = [
+    { value: 'all', label: 'All Statuses' },
+    { value: 'pending', label: 'Pending Review' },
+    { value: 'approved', label: 'Approved' },
+    { value: 'rejected', label: 'Rejected' },
+    { value: 'auto_approved', label: 'Auto-Approved' },
+  ];
+
+  const activeMethod = methodOptions.find(m => m.value === filters.method);
+  const activeStatus = statusOptions.find(s => s.value === filters.verificationStatus);
+
   return (
-    <Card>
-      <CardContent className="pt-6">
-        <div className="space-y-4">
-          {/* Quick Filter Pills */}
-          <div className="flex flex-wrap gap-2">
-            <Badge
-              variant={filters.quickFilter === 'last7Days' ? 'default' : 'outline'}
-              className="cursor-pointer"
-              onClick={() => applyQuickFilter('last7Days')}
-            >
-              Last 7 Days
-            </Badge>
-            <Badge
-              variant={filters.quickFilter === 'thisMonth' ? 'default' : 'outline'}
-              className="cursor-pointer"
-              onClick={() => applyQuickFilter('thisMonth')}
-            >
-              This Month
-            </Badge>
-            <Badge
-              variant={filters.quickFilter === 'allTime' ? 'default' : 'outline'}
-              className="cursor-pointer"
-              onClick={() => applyQuickFilter('allTime')}
-            >
-              All Time
-            </Badge>
-          </div>
+    <div>
+      <div className="flex flex-wrap gap-3 items-center">
+        {/* Search */}
+        <div className="relative flex-1 min-w-[200px]">
+          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
+          <Input
+            placeholder="Search customer or vehicle..."
+            value={filters.customerSearch}
+            onChange={(e) => updateFilters({ customerSearch: e.target.value })}
+            className="pl-10 h-8 text-sm"
+          />
+        </div>
 
-          {/* Filter Controls */}
-          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-6">
-            <div>
-              <Input
-                placeholder="Search Customers..."
-                value={filters.customerSearch}
-                onChange={(e) => updateFilters({ customerSearch: e.target.value })}
-                className="w-full"
-              />
-            </div>
+        {/* Method + Status + Date grouped */}
+        <div className="flex items-center">
+          <Popover open={methodOpen} onOpenChange={setMethodOpen}>
+            <PopoverTrigger asChild>
+              <Button
+                variant="outline"
+                size="sm"
+                className={cn("gap-1.5 rounded-r-none border-r-0", filters.method !== 'all' && "border-primary")}
+              >
+                {filters.method !== 'all' ? (
+                  <span className="text-primary">{activeMethod?.label}</span>
+                ) : (
+                  "Method"
+                )}
+                <ChevronDown className="h-3 w-3 text-muted-foreground" />
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-auto p-2" align="start">
+              <div className="flex flex-col gap-1">
+                {methodOptions.map(({ value, label }) => {
+                  const isActive = filters.method === value;
+                  return (
+                    <button
+                      key={value}
+                      onClick={() => {
+                        updateFilters({ method: value });
+                        setMethodOpen(false);
+                      }}
+                      className={cn(
+                        "inline-flex items-center gap-2 rounded-md px-3 py-1.5 text-sm font-medium transition-colors text-left",
+                        isActive ? "bg-primary/10 text-primary" : "hover:bg-muted"
+                      )}
+                    >
+                      {label}
+                    </button>
+                  );
+                })}
+              </div>
+            </PopoverContent>
+          </Popover>
 
-            <div>
-              <Input
-                placeholder="Search Vehicles..."
-                value={filters.vehicleSearch}
-                onChange={(e) => updateFilters({ vehicleSearch: e.target.value })}
-                className="w-full"
-              />
-            </div>
+          <Popover open={statusOpen} onOpenChange={setStatusOpen}>
+            <PopoverTrigger asChild>
+              <Button
+                variant="outline"
+                size="sm"
+                className={cn("gap-1.5 rounded-none border-r-0", filters.verificationStatus !== 'all' && "border-primary")}
+              >
+                {filters.verificationStatus !== 'all' ? (
+                  <span className="text-primary">{activeStatus?.label}</span>
+                ) : (
+                  "Status"
+                )}
+                <ChevronDown className="h-3 w-3 text-muted-foreground" />
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-auto p-2" align="start">
+              <div className="flex flex-col gap-1">
+                {statusOptions.map(({ value, label }) => {
+                  const isActive = filters.verificationStatus === value;
+                  return (
+                    <button
+                      key={value}
+                      onClick={() => {
+                        updateFilters({ verificationStatus: value });
+                        setStatusOpen(false);
+                      }}
+                      className={cn(
+                        "inline-flex items-center gap-2 rounded-md px-3 py-1.5 text-sm font-medium transition-colors text-left",
+                        isActive ? "bg-primary/10 text-primary" : "hover:bg-muted"
+                      )}
+                    >
+                      {label}
+                    </button>
+                  );
+                })}
+              </div>
+            </PopoverContent>
+          </Popover>
 
-            <div>
-              <Select value={filters.method} onValueChange={(value) => updateFilters({ method: value })}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Payment Method" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Methods</SelectItem>
-                  <SelectItem value="Cash">Cash</SelectItem>
-                  <SelectItem value="Card">Card</SelectItem>
-                  <SelectItem value="Bank Transfer">Bank Transfer</SelectItem>
-                  <SelectItem value="Other">Other</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div>
-              <Select value={filters.verificationStatus} onValueChange={(value) => updateFilters({ verificationStatus: value })}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Verification Status" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Statuses</SelectItem>
-                  <SelectItem value="pending">Pending Review</SelectItem>
-                  <SelectItem value="approved">Approved</SelectItem>
-                  <SelectItem value="rejected">Rejected</SelectItem>
-                  <SelectItem value="auto_approved">Auto-Approved</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div>
-              <Popover>
-                <PopoverTrigger asChild>
-                  <Button
-                    variant="outline"
-                    className={cn(
-                      "w-full justify-start text-left font-normal",
-                      !filters.dateFrom && "text-muted-foreground"
-                    )}
-                  >
-                    <CalendarIcon className="mr-2 h-4 w-4" />
-                    {filters.dateFrom ? formatInTimeZone(filters.dateFrom, 'America/New_York', "MM/dd/yyyy") : "From Date"}
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-auto p-0" align="start">
+          <Popover open={dateOpen} onOpenChange={setDateOpen}>
+            <PopoverTrigger asChild>
+              <Button
+                variant="outline"
+                size="sm"
+                className={cn("rounded-l-none px-2", hasDateFilter && "border-primary text-primary")}
+              >
+                <CalendarIcon className="h-4 w-4" />
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-auto p-3" align="end">
+              <div className="flex gap-4">
+                <div className="space-y-1">
+                  <p className="text-xs font-medium text-muted-foreground">From</p>
                   <Calendar
                     mode="single"
                     selected={filters.dateFrom}
                     onSelect={(date) => updateFilters({ dateFrom: date })}
-                    initialFocus
-                    className="pointer-events-auto"
+                    className="p-0 pointer-events-auto"
                   />
-                </PopoverContent>
-              </Popover>
-            </div>
-
-            <div>
-              <Popover>
-                <PopoverTrigger asChild>
-                  <Button
-                    variant="outline"
-                    className={cn(
-                      "w-full justify-start text-left font-normal",
-                      !filters.dateTo && "text-muted-foreground"
-                    )}
-                  >
-                    <CalendarIcon className="mr-2 h-4 w-4" />
-                    {filters.dateTo ? formatInTimeZone(filters.dateTo, 'America/New_York', "MM/dd/yyyy") : "To Date"}
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-auto p-0" align="start">
+                </div>
+                <div className="space-y-1 border-l pl-4">
+                  <p className="text-xs font-medium text-muted-foreground">To</p>
                   <Calendar
                     mode="single"
                     selected={filters.dateTo}
                     onSelect={(date) => updateFilters({ dateTo: date })}
-                    initialFocus
-                    className="pointer-events-auto"
+                    className="p-0 pointer-events-auto"
                   />
-                </PopoverContent>
-              </Popover>
-            </div>
-          </div>
-
-          {hasActiveFilters && (
-            <div className="flex justify-between items-center pt-2">
-              <div className="text-sm text-muted-foreground">
-                <Filter className="inline h-4 w-4 mr-1" />
-                Filters Active
+                </div>
               </div>
-              <Button variant="outline" size="sm" onClick={clearFilters}>
-                <X className="h-4 w-4 mr-2" />
-                Clear All
-              </Button>
-            </div>
-          )}
+              {hasDateFilter && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="w-full text-xs mt-2"
+                  onClick={() => updateFilters({ dateFrom: undefined, dateTo: undefined })}
+                >
+                  Clear dates
+                </Button>
+              )}
+            </PopoverContent>
+          </Popover>
         </div>
-      </CardContent>
-    </Card>
+
+        {/* Quick Period filters grouped */}
+        <div className="flex items-center border rounded-md overflow-hidden sm:ml-auto">
+          <span className="text-xs text-muted-foreground px-2.5 shrink-0">Period</span>
+          <div className="h-5 w-px bg-border" />
+          {([
+            { value: 'last7Days', label: '7 Days' },
+            { value: 'thisMonth', label: 'This Month' },
+            { value: 'allTime', label: 'All Time' },
+          ] as const).map(({ value, label }, i) => {
+            const isActive = filters.quickFilter === value;
+            return (
+              <div key={value} className="flex items-center">
+                {i > 0 && <div className="h-5 w-px bg-border" />}
+                <button
+                  onClick={() => applyQuickFilter(value)}
+                  className={cn(
+                    "inline-flex items-center px-2.5 h-8 text-xs font-medium whitespace-nowrap transition-colors",
+                    isActive ? "bg-primary/15 text-primary" : "text-muted-foreground hover:text-foreground"
+                  )}
+                >
+                  {label}
+                </button>
+              </div>
+            );
+          })}
+        </div>
+
+        {/* Clear All */}
+        {hasActiveFilters && (
+          <Button variant="ghost" size="sm" onClick={clearFilters} className="h-8 gap-1 text-muted-foreground hover:text-foreground">
+            <X className="h-3.5 w-3.5" />
+            Clear
+          </Button>
+        )}
+      </div>
+    </div>
   );
 };

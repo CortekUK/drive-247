@@ -15,7 +15,9 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { Users, Plus, Mail, Phone, Eye, Edit, Search, Shield, ArrowUpDown, ArrowUp, ArrowDown, X, MoreHorizontal, Ban, Trash2, XCircle, UserCheck, Link2, Briefcase, BarChart3 } from "lucide-react";
+import { Users, Plus, Mail, Phone, Eye, Edit, Search, Shield, ArrowUpDown, ArrowUp, ArrowDown, X, MoreHorizontal, Ban, Trash2, XCircle, UserCheck, Link2, Briefcase, BarChart3, ChevronDown } from "lucide-react";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { cn } from "@/lib/utils";
 import Link from "next/link";
 import { CustomerFormModal } from "@/components/customers/customer-form-modal";
 import { GenerateInviteDialog } from "@/components/customers/generate-invite-dialog";
@@ -57,6 +59,57 @@ interface Customer {
 
 type SortField = 'name' | 'type' | 'balance';
 type SortOrder = 'asc' | 'desc';
+
+function CustomerFilterPopover({
+  label, active, activeLabel, options, value, onChange, className
+}: {
+  label: string;
+  active: boolean;
+  activeLabel?: string;
+  options: { value: string; label: string }[];
+  value: string;
+  onChange: (v: string) => void;
+  className?: string;
+}) {
+  const [open, setOpen] = useState(false);
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <Button
+          variant="outline"
+          size="sm"
+          className={cn("gap-1.5", active && "border-primary", className)}
+        >
+          {active ? (
+            <span className="text-primary">{activeLabel}</span>
+          ) : (
+            label
+          )}
+          <ChevronDown className="h-3 w-3 text-muted-foreground" />
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent className="w-auto p-2" align="start">
+        <div className="flex flex-col gap-1">
+          {options.map(({ value: v, label: l }) => {
+            const isActive = value === v;
+            return (
+              <button
+                key={v}
+                onClick={() => { onChange(v); setOpen(false); }}
+                className={cn(
+                  "inline-flex items-center gap-2 rounded-md px-3 py-1.5 text-sm font-medium transition-colors text-left",
+                  isActive ? "bg-primary/10 text-primary" : "hover:bg-muted"
+                )}
+              >
+                {l}
+              </button>
+            );
+          })}
+        </div>
+      </PopoverContent>
+    </Popover>
+  );
+}
 
 const CustomersList = () => {
   const router = useRouter();
@@ -572,46 +625,52 @@ const CustomersList = () => {
       {customers && <CustomerSummaryCards customers={customers} />}
 
       {/* Search and Filters */}
-      <div className="space-y-4">
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <div className="relative md:col-span-1">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
-            <Input
-              placeholder="Search customers..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="pl-10"
-            />
-          </div>
+      <div className="flex flex-wrap gap-3 items-center">
+        <div className="relative flex-1 min-w-[200px]">
+          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
+          <Input
+            placeholder="Search customers..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="pl-10 h-8 text-sm"
+          />
+        </div>
 
-          <Select value={statusFilter} onValueChange={setStatusFilter}>
-            <SelectTrigger>
-              <SelectValue placeholder="All Statuses" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Statuses</SelectItem>
-              <SelectItem value="Active">Active</SelectItem>
-              <SelectItem value="Inactive">Inactive</SelectItem>
-              <SelectItem value="Rejected">Rejected</SelectItem>
-            </SelectContent>
-          </Select>
-
-          <Select value={userTypeFilter} onValueChange={setUserTypeFilter}>
-            <SelectTrigger>
-              <SelectValue placeholder="All Users" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Users</SelectItem>
-              <SelectItem value="Authenticated">Authenticated</SelectItem>
-              <SelectItem value="Guest">Guest</SelectItem>
-            </SelectContent>
-          </Select>
+        {/* Status + Type grouped */}
+        <div className="flex items-center">
+          <CustomerFilterPopover
+            label="Status"
+            active={statusFilter !== 'all'}
+            activeLabel={statusFilter !== 'all' ? statusFilter : undefined}
+            options={[
+              { value: 'all', label: 'All Statuses' },
+              { value: 'Active', label: 'Active' },
+              { value: 'Inactive', label: 'Inactive' },
+              { value: 'Rejected', label: 'Rejected' },
+            ]}
+            value={statusFilter}
+            onChange={setStatusFilter}
+            className="rounded-r-none border-r-0"
+          />
+          <CustomerFilterPopover
+            label="User Type"
+            active={userTypeFilter !== 'all'}
+            activeLabel={userTypeFilter !== 'all' ? userTypeFilter : undefined}
+            options={[
+              { value: 'all', label: 'All Users' },
+              { value: 'Authenticated', label: 'Authenticated' },
+              { value: 'Guest', label: 'Guest' },
+            ]}
+            value={userTypeFilter}
+            onChange={setUserTypeFilter}
+            className="rounded-l-none"
+          />
         </div>
 
         {hasActiveFilters && (
-          <Button variant="outline" size="sm" onClick={clearFilters}>
-            <X className="h-4 w-4 mr-1" />
-            Clear Filters
+          <Button variant="ghost" size="sm" onClick={clearFilters} className="h-8 gap-1 text-muted-foreground hover:text-foreground">
+            <X className="h-3.5 w-3.5" />
+            Clear
           </Button>
         )}
       </div>
@@ -621,8 +680,9 @@ const CustomersList = () => {
         <>
         <Card>
           <CardContent className="p-0">
+            <div className="max-h-[calc(100vh-380px)] min-h-[300px] overflow-auto relative">
               <Table>
-                <TableHeader>
+                <TableHeader className="sticky top-0 z-10 bg-background">
                   <TableRow>
                     <TableHead
                       className="cursor-pointer hover:bg-muted/50"
@@ -807,6 +867,7 @@ const CustomersList = () => {
                   })}
                 </TableBody>
               </Table>
+            </div>
           </CardContent>
         </Card>
 

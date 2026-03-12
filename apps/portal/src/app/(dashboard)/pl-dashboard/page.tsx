@@ -611,80 +611,14 @@ const PLDashboard: React.FC = () => {
           </p>
         </div>
 
-        <div className="flex flex-wrap gap-2 w-full sm:w-auto">
-          <Button
-            variant="outline"
-            onClick={exportToCSV}
-            className="flex items-center gap-2"
-            disabled={(!vehiclePLData?.length && !monthlyPLData?.length)}
-          >
-            <Download className="h-4 w-4" />
-            Export CSV
-          </Button>
-
-          {groupByMonth && (
-            <Button
-              variant="outline"
-              onClick={() => setShowChart(!showChart)}
-              className="flex items-center gap-2"
-            >
-              <BarChart3 className="h-4 w-4" />
-              {showChart ? 'Show Table' : 'Show Chart'}
-            </Button>
-          )}
-
-          <Button
-            variant={groupByMonth ? "default" : "outline"}
-            onClick={() => {
-              setGroupByMonth(!groupByMonth);
-              setShowChart(false);
-            }}
-            className="flex items-center gap-2"
-          >
-            <Calendar className="h-4 w-4" />
-            Group by Month
-          </Button>
-
-          <Popover>
-            <PopoverTrigger asChild>
-              <Button
-                variant="outline"
-                className={cn(
-                  "w-full sm:w-[280px] justify-start text-left font-normal",
-                  !dateRange && "text-muted-foreground"
-                )}
-              >
-                <CalendarIcon className="mr-2 h-4 w-4 shrink-0" />
-                {dateRange?.from ? (
-                  dateRange.to ? (
-                    <>
-                      {format(dateRange.from, "LLL dd, y")} -{" "}
-                      {format(dateRange.to, "LLL dd, y")}
-                    </>
-                  ) : (
-                    format(dateRange.from, "LLL dd, y")
-                  )
-                ) : (
-                  <span>Pick a date range</span>
-                )}
-              </Button>
-            </PopoverTrigger>
-            <PopoverContent className="w-auto p-0" align="start">
-              <CalendarComponent
-                initialFocus
-                mode="range"
-                defaultMonth={dateRange?.from}
-                selected={dateRange}
-                onSelect={(range) => {
-                  if (range?.from && range?.to) {
-                    setDateRange({ from: range.from, to: range.to });
-                  }
-                }}
-                numberOfMonths={2}
-              />
-            </PopoverContent>
-          </Popover>
-        </div>
+        <Button
+          onClick={exportToCSV}
+          className="bg-gradient-primary flex items-center gap-2"
+          disabled={(!vehiclePLData?.length && !monthlyPLData?.length)}
+        >
+          <Download className="h-4 w-4" />
+          Export CSV
+        </Button>
       </div>
 
       {/* Summary Cards */}
@@ -954,6 +888,72 @@ const PLDashboard: React.FC = () => {
         </TooltipProvider>
       )}
 
+      {/* Filters Bar */}
+      <div className="flex flex-wrap gap-2 items-center">
+        {groupByMonth && (
+          <Button
+            variant="outline"
+            onClick={() => setShowChart(!showChart)}
+            className="flex items-center gap-2 h-8 text-sm"
+          >
+            <BarChart3 className="h-4 w-4" />
+            {showChart ? 'Show Table' : 'Show Chart'}
+          </Button>
+        )}
+
+        <Button
+          variant={groupByMonth ? "default" : "outline"}
+          onClick={() => {
+            setGroupByMonth(!groupByMonth);
+            setShowChart(false);
+          }}
+          className="flex items-center gap-2 h-8 text-sm"
+        >
+          <Calendar className="h-4 w-4" />
+          Group by Month
+        </Button>
+
+        <Popover>
+          <PopoverTrigger asChild>
+            <Button
+              variant="outline"
+              className={cn(
+                "w-full sm:w-[280px] justify-start text-left font-normal h-8 text-sm",
+                !dateRange && "text-muted-foreground"
+              )}
+            >
+              <CalendarIcon className="mr-2 h-4 w-4 shrink-0" />
+              {dateRange?.from ? (
+                dateRange.to ? (
+                  <>
+                    {format(dateRange.from, "LLL dd, y")} -{" "}
+                    {format(dateRange.to, "LLL dd, y")}
+                  </>
+                ) : (
+                  format(dateRange.from, "LLL dd, y")
+                )
+              ) : (
+                <span>Pick a date range</span>
+              )}
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent className="w-auto p-0" align="start">
+            <CalendarComponent
+              initialFocus
+              mode="range"
+              defaultMonth={dateRange?.from}
+              selected={dateRange}
+              onSelect={(range) => {
+                if (range?.from && range?.to) {
+                  setDateRange({ from: range.from, to: range.to });
+                }
+              }}
+              numberOfMonths={2}
+            />
+          </PopoverContent>
+        </Popover>
+      </div>
+
       {/* Vehicle Profitability Table or Monthly View */}
       <Card className="shadow-sm">
         <CardHeader>
@@ -1051,9 +1051,9 @@ const PLDashboard: React.FC = () => {
           ) : (
             // Vehicle view
             <div className="space-y-4">
-              <div className="relative overflow-x-auto">
+              <div className="max-h-[calc(100vh-380px)] min-h-[300px] overflow-auto relative">
                 <Table className="min-w-[800px]">
-                  <TableHeader className="sticky top-0 bg-background">
+                  <TableHeader className="sticky top-0 z-10 bg-background">
                     <TableRow>
                       <TableHead>
                         <SortButton field="vehicle_reg">Vehicle</SortButton>
