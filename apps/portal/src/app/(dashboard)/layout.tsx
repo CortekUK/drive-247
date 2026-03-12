@@ -21,6 +21,7 @@ import {
 } from "@/components/ui/sidebar";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ChatSidebar } from "@/components/chat";
+import { MaintenanceBanner } from "@/components/dashboard/maintenance-banner";
 
 function LoadingSkeleton() {
   return (
@@ -120,6 +121,7 @@ export default function DashboardLayout({
               <UserMenu />
             </div>
           </header>
+          <MaintenanceBanner />
 
           <main className="flex flex-1 flex-col gap-4 p-4 pt-0">
             {children}

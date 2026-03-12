@@ -16,6 +16,7 @@ import { TenantProvider } from '@/contexts/TenantContext';
 import { CustomerAuthProvider } from '@/providers/CustomerAuthProvider';
 import { BookingPersistenceGuard } from '@/components/BookingPersistenceGuard';
 import DevJumpPanel from '@/components/DevJumpPanel';
+import { MaintenanceBanner } from '@/components/MaintenanceBanner';
 
 const inter = Inter({ subsets: ['latin'] });
 
@@ -114,6 +115,7 @@ export default function RootLayout({
                   <ScrollToTopOnNavigate />
                   <GDPRConsent />
                   <DevJumpPanel />
+                  <MaintenanceBanner />
                   {children}
                 </TooltipProvider>
               </ThemeInitializer>

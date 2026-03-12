@@ -156,6 +156,11 @@ export default function TenantDetailsPage() {
   });
   const [newFeature, setNewFeature] = useState('');
 
+  // Maintenance banner state
+  const [tenantBannerEnabled, setTenantBannerEnabled] = useState(false);
+  const [tenantBannerMessage, setTenantBannerMessage] = useState('We are currently performing scheduled maintenance. Some features may be temporarily unavailable.');
+  const [bannerSaving, setBannerSaving] = useState(false);
+
   // Integration mode state
   const [modeUpdating, setModeUpdating] = useState(false);
   const [showModeConfirm, setShowModeConfirm] = useState(false);
@@ -183,6 +188,8 @@ export default function TenantDetailsPage() {
         slug: data.slug,
         contact_email: data.contact_email,
       });
+      setTenantBannerEnabled(data.maintenance_banner_enabled ?? false);
+      setTenantBannerMessage(data.maintenance_banner_message || 'We are currently performing scheduled maintenance. Some features may be temporarily unavailable.');
 
       // Load subscription data and plans
       loadSubscription(id);
@@ -250,6 +257,26 @@ export default function TenantDetailsPage() {
       console.error('Error loading plans:', error);
     } finally {
       setPlansLoading(false);
+    }
+  };
+
+  const handleSaveBanner = async () => {
+    if (!tenant) return;
+    setBannerSaving(true);
+    try {
+      const { error } = await supabase
+        .from('tenants')
+        .update({
+          maintenance_banner_enabled: tenantBannerEnabled,
+          maintenance_banner_message: tenantBannerMessage,
+        })
+        .eq('id', tenant.id);
+      if (error) throw error;
+      toast.success(tenantBannerEnabled ? 'Maintenance banner enabled for this tenant' : 'Maintenance banner disabled for this tenant');
+    } catch (error: any) {
+      toast.error(`Failed to update banner: ${error.message}`);
+    } finally {
+      setBannerSaving(false);
     }
   };
 
@@ -1103,6 +1130,64 @@ export default function TenantDetailsPage() {
                 </div>
               </div>
             )}
+
+            {/* Maintenance Banner */}
+            <div className="bg-dark-card rounded-lg overflow-hidden border border-dark-border lg:col-span-2">
+              <div className="px-6 py-4 border-b border-dark-border flex items-center justify-between">
+                <div>
+                  <h2 className="text-xl font-semibold text-white">Maintenance Banner</h2>
+                  <p className="text-sm text-gray-400 mt-1">
+                    Show a custom maintenance banner on this tenant's portal and booking site only.
+                  </p>
+                </div>
+                <label className="flex items-center cursor-pointer">
+                  <div className="relative">
+                    <input
+                      type="checkbox"
+                      checked={tenantBannerEnabled}
+                      onChange={(e) => setTenantBannerEnabled(e.target.checked)}
+                      className="sr-only"
+                    />
+                    <div className={`w-14 h-8 rounded-full transition-colors ${
+                      tenantBannerEnabled ? 'bg-orange-500' : 'bg-dark-border'
+                    }`}>
+                      <div className={`absolute top-1 left-1 w-6 h-6 bg-white rounded-full transition-transform ${
+                        tenantBannerEnabled ? 'translate-x-6' : ''
+                      }`}></div>
+                    </div>
+                  </div>
+                  <span className={`ml-3 text-sm font-medium ${tenantBannerEnabled ? 'text-orange-400' : 'text-gray-400'}`}>
+                    {tenantBannerEnabled ? 'Active' : 'Inactive'}
+                  </span>
+                </label>
+              </div>
+              <div className="p-6 space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-400 mb-2">Banner Message</label>
+                  <textarea
+                    value={tenantBannerMessage}
+                    onChange={(e) => setTenantBannerMessage(e.target.value)}
+                    rows={2}
+                    className="w-full px-4 py-3 bg-dark-bg border border-dark-border rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-primary-500 resize-none"
+                    placeholder="Enter a custom maintenance message..."
+                  />
+                </div>
+                {tenantBannerEnabled && (
+                  <div className="rounded-lg px-4 py-3 text-sm font-medium bg-orange-500/10 border border-orange-500/30 text-orange-300">
+                    ⚠️ {tenantBannerMessage}
+                  </div>
+                )}
+                <div className="flex justify-end">
+                  <button
+                    onClick={handleSaveBanner}
+                    disabled={bannerSaving}
+                    className="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 text-sm font-medium disabled:opacity-50"
+                  >
+                    {bannerSaving ? 'Saving...' : 'Save Banner Settings'}
+                  </button>
+                </div>
+              </div>
+            </div>
 
             {/* Quick Actions */}
             <div className="bg-dark-card rounded-lg p-6 border border-dark-border lg:col-span-2">

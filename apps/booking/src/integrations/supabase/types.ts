@@ -43,6 +43,9 @@ export type Database = {
           contact_form_enabled: boolean | null
           created_at: string | null
           id: string
+          maintenance_banner_enabled: boolean
+          maintenance_banner_message: string
+          maintenance_banner_type: string
           notification_emails: string[] | null
           updated_at: string | null
         }
@@ -50,6 +53,9 @@ export type Database = {
           contact_form_enabled?: boolean | null
           created_at?: string | null
           id?: string
+          maintenance_banner_enabled?: boolean
+          maintenance_banner_message?: string
+          maintenance_banner_type?: string
           notification_emails?: string[] | null
           updated_at?: string | null
         }
@@ -57,6 +63,9 @@ export type Database = {
           contact_form_enabled?: boolean | null
           created_at?: string | null
           id?: string
+          maintenance_banner_enabled?: boolean
+          maintenance_banner_message?: string
+          maintenance_banner_type?: string
           notification_emails?: string[] | null
           updated_at?: string | null
         }
@@ -103,6 +112,7 @@ export type Database = {
       app_users: {
         Row: {
           auth_user_id: string
+          avatar_url: string | null
           created_at: string
           email: string
           id: string
@@ -117,6 +127,7 @@ export type Database = {
         }
         Insert: {
           auth_user_id: string
+          avatar_url?: string | null
           created_at?: string
           email: string
           id?: string
@@ -131,6 +142,7 @@ export type Database = {
         }
         Update: {
           auth_user_id?: string
+          avatar_url?: string | null
           created_at?: string
           email?: string
           id?: string
@@ -2466,8 +2478,12 @@ export type Database = {
           email: string
           first_blocked_at: string | null
           id: string
+          is_whitelisted: boolean | null
           last_blocked_at: string | null
           updated_at: string | null
+          whitelist_reason: string | null
+          whitelisted_at: string | null
+          whitelisted_by: string | null
         }
         Insert: {
           blocked_tenant_count?: number
@@ -2475,8 +2491,12 @@ export type Database = {
           email: string
           first_blocked_at?: string | null
           id?: string
+          is_whitelisted?: boolean | null
           last_blocked_at?: string | null
           updated_at?: string | null
+          whitelist_reason?: string | null
+          whitelisted_at?: string | null
+          whitelisted_by?: string | null
         }
         Update: {
           blocked_tenant_count?: number
@@ -2484,10 +2504,22 @@ export type Database = {
           email?: string
           first_blocked_at?: string | null
           id?: string
+          is_whitelisted?: boolean | null
           last_blocked_at?: string | null
           updated_at?: string | null
+          whitelist_reason?: string | null
+          whitelisted_at?: string | null
+          whitelisted_by?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "global_blacklist_whitelisted_by_fkey"
+            columns: ["whitelisted_by"]
+            isOneToOne: false
+            referencedRelation: "app_users"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       identity_verifications: {
         Row: {
@@ -6700,6 +6732,8 @@ export type Database = {
           lockbox_enabled: boolean | null
           lockbox_notification_methods: Json | null
           logo_url: string | null
+          maintenance_banner_enabled: boolean
+          maintenance_banner_message: string
           master_password_hash: string | null
           max_rental_days: number | null
           meta_description: string | null
@@ -6849,6 +6883,8 @@ export type Database = {
           lockbox_enabled?: boolean | null
           lockbox_notification_methods?: Json | null
           logo_url?: string | null
+          maintenance_banner_enabled?: boolean
+          maintenance_banner_message?: string
           master_password_hash?: string | null
           max_rental_days?: number | null
           meta_description?: string | null
@@ -6998,6 +7034,8 @@ export type Database = {
           lockbox_enabled?: boolean | null
           lockbox_notification_methods?: Json | null
           logo_url?: string | null
+          maintenance_banner_enabled?: boolean
+          maintenance_banner_message?: string
           master_password_hash?: string | null
           max_rental_days?: number | null
           meta_description?: string | null
@@ -7699,9 +7737,21 @@ export type Database = {
           email: string | null
           first_blocked_at: string | null
           id: string | null
+          is_whitelisted: boolean | null
           last_blocked_at: string | null
+          whitelist_reason: string | null
+          whitelisted_at: string | null
+          whitelisted_by: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "global_blacklist_whitelisted_by_fkey"
+            columns: ["whitelisted_by"]
+            isOneToOne: false
+            referencedRelation: "app_users"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       v_payment_remaining: {
         Row: {

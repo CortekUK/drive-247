@@ -8,6 +8,9 @@ interface AdminSettings {
   id?: string;
   notification_emails: string[];
   contact_form_enabled: boolean;
+  maintenance_banner_enabled: boolean;
+  maintenance_banner_message: string;
+  maintenance_banner_type: 'info' | 'warning' | 'critical';
   updated_at?: string;
 }
 
@@ -15,6 +18,9 @@ export default function SettingsPage() {
   const [settings, setSettings] = useState<AdminSettings>({
     notification_emails: ['ilyasghulam35@gmail.com'],
     contact_form_enabled: true,
+    maintenance_banner_enabled: false,
+    maintenance_banner_message: 'We are currently performing scheduled maintenance. Some features may be temporarily unavailable.',
+    maintenance_banner_type: 'warning',
   });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -46,6 +52,9 @@ export default function SettingsPage() {
           id: data.id,
           notification_emails: data.notification_emails || ['ilyasghulam35@gmail.com'],
           contact_form_enabled: data.contact_form_enabled ?? true,
+          maintenance_banner_enabled: data.maintenance_banner_enabled ?? false,
+          maintenance_banner_message: data.maintenance_banner_message || 'We are currently performing scheduled maintenance. Some features may be temporarily unavailable.',
+          maintenance_banner_type: data.maintenance_banner_type || 'warning',
           updated_at: data.updated_at,
         });
       }
@@ -67,6 +76,9 @@ export default function SettingsPage() {
           .update({
             notification_emails: settings.notification_emails,
             contact_form_enabled: settings.contact_form_enabled,
+            maintenance_banner_enabled: settings.maintenance_banner_enabled,
+            maintenance_banner_message: settings.maintenance_banner_message,
+            maintenance_banner_type: settings.maintenance_banner_type,
             updated_at: new Date().toISOString(),
           })
           .eq('id', settings.id);
@@ -79,6 +91,9 @@ export default function SettingsPage() {
           .insert({
             notification_emails: settings.notification_emails,
             contact_form_enabled: settings.contact_form_enabled,
+            maintenance_banner_enabled: settings.maintenance_banner_enabled,
+            maintenance_banner_message: settings.maintenance_banner_message,
+            maintenance_banner_type: settings.maintenance_banner_type,
           })
           .select()
           .single();
@@ -216,6 +231,93 @@ export default function SettingsPage() {
             >
               Add
             </button>
+          </div>
+        </div>
+
+        {/* Global Maintenance Banner */}
+        <div className="bg-dark-card rounded-lg overflow-hidden border border-dark-border">
+          <div className="px-6 py-4 border-b border-dark-border flex items-center justify-between">
+            <div>
+              <h2 className="text-xl font-semibold text-white">Maintenance Banner</h2>
+              <p className="text-sm text-gray-400 mt-1">
+                Display a global maintenance banner across all tenant portals and booking sites.
+              </p>
+            </div>
+            <label className="flex items-center cursor-pointer">
+              <div className="relative">
+                <input
+                  type="checkbox"
+                  checked={settings.maintenance_banner_enabled}
+                  onChange={(e) => setSettings({ ...settings, maintenance_banner_enabled: e.target.checked })}
+                  className="sr-only"
+                />
+                <div className={`w-14 h-8 rounded-full transition-colors ${
+                  settings.maintenance_banner_enabled ? 'bg-orange-500' : 'bg-dark-border'
+                }`}>
+                  <div className={`absolute top-1 left-1 w-6 h-6 bg-white rounded-full transition-transform ${
+                    settings.maintenance_banner_enabled ? 'translate-x-6' : ''
+                  }`}></div>
+                </div>
+              </div>
+              <span className={`ml-3 text-sm font-medium ${settings.maintenance_banner_enabled ? 'text-orange-400' : 'text-gray-400'}`}>
+                {settings.maintenance_banner_enabled ? 'Active' : 'Inactive'}
+              </span>
+            </label>
+          </div>
+
+          <div className="p-6 space-y-4">
+            {/* Banner Type */}
+            <div>
+              <label className="block text-sm font-medium text-gray-400 mb-2">Severity Level</label>
+              <div className="flex gap-3">
+                {(['info', 'warning', 'critical'] as const).map((type) => (
+                  <button
+                    key={type}
+                    onClick={() => setSettings({ ...settings, maintenance_banner_type: type })}
+                    className={`flex-1 px-4 py-2.5 rounded-lg border font-medium text-sm capitalize transition-colors ${
+                      settings.maintenance_banner_type === type
+                        ? type === 'info'
+                          ? 'bg-blue-600/20 border-blue-500 text-blue-400'
+                          : type === 'warning'
+                          ? 'bg-orange-600/20 border-orange-500 text-orange-400'
+                          : 'bg-red-600/20 border-red-500 text-red-400'
+                        : 'bg-dark-bg border-dark-border text-gray-400 hover:border-gray-500'
+                    }`}
+                  >
+                    {type === 'info' ? '🔵 Info' : type === 'warning' ? '🟡 Warning' : '🔴 Critical'}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Banner Message */}
+            <div>
+              <label className="block text-sm font-medium text-gray-400 mb-2">Banner Message</label>
+              <textarea
+                value={settings.maintenance_banner_message}
+                onChange={(e) => setSettings({ ...settings, maintenance_banner_message: e.target.value })}
+                rows={3}
+                className="w-full px-4 py-3 bg-dark-bg border border-dark-border rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-primary-500 resize-none"
+                placeholder="Enter the maintenance message to display..."
+              />
+            </div>
+
+            {/* Preview */}
+            {settings.maintenance_banner_enabled && (
+              <div>
+                <label className="block text-sm font-medium text-gray-400 mb-2">Preview</label>
+                <div className={`rounded-lg px-4 py-3 text-sm font-medium ${
+                  settings.maintenance_banner_type === 'info'
+                    ? 'bg-blue-500/10 border border-blue-500/30 text-blue-300'
+                    : settings.maintenance_banner_type === 'warning'
+                    ? 'bg-orange-500/10 border border-orange-500/30 text-orange-300'
+                    : 'bg-red-500/10 border border-red-500/30 text-red-300'
+                }`}>
+                  {settings.maintenance_banner_type === 'info' ? 'ℹ️' : settings.maintenance_banner_type === 'warning' ? '⚠️' : '🚨'}{' '}
+                  {settings.maintenance_banner_message}
+                </div>
+              </div>
+            )}
           </div>
         </div>
 

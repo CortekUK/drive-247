@@ -15,6 +15,7 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
     { name: 'Rental Companies', href: '/admin/rentals', icon: '🏢' },
     { name: 'Global Blacklist', href: '/admin/blacklist', icon: '🚫' },
     { name: 'Contact Requests', href: '/admin/contacts', icon: '📧' },
+    { name: 'Settings', href: '/admin/settings', icon: '⚙️' },
   ];
 
   // Only show "Manage Admins" to primary super admin

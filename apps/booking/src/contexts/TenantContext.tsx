@@ -147,6 +147,10 @@ export interface Tenant {
   // Dynamic pricing
   weekend_surcharge_percent: number | null;
   weekend_days: number[] | null;
+
+  // Maintenance banner
+  maintenance_banner_enabled: boolean | null;
+  maintenance_banner_message: string | null;
 }
 
 interface TenantContextType {
@@ -300,7 +304,8 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
                 pickup_area_enabled, return_area_enabled,
                 installments_enabled, installment_config,
                 lockbox_enabled,
-                weekend_surcharge_percent, weekend_days
+                weekend_surcharge_percent, weekend_days,
+                maintenance_banner_enabled, maintenance_banner_message
               `)
               .eq('slug', defaultSlug)
               .eq('status', 'active')
@@ -435,7 +440,9 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
           installment_config,
           lockbox_enabled,
           weekend_surcharge_percent,
-          weekend_days
+          weekend_days,
+          maintenance_banner_enabled,
+          maintenance_banner_message
         `)
         .eq('slug', slug)
         .eq('status', 'active')
