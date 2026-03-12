@@ -10,7 +10,7 @@ import { useBonzahAlertConfig } from "@/hooks/use-bonzah-alert-config";
 
 export function BonzahBalanceWidget() {
   const router = useRouter();
-  const { balanceNumber, isBonzahConnected, refetch, isFetching } = useBonzahBalance();
+  const { balanceNumber, isBonzahConnected, refetch, isFetching, bonzahMode } = useBonzahBalance();
   const { config } = useBonzahAlertConfig();
 
   if (!isBonzahConnected) return null;
@@ -57,6 +57,11 @@ export function BonzahBalanceWidget() {
                 >
                   {formattedBalance}
                 </p>
+                {bonzahMode === "test" && (
+                  <Badge variant="outline" className="text-[10px] px-1.5 py-0 border-amber-500 text-amber-600 dark:text-amber-400">
+                    TEST
+                  </Badge>
+                )}
                 {isLow && (
                   <Badge variant="destructive" className="text-[10px] px-1.5 py-0">
                     LOW
