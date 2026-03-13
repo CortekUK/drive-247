@@ -2258,6 +2258,7 @@ export type Database = {
           liability: string | null
           notes: string | null
           reference_no: string | null
+          rental_id: string | null
           resolved_at: string | null
           status: string | null
           tenant_id: string | null
@@ -2277,6 +2278,7 @@ export type Database = {
           liability?: string | null
           notes?: string | null
           reference_no?: string | null
+          rental_id?: string | null
           resolved_at?: string | null
           status?: string | null
           tenant_id?: string | null
@@ -2296,6 +2298,7 @@ export type Database = {
           liability?: string | null
           notes?: string | null
           reference_no?: string | null
+          rental_id?: string | null
           resolved_at?: string | null
           status?: string | null
           tenant_id?: string | null
@@ -2331,6 +2334,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "view_fines_export"
             referencedColumns: ["customer_id"]
+          },
+          {
+            foreignKeyName: "fines_rental_id_fkey"
+            columns: ["rental_id"]
+            isOneToOne: false
+            referencedRelation: "rentals"
+            referencedColumns: ["id"]
           },
           {
             foreignKeyName: "fines_tenant_id_fkey"

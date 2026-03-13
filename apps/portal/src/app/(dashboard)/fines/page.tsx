@@ -23,6 +23,7 @@ import { cn } from "@/lib/utils";
 import { formatCurrency } from "@/lib/format-utils";
 import { useTenant } from "@/contexts/TenantContext";
 import { useManagerPermissions } from "@/hooks/use-manager-permissions";
+import AddFineDialog from "@/components/fines/add-fine-dialog";
 
 const FinesList = () => {
   const router = useRouter();
@@ -32,6 +33,7 @@ const FinesList = () => {
   const { logAction } = useAuditLog();
   const { tenant } = useTenant();
   const { canEdit } = useManagerPermissions();
+  const [showAddFineDialog, setShowAddFineDialog] = useState(false);
 
   // State for filtering, sorting, and selection
   const [filters, setFilters] = useState<FineFilterState>({
@@ -86,6 +88,9 @@ const FinesList = () => {
       toast({ title: "Fine charged to customer account successfully" });
       queryClient.invalidateQueries({ queryKey: ["fines-enhanced"] });
       queryClient.invalidateQueries({ queryKey: ["fines-kpis"] });
+      queryClient.invalidateQueries({ queryKey: ["customer-balance"] });
+      queryClient.invalidateQueries({ queryKey: ["customer-balance-status"] });
+      queryClient.invalidateQueries({ queryKey: ["customer-fine-stats"] });
       queryClient.invalidateQueries({ queryKey: ["audit-logs"] });
 
       // Audit log
@@ -107,6 +112,14 @@ const FinesList = () => {
 
   const waiveFineAction = useMutation({
     mutationFn: async (fineId: string) => {
+      // Client-side: delete ledger entry for Open fines before calling edge function
+      // (the deployed edge function only handles Charged fines' ledger cleanup)
+      await supabase
+        .from('ledger_entries')
+        .delete()
+        .eq('reference', `FINE-${fineId}`)
+        .eq('type', 'Charge');
+
       const { data, error } = await supabase.functions.invoke('apply-fine', {
         body: { fineId, action: 'waive' }
       });
@@ -118,6 +131,9 @@ const FinesList = () => {
       toast({ title: "Fine waived successfully" });
       queryClient.invalidateQueries({ queryKey: ["fines-enhanced"] });
       queryClient.invalidateQueries({ queryKey: ["fines-kpis"] });
+      queryClient.invalidateQueries({ queryKey: ["customer-balance"] });
+      queryClient.invalidateQueries({ queryKey: ["customer-balance-status"] });
+      queryClient.invalidateQueries({ queryKey: ["customer-fine-stats"] });
       queryClient.invalidateQueries({ queryKey: ["audit-logs"] });
 
       // Audit log
@@ -188,6 +204,10 @@ const FinesList = () => {
         </TableCell>
 
         <TableCell>
+          {fine.rentals?.rental_number || ''}
+        </TableCell>
+
+        <TableCell>
           {fine.vehicles.reg} • {fine.vehicles.make} {fine.vehicles.model}
         </TableCell>
 
@@ -196,11 +216,11 @@ const FinesList = () => {
         </TableCell>
 
         <TableCell>
-          {new Date(fine.issue_date).toLocaleDateString()}
+          {new Date(fine.issue_date + 'T00:00:00').toLocaleDateString()}
         </TableCell>
 
         <TableCell className={cn(fine.isOverdue && "text-destructive font-medium")}>
-          {new Date(fine.due_date).toLocaleDateString()}
+          {new Date(fine.due_date + 'T00:00:00').toLocaleDateString()}
           {fine.isOverdue && (
             <Badge variant="destructive" className="ml-2 text-xs">
               {Math.abs(fine.daysUntilDue)} days overdue
@@ -280,6 +300,7 @@ const FinesList = () => {
               )}
             </TableHead>
             <TableHead>Reference</TableHead>
+            <TableHead>Rental #</TableHead>
             <TableHead>Vehicle</TableHead>
             <TableHead>Customer</TableHead>
             <TableHead>Issue Date</TableHead>
@@ -311,7 +332,7 @@ const FinesList = () => {
             fines.map(renderFineRow)
           ) : (
             <TableRow>
-              <TableCell colSpan={10} className="text-center py-8">
+              <TableCell colSpan={11} className="text-center py-8">
                 <div className="flex flex-col items-center space-y-2">
                   <AlertTriangle className="h-12 w-12 text-muted-foreground" />
                   <p className="text-lg font-medium">No fines found</p>
@@ -343,6 +364,7 @@ const FinesList = () => {
   }
 
   return (
+    <>
     <div className="container mx-auto p-6 space-y-6">
       {/* Header */}
       <div className="flex justify-between items-start">
@@ -362,7 +384,7 @@ const FinesList = () => {
           )}
           {canEdit('fines') && (
             <Button
-              onClick={() => router.push("/fines/new")}
+              onClick={() => setShowAddFineDialog(true)}
               className="bg-gradient-primary"
             >
               <Plus className="h-4 w-4 mr-2" />
@@ -429,6 +451,9 @@ const FinesList = () => {
         </>
       )}
     </div>
+
+    <AddFineDialog open={showAddFineDialog} onOpenChange={setShowAddFineDialog} />
+  </>
   );
 };
 

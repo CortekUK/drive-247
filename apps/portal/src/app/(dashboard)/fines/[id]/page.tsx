@@ -26,8 +26,10 @@ interface Fine {
   notes: string | null;
   customer_id: string | null;
   vehicle_id: string;
+  rental_id: string | null;
   customers: { name: string } | null;
   vehicles: { reg: string; make: string; model: string };
+  rentals: { rental_number: string | null } | null;
 }
 
 interface FineFile {
@@ -58,6 +60,9 @@ const FineDetail = () => {
     onSuccess: () => {
       toast({ title: "Fine charged to customer account successfully" });
       queryClient.invalidateQueries({ queryKey: ["fine", id] });
+      queryClient.invalidateQueries({ queryKey: ["customer-balance"] });
+      queryClient.invalidateQueries({ queryKey: ["customer-balance-status"] });
+      queryClient.invalidateQueries({ queryKey: ["fines-kpis"] });
     },
     onError: (error: any) => {
       toast({
@@ -70,6 +75,13 @@ const FineDetail = () => {
 
   const waiveFineAction = useMutation({
     mutationFn: async () => {
+      // Client-side: delete ledger entry for Open fines before calling edge function
+      await supabase
+        .from('ledger_entries')
+        .delete()
+        .eq('reference', `FINE-${id}`)
+        .eq('type', 'Charge');
+
       const { data, error } = await supabase.functions.invoke('apply-fine', {
         body: { fineId: id, action: 'waive' }
       });
@@ -80,6 +92,9 @@ const FineDetail = () => {
     onSuccess: () => {
       toast({ title: "Fine waived successfully" });
       queryClient.invalidateQueries({ queryKey: ["fine", id] });
+      queryClient.invalidateQueries({ queryKey: ["customer-balance"] });
+      queryClient.invalidateQueries({ queryKey: ["customer-balance-status"] });
+      queryClient.invalidateQueries({ queryKey: ["fines-kpis"] });
     },
     onError: (error: any) => {
       toast({
@@ -98,7 +113,8 @@ const FineDetail = () => {
         .select(`
           *,
           customers!fines_customer_id_fkey(name),
-          vehicles!fines_vehicle_id_fkey(reg, make, model)
+          vehicles!fines_vehicle_id_fkey(reg, make, model),
+          rentals!fines_rental_id_fkey(rental_number)
         `)
         .eq("id", id)
         .single();
@@ -296,8 +312,9 @@ const FineDetail = () => {
                   { label: "Reference", value: fine.reference_no || '-' },
                   { label: "Vehicle", value: `${fine.vehicles.reg} (${fine.vehicles.make} ${fine.vehicles.model})` },
                   { label: "Customer", value: fine.customers?.name || 'No customer assigned' },
-                  { label: "Issue Date", value: new Date(fine.issue_date).toLocaleDateString() },
-                  { label: "Due Date", value: new Date(fine.due_date).toLocaleDateString() }
+                  { label: "Rental #", value: fine.rentals?.rental_number || '-' },
+                  { label: "Issue Date", value: new Date(fine.issue_date + 'T00:00:00').toLocaleDateString() },
+                  { label: "Due Date", value: new Date(fine.due_date + 'T00:00:00').toLocaleDateString() }
                 ]} />
                 {fine.notes && (
                   <div className="mt-6 pt-4 border-t">
