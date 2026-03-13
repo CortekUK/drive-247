@@ -13,7 +13,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
-import { FileText, ArrowLeft, DollarSign, Plus, X, Send, Download, Ban, Check, AlertTriangle, Loader2, Shield, ShieldCheck, CheckCircle, XCircle, ExternalLink, UserCheck, IdCard, Camera, FileSignature, Clock, Mail, RefreshCw, Trash2, Receipt, Percent, Car, Undo2, Truck, MapPin, Key, KeyRound, CalendarPlus, Package, Banknote, CreditCard, Calendar, Info, Copy, Gauge, Briefcase } from "lucide-react";
+import { FileText, ArrowLeft, DollarSign, Plus, X, Send, Download, Ban, Check, AlertTriangle, Loader2, Shield, ShieldCheck, CheckCircle, XCircle, ExternalLink, UserCheck, IdCard, Camera, FileSignature, Clock, Mail, RefreshCw, Trash2, Receipt, Percent, Car, Undo2, Truck, MapPin, Key, KeyRound, CalendarPlus, Package, Banknote, CreditCard, Calendar, Info, Copy, Gauge, Briefcase, Bell } from "lucide-react";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Progress } from "@/components/ui/progress";
 import { AddPaymentDialog } from "@/components/shared/dialogs/add-payment-dialog";
@@ -50,6 +50,7 @@ import { useRentalAgreements } from "@/hooks/use-rental-agreements";
 import { AgreementTimeline } from "@/components/rentals/AgreementTimeline";
 import { useRentalInsurancePolicies } from "@/hooks/use-rental-insurance-policies";
 import { InsuranceTimeline } from "@/components/rentals/InsuranceTimeline";
+import { AddReminderDialog } from "@/components/reminders/add-reminder-dialog";
 
 interface Rental {
   id: string;
@@ -266,7 +267,12 @@ const RentalDetail = () => {
 
   // Targeted payment selection state
   const [selectedCategories, setSelectedCategories] = useState<Set<string>>(new Set());
+  const [selectedExtCategories, setSelectedExtCategories] = useState<Set<string>>(new Set());
   const [showTargetedPayment, setShowTargetedPayment] = useState(false);
+
+  // Add reminder dialog state (from breakdown rows)
+  const [showRowReminder, setShowRowReminder] = useState(false);
+  const [reminderRowTitle, setReminderRowTitle] = useState('');
 
   // Excess mileage deduction dialog state
   const [showDeductFromDepositDialog, setShowDeductFromDepositDialog] = useState(false);
@@ -1385,6 +1391,7 @@ const RentalDetail = () => {
         show={needsKeyHandover}
         customerName={rental?.customers?.name}
         vehicleInfo={rental?.vehicles ? `${rental.vehicles.make} ${rental.vehicles.model} • ${rental.vehicles.reg}` : undefined}
+        onGoToSection={() => setActiveTab('operations')}
       />
 
       {/* Header */}
@@ -1838,10 +1845,10 @@ const RentalDetail = () => {
                     </TableHead>
                   )}
                   <TableHead className={selectableCategories.length > 0 ? "" : "pl-6"}>Category</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead className="text-right">Amount</TableHead>
-                  <TableHead className="text-right">Refunded</TableHead>
-                  <TableHead className="text-right pr-6">Action</TableHead>
+                  <TableHead className="text-center w-[100px]">Status</TableHead>
+                  <TableHead className="text-right w-[100px]">Amount</TableHead>
+                  <TableHead className="text-right w-[100px]">Refunded</TableHead>
+                  <TableHead className="text-right pr-6 w-[140px]">Action</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -1885,7 +1892,7 @@ const RentalDetail = () => {
                           </div>
                         </div>
                       </TableCell>
-                      <TableCell>
+                      <TableCell className="text-center">
                         {(() => {
                           if (!applied) {
                             return <Badge variant="outline" className="text-muted-foreground/60 border-muted-foreground/20 text-[11px]">Not Applied</Badge>;
@@ -1935,6 +1942,7 @@ const RentalDetail = () => {
                         )}
                       </TableCell>
                       <TableCell className="text-right pr-6">
+                        <div className="flex items-center gap-2 justify-end">
                         {isExcessMileageUnpaid && excessMileageCharge ? (
                           <div className={`flex items-center gap-2 justify-end ${isRentalCompleted ? 'opacity-40 pointer-events-none' : ''}`}>
                             {invoiceBreakdown && invoiceBreakdown.securityDeposit > 0 && (
@@ -2017,6 +2025,20 @@ const RentalDetail = () => {
                         ) : (
                           <span className="text-muted-foreground/30">-</span>
                         )}
+                        {applied && (
+                          <button
+                            className="text-muted-foreground hover:text-amber-500 transition-colors"
+                            title="Add Reminder"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setReminderRowTitle(`${label} - Rental #${rental.id?.slice(0, 8)}`);
+                              setShowRowReminder(true);
+                            }}
+                          >
+                            <Bell className="h-3.5 w-3.5" />
+                          </button>
+                        )}
+                        </div>
                       </TableCell>
                     </TableRow>
                   );
@@ -2120,15 +2142,57 @@ const RentalDetail = () => {
             },
           ];
 
+          // Compute selectable categories for this extension (same logic as original)
+          const extSelectableCategories = isInactive ? [] : extRows
+            .filter(({ amount, remaining_amount }) => amount > 0 && remaining_amount > 0)
+            .map(r => r.category);
+
+          const extAllSelected = extSelectableCategories.length > 0 && extSelectableCategories.every(c => selectedExtCategories.has(c));
+          const extSomeSelected = extSelectableCategories.some(c => selectedExtCategories.has(c));
+
+          const extSelectedTotal = extSelectableCategories
+            .filter(c => selectedExtCategories.has(c))
+            .reduce((sum, c) => {
+              const row = extRows.find(r => r.category === c);
+              return sum + (row?.remaining_amount ?? 0);
+            }, 0);
+
+          const toggleExtCategory = (category: string) => {
+            setSelectedExtCategories(prev => {
+              const next = new Set(prev);
+              if (next.has(category)) next.delete(category);
+              else next.add(category);
+              return next;
+            });
+          };
+
+          const toggleAllExtUnpaid = () => {
+            if (extAllSelected) {
+              setSelectedExtCategories(new Set());
+            } else {
+              setSelectedExtCategories(new Set(extSelectableCategories));
+            }
+          };
+
           return (
+            <>
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead className="pl-6">Category</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead className="text-right">Amount</TableHead>
-                  <TableHead className="text-right">Refunded</TableHead>
-                  <TableHead className="text-right pr-6">Action</TableHead>
+                  {extSelectableCategories.length > 0 && (
+                    <TableHead className="pl-6 w-10">
+                      <Checkbox
+                        checked={extAllSelected ? true : extSomeSelected ? "indeterminate" : false}
+                        onCheckedChange={toggleAllExtUnpaid}
+                        aria-label="Select all unpaid extension items"
+                      />
+                    </TableHead>
+                  )}
+                  <TableHead className={extSelectableCategories.length > 0 ? "" : "pl-6"}>Category</TableHead>
+                  <TableHead className="text-center w-[100px]">Status</TableHead>
+                  <TableHead className="text-right w-[100px]">Amount</TableHead>
+                  <TableHead className="text-right w-[100px]">Refunded</TableHead>
+                  <TableHead className="text-right pr-6 w-[140px]">Action</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -2142,10 +2206,23 @@ const RentalDetail = () => {
                     : (applied && remaining_amount === 0);
                   const isPartial = !isInsuranceRow && applied && remaining_amount > 0 && remaining_amount < amount;
                   const hasUnpaid = applied && !isPaid && !fullyRefunded;
+                  const isExtSelectable = extSelectableCategories.includes(category);
+                  const isExtSelected = selectedExtCategories.has(category);
 
                   return (
                     <TableRow key={category} className={!applied ? 'opacity-40' : ''}>
-                      <TableCell className="pl-6">
+                      {extSelectableCategories.length > 0 && (
+                        <TableCell className="pl-6 w-10">
+                          {isExtSelectable ? (
+                            <Checkbox
+                              checked={isExtSelected}
+                              onCheckedChange={() => toggleExtCategory(category)}
+                              aria-label={`Select ${label}`}
+                            />
+                          ) : null}
+                        </TableCell>
+                      )}
+                      <TableCell className={extSelectableCategories.length > 0 ? "" : "pl-6"}>
                         <div className="flex items-center gap-3">
                           <div className={`h-7 w-7 rounded-full flex items-center justify-center ${applied ? bg : 'bg-muted/30'}`}>
                             <Icon className={`h-3.5 w-3.5 ${applied ? color : 'text-muted-foreground/50'}`} />
@@ -2156,7 +2233,7 @@ const RentalDetail = () => {
                           </div>
                         </div>
                       </TableCell>
-                      <TableCell>
+                      <TableCell className="text-center">
                         {(() => {
                           if (!applied) {
                             return <Badge variant="outline" className="text-muted-foreground/60 border-muted-foreground/20 text-[11px]">Not Applied</Badge>;
@@ -2197,6 +2274,7 @@ const RentalDetail = () => {
                         )}
                       </TableCell>
                       <TableCell className="text-right pr-6">
+                        <div className="flex items-center gap-2 justify-end">
                         {!applied ? (
                           <span className="text-muted-foreground/30">-</span>
                         ) : hasUnpaid && !isInactive ? (
@@ -2230,12 +2308,48 @@ const RentalDetail = () => {
                         ) : (
                           <span className="text-muted-foreground/30">-</span>
                         )}
+                        {applied && (
+                          <button
+                            className="text-muted-foreground hover:text-amber-500 transition-colors"
+                            title="Add Reminder"
+                            onClick={() => {
+                              setReminderRowTitle(`${label} (Ext #${group.extensionNumber}) - Rental #${rental.id?.slice(0, 8)}`);
+                              setShowRowReminder(true);
+                            }}
+                          >
+                            <Bell className="h-3.5 w-3.5" />
+                          </button>
+                        )}
+                        </div>
                       </TableCell>
                     </TableRow>
                   );
                 })}
               </TableBody>
             </Table>
+
+            {/* Selection footer for targeted extension payment */}
+            {selectedExtCategories.size > 0 && (
+              <div className="sticky bottom-0 border-t bg-primary/20 border-primary/40 px-6 py-3 flex items-center justify-between">
+                <p className="text-sm text-muted-foreground">
+                  {selectedExtCategories.size} item{selectedExtCategories.size > 1 ? 's' : ''} selected &mdash;{' '}
+                  <span className="font-semibold text-foreground">{formatCurrencyUtil(extSelectedTotal, tenant?.currency_code || 'USD')}</span>
+                </p>
+                <Button
+                  size="sm"
+                  onClick={() => {
+                    const cats = Array.from(selectedExtCategories);
+                    setExtensionPaymentCategories(cats);
+                    setExtensionPaymentAmount(extSelectedTotal);
+                    setShowExtensionPayment(true);
+                  }}
+                >
+                  <DollarSign className="h-3.5 w-3.5 mr-1.5" />
+                  Add Payment
+                </Button>
+              </div>
+            )}
+            </>
           );
         };
 
@@ -4387,6 +4501,14 @@ const RentalDetail = () => {
           rentalNumber={rental.rental_number}
         />
       )}
+
+      {/* Add Reminder Dialog (from breakdown rows) */}
+      <AddReminderDialog
+        open={showRowReminder}
+        onOpenChange={setShowRowReminder}
+        defaultTitle={reminderRowTitle}
+        defaultObjectType="Rental"
+      />
     </div>
   );
 };

@@ -1,7 +1,8 @@
 'use client';
 
 import React, { useState } from 'react';
-import { useReminders, useReminderStats, useReminderActions, useReminderGeneration, type ReminderFilters } from '@/hooks/use-reminders';
+import { useReminders, useReminderStats, useReminderActions, type ReminderFilters } from '@/hooks/use-reminders';
+import { AddReminderDialog } from '@/components/reminders/add-reminder-dialog';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -20,7 +21,7 @@ import {
   Bell,
   Calendar,
   Download,
-  Play,
+  Plus,
   MoreHorizontal,
   Shield,
   BarChart3,
@@ -44,12 +45,12 @@ const SEVERITY_ICONS = {
 export default function RemindersPageEnhanced() {
   const [filters, setFilters] = useState<ReminderFilters>({});
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [showAddDialog, setShowAddDialog] = useState(false);
   const { canEdit } = useManagerPermissions();
 
   const { data: reminders = [], isLoading, error } = useReminders(filters);
   const { data: stats } = useReminderStats();
   const { markDone, dismiss, snooze, bulkUpdate, isLoading: isUpdating } = useReminderActions();
-  const generateReminders = useReminderGeneration();
 
   const handleSelectAll = (checked: boolean) => {
     if (checked) {
@@ -182,13 +183,9 @@ export default function RemindersPageEnhanced() {
           </Link>
 
           {canEdit('reminders') && (
-            <Button
-              variant="outline"
-              onClick={() => generateReminders.mutate()}
-              disabled={generateReminders.isPending}
-            >
-              <Play className="h-4 w-4 mr-2" />
-              {generateReminders.isPending ? 'Generating...' : 'Generate'}
+            <Button onClick={() => setShowAddDialog(true)}>
+              <Plus className="h-4 w-4 mr-2" />
+              New Reminder
             </Button>
           )}
         </div>
@@ -329,11 +326,10 @@ export default function RemindersPageEnhanced() {
               {canEdit('reminders') && (
                 <Button
                   variant="outline"
-                  onClick={() => generateReminders.mutate()}
-                  disabled={generateReminders.isPending}
+                  onClick={() => setShowAddDialog(true)}
                 >
-                  <Play className="h-4 w-4 mr-2" />
-                  Generate Reminders
+                  <Plus className="h-4 w-4 mr-2" />
+                  Create a Reminder
                 </Button>
               )}
             </div>
@@ -450,6 +446,7 @@ export default function RemindersPageEnhanced() {
           )}
         </CardContent>
       </Card>
+      <AddReminderDialog open={showAddDialog} onOpenChange={setShowAddDialog} />
     </div>
   );
 }
