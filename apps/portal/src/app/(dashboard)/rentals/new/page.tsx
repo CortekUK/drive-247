@@ -291,15 +291,14 @@ const CreateRental = () => {
 
       if (hasOverlap) {
         const isGlobal = !block.vehicle_id;
-        const isVehicleSpecific = block.vehicle_id === vehicleId;
 
-        // Block if it's a global block OR if it's for this specific vehicle
-        if (isGlobal || isVehicleSpecific) {
-          console.log(`[BlockedDates] Rental blocked: ${startDate.toISOString()} - ${endDate.toISOString()} overlaps with ${block.start_date} - ${block.end_date} (vehicle: ${block.vehicle_id || 'global'})`);
+        // Admin portal only enforces global blocks — vehicle-specific blocks are informational only
+        if (isGlobal) {
+          console.log(`[BlockedDates] Rental blocked: ${startDate.toISOString()} - ${endDate.toISOString()} overlaps with ${block.start_date} - ${block.end_date} (global block)`);
           return {
             blocked: true,
-            reason: block.reason || (isGlobal ? "General blocked period" : "Vehicle maintenance/blocked"),
-            isGlobal
+            reason: block.reason || "General blocked period",
+            isGlobal: true
           };
         }
       }
@@ -2059,12 +2058,6 @@ const CreateRental = () => {
                                 if (globalBlockedDatesArray.some(
                                   blockedDate => blockedDate.toDateString() === date.toDateString()
                                 )) return true;
-                                if (selectedVehicleId) {
-                                  const vehicleBlockedDates = getVehicleBlockedDates(selectedVehicleId);
-                                  if (vehicleBlockedDates.some(
-                                    blockedDate => blockedDate.toDateString() === date.toDateString()
-                                  )) return true;
-                                }
                                 return false;
                               }}
                               error={!!form.formState.errors.start_date}
@@ -2109,13 +2102,7 @@ const CreateRental = () => {
                                   if (globalBlockedDatesArray.some(
                                     blockedDate => blockedDate.toDateString() === date.toDateString()
                                   )) return true;
-                                  if (selectedVehicleId) {
-                                    const vehicleBlockedDates = getVehicleBlockedDates(selectedVehicleId);
-                                    if (vehicleBlockedDates.some(
-                                      blockedDate => blockedDate.toDateString() === date.toDateString()
-                                    )) return true;
-                                  }
-                                  if (watchedStartDate && selectedVehicleId) {
+                                  if (watchedStartDate) {
                                     const blockCheck = checkBlockedDatesOverlap(watchedStartDate, date, selectedVehicleId);
                                     if (blockCheck.blocked) return true;
                                   }
