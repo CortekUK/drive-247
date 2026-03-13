@@ -235,7 +235,7 @@ const Settings = () => {
   // Handle URL tab parameter
   useEffect(() => {
     const tabParam = searchParams.get('tab');
-    if (tabParam && ['general', 'branding', 'reminders', 'payments', 'locations', 'rental', 'extras', 'templates', 'integrations', 'subscription'].includes(tabParam)) {
+    if (tabParam && allSettingsTabs.includes(tabParam) && canViewSettings(tabParam)) {
       setActiveTab(tabParam);
     }
   }, [searchParams]);
@@ -414,16 +414,18 @@ const Settings = () => {
       setShowTabWarning(true);
     } else {
       setActiveTab(newTab);
+      router.replace(`/settings?tab=${newTab}`, { scroll: false });
     }
-  }, [activeTab, tabDirtyMap]);
+  }, [activeTab, tabDirtyMap, router]);
 
   const handleTabDiscardAndSwitch = useCallback(() => {
     setShowTabWarning(false);
     if (pendingTab) {
       setActiveTab(pendingTab);
+      router.replace(`/settings?tab=${pendingTab}`, { scroll: false });
       setPendingTab(null);
     }
-  }, [pendingTab]);
+  }, [pendingTab, router]);
 
   const handleTabCancel = useCallback(() => {
     setPendingTab(null);
@@ -526,6 +528,7 @@ const Settings = () => {
       const success = await saveAllDirtyForms();
       if (success && pendingTab) {
         setActiveTab(pendingTab);
+        router.replace(`/settings?tab=${pendingTab}`, { scroll: false });
         setPendingTab(null);
         setShowTabWarning(false);
       }
@@ -1128,8 +1131,8 @@ const Settings = () => {
 
       {/* Settings Tabs */}
       <Tabs value={activeTab} onValueChange={handleTabChange}>
-        <div className="flex flex-col lg:flex-row gap-6">
-          {/* Mobile: Horizontal scrollable nav */}
+        <div className="space-y-6">
+          {/* Mobile: Horizontal scrollable nav (sidebar handles desktop nav) */}
           <div className="lg:hidden">
             <TabsList className="flex w-full overflow-x-auto gap-1 bg-muted/50 p-1 rounded-lg">
               {([
@@ -1152,81 +1155,8 @@ const Settings = () => {
             </TabsList>
           </div>
 
-          {/* Desktop: Vertical sidebar nav */}
-          <nav className="hidden lg:block w-52 shrink-0">
-            <div className="sticky top-6 rounded-lg border bg-card p-2 space-y-1">
-              {/* Business group */}
-              <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground/50 px-2.5 pt-1 pb-0.5">Business</p>
-              {([
-                { value: 'general', icon: Building2, label: 'General' },
-                { value: 'locations', icon: MapPin, label: 'Locations' },
-                { value: 'branding', icon: Palette, label: 'Branding' },
-              ] as const).filter(item => canViewSettings(item.value)).map(item => (
-                <button
-                  key={item.value}
-                  onClick={() => setActiveTab(item.value)}
-                  className={`flex items-center gap-2.5 w-full px-2.5 py-1.5 text-[13px] rounded-md transition-colors ${
-                    activeTab === item.value
-                      ? 'bg-primary/10 text-primary font-medium'
-                      : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'
-                  }`}
-                >
-                  <item.icon className="h-4 w-4 shrink-0" />
-                  {item.label}
-                </button>
-              ))}
-
-              <Separator className="!my-2" />
-
-              {/* Operations group */}
-              <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground/50 px-2.5 pt-0.5 pb-0.5">Operations</p>
-              {([
-                { value: 'rental', icon: Car, label: 'Bookings' },
-                { value: 'pricing', icon: TrendingUp, label: 'Dynamic Pricing' },
-                { value: 'extras', icon: Package, label: 'Extras' },
-                { value: 'payments', icon: CreditCard, label: 'Payments & Stripe' },
-                { value: 'reminders', icon: Bell, label: 'Notifications' },
-                { value: 'templates', icon: FileText, label: 'Templates' },
-              ] as const).filter(item => canViewSettings(item.value)).map(item => (
-                <button
-                  key={item.value}
-                  onClick={() => setActiveTab(item.value)}
-                  className={`flex items-center gap-2.5 w-full px-2.5 py-1.5 text-[13px] rounded-md transition-colors ${
-                    activeTab === item.value
-                      ? 'bg-primary/10 text-primary font-medium'
-                      : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'
-                  }`}
-                >
-                  <item.icon className="h-4 w-4 shrink-0" />
-                  {item.label}
-                </button>
-              ))}
-
-              <Separator className="!my-2" />
-
-              {/* More group */}
-              {([
-                { value: 'integrations', icon: Shield, label: 'Integrations' },
-                { value: 'subscription', icon: Crown, label: 'Subscription' },
-              ] as const).filter(item => canViewSettings(item.value)).map(item => (
-                <button
-                  key={item.value}
-                  onClick={() => setActiveTab(item.value)}
-                  className={`flex items-center gap-2.5 w-full px-2.5 py-1.5 text-[13px] rounded-md transition-colors ${
-                    activeTab === item.value
-                      ? 'bg-primary/10 text-primary font-medium'
-                      : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'
-                  }`}
-                >
-                  <item.icon className="h-4 w-4 shrink-0" />
-                  {item.label}
-                </button>
-              ))}
-            </div>
-          </nav>
-
           {/* Tab Content Area */}
-          <div className="flex-1 min-w-0 space-y-6">
+          <div className="space-y-6">
             {!canEditSettings(activeTab) && (
               <div className="p-3 bg-muted/50 border rounded-lg flex items-center gap-2 text-sm text-muted-foreground">
                 <Eye className="h-4 w-4 shrink-0" />
@@ -3715,7 +3645,7 @@ const Settings = () => {
 
             </div>
           </div>{/* end Tab Content Area */}
-        </div>{/* end flex layout */}
+        </div>{/* end layout */}
       </Tabs>
 
       <UnsavedChangesDialog

@@ -23,22 +23,21 @@ export const HeaderSearch = () => {
 
   return (
     <>
-      <Button
-        variant="outline"
+      <button
         onClick={() => setSearchOpen(true)}
-        className="group relative gap-2 sm:gap-3 px-2 sm:px-4 h-10 w-full text-muted-foreground hover:text-foreground border-border hover:border-primary/50 transition-all duration-200 hover:bg-accent/50 justify-start shadow-sm"
+        className="group flex items-center gap-2 px-3 h-8 rounded-md text-muted-foreground/50 hover:text-muted-foreground border border-border/40 hover:border-border/60 bg-transparent hover:bg-accent/30 transition-all duration-200 cursor-pointer w-full"
       >
-        <Search className="h-4 w-4 shrink-0 transition-transform duration-200 group-hover:scale-110 text-muted-foreground" />
-        <span className="flex-1 text-left text-sm font-normal text-muted-foreground truncate min-w-0">Search for anything...</span>
-        <div className="hidden sm:flex items-center gap-1">
-          <kbd className="inline-flex items-center justify-center h-6 px-2 rounded text-[11px] font-mono bg-muted border border-border text-muted-foreground min-w-[24px]">
+        <Search className="h-3.5 w-3.5 shrink-0" />
+        <span className="flex-1 text-left text-[13px] font-normal truncate min-w-0">Search...</span>
+        <div className="hidden sm:flex items-center gap-0.5">
+          <kbd className="inline-flex items-center justify-center h-[18px] px-1 rounded text-[10px] font-mono bg-muted/50 border border-border/40 text-muted-foreground/40 min-w-[18px]">
             ⌘
           </kbd>
-          <kbd className="inline-flex items-center justify-center h-6 px-2 rounded text-[11px] font-mono bg-muted border border-border text-muted-foreground min-w-[24px]">
+          <kbd className="inline-flex items-center justify-center h-[18px] px-1 rounded text-[10px] font-mono bg-muted/50 border border-border/40 text-muted-foreground/40 min-w-[18px]">
             K
           </kbd>
         </div>
-      </Button>
+      </button>
 
       <GlobalSearch open={searchOpen} onOpenChange={setSearchOpen} />
     </>

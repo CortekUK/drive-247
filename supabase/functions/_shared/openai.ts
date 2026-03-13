@@ -6,8 +6,8 @@ const OPENAI_BASE_URL = 'https://api.openai.com/v1';
 
 // Embedding model - 1536 dimensions
 const EMBEDDING_MODEL = 'text-embedding-ada-002';
-// Chat model - fast and cost-effective
-const CHAT_MODEL = 'gpt-4o-mini';
+// Chat model - gpt-4o for reliable function calling and quality responses
+const CHAT_MODEL = 'gpt-4o';
 
 export interface EmbeddingResponse {
   data: Array<{
@@ -21,14 +21,36 @@ export interface EmbeddingResponse {
 }
 
 export interface ChatMessage {
-  role: 'system' | 'user' | 'assistant';
-  content: string;
+  role: 'system' | 'user' | 'assistant' | 'tool';
+  content: string | null;
+  tool_calls?: ToolCall[];
+  tool_call_id?: string;
+}
+
+export interface ToolCall {
+  id: string;
+  type: 'function';
+  function: {
+    name: string;
+    arguments: string;
+  };
+}
+
+export interface ToolDefinition {
+  type: 'function';
+  function: {
+    name: string;
+    description: string;
+    parameters: Record<string, unknown>;
+  };
 }
 
 export interface ChatCompletionOptions {
   temperature?: number;
   max_tokens?: number;
   model?: string;
+  tools?: ToolDefinition[];
+  tool_choice?: 'auto' | 'none' | { type: 'function'; function: { name: string } };
 }
 
 export interface ChatCompletionResponse {
@@ -36,7 +58,8 @@ export interface ChatCompletionResponse {
   choices: Array<{
     message: {
       role: string;
-      content: string;
+      content: string | null;
+      tool_calls?: ToolCall[];
     };
     finish_reason: string;
   }>;
@@ -133,7 +156,21 @@ export async function chatCompletion(
     temperature = 0.7,
     max_tokens = 2048,
     model = CHAT_MODEL,
+    tools,
+    tool_choice,
   } = options;
+
+  const requestBody: Record<string, unknown> = {
+    model,
+    messages,
+    temperature,
+    max_tokens,
+  };
+
+  if (tools && tools.length > 0) {
+    requestBody.tools = tools;
+    requestBody.tool_choice = tool_choice || 'auto';
+  }
 
   const response = await fetch(`${OPENAI_BASE_URL}/chat/completions`, {
     method: 'POST',
@@ -141,12 +178,7 @@ export async function chatCompletion(
       'Authorization': `Bearer ${OPENAI_API_KEY}`,
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify({
-      model,
-      messages,
-      temperature,
-      max_tokens,
-    }),
+    body: JSON.stringify(requestBody),
   });
 
   if (!response.ok) {

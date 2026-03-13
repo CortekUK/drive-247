@@ -32,6 +32,30 @@ export function useChat(): UseChatReturn {
     return 'there';
   }, [appUser]);
 
+  // Helper to call the chat edge function
+  const callChatFunction = useCallback(async (body: Record<string, unknown>): Promise<ChatApiResponse> => {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session?.access_token) {
+      throw new Error('Not authenticated');
+    }
+
+    const response = await fetch(`${SUPABASE_URL}/functions/v1/chat`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${session.access_token}`,
+      },
+      body: JSON.stringify(body),
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.error || `Request failed: ${response.status}`);
+    }
+
+    return await response.json();
+  }, []);
+
   const sendMessage = useCallback(async (content: string) => {
     if (!content.trim()) return;
 
@@ -62,34 +86,12 @@ export function useChat(): UseChatReturn {
     setMessages((prev) => [...prev, userMessage]);
 
     try {
-      // Get current session for auth
-      const { data: { session } } = await supabase.auth.getSession();
-
-      if (!session?.access_token) {
-        throw new Error('Not authenticated');
-      }
-
-      // Call the chat edge function
-      const response = await fetch(`${SUPABASE_URL}/functions/v1/chat`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${session.access_token}`,
-        },
-        body: JSON.stringify({
-          message: content.trim(),
-          conversationId,
-          userName: getUserName(),
-          tenantId: tenant.id,
-        }),
+      const data = await callChatFunction({
+        message: content.trim(),
+        conversationId,
+        userName: getUserName(),
+        tenantId: tenant.id,
       });
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.error || `Request failed: ${response.status}`);
-      }
-
-      const data: ChatApiResponse = await response.json();
 
       // Update conversation ID if this is a new conversation
       if (!conversationId) {
@@ -103,6 +105,8 @@ export function useChat(): UseChatReturn {
         content: data.response,
         sources: data.sources,
         chart: data.chart,
+        rentalRequests: data.rentalRequests,
+        action: data.action,
         timestamp: new Date(),
       };
 
@@ -125,7 +129,79 @@ export function useChat(): UseChatReturn {
     } finally {
       setIsLoading(false);
     }
-  }, [conversationId, getUserName, tenant?.id]);
+  }, [conversationId, getUserName, tenant?.id, callChatFunction]);
+
+  const confirmAction = useCallback(async (messageId: string) => {
+    // Find the message with the action
+    const msg = messages.find((m) => m.id === messageId);
+    if (!msg?.action) return;
+
+    if (!tenant?.id) return;
+
+    setIsLoading(true);
+
+    try {
+      const data = await callChatFunction({
+        type: 'execute_action',
+        actionName: msg.action.actionName,
+        resolvedParams: msg.action.resolvedParams,
+        conversationId,
+        tenantId: tenant.id,
+      });
+
+      // Update the original message to remove the action (it's been handled)
+      // and add a result message
+      setMessages((prev) =>
+        prev.map((m) =>
+          m.id === messageId ? { ...m, action: undefined } : m
+        )
+      );
+
+      const resultMessage: ChatMessage = {
+        id: crypto.randomUUID(),
+        role: 'assistant',
+        content: data.response,
+        actionResult: data.actionResult,
+        timestamp: new Date(),
+      };
+
+      setMessages((prev) => [...prev, resultMessage]);
+
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Action failed';
+      console.error('Action execution error:', err);
+
+      const errorMsg: ChatMessage = {
+        id: crypto.randomUUID(),
+        role: 'assistant',
+        content: `Sorry, the action failed: ${errorMessage}`,
+        actionResult: { success: false, message: errorMessage },
+        timestamp: new Date(),
+      };
+
+      setMessages((prev) => [...prev, errorMsg]);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [messages, conversationId, tenant?.id, callChatFunction]);
+
+  const rejectAction = useCallback((messageId: string) => {
+    // Remove the action from the message and add a cancellation note
+    setMessages((prev) =>
+      prev.map((m) =>
+        m.id === messageId ? { ...m, action: undefined } : m
+      )
+    );
+
+    const cancelMessage: ChatMessage = {
+      id: crypto.randomUUID(),
+      role: 'assistant',
+      content: 'No problem, I\'ve cancelled that action.',
+      timestamp: new Date(),
+    };
+
+    setMessages((prev) => [...prev, cancelMessage]);
+  }, []);
 
   const clearChat = useCallback(() => {
     setMessages([]);
@@ -139,6 +215,8 @@ export function useChat(): UseChatReturn {
     error,
     conversationId,
     sendMessage,
+    confirmAction,
+    rejectAction,
     clearChat,
   };
 }

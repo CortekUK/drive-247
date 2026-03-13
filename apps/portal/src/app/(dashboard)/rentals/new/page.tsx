@@ -31,7 +31,6 @@ import { useBonzahVehicleEligibility } from "@/hooks/use-bonzah-vehicle-eligibil
 import { useBonzahBalance } from "@/hooks/use-bonzah-balance";
 import { useCustomerActiveRentals } from "@/hooks/use-customer-active-rentals";
 import { PAYMENT_TYPES } from "@/constants";
-import { ContractSummary } from "@/components/rentals/contract-summary";
 import { DatePickerInput } from "@/components/shared/forms/date-picker-input";
 import { CurrencyInput } from "@/components/shared/forms/currency-input";
 import { InvoiceDialog } from "@/components/shared/dialogs/invoice-dialog";
@@ -1627,10 +1626,8 @@ const CreateRental = () => {
         </Alert>
       )}
 
-      {/* Two-column layout: Form + Contract Summary */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        {/* Form Column */}
-        <div className="lg:col-span-2">
+      <div>
+        <div>
           {/* Submit Error Alert */}
           {submitError && (
             <Alert variant="destructive" className="mb-6">
@@ -1640,16 +1637,17 @@ const CreateRental = () => {
           )}
 
           <Form {...form}>
-            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
-
-              {/* ── Section 1: Customer & Vehicle ─────────────────── */}
+            <form onSubmit={form.handleSubmit(onSubmit)}>
+            <div className="grid grid-cols-1 lg:grid-cols-5 gap-8 lg:h-[calc(100vh-180px)]">
+            {/* ── Left: Scrollable Form ─────────────────────── */}
+            <div className="lg:col-span-3 lg:overflow-y-auto lg:pr-2 space-y-6">
+              {/* ── Section 1: Customer ──────────────────────────── */}
               <div className="rounded-xl border bg-card shadow-sm">
-                <div className="flex items-center gap-3 px-5 py-3.5 border-b bg-muted/40">
-                  <div className="flex items-center justify-center h-6 w-6 rounded-md bg-primary/10 text-primary"><FileText className="h-3.5 w-3.5" /></div>
-                  <h2 className="font-semibold text-sm">Customer & Vehicle</h2>
+                <div className="flex items-center gap-3 px-5 py-4 border-b bg-primary/10">
+                  <span className="text-2xl font-bold text-primary">1.</span>
+                  <h2 className="font-bold text-lg text-foreground uppercase tracking-wide">Customer</h2>
                 </div>
-                <div className="p-5 space-y-5">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="p-5">
                     <FormField
                       control={form.control}
                       name="customer_id"
@@ -1735,6 +1733,171 @@ const CreateRental = () => {
                       }}
                     />
 
+                  {/* Customer Verification */}
+                  {selectedCustomerId && (
+                    <div className="space-y-4 p-4 border rounded-lg bg-muted/30 mt-5">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <Shield className="h-5 w-5 text-primary" />
+                          <h3 className="font-medium">Identity Verification</h3>
+                          <span className="text-sm text-muted-foreground">
+                            ({verificationMode === "ai" ? "AI Verification" : "Veriff"})
+                          </span>
+                        </div>
+                        {isCustomerVerified ? (
+                          <Badge variant="default" className="bg-green-500 hover:bg-green-600">
+                            <CheckCircle2 className="h-3 w-3 mr-1" />
+                            Verified
+                          </Badge>
+                        ) : verificationPending ? (
+                          <Badge variant="secondary">
+                            <Clock className="h-3 w-3 mr-1" />
+                            Pending
+                          </Badge>
+                        ) : (
+                          <Badge variant="outline" className="border-amber-500 text-amber-600">
+                            <AlertTriangle className="h-3 w-3 mr-1" />
+                            Not Verified
+                          </Badge>
+                        )}
+                      </div>
+
+                      {/* DOB Warning */}
+                      {customerDetails && !customerDetails.date_of_birth && (
+                        <Alert variant="default" className="border-amber-500 bg-amber-50">
+                          <AlertTriangle className="h-4 w-4 text-amber-600" />
+                          <AlertDescription className="text-amber-700">
+                            Customer date of birth is not set. This may be required for identity verification.
+                          </AlertDescription>
+                        </Alert>
+                      )}
+
+                      {isCustomerVerified ? (
+                        <div className="text-sm text-muted-foreground">
+                          <p>Customer identity has been verified.</p>
+                          {customerVerification?.first_name && customerVerification?.last_name && (
+                            <p className="mt-1">
+                              Name: {customerVerification.first_name} {customerVerification.last_name}
+                            </p>
+                          )}
+                        </div>
+                      ) : verificationPending ? (
+                        <div className="space-y-3">
+                          <Alert variant="default" className="border-blue-500 bg-blue-50">
+                            <Clock className="h-4 w-4 text-blue-600" />
+                            <AlertDescription className="text-blue-700">
+                              Verification session in progress.
+                            </AlertDescription>
+                          </Alert>
+                        </div>
+                      ) : (
+                        <div className="space-y-3">
+                          <Alert variant="destructive">
+                            <XCircle className="h-4 w-4" />
+                            <AlertDescription>
+                              Customer must complete identity verification before rental can be created.
+                            </AlertDescription>
+                          </Alert>
+                          <Button
+                            type="button"
+                            onClick={handleCreateVerification}
+                            disabled={creatingVerification}
+                            className="w-full"
+                          >
+                            {creatingVerification ? (
+                              <>
+                                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                                Creating Session...
+                              </>
+                            ) : (
+                              <>
+                                <Shield className="h-4 w-4 mr-2" />
+                                Start Verification
+                              </>
+                            )}
+                          </Button>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Customer Reviews */}
+                  {selectedCustomerId && (
+                    <div className="p-4 border rounded-lg bg-muted/30 space-y-3 mt-5">
+                      <div className="flex items-center gap-2">
+                        <Star className="h-4 w-4 text-amber-500" />
+                        <h3 className="font-medium text-sm">Customer Reviews</h3>
+                      </div>
+
+                      {reviewSummary ? (
+                        <div className="space-y-2">
+                          <div className="flex items-center gap-3">
+                            <div className="flex items-center gap-1">
+                              {Array.from({ length: 10 }, (_, i) => (
+                                <div
+                                  key={i}
+                                  className={cn(
+                                    "h-2 w-2 rounded-full",
+                                    i < Math.round(reviewSummary.average_rating || 0)
+                                      ? "bg-amber-500"
+                                      : "bg-muted-foreground/20"
+                                  )}
+                                />
+                              ))}
+                            </div>
+                            <span className="text-sm font-semibold">
+                              {(reviewSummary.average_rating || 0).toFixed(1)}/10
+                            </span>
+                            <span className="text-xs text-muted-foreground">
+                              ({reviewSummary.total_reviews} {reviewSummary.total_reviews === 1 ? 'review' : 'reviews'})
+                            </span>
+                          </div>
+                          {reviewSummary.summary && (
+                            <p className="text-xs text-muted-foreground leading-relaxed italic">
+                              "{reviewSummary.summary}"
+                            </p>
+                          )}
+                          {customerReviews && customerReviews.length > 0 && (
+                            <div className="flex flex-wrap gap-1.5">
+                              {[...new Set(customerReviews.flatMap(r => r.tags))].slice(0, 6).map(tag => (
+                                <Badge key={tag} variant="secondary" className="text-[10px] px-1.5 py-0">
+                                  {tag}
+                                </Badge>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      ) : customerReviews && customerReviews.length > 0 ? (
+                        <div className="space-y-2">
+                          <div className="text-xs text-muted-foreground">
+                            {customerReviews.length} {customerReviews.length === 1 ? 'review' : 'reviews'} — avg{' '}
+                            {(customerReviews.reduce((sum, r) => sum + (r.rating || 0), 0) / customerReviews.length).toFixed(1)}/10
+                          </div>
+                          <div className="flex flex-wrap gap-1.5">
+                            {[...new Set(customerReviews.flatMap(r => r.tags))].slice(0, 6).map(tag => (
+                              <Badge key={tag} variant="secondary" className="text-[10px] px-1.5 py-0">
+                                {tag}
+                              </Badge>
+                            ))}
+                          </div>
+                        </div>
+                      ) : (
+                        <p className="text-xs text-muted-foreground">
+                          No reviews yet. Reviews will appear here after completed rentals are reviewed.
+                        </p>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* ── Section 1b: Vehicle ───────────────────────────── */}
+              <div className="rounded-xl border bg-card shadow-sm">
+                <div className="flex items-center gap-3 px-5 py-4 border-b bg-primary/10">
+                  <span className="text-2xl font-bold text-primary">2.</span>
+                  <h2 className="font-bold text-lg text-foreground uppercase tracking-wide">Vehicle</h2>
+                </div>
+                <div className="p-5">
                     <FormField
                       control={form.control}
                       name="vehicle_id"
@@ -1807,238 +1970,69 @@ const CreateRental = () => {
                         );
                       }}
                     />
-                  </div>
-
-                  {/* Customer Verification Section */}
-                  {selectedCustomerId && (
-                    <div className="space-y-4 p-4 border rounded-lg bg-muted/30">
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                          <Shield className="h-5 w-5 text-primary" />
-                          <h3 className="font-medium">Identity Verification</h3>
-                          <span className="text-sm text-muted-foreground">
-                            ({verificationMode === "ai" ? "AI Verification" : "Veriff"})
-                          </span>
-                        </div>
-                        {isCustomerVerified ? (
-                          <Badge variant="default" className="bg-green-500 hover:bg-green-600">
-                            <CheckCircle2 className="h-3 w-3 mr-1" />
-                            Verified
-                          </Badge>
-                        ) : verificationPending ? (
-                          <Badge variant="secondary">
-                            <Clock className="h-3 w-3 mr-1" />
-                            Pending
-                          </Badge>
-                        ) : (
-                          <Badge variant="outline" className="border-amber-500 text-amber-600">
-                            <AlertTriangle className="h-3 w-3 mr-1" />
-                            Not Verified
-                          </Badge>
-                        )}
-                      </div>
-
-                      {/* DOB Warning */}
-                      {customerDetails && !customerDetails.date_of_birth && (
-                        <Alert variant="default" className="border-amber-500 bg-amber-50">
-                          <AlertTriangle className="h-4 w-4 text-amber-600" />
-                          <AlertDescription className="text-amber-700">
-                            Customer date of birth is not set. This may be required for identity verification.
-                          </AlertDescription>
-                        </Alert>
-                      )}
-
-                      {isCustomerVerified ? (
-                        <div className="text-sm text-muted-foreground">
-                          <p>Customer identity has been verified.</p>
-                          {customerVerification?.first_name && customerVerification?.last_name && (
-                            <p className="mt-1">
-                              Name: {customerVerification.first_name} {customerVerification.last_name}
-                            </p>
-                          )}
-                          {customerVerification?.document_number && (
-                            <p>Document: {customerVerification.document_number}</p>
-                          )}
-                          {customerVerification?.created_at && (
-                            <p>Verified on: {format(new Date(customerVerification.created_at), "MMM d, yyyy")}</p>
-                          )}
-                        </div>
-                      ) : verificationPending ? (
-                        <div className="flex items-center justify-between">
-                          <p className="text-sm text-muted-foreground">
-                            Verification is in progress. Please wait for the customer to complete verification.
-                          </p>
-                          <Button
-                            type="button"
-                            variant="outline"
-                            size="sm"
-                            onClick={() => refetchVerification()}
-                          >
-                            <RefreshCw className="h-4 w-4 mr-2" />
-                            Refresh
-                          </Button>
-                        </div>
-                      ) : (
-                        <div className="space-y-3">
-                          <Alert variant="destructive">
-                            <XCircle className="h-4 w-4" />
-                            <AlertDescription>
-                              Customer must complete identity verification before rental can be created.
-                            </AlertDescription>
-                          </Alert>
-                          <Button
-                            type="button"
-                            onClick={handleCreateVerification}
-                            disabled={creatingVerification}
-                            className="w-full"
-                          >
-                            {creatingVerification ? (
-                              <>
-                                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                                Creating Session...
-                              </>
-                            ) : (
-                              <>
-                                <Shield className="h-4 w-4 mr-2" />
-                                Start Verification
-                              </>
-                            )}
-                          </Button>
-                        </div>
-                      )}
-                    </div>
-                  )}
-
-                  {/* Customer Reviews & Insurance — shown when customer selected */}
-                  {selectedCustomerId && (
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      {/* Reviews Card */}
-                      <div className="p-4 border rounded-lg bg-muted/30 space-y-3">
-                        <div className="flex items-center gap-2">
-                          <Star className="h-4 w-4 text-amber-500" />
-                          <h3 className="font-medium text-sm">Customer Reviews</h3>
-                        </div>
-
-                        {reviewSummary ? (
-                          <div className="space-y-2">
-                            <div className="flex items-center gap-3">
-                              <div className="flex items-center gap-1">
-                                {Array.from({ length: 10 }, (_, i) => (
-                                  <div
-                                    key={i}
-                                    className={cn(
-                                      "h-2 w-2 rounded-full",
-                                      i < Math.round(reviewSummary.average_rating || 0)
-                                        ? "bg-amber-500"
-                                        : "bg-muted-foreground/20"
-                                    )}
-                                  />
-                                ))}
-                              </div>
-                              <span className="text-sm font-semibold">
-                                {(reviewSummary.average_rating || 0).toFixed(1)}/10
-                              </span>
-                              <span className="text-xs text-muted-foreground">
-                                ({reviewSummary.total_reviews} {reviewSummary.total_reviews === 1 ? 'review' : 'reviews'})
-                              </span>
-                            </div>
-                            {reviewSummary.summary && (
-                              <p className="text-xs text-muted-foreground leading-relaxed italic">
-                                "{reviewSummary.summary}"
-                              </p>
-                            )}
-                            {customerReviews && customerReviews.length > 0 && (
-                              <div className="flex flex-wrap gap-1.5">
-                                {[...new Set(customerReviews.flatMap(r => r.tags))].slice(0, 6).map(tag => (
-                                  <Badge key={tag} variant="secondary" className="text-[10px] px-1.5 py-0">
-                                    {tag}
-                                  </Badge>
-                                ))}
-                              </div>
-                            )}
-                          </div>
-                        ) : customerReviews && customerReviews.length > 0 ? (
-                          <div className="space-y-2">
-                            <div className="text-xs text-muted-foreground">
-                              {customerReviews.length} {customerReviews.length === 1 ? 'review' : 'reviews'} — avg{' '}
-                              {(customerReviews.reduce((sum, r) => sum + (r.rating || 0), 0) / customerReviews.length).toFixed(1)}/10
-                            </div>
-                            <div className="flex flex-wrap gap-1.5">
-                              {[...new Set(customerReviews.flatMap(r => r.tags))].slice(0, 6).map(tag => (
-                                <Badge key={tag} variant="secondary" className="text-[10px] px-1.5 py-0">
-                                  {tag}
-                                </Badge>
-                              ))}
-                            </div>
-                          </div>
-                        ) : (
-                          <p className="text-xs text-muted-foreground">
-                            No reviews yet. Reviews will appear here after completed rentals are reviewed.
-                          </p>
-                        )}
-                      </div>
-
-                      {/* Insurance Card */}
-                      <div className="p-4 border rounded-lg bg-muted/30 space-y-3">
-                        <div className="flex items-center gap-2">
-                          <ShieldCheck className="h-4 w-4 text-emerald-500" />
-                          <h3 className="font-medium text-sm">Uploaded Insurance</h3>
-                        </div>
-
-                        {customerInsurance && customerInsurance.length > 0 ? (
-                          <div className="space-y-2">
-                            {customerInsurance.slice(0, 3).map(policy => {
-                              const isActive = policy.status === "Active";
-                              const isExpired = policy.status === "Expired";
-                              return (
-                                <div key={policy.id} className="flex items-center justify-between text-xs">
-                                  <div className="flex items-center gap-2 min-w-0">
-                                    <div className={cn(
-                                      "h-1.5 w-1.5 rounded-full shrink-0",
-                                      isActive ? "bg-emerald-500" : isExpired ? "bg-red-500" : "bg-amber-500"
-                                    )} />
-                                    <span className="font-medium truncate">{policy.policy_number}</span>
-                                  </div>
-                                  <div className="flex items-center gap-2 shrink-0 ml-2">
-                                    {policy.vehicles && (
-                                      <span className="text-muted-foreground">{policy.vehicles.reg}</span>
-                                    )}
-                                    <Badge
-                                      variant="outline"
-                                      className={cn(
-                                        "text-[10px] px-1.5 py-0",
-                                        isActive && "border-emerald-500/30 text-emerald-600",
-                                        isExpired && "border-red-500/30 text-red-600"
-                                      )}
-                                    >
-                                      {policy.status}
-                                    </Badge>
-                                  </div>
-                                </div>
-                              );
-                            })}
-                            {customerInsurance.length > 3 && (
-                              <p className="text-[10px] text-muted-foreground">
-                                +{customerInsurance.length - 3} more {customerInsurance.length - 3 === 1 ? 'policy' : 'policies'}
-                              </p>
-                            )}
-                          </div>
-                        ) : (
-                          <p className="text-xs text-muted-foreground">
-                            No uploaded insurance on record. Customer-provided policies will appear here once uploaded.
-                          </p>
-                        )}
-                      </div>
-                    </div>
-                  )}
                 </div>
               </div>
 
-              {/* ── Section 2: Rental Period & Pricing ────────────── */}
+              {/* ── Uploaded Insurance ────────────────────────────── */}
+              {selectedCustomerId && (
+                <div className="rounded-xl border bg-card shadow-sm">
+                  <div className="flex items-center gap-3 px-5 py-4 border-b bg-primary/10">
+                    <div className="flex items-center justify-center h-6 w-6 rounded-md bg-primary/10 text-primary"><ShieldCheck className="h-3.5 w-3.5" /></div>
+                    <h2 className="font-bold text-lg text-foreground uppercase tracking-wide">Uploaded Insurance</h2>
+                  </div>
+                  <div className="p-5">
+                    {customerInsurance && customerInsurance.length > 0 ? (
+                      <div className="space-y-2">
+                        {customerInsurance.slice(0, 3).map(policy => {
+                          const isActive = policy.status === "Active";
+                          const isExpired = policy.status === "Expired";
+                          return (
+                            <div key={policy.id} className="flex items-center justify-between text-xs">
+                              <div className="flex items-center gap-2 min-w-0">
+                                <div className={cn(
+                                  "h-1.5 w-1.5 rounded-full shrink-0",
+                                  isActive ? "bg-emerald-500" : isExpired ? "bg-red-500" : "bg-amber-500"
+                                )} />
+                                <span className="font-medium truncate">{policy.policy_number}</span>
+                              </div>
+                              <div className="flex items-center gap-2 shrink-0 ml-2">
+                                {policy.vehicles && (
+                                  <span className="text-muted-foreground">{policy.vehicles.reg}</span>
+                                )}
+                                <Badge
+                                  variant="outline"
+                                  className={cn(
+                                    "text-[10px] px-1.5 py-0",
+                                    isActive && "border-emerald-500/30 text-emerald-600",
+                                    isExpired && "border-red-500/30 text-red-600"
+                                  )}
+                                >
+                                  {policy.status}
+                                </Badge>
+                              </div>
+                            </div>
+                          );
+                        })}
+                        {customerInsurance.length > 3 && (
+                          <p className="text-[10px] text-muted-foreground">
+                            +{customerInsurance.length - 3} more {customerInsurance.length - 3 === 1 ? 'policy' : 'policies'}
+                          </p>
+                        )}
+                      </div>
+                    ) : (
+                      <p className="text-xs text-muted-foreground">
+                        No uploaded insurance on record. Customer-provided policies will appear here once uploaded.
+                      </p>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* ── Section 2: Rental Period ────────────── */}
               <div className="rounded-xl border bg-card shadow-sm">
-                <div className="flex items-center gap-3 px-5 py-3.5 border-b bg-muted/40">
-                  <div className="flex items-center justify-center h-6 w-6 rounded-md bg-primary/10 text-primary"><CalendarDays className="h-3.5 w-3.5" /></div>
-                  <h2 className="font-semibold text-sm">Rental Period & Pricing</h2>
+                <div className="flex items-center gap-3 px-5 py-4 border-b bg-primary/10">
+                  <span className="text-2xl font-bold text-primary">3.</span>
+                  <h2 className="font-bold text-lg text-foreground uppercase tracking-wide">Rental Period & Pricing</h2>
                 </div>
                 <div className="p-5 space-y-5">
                   {/* Dates first — period type is auto-determined from date range */}
@@ -2190,8 +2184,16 @@ const CreateRental = () => {
                       </Alert>
                     );
                   })()}
+                </div>
+              </div>
 
-                  {/* Financial Details */}
+              {/* ── Section 2b: Pricing ────────────── */}
+              <div className="rounded-xl border bg-card shadow-sm">
+                <div className="flex items-center gap-3 px-5 py-4 border-b bg-primary/10">
+                  <div className="flex items-center justify-center h-6 w-6 rounded-md bg-primary/10 text-primary"><Banknote className="h-3.5 w-3.5" /></div>
+                  <h2 className="font-bold text-lg text-foreground uppercase tracking-wide">Pricing</h2>
+                </div>
+                <div className="p-5 space-y-5">
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <FormField
                       control={form.control}
@@ -2256,11 +2258,11 @@ const CreateRental = () => {
 
                 return (
                   <div className="rounded-xl border bg-card shadow-sm">
-                    <div className="flex items-center gap-3 px-5 py-3.5 border-b bg-muted/40">
+                    <div className="flex items-center gap-3 px-5 py-4 border-b bg-primary/10">
                       <div className="flex items-center justify-center h-6 w-6 rounded-md bg-primary/10 text-primary">
                         <Receipt className="h-3.5 w-3.5" />
                       </div>
-                      <h2 className="font-semibold text-sm">Fees & Charges</h2>
+                      <h2 className="font-bold text-lg text-foreground uppercase tracking-wide">Fees & Charges</h2>
                       <span className="ml-auto text-xs text-muted-foreground">Auto-calculated from settings. Override for this rental only.</span>
                     </div>
                     <div className="p-5 space-y-4">
@@ -2494,11 +2496,11 @@ const CreateRental = () => {
 
                 return (
                   <div className="rounded-xl border bg-card shadow-sm">
-                    <div className="flex items-center gap-3 px-5 py-3.5 border-b bg-muted/40">
+                    <div className="flex items-center gap-3 px-5 py-4 border-b bg-primary/10">
                       <div className="flex items-center justify-center h-6 w-6 rounded-md bg-primary/10 text-primary">
                         <CreditCard className="h-3.5 w-3.5" />
                       </div>
-                      <h2 className="font-semibold text-sm">Payment Plan</h2>
+                      <h2 className="font-bold text-lg text-foreground uppercase tracking-wide">Payment Plan</h2>
                       <span className="ml-auto text-xs text-muted-foreground">Admin can adjust installment amounts per-rental.</span>
                     </div>
                     <div className="p-5 space-y-4">
@@ -2621,9 +2623,9 @@ const CreateRental = () => {
 
               {/* ── Section 3: Pickup & Return ────────────────────── */}
               <div className="rounded-xl border bg-card shadow-sm">
-                <div className="flex items-center gap-3 px-5 py-3.5 border-b bg-muted/40">
-                  <div className="flex items-center justify-center h-6 w-6 rounded-md bg-primary/10 text-primary"><MapPin className="h-3.5 w-3.5" /></div>
-                  <h2 className="font-semibold text-sm">Pickup & Return</h2>
+                <div className="flex items-center gap-3 px-5 py-4 border-b bg-primary/10">
+                  <span className="text-2xl font-bold text-primary">4.</span>
+                  <h2 className="font-bold text-lg text-foreground uppercase tracking-wide">Pickup & Return</h2>
                 </div>
                 <div className="p-5 space-y-5">
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -2798,9 +2800,9 @@ const CreateRental = () => {
               {/* ── Section 4: Insurance ──────────────────────────── */}
               {!skipInsurance && (
                 <div className="rounded-xl border bg-card shadow-sm">
-                  <div className="flex items-center gap-3 px-5 py-3.5 border-b bg-muted/40">
-                    <div className="flex items-center justify-center h-6 w-6 rounded-md bg-primary/10 text-primary"><Shield className="h-3.5 w-3.5" /></div>
-                    <h2 className="font-semibold text-sm">Insurance</h2>
+                  <div className="flex items-center gap-3 px-5 py-4 border-b bg-primary/10">
+                    <span className="text-2xl font-bold text-primary">5.</span>
+                    <h2 className="font-bold text-lg text-foreground uppercase tracking-wide">Insurance</h2>
                   </div>
                   <div className="p-5 space-y-5">
                     <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
@@ -2933,9 +2935,9 @@ const CreateRental = () => {
               {/* ── Section 5: Optional Extras ────────────────────── */}
               {activeExtras.length > 0 && (
                 <div className="rounded-xl border bg-card shadow-sm">
-                  <div className="flex items-center gap-3 px-5 py-3.5 border-b bg-muted/40">
-                    <div className="flex items-center justify-center h-6 w-6 rounded-md bg-primary/10 text-primary"><Receipt className="h-3.5 w-3.5" /></div>
-                    <h2 className="font-semibold text-sm">Optional Extras</h2>
+                  <div className="flex items-center gap-3 px-5 py-4 border-b bg-primary/10">
+                    <span className="text-2xl font-bold text-primary">6.</span>
+                    <h2 className="font-bold text-lg text-foreground uppercase tracking-wide">Optional Extras</h2>
                   </div>
                   <div className="p-5 space-y-4">
                       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
@@ -3060,9 +3062,9 @@ const CreateRental = () => {
 
               {/* ── Section 6: Additional Details ─────────────────── */}
               <div className="rounded-xl border bg-card shadow-sm">
-                <div className="flex items-center gap-3 px-5 py-3.5 border-b bg-muted/40">
-                  <div className="flex items-center justify-center h-6 w-6 rounded-md bg-primary/10 text-primary"><StickyNote className="h-3.5 w-3.5" /></div>
-                  <h2 className="font-semibold text-sm">Additional Details</h2>
+                <div className="flex items-center gap-3 px-5 py-4 border-b bg-primary/10">
+                  <span className="text-2xl font-bold text-primary">7.</span>
+                  <h2 className="font-bold text-lg text-foreground uppercase tracking-wide">Additional Details</h2>
                 </div>
                 <div className="p-5 space-y-4">
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -3201,7 +3203,7 @@ const CreateRental = () => {
                 </div>
               </div>
 
-              {/* Submit */}
+              {/* ── Submit ─────────────────────────── */}
               <div className="flex justify-end gap-3 pt-2">
                 <Button
                   type="button"
@@ -3220,23 +3222,158 @@ const CreateRental = () => {
                   {loading ? "Creating..." : !isCustomerVerified ? "Verification Required" : "Create Rental"}
                 </Button>
               </div>
+            </div>
+
+            {/* ── Right: Static Preview ─────────────────────── */}
+            <div className="hidden lg:block lg:col-span-2 lg:overflow-y-auto">
+              <div className="space-y-5">
+                {/* Preview Header */}
+                <div className="rounded-xl border bg-card shadow-sm">
+                  <div className="flex items-center gap-3 px-5 py-4 border-b bg-primary/10">
+                    <div className="flex items-center justify-center h-6 w-6 rounded-md bg-primary/10 text-primary"><FileText className="h-3.5 w-3.5" /></div>
+                    <h2 className="font-bold text-lg text-foreground uppercase tracking-wide">Rental Preview</h2>
+                  </div>
+                  <div className="p-5 space-y-5">
+                    {/* Customer */}
+                    <div className="space-y-1">
+                      <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Customer</p>
+                      {selectedCustomer ? (
+                        <div className="flex items-center gap-2">
+                          <div className="h-2 w-2 rounded-full bg-green-500 shrink-0" />
+                          <p className="text-sm font-medium">{selectedCustomer.name}</p>
+                        </div>
+                      ) : (
+                        <p className="text-sm text-muted-foreground italic">Not selected</p>
+                      )}
+                    </div>
+
+                    {/* Vehicle */}
+                    <div className="space-y-1">
+                      <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Vehicle</p>
+                      {selectedVehicle ? (
+                        <div className="flex items-center gap-2">
+                          <div className="h-2 w-2 rounded-full bg-blue-500 shrink-0" />
+                          <p className="text-sm font-medium">{selectedVehicle.make} {selectedVehicle.model}</p>
+                          <Badge variant="outline" className="text-[10px]">{selectedVehicle.reg}</Badge>
+                        </div>
+                      ) : (
+                        <p className="text-sm text-muted-foreground italic">Not selected</p>
+                      )}
+                    </div>
+
+                    {/* Verification Status */}
+                    {selectedCustomerId && (
+                      <div className="space-y-1">
+                        <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Verification</p>
+                        {isCustomerVerified ? (
+                          <Badge variant="default" className="bg-green-500 hover:bg-green-600">
+                            <CheckCircle2 className="h-3 w-3 mr-1" /> Verified
+                          </Badge>
+                        ) : verificationPending ? (
+                          <Badge variant="secondary">
+                            <Clock className="h-3 w-3 mr-1" /> Pending
+                          </Badge>
+                        ) : (
+                          <Badge variant="outline" className="border-amber-500 text-amber-600">
+                            <AlertTriangle className="h-3 w-3 mr-1" /> Not Verified
+                          </Badge>
+                        )}
+                      </div>
+                    )}
+
+                    <div className="border-t pt-4 space-y-3">
+                      {/* Period */}
+                      <div className="flex items-center justify-between">
+                        <p className="text-xs text-muted-foreground">Period Type</p>
+                        <Badge variant="outline">{watchedRentalPeriodType || "—"}</Badge>
+                      </div>
+
+                      {/* Dates */}
+                      <div className="flex items-center justify-between">
+                        <p className="text-xs text-muted-foreground">Start</p>
+                        <p className="text-sm font-medium">{watchedStartDate ? format(watchedStartDate, "dd MMM yyyy") : "—"}</p>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <p className="text-xs text-muted-foreground">End</p>
+                        <p className="text-sm font-medium">{watchedEndDate ? format(watchedEndDate, "dd MMM yyyy") : "—"}</p>
+                      </div>
+
+                      {/* Pickup */}
+                      {watchedPickupLocation && (
+                        <div className="flex items-center justify-between">
+                          <p className="text-xs text-muted-foreground">Pickup</p>
+                          <p className="text-sm font-medium truncate max-w-[180px]">{watchedPickupLocation}</p>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Financial Summary */}
+                    <div className="border-t pt-4 space-y-3">
+                      <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Financial Summary</p>
+                      <div className="flex items-center justify-between">
+                        <p className="text-sm text-muted-foreground">Rental Amount</p>
+                        <p className="text-sm font-semibold">{watchedMonthlyAmount > 0 ? formatCurrency(watchedMonthlyAmount, tenant?.currency_code || 'USD') : "—"}</p>
+                      </div>
+                      {bonzahPremium > 0 && (
+                        <div className="flex items-center justify-between">
+                          <p className="text-sm text-muted-foreground">Insurance</p>
+                          <p className="text-sm font-medium">{formatCurrency(bonzahPremium, tenant?.currency_code || 'USD')}</p>
+                        </div>
+                      )}
+                      {Object.keys(selectedExtras).length > 0 && (
+                        <div className="flex items-center justify-between">
+                          <p className="text-sm text-muted-foreground">Extras</p>
+                          <p className="text-sm font-medium">
+                            {formatCurrency(
+                              Object.entries(selectedExtras).reduce((sum, [id, qty]) => {
+                                const extra = activeExtras?.find((e: RentalExtra) => e.id === id);
+                                return sum + (extra ? Number(extra.price) * qty : 0);
+                              }, 0),
+                              tenant?.currency_code || 'USD'
+                            )}
+                          </p>
+                        </div>
+                      )}
+                      {promoDetails && (
+                        <div className="flex items-center justify-between text-green-600">
+                          <p className="text-sm">Discount</p>
+                          <p className="text-sm font-medium">
+                            −{promoDetails.type === 'percentage' ? `${promoDetails.value}%` : formatCurrency(promoDetails.value, tenant?.currency_code || 'USD')}
+                          </p>
+                        </div>
+                      )}
+                      <div className="border-t pt-3 flex items-center justify-between">
+                        <p className="text-sm font-semibold">Total</p>
+                        <p className="text-base font-bold text-primary">
+                          {(() => {
+                            let total = watchedMonthlyAmount || 0;
+                            total += bonzahPremium || 0;
+                            total += Object.entries(selectedExtras).reduce((sum, [id, qty]) => {
+                              const extra = activeExtras?.find((e: RentalExtra) => e.id === id);
+                              return sum + (extra ? Number(extra.price) * qty : 0);
+                            }, 0);
+                            if (promoDetails) {
+                              if (promoDetails.type === 'percentage') {
+                                total -= (watchedMonthlyAmount || 0) * (promoDetails.value / 100);
+                              } else {
+                                total -= promoDetails.value;
+                              }
+                            }
+                            return total > 0 ? formatCurrency(Math.max(0, total), tenant?.currency_code || 'USD') : "—";
+                          })()}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            </div>
             </form>
           </Form>
         </div>
 
-        {/* Contract Summary Panel */}
-        <div className="lg:col-span-1">
-          <div className="sticky top-6">
-            <ContractSummary
-              customer={selectedCustomer}
-              vehicle={selectedVehicle}
-              startDate={watchedStartDate}
-              endDate={watchedEndDate}
-              rentalPeriodType={watchedRentalPeriodType}
-              monthlyAmount={watchedMonthlyAmount}
-            />
-          </div>
-        </div>
       </div>
 
       {/* Post-Creation Payment Dialog — always mounted so Radix Dialog transitions correctly */}

@@ -10,19 +10,27 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { CalendarIcon, Plus } from "lucide-react";
+import { CalendarIcon, Plus, CalendarDays } from "lucide-react";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
 import { DashboardKPICards } from "@/components/dashboard/dashboard-kpi-cards";
+import { DashboardCharts } from "@/components/dashboard/dashboard-charts";
 import { FleetOverview } from "@/components/dashboard/fleet-overview";
 import { ComplianceOverviewCard } from "@/components/dashboard/compliance-overview-card";
 import { ActionItems } from "@/components/dashboard/action-items";
 import { CalendarWidget } from "@/components/dashboard/calendar-widget";
 import { AIInsightsPanel } from "@/components/rentals/calendar/ai-insights-panel";
-import { SetupHub } from "@/components/dashboard/setup-hub";
-import { GoLiveBanner } from "@/components/dashboard/go-live-banner";
-import { BonzahBalanceWidget } from "@/components/dashboard/bonzah-balance-widget";
 import { BonzahPendingAlert } from "@/components/dashboard/bonzah-pending-alert";
+import { PlatformStatusBanner } from "@/components/dashboard/platform-status-banner";
+import { CommandCenter } from "@/components/dashboard/command-center";
 import { useCalendarRentals } from "@/hooks/use-calendar-rentals";
 import { useDashboardKPIs } from "@/hooks/use-dashboard-kpis";
+import { usePlatformStatus } from "@/hooks/use-platform-status";
 import { useAuth } from "@/stores/auth-store";
 import { useTenant } from "@/contexts/TenantContext";
 import { useManagerPermissions } from "@/hooks/use-manager-permissions";
@@ -71,6 +79,7 @@ export default function DashboardPage() {
   const { appUser } = useAuth();
   const { tenant } = useTenant();
   const { canView, canEdit } = useManagerPermissions();
+  const platformStatus = usePlatformStatus();
 
   // Get date range from URL or default to "This Month"
   const dateRanges = getDateRanges();
@@ -151,6 +160,22 @@ export default function DashboardPage() {
           </p>
         </div>
         <div className="flex items-center gap-3">
+          {canView('rentals') && (
+            <Dialog>
+              <DialogTrigger asChild>
+                <Button variant="outline">
+                  <CalendarDays className="h-4 w-4 mr-2" />
+                  Today's Schedule
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="max-w-4xl max-h-[85vh] overflow-y-auto">
+                <DialogHeader>
+                  <DialogTitle>Today's Schedule</DialogTitle>
+                </DialogHeader>
+                <CalendarWidget />
+              </DialogContent>
+            </Dialog>
+          )}
           {canEdit('rentals') && (
             <Button onClick={() => router.push("/rentals/new")}>
               <Plus className="h-4 w-4 mr-2" />
@@ -160,33 +185,24 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      {/* Setup Hub (trial) / Go-Live Banner — always shown */}
-      <SetupHub />
-      <GoLiveBanner />
-      {canView('payments') && <BonzahBalanceWidget />}
-      {canView('payments') && <BonzahPendingAlert />}
-
       {/* AI Insights Marquee */}
       {canView('rentals') && <AIInsightsPanel grouped={todayCalendar?.grouped || []} />}
 
-      {/* Action Items */}
-      {canView('payments') && <ActionItems />}
+      {/* Platform Status */}
+      <PlatformStatusBanner
+        mode={platformStatus.mode}
+        trialDaysRemaining={platformStatus.trialDaysRemaining}
+        wentLiveAt={platformStatus.wentLiveAt}
+      />
+      <CommandCenter
+        checklist={platformStatus.checklist}
+        checklistProgress={platformStatus.checklistProgress}
+        allComplete={platformStatus.allChecklistComplete}
+      />
 
-      {/* KPI Cards */}
-      {visibleKpiCards.size > 0 && (
-        <DashboardKPICards
-          data={kpis}
-          isLoading={isLoading}
-          error={error}
-          visibleCards={visibleKpiCards}
-        />
-      )}
+      {/* Charts */}
+      <DashboardCharts />
 
-      {/* Calendar Widget */}
-      {canView('rentals') && <CalendarWidget />}
-
-      {/* Fleet Overview */}
-      {canView('vehicles') && <FleetOverview />}
 
     </div>
   );

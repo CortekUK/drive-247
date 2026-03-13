@@ -21,7 +21,7 @@ export function CreditBalance() {
               : "text-[#404040] dark:text-gray-300"
           }`}
         >
-          <CircleDollarSign className={`h-4 w-4 ${isLowBalance ? "text-red-500" : "text-yellow-500"}`} />
+          <CircleDollarSign className={`h-4 w-4 ${isLowBalance ? "text-red-500" : "text-emerald-500"}`} />
           <span>{balance.toFixed(0)}</span>
         </Link>
       </TooltipTrigger>

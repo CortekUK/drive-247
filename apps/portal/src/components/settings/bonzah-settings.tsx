@@ -233,7 +233,8 @@ export function BonzahSettings() {
 
   const currentMode = tenantContext?.bonzah_mode || bonzahStatus?.bonzah_mode || 'test';
   const isTestMode = currentMode === 'test';
-  const isConnected = isTestMode || (bonzahStatus?.integration_bonzah && !!bonzahStatus?.bonzah_username);
+  const hasOwnCredentials = bonzahStatus?.integration_bonzah && !!bonzahStatus?.bonzah_username;
+  const isConnected = hasOwnCredentials;
   const pendingCount = pendingPolicies?.length || 0;
   const pendingTotal = pendingPolicies?.reduce((sum, p) => sum + (p.premium_amount || 0), 0) || 0;
 
@@ -299,8 +300,8 @@ export function BonzahSettings() {
         </CardContent>
       </Card>
 
-      {/* Card 2: How Bonzah Insurance Works (live mode only — test mode explains itself in Card 4) */}
-      {!isTestMode && <Card>
+      {/* Card 2: How Bonzah Insurance Works (shown when not yet connected) */}
+      {!isConnected && <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Shield className="h-5 w-5 text-primary" />
@@ -353,8 +354,8 @@ export function BonzahSettings() {
         </CardContent>
       </Card>}
 
-      {/* Card 3: Onboarding (live mode only — test mode uses platform account) */}
-      {!isTestMode && <Card>
+      {/* Card 3: Onboarding (shown when not yet connected) */}
+      {!isConnected && <Card>
         <CardHeader>
           <CardTitle>Bonzah Onboarding</CardTitle>
           <CardDescription>
@@ -396,8 +397,12 @@ export function BonzahSettings() {
             )}
           </CardTitle>
           <CardDescription>
-            {isTestMode
-              ? 'Using Drive247 shared test account — no credentials needed'
+            {isConnected
+              ? isTestMode
+                ? 'Your Bonzah account is connected in test mode'
+                : 'Your Bonzah account is connected and active'
+              : isTestMode
+              ? 'Complete onboarding to connect your Bonzah account — test insurance uses the shared Drive247 account'
               : 'Enter your Bonzah portal credentials to enable insurance for your customers'}
           </CardDescription>
         </CardHeader>
@@ -433,10 +438,12 @@ export function BonzahSettings() {
                     ? 'text-green-700 dark:text-green-400'
                     : 'text-gray-600 dark:text-gray-400'
                 }`}>
-                  {isTestMode
-                    ? 'Using Drive247 shared test account. Insurance is enabled for your customers.'
-                    : isConnected
-                    ? `Connected as ${bonzahStatus?.bonzah_username}. Insurance is enabled for your customers.`
+                  {isConnected
+                    ? isTestMode
+                      ? `Connected as ${bonzahStatus?.bonzah_username}. Using test environment.`
+                      : `Connected as ${bonzahStatus?.bonzah_username}. Insurance is enabled for your customers.`
+                    : isTestMode
+                    ? 'Complete the Bonzah onboarding to connect your own account. Test insurance uses the shared Drive247 account.'
                     : 'Enter your Bonzah credentials below to enable insurance.'}
                 </p>
               </div>
@@ -584,8 +591,8 @@ export function BonzahSettings() {
             </div>
           )}
 
-          {/* Credential Form (live mode only) */}
-          {!isTestMode && (
+          {/* Credential Form (shown when not connected, regardless of mode) */}
+          {!isConnected && (
             <>
               <div className="space-y-3">
                 <div className="space-y-2">

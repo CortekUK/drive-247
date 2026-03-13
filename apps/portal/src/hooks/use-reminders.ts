@@ -46,8 +46,7 @@ export function useReminders(filters?: ReminderFilters) {
       }
 
       query = query
-        .order('due_on', { ascending: true })
-        .order('remind_on', { ascending: true });
+        .order('created_at', { ascending: false });
 
       // If no status filter is applied, default to showing active reminders
       if (filters?.status && filters.status.length > 0) {
@@ -84,15 +83,15 @@ export function useReminders(filters?: ReminderFilters) {
         throw new Error('Failed to fetch reminders');
       }
 
-      // Sort: Integration reminders first, then by severity priority
+      // Sort: Integration reminders first, then newest first
       const sortedData = (data as Reminder[]).sort((a, b) => {
         // Pin Integration (Bonzah) reminders to top
         const aIsIntegration = a.object_type === 'Integration' ? 0 : 1;
         const bIsIntegration = b.object_type === 'Integration' ? 0 : 1;
         if (aIsIntegration !== bIsIntegration) return aIsIntegration - bIsIntegration;
 
-        const severityOrder = { critical: 1, warning: 2, info: 3 };
-        return severityOrder[a.severity] - severityOrder[b.severity];
+        // Newest first
+        return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
       });
 
       return sortedData;

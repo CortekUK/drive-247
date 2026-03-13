@@ -20,7 +20,7 @@ import {
   SidebarInset,
 } from "@/components/ui/sidebar";
 import { Skeleton } from "@/components/ui/skeleton";
-import { ChatSidebar } from "@/components/chat";
+import { TraxAIDialog } from "@/components/chat";
 import { MaintenanceBanner } from "@/components/dashboard/maintenance-banner";
 
 function LoadingSkeleton() {
@@ -111,9 +111,10 @@ export default function DashboardLayout({
         <SidebarInset className="overflow-x-hidden">
           <header className="flex h-16 shrink-0 items-center gap-2 border-b px-2 sm:px-4">
             <SidebarTrigger className="-ml-1 flex-shrink-0" />
-            <div className="flex-1 min-w-0 max-w-2xl">
+            <div className="min-w-0 w-48 sm:w-56 lg:w-64">
               <HeaderSearch />
             </div>
+            <TraxAIDialog />
             <div className="ml-auto flex items-center gap-1 sm:gap-2 flex-shrink-0">
               <CreditBalance />
               <NotificationBell />
@@ -127,9 +128,6 @@ export default function DashboardLayout({
             {children}
           </main>
         </SidebarInset>
-
-        {/* RAG Chatbot */}
-        <ChatSidebar />
 
         {/* Hard gate — blocks access until billing setup is complete */}
         {showSetupGate && <SubscriptionGateDialog />}

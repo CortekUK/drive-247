@@ -36,7 +36,7 @@ const insightIcons: Record<string, (className?: string) => React.ReactNode> = {
   recommendation: (cls) => <Lightbulb className={cn("h-3.5 w-3.5", cls)} />,
 };
 
-// Severity colors: light mode uses solid readable colors, dark mode uses neon glow
+// Severity colors: muted/desaturated with eerie glow undertone
 const severityNeon: Record<string, {
   border: string;
   bg: string;
@@ -47,31 +47,31 @@ const severityNeon: Record<string, {
   text: string;
 }> = {
   success: {
-    border: "border-emerald-200 dark:border-[rgba(57,255,20,0.3)]",
-    bg: "bg-emerald-50 dark:bg-[rgba(57,255,20,0.08)]",
-    hover: "hover:bg-emerald-100 dark:hover:bg-[rgba(57,255,20,0.15)]",
-    glow: "dark:shadow-[0_0_12px_-3px_rgba(57,255,20,0.4)]",
-    icon: "text-emerald-600 dark:text-[#39ff14] dark:drop-shadow-[0_0_5px_rgba(57,255,20,0.6)]",
-    badge: "bg-emerald-100 text-emerald-700 dark:bg-[rgba(57,255,20,0.15)] dark:text-[#39ff14]",
-    text: "text-emerald-600 dark:text-[#39ff14]",
+    border: "border-emerald-800/20 dark:border-emerald-500/10",
+    bg: "bg-emerald-950/5 dark:bg-emerald-500/[0.03]",
+    hover: "hover:bg-emerald-950/10 dark:hover:bg-emerald-500/[0.06]",
+    glow: "shadow-[0_0_18px_-6px_rgba(52,211,153,0.12)] dark:shadow-[0_0_18px_-6px_rgba(52,211,153,0.15)]",
+    icon: "text-emerald-700/60 dark:text-emerald-400/50",
+    badge: "bg-emerald-950/5 text-emerald-700/70 dark:bg-emerald-500/[0.06] dark:text-emerald-400/60",
+    text: "text-emerald-700/60 dark:text-emerald-400/50",
   },
   warning: {
-    border: "border-amber-200 dark:border-[rgba(255,230,0,0.3)]",
-    bg: "bg-amber-50 dark:bg-[rgba(255,230,0,0.08)]",
-    hover: "hover:bg-amber-100 dark:hover:bg-[rgba(255,230,0,0.15)]",
-    glow: "dark:shadow-[0_0_12px_-3px_rgba(255,230,0,0.4)]",
-    icon: "text-amber-600 dark:text-[#ffe600] dark:drop-shadow-[0_0_5px_rgba(255,230,0,0.6)]",
-    badge: "bg-amber-100 text-amber-700 dark:bg-[rgba(255,230,0,0.15)] dark:text-[#ffe600]",
-    text: "text-amber-600 dark:text-[#ffe600]",
+    border: "border-amber-800/20 dark:border-amber-500/10",
+    bg: "bg-amber-950/5 dark:bg-amber-500/[0.03]",
+    hover: "hover:bg-amber-950/10 dark:hover:bg-amber-500/[0.06]",
+    glow: "shadow-[0_0_18px_-6px_rgba(245,158,11,0.12)] dark:shadow-[0_0_18px_-6px_rgba(245,158,11,0.15)]",
+    icon: "text-amber-700/60 dark:text-amber-400/50",
+    badge: "bg-amber-950/5 text-amber-700/70 dark:bg-amber-500/[0.06] dark:text-amber-400/60",
+    text: "text-amber-700/60 dark:text-amber-400/50",
   },
   info: {
-    border: "border-red-200 dark:border-[rgba(255,49,49,0.3)]",
-    bg: "bg-red-50 dark:bg-[rgba(255,49,49,0.08)]",
-    hover: "hover:bg-red-100 dark:hover:bg-[rgba(255,49,49,0.15)]",
-    glow: "dark:shadow-[0_0_12px_-3px_rgba(255,49,49,0.4)]",
-    icon: "text-red-600 dark:text-[#ff3131] dark:drop-shadow-[0_0_5px_rgba(255,49,49,0.6)]",
-    badge: "bg-red-100 text-red-700 dark:bg-[rgba(255,49,49,0.15)] dark:text-[#ff3131]",
-    text: "text-red-600 dark:text-[#ff3131]",
+    border: "border-red-800/20 dark:border-red-500/10",
+    bg: "bg-red-950/5 dark:bg-red-500/[0.03]",
+    hover: "hover:bg-red-950/10 dark:hover:bg-red-500/[0.06]",
+    glow: "shadow-[0_0_18px_-6px_rgba(239,68,68,0.12)] dark:shadow-[0_0_18px_-6px_rgba(239,68,68,0.15)]",
+    icon: "text-red-700/60 dark:text-red-400/50",
+    badge: "bg-red-950/5 text-red-700/70 dark:bg-red-500/[0.06] dark:text-red-400/60",
+    text: "text-red-700/60 dark:text-red-400/50",
   },
 };
 
@@ -93,7 +93,7 @@ function MarqueeInsightChip({
     <button
       onClick={onClick}
       className={cn(
-        "inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full border shrink-0",
+        "inline-flex items-center gap-2 px-3.5 py-1.5 rounded-md border shrink-0",
         "transition-all cursor-pointer",
         s.border, s.bg, s.hover, s.glow
       )}

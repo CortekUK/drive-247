@@ -353,6 +353,36 @@ export function plateToDocument(plate: PlateRecord, currencyCode: string = 'GBP'
   };
 }
 
+// Knowledge article record
+interface KnowledgeArticleRecord {
+  id: string;
+  category: string;
+  title: string;
+  content: string;
+  tags?: string[] | null;
+}
+
+function knowledgeArticleToDocument(article: KnowledgeArticleRecord): DocumentResult {
+  const parts: string[] = [];
+  parts.push(`[Knowledge Article] ${article.title}`);
+  parts.push(`Category: ${article.category}`);
+  if (article.tags && article.tags.length > 0) {
+    parts.push(`Topics: ${article.tags.join(', ')}`);
+  }
+  parts.push('');
+  parts.push(article.content);
+
+  return {
+    content: parts.join('\n'),
+    metadata: {
+      type: 'knowledge_article',
+      category: article.category,
+      title: article.title,
+      tags: article.tags || [],
+    },
+  };
+}
+
 /**
  * Get document loader for a given table
  */
@@ -364,6 +394,7 @@ export function getDocumentLoader(tableName: string, currencyCode: string = 'GBP
     payments: (r) => paymentToDocument(r as PaymentRecord, currencyCode),
     fines: (r) => fineToDocument(r as FineRecord, currencyCode),
     plates: (r) => plateToDocument(r as PlateRecord, currencyCode),
+    knowledge_articles: (r) => knowledgeArticleToDocument(r as KnowledgeArticleRecord),
   };
 
   return loaders[tableName] || null;
@@ -373,7 +404,7 @@ export function getDocumentLoader(tableName: string, currencyCode: string = 'GBP
  * Get list of tables that are indexed for RAG
  */
 export function getIndexedTables(): string[] {
-  return ['customers', 'vehicles', 'rentals', 'payments', 'fines', 'plates'];
+  return ['customers', 'vehicles', 'rentals', 'payments', 'fines', 'plates', 'knowledge_articles'];
 }
 
 /**
@@ -387,6 +418,7 @@ export function getSelectFields(tableName: string): string {
     payments: '*, customer:customers(name), rental:rentals(rental_number), vehicle:vehicles(reg)',
     fines: '*, customer:customers(name), vehicle:vehicles(reg)',
     plates: '*, vehicle:vehicles(reg)',
+    knowledge_articles: 'id, category, title, content, tags',
   };
 
   return selectFields[tableName] || '*';

@@ -137,141 +137,158 @@ export function useAdminUsers() {
   });
 }
 
-// Helper to format action names for display
+// Helper to format action names for display — short single-line labels
 export function formatActionName(action: string): string {
-  // Special cases for better formatting
   const actionMap: Record<string, string> = {
     // Settings
-    update_settings: "Update Settings",
-    settings_updated: "Settings Updated",
+    update_settings: "Settings Edit",
+    settings_updated: "Settings Edit",
     // Users
-    create_user: "Create User",
-    update_user: "Update User",
-    delete_user: "Delete User",
-    user_created: "User Created",
-    user_updated: "User Updated",
-    user_deleted: "User Deleted",
+    create_user: "User Add",
+    update_user: "User Edit",
+    delete_user: "User Delete",
+    user_created: "User Add",
+    user_updated: "User Edit",
+    user_deleted: "User Delete",
     // Customers
-    blocked_customer: "Block Customer",
-    unblocked_customer: "Unblock Customer",
-    customer_created: "Customer Created",
-    customer_updated: "Customer Updated",
-    customer_deleted: "Customer Deleted",
-    customer_blocked: "Customer Blocked",
-    customer_unblocked: "Customer Unblocked",
-    customer_approved: "Customer Approved",
-    customer_rejected: "Customer Rejected",
+    blocked_customer: "Blocked",
+    unblocked_customer: "Unblocked",
+    customer_created: "Customer Add",
+    customer_updated: "Customer Edit",
+    customer_deleted: "Customer Delete",
+    customer_blocked: "Blocked",
+    customer_unblocked: "Unblocked",
+    customer_approved: "Approved",
+    customer_rejected: "Rejected",
     // Identities
-    identity_blocked: "Identity Blocked",
-    identity_unblocked: "Identity Unblocked",
+    identity_blocked: "ID Blocked",
+    identity_unblocked: "ID Unblocked",
     // Vehicles
-    vehicle_created: "Vehicle Created",
-    vehicle_updated: "Vehicle Updated",
-    vehicle_deleted: "Vehicle Deleted",
-    vehicle_status_changed: "Vehicle Status Changed",
+    vehicle_created: "Vehicle Add",
+    vehicle_updated: "Vehicle Edit",
+    vehicle_deleted: "Vehicle Delete",
+    vehicle_status_changed: "Status Change",
     // Rentals
-    rental_created: "Rental Created",
-    rental_updated: "Rental Updated",
-    rental_cancelled: "Rental Cancelled",
-    rental_closed: "Rental Closed",
-    rental_extended: "Rental Extended",
+    rental_created: "Rental Add",
+    rental_updated: "Rental Edit",
+    rental_cancelled: "Cancelled",
+    rental_closed: "Closed",
+    rental_extended: "Extended",
+    rental_deleted: "Rental Delete",
     // Payments
-    payment_created: "Payment Created",
-    payment_captured: "Payment Captured",
-    payment_refunded: "Payment Refunded",
-    payment_failed: "Payment Failed",
+    payment_created: "Payment Add",
+    payment_captured: "Captured",
+    payment_refunded: "Refunded",
+    payment_failed: "Pay Failed",
     // Fines
-    fine_created: "Fine Created",
-    fine_updated: "Fine Updated",
-    fine_deleted: "Fine Deleted",
+    fine_created: "Fine Add",
+    fine_updated: "Fine Edit",
+    fine_deleted: "Fine Delete",
     fine_charged: "Fine Charged",
     fine_waived: "Fine Waived",
     fine_paid: "Fine Paid",
+    fine_appeal_successful: "Appeal Won",
     // Invoices
-    invoice_created: "Invoice Created",
-    invoice_updated: "Invoice Updated",
-    invoice_deleted: "Invoice Deleted",
+    invoice_created: "Invoice Add",
+    invoice_updated: "Invoice Edit",
+    invoice_deleted: "Invoice Delete",
     invoice_sent: "Invoice Sent",
     // Documents
-    document_uploaded: "Document Uploaded",
-    document_updated: "Document Updated",
-    document_deleted: "Document Deleted",
+    document_uploaded: "Doc Upload",
+    document_updated: "Doc Edit",
+    document_deleted: "Doc Delete",
     // Plates
-    plate_created: "Plate Created",
-    plate_updated: "Plate Updated",
-    plate_deleted: "Plate Deleted",
-    plate_assigned: "Plate Assigned",
-    plate_unassigned: "Plate Unassigned",
-    // Warning dialog shown actions
-    rental_delete_warning_shown: "Delete Rental Warning Shown",
-    rental_cancel_warning_shown: "Cancel Rental Warning Shown",
-    rental_close_warning_shown: "Close Rental Warning Shown",
-    rental_reject_warning_shown: "Reject Booking Warning Shown",
-    vehicle_dispose_warning_shown: "Dispose Vehicle Warning Shown",
-    vehicle_undo_dispose_warning_shown: "Undo Disposal Warning Shown",
-    invoice_delete_warning_shown: "Delete Invoice Warning Shown",
-    customer_reject_warning_shown: "Reject Customer Warning Shown",
-    payment_refund_warning_shown: "Refund Warning Shown",
-    data_cleanup_warning_shown: "Data Cleanup Warning Shown",
-    fine_appeal_warning_shown: "Fine Appeal Warning Shown",
-    blocked_date_delete_warning_shown: "Delete Blocked Date Warning Shown",
-    working_hours_update_warning_shown: "Working Hours Update Warning Shown",
-    fine_bulk_charge_warning_shown: "Bulk Charge Fines Warning Shown",
-    fine_bulk_waive_warning_shown: "Bulk Waive Fines Warning Shown",
-    customer_unblock_warning_shown: "Unblock Customer Warning Shown",
-    identity_remove_warning_shown: "Remove Identity Warning Shown",
-    settings_reset_warning_shown: "Reset Settings Warning Shown",
-    agreement_template_clear_warning_shown: "Clear Template Warning Shown",
-    location_delete_warning_shown: "Delete Location Warning Shown",
-    holiday_delete_warning_shown: "Delete Holiday Warning Shown",
-    testimonial_delete_warning_shown: "Delete Testimonial Warning Shown",
-    faq_delete_warning_shown: "Delete FAQ Warning Shown",
-    promotion_delete_warning_shown: "Delete Promotion Warning Shown",
-    payment_create_dialog_shown: "Record Payment Dialog Shown",
-    customer_form_dialog_shown: "Customer Form Dialog Shown",
-    customer_document_upload_dialog_shown: "Document Upload Dialog Shown",
-    user_create_dialog_shown: "Create User Dialog Shown",
-    fine_create_dialog_shown: "Create Fine Dialog Shown",
-    fine_authority_payment_dialog_shown: "Authority Payment Dialog Shown",
-    invoice_send_dialog_shown: "Send Invoice Dialog Shown",
-    insurance_document_upload_dialog_shown: "Insurance Document Upload Dialog Shown",
-    insurance_policy_dialog_shown: "Insurance Policy Dialog Shown",
-    buy_insurance_dialog_shown: "Buy Insurance Dialog Shown",
-    rental_review_dialog_shown: "Rental Review Dialog Shown",
-    vehicle_expense_dialog_shown: "Vehicle Expense Dialog Shown",
-    service_record_dialog_shown: "Service Record Dialog Shown",
-    vehicle_form_dialog_shown: "Vehicle Form Dialog Shown",
-    plate_form_dialog_shown: "Plate Form Dialog Shown",
-    plate_assign_dialog_shown: "Plate Assign Dialog Shown",
+    plate_created: "Plate Add",
+    plate_updated: "Plate Edit",
+    plate_deleted: "Plate Delete",
+    plate_assigned: "Plate Assign",
+    plate_unassigned: "Plate Remove",
+    // Warning shown — short labels
+    rental_delete_warning_shown: "Rental Warn",
+    rental_cancel_warning_shown: "Cancel Warn",
+    rental_close_warning_shown: "Close Warn",
+    rental_reject_warning_shown: "Reject Warn",
+    vehicle_dispose_warning_shown: "Dispose Warn",
+    vehicle_undo_dispose_warning_shown: "Undo Warn",
+    invoice_delete_warning_shown: "Invoice Warn",
+    customer_reject_warning_shown: "Reject Warn",
+    payment_refund_warning_shown: "Refund Warn",
+    data_cleanup_warning_shown: "Cleanup Warn",
+    fine_appeal_warning_shown: "Appeal Warn",
+    blocked_date_delete_warning_shown: "Date Warn",
+    working_hours_update_warning_shown: "Hours Warn",
+    fine_bulk_charge_warning_shown: "Bulk Charge",
+    fine_bulk_waive_warning_shown: "Bulk Waive",
+    customer_unblock_warning_shown: "Unblock Warn",
+    identity_remove_warning_shown: "ID Warn",
+    settings_reset_warning_shown: "Reset Warn",
+    agreement_template_clear_warning_shown: "Template Warn",
+    location_delete_warning_shown: "Location Warn",
+    holiday_delete_warning_shown: "Holiday Warn",
+    testimonial_delete_warning_shown: "Review Warn",
+    faq_delete_warning_shown: "FAQ Warn",
+    promotion_delete_warning_shown: "Promo Warn",
+    // Dialog shown — short labels
+    payment_create_dialog_shown: "Payment View",
+    customer_form_dialog_shown: "Customer View",
+    customer_document_upload_dialog_shown: "Doc View",
+    user_create_dialog_shown: "User View",
+    fine_create_dialog_shown: "Fine View",
+    fine_authority_payment_dialog_shown: "Authority View",
+    invoice_send_dialog_shown: "Invoice View",
+    insurance_document_upload_dialog_shown: "Insurance View",
+    insurance_policy_dialog_shown: "Policy View",
+    buy_insurance_dialog_shown: "Insurance View",
+    rental_review_dialog_shown: "Review View",
+    vehicle_expense_dialog_shown: "Expense View",
+    service_record_dialog_shown: "Service View",
+    vehicle_form_dialog_shown: "Vehicle View",
+    plate_form_dialog_shown: "Plate View",
+    plate_assign_dialog_shown: "Assign View",
     // CRUD completion actions
-    promotion_created: "Promotion Created",
-    promotion_updated: "Promotion Updated",
-    promotion_deleted: "Promotion Deleted",
-    testimonial_created: "Testimonial Created",
-    testimonial_updated: "Testimonial Updated",
-    testimonial_deleted: "Testimonial Deleted",
-    faq_created: "FAQ Created",
-    faq_updated: "FAQ Updated",
-    faq_deleted: "FAQ Deleted",
-    location_created: "Location Created",
-    location_updated: "Location Updated",
-    location_deleted: "Location Deleted",
-    holiday_created: "Holiday Created",
-    holiday_updated: "Holiday Updated",
-    holiday_deleted: "Holiday Deleted",
-    rental_deleted: "Rental Deleted",
-    fine_appeal_successful: "Fine Appeal Successful",
+    promotion_created: "Promo Add",
+    promotion_updated: "Promo Edit",
+    promotion_deleted: "Promo Delete",
+    testimonial_created: "Review Add",
+    testimonial_updated: "Review Edit",
+    testimonial_deleted: "Review Delete",
+    faq_created: "FAQ Add",
+    faq_updated: "FAQ Edit",
+    faq_deleted: "FAQ Delete",
+    location_created: "Location Add",
+    location_updated: "Location Edit",
+    location_deleted: "Location Delete",
+    holiday_created: "Holiday Add",
+    holiday_updated: "Holiday Edit",
+    holiday_deleted: "Holiday Delete",
+    // Auth
+    login_success: "Login",
+    login_failed: "Login Fail",
+    logout: "Logout",
   };
 
   if (actionMap[action]) {
     return actionMap[action];
   }
 
-  // Default: capitalize each word
-  return action
+  // Fallback for unmapped dialog/warning actions
+  if (action.includes("_dialog_shown")) {
+    const entity = action.replace("_dialog_shown", "").replace(/_/g, " ");
+    const words = entity.split(" ");
+    return words.slice(0, 2).map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(" ") + " View";
+  }
+  if (action.includes("_warning_shown")) {
+    const entity = action.replace("_warning_shown", "").replace(/_/g, " ");
+    const words = entity.split(" ");
+    return words.slice(0, 2).map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(" ") + " Warn";
+  }
+
+  // Default: capitalize, max 3 words
+  const words = action
     .split("_")
-    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
-    .join(" ");
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1));
+  if (words.length > 3) return words.slice(0, 2).join(" ");
+  return words.join(" ");
 }
 
 // Helper to get action color

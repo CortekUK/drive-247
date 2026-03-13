@@ -2,8 +2,8 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
-import { Clock, ChevronRight, CircleDollarSign, Layers, Timer, Zap, ShieldCheck, FileSignature } from "lucide-react";
+import { usePathname, useSearchParams } from "next/navigation";
+import { Clock, ChevronRight, CircleDollarSign, Layers, Timer, Zap, ShieldCheck, FileSignature, ArrowLeft, Building2, MapPin, Palette, Car, TrendingUp, Package, CreditCard, Bell, FileText, Shield, Crown } from "lucide-react";
 import { EarthIcon } from "@/components/ui/earth";
 import { CarIcon } from "@/components/ui/car";
 import { BlocksIcon } from "@/components/ui/blocks";
@@ -71,9 +71,40 @@ interface NavGroup {
   items: NavItem[];
 }
 
+// Settings sidebar tab definitions
+const settingsTabGroups = [
+  {
+    label: "Business",
+    items: [
+      { value: 'general', icon: Building2, label: 'General' },
+      { value: 'locations', icon: MapPin, label: 'Locations' },
+      { value: 'branding', icon: Palette, label: 'Branding' },
+    ],
+  },
+  {
+    label: "Operations",
+    items: [
+      { value: 'rental', icon: Car, label: 'Bookings' },
+      { value: 'pricing', icon: TrendingUp, label: 'Dynamic Pricing' },
+      { value: 'extras', icon: Package, label: 'Extras' },
+      { value: 'payments', icon: CreditCard, label: 'Payments & Stripe' },
+      { value: 'reminders', icon: Bell, label: 'Notifications' },
+      { value: 'templates', icon: FileText, label: 'Templates' },
+    ],
+  },
+  {
+    label: "More",
+    items: [
+      { value: 'integrations', icon: Shield, label: 'Integrations' },
+      { value: 'subscription', icon: Crown, label: 'Subscription' },
+    ],
+  },
+];
+
 export function AppSidebar() {
   const { state } = useSidebar();
   const pathname = usePathname();
+  const searchParams = useSearchParams();
   const { data: reminderStats } = useReminderStats();
   const { settings } = useOrgSettings();
   const { branding } = useTenantBranding();
@@ -82,7 +113,7 @@ export function AppSidebar() {
   const { appUser } = useAuthStore();
   const { isTrialing, trialDaysRemaining } = useTenantSubscription();
   const { isLive } = useSetupStatus();
-  const { isManager, canView } = useManagerPermissions();
+  const { isManager, canView, canViewSettings } = useManagerPermissions();
 
   const { resolvedTheme } = useTheme();
   const appName = branding?.app_name || 'DRIVE247';
@@ -90,6 +121,10 @@ export function AppSidebar() {
   const logoUrl = resolvedTheme === 'dark' && branding?.dark_logo_url ? branding.dark_logo_url : branding?.logo_url;
   const showPendingBookings = settings?.payment_mode === 'manual';
   const collapsed = state === "collapsed";
+
+  // Settings mode: when on /settings path, show settings sidebar
+  const isSettingsPage = pathname?.startsWith("/settings") || false;
+  const activeSettingsTab = searchParams.get('tab') || 'general';
 
   const isActive = (path: string) => {
     if (path === "/") return pathname === "/";
@@ -241,6 +276,154 @@ export function AppSidebar() {
     );
   };
 
+  // --- Settings Sidebar Mode ---
+  if (isSettingsPage) {
+    return (
+      <Sidebar collapsible="icon" className="transition-all duration-300 ease-in-out">
+        {/* Settings Header with Back Button */}
+        <SidebarHeader className="h-16 border-b">
+          <div className="flex items-center w-full h-full px-2 transition-all duration-300 ease-in-out">
+            {collapsed ? (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Link href="/" className="flex items-center justify-center w-full h-8 rounded-md hover:bg-muted/50 transition-colors">
+                    <ArrowLeft className="h-4 w-4 shrink-0" />
+                  </Link>
+                </TooltipTrigger>
+                <TooltipContent side="right">Back to Dashboard</TooltipContent>
+              </Tooltip>
+            ) : (
+              <Link href="/" className="flex items-center gap-2 h-8 px-1 rounded-md hover:bg-muted/50 transition-colors text-muted-foreground hover:text-foreground">
+                <ArrowLeft className="h-4 w-4 shrink-0" />
+                <span className="text-[13px]">Back</span>
+              </Link>
+            )}
+          </div>
+        </SidebarHeader>
+
+        {/* Settings Title */}
+        {!collapsed && (
+          <div className="px-4 pt-4 pb-1">
+            <h2 className="text-sm font-semibold text-foreground">Settings</h2>
+            <p className="text-[11px] text-muted-foreground mt-0.5">Configure your system</p>
+          </div>
+        )}
+
+        {/* Settings Navigation */}
+        <SidebarContent className="transition-all duration-300 ease-in-out gap-0">
+          {settingsTabGroups.map((group, groupIndex) => {
+            const visibleItems = group.items.filter(item => canViewSettings(item.value));
+            if (visibleItems.length === 0) return null;
+            const GroupIcon = visibleItems[0].icon;
+
+            return (
+              <SidebarGroup key={group.label} className="p-1.5 pb-0">
+                {collapsed ? (
+                  <Popover>
+                    <SidebarMenu>
+                      <SidebarMenuItem>
+                        <PopoverTrigger asChild>
+                          <SidebarMenuButton className="h-8 w-full transition-all duration-200 ease-in-out">
+                            <GroupIcon className="h-4 w-4 shrink-0" />
+                          </SidebarMenuButton>
+                        </PopoverTrigger>
+                      </SidebarMenuItem>
+                    </SidebarMenu>
+                    <PopoverContent side="right" align="start" sideOffset={8} className="w-52 p-1.5">
+                      <p className="px-2 py-1.5 text-xs font-semibold text-muted-foreground">{group.label}</p>
+                      <div className="space-y-0.5">
+                        {visibleItems.map(item => (
+                          <Link
+                            key={item.value}
+                            href={`/settings?tab=${item.value}`}
+                            className={`flex items-center gap-2 px-2 py-1.5 text-sm rounded-md transition-colors hover:bg-accent ${
+                              activeSettingsTab === item.value ? "bg-accent text-accent-foreground font-medium" : "text-foreground"
+                            }`}
+                          >
+                            <item.icon className="h-3.5 w-3.5 shrink-0" />
+                            <span className="truncate">{item.label}</span>
+                          </Link>
+                        ))}
+                      </div>
+                    </PopoverContent>
+                  </Popover>
+                ) : (
+                  <SidebarGroupContent>
+                    {groupIndex > 0 && (
+                      <div className="mx-2.5 mb-1.5 border-t" />
+                    )}
+                    <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground/50 px-2.5 pt-0.5 pb-1">{group.label}</p>
+                    <SidebarMenu>
+                      {visibleItems.map(item => (
+                        <SidebarMenuItem key={item.value}>
+                          <SidebarMenuButton
+                            asChild
+                            isActive={activeSettingsTab === item.value}
+                            className="h-8 transition-all duration-200 ease-in-out"
+                          >
+                            <Link href={`/settings?tab=${item.value}`} className="flex items-center gap-2.5">
+                              <item.icon className="h-4 w-4 shrink-0" />
+                              <span className="text-[13px]">{item.label}</span>
+                            </Link>
+                          </SidebarMenuButton>
+                        </SidebarMenuItem>
+                      ))}
+                    </SidebarMenu>
+                  </SidebarGroupContent>
+                )}
+              </SidebarGroup>
+            );
+          })}
+        </SidebarContent>
+
+        {/* Footer — trial/live status */}
+        <SidebarFooter className="border-t p-1.5">
+          <SidebarMenu>
+            {(isTrialing || isLive) && (
+              <SidebarMenuItem>
+                {collapsed ? (
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <div className="flex items-center justify-center h-8">
+                        {isTrialing ? (
+                          <Timer className="h-4 w-4 text-blue-500" />
+                        ) : (
+                          <Zap className="h-4 w-4 text-green-500" />
+                        )}
+                      </div>
+                    </TooltipTrigger>
+                    <TooltipContent side="right">
+                      {isTrialing ? `Setup Mode · ${trialDaysRemaining}d left` : "Live"}
+                    </TooltipContent>
+                  </Tooltip>
+                ) : (
+                  <div className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-xs font-medium ${
+                    isTrialing
+                      ? "bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-400"
+                      : "bg-green-50 text-green-700 dark:bg-green-950/40 dark:text-green-400"
+                  }`}>
+                    {isTrialing ? (
+                      <>
+                        <Timer className="h-3.5 w-3.5" />
+                        <span>Setup Mode · {trialDaysRemaining}d left</span>
+                      </>
+                    ) : (
+                      <>
+                        <Zap className="h-3.5 w-3.5" />
+                        <span>Live</span>
+                      </>
+                    )}
+                  </div>
+                )}
+              </SidebarMenuItem>
+            )}
+          </SidebarMenu>
+        </SidebarFooter>
+      </Sidebar>
+    );
+  }
+
+  // --- Main Sidebar Mode ---
   return (
     <Sidebar collapsible="icon" className="transition-all duration-300 ease-in-out">
       {/* Branding Header */}

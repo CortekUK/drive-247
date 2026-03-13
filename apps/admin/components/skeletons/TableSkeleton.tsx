@@ -1,4 +1,5 @@
 import { Skeleton } from "@/components/ui/skeleton";
+import { Card, CardContent } from "@/components/ui/card";
 
 interface TableSkeletonProps {
   rows?: number;
@@ -16,43 +17,41 @@ export function TableSkeleton({
   showButton = true,
 }: TableSkeletonProps) {
   return (
-    <div className="p-8">
-      {/* Header */}
-      <div className="flex justify-between items-center mb-8">
+    <div className="space-y-6">
+      <div className="flex justify-between items-center">
         <div>
           {title ? (
             <>
-              <h1 className="text-3xl font-bold text-white">{title}</h1>
-              {subtitle && <p className="mt-2 text-gray-400">{subtitle}</p>}
+              <h1 className="text-2xl font-bold">{title}</h1>
+              {subtitle && <p className="text-sm text-muted-foreground mt-1">{subtitle}</p>}
             </>
           ) : (
             <>
-              <Skeleton className="h-9 w-48 mb-2" />
-              <Skeleton className="h-5 w-72" />
+              <Skeleton className="h-8 w-48 mb-2" />
+              <Skeleton className="h-4 w-72" />
             </>
           )}
         </div>
-        {showButton && <Skeleton className="h-12 w-40 rounded-lg" />}
+        {showButton && <Skeleton className="h-10 w-40" />}
       </div>
 
-      {/* Table */}
-      <div className="bg-dark-card rounded-lg shadow overflow-hidden border border-dark-border">
-        {/* Table Header */}
-        <div className="bg-dark-bg px-6 py-3 flex gap-4">
-          {[...Array(columns)].map((_, i) => (
-            <Skeleton
-              key={i}
-              className="h-4"
-              style={{ flex: i === 0 ? 2 : 1 }}
-            />
-          ))}
-        </div>
+      <Card>
+        <CardContent className="p-0">
+          {/* Header */}
+          <div className="border-b px-4 py-3 flex gap-4">
+            {Array.from({ length: columns }).map((_, i) => (
+              <Skeleton
+                key={i}
+                className="h-4"
+                style={{ flex: i === 0 ? 2 : 1 }}
+              />
+            ))}
+          </div>
 
-        {/* Table Body */}
-        <div className="divide-y divide-dark-border">
-          {[...Array(rows)].map((_, rowIdx) => (
-            <div key={rowIdx} className="px-6 py-4 flex gap-4 items-center">
-              {[...Array(columns)].map((_, colIdx) => (
+          {/* Rows */}
+          {Array.from({ length: rows }).map((_, rowIdx) => (
+            <div key={rowIdx} className="px-4 py-3 flex gap-4 items-center border-b last:border-0">
+              {Array.from({ length: columns }).map((_, colIdx) => (
                 <Skeleton
                   key={colIdx}
                   className="h-5"
@@ -61,8 +60,8 @@ export function TableSkeleton({
               ))}
             </div>
           ))}
-        </div>
-      </div>
+        </CardContent>
+      </Card>
     </div>
   );
 }

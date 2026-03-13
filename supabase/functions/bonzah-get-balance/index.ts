@@ -14,6 +14,7 @@ import {
 
 interface GetBalanceRequest {
   tenant_id: string
+  mode?: 'test' | 'live'
 }
 
 async function checkLowBalanceThreshold(
@@ -212,8 +213,13 @@ Deno.serve(async (req) => {
     }
 
     const credentials = await getTenantBonzahCredentials(supabase, body.tenant_id)
-    const apiUrl = getBonzahApiUrl(credentials.mode)
-    const token = await getBonzahTokenForCredentials(credentials.username, credentials.password, apiUrl)
+    // Allow mode override for fetching test balance when tenant is in live mode
+    const effectiveMode = body.mode || credentials.mode
+    const effectiveCredentials = body.mode && body.mode !== credentials.mode
+      ? { ...credentials, mode: body.mode, ...(body.mode === 'test' ? { username: Deno.env.get('BONZAH_USERNAME') || '', password: Deno.env.get('BONZAH_PASSWORD') || '' } : {}) }
+      : credentials
+    const apiUrl = getBonzahApiUrl(effectiveMode)
+    const token = await getBonzahTokenForCredentials(effectiveCredentials.username, effectiveCredentials.password, apiUrl)
 
     const resp = await fetch(`${apiUrl}/Bonzah/cdBalance`, {
       method: 'GET',

@@ -6,27 +6,68 @@
 
 @layer base {
   :root {
-    /* CSS variables for shadcn chart component */
-    --background: #0a0a0a;
-    --foreground: #f3f4f6;
-    --card: #141414;
-    --card-foreground: #f3f4f6;
-    --muted: #262626;
-    --muted-foreground: #9ca3af;
-    --border: #262626;
-    --chart-1: #0ea5e9;
-    --chart-2: #d946ef;
-    --chart-3: #22c55e;
-    --chart-4: #f59e0b;
-    --chart-5: #ef4444;
+    /* Neon purple theme — rich purple tones, glowy, dreamy */
+    --background: 258 30% 12%;           /* #1c1535 — deep violet */
+    --foreground: 270 25% 88%;           /* #ddd1f0 — warm lavender */
+
+    --card: 258 28% 15%;                 /* #241c42 — rich purple card */
+    --card-foreground: 270 25% 88%;
+
+    --popover: 258 28% 17%;
+    --popover-foreground: 270 25% 88%;
+
+    --primary: 265 85% 65%;              /* #a470ff — bright neon violet */
+    --primary-foreground: 270 30% 98%;
+
+    --secondary: 258 25% 20%;            /* #30264e */
+    --secondary-foreground: 270 20% 78%;
+
+    --muted: 258 25% 20%;
+    --muted-foreground: 265 15% 55%;     /* #8a74a8 — purple-gray */
+
+    --accent: 258 25% 23%;
+    --accent-foreground: 270 25% 88%;
+
+    --destructive: 350 70% 55%;          /* pinkish-red, fits purple */
+    --destructive-foreground: 270 30% 98%;
+
+    --success: 160 60% 50%;              /* teal-green, complements purple */
+    --success-foreground: 270 30% 98%;
+
+    --warning: 42 90% 58%;               /* warm gold */
+    --warning-foreground: 258 30% 12%;
+
+    --border: 258 22% 22%;               /* #362d54 */
+    --input: 258 22% 24%;
+    --ring: 265 85% 65%;
+
+    --radius: 0.75rem;
+
+    /* Sidebar — richest purple layer */
+    --sidebar-background: 260 35% 10%;   /* #17102e */
+    --sidebar-foreground: 270 18% 75%;
+    --sidebar-primary: 265 85% 65%;
+    --sidebar-primary-foreground: 270 30% 98%;
+    --sidebar-accent: 265 85% 65%;
+    --sidebar-accent-foreground: 270 30% 98%;
+    --sidebar-border: 258 22% 18%;
+    --sidebar-ring: 265 85% 65%;
+    --sidebar-muted: 265 15% 55%;
+
+    /* Charts */
+    --chart-1: 265 85% 65%;             /* neon purple */
+    --chart-2: 190 90% 55%;             /* neon cyan */
+    --chart-3: 160 60% 50%;             /* teal */
+    --chart-4: 42 90% 58%;              /* gold */
+    --chart-5: 350 70% 55%;             /* pink-red */
   }
 
   * {
-    @apply border-dark-border;
+    @apply border-border;
   }
 
   body {
-    @apply bg-dark-bg text-gray-100 font-sans antialiased;
+    @apply bg-background text-foreground font-sans antialiased;
   }
 }
 
@@ -36,6 +77,38 @@
   }
 
   .gradient-text {
-    @apply bg-clip-text text-transparent bg-gradient-to-r from-primary-400 to-accent-400;
+    @apply bg-clip-text text-transparent bg-gradient-to-r from-violet-400 to-fuchsia-400;
+  }
+
+  /* Neon glow utilities — visible, dreamy, layered */
+  .glow-purple {
+    box-shadow: 0 0 20px -4px hsl(265 85% 65% / 0.45),
+                0 0 8px -2px hsl(265 85% 65% / 0.2),
+                inset 0 0 12px -8px hsl(265 85% 65% / 0.1);
+  }
+
+  .glow-purple-sm {
+    box-shadow: 0 0 14px -4px hsl(265 85% 65% / 0.35),
+                0 0 5px -1px hsl(265 85% 65% / 0.15);
+  }
+
+  .glow-green {
+    box-shadow: 0 0 14px -4px hsl(160 60% 50% / 0.4),
+                0 0 5px -1px hsl(160 60% 50% / 0.15);
+  }
+
+  .glow-red {
+    box-shadow: 0 0 14px -4px hsl(350 70% 55% / 0.4),
+                0 0 5px -1px hsl(350 70% 55% / 0.15);
+  }
+
+  .glow-amber {
+    box-shadow: 0 0 14px -4px hsl(42 90% 58% / 0.4),
+                0 0 5px -1px hsl(42 90% 58% / 0.15);
+  }
+
+  .glow-cyan {
+    box-shadow: 0 0 14px -4px hsl(190 90% 55% / 0.4),
+                0 0 5px -1px hsl(190 90% 55% / 0.15);
   }
 }

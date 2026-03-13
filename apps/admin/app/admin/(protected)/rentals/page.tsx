@@ -1,9 +1,42 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
 import { toast } from '@/components/ui/sonner';
-import { TableSkeleton } from '@/components/skeletons/TableSkeleton';
+import { cn } from '@/lib/utils';
+import { Card, CardContent } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Badge } from '@/components/ui/badge';
+import { Skeleton } from '@/components/ui/skeleton';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import {
+  Plus,
+  ArrowRight,
+  Copy,
+  AlertTriangle,
+  CheckCircle,
+  Search,
+  Star,
+  Building2,
+} from 'lucide-react';
 
 interface Tenant {
   id: string;
@@ -42,6 +75,17 @@ export default function RentalCompaniesPage() {
   const [showDetailsModal, setShowDetailsModal] = useState(false);
   const [selectedTenantCreds, setSelectedTenantCreds] = useState<TenantCredentials | null>(null);
   const [typeFilter, setTypeFilter] = useState<'all' | 'production' | 'test'>('all');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [showFavoritesOnly, setShowFavoritesOnly] = useState(false);
+  const [favorites, setFavorites] = useState<Set<string>>(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const saved = localStorage.getItem('admin_favorite_tenants');
+        return saved ? new Set(JSON.parse(saved)) : new Set();
+      } catch { return new Set(); }
+    }
+    return new Set();
+  });
   const [formErrors, setFormErrors] = useState<{ slug?: string }>({});
 
   useEffect(() => {
@@ -60,7 +104,6 @@ export default function RentalCompaniesPage() {
       }
 
       const { data, error } = await query;
-
       if (error) throw error;
       setTenants(data || []);
     } catch (error) {
@@ -70,7 +113,6 @@ export default function RentalCompaniesPage() {
     }
   };
 
-  // Generate random password
   const generateRandomPassword = () => {
     const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789!@#$%^&*';
     let password = '';
@@ -82,22 +124,15 @@ export default function RentalCompaniesPage() {
 
   const validateSlug = (slug: string): string | null => {
     const cleanSlug = slug.toLowerCase().replace(/[^a-z0-9-]/g, '-');
-    if (cleanSlug.length < 3) {
-      return 'Slug must be at least 3 characters long';
-    }
-    if (cleanSlug.length > 50) {
-      return 'Slug must be 50 characters or less';
-    }
-    if (!/^[a-z][a-z0-9-]*$/.test(cleanSlug)) {
-      return 'Slug must start with a letter and contain only letters, numbers, and hyphens';
-    }
+    if (cleanSlug.length < 3) return 'Slug must be at least 3 characters long';
+    if (cleanSlug.length > 50) return 'Slug must be 50 characters or less';
+    if (!/^[a-z][a-z0-9-]*$/.test(cleanSlug)) return 'Slug must start with a letter and contain only letters, numbers, and hyphens';
     return null;
   };
 
   const handleCreateTenant = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    // Validate slug before submitting
     const slug = formData.slug.toLowerCase().replace(/[^a-z0-9-]/g, '-');
     const slugError = validateSlug(slug);
     if (slugError) {
@@ -108,30 +143,24 @@ export default function RentalCompaniesPage() {
     setCreating(true);
 
     try {
-
-      // Step 1: Create tenant
       const { data: tenant, error: tenantError } = await supabase
         .from('tenants')
-        .insert([
-          {
-            company_name: formData.companyName,
-            admin_name: formData.adminName || null,
-            slug: slug,
-            contact_email: formData.contactEmail,
-            status: 'active',
-            tenant_type: formData.tenantType,
-          }
-        ])
+        .insert([{
+          company_name: formData.companyName,
+          admin_name: formData.adminName || null,
+          slug: slug,
+          contact_email: formData.contactEmail,
+          status: 'active',
+          tenant_type: formData.tenantType,
+        }])
         .select()
         .single();
 
       if (tenantError) throw tenantError;
 
-      // Step 2: Generate admin credentials
       const adminEmail = formData.contactEmail;
       const adminPassword = generateRandomPassword();
 
-      // Step 4: Create the admin user via edge function
       const { data: session } = await supabase.auth.getSession();
       if (!session?.session?.access_token) {
         throw new Error('Not authenticated - please log in again');
@@ -143,25 +172,20 @@ export default function RentalCompaniesPage() {
           name: `${formData.companyName} Admin`,
           role: 'head_admin',
           temporaryPassword: adminPassword,
-          tenant_id: tenant.id, // Assign user to this specific tenant
+          tenant_id: tenant.id,
         },
       });
 
       if (createUserError) {
-        console.error('Failed to create admin user:', createUserError);
-        // Clean up: delete the tenant if user creation failed
         await supabase.from('tenants').delete().eq('id', tenant.id);
         throw new Error(`Failed to create admin user: ${createUserError.message}`);
       }
 
       if (createUserData?.error) {
-        console.error('Admin user creation returned error:', createUserData.error);
-        // Clean up: delete the tenant if user creation failed
         await supabase.from('tenants').delete().eq('id', tenant.id);
         throw new Error(`Failed to create admin user: ${createUserData.error}`);
       }
 
-      // Prepare credentials object
       const credentials: TenantCredentials = {
         tenantId: tenant.id,
         companyName: formData.companyName,
@@ -173,15 +197,12 @@ export default function RentalCompaniesPage() {
         bookingUrl: `https://${slug}.drive-247.com`,
       };
 
-      // Show details modal
       setSelectedTenantCreds(credentials);
       setShowDetailsModal(true);
       setShowCreateModal(false);
       setFormData({ companyName: '', adminName: '', slug: '', contactEmail: '', tenantType: 'production' });
       loadTenants();
-
     } catch (error: any) {
-      // Parse database constraint errors into user-friendly messages
       let errorMessage = error.message;
       if (error.message?.includes('slug_length')) {
         errorMessage = 'Slug must be between 3 and 50 characters';
@@ -219,437 +240,444 @@ Admin User Credentials:
 Access URLs:
 - Rental Portal (Admin Dashboard): ${selectedTenantCreds.portalUrl}
 - Booking Site (Customer Facing): ${selectedTenantCreds.bookingUrl}
-
-⚠️ IMPORTANT: Save these credentials securely. They cannot be retrieved later.
     `.trim();
 
     navigator.clipboard.writeText(text);
     toast.success('All credentials copied to clipboard!');
   };
 
+  const toggleFavorite = (tenantId: string) => {
+    setFavorites((prev) => {
+      const next = new Set(prev);
+      if (next.has(tenantId)) next.delete(tenantId);
+      else next.add(tenantId);
+      localStorage.setItem('admin_favorite_tenants', JSON.stringify([...next]));
+      return next;
+    });
+  };
+
+  const filteredTenants = tenants
+    .filter((t) => {
+      if (showFavoritesOnly && !favorites.has(t.id)) return false;
+      if (!searchQuery) return true;
+      const q = searchQuery.toLowerCase();
+      return (
+        t.company_name?.toLowerCase().includes(q) ||
+        t.slug?.toLowerCase().includes(q) ||
+        t.contact_email?.toLowerCase().includes(q) ||
+        t.admin_name?.toLowerCase().includes(q)
+      );
+    })
+    .sort((a, b) => {
+      // Favorites first
+      const aFav = favorites.has(a.id) ? 0 : 1;
+      const bFav = favorites.has(b.id) ? 0 : 1;
+      if (aFav !== bFav) return aFav - bFav;
+      return 0; // preserve original order otherwise
+    });
+
   if (loading) {
     return (
-      <TableSkeleton
-        rows={5}
-        columns={7}
-        title="Rental Companies"
-        subtitle="Manage all rental companies on the platform"
-      />
+      <div className="space-y-6">
+        <div className="flex justify-between items-center">
+          <div>
+            <Skeleton className="h-8 w-48" />
+            <Skeleton className="h-4 w-80 mt-2" />
+          </div>
+          <Skeleton className="h-10 w-44" />
+        </div>
+        <Skeleton className="h-10 w-60" />
+        <Card>
+          <CardContent className="p-0">
+            {Array.from({ length: 5 }).map((_, i) => (
+              <div key={i} className="flex items-center gap-4 px-4 py-3 border-b last:border-0">
+                <Skeleton className="h-5 w-40" />
+                <Skeleton className="h-5 w-20" />
+                <Skeleton className="h-5 w-20" />
+                <Skeleton className="h-5 w-24" />
+                <Skeleton className="h-5 w-24 ml-auto" />
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+      </div>
     );
   }
 
   return (
-    <div className="p-8 h-full overflow-auto">
-      <div className="flex justify-between items-center mb-8">
-        <div>
-          <h1 className="text-3xl font-bold text-white">Rental Companies</h1>
-          <p className="mt-2 text-gray-400">Manage all rental companies on the platform</p>
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <div className="flex items-center justify-center h-10 w-10 rounded-xl bg-primary/15 glow-purple-sm">
+            <Building2 className="h-5 w-5 text-primary" />
+          </div>
+          <div>
+            <h1 className="text-2xl font-bold tracking-tight">Rental Companies</h1>
+            <p className="text-sm text-muted-foreground">
+              Manage all rental companies · {tenants.length} total
+            </p>
+          </div>
         </div>
-        <button
-          onClick={() => setShowCreateModal(true)}
-          className="px-6 py-3 bg-primary-600 text-white rounded-lg hover:bg-primary-700 font-medium"
-        >
-          + Add New Rental
-        </button>
+        <Button onClick={() => setShowCreateModal(true)}>
+          <Plus className="h-4 w-4" />
+          Add New Rental
+        </Button>
       </div>
 
-      {/* Type Filter */}
-      <div className="mb-4 flex items-center space-x-2">
-        <span className="text-sm text-gray-400">Filter:</span>
-        <button
-          onClick={() => setTypeFilter('all')}
-          className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
-            typeFilter === 'all'
-              ? 'bg-primary-600 text-white'
-              : 'bg-dark-card text-gray-400 hover:text-white border border-dark-border'
-          }`}
-        >
-          All
-        </button>
-        <button
-          onClick={() => setTypeFilter('production')}
-          className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
-            typeFilter === 'production'
-              ? 'bg-green-600 text-white'
-              : 'bg-dark-card text-gray-400 hover:text-white border border-dark-border'
-          }`}
-        >
-          Production
-        </button>
-        <button
-          onClick={() => setTypeFilter('test')}
-          className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
-            typeFilter === 'test'
-              ? 'bg-orange-600 text-white'
-              : 'bg-dark-card text-gray-400 hover:text-white border border-dark-border'
-          }`}
-        >
-          Test
-        </button>
-      </div>
+      {/* Search & Filters */}
+      <Card>
+        <CardContent className="pt-6">
+          <div className="flex flex-col sm:flex-row gap-3">
+            {/* Search */}
+            <div className="relative flex-1">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Search by name, slug, or email..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="pl-9"
+              />
+            </div>
 
-      <div className="bg-dark-card rounded-lg shadow overflow-x-auto border border-dark-border">
-        <table className="min-w-full divide-y divide-dark-border">
-          <thead className="bg-dark-bg">
-            <tr>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">
-                Company
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">
-                Type
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">
-                Status
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">
-                Created
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">
-                Actions
-              </th>
-            </tr>
-          </thead>
-          <tbody className="bg-dark-card divide-y divide-dark-border">
-            {tenants.map((tenant) => (
-              <tr key={tenant.id} className="hover:bg-dark-hover">
-                <td className="px-6 py-4 whitespace-nowrap">
-                  <div className="text-sm font-medium text-white">{tenant.company_name}</div>
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap">
-                  {tenant.tenant_type ? (
-                    <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                      tenant.tenant_type === 'production'
-                        ? 'bg-blue-900/30 text-blue-400 border border-blue-800/50'
-                        : 'bg-orange-900/30 text-orange-400 border border-orange-800/50'
-                    }`}>
-                      {tenant.tenant_type}
-                    </span>
-                  ) : (
-                    <span className="text-gray-500 text-xs">—</span>
+            {/* Favorites toggle */}
+            <button
+              onClick={() => setShowFavoritesOnly(!showFavoritesOnly)}
+              className={cn(
+                'flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-all border',
+                showFavoritesOnly
+                  ? 'bg-amber-500/15 text-amber-400 border-amber-500/30 glow-amber'
+                  : 'bg-secondary text-muted-foreground border-transparent hover:bg-secondary/80'
+              )}
+            >
+              <Star className={cn('h-4 w-4', showFavoritesOnly && 'fill-amber-400')} />
+              Favorites{favorites.size > 0 && ` (${favorites.size})`}
+            </button>
+
+            {/* Type pills */}
+            <div className="flex items-center gap-1.5">
+              {(['all', 'production', 'test'] as const).map((type) => (
+                <button
+                  key={type}
+                  onClick={() => setTypeFilter(type)}
+                  className={cn(
+                    'px-3 py-2 rounded-md text-xs font-semibold transition-all capitalize border',
+                    typeFilter === type
+                      ? type === 'production'
+                        ? 'bg-sky-500/15 text-sky-400 border-sky-500/30'
+                        : type === 'test'
+                        ? 'bg-warning/15 text-amber-400 border-warning/30'
+                        : 'bg-primary/15 text-primary border-primary/30'
+                      : 'bg-secondary text-muted-foreground border-transparent hover:bg-secondary/80'
                   )}
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap">
-                  <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                    tenant.status === 'active'
-                      ? 'bg-green-900/30 text-green-400 border border-green-800/50'
-                      : 'bg-red-900/30 text-red-400 border border-red-800/50'
-                  }`}>
-                    {tenant.status}
-                  </span>
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-400">
-                  {new Date(tenant.created_at).toLocaleDateString('en-US')}
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                  <a
-                    href={`/admin/rentals/${tenant.id}`}
-                    className="text-primary-400 hover:text-primary-300"
-                  >
-                    View Details →
-                  </a>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+                >
+                  {type}
+                </button>
+              ))}
+            </div>
+          </div>
+        </CardContent>
+      </Card>
 
-        {tenants.length === 0 && (
-          <div className="text-center py-12">
-            <p className="text-gray-400">No rental companies yet. Create one to get started.</p>
+      {/* Table */}
+      <Card>
+        <Table>
+          <TableHeader>
+            <TableRow className="bg-primary/5 hover:bg-primary/5">
+              <TableHead className="w-10"></TableHead>
+              <TableHead>Company</TableHead>
+              <TableHead>Type</TableHead>
+              <TableHead>Status</TableHead>
+              <TableHead>Created</TableHead>
+              <TableHead className="text-right">Actions</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {filteredTenants.map((tenant) => (
+              <TableRow key={tenant.id}>
+                <TableCell className="pr-0">
+                  <button
+                    onClick={() => toggleFavorite(tenant.id)}
+                    className="p-1 rounded hover:bg-accent transition-colors"
+                    title={favorites.has(tenant.id) ? 'Remove from favorites' : 'Add to favorites'}
+                  >
+                    <Star
+                      className={cn(
+                        'h-4 w-4 transition-colors',
+                        favorites.has(tenant.id)
+                          ? 'fill-amber-400 text-amber-400'
+                          : 'text-muted-foreground/40 hover:text-muted-foreground'
+                      )}
+                    />
+                  </button>
+                </TableCell>
+                <TableCell className="font-medium">{tenant.company_name}</TableCell>
+                <TableCell>
+                  {tenant.tenant_type ? (
+                    <Badge variant={tenant.tenant_type === 'production' ? 'info' : 'warning'} className="capitalize whitespace-nowrap">
+                      {tenant.tenant_type}
+                    </Badge>
+                  ) : (
+                    <span className="text-muted-foreground">—</span>
+                  )}
+                </TableCell>
+                <TableCell>
+                  <Badge variant={tenant.status === 'active' ? 'success' : 'destructive'} className="capitalize whitespace-nowrap">
+                    {tenant.status}
+                  </Badge>
+                </TableCell>
+                <TableCell className="text-muted-foreground tabular-nums">
+                  {new Date(tenant.created_at).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}
+                </TableCell>
+                <TableCell className="text-right">
+                  <Button variant="ghost" size="sm" asChild>
+                    <Link href={`/admin/rentals/${tenant.id}`}>
+                      View Details
+                      <ArrowRight className="h-4 w-4" />
+                    </Link>
+                  </Button>
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+
+        {filteredTenants.length === 0 && (
+          <div className="flex flex-col items-center justify-center py-16 text-center">
+            <Building2 className="h-10 w-10 text-muted-foreground/40 mb-3" />
+            <p className="text-sm text-muted-foreground">
+              {showFavoritesOnly
+                ? 'No favorite companies yet. Star a company to add it here.'
+                : searchQuery
+                ? 'No companies match your search.'
+                : 'No rental companies yet. Create one to get started.'}
+            </p>
           </div>
         )}
-      </div>
+      </Card>
 
-      {/* Create Tenant Modal */}
-      {showCreateModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50">
-          <div className="bg-dark-card rounded-lg p-8 max-w-md w-full border border-dark-border">
-            <h2 className="text-2xl font-bold text-white mb-4">Add New Rental Company</h2>
+      {/* Create Tenant Dialog */}
+      <Dialog open={showCreateModal} onOpenChange={setShowCreateModal}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Add New Rental Company</DialogTitle>
+            <DialogDescription>
+              Create a new rental company with an initial admin user.
+            </DialogDescription>
+          </DialogHeader>
 
-            <form onSubmit={handleCreateTenant} className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-1">
-                  Company Name *
-                </label>
-                <input
-                  type="text"
-                  required
-                  value={formData.companyName}
-                  onChange={(e) => setFormData({ ...formData, companyName: e.target.value })}
-                  className="w-full px-3 py-2 bg-dark-bg border border-dark-border rounded-md text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-primary-500"
-                  placeholder="Acme Rentals"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-1">
-                  Admin Name
-                </label>
-                <input
-                  type="text"
-                  value={formData.adminName}
-                  onChange={(e) => setFormData({ ...formData, adminName: e.target.value })}
-                  className="w-full px-3 py-2 bg-dark-bg border border-dark-border rounded-md text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-primary-500"
-                  placeholder="John Doe"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-1">
-                  Slug (subdomain) *
-                </label>
-                <input
-                  type="text"
-                  required
-                  minLength={3}
-                  maxLength={50}
-                  value={formData.slug}
-                  onChange={(e) => {
-                    setFormData({ ...formData, slug: e.target.value });
-                    // Clear error when user starts typing
-                    if (formErrors.slug) {
-                      const newSlug = e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, '-');
-                      if (newSlug.length >= 3) {
-                        setFormErrors({});
-                      }
-                    }
-                  }}
-                  className={`w-full px-3 py-2 bg-dark-bg border rounded-md text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-primary-500 ${
-                    formErrors.slug ? 'border-red-500' : 'border-dark-border'
-                  }`}
-                  placeholder="acme-rentals"
-                />
-                {formErrors.slug ? (
-                  <p className="text-xs text-red-400 mt-1">{formErrors.slug}</p>
-                ) : (
-                  <p className="text-xs text-gray-500 mt-1">
-                    Min 3 characters. Portal: {formData.slug || 'slug'}.portal.drive-247.com | Booking: {formData.slug || 'slug'}.drive-247.com
-                  </p>
-                )}
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-1">
-                  Contact Email *
-                </label>
-                <input
-                  type="email"
-                  required
-                  value={formData.contactEmail}
-                  onChange={(e) => setFormData({ ...formData, contactEmail: e.target.value })}
-                  className="w-full px-3 py-2 bg-dark-bg border border-dark-border rounded-md text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-primary-500"
-                  placeholder="admin@acmerentals.com"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-1">
-                  Tenant Type *
-                </label>
-                <div className="flex space-x-2">
-                  <button
-                    type="button"
-                    onClick={() => setFormData({ ...formData, tenantType: 'production' })}
-                    className={`flex-1 px-3 py-2 rounded-md text-sm font-medium transition-colors ${
-                      formData.tenantType === 'production'
-                        ? 'bg-green-600 text-white'
-                        : 'bg-dark-bg text-gray-400 border border-dark-border hover:text-white'
-                    }`}
-                  >
-                    Production
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setFormData({ ...formData, tenantType: 'test' })}
-                    className={`flex-1 px-3 py-2 rounded-md text-sm font-medium transition-colors ${
-                      formData.tenantType === 'test'
-                        ? 'bg-orange-600 text-white'
-                        : 'bg-dark-bg text-gray-400 border border-dark-border hover:text-white'
-                    }`}
-                  >
-                    Test
-                  </button>
-                </div>
-                <p className="text-xs text-gray-500 mt-1">
-                  Production = real customer, Test = internal/testing use
-                </p>
-              </div>
-
-              <div className="flex space-x-3 mt-6">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setShowCreateModal(false);
-                    setFormErrors({});
-                  }}
-                  className="flex-1 px-4 py-2 border border-dark-border rounded-md text-gray-300 hover:bg-dark-hover"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={creating}
-                  className="flex-1 px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700 disabled:opacity-50"
-                >
-                  {creating ? 'Creating...' : 'Create Company'}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* Tenant Details Modal with Complete Credentials */}
-      {showDetailsModal && selectedTenantCreds && (
-        <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50 p-4">
-          <div className="bg-dark-card rounded-lg p-8 max-w-2xl w-full max-h-[90vh] overflow-y-auto border border-dark-border">
-            <h2 className="text-2xl font-bold text-white mb-2">
-              {selectedTenantCreds.companyName} - Complete Setup
-            </h2>
-            <p className="text-sm text-gray-400 mb-6">
-              Rental company created successfully! Save these credentials securely.
-            </p>
-
-            {/* Warning Banner */}
-            <div className="bg-yellow-900/20 border-l-4 border-yellow-500 p-4 mb-6">
-              <div className="flex">
-                <div className="flex-shrink-0">
-                  <svg className="h-5 w-5 text-yellow-500" viewBox="0 0 20 20" fill="currentColor">
-                    <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
-                  </svg>
-                </div>
-                <div className="ml-3">
-                  <p className="text-sm text-yellow-400">
-                    <strong>Important:</strong> These credentials will only be shown once. Please save them securely before closing this window.
-                  </p>
-                </div>
-              </div>
+          <form onSubmit={handleCreateTenant} className="space-y-4">
+            <div>
+              <Label className="mb-1.5 block">Company Name *</Label>
+              <Input
+                required
+                value={formData.companyName}
+                onChange={(e) => setFormData({ ...formData, companyName: e.target.value })}
+                placeholder="Acme Rentals"
+              />
             </div>
 
-            {/* Company Information */}
-            <div className="bg-dark-bg rounded-lg p-4 mb-4 border border-dark-border">
-              <h3 className="text-lg font-semibold text-white mb-3">Company Information</h3>
-              <div className="space-y-2">
-                <div className="flex justify-between items-center">
-                  <span className="text-sm text-gray-400">Company Name:</span>
-                  <span className="text-sm font-medium text-white">{selectedTenantCreds.companyName}</span>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-sm text-gray-400">Slug:</span>
-                  <span className="text-sm font-medium text-white">{selectedTenantCreds.slug}</span>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-sm text-gray-400">Portal:</span>
-                  <span className="text-sm font-semibold text-primary-400">{selectedTenantCreds.slug}.portal.drive-247.com</span>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-sm text-gray-400">Booking:</span>
-                  <span className="text-sm font-semibold text-primary-400">{selectedTenantCreds.slug}.drive-247.com</span>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-sm text-gray-400">Contact Email:</span>
-                  <span className="text-sm font-medium text-white">{selectedTenantCreds.contactEmail}</span>
-                </div>
-              </div>
+            <div>
+              <Label className="mb-1.5 block">Admin Name</Label>
+              <Input
+                value={formData.adminName}
+                onChange={(e) => setFormData({ ...formData, adminName: e.target.value })}
+                placeholder="John Doe"
+              />
             </div>
 
-            {/* Admin User Credentials */}
-            <div className="bg-green-900/20 rounded-lg p-4 mb-4 border border-green-800/50">
-              <h3 className="text-lg font-semibold text-white mb-3">Admin User Credentials</h3>
-              <p className="text-xs text-gray-400 mb-3">Initial admin account for the rental company</p>
-
-              <div className="space-y-3">
-                <div>
-                  <label className="block text-xs font-semibold text-gray-300 mb-1">Email</label>
-                  <div className="flex items-center space-x-2">
-                    <code className="flex-1 bg-green-900/30 px-4 py-3 rounded-lg border border-green-700 text-sm font-mono break-all text-green-300 font-semibold">
-                      {selectedTenantCreds.adminEmail}
-                    </code>
-                    <button
-                      onClick={() => copyToClipboard(selectedTenantCreds.adminEmail, 'Admin email')}
-                      className="px-4 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 text-sm whitespace-nowrap font-medium shadow-sm"
-                    >
-                      Copy
-                    </button>
-                  </div>
-                </div>
-
-                <div>
-                  <label className="block text-xs font-semibold text-gray-300 mb-1">Password</label>
-                  <div className="flex items-center space-x-2">
-                    <code className="flex-1 bg-green-900/30 px-4 py-3 rounded-lg border border-green-700 text-sm font-mono break-all text-green-300 font-semibold">
-                      {selectedTenantCreds.adminPassword}
-                    </code>
-                    <button
-                      onClick={() => copyToClipboard(selectedTenantCreds.adminPassword, 'Admin password')}
-                      className="px-4 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 text-sm whitespace-nowrap font-medium shadow-sm"
-                    >
-                      Copy
-                    </button>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Access URLs */}
-            <div className="bg-blue-900/20 rounded-lg p-4 mb-6 border border-blue-800/50">
-              <h3 className="text-lg font-semibold text-white mb-3">Access URLs</h3>
-
-              <div className="space-y-3">
-                <div>
-                  <label className="block text-xs font-semibold text-gray-300 mb-1">Rental Portal (Admin Dashboard)</label>
-                  <div className="flex items-center space-x-2">
-                    <code className="flex-1 bg-blue-900/30 px-4 py-3 rounded-lg border border-blue-700 text-sm break-all text-blue-300 font-semibold">
-                      {selectedTenantCreds.portalUrl}
-                    </code>
-                    <button
-                      onClick={() => copyToClipboard(selectedTenantCreds.portalUrl, 'Portal URL')}
-                      className="px-4 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm whitespace-nowrap font-medium shadow-sm"
-                    >
-                      Copy
-                    </button>
-                  </div>
-                </div>
-
-                <div>
-                  <label className="block text-xs font-semibold text-gray-300 mb-1">Booking Site (Customer Facing)</label>
-                  <div className="flex items-center space-x-2">
-                    <code className="flex-1 bg-blue-900/30 px-4 py-3 rounded-lg border border-blue-700 text-sm break-all text-blue-300 font-semibold">
-                      {selectedTenantCreds.bookingUrl}
-                    </code>
-                    <button
-                      onClick={() => copyToClipboard(selectedTenantCreds.bookingUrl, 'Booking URL')}
-                      className="px-4 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm whitespace-nowrap font-medium shadow-sm"
-                    >
-                      Copy
-                    </button>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Action Buttons */}
-            <div className="flex space-x-3">
-              <button
-                onClick={copyAllCredentials}
-                className="flex-1 px-6 py-3 bg-dark-hover text-white rounded-lg hover:bg-dark-border font-semibold shadow-md hover:shadow-lg transition-all border border-dark-border"
-              >
-                Copy All Credentials
-              </button>
-              <button
-                onClick={() => {
-                  setShowDetailsModal(false);
-                  setSelectedTenantCreds(null);
+            <div>
+              <Label className="mb-1.5 block">Slug (subdomain) *</Label>
+              <Input
+                required
+                minLength={3}
+                maxLength={50}
+                value={formData.slug}
+                onChange={(e) => {
+                  setFormData({ ...formData, slug: e.target.value });
+                  if (formErrors.slug) {
+                    const newSlug = e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, '-');
+                    if (newSlug.length >= 3) setFormErrors({});
+                  }
                 }}
-                className="flex-1 px-6 py-3 bg-primary-600 text-white rounded-lg hover:bg-primary-700 font-semibold shadow-md hover:shadow-lg transition-all"
-              >
-                Done
-              </button>
+                className={formErrors.slug ? 'border-destructive' : ''}
+                placeholder="acme-rentals"
+              />
+              {formErrors.slug ? (
+                <p className="text-xs text-destructive mt-1">{formErrors.slug}</p>
+              ) : (
+                <p className="text-xs text-muted-foreground mt-1">
+                  Portal: {formData.slug || 'slug'}.portal.drive-247.com | Booking: {formData.slug || 'slug'}.drive-247.com
+                </p>
+              )}
             </div>
-          </div>
-        </div>
-      )}
 
+            <div>
+              <Label className="mb-1.5 block">Contact Email *</Label>
+              <Input
+                type="email"
+                required
+                value={formData.contactEmail}
+                onChange={(e) => setFormData({ ...formData, contactEmail: e.target.value })}
+                placeholder="admin@acmerentals.com"
+              />
+            </div>
+
+            <div>
+              <Label className="mb-1.5 block">Tenant Type *</Label>
+              <div className="flex gap-2">
+                <Button
+                  type="button"
+                  variant={formData.tenantType === 'production' ? 'default' : 'outline'}
+                  onClick={() => setFormData({ ...formData, tenantType: 'production' })}
+                  className={cn('flex-1', formData.tenantType === 'production' && 'bg-success hover:bg-success/90')}
+                >
+                  Production
+                </Button>
+                <Button
+                  type="button"
+                  variant={formData.tenantType === 'test' ? 'default' : 'outline'}
+                  onClick={() => setFormData({ ...formData, tenantType: 'test' })}
+                  className={cn('flex-1', formData.tenantType === 'test' && 'bg-warning hover:bg-warning/90 text-warning-foreground')}
+                >
+                  Test
+                </Button>
+              </div>
+              <p className="text-xs text-muted-foreground mt-1">
+                Production = real customer, Test = internal/testing use
+              </p>
+            </div>
+
+            <DialogFooter>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => { setShowCreateModal(false); setFormErrors({}); }}
+              >
+                Cancel
+              </Button>
+              <Button type="submit" disabled={creating}>
+                {creating ? 'Creating...' : 'Create Company'}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Credentials Dialog */}
+      <Dialog open={showDetailsModal} onOpenChange={(open) => {
+        if (!open) { setShowDetailsModal(false); setSelectedTenantCreds(null); }
+      }}>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <CheckCircle className="h-5 w-5 text-success" />
+              {selectedTenantCreds?.companyName} - Complete Setup
+            </DialogTitle>
+            <DialogDescription>
+              Rental company created successfully! Save these credentials securely.
+            </DialogDescription>
+          </DialogHeader>
+
+          {/* Warning */}
+          <div className="rounded-md bg-warning/10 border border-warning/30 p-4 flex gap-3">
+            <AlertTriangle className="h-5 w-5 text-warning flex-shrink-0 mt-0.5" />
+            <p className="text-sm text-warning">
+              <strong>Important:</strong> These credentials will only be shown once. Please save them securely before closing this window.
+            </p>
+          </div>
+
+          {selectedTenantCreds && (
+            <>
+              {/* Company Information */}
+              <Card>
+                <CardContent className="p-4 space-y-2">
+                  <h3 className="text-sm font-semibold mb-3">Company Information</h3>
+                  {[
+                    ['Company Name', selectedTenantCreds.companyName],
+                    ['Slug', selectedTenantCreds.slug],
+                    ['Portal', `${selectedTenantCreds.slug}.portal.drive-247.com`],
+                    ['Booking', `${selectedTenantCreds.slug}.drive-247.com`],
+                    ['Contact', selectedTenantCreds.contactEmail],
+                  ].map(([label, value]) => (
+                    <div key={label} className="flex justify-between items-center text-sm">
+                      <span className="text-muted-foreground">{label}:</span>
+                      <span className="font-medium">{value}</span>
+                    </div>
+                  ))}
+                </CardContent>
+              </Card>
+
+              {/* Admin Credentials */}
+              <Card className="border-success/30">
+                <CardContent className="p-4 space-y-3">
+                  <h3 className="text-sm font-semibold">Admin User Credentials</h3>
+                  <p className="text-xs text-muted-foreground">Initial admin account for the rental company</p>
+
+                  {[
+                    ['Email', selectedTenantCreds.adminEmail],
+                    ['Password', selectedTenantCreds.adminPassword],
+                  ].map(([label, value]) => (
+                    <div key={label}>
+                      <Label className="text-xs mb-1 block">{label}</Label>
+                      <div className="flex items-center gap-2">
+                        <code className="flex-1 bg-success/10 px-3 py-2 rounded-md border border-success/30 text-sm font-mono break-all">
+                          {value}
+                        </code>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => copyToClipboard(value, label)}
+                        >
+                          <Copy className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
+                </CardContent>
+              </Card>
+
+              {/* Access URLs */}
+              <Card className="border-primary/30">
+                <CardContent className="p-4 space-y-3">
+                  <h3 className="text-sm font-semibold">Access URLs</h3>
+
+                  {[
+                    ['Rental Portal', selectedTenantCreds.portalUrl],
+                    ['Booking Site', selectedTenantCreds.bookingUrl],
+                  ].map(([label, value]) => (
+                    <div key={label}>
+                      <Label className="text-xs mb-1 block">{label}</Label>
+                      <div className="flex items-center gap-2">
+                        <code className="flex-1 bg-primary/10 px-3 py-2 rounded-md border border-primary/30 text-sm break-all">
+                          {value}
+                        </code>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => copyToClipboard(value, label)}
+                        >
+                          <Copy className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
+                </CardContent>
+              </Card>
+            </>
+          )}
+
+          <DialogFooter>
+            <Button variant="outline" onClick={copyAllCredentials}>
+              <Copy className="h-4 w-4" />
+              Copy All Credentials
+            </Button>
+            <Button onClick={() => { setShowDetailsModal(false); setSelectedTenantCreds(null); }}>
+              Done
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

@@ -3,6 +3,24 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { toast } from '@/components/ui/sonner';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
+import { Label } from '@/components/ui/label';
+import { Badge } from '@/components/ui/badge';
+import { Separator } from '@/components/ui/separator';
+import { Skeleton } from '@/components/ui/skeleton';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import { cn } from '@/lib/utils';
+import { X, AlertTriangle } from 'lucide-react';
 
 interface AdminSettings {
   id?: string;
@@ -26,7 +44,6 @@ export default function SettingsPage() {
   const [saving, setSaving] = useState(false);
   const [newEmail, setNewEmail] = useState('');
 
-  // Force logout state
   const [showGlobalLogoutConfirm, setShowGlobalLogoutConfirm] = useState(false);
   const [globalLogoutConfirmText, setGlobalLogoutConfirmText] = useState('');
   const [globalLogoutLoading, setGlobalLogoutLoading] = useState(false);
@@ -37,16 +54,15 @@ export default function SettingsPage() {
 
   const loadSettings = async () => {
     try {
-      const { data, error } = await supabase
+      const { data: rows, error } = await supabase
         .from('admin_settings')
         .select('*')
-        .single();
+        .order('created_at', { ascending: true })
+        .limit(1);
 
-      if (error && error.code !== 'PGRST116') {
-        // PGRST116 = no rows returned
-        throw error;
-      }
+      if (error) throw error;
 
+      const data = rows?.[0];
       if (data) {
         setSettings({
           id: data.id,
@@ -60,7 +76,6 @@ export default function SettingsPage() {
       }
     } catch (error) {
       console.error('Error loading settings:', error);
-      // Use defaults
     } finally {
       setLoading(false);
     }
@@ -70,7 +85,6 @@ export default function SettingsPage() {
     setSaving(true);
     try {
       if (settings.id) {
-        // Update existing
         const { error } = await supabase
           .from('admin_settings')
           .update({
@@ -84,8 +98,16 @@ export default function SettingsPage() {
           .eq('id', settings.id);
 
         if (error) throw error;
+
+        await supabase
+          .from('admin_settings')
+          .update({
+            maintenance_banner_enabled: settings.maintenance_banner_enabled,
+            maintenance_banner_message: settings.maintenance_banner_message,
+            maintenance_banner_type: settings.maintenance_banner_type,
+          })
+          .neq('id', settings.id);
       } else {
-        // Insert new
         const { data, error } = await supabase
           .from('admin_settings')
           .insert({
@@ -115,7 +137,6 @@ export default function SettingsPage() {
     const email = newEmail.trim().toLowerCase();
     if (!email) return;
 
-    // Validate email format
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(email)) {
       toast.error('Please enter a valid email address');
@@ -173,278 +194,290 @@ export default function SettingsPage() {
 
   if (loading) {
     return (
-      <div className="p-8">
-        <div className="animate-pulse">
-          <div className="h-8 bg-dark-card rounded w-48 mb-4"></div>
-          <div className="h-4 bg-dark-card rounded w-96 mb-8"></div>
-          <div className="h-64 bg-dark-card rounded"></div>
+      <div className="space-y-6">
+        <div>
+          <Skeleton className="h-8 w-48" />
+          <Skeleton className="h-4 w-96 mt-2" />
+        </div>
+        <div className="max-w-2xl space-y-4">
+          <Skeleton className="h-64 rounded-lg" />
+          <Skeleton className="h-48 rounded-lg" />
         </div>
       </div>
     );
   }
 
   return (
-    <div className="p-8">
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold text-white">Settings</h1>
-        <p className="mt-2 text-gray-400">Configure admin dashboard settings</p>
+    <div className="space-y-6">
+      <div>
+        <h1 className="text-2xl font-bold">Settings</h1>
+        <p className="text-sm text-muted-foreground mt-1">Configure admin dashboard settings</p>
       </div>
 
       <div className="max-w-2xl space-y-6">
         {/* Notification Emails */}
-        <div className="bg-dark-card rounded-lg p-6 border border-dark-border">
-          <h2 className="text-xl font-semibold text-white mb-2">Notification Emails</h2>
-          <p className="text-sm text-gray-400 mb-4">
-            These email addresses will receive notifications when a contact form is submitted.
-          </p>
-
-          <div className="space-y-3 mb-4">
-            {settings.notification_emails.map((email, index) => (
-              <div
-                key={email}
-                className="flex items-center justify-between bg-dark-bg rounded-lg px-4 py-3 border border-dark-border"
-              >
-                <span className="text-gray-300">{email}</span>
-                <button
-                  onClick={() => removeEmail(email)}
-                  className="text-red-400 hover:text-red-300 text-sm font-medium"
-                  disabled={settings.notification_emails.length <= 1}
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Notification Emails</CardTitle>
+            <CardDescription>
+              These email addresses will receive notifications when a contact form is submitted.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="space-y-2">
+              {settings.notification_emails.map((email) => (
+                <div
+                  key={email}
+                  className="flex items-center justify-between rounded-md border px-4 py-2.5"
                 >
-                  Remove
-                </button>
-              </div>
-            ))}
-          </div>
-
-          <div className="flex space-x-2">
-            <input
-              type="email"
-              value={newEmail}
-              onChange={(e) => setNewEmail(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && addEmail()}
-              placeholder="Add email address"
-              className="flex-1 px-4 py-2 bg-dark-bg border border-dark-border rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-primary-500"
-            />
-            <button
-              onClick={addEmail}
-              className="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 font-medium"
-            >
-              Add
-            </button>
-          </div>
-        </div>
-
-        {/* Global Maintenance Banner */}
-        <div className="bg-dark-card rounded-lg overflow-hidden border border-dark-border">
-          <div className="px-6 py-4 border-b border-dark-border flex items-center justify-between">
-            <div>
-              <h2 className="text-xl font-semibold text-white">Maintenance Banner</h2>
-              <p className="text-sm text-gray-400 mt-1">
-                Display a global maintenance banner across all tenant portals and booking sites.
-              </p>
-            </div>
-            <label className="flex items-center cursor-pointer">
-              <div className="relative">
-                <input
-                  type="checkbox"
-                  checked={settings.maintenance_banner_enabled}
-                  onChange={(e) => setSettings({ ...settings, maintenance_banner_enabled: e.target.checked })}
-                  className="sr-only"
-                />
-                <div className={`w-14 h-8 rounded-full transition-colors ${
-                  settings.maintenance_banner_enabled ? 'bg-orange-500' : 'bg-dark-border'
-                }`}>
-                  <div className={`absolute top-1 left-1 w-6 h-6 bg-white rounded-full transition-transform ${
-                    settings.maintenance_banner_enabled ? 'translate-x-6' : ''
-                  }`}></div>
-                </div>
-              </div>
-              <span className={`ml-3 text-sm font-medium ${settings.maintenance_banner_enabled ? 'text-orange-400' : 'text-gray-400'}`}>
-                {settings.maintenance_banner_enabled ? 'Active' : 'Inactive'}
-              </span>
-            </label>
-          </div>
-
-          <div className="p-6 space-y-4">
-            {/* Banner Type */}
-            <div>
-              <label className="block text-sm font-medium text-gray-400 mb-2">Severity Level</label>
-              <div className="flex gap-3">
-                {(['info', 'warning', 'critical'] as const).map((type) => (
-                  <button
-                    key={type}
-                    onClick={() => setSettings({ ...settings, maintenance_banner_type: type })}
-                    className={`flex-1 px-4 py-2.5 rounded-lg border font-medium text-sm capitalize transition-colors ${
-                      settings.maintenance_banner_type === type
-                        ? type === 'info'
-                          ? 'bg-blue-600/20 border-blue-500 text-blue-400'
-                          : type === 'warning'
-                          ? 'bg-orange-600/20 border-orange-500 text-orange-400'
-                          : 'bg-red-600/20 border-red-500 text-red-400'
-                        : 'bg-dark-bg border-dark-border text-gray-400 hover:border-gray-500'
-                    }`}
+                  <span className="text-sm">{email}</span>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => removeEmail(email)}
+                    disabled={settings.notification_emails.length <= 1}
+                    className="text-muted-foreground hover:text-destructive h-auto py-1 px-2"
                   >
-                    {type === 'info' ? '🔵 Info' : type === 'warning' ? '🟡 Warning' : '🔴 Critical'}
-                  </button>
+                    <X className="h-4 w-4" />
+                  </Button>
+                </div>
+              ))}
+            </div>
+
+            <div className="flex gap-2">
+              <Input
+                type="email"
+                value={newEmail}
+                onChange={(e) => setNewEmail(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && addEmail()}
+                placeholder="Add email address"
+                className="flex-1"
+              />
+              <Button onClick={addEmail}>Add</Button>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Maintenance Banner */}
+        <Card>
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <div>
+                <CardTitle className="text-base">Maintenance Banner</CardTitle>
+                <CardDescription className="mt-1">
+                  Display a global maintenance banner across all tenant portals and booking sites.
+                </CardDescription>
+              </div>
+              <label className="flex items-center cursor-pointer">
+                <div className="relative">
+                  <input
+                    type="checkbox"
+                    checked={settings.maintenance_banner_enabled}
+                    onChange={(e) => setSettings({ ...settings, maintenance_banner_enabled: e.target.checked })}
+                    className="sr-only"
+                  />
+                  <div className={cn(
+                    "w-11 h-6 rounded-full transition-colors",
+                    settings.maintenance_banner_enabled ? 'bg-amber-500' : 'bg-muted'
+                  )}>
+                    <div className={cn(
+                      "absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full transition-transform",
+                      settings.maintenance_banner_enabled && 'translate-x-5'
+                    )} />
+                  </div>
+                </div>
+                <Badge
+                  variant={settings.maintenance_banner_enabled ? 'warning' : 'outline'}
+                  className="ml-2"
+                >
+                  {settings.maintenance_banner_enabled ? 'Active' : 'Inactive'}
+                </Badge>
+              </label>
+            </div>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div>
+              <Label className="mb-2 block">Severity Level</Label>
+              <div className="flex gap-2">
+                {(['info', 'warning', 'critical'] as const).map((type) => (
+                  <Button
+                    key={type}
+                    variant={settings.maintenance_banner_type === type ? 'default' : 'outline'}
+                    size="sm"
+                    onClick={() => setSettings({ ...settings, maintenance_banner_type: type })}
+                    className={cn(
+                      'flex-1 capitalize',
+                      settings.maintenance_banner_type === type && type === 'info' && 'bg-blue-600 hover:bg-blue-700',
+                      settings.maintenance_banner_type === type && type === 'warning' && 'bg-warning hover:bg-warning/90 text-warning-foreground',
+                      settings.maintenance_banner_type === type && type === 'critical' && 'bg-destructive hover:bg-destructive/90'
+                    )}
+                  >
+                    {type}
+                  </Button>
                 ))}
               </div>
             </div>
 
-            {/* Banner Message */}
             <div>
-              <label className="block text-sm font-medium text-gray-400 mb-2">Banner Message</label>
-              <textarea
+              <Label className="mb-2 block">Banner Message</Label>
+              <Textarea
                 value={settings.maintenance_banner_message}
                 onChange={(e) => setSettings({ ...settings, maintenance_banner_message: e.target.value })}
                 rows={3}
-                className="w-full px-4 py-3 bg-dark-bg border border-dark-border rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-primary-500 resize-none"
                 placeholder="Enter the maintenance message to display..."
               />
             </div>
 
-            {/* Preview */}
             {settings.maintenance_banner_enabled && (
               <div>
-                <label className="block text-sm font-medium text-gray-400 mb-2">Preview</label>
-                <div className={`rounded-lg px-4 py-3 text-sm font-medium ${
-                  settings.maintenance_banner_type === 'info'
-                    ? 'bg-blue-500/10 border border-blue-500/30 text-blue-300'
-                    : settings.maintenance_banner_type === 'warning'
-                    ? 'bg-orange-500/10 border border-orange-500/30 text-orange-300'
-                    : 'bg-red-500/10 border border-red-500/30 text-red-300'
-                }`}>
-                  {settings.maintenance_banner_type === 'info' ? 'ℹ️' : settings.maintenance_banner_type === 'warning' ? '⚠️' : '🚨'}{' '}
+                <Label className="mb-2 block">Preview</Label>
+                <div className={cn(
+                  "rounded-md px-4 py-3 text-sm font-medium border",
+                  settings.maintenance_banner_type === 'info' && 'bg-blue-500/10 border-blue-500/30 text-blue-400',
+                  settings.maintenance_banner_type === 'warning' && 'bg-warning/10 border-warning/30 text-warning',
+                  settings.maintenance_banner_type === 'critical' && 'bg-destructive/10 border-destructive/30 text-destructive'
+                )}>
                   {settings.maintenance_banner_message}
                 </div>
               </div>
             )}
-          </div>
-        </div>
+          </CardContent>
+        </Card>
 
-        {/* Contact Form Settings */}
-        <div className="bg-dark-card rounded-lg p-6 border border-dark-border">
-          <h2 className="text-xl font-semibold text-white mb-2">Contact Form</h2>
-          <p className="text-sm text-gray-400 mb-4">
-            Control whether the contact form on the website is enabled.
-          </p>
-
-          <label className="flex items-center cursor-pointer">
-            <div className="relative">
-              <input
-                type="checkbox"
-                checked={settings.contact_form_enabled}
-                onChange={(e) => setSettings({ ...settings, contact_form_enabled: e.target.checked })}
-                className="sr-only"
-              />
-              <div className={`w-14 h-8 rounded-full transition-colors ${
-                settings.contact_form_enabled ? 'bg-primary-600' : 'bg-dark-border'
-              }`}>
-                <div className={`absolute top-1 left-1 w-6 h-6 bg-white rounded-full transition-transform ${
-                  settings.contact_form_enabled ? 'translate-x-6' : ''
-                }`}></div>
+        {/* Contact Form */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Contact Form</CardTitle>
+            <CardDescription>
+              Control whether the contact form on the website is enabled.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <label className="flex items-center cursor-pointer">
+              <div className="relative">
+                <input
+                  type="checkbox"
+                  checked={settings.contact_form_enabled}
+                  onChange={(e) => setSettings({ ...settings, contact_form_enabled: e.target.checked })}
+                  className="sr-only"
+                />
+                <div className={cn(
+                  "w-11 h-6 rounded-full transition-colors",
+                  settings.contact_form_enabled ? 'bg-violet-500' : 'bg-muted'
+                )}>
+                  <div className={cn(
+                    "absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full transition-transform",
+                    settings.contact_form_enabled && 'translate-x-5'
+                  )} />
+                </div>
               </div>
-            </div>
-            <span className="ml-3 text-gray-300">
-              {settings.contact_form_enabled ? 'Enabled' : 'Disabled'}
-            </span>
-          </label>
-        </div>
+              <span className="ml-3 text-sm">
+                {settings.contact_form_enabled ? 'Enabled' : 'Disabled'}
+              </span>
+            </label>
+          </CardContent>
+        </Card>
 
         {/* Save Button */}
-        <div className="flex justify-end">
-          <button
-            onClick={handleSave}
-            disabled={saving}
-            className="px-6 py-3 bg-primary-600 text-white rounded-lg hover:bg-primary-700 font-medium disabled:opacity-50"
-          >
+        <div className="flex items-center justify-between">
+          {settings.updated_at && (
+            <p className="text-xs text-muted-foreground">
+              Last updated: {new Date(settings.updated_at).toLocaleDateString('en-US', {
+                month: 'long',
+                day: 'numeric',
+                year: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit'
+              })}
+            </p>
+          )}
+          <Button onClick={handleSave} disabled={saving} className="ml-auto">
             {saving ? 'Saving...' : 'Save Settings'}
-          </button>
+          </Button>
         </div>
 
-        {settings.updated_at && (
-          <p className="text-xs text-gray-500 text-right">
-            Last updated: {new Date(settings.updated_at).toLocaleDateString('en-US', {
-              month: 'long',
-              day: 'numeric',
-              year: 'numeric',
-              hour: '2-digit',
-              minute: '2-digit'
-            })}
-          </p>
-        )}
+        <Separator />
 
         {/* Danger Zone */}
-        <div className="bg-dark-card rounded-lg overflow-hidden border border-red-800/50 mt-8">
-          <div className="px-6 py-4 border-b border-dark-border">
-            <h2 className="text-xl font-semibold text-red-400">Danger Zone</h2>
-            <p className="text-sm text-gray-400 mt-1">Destructive actions that affect all tenants</p>
-          </div>
-          <div className="p-6">
+        <Card className="border-destructive/50">
+          <CardHeader>
+            <CardTitle className="text-base text-destructive flex items-center gap-2">
+              <AlertTriangle className="h-4 w-4" />
+              Danger Zone
+            </CardTitle>
+            <CardDescription>Destructive actions that affect all tenants</CardDescription>
+          </CardHeader>
+          <CardContent>
             <div className="flex items-center justify-between">
               <div>
-                <h3 className="text-white font-medium">Force Logout All Users</h3>
-                <p className="text-sm text-gray-400 mt-1">
+                <h3 className="text-sm font-medium">Force Logout All Users</h3>
+                <p className="text-sm text-muted-foreground mt-1">
                   Immediately sign out all portal staff and booking customers across every tenant.
                   Super admins will not be affected.
                 </p>
               </div>
-              <button
+              <Button
+                variant="destructive"
+                size="sm"
                 onClick={() => setShowGlobalLogoutConfirm(true)}
-                className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 text-sm font-medium whitespace-nowrap ml-4"
+                className="ml-4 whitespace-nowrap"
               >
                 Force Logout All
-              </button>
+              </Button>
             </div>
-          </div>
-        </div>
+          </CardContent>
+        </Card>
       </div>
 
-      {/* Global Force Logout Confirmation Modal */}
-      {showGlobalLogoutConfirm && (
-        <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50 p-4">
-          <div className="bg-dark-card rounded-lg p-6 max-w-md w-full border border-dark-border">
-            <h2 className="text-xl font-bold text-white mb-2">Force Logout ALL Users</h2>
-            <div className="bg-red-900/20 border border-red-700 rounded-lg p-4 mb-4">
-              <p className="text-sm text-red-400">
-                This will immediately sign out <strong>every portal staff member</strong> and{' '}
-                <strong>every booking customer</strong> across all tenants on the platform.
-              </p>
-              <p className="text-sm text-red-400 mt-2">
-                Super admins will not be affected.
-              </p>
-            </div>
+      {/* Global Force Logout Confirmation Dialog */}
+      <Dialog open={showGlobalLogoutConfirm} onOpenChange={(open) => {
+        if (!open) {
+          setShowGlobalLogoutConfirm(false);
+          setGlobalLogoutConfirmText('');
+        }
+      }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Force Logout ALL Users</DialogTitle>
+            <DialogDescription>
+              This will immediately sign out every portal staff member and every booking customer across all tenants on the platform. Super admins will not be affected.
+            </DialogDescription>
+          </DialogHeader>
 
-            <div className="mb-4">
-              <label className="block text-sm font-medium text-gray-300 mb-2">
-                Type <strong className="text-white">LOGOUT ALL</strong> to confirm:
-              </label>
-              <input
-                type="text"
-                value={globalLogoutConfirmText}
-                onChange={(e) => setGlobalLogoutConfirmText(e.target.value)}
-                className="w-full px-3 py-2 bg-dark-bg border border-dark-border rounded-md text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-red-500"
-                placeholder="LOGOUT ALL"
-              />
-            </div>
-
-            <div className="flex space-x-3">
-              <button
-                onClick={() => { setShowGlobalLogoutConfirm(false); setGlobalLogoutConfirmText(''); }}
-                className="flex-1 px-4 py-2 border border-dark-border rounded-md text-gray-300 hover:bg-dark-hover"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleGlobalForceLogout}
-                disabled={globalLogoutLoading || globalLogoutConfirmText !== 'LOGOUT ALL'}
-                className="flex-1 px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {globalLogoutLoading ? 'Logging out...' : 'Force Logout Everyone'}
-              </button>
-            </div>
+          <div className="rounded-md bg-destructive/10 border border-destructive/30 p-4">
+            <p className="text-sm text-destructive">
+              This action cannot be undone. All users will need to sign in again.
+            </p>
           </div>
-        </div>
-      )}
+
+          <div>
+            <Label className="mb-2 block">
+              Type <strong>LOGOUT ALL</strong> to confirm:
+            </Label>
+            <Input
+              value={globalLogoutConfirmText}
+              onChange={(e) => setGlobalLogoutConfirmText(e.target.value)}
+              placeholder="LOGOUT ALL"
+            />
+          </div>
+
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => { setShowGlobalLogoutConfirm(false); setGlobalLogoutConfirmText(''); }}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={handleGlobalForceLogout}
+              disabled={globalLogoutLoading || globalLogoutConfirmText !== 'LOGOUT ALL'}
+            >
+              {globalLogoutLoading ? 'Logging out...' : 'Force Logout Everyone'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

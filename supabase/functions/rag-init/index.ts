@@ -89,11 +89,17 @@ serve(async (req) => {
 
         try {
           // Fetch all records for this tenant
+          // Knowledge articles: include both tenant-specific AND global (tenant_id IS NULL)
           const selectFields = getSelectFields(tableName);
-          const { data: records, error } = await supabase
-            .from(tableName)
-            .select(selectFields)
-            .eq('tenant_id', tenant.id);
+          let query = supabase.from(tableName).select(selectFields);
+
+          if (tableName === 'knowledge_articles') {
+            query = query.or(`tenant_id.eq.${tenant.id},tenant_id.is.null`).eq('is_active', true);
+          } else {
+            query = query.eq('tenant_id', tenant.id);
+          }
+
+          const { data: records, error } = await query;
 
           if (error) {
             console.error(`    Error fetching ${tableName}: ${error.message}`);

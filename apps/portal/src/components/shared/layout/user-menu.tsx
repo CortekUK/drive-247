@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef } from 'react';
+import { useState, useRef, useCallback } from 'react';
 import { useAuth } from '@/stores/auth-store';
 import { useTenant } from '@/contexts/TenantContext';
 import { supabase } from '@/integrations/supabase/client';
@@ -20,6 +20,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { User, Settings, LogOut, Key, Shield, Pencil, Camera, Loader2 } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
+import { AvatarCropDialog } from './avatar-crop-dialog';
 
 export const UserMenu = () => {
   const { appUser, signOut, updatePassword } = useAuth();
@@ -32,6 +33,8 @@ export const UserMenu = () => {
   const [isUpdating, setIsUpdating] = useState(false);
   const [isUpdatingName, setIsUpdatingName] = useState(false);
   const [isUploadingAvatar, setIsUploadingAvatar] = useState(false);
+  const [showCropDialog, setShowCropDialog] = useState(false);
+  const [cropImageSrc, setCropImageSrc] = useState<string | null>(null);
   const avatarInputRef = useRef<HTMLInputElement>(null);
 
   if (!appUser) return null;
@@ -43,24 +46,31 @@ export const UserMenu = () => {
     .toUpperCase()
     .slice(0, 2);
 
-  const handleAvatarUpload = async (file: File) => {
+  const handleFileSelected = (file: File) => {
     if (!file.type.startsWith('image/')) {
       toast({ title: "Error", description: "Please upload an image file", variant: "destructive" });
       return;
     }
-    if (file.size > 2 * 1024 * 1024) {
-      toast({ title: "Error", description: "Image must be less than 2MB", variant: "destructive" });
+    if (file.size > 5 * 1024 * 1024) {
+      toast({ title: "Error", description: "Image must be less than 5MB", variant: "destructive" });
       return;
     }
+    const reader = new FileReader();
+    reader.onload = () => {
+      setCropImageSrc(reader.result as string);
+      setShowCropDialog(true);
+    };
+    reader.readAsDataURL(file);
+  };
 
+  const handleCroppedUpload = useCallback(async (blob: Blob) => {
     setIsUploadingAvatar(true);
     try {
-      const fileExt = file.name.split('.').pop();
-      const filePath = `avatars/${appUser.id}-${Date.now()}.${fileExt}`;
+      const filePath = `avatars/${appUser.id}-${Date.now()}.png`;
 
       const { error: uploadError } = await supabase.storage
         .from('cms-media')
-        .upload(filePath, file, { upsert: true });
+        .upload(filePath, blob, { upsert: true, contentType: 'image/png' });
 
       if (uploadError) throw uploadError;
 
@@ -75,19 +85,20 @@ export const UserMenu = () => {
 
       if (updateError) throw updateError;
 
-      // Update local state
       useAuth.setState({
         appUser: { ...appUser, avatar_url: publicUrl },
       });
 
       toast({ title: "Success", description: "Profile photo updated" });
+      setShowCropDialog(false);
+      setCropImageSrc(null);
     } catch (error: any) {
       console.error('Avatar upload error:', error);
       toast({ title: "Error", description: error.message || "Failed to upload photo", variant: "destructive" });
     } finally {
       setIsUploadingAvatar(false);
     }
-  };
+  }, [appUser]);
 
   const getRoleBadgeVariant = (role: string) => {
     switch (role) {
@@ -255,8 +266,8 @@ export const UserMenu = () => {
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <Button variant="ghost" size="icon" className="relative hover:bg-accent transition-colors">
-            <Avatar className="h-8 w-8">
-              <AvatarImage src={appUser.avatar_url || undefined} alt={appUser.name || 'User'} />
+            <Avatar className="h-8 w-8 rounded-full overflow-hidden">
+              <AvatarImage src={appUser.avatar_url || undefined} alt={appUser.name || 'User'} className="object-cover" />
               <AvatarFallback className="bg-primary/10 text-primary text-xs font-medium">
                 {userInitials}
               </AvatarFallback>
@@ -266,75 +277,80 @@ export const UserMenu = () => {
             )}
           </Button>
         </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" className="w-64">
-          <DropdownMenuLabel className="flex flex-col gap-2 p-3">
+        <DropdownMenuContent align="end" className="w-72 p-0 rounded-xl overflow-hidden">
+          {/* User info header */}
+          <div className="p-4 pb-3">
             <div className="flex items-center gap-3">
-              <Avatar className="h-10 w-10">
-                <AvatarImage src={appUser.avatar_url || undefined} alt={appUser.name || 'User'} />
-                <AvatarFallback className="bg-primary/10 text-primary font-medium">
+              <Avatar className="h-11 w-11 ring-2 ring-border/50 rounded-full overflow-hidden">
+                <AvatarImage src={appUser.avatar_url || undefined} alt={appUser.name || 'User'} className="object-cover" />
+                <AvatarFallback className="bg-primary/10 text-primary text-sm font-semibold">
                   {userInitials}
                 </AvatarFallback>
               </Avatar>
               <div className="flex-1 min-w-0">
                 <div className="font-semibold text-sm truncate">{appUser.name || 'User'}</div>
-                <div className="text-xs text-muted-foreground truncate">{appUser.email}</div>
+                <div className="text-xs text-muted-foreground/70 truncate">{appUser.email}</div>
+                <div className="text-[11px] text-muted-foreground/50 mt-0.5">{getRoleDisplay(appUser.role)}</div>
               </div>
             </div>
-            <Badge variant={getRoleBadgeVariant(appUser.role)} className="w-fit text-xs">
-              <Shield className="h-3 w-3 mr-1" />
-              {getRoleDisplay(appUser.role)}
-            </Badge>
-          </DropdownMenuLabel>
-          <DropdownMenuSeparator />
-          <DropdownMenuItem
-            onClick={() => avatarInputRef.current?.click()}
-            disabled={isUploadingAvatar}
-            className="cursor-pointer"
-          >
-            {isUploadingAvatar ? (
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-            ) : (
-              <Camera className="mr-2 h-4 w-4" />
+          </div>
+
+          <DropdownMenuSeparator className="m-0" />
+
+          {/* Menu items */}
+          <div className="p-1.5">
+            <DropdownMenuItem
+              onSelect={(e) => {
+                e.preventDefault();
+                avatarInputRef.current?.click();
+              }}
+              className="cursor-pointer rounded-lg px-3 py-2 text-[13px]"
+            >
+              <Camera className="mr-2.5 h-4 w-4 text-muted-foreground" />
+              <span>Upload Photo</span>
+            </DropdownMenuItem>
+            <input
+              ref={avatarInputRef}
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                if (file) handleFileSelected(file);
+                e.target.value = '';
+              }}
+            />
+            {!appUser.is_super_admin && (
+              <DropdownMenuItem onClick={() => setShowPasswordDialog(true)} className="cursor-pointer rounded-lg px-3 py-2 text-[13px]">
+                <Key className="mr-2.5 h-4 w-4 text-muted-foreground" />
+                <span>Change Password</span>
+                {appUser.must_change_password && (
+                  <Badge variant="destructive" className="ml-auto text-[10px] px-1.5 py-0">Required</Badge>
+                )}
+              </DropdownMenuItem>
             )}
-            <span>{isUploadingAvatar ? 'Uploading...' : 'Upload Photo'}</span>
-          </DropdownMenuItem>
-          <input
-            ref={avatarInputRef}
-            type="file"
-            accept="image/*"
-            className="hidden"
-            onChange={(e) => {
-              const file = e.target.files?.[0];
-              if (file) handleAvatarUpload(file);
-              e.target.value = '';
-            }}
-          />
-          {!appUser.is_super_admin && (
-            <DropdownMenuItem onClick={() => setShowPasswordDialog(true)} className="cursor-pointer">
-              <Key className="mr-2 h-4 w-4" />
-              <span>Change Password</span>
-              {appUser.must_change_password && (
-                <Badge variant="destructive" className="ml-auto text-xs">Required</Badge>
-              )}
+            {!appUser.is_super_admin && (
+              <DropdownMenuItem onClick={handleOpenNameDialog} className="cursor-pointer rounded-lg px-3 py-2 text-[13px]">
+                <Pencil className="mr-2.5 h-4 w-4 text-muted-foreground" />
+                <span>Change Name</span>
+              </DropdownMenuItem>
+            )}
+            <DropdownMenuItem asChild>
+              <a href="/settings" className="cursor-pointer rounded-lg px-3 py-2 text-[13px]">
+                <Settings className="mr-2.5 h-4 w-4 text-muted-foreground" />
+                <span>Settings</span>
+              </a>
             </DropdownMenuItem>
-          )}
-          {!appUser.is_super_admin && (
-            <DropdownMenuItem onClick={handleOpenNameDialog} className="cursor-pointer">
-              <Pencil className="mr-2 h-4 w-4" />
-              <span>Change Name</span>
+          </div>
+
+          <DropdownMenuSeparator className="m-0" />
+
+          <div className="p-1.5">
+            <DropdownMenuItem onClick={handleSignOut} className="cursor-pointer rounded-lg px-3 py-2 text-[13px] text-destructive focus:text-destructive focus:bg-destructive/10">
+              <LogOut className="mr-2.5 h-4 w-4" />
+              <span>Sign Out</span>
             </DropdownMenuItem>
-          )}
-          <DropdownMenuItem asChild>
-            <a href="/settings" className="cursor-pointer">
-              <Settings className="mr-2 h-4 w-4" />
-              <span>Settings</span>
-            </a>
-          </DropdownMenuItem>
-          <DropdownMenuSeparator />
-          <DropdownMenuItem onClick={handleSignOut} className="text-destructive cursor-pointer focus:text-destructive">
-            <LogOut className="mr-2 h-4 w-4" />
-            <span>Sign Out</span>
-          </DropdownMenuItem>
+          </div>
         </DropdownMenuContent>
       </DropdownMenu>
 
@@ -430,6 +446,17 @@ export const UserMenu = () => {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <AvatarCropDialog
+        open={showCropDialog}
+        onOpenChange={(open) => {
+          setShowCropDialog(open);
+          if (!open) setCropImageSrc(null);
+        }}
+        imageSrc={cropImageSrc}
+        onCropComplete={handleCroppedUpload}
+        isUploading={isUploadingAvatar}
+      />
     </>
   );
 };

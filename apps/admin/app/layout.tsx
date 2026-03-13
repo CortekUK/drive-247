@@ -17,7 +17,7 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body>
-        <NextTopLoader color="#3b82f6" height={2} showSpinner={false} />
+        <NextTopLoader color="#a470ff" height={2} showSpinner={false} />
         {children}
         <Toaster />
         <DevPanel />
