@@ -40,10 +40,13 @@ export const useBlockedDates = (vehicle_id?: string) => {
     queryFn: async () => {
       if (!tenant) throw new Error("No tenant context available");
 
+      const today = new Date().toISOString().split('T')[0];
+
       let query = supabase
         .from("blocked_dates")
         .select("*, vehicles!blocked_dates_vehicle_id_fkey(make, model, reg)")
-        .eq("tenant_id", tenant.id);
+        .eq("tenant_id", tenant.id)
+        .gte("end_date", today); // Only fetch current and future blocks
 
       // If vehicle_id is provided, get only vehicle-specific blocks
       if (vehicle_id) {

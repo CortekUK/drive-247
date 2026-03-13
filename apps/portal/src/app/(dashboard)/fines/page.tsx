@@ -267,9 +267,9 @@ const FinesList = () => {
 
   // Render fines table
   const renderFinesTable = (fines: EnhancedFine[]) => (
-    <div className="rounded-md border">
+    <div className="max-h-[calc(100vh-380px)] min-h-[300px] overflow-auto relative">
       <Table>
-        <TableHeader>
+        <TableHeader className="sticky top-0 z-10 bg-background">
           <TableRow>
             <TableHead className="w-12">
               {canEdit('fines') && (
@@ -345,38 +345,35 @@ const FinesList = () => {
   return (
     <div className="container mx-auto p-6 space-y-6">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      <div className="flex justify-between items-start">
         <div>
           <h1 className="text-3xl font-bold">Fines Management</h1>
           <p className="text-muted-foreground">
-            Track and manage traffic fines and penalties
+            Track and manage traffic fines
           </p>
         </div>
-        {canEdit('fines') && (
-          <Button
-            onClick={() => router.push("/fines/new")}
-            className="bg-gradient-primary w-full sm:w-auto"
-          >
-            <Plus className="h-4 w-4 mr-2" />
-            Add Fine
-          </Button>
-        )}
+        <div className="flex items-center gap-2">
+          {allFines.length > 0 && (
+            <Link href="/fines/analytics">
+              <Button variant="outline" size="icon" className="border-primary/20 hover:border-primary/40 hover:bg-primary/5">
+                <BarChart3 className="h-4 w-4" />
+              </Button>
+            </Link>
+          )}
+          {canEdit('fines') && (
+            <Button
+              onClick={() => router.push("/fines/new")}
+              className="bg-gradient-primary"
+            >
+              <Plus className="h-4 w-4 mr-2" />
+              Add Fine
+            </Button>
+          )}
+        </div>
       </div>
 
       {/* KPIs */}
       <FineKPIs />
-
-      {/* Analytics Button */}
-      {allFines.length > 0 && (
-        <div className="flex justify-end">
-          <Link href="/fines/analytics">
-            <Button variant="outline" className="border-primary/20 hover:border-primary/40 hover:bg-primary/5">
-              <BarChart3 className="h-4 w-4 mr-2" />
-              View Analytics
-            </Button>
-          </Link>
-        </div>
-      )}
 
       {/* Filters */}
       <FineFilters onFiltersChange={handleFiltersChange} />

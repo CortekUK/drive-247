@@ -12,7 +12,9 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Eye, Plus, Search, BarChart3 } from "lucide-react";
+import { Eye, Plus, Search, BarChart3, ChevronDown, X } from "lucide-react";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { cn } from "@/lib/utils";
 import { EmptyState } from "@/components/shared/data-display/empty-state";
 import { AddVehicleDialog } from "@/components/vehicles/add-vehicle-dialog";
 import { FleetSummaryCards } from "@/components/vehicles/fleet-summary-cards";
@@ -66,6 +68,57 @@ interface FiltersState {
   performance: PerformanceFilter;
   servicePlan: string;
   spareKey: string;
+}
+
+function VehicleFilterPopover({
+  label, active, activeLabel, options, value, onChange, className
+}: {
+  label: string;
+  active: boolean;
+  activeLabel?: string;
+  options: { value: string; label: string }[];
+  value: string;
+  onChange: (v: string) => void;
+  className?: string;
+}) {
+  const [open, setOpen] = useState(false);
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <Button
+          variant="outline"
+          size="sm"
+          className={cn("gap-1.5", active && "border-primary", className)}
+        >
+          {active ? (
+            <span className="text-primary truncate max-w-[80px]">{activeLabel}</span>
+          ) : (
+            label
+          )}
+          <ChevronDown className="h-3 w-3 text-muted-foreground" />
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent className="w-auto p-2 max-h-[280px] overflow-y-auto" align="start">
+        <div className="flex flex-col gap-1">
+          {options.map(({ value: v, label: l }) => {
+            const isActive = value === v;
+            return (
+              <button
+                key={v}
+                onClick={() => { onChange(v); setOpen(false); }}
+                className={cn(
+                  "inline-flex items-center gap-2 rounded-md px-3 py-1.5 text-sm font-medium transition-colors text-left whitespace-nowrap",
+                  isActive ? "bg-primary/10 text-primary" : "hover:bg-muted"
+                )}
+              >
+                {l}
+              </button>
+            );
+          })}
+        </div>
+      </PopoverContent>
+    </Popover>
+  );
 }
 
 export default function VehiclesListEnhanced() {
@@ -365,90 +418,113 @@ export default function VehiclesListEnhanced() {
         <div>
           <h1 className="text-3xl font-bold">Fleet Management</h1>
           <p className="text-muted-foreground">
-            Manage your vehicle fleet, track P&L performance, and monitor compliance
+            Manage your vehicle fleet and track performance
           </p>
         </div>
-        {canEdit('vehicles') && (
-          <div data-add-vehicle-trigger>
-            <AddVehicleDialog />
-          </div>
-        )}
+        <div className="flex items-center gap-2">
+          {vehicles.length > 0 && (
+            <Link href="/vehicles/analytics">
+              <Button variant="outline" size="icon" className="border-primary/20 hover:border-primary/40 hover:bg-primary/5">
+                <BarChart3 className="h-4 w-4" />
+              </Button>
+            </Link>
+          )}
+          {canEdit('vehicles') && (
+            <div data-add-vehicle-trigger>
+              <AddVehicleDialog />
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Fleet Summary Cards */}
       <FleetSummaryCards vehicles={filteredVehicles} currencyCode={currencyCode} />
 
-      {/* Analytics Button */}
-      {vehicles.length > 0 && (
-        <div className="flex justify-end">
-          <Link href="/vehicles/analytics">
-            <Button variant="outline" className="border-primary/20 hover:border-primary/40 hover:bg-primary/5">
-              <BarChart3 className="h-4 w-4 mr-2" />
-              View Analytics
-            </Button>
-          </Link>
-        </div>
-      )}
-
       {/* Filters */}
-      <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
-        <div className="relative">
-          <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-          <Input
-            placeholder="Search vehicles..."
-            value={filters.search}
-            onChange={(e) => updateFilters({ search: e.target.value })}
-            className="pl-9"
-          />
-        </div>
+      {(() => {
+        const statusOptions = [
+          { value: 'all', label: 'All Status' },
+          { value: 'available', label: 'Available' },
+          { value: 'rented', label: 'Rented' },
+          { value: 'disposed', label: 'Disposed' },
+        ];
+        const performanceOptions = [
+          { value: 'all', label: 'All' },
+          { value: 'profitable', label: 'Profitable' },
+          { value: 'loss', label: 'Loss Making' },
+        ];
+        const activeStatusLabel = statusOptions.find(s => s.value === filters.status)?.label;
+        const activeMakeLabel = filters.make !== 'all' ? filters.make : null;
+        const activeYearLabel = filters.year !== 'all' ? filters.year : null;
+        const activePerformanceLabel = performanceOptions.find(p => p.value === filters.performance)?.label;
+        const hasAnyFilter = filters.search || filters.status !== 'all' || filters.make !== 'all' || filters.year !== 'all' || filters.performance !== 'all';
 
-        <Select value={filters.status} onValueChange={(value) => updateFilters({ status: value })}>
-          <SelectTrigger>
-            <SelectValue placeholder="All Status" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All Status</SelectItem>
-            <SelectItem value="available">Available</SelectItem>
-            <SelectItem value="rented">Rented</SelectItem>
-            <SelectItem value="disposed">Disposed</SelectItem>
-          </SelectContent>
-        </Select>
+        return (
+          <div className="flex flex-wrap gap-3 items-center">
+            <div className="relative flex-1 min-w-[200px]">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
+              <Input
+                placeholder="Search vehicles..."
+                value={filters.search}
+                onChange={(e) => updateFilters({ search: e.target.value })}
+                className="pl-10 h-8 text-sm"
+              />
+            </div>
 
-        <Select value={filters.make} onValueChange={(value) => updateFilters({ make: value })}>
-          <SelectTrigger>
-            <SelectValue placeholder="All Makes" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All Makes</SelectItem>
-            {uniqueMakes.map(make => (
-              <SelectItem key={make} value={make}>{make}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+            {/* Status + Make + Year + Performance grouped */}
+            <div className="flex items-center">
+              <VehicleFilterPopover
+                label="Status"
+                active={filters.status !== 'all'}
+                activeLabel={filters.status !== 'all' ? activeStatusLabel : undefined}
+                options={statusOptions}
+                value={filters.status}
+                onChange={(v) => updateFilters({ status: v })}
+                className="rounded-r-none border-r-0"
+              />
+              <VehicleFilterPopover
+                label="Make"
+                active={filters.make !== 'all'}
+                activeLabel={activeMakeLabel || undefined}
+                options={[{ value: 'all', label: 'All Makes' }, ...uniqueMakes.map(m => ({ value: m, label: m }))]}
+                value={filters.make}
+                onChange={(v) => updateFilters({ make: v })}
+                className="rounded-none border-r-0"
+              />
+              <VehicleFilterPopover
+                label="Year"
+                active={filters.year !== 'all'}
+                activeLabel={activeYearLabel || undefined}
+                options={[{ value: 'all', label: 'All Years' }, ...uniqueYears.map(y => ({ value: y.toString(), label: y.toString() }))]}
+                value={filters.year}
+                onChange={(v) => updateFilters({ year: v })}
+                className="rounded-none border-r-0"
+              />
+              <VehicleFilterPopover
+                label="P&L"
+                active={filters.performance !== 'all'}
+                activeLabel={filters.performance !== 'all' ? activePerformanceLabel : undefined}
+                options={performanceOptions}
+                value={filters.performance}
+                onChange={(v) => updateFilters({ performance: v as PerformanceFilter })}
+                className="rounded-l-none"
+              />
+            </div>
 
-        <Select value={filters.year} onValueChange={(value) => updateFilters({ year: value })}>
-          <SelectTrigger>
-            <SelectValue placeholder="All Years" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All Years</SelectItem>
-            {uniqueYears.map(year => (
-              <SelectItem key={year} value={year.toString()}>{year}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-
-        <Select value={filters.performance} onValueChange={(value) => updateFilters({ performance: value as PerformanceFilter })}>
-          <SelectTrigger>
-            <SelectValue placeholder="All Performance" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All Performance</SelectItem>
-            <SelectItem value="profitable">Profitable</SelectItem>
-            <SelectItem value="loss">Loss Making</SelectItem>
-          </SelectContent>
-        </Select>
-      </div>
+            {hasAnyFilter && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => updateFilters({ search: '', status: 'all', make: 'all', year: 'all', performance: 'all' })}
+                className="h-8 gap-1 text-muted-foreground hover:text-foreground"
+              >
+                <X className="h-3.5 w-3.5" />
+                Clear
+              </Button>
+            )}
+          </div>
+        );
+      })()}
 
       {/* Table */}
       {filteredVehicles.length === 0 ? (
@@ -466,8 +542,9 @@ export default function VehiclesListEnhanced() {
       ) : (
         <Card>
           <CardContent className="p-0">
+            <div className="max-h-[calc(100vh-380px)] min-h-[300px] overflow-auto relative">
             <Table key={`${sortField || 'default'}-${sortDirection}`}>
-               <TableHeader>
+               <TableHeader className="sticky top-0 z-10 bg-background">
                  <TableRow>
                    <TableHead>Photo</TableHead>
                    <TableHead>Registration</TableHead>
@@ -534,6 +611,7 @@ export default function VehiclesListEnhanced() {
                  })}
                </TableBody>
             </Table>
+            </div>
           </CardContent>
         </Card>
       )}

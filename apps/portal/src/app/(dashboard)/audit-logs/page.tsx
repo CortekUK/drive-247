@@ -5,7 +5,6 @@ import { format } from "date-fns";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import {
   Select,
   SelectContent,
@@ -39,8 +38,10 @@ import {
   User,
   Calendar as CalendarIcon,
   FileText,
+  Download,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useToast } from "@/hooks/use-toast";
 import {
   useAuditLogs,
   useAuditLogActions,
@@ -54,6 +55,7 @@ const AuditLogs = () => {
   const [filters, setFilters] = useState<AuditLogsFilters>({});
   const [currentPage, setCurrentPage] = useState(1);
   const pageSize = 25;
+  const { toast } = useToast();
 
   const { data: logs, isLoading } = useAuditLogs(filters);
   const { data: actions } = useAuditLogActions();
@@ -77,6 +79,40 @@ const AuditLogs = () => {
     filters.actorId ||
     filters.dateFrom ||
     filters.dateTo;
+
+  const handleExportCSV = () => {
+    if (!logs || logs.length === 0) {
+      toast({ title: "No data to export", variant: "destructive" });
+      return;
+    }
+    const headers = ["Date & Time", "Action", "Entity Type", "Entity Name", "Details", "Performed By"];
+    const rows = logs.map((log) => [
+      format(new Date(log.created_at), "yyyy-MM-dd HH:mm:ss"),
+      formatActionName(log.action),
+      log.entity_type || "",
+      log.details?.customer_name || "",
+      log.details?.reason
+        ? `Reason: ${log.details.reason}`
+        : log.details?.previous_status && log.details?.new_status
+          ? `Status: ${log.details.previous_status} → ${log.details.new_status}`
+          : JSON.stringify(log.details || {}),
+      log.actor?.name || log.actor?.email || "System",
+    ]);
+    const csvContent = [
+      headers.join(","),
+      ...rows.map((row) =>
+        row.map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join(",")
+      ),
+    ].join("\n");
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `audit-logs-${format(new Date(), "yyyy-MM-dd")}.csv`;
+    link.click();
+    URL.revokeObjectURL(url);
+    toast({ title: "CSV exported successfully" });
+  };
 
   if (isLoading) {
     return (
@@ -111,171 +147,164 @@ const AuditLogs = () => {
             Track all system actions and changes
           </p>
         </div>
+        <Button onClick={handleExportCSV} className="bg-gradient-primary">
+          <Download className="h-4 w-4 mr-2" />
+          Export CSV
+        </Button>
       </div>
 
-      {/* Filters */}
-      <div className="space-y-4">
-        <div className="flex flex-wrap gap-4 items-center">
-          <Select
-            value={filters.entityType || "all"}
-            onValueChange={(value) =>
-              setFilters((prev) => ({
-                ...prev,
-                entityType: value === "all" ? undefined : value,
-              }))
-            }
-          >
-            <SelectTrigger className="w-full sm:w-48">
-              <SelectValue placeholder="Entity type" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Entities</SelectItem>
-              <SelectItem value="customer">Customer</SelectItem>
-              <SelectItem value="rental">Rental</SelectItem>
-              <SelectItem value="vehicle">Vehicle</SelectItem>
-              <SelectItem value="payment">Payment</SelectItem>
-              <SelectItem value="fine">Fine</SelectItem>
-              <SelectItem value="invoice">Invoice</SelectItem>
-              <SelectItem value="document">Document</SelectItem>
-              <SelectItem value="plate">Plate</SelectItem>
-              <SelectItem value="identity">Identity</SelectItem>
-              <SelectItem value="user">User</SelectItem>
-              <SelectItem value="settings">Settings</SelectItem>
-            </SelectContent>
-          </Select>
+      {/* Filter Bar */}
+      <div className="flex flex-wrap items-center gap-3">
+        <Select
+          value={filters.entityType || "all"}
+          onValueChange={(value) =>
+            setFilters((prev) => ({
+              ...prev,
+              entityType: value === "all" ? undefined : value,
+            }))
+          }
+        >
+          <SelectTrigger className="w-[160px] h-8 text-sm">
+            <SelectValue placeholder="Entity type" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Entities</SelectItem>
+            <SelectItem value="customer">Customer</SelectItem>
+            <SelectItem value="rental">Rental</SelectItem>
+            <SelectItem value="vehicle">Vehicle</SelectItem>
+            <SelectItem value="payment">Payment</SelectItem>
+            <SelectItem value="fine">Fine</SelectItem>
+            <SelectItem value="invoice">Invoice</SelectItem>
+            <SelectItem value="document">Document</SelectItem>
+            <SelectItem value="plate">Plate</SelectItem>
+            <SelectItem value="identity">Identity</SelectItem>
+            <SelectItem value="user">User</SelectItem>
+            <SelectItem value="settings">Settings</SelectItem>
+          </SelectContent>
+        </Select>
 
-          <Select
-            value={filters.action || "all"}
-            onValueChange={(value) =>
-              setFilters((prev) => ({
-                ...prev,
-                action: value === "all" ? undefined : value,
-              }))
-            }
-          >
-            <SelectTrigger className="w-full sm:w-48">
-              <SelectValue placeholder="Action type" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Actions</SelectItem>
-              {actions?.map((action) => (
-                <SelectItem key={action} value={action}>
-                  {formatActionName(action)}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+        <Select
+          value={filters.action || "all"}
+          onValueChange={(value) =>
+            setFilters((prev) => ({
+              ...prev,
+              action: value === "all" ? undefined : value,
+            }))
+          }
+        >
+          <SelectTrigger className="w-[160px] h-8 text-sm">
+            <SelectValue placeholder="Action type" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Actions</SelectItem>
+            {actions?.map((action) => (
+              <SelectItem key={action} value={action}>
+                {formatActionName(action)}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
 
-          <Select
-            value={filters.actorId || "all"}
-            onValueChange={(value) =>
-              setFilters((prev) => ({
-                ...prev,
-                actorId: value === "all" ? undefined : value,
-              }))
-            }
-          >
-            <SelectTrigger className="w-full sm:w-48">
-              <SelectValue placeholder="Performed by" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Users</SelectItem>
-              {adminUsers?.map((user) => (
-                <SelectItem key={user.id} value={user.id}>
-                  {user.name || user.email}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
+        <Select
+          value={filters.actorId || "all"}
+          onValueChange={(value) =>
+            setFilters((prev) => ({
+              ...prev,
+              actorId: value === "all" ? undefined : value,
+            }))
+          }
+        >
+          <SelectTrigger className="w-[160px] h-8 text-sm">
+            <SelectValue placeholder="Performed by" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Users</SelectItem>
+            {adminUsers?.map((user) => (
+              <SelectItem key={user.id} value={user.id}>
+                {user.name || user.email}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
 
-        {/* Date Range Section */}
-        <div className="flex flex-col sm:flex-row sm:items-center gap-3">
-          <span className="text-sm font-medium text-muted-foreground">
-            Date Range:
-          </span>
-
-          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 flex-1">
-            <Popover>
-              <PopoverTrigger asChild>
-                <Button
-                  variant="outline"
-                  className={cn(
-                    "w-full sm:w-[160px] justify-between text-left font-normal",
-                    !filters.dateFrom && "text-muted-foreground"
-                  )}
-                >
-                  {filters.dateFrom ? (
-                    format(new Date(filters.dateFrom), "MMM dd, yyyy")
-                  ) : (
-                    <span>From date</span>
-                  )}
-                  <CalendarIcon className="ml-2 h-4 w-4" />
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent className="w-auto p-0" align="start">
-                <CalendarComponent
-                  mode="single"
-                  selected={
-                    filters.dateFrom
-                      ? new Date(filters.dateFrom)
-                      : undefined
-                  }
-                  onSelect={(date) =>
-                    setFilters((prev) => ({
-                      ...prev,
-                      dateFrom: date ? format(date, "yyyy-MM-dd") : undefined,
-                    }))
-                  }
-                  initialFocus
-                />
-              </PopoverContent>
-            </Popover>
-
-            <span className="text-muted-foreground text-center sm:text-left">to</span>
-
-            <Popover>
-              <PopoverTrigger asChild>
-                <Button
-                  variant="outline"
-                  className={cn(
-                    "w-full sm:w-[160px] justify-between text-left font-normal",
-                    !filters.dateTo && "text-muted-foreground"
-                  )}
-                >
-                  {filters.dateTo ? (
-                    format(new Date(filters.dateTo), "MMM dd, yyyy")
-                  ) : (
-                    <span>To date</span>
-                  )}
-                  <CalendarIcon className="ml-2 h-4 w-4" />
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent className="w-auto p-0" align="start">
-                <CalendarComponent
-                  mode="single"
-                  selected={
-                    filters.dateTo ? new Date(filters.dateTo) : undefined
-                  }
-                  onSelect={(date) =>
-                    setFilters((prev) => ({
-                      ...prev,
-                      dateTo: date ? format(date, "yyyy-MM-dd") : undefined,
-                    }))
-                  }
-                  initialFocus
-                />
-              </PopoverContent>
-            </Popover>
-          </div>
-
-          {hasActiveFilters && (
-            <Button variant="outline" size="sm" onClick={clearFilters} className="w-full sm:w-auto">
-              <X className="h-4 w-4 mr-1" />
-              Clear Filters
+        <Popover>
+          <PopoverTrigger asChild>
+            <Button
+              variant="outline"
+              className={cn(
+                "w-[150px] h-8 text-sm justify-between text-left font-normal",
+                !filters.dateFrom && "text-muted-foreground"
+              )}
+            >
+              {filters.dateFrom ? (
+                format(new Date(filters.dateFrom), "MMM dd, yyyy")
+              ) : (
+                <span>From date</span>
+              )}
+              <CalendarIcon className="ml-2 h-3.5 w-3.5" />
             </Button>
-          )}
-        </div>
+          </PopoverTrigger>
+          <PopoverContent className="w-auto p-0" align="start">
+            <CalendarComponent
+              mode="single"
+              selected={
+                filters.dateFrom
+                  ? new Date(filters.dateFrom)
+                  : undefined
+              }
+              onSelect={(date) =>
+                setFilters((prev) => ({
+                  ...prev,
+                  dateFrom: date ? format(date, "yyyy-MM-dd") : undefined,
+                }))
+              }
+              initialFocus
+            />
+          </PopoverContent>
+        </Popover>
+
+        <span className="text-sm text-muted-foreground">to</span>
+
+        <Popover>
+          <PopoverTrigger asChild>
+            <Button
+              variant="outline"
+              className={cn(
+                "w-[150px] h-8 text-sm justify-between text-left font-normal",
+                !filters.dateTo && "text-muted-foreground"
+              )}
+            >
+              {filters.dateTo ? (
+                format(new Date(filters.dateTo), "MMM dd, yyyy")
+              ) : (
+                <span>To date</span>
+              )}
+              <CalendarIcon className="ml-2 h-3.5 w-3.5" />
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent className="w-auto p-0" align="start">
+            <CalendarComponent
+              mode="single"
+              selected={
+                filters.dateTo ? new Date(filters.dateTo) : undefined
+              }
+              onSelect={(date) =>
+                setFilters((prev) => ({
+                  ...prev,
+                  dateTo: date ? format(date, "yyyy-MM-dd") : undefined,
+                }))
+              }
+              initialFocus
+            />
+          </PopoverContent>
+        </Popover>
+
+        {hasActiveFilters && (
+          <Button variant="outline" size="sm" onClick={clearFilters} className="h-8 text-sm">
+            <X className="h-3.5 w-3.5 mr-1" />
+            Clear
+          </Button>
+        )}
       </div>
 
       {/* Audit Logs Table */}

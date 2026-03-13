@@ -248,7 +248,6 @@ const FineDetail = () => {
             title="Fine Amount"
             value={formatCurrency(Number(fine.amount), tenant?.currency_code || 'GBP')}
             valueClassName="text-destructive dark:text-destructive"
-            icon={<DollarSign className="h-4 w-4" />}
             className="bg-destructive/10 border-destructive/20"
           />
 
@@ -266,7 +265,6 @@ const FineDetail = () => {
             title="Days Until Due"
             value={getDaysUntilDueDisplay()}
             valueClassName={getDaysUntilDueColor() === "text-red-600" ? "text-destructive dark:text-destructive" : getDaysUntilDueColor() === "text-amber-600" ? "text-warning dark:text-warning" : "text-success dark:text-success"}
-            icon={<Clock className="h-4 w-4" />}
             className={
               getDaysUntilDueColor() === "text-red-600"
                 ? "bg-destructive/10 border-destructive/20"

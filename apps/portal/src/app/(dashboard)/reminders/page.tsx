@@ -24,6 +24,7 @@ import {
   MoreHorizontal,
   Shield,
   BarChart3,
+  X,
 } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
@@ -158,33 +159,33 @@ export default function RemindersPageEnhanced() {
   return (
     <div className="container mx-auto py-8 space-y-6">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row justify-between sm:items-start gap-4">
+      <div className="flex justify-between items-start">
         <div>
-          <h1 className="text-3xl font-bold mb-2">Reminders</h1>
-          <p className="text-sm text-muted-foreground">
-            Monitor and manage fleet compliance reminders and notifications
-          </p>
+          <h1 className="text-3xl font-bold">Reminders</h1>
+          <p className="text-muted-foreground">Monitor and manage fleet compliance reminders</p>
         </div>
 
-        <div className="flex items-center gap-2 w-full sm:w-auto flex-wrap">
+        <div className="flex items-center gap-2">
           <Button
             variant="outline"
-            size="sm"
+            size="icon"
             onClick={exportReminders}
             disabled={reminders.length === 0}
-            className="flex-1 sm:flex-none"
           >
-            <Download className="h-4 w-4 mr-2" />
-            Export
+            <Download className="h-4 w-4" />
           </Button>
+
+          <Link href="/reminders/analytics">
+            <Button variant="outline" size="icon">
+              <BarChart3 className="h-4 w-4" />
+            </Button>
+          </Link>
 
           {canEdit('reminders') && (
             <Button
               variant="outline"
-              size="sm"
               onClick={() => generateReminders.mutate()}
               disabled={generateReminders.isPending}
-              className="flex-1 sm:flex-none"
             >
               <Play className="h-4 w-4 mr-2" />
               {generateReminders.isPending ? 'Generating...' : 'Generate'}
@@ -194,8 +195,8 @@ export default function RemindersPageEnhanced() {
       </div>
 
       {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <Card className="bg-card hover:bg-accent/50 border transition-all duration-200 cursor-pointer hover:shadow-md">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <Card className="bg-gradient-to-br from-indigo-500/10 to-indigo-500/5 border-indigo-500/20 hover:border-indigo-500/40 transition-all duration-200 cursor-pointer hover:shadow-md">
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium">Total Active</CardTitle>
           </CardHeader>
@@ -205,12 +206,12 @@ export default function RemindersPageEnhanced() {
           </CardContent>
         </Card>
 
-        <Card className="bg-gradient-to-br from-primary/10 to-primary/5 border-primary/20 hover:border-primary/40 transition-all duration-200 cursor-pointer hover:shadow-md">
+        <Card className="bg-gradient-to-br from-warning/10 to-warning/5 border-warning/20 hover:border-warning/40 transition-all duration-200 cursor-pointer hover:shadow-md">
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium">Due Today</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-primary">{stats?.due || 0}</div>
+            <div className="text-2xl font-bold text-warning">{stats?.due || 0}</div>
             <p className="text-xs text-muted-foreground">Require attention</p>
           </CardContent>
         </Card>
@@ -226,78 +227,52 @@ export default function RemindersPageEnhanced() {
         </Card>
       </div>
 
-      {/* Analytics Button */}
-      {reminders.length > 0 && (
-        <div className="flex justify-end">
-          <Link href="/reminders/analytics">
-            <Button variant="outline" className="border-primary/20 hover:border-primary/40 hover:bg-primary/5">
-              <BarChart3 className="h-4 w-4 mr-2" />
-              View Analytics
-            </Button>
-          </Link>
-        </div>
-      )}
+      {/* Filters */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <Select
+          value={filters.severity?.[0] || ''}
+          onValueChange={(value) =>
+            setFilters(prev => ({ ...prev, severity: value ? [value] : undefined }))
+          }
+        >
+          <SelectTrigger>
+            <SelectValue placeholder="All severities" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="critical">Critical</SelectItem>
+            <SelectItem value="warning">Warning</SelectItem>
+            <SelectItem value="info">Info</SelectItem>
+          </SelectContent>
+        </Select>
 
-      {/* Filters Panel */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-sm">Filter Reminders</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div className="space-y-2">
-              <Label>Severity</Label>
-              <Select
-                value={filters.severity?.[0] || ''}
-                onValueChange={(value) =>
-                  setFilters(prev => ({ ...prev, severity: value ? [value] : undefined }))
-                }
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="All severities" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="critical">Critical</SelectItem>
-                  <SelectItem value="warning">Warning</SelectItem>
-                  <SelectItem value="info">Info</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
+        <Select
+          value={filters.object_type?.[0] || ''}
+          onValueChange={(value) =>
+            setFilters(prev => ({ ...prev, object_type: value ? [value] : undefined }))
+          }
+        >
+          <SelectTrigger>
+            <SelectValue placeholder="All types" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="Vehicle">Vehicle</SelectItem>
+            <SelectItem value="Rental">Rental</SelectItem>
+            <SelectItem value="Customer">Customer</SelectItem>
+            <SelectItem value="Fine">Fine</SelectItem>
+            <SelectItem value="Integration">Integration</SelectItem>
+            <SelectItem value="Document">Document</SelectItem>
+          </SelectContent>
+        </Select>
 
-            <div className="space-y-2">
-              <Label>Object Type</Label>
-              <Select
-                value={filters.object_type?.[0] || ''}
-                onValueChange={(value) =>
-                  setFilters(prev => ({ ...prev, object_type: value ? [value] : undefined }))
-                }
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="All types" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="Vehicle">Vehicle</SelectItem>
-                  <SelectItem value="Rental">Rental</SelectItem>
-                  <SelectItem value="Customer">Customer</SelectItem>
-                  <SelectItem value="Fine">Fine</SelectItem>
-                  <SelectItem value="Integration">Integration</SelectItem>
-                  <SelectItem value="Document">Document</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="flex items-end">
-              <Button
-                variant="outline"
-                onClick={() => setFilters({})}
-                className="w-full"
-              >
-                Clear Filters
-              </Button>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
+        <Button
+          variant="ghost"
+          onClick={() => setFilters({})}
+          className="w-fit"
+        >
+          <X className="h-4 w-4 mr-1" />
+          Clear
+        </Button>
+      </div>
 
       {/* Bulk Actions */}
       {canEdit('reminders') && selectedIds.length > 0 && (
@@ -363,9 +338,9 @@ export default function RemindersPageEnhanced() {
               )}
             </div>
           ) : (
-            <div className="rounded-md border">
+            <div className="rounded-md border max-h-[calc(100vh-420px)] min-h-[300px] overflow-auto relative">
               <Table>
-                <TableHeader>
+                <TableHeader className="sticky top-0 z-10 bg-background">
                   <TableRow>
                     <TableHead className="w-[50px]">
                       {canEdit('reminders') && (

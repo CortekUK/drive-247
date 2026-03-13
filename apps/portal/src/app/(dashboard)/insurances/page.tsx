@@ -5,38 +5,17 @@ import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { ChartContainer, ChartTooltip, type ChartConfig } from "@/components/ui/chart";
-import {
-  BarChart, Bar, PieChart, Pie, Cell, CartesianGrid, XAxis, YAxis,
-  RadialBarChart, RadialBar, PolarAngleAxis,
-} from "recharts";
-import { ShieldCheck, Download, ExternalLink, X, Info } from "lucide-react";
+import { ShieldCheck, Download, ExternalLink, X, Loader2, Search, BarChart3 } from "lucide-react";
 import { EmptyState } from "@/components/shared/data-display/empty-state";
-import { format, subMonths, startOfMonth } from "date-fns";
-import { useState, useMemo } from "react";
+import { format } from "date-fns";
+import Link from "next/link";
+import { useState, useCallback } from "react";
 import { useTenant } from "@/contexts/TenantContext";
 import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
-
-// --- Chart configs ---
-const SOURCE_COLORS: Record<string, string> = {
-  "Bonzah": "#CC004A",
-  "Uploaded": "#6366f1",
-};
-
-const sourceChartConfig = Object.fromEntries(
-  Object.entries(SOURCE_COLORS).map(([k, v]) => [k, { label: k, color: v }])
-) as ChartConfig;
-
-const monthlyConfig: ChartConfig = {
-  count: { label: "Insurances", color: "#6366f1" },
-};
-
-const statusRadialConfig: ChartConfig = {
-  rate: { label: "Active", color: "#22c55e" },
-};
+import JSZip from "jszip";
+import { jsPDF } from "jspdf";
 
 interface InsuranceDoc {
   id: string;
@@ -60,6 +39,7 @@ export default function InsurancesList() {
   const [bonzahFilter, setBonzahFilter] = useState(false);
   const { tenant } = useTenant();
   const router = useRouter();
+  const [isDownloadingAll, setIsDownloadingAll] = useState(false);
 
   // Fetch insurance documents from customer_documents table
   const { data: insuranceDocuments = [], isLoading: isLoadingDocs } = useQuery({
@@ -97,6 +77,12 @@ export default function InsurancesList() {
           created_at,
           customer_id,
           rental_id,
+          policy_type,
+          pickup_state,
+          trip_start_date,
+          trip_end_date,
+          renter_details,
+          policy_issued_at,
           customers!bonzah_insurance_policies_customer_id_fkey(name)
         `)
         .eq("tenant_id", tenant!.id)
@@ -183,47 +169,200 @@ export default function InsurancesList() {
     window.open(publicUrl, "_blank");
   };
 
-  // --- Chart data ---
-  const sourceDonutData = useMemo(() => {
-    const bonzahCount = allInsurances.filter(d => d.isBonzah).length;
-    const uploadedCount = allInsurances.filter(d => !d.isBonzah).length;
-    return [
-      { name: "Bonzah", value: bonzahCount, fill: SOURCE_COLORS["Bonzah"] },
-      { name: "Uploaded", value: uploadedCount, fill: SOURCE_COLORS["Uploaded"] },
-    ].filter(d => d.value > 0);
-  }, [allInsurances]);
+  const generateInsurancePdf = (doc: InsuranceDoc, index: number): { blob: Blob; fileName: string } => {
+    const pdf = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
+    const pageWidth = pdf.internal.pageSize.getWidth();
+    const margin = 20;
+    let y = 25;
 
-  const monthlyData = useMemo(() => {
-    const now = new Date();
-    const months: { month: string; count: number }[] = [];
-    for (let i = 5; i >= 0; i--) {
-      const d = subMonths(now, i);
-      const key = format(startOfMonth(d), "yyyy-MM");
-      const label = format(d, "MMM");
-      const count = allInsurances.filter((doc) => doc.created_at?.startsWith(key)).length;
-      months.push({ month: label, count });
+    // Header
+    const companyName = tenant?.company_name || tenant?.slug || "Drive247";
+    pdf.setFontSize(18);
+    pdf.setFont("helvetica", "bold");
+    pdf.text(companyName, margin, y);
+    y += 8;
+    pdf.setFontSize(10);
+    pdf.setFont("helvetica", "normal");
+    pdf.setTextColor(100);
+    pdf.text("Insurance Record", margin, y);
+    y += 4;
+
+    // Divider line
+    pdf.setDrawColor(200);
+    pdf.setLineWidth(0.5);
+    pdf.line(margin, y, pageWidth - margin, y);
+    y += 12;
+
+    // Helper to add a labeled row
+    const addRow = (label: string, value: string) => {
+      if (!value || value === "—") return;
+      pdf.setFontSize(9);
+      pdf.setFont("helvetica", "bold");
+      pdf.setTextColor(100);
+      pdf.text(label, margin, y);
+      pdf.setFontSize(10);
+      pdf.setFont("helvetica", "normal");
+      pdf.setTextColor(40);
+      pdf.text(value, margin + 50, y);
+      y += 7;
+    };
+
+    // General details
+    pdf.setFontSize(12);
+    pdf.setFont("helvetica", "bold");
+    pdf.setTextColor(40);
+    pdf.text("Document Details", margin, y);
+    y += 9;
+
+    addRow("Document Name", doc.document_name);
+    addRow("Customer", doc.customers?.name || "Unknown");
+    addRow("Created", format(new Date(doc.created_at), "MMM dd, yyyy HH:mm"));
+    addRow("Source", doc.isBonzah ? "Bonzah Insurance" : "Uploaded Document");
+    if (doc.insurance_provider) addRow("Provider", doc.insurance_provider);
+    if (doc.document_type) addRow("Document Type", doc.document_type);
+    if (doc.status) addRow("Status", doc.status.charAt(0).toUpperCase() + doc.status.slice(1));
+
+    // For Bonzah policies, add extra details
+    if (doc.isBonzah && doc.id.startsWith("bonzah-")) {
+      const policyDbId = doc.id.replace("bonzah-", "");
+      const policy = bonzahPolicies.find((p: any) => p.id === policyDbId);
+
+      if (policy) {
+        y += 5;
+        pdf.setDrawColor(200);
+        pdf.line(margin, y, pageWidth - margin, y);
+        y += 10;
+
+        pdf.setFontSize(12);
+        pdf.setFont("helvetica", "bold");
+        pdf.setTextColor(40);
+        pdf.text("Bonzah Policy Details", margin, y);
+        y += 9;
+
+        if (policy.policy_no) addRow("Policy No", policy.policy_no);
+        if (policy.quote_no) addRow("Quote No", policy.quote_no);
+        if (policy.policy_type) addRow("Policy Type", policy.policy_type);
+        if (policy.premium_amount) addRow("Premium", `$${Number(policy.premium_amount).toFixed(2)}`);
+        if (policy.pickup_state) addRow("Pickup State", policy.pickup_state);
+        if (policy.trip_start_date) addRow("Trip Start", format(new Date(policy.trip_start_date), "MMM dd, yyyy"));
+        if (policy.trip_end_date) addRow("Trip End", format(new Date(policy.trip_end_date), "MMM dd, yyyy"));
+        if (policy.policy_issued_at) addRow("Policy Issued", format(new Date(policy.policy_issued_at), "MMM dd, yyyy HH:mm"));
+
+        // Coverage types
+        if (policy.coverage_types) {
+          const coverages = Array.isArray(policy.coverage_types) ? policy.coverage_types : [];
+          if (coverages.length > 0) {
+            y += 5;
+            pdf.setFontSize(12);
+            pdf.setFont("helvetica", "bold");
+            pdf.setTextColor(40);
+            pdf.text("Coverage Types", margin, y);
+            y += 8;
+
+            coverages.forEach((coverage: any) => {
+              const name = typeof coverage === "string" ? coverage : coverage?.name || coverage?.type || JSON.stringify(coverage);
+              pdf.setFontSize(10);
+              pdf.setFont("helvetica", "normal");
+              pdf.setTextColor(60);
+              pdf.text(`•  ${name}`, margin + 4, y);
+              y += 6;
+            });
+          }
+        }
+
+        // Renter details
+        if (policy.renter_details && typeof policy.renter_details === "object") {
+          const renter = policy.renter_details as Record<string, any>;
+          const hasDetails = Object.values(renter).some((v) => v);
+          if (hasDetails) {
+            y += 5;
+            pdf.setDrawColor(200);
+            pdf.line(margin, y, pageWidth - margin, y);
+            y += 10;
+
+            pdf.setFontSize(12);
+            pdf.setFont("helvetica", "bold");
+            pdf.setTextColor(40);
+            pdf.text("Renter Details", margin, y);
+            y += 9;
+
+            if (renter.first_name || renter.last_name) addRow("Name", `${renter.first_name || ""} ${renter.last_name || ""}`.trim());
+            if (renter.email) addRow("Email", renter.email);
+            if (renter.phone) addRow("Phone", renter.phone);
+            if (renter.address) addRow("Address", renter.address);
+            if (renter.city) addRow("City", renter.city);
+            if (renter.state) addRow("State", renter.state);
+            if (renter.zip) addRow("ZIP", renter.zip);
+          }
+        }
+      }
     }
-    return months;
-  }, [allInsurances]);
 
-  const statusRadialData = useMemo(() => {
-    const active = allInsurances.filter(d => d.status === 'active' || d.status === 'confirmed').length;
-    const total = allInsurances.length;
-    const rate = total > 0 ? Math.round((active / total) * 100) : 0;
-    return { rate, active, total, expired: total - active };
-  }, [allInsurances]);
+    // Footer
+    y = pdf.internal.pageSize.getHeight() - 15;
+    pdf.setFontSize(8);
+    pdf.setFont("helvetica", "normal");
+    pdf.setTextColor(150);
+    pdf.text(`Generated on ${format(new Date(), "MMM dd, yyyy HH:mm")} by ${companyName}`, margin, y);
+    pdf.text(`Record ${index + 1}`, pageWidth - margin - 20, y);
 
-  const topCustomersData = useMemo(() => {
-    const counts: Record<string, number> = {};
-    allInsurances.forEach((doc) => {
-      const name = doc.customers?.name || "Unknown";
-      counts[name] = (counts[name] || 0) + 1;
-    });
-    return Object.entries(counts)
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, 5)
-      .map(([name, count]) => ({ name: name.length > 12 ? name.slice(0, 12) + "…" : name, count, fullName: name }));
-  }, [allInsurances]);
+    const customerName = (doc.customers?.name || "Unknown").replace(/[^a-zA-Z0-9-_ ]/g, "_");
+    const docName = doc.document_name.replace(/[^a-zA-Z0-9-_ ]/g, "_").slice(0, 50);
+    const fileName = `${customerName}_${docName}.pdf`;
+
+    return { blob: pdf.output("blob"), fileName };
+  };
+
+  const handleDownloadAll = useCallback(async () => {
+    if (allInsurances.length === 0) {
+      toast.error("No insurance records to download");
+      return;
+    }
+
+    setIsDownloadingAll(true);
+    const folderName = `${(tenant?.company_name || tenant?.slug || "tenant").replace(/[^a-zA-Z0-9-_ ]/g, "")}_Insurances`;
+
+    try {
+      const zip = new JSZip();
+      const folder = zip.folder(folderName)!;
+      const usedNames = new Set<string>();
+
+      const getUniqueName = (baseName: string) => {
+        let name = baseName;
+        let counter = 1;
+        while (usedNames.has(name)) {
+          const stem = baseName.slice(0, baseName.lastIndexOf("."));
+          const ext = baseName.slice(baseName.lastIndexOf("."));
+          name = `${stem} (${counter})${ext}`;
+          counter++;
+        }
+        usedNames.add(name);
+        return name;
+      };
+
+      for (let i = 0; i < allInsurances.length; i++) {
+        const { blob, fileName } = generateInsurancePdf(allInsurances[i], i);
+        folder.file(getUniqueName(fileName), blob);
+      }
+
+      const content = await zip.generateAsync({ type: "blob" });
+      const url = URL.createObjectURL(content);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `${folderName}.zip`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+
+      toast.success(`Downloaded ${allInsurances.length} insurance records as PDFs`);
+    } catch (error) {
+      console.error("Download all error:", error);
+      toast.error("Failed to create download archive");
+    } finally {
+      setIsDownloadingAll(false);
+    }
+  }, [allInsurances, bonzahPolicies, tenant]);
 
   if (isLoading) {
     return (
@@ -237,29 +376,83 @@ export default function InsurancesList() {
   return (
     <div className="container mx-auto p-6 space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex justify-between items-start">
         <div>
           <h1 className="text-3xl font-bold">Insurances</h1>
-          <p className="text-muted-foreground">
-            All customer insurance documents and Bonzah policies
-          </p>
+          <p className="text-muted-foreground">Manage customer insurance documents and Bonzah policies</p>
+        </div>
+        <div className="flex items-center gap-2">
+          {allInsurances.length > 0 && (
+            <Link href="/insurances/analytics">
+              <Button variant="outline" size="icon" className="border-primary/20 hover:border-primary/40 hover:bg-primary/5">
+                <BarChart3 className="h-4 w-4" />
+              </Button>
+            </Link>
+          )}
+          <Button
+            onClick={handleDownloadAll}
+            disabled={isDownloadingAll || allInsurances.length === 0}
+            className="bg-gradient-primary"
+          >
+            {isDownloadingAll ? (
+              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+            ) : (
+              <Download className="h-4 w-4 mr-2" />
+            )}
+            Export PDFs
+          </Button>
         </div>
       </div>
 
+      {/* Stat Cards */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <Card className="bg-gradient-to-br from-indigo-500/10 to-indigo-500/5 border-indigo-500/20">
+          <CardContent className="p-4">
+            <p className="text-sm font-medium text-muted-foreground">Total Insurances</p>
+            <p className="text-2xl font-bold mt-1">{allInsurances.length}</p>
+            <p className="text-xs text-muted-foreground mt-1">All insurance records</p>
+          </CardContent>
+        </Card>
+        <Card className="bg-gradient-to-br from-pink-600/10 to-pink-600/5 border-pink-600/20">
+          <CardContent className="p-4">
+            <p className="text-sm font-medium text-muted-foreground">Bonzah Policies</p>
+            <p className="text-2xl font-bold mt-1">{allInsurances.filter(d => d.isBonzah).length}</p>
+            <p className="text-xs text-muted-foreground mt-1">Via Bonzah integration</p>
+          </CardContent>
+        </Card>
+        <Card className="bg-gradient-to-br from-violet-500/10 to-violet-500/5 border-violet-500/20">
+          <CardContent className="p-4">
+            <p className="text-sm font-medium text-muted-foreground">Uploaded</p>
+            <p className="text-2xl font-bold mt-1">{allInsurances.filter(d => !d.isBonzah).length}</p>
+            <p className="text-xs text-muted-foreground mt-1">Manually uploaded</p>
+          </CardContent>
+        </Card>
+        <Card className="bg-gradient-to-br from-green-500/10 to-green-500/5 border-green-500/20">
+          <CardContent className="p-4">
+            <p className="text-sm font-medium text-muted-foreground">Active Policies</p>
+            <p className="text-2xl font-bold mt-1">{allInsurances.filter(d => d.status === 'active' || d.status === 'confirmed').length}</p>
+            <p className="text-xs text-muted-foreground mt-1">Currently active</p>
+          </CardContent>
+        </Card>
+      </div>
+
       {/* Search + Bonzah Filter */}
-      <div className="flex items-center gap-3">
-        <Input
-          placeholder="Search by document name or customer..."
-          value={searchQuery}
-          onChange={(e) => handleSearchChange(e.target.value)}
-          className="flex-1"
-        />
+      <div className="flex flex-wrap gap-3 items-center">
+        <div className="relative flex-1 min-w-[200px]">
+          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
+          <Input
+            placeholder="Search by document name or customer..."
+            value={searchQuery}
+            onChange={(e) => handleSearchChange(e.target.value)}
+            className="pl-10 h-8 text-sm"
+          />
+        </div>
         <button
           onClick={() => {
             setBonzahFilter(!bonzahFilter);
             setCurrentPage(1);
           }}
-          className="inline-flex items-center gap-2 px-3 h-9 rounded-md border text-sm font-medium whitespace-nowrap transition-colors shrink-0"
+          className="inline-flex items-center gap-2 px-3 h-8 rounded-md border text-xs font-medium whitespace-nowrap transition-colors shrink-0"
           style={{
             borderColor: bonzahFilter ? '#CC004A' : 'rgba(204, 0, 74, 0.3)',
             backgroundColor: bonzahFilter ? '#CC004A' : 'transparent',
@@ -281,149 +474,6 @@ export default function InsurancesList() {
         </button>
       </div>
 
-      {/* Charts */}
-      <TooltipProvider>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-          {/* Insurance Sources Donut */}
-          <div className="rounded-lg border border-border/60 bg-card/50 p-4">
-            <div className="flex items-center gap-1.5 mb-3">
-              <h3 className="text-sm font-medium">Insurance Sources</h3>
-              <Tooltip>
-                <TooltipTrigger><Info className="h-3.5 w-3.5 text-muted-foreground" /></TooltipTrigger>
-                <TooltipContent>Bonzah vs uploaded insurance documents</TooltipContent>
-              </Tooltip>
-            </div>
-            {sourceDonutData.length > 0 ? (
-              <ChartContainer config={sourceChartConfig} className="h-[180px] w-full">
-                <PieChart>
-                  <Pie data={sourceDonutData} dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius={45} outerRadius={70} paddingAngle={2}>
-                    {sourceDonutData.map((entry) => (
-                      <Cell key={entry.name} fill={entry.fill} />
-                    ))}
-                  </Pie>
-                  <ChartTooltip content={({ active, payload }) => {
-                    if (!active || !payload?.length) return null;
-                    const d = payload[0].payload;
-                    return (
-                      <div className="rounded-lg border bg-background px-3 py-2 shadow-md">
-                        <div className="flex items-center gap-2">
-                          <span className="h-2.5 w-2.5 rounded-full" style={{ background: d.fill }} />
-                          <span className="text-sm font-medium">{d.name}</span>
-                        </div>
-                        <p className="text-sm text-muted-foreground mt-0.5">{d.value} polic{d.value !== 1 ? "ies" : "y"}</p>
-                      </div>
-                    );
-                  }} />
-                </PieChart>
-              </ChartContainer>
-            ) : (
-              <p className="text-sm text-muted-foreground text-center py-10">No data</p>
-            )}
-            <div className="flex flex-wrap gap-x-3 gap-y-1 mt-2">
-              {sourceDonutData.map((d) => (
-                <div key={d.name} className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                  <span className="h-2 w-2 rounded-full" style={{ background: d.fill }} />
-                  {d.name}
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* Monthly Insurances */}
-          <div className="rounded-lg border border-border/60 bg-card/50 p-4">
-            <div className="flex items-center gap-1.5 mb-3">
-              <h3 className="text-sm font-medium">Monthly Insurances</h3>
-              <Tooltip>
-                <TooltipTrigger><Info className="h-3.5 w-3.5 text-muted-foreground" /></TooltipTrigger>
-                <TooltipContent>Insurance documents over last 6 months</TooltipContent>
-              </Tooltip>
-            </div>
-            <ChartContainer config={monthlyConfig} className="h-[180px] w-full">
-              <BarChart data={monthlyData}>
-                <CartesianGrid vertical={false} strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                <XAxis dataKey="month" tickLine={false} axisLine={false} tick={{ fontSize: 11 }} />
-                <YAxis allowDecimals={false} tickLine={false} axisLine={false} tick={{ fontSize: 11 }} width={28} />
-                <Bar dataKey="count" fill="#6366f1" radius={[4, 4, 0, 0]} />
-                <ChartTooltip cursor={{ fill: "hsl(var(--muted-foreground))", opacity: 0.08 }} content={({ active, payload }) => {
-                  if (!active || !payload?.length) return null;
-                  const d = payload[0].payload;
-                  return (
-                    <div className="rounded-lg border bg-background px-3 py-2 shadow-md">
-                      <p className="text-xs text-muted-foreground">{d.month}</p>
-                      <p className="text-sm font-semibold">{d.count} insurance{d.count !== 1 ? "s" : ""}</p>
-                    </div>
-                  );
-                }} />
-              </BarChart>
-            </ChartContainer>
-          </div>
-
-          {/* Policy Status Radial */}
-          <div className="rounded-lg border border-border/60 bg-card/50 p-4">
-            <div className="flex items-center gap-1.5 mb-3">
-              <h3 className="text-sm font-medium">Policy Status</h3>
-              <Tooltip>
-                <TooltipTrigger><Info className="h-3.5 w-3.5 text-muted-foreground" /></TooltipTrigger>
-                <TooltipContent>Percentage of active policies</TooltipContent>
-              </Tooltip>
-            </div>
-            <ChartContainer config={statusRadialConfig} className="h-[180px] w-full">
-              <RadialBarChart
-                innerRadius="70%"
-                outerRadius="100%"
-                data={[{ rate: statusRadialData.rate, fill: "#22c55e" }]}
-                startAngle={180}
-                endAngle={0}
-                cx="50%"
-                cy="65%"
-              >
-                <PolarAngleAxis type="number" domain={[0, 100]} angleAxisId={0} tick={false} />
-                <RadialBar background dataKey="rate" cornerRadius={6} />
-                <text x="50%" y="55%" textAnchor="middle" dominantBaseline="middle" className="fill-foreground text-2xl font-bold">
-                  {statusRadialData.rate}%
-                </text>
-                <text x="50%" y="70%" textAnchor="middle" className="fill-muted-foreground text-xs">
-                  {statusRadialData.active}/{statusRadialData.total} active
-                </text>
-              </RadialBarChart>
-            </ChartContainer>
-          </div>
-
-          {/* Top Customers */}
-          <div className="rounded-lg border border-border/60 bg-card/50 p-4">
-            <div className="flex items-center gap-1.5 mb-3">
-              <h3 className="text-sm font-medium">Top Customers</h3>
-              <Tooltip>
-                <TooltipTrigger><Info className="h-3.5 w-3.5 text-muted-foreground" /></TooltipTrigger>
-                <TooltipContent>Customers with most insurance documents</TooltipContent>
-              </Tooltip>
-            </div>
-            {topCustomersData.length > 0 ? (
-              <ChartContainer config={{ count: { label: "Insurances", color: "#6366f1" } }} className="h-[180px] w-full">
-                <BarChart data={topCustomersData} layout="vertical" margin={{ left: 0, right: 8 }}>
-                  <CartesianGrid horizontal={false} strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                  <XAxis type="number" allowDecimals={false} tickLine={false} axisLine={false} tick={{ fontSize: 11 }} />
-                  <YAxis type="category" dataKey="name" tickLine={false} axisLine={false} tick={{ fontSize: 11 }} width={80} />
-                  <Bar dataKey="count" fill="#6366f1" radius={[0, 4, 4, 0]} />
-                  <ChartTooltip cursor={{ fill: "hsl(var(--muted-foreground))", opacity: 0.08 }} content={({ active, payload }) => {
-                    if (!active || !payload?.length) return null;
-                    const d = payload[0].payload;
-                    return (
-                      <div className="rounded-lg border bg-background px-3 py-2 shadow-md">
-                        <p className="text-sm font-medium">{d.fullName}</p>
-                        <p className="text-sm text-muted-foreground">{d.count} insurance{d.count !== 1 ? "s" : ""}</p>
-                      </div>
-                    );
-                  }} />
-                </BarChart>
-              </ChartContainer>
-            ) : (
-              <p className="text-sm text-muted-foreground text-center py-10">No data</p>
-            )}
-          </div>
-        </div>
-      </TooltipProvider>
-
       {/* Insurance Table */}
       {paginatedDocuments.length === 0 ? (
         <EmptyState
@@ -437,8 +487,9 @@ export default function InsurancesList() {
         <>
           <Card>
             <CardContent className="p-0">
+              <div className="max-h-[calc(100vh-380px)] min-h-[300px] overflow-auto relative">
               <Table>
-                <TableHeader>
+                <TableHeader className="sticky top-0 z-10 bg-background">
                   <TableRow>
                     <TableHead>Document Name</TableHead>
                     <TableHead>Customer</TableHead>
@@ -507,6 +558,7 @@ export default function InsurancesList() {
                   ))}
                 </TableBody>
               </Table>
+              </div>
             </CardContent>
           </Card>
 

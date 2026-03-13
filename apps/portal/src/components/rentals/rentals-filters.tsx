@@ -66,7 +66,7 @@ export const RentalsFilters = ({ filters, onFiltersChange, onClearFilters }: Ren
   return (
     <div>
       <div className="flex flex-wrap gap-3 items-center">
-        <div className="relative w-full sm:w-[320px]">
+        <div className="relative flex-1 min-w-[200px] sm:max-w-[400px]">
           <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
           <Input
             placeholder="Search customer, reg, rental #..."

@@ -5,38 +5,16 @@ import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { ChartContainer, ChartTooltip, type ChartConfig } from "@/components/ui/chart";
-import {
-  BarChart, Bar, PieChart, Pie, Cell, CartesianGrid, XAxis, YAxis,
-  RadialBarChart, RadialBar, PolarAngleAxis,
-} from "recharts";
-import { FileSignature, Download, ExternalLink, Info } from "lucide-react";
+import { FileSignature, Download, ExternalLink, Loader2, Search, BarChart3 } from "lucide-react";
 import { EmptyState } from "@/components/shared/data-display/empty-state";
-import { format, subMonths, startOfMonth } from "date-fns";
-import { useState, useMemo } from "react";
+import { format } from "date-fns";
+import { useState, useMemo, useCallback } from "react";
 import { useTenant } from "@/contexts/TenantContext";
 import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
-
-// --- Chart configs ---
-const TYPE_COLORS: Record<string, string> = {
-  "Original": "#6366f1",
-  "Extension": "#8b5cf6",
-  "Signed": "#22c55e",
-};
-
-const typeChartConfig = Object.fromEntries(
-  Object.entries(TYPE_COLORS).map(([k, v]) => [k, { label: k, color: v }])
-) as ChartConfig;
-
-const monthlyConfig: ChartConfig = {
-  count: { label: "Agreements", color: "#6366f1" },
-};
-
-const signedRadialConfig: ChartConfig = {
-  rate: { label: "Signed", color: "#22c55e" },
-};
+import Link from "next/link";
+import JSZip from "jszip";
+import { jsPDF } from "jspdf";
 
 interface AgreementDoc {
   id: string;
@@ -57,6 +35,7 @@ export default function AgreementsList() {
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize] = useState(25);
   const { tenant } = useTenant();
+  const [isDownloadingAll, setIsDownloadingAll] = useState(false);
 
   // Fetch signed agreements from customer_documents
   const { data: signedAgreements = [], isLoading: isLoadingSigned } = useQuery({
@@ -217,50 +196,159 @@ export default function AgreementsList() {
     window.open(publicUrl, "_blank");
   };
 
-  // --- Chart data ---
-  const typeDonutData = useMemo(() => {
-    const original = allAgreements.filter(d => d.agreementType === "original").length;
-    const extension = allAgreements.filter(d => d.agreementType === "extension").length;
-    const signed = allAgreements.filter(d => d.agreementType === "signed").length;
-    return [
-      { name: "Original", value: original, fill: TYPE_COLORS["Original"] },
-      { name: "Extension", value: extension, fill: TYPE_COLORS["Extension"] },
-      { name: "Signed", value: signed, fill: TYPE_COLORS["Signed"] },
-    ].filter(d => d.value > 0);
-  }, [allAgreements]);
+  const generateAgreementPdf = (doc: AgreementDoc, index: number): { blob: Blob; fileName: string } => {
+    const pdf = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
+    const pageWidth = pdf.internal.pageSize.getWidth();
+    const margin = 20;
+    let y = 25;
 
-  const monthlyData = useMemo(() => {
-    const now = new Date();
-    const months: { month: string; count: number }[] = [];
-    for (let i = 5; i >= 0; i--) {
-      const d = subMonths(now, i);
-      const key = format(startOfMonth(d), "yyyy-MM");
-      const label = format(d, "MMM");
-      const count = allAgreements.filter((doc) => doc.created_at?.startsWith(key)).length;
-      months.push({ month: label, count });
+    const companyName = tenant?.company_name || tenant?.slug || "Drive247";
+    pdf.setFontSize(18);
+    pdf.setFont("helvetica", "bold");
+    pdf.text(companyName, margin, y);
+    y += 8;
+    pdf.setFontSize(10);
+    pdf.setFont("helvetica", "normal");
+    pdf.setTextColor(100);
+    pdf.text("Agreement Record", margin, y);
+    y += 4;
+
+    pdf.setDrawColor(200);
+    pdf.setLineWidth(0.5);
+    pdf.line(margin, y, pageWidth - margin, y);
+    y += 12;
+
+    const addRow = (label: string, value: string) => {
+      if (!value || value === "—") return;
+      pdf.setFontSize(9);
+      pdf.setFont("helvetica", "bold");
+      pdf.setTextColor(100);
+      pdf.text(label, margin, y);
+      pdf.setFontSize(10);
+      pdf.setFont("helvetica", "normal");
+      pdf.setTextColor(40);
+      pdf.text(value, margin + 50, y);
+      y += 7;
+    };
+
+    pdf.setFontSize(12);
+    pdf.setFont("helvetica", "bold");
+    pdf.setTextColor(40);
+    pdf.text("Agreement Details", margin, y);
+    y += 9;
+
+    addRow("Agreement Name", doc.document_name);
+    addRow("Customer", doc.customers?.name || "Unknown");
+    addRow("Created", format(new Date(doc.created_at), "MMM dd, yyyy HH:mm"));
+    addRow("Type", doc.agreementType === "original" ? "Original Rental Agreement" : doc.agreementType === "extension" ? "Extension Agreement" : "Signed Agreement");
+    addRow("Status", doc.isRentalAgreement ? "Pending Signature" : "Signed");
+    if (doc.document_type) addRow("Document Type", doc.document_type);
+
+    // For rental agreements, look up extra rental details
+    if (doc.isRentalAgreement && doc.agreementType === "original") {
+      const rental = rentalAgreements.find((r: any) => r.id === doc.id);
+      if (rental) {
+        y += 5;
+        pdf.setDrawColor(200);
+        pdf.line(margin, y, pageWidth - margin, y);
+        y += 10;
+        pdf.setFontSize(12);
+        pdf.setFont("helvetica", "bold");
+        pdf.setTextColor(40);
+        pdf.text("Rental Details", margin, y);
+        y += 9;
+
+        const vehicle = (rental as any).vehicles;
+        if (vehicle) addRow("Vehicle", `${vehicle.reg} - ${vehicle.make} ${vehicle.model}`);
+        addRow("Document Status", (rental as any).document_status || "Pending");
+      }
     }
-    return months;
-  }, [allAgreements]);
 
-  const signedRadialData = useMemo(() => {
-    const signed = allAgreements.filter(d => d.agreementType === "signed").length;
-    const pending = allAgreements.filter(d => d.isRentalAgreement).length;
-    const total = signed + pending;
-    const rate = total > 0 ? Math.round((signed / total) * 100) : 0;
-    return { rate, signed, total, pending };
-  }, [allAgreements]);
+    if (doc.isRentalAgreement && doc.agreementType === "extension") {
+      const ext = extensionAgreements.find((a: any) => a.id === doc.id);
+      if (ext) {
+        y += 5;
+        pdf.setDrawColor(200);
+        pdf.line(margin, y, pageWidth - margin, y);
+        y += 10;
+        pdf.setFontSize(12);
+        pdf.setFont("helvetica", "bold");
+        pdf.setTextColor(40);
+        pdf.text("Extension Details", margin, y);
+        y += 9;
 
-  const topCustomersData = useMemo(() => {
-    const counts: Record<string, number> = {};
-    allAgreements.forEach((doc) => {
-      const name = doc.customers?.name || "Unknown";
-      counts[name] = (counts[name] || 0) + 1;
-    });
-    return Object.entries(counts)
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, 5)
-      .map(([name, count]) => ({ name: name.length > 12 ? name.slice(0, 12) + "…" : name, count, fullName: name }));
-  }, [allAgreements]);
+        const vehicle = (ext as any).rentals?.vehicles;
+        if (vehicle) addRow("Vehicle", `${vehicle.reg} - ${vehicle.make} ${vehicle.model}`);
+        addRow("Agreement Type", "Extension");
+        addRow("Document Status", (ext as any).document_status || "Pending");
+      }
+    }
+
+    // Footer
+    y = pdf.internal.pageSize.getHeight() - 15;
+    pdf.setFontSize(8);
+    pdf.setFont("helvetica", "normal");
+    pdf.setTextColor(150);
+    pdf.text(`Generated on ${format(new Date(), "MMM dd, yyyy HH:mm")} by ${companyName}`, margin, y);
+    pdf.text(`Record ${index + 1}`, pageWidth - margin - 20, y);
+
+    const customerName = (doc.customers?.name || "Unknown").replace(/[^a-zA-Z0-9-_ ]/g, "_");
+    const docName = doc.document_name.replace(/[^a-zA-Z0-9-_ ]/g, "_").slice(0, 50);
+    const fileName = `${customerName}_${docName}.pdf`;
+
+    return { blob: pdf.output("blob"), fileName };
+  };
+
+  const handleDownloadAll = useCallback(async () => {
+    if (allAgreements.length === 0) {
+      toast.error("No agreement records to download");
+      return;
+    }
+
+    setIsDownloadingAll(true);
+    const folderName = `${(tenant?.company_name || tenant?.slug || "tenant").replace(/[^a-zA-Z0-9-_ ]/g, "")}_Agreements`;
+
+    try {
+      const zip = new JSZip();
+      const folder = zip.folder(folderName)!;
+      const usedNames = new Set<string>();
+
+      const getUniqueName = (baseName: string) => {
+        let name = baseName;
+        let counter = 1;
+        while (usedNames.has(name)) {
+          const stem = baseName.slice(0, baseName.lastIndexOf("."));
+          const ext = baseName.slice(baseName.lastIndexOf("."));
+          name = `${stem} (${counter})${ext}`;
+          counter++;
+        }
+        usedNames.add(name);
+        return name;
+      };
+
+      for (let i = 0; i < allAgreements.length; i++) {
+        const { blob, fileName } = generateAgreementPdf(allAgreements[i], i);
+        folder.file(getUniqueName(fileName), blob);
+      }
+
+      const content = await zip.generateAsync({ type: "blob" });
+      const url = URL.createObjectURL(content);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `${folderName}.zip`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+
+      toast.success(`Downloaded ${allAgreements.length} agreement records as PDFs`);
+    } catch (error) {
+      console.error("Download all error:", error);
+      toast.error("Failed to create download archive");
+    } finally {
+      setIsDownloadingAll(false);
+    }
+  }, [allAgreements, rentalAgreements, extensionAgreements, tenant]);
 
   if (isLoading) {
     return (
@@ -274,167 +362,78 @@ export default function AgreementsList() {
   return (
     <div className="container mx-auto p-6 space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex justify-between items-start">
         <div>
           <h1 className="text-3xl font-bold">Agreements</h1>
-          <p className="text-muted-foreground">
-            All rental agreements and signed documents
-          </p>
+          <p className="text-muted-foreground">Manage rental agreements and signed documents</p>
         </div>
+        <div className="flex items-center gap-2">
+          {allAgreements.length > 0 && (
+            <Link href="/agreements/analytics">
+              <Button variant="outline" size="icon" className="border-primary/20 hover:border-primary/40 hover:bg-primary/5">
+                <BarChart3 className="h-4 w-4" />
+              </Button>
+            </Link>
+          )}
+          <Button
+            onClick={handleDownloadAll}
+            disabled={isDownloadingAll || allAgreements.length === 0}
+            className="bg-gradient-primary"
+          >
+            {isDownloadingAll ? (
+              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+            ) : (
+              <Download className="h-4 w-4 mr-2" />
+            )}
+            Export PDFs
+          </Button>
+        </div>
+      </div>
+
+      {/* Stat Cards */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <Card className="bg-gradient-to-br from-indigo-500/10 to-indigo-500/5 border-indigo-500/20">
+          <CardContent className="p-4">
+            <p className="text-sm font-medium text-muted-foreground">Total Agreements</p>
+            <p className="text-2xl font-bold mt-1">{allAgreements.length}</p>
+            <p className="text-xs text-muted-foreground mt-1">All agreement types</p>
+          </CardContent>
+        </Card>
+        <Card className="bg-gradient-to-br from-violet-500/10 to-violet-500/5 border-violet-500/20">
+          <CardContent className="p-4">
+            <p className="text-sm font-medium text-muted-foreground">Original</p>
+            <p className="text-2xl font-bold mt-1">{rentalAgreements.length}</p>
+            <p className="text-xs text-muted-foreground mt-1">Rental agreements</p>
+          </CardContent>
+        </Card>
+        <Card className="bg-gradient-to-br from-cyan-500/10 to-cyan-500/5 border-cyan-500/20">
+          <CardContent className="p-4">
+            <p className="text-sm font-medium text-muted-foreground">Extensions</p>
+            <p className="text-2xl font-bold mt-1">{extensionAgreements.length}</p>
+            <p className="text-xs text-muted-foreground mt-1">Extension agreements</p>
+          </CardContent>
+        </Card>
+        <Card className="bg-gradient-to-br from-green-500/10 to-green-500/5 border-green-500/20">
+          <CardContent className="p-4">
+            <p className="text-sm font-medium text-muted-foreground">Signed</p>
+            <p className="text-2xl font-bold mt-1">{signedAgreements.length}</p>
+            <p className="text-xs text-muted-foreground mt-1">Completed signatures</p>
+          </CardContent>
+        </Card>
       </div>
 
       {/* Search */}
-      <div className="flex items-center gap-3">
-        <Input
-          placeholder="Search by agreement name or customer..."
-          value={searchQuery}
-          onChange={(e) => handleSearchChange(e.target.value)}
-          className="flex-1"
-        />
-      </div>
-
-      {/* Charts */}
-      <TooltipProvider>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-          {/* Agreement Types Donut */}
-          <div className="rounded-lg border border-border/60 bg-card/50 p-4">
-            <div className="flex items-center gap-1.5 mb-3">
-              <h3 className="text-sm font-medium">Agreement Types</h3>
-              <Tooltip>
-                <TooltipTrigger><Info className="h-3.5 w-3.5 text-muted-foreground" /></TooltipTrigger>
-                <TooltipContent>Original vs Extension vs Signed agreements</TooltipContent>
-              </Tooltip>
-            </div>
-            {typeDonutData.length > 0 ? (
-              <ChartContainer config={typeChartConfig} className="h-[180px] w-full">
-                <PieChart>
-                  <Pie data={typeDonutData} dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius={45} outerRadius={70} paddingAngle={2}>
-                    {typeDonutData.map((entry) => (
-                      <Cell key={entry.name} fill={entry.fill} />
-                    ))}
-                  </Pie>
-                  <ChartTooltip content={({ active, payload }) => {
-                    if (!active || !payload?.length) return null;
-                    const d = payload[0].payload;
-                    return (
-                      <div className="rounded-lg border bg-background px-3 py-2 shadow-md">
-                        <div className="flex items-center gap-2">
-                          <span className="h-2.5 w-2.5 rounded-full" style={{ background: d.fill }} />
-                          <span className="text-sm font-medium">{d.name}</span>
-                        </div>
-                        <p className="text-sm text-muted-foreground mt-0.5">{d.value} agreement{d.value !== 1 ? "s" : ""}</p>
-                      </div>
-                    );
-                  }} />
-                </PieChart>
-              </ChartContainer>
-            ) : (
-              <p className="text-sm text-muted-foreground text-center py-10">No data</p>
-            )}
-            <div className="flex flex-wrap gap-x-3 gap-y-1 mt-2">
-              {typeDonutData.map((d) => (
-                <div key={d.name} className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                  <span className="h-2 w-2 rounded-full" style={{ background: d.fill }} />
-                  {d.name}
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* Monthly Agreements */}
-          <div className="rounded-lg border border-border/60 bg-card/50 p-4">
-            <div className="flex items-center gap-1.5 mb-3">
-              <h3 className="text-sm font-medium">Monthly Agreements</h3>
-              <Tooltip>
-                <TooltipTrigger><Info className="h-3.5 w-3.5 text-muted-foreground" /></TooltipTrigger>
-                <TooltipContent>Agreements over last 6 months</TooltipContent>
-              </Tooltip>
-            </div>
-            <ChartContainer config={monthlyConfig} className="h-[180px] w-full">
-              <BarChart data={monthlyData}>
-                <CartesianGrid vertical={false} strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                <XAxis dataKey="month" tickLine={false} axisLine={false} tick={{ fontSize: 11 }} />
-                <YAxis allowDecimals={false} tickLine={false} axisLine={false} tick={{ fontSize: 11 }} width={28} />
-                <Bar dataKey="count" fill="#6366f1" radius={[4, 4, 0, 0]} />
-                <ChartTooltip cursor={{ fill: "hsl(var(--muted-foreground))", opacity: 0.08 }} content={({ active, payload }) => {
-                  if (!active || !payload?.length) return null;
-                  const d = payload[0].payload;
-                  return (
-                    <div className="rounded-lg border bg-background px-3 py-2 shadow-md">
-                      <p className="text-xs text-muted-foreground">{d.month}</p>
-                      <p className="text-sm font-semibold">{d.count} agreement{d.count !== 1 ? "s" : ""}</p>
-                    </div>
-                  );
-                }} />
-              </BarChart>
-            </ChartContainer>
-          </div>
-
-          {/* Signature Rate Radial */}
-          <div className="rounded-lg border border-border/60 bg-card/50 p-4">
-            <div className="flex items-center gap-1.5 mb-3">
-              <h3 className="text-sm font-medium">Signature Rate</h3>
-              <Tooltip>
-                <TooltipTrigger><Info className="h-3.5 w-3.5 text-muted-foreground" /></TooltipTrigger>
-                <TooltipContent>Percentage of agreements that are signed</TooltipContent>
-              </Tooltip>
-            </div>
-            <ChartContainer config={signedRadialConfig} className="h-[180px] w-full">
-              <RadialBarChart
-                innerRadius="70%"
-                outerRadius="100%"
-                data={[{ rate: signedRadialData.rate, fill: "#22c55e" }]}
-                startAngle={180}
-                endAngle={0}
-                cx="50%"
-                cy="65%"
-              >
-                <PolarAngleAxis type="number" domain={[0, 100]} angleAxisId={0} tick={false} />
-                <RadialBar background dataKey="rate" cornerRadius={6} />
-                <text x="50%" y="55%" textAnchor="middle" dominantBaseline="middle" className="fill-foreground text-2xl font-bold">
-                  {signedRadialData.rate}%
-                </text>
-                <text x="50%" y="70%" textAnchor="middle" className="fill-muted-foreground text-xs">
-                  {signedRadialData.signed}/{signedRadialData.total} signed
-                </text>
-              </RadialBarChart>
-            </ChartContainer>
-          </div>
-
-          {/* Top Customers */}
-          <div className="rounded-lg border border-border/60 bg-card/50 p-4">
-            <div className="flex items-center gap-1.5 mb-3">
-              <h3 className="text-sm font-medium">Top Customers</h3>
-              <Tooltip>
-                <TooltipTrigger><Info className="h-3.5 w-3.5 text-muted-foreground" /></TooltipTrigger>
-                <TooltipContent>Customers with most agreements</TooltipContent>
-              </Tooltip>
-            </div>
-            {topCustomersData.length > 0 ? (
-              <ChartContainer config={{ count: { label: "Agreements", color: "#6366f1" } }} className="h-[180px] w-full">
-                <BarChart data={topCustomersData} layout="vertical" margin={{ left: 0, right: 8 }}>
-                  <CartesianGrid horizontal={false} strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                  <XAxis type="number" allowDecimals={false} tickLine={false} axisLine={false} tick={{ fontSize: 11 }} />
-                  <YAxis type="category" dataKey="name" tickLine={false} axisLine={false} tick={{ fontSize: 11 }} width={80} />
-                  <Bar dataKey="count" fill="#6366f1" radius={[0, 4, 4, 0]} />
-                  <ChartTooltip cursor={{ fill: "hsl(var(--muted-foreground))", opacity: 0.08 }} content={({ active, payload }) => {
-                    if (!active || !payload?.length) return null;
-                    const d = payload[0].payload;
-                    return (
-                      <div className="rounded-lg border bg-background px-3 py-2 shadow-md">
-                        <p className="text-sm font-medium">{d.fullName}</p>
-                        <p className="text-sm text-muted-foreground">{d.count} agreement{d.count !== 1 ? "s" : ""}</p>
-                      </div>
-                    );
-                  }} />
-                </BarChart>
-              </ChartContainer>
-            ) : (
-              <p className="text-sm text-muted-foreground text-center py-10">No data</p>
-            )}
-          </div>
+      <div className="flex flex-wrap gap-3 items-center">
+        <div className="relative flex-1 min-w-[200px]">
+          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
+          <Input
+            placeholder="Search by agreement name or customer..."
+            value={searchQuery}
+            onChange={(e) => handleSearchChange(e.target.value)}
+            className="pl-10 h-8 text-sm"
+          />
         </div>
-      </TooltipProvider>
+      </div>
 
       {/* Agreements Table */}
       {paginatedDocuments.length === 0 ? (
@@ -449,8 +448,9 @@ export default function AgreementsList() {
         <>
           <Card>
             <CardContent className="p-0">
+              <div className="max-h-[calc(100vh-380px)] min-h-[300px] overflow-auto relative">
               <Table>
-                <TableHeader>
+                <TableHeader className="sticky top-0 z-10 bg-background">
                   <TableRow>
                     <TableHead>Agreement Name</TableHead>
                     <TableHead>Customer</TableHead>
@@ -506,6 +506,7 @@ export default function AgreementsList() {
                   ))}
                 </TableBody>
               </Table>
+              </div>
             </CardContent>
           </Card>
 

@@ -4,11 +4,10 @@ import { useState, useEffect } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar as CalendarComponent } from "@/components/ui/calendar";
 import { format } from "date-fns";
-import { Search, Calendar, X } from "lucide-react";
+import { Search, Calendar, X, ChevronDown } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface FineFiltersProps {
@@ -19,7 +18,7 @@ export interface FineFilterState {
   status: string[];
   vehicleSearch: string;
   customerSearch: string;
-  search?: string; // Unified search
+  search?: string;
   issueDateFrom?: Date;
   issueDateTo?: Date;
   dueDateFrom?: Date;
@@ -44,10 +43,9 @@ export const FineFilters = ({ onFiltersChange }: FineFiltersProps) => {
   });
 
   const [localSearch, setLocalSearch] = useState(filters.search || '');
-  const [issueDateFromOpen, setIssueDateFromOpen] = useState(false);
-  const [issueDateToOpen, setIssueDateToOpen] = useState(false);
-  const [dueDateFromOpen, setDueDateFromOpen] = useState(false);
-  const [dueDateToOpen, setDueDateToOpen] = useState(false);
+  const [statusOpen, setStatusOpen] = useState(false);
+  const [issueDateOpen, setIssueDateOpen] = useState(false);
+  const [dueDateOpen, setDueDateOpen] = useState(false);
 
   // Debounce search
   useEffect(() => {
@@ -59,7 +57,6 @@ export const FineFilters = ({ onFiltersChange }: FineFiltersProps) => {
     return () => clearTimeout(timer);
   }, [localSearch]);
 
-  // Sync local search when filters change externally
   useEffect(() => {
     setLocalSearch(filters.search || '');
   }, [filters.search]);
@@ -69,9 +66,7 @@ export const FineFilters = ({ onFiltersChange }: FineFiltersProps) => {
     setFilters(newFilters);
     onFiltersChange(newFilters);
 
-    // Update URL params
     const newSearchParams = new URLSearchParams(searchParams?.toString() || "");
-
     if (Array.isArray(value)) {
       newSearchParams.delete(key);
       value.forEach(v => newSearchParams.append(key, v));
@@ -84,7 +79,6 @@ export const FineFilters = ({ onFiltersChange }: FineFiltersProps) => {
     } else {
       newSearchParams.delete(key);
     }
-
     router.push(`?${newSearchParams.toString()}`, { scroll: false });
   };
 
@@ -101,7 +95,6 @@ export const FineFilters = ({ onFiltersChange }: FineFiltersProps) => {
     router.push("?", { scroll: false });
   };
 
-  // Helper to fix timezone issues with date picker
   const normalizeDate = (date: Date | undefined) => {
     if (!date) return undefined;
     return new Date(date.getFullYear(), date.getMonth(), date.getDate(), 12, 0, 0);
@@ -115,160 +108,201 @@ export const FineFilters = ({ onFiltersChange }: FineFiltersProps) => {
     filters.dueDateTo ||
     filters.quickFilter;
 
+  const hasIssueDateFilter = filters.issueDateFrom || filters.issueDateTo;
+  const hasDueDateFilter = filters.dueDateFrom || filters.dueDateTo;
+
+  const statusOptions = [
+    { value: 'Open', label: 'Open' },
+    { value: 'Charged', label: 'Charged' },
+    { value: 'Waived', label: 'Waived' },
+    { value: 'Appealed', label: 'Appealed' },
+    { value: 'Paid', label: 'Paid' },
+  ];
+
+  const activeStatusLabel = filters.status.length === 1
+    ? statusOptions.find(s => s.value === filters.status[0])?.label
+    : filters.status.length > 1
+    ? `${filters.status.length} selected`
+    : undefined;
+
   return (
-    <div className="space-y-4">
-      {/* Search and main filters */}
-      <div className="flex flex-wrap gap-4 items-center">
-        <div className="relative flex-1 min-w-[200px] sm:min-w-[300px]">
+    <div>
+      <div className="flex flex-wrap gap-3 items-center">
+        {/* Search */}
+        <div className="relative flex-1 min-w-[200px]">
           <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
           <Input
             placeholder="Search by reference, vehicle, or customer..."
             value={localSearch}
             onChange={(e) => setLocalSearch(e.target.value)}
-            className="pl-10"
+            className="pl-10 h-8 text-sm"
           />
         </div>
 
-        <Select
-          value={filters.status.length === 1 ? filters.status[0] : "all"}
-          onValueChange={(value) => updateFilter('status', value === 'all' ? [] : [value])}
-        >
-          <SelectTrigger className="w-full sm:w-[140px]">
-            <SelectValue placeholder="Status" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All Status</SelectItem>
-            <SelectItem value="Open">Open</SelectItem>
-            <SelectItem value="Charged">Charged</SelectItem>
-            <SelectItem value="Waived">Waived</SelectItem>
-            <SelectItem value="Appealed">Appealed</SelectItem>
-            <SelectItem value="Paid">Paid</SelectItem>
-          </SelectContent>
-        </Select>
-      </div>
-
-      {/* Date filters row */}
-      <div className="flex flex-wrap gap-4 items-center">
-        <div className="flex gap-2 items-center">
-          <span className="text-sm text-muted-foreground whitespace-nowrap">Issue Date:</span>
-
-          <Popover open={issueDateFromOpen} onOpenChange={setIssueDateFromOpen}>
+        {/* Status + Issue Date + Due Date grouped */}
+        <div className="flex items-center">
+          <Popover open={statusOpen} onOpenChange={setStatusOpen}>
             <PopoverTrigger asChild>
               <Button
                 variant="outline"
-                className={cn(
-                  "w-[110px] justify-start text-left font-normal",
-                  !filters.issueDateFrom && "text-muted-foreground"
-                )}
+                size="sm"
+                className={cn("gap-1.5 rounded-r-none border-r-0", filters.status.length > 0 && "border-primary")}
               >
-                <Calendar className="mr-2 h-4 w-4" />
-                {filters.issueDateFrom ? format(filters.issueDateFrom, "MMM dd") : "From"}
+                {filters.status.length > 0 ? (
+                  <span className="text-primary">{activeStatusLabel}</span>
+                ) : (
+                  "Status"
+                )}
+                <ChevronDown className="h-3 w-3 text-muted-foreground" />
               </Button>
             </PopoverTrigger>
-            <PopoverContent className="w-auto p-0" align="start">
-              <CalendarComponent
-                mode="single"
-                selected={filters.issueDateFrom}
-                onSelect={(date) => {
-                  updateFilter("issueDateFrom", normalizeDate(date));
-                  setIssueDateFromOpen(false);
-                }}
-                initialFocus
-                className="p-3 pointer-events-auto"
-              />
+            <PopoverContent className="w-auto p-2" align="start">
+              <div className="flex flex-col gap-1">
+                <button
+                  onClick={() => { updateFilter('status', []); setStatusOpen(false); }}
+                  className={cn(
+                    "inline-flex items-center gap-2 rounded-md px-3 py-1.5 text-sm font-medium transition-colors text-left",
+                    filters.status.length === 0 ? "bg-primary/10 text-primary" : "hover:bg-muted"
+                  )}
+                >
+                  All Status
+                </button>
+                {statusOptions.map(({ value, label }) => {
+                  const isActive = filters.status.includes(value);
+                  return (
+                    <button
+                      key={value}
+                      onClick={() => {
+                        updateFilter('status', isActive ? [] : [value]);
+                        setStatusOpen(false);
+                      }}
+                      className={cn(
+                        "inline-flex items-center gap-2 rounded-md px-3 py-1.5 text-sm font-medium transition-colors text-left",
+                        isActive ? "bg-primary/10 text-primary" : "hover:bg-muted"
+                      )}
+                    >
+                      {label}
+                    </button>
+                  );
+                })}
+              </div>
             </PopoverContent>
           </Popover>
 
-          <Popover open={issueDateToOpen} onOpenChange={setIssueDateToOpen}>
+          <Popover open={issueDateOpen} onOpenChange={setIssueDateOpen}>
             <PopoverTrigger asChild>
               <Button
                 variant="outline"
-                className={cn(
-                  "w-[110px] justify-start text-left font-normal",
-                  !filters.issueDateTo && "text-muted-foreground"
-                )}
+                size="sm"
+                className={cn("gap-1.5 rounded-none border-r-0", hasIssueDateFilter && "border-primary text-primary")}
               >
-                <Calendar className="mr-2 h-4 w-4" />
-                {filters.issueDateTo ? format(filters.issueDateTo, "MMM dd") : "To"}
+                {hasIssueDateFilter ? (
+                  <span className="text-primary text-xs">
+                    Issue: {filters.issueDateFrom ? format(filters.issueDateFrom, "MMM dd") : "..."} – {filters.issueDateTo ? format(filters.issueDateTo, "MMM dd") : "..."}
+                  </span>
+                ) : (
+                  <>Issue Date</>
+                )}
+                <Calendar className="h-3.5 w-3.5" />
               </Button>
             </PopoverTrigger>
-            <PopoverContent className="w-auto p-0" align="start">
-              <CalendarComponent
-                mode="single"
-                selected={filters.issueDateTo}
-                onSelect={(date) => {
-                  updateFilter("issueDateTo", normalizeDate(date));
-                  setIssueDateToOpen(false);
-                }}
-                initialFocus
-                className="p-3 pointer-events-auto"
-              />
+            <PopoverContent className="w-auto p-3" align="start">
+              <div className="flex gap-4">
+                <div className="space-y-1">
+                  <p className="text-xs font-medium text-muted-foreground">From</p>
+                  <CalendarComponent
+                    mode="single"
+                    selected={filters.issueDateFrom}
+                    onSelect={(date) => updateFilter("issueDateFrom", normalizeDate(date))}
+                    className="p-0 pointer-events-auto"
+                  />
+                </div>
+                <div className="space-y-1 border-l pl-4">
+                  <p className="text-xs font-medium text-muted-foreground">To</p>
+                  <CalendarComponent
+                    mode="single"
+                    selected={filters.issueDateTo}
+                    onSelect={(date) => updateFilter("issueDateTo", normalizeDate(date))}
+                    className="p-0 pointer-events-auto"
+                  />
+                </div>
+              </div>
+              {hasIssueDateFilter && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="w-full text-xs mt-2"
+                  onClick={() => {
+                    updateFilter("issueDateFrom", undefined);
+                    updateFilter("issueDateTo", undefined);
+                  }}
+                >
+                  Clear dates
+                </Button>
+              )}
+            </PopoverContent>
+          </Popover>
+
+          <Popover open={dueDateOpen} onOpenChange={setDueDateOpen}>
+            <PopoverTrigger asChild>
+              <Button
+                variant="outline"
+                size="sm"
+                className={cn("gap-1.5 rounded-l-none", hasDueDateFilter && "border-primary text-primary")}
+              >
+                {hasDueDateFilter ? (
+                  <span className="text-primary text-xs">
+                    Due: {filters.dueDateFrom ? format(filters.dueDateFrom, "MMM dd") : "..."} – {filters.dueDateTo ? format(filters.dueDateTo, "MMM dd") : "..."}
+                  </span>
+                ) : (
+                  <>Due Date</>
+                )}
+                <Calendar className="h-3.5 w-3.5" />
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-auto p-3" align="end">
+              <div className="flex gap-4">
+                <div className="space-y-1">
+                  <p className="text-xs font-medium text-muted-foreground">From</p>
+                  <CalendarComponent
+                    mode="single"
+                    selected={filters.dueDateFrom}
+                    onSelect={(date) => updateFilter("dueDateFrom", normalizeDate(date))}
+                    className="p-0 pointer-events-auto"
+                  />
+                </div>
+                <div className="space-y-1 border-l pl-4">
+                  <p className="text-xs font-medium text-muted-foreground">To</p>
+                  <CalendarComponent
+                    mode="single"
+                    selected={filters.dueDateTo}
+                    onSelect={(date) => updateFilter("dueDateTo", normalizeDate(date))}
+                    className="p-0 pointer-events-auto"
+                  />
+                </div>
+              </div>
+              {hasDueDateFilter && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="w-full text-xs mt-2"
+                  onClick={() => {
+                    updateFilter("dueDateFrom", undefined);
+                    updateFilter("dueDateTo", undefined);
+                  }}
+                >
+                  Clear dates
+                </Button>
+              )}
             </PopoverContent>
           </Popover>
         </div>
 
-        <div className="flex gap-2 items-center">
-          <span className="text-sm text-muted-foreground whitespace-nowrap">Due Date:</span>
-
-          <Popover open={dueDateFromOpen} onOpenChange={setDueDateFromOpen}>
-            <PopoverTrigger asChild>
-              <Button
-                variant="outline"
-                className={cn(
-                  "w-[110px] justify-start text-left font-normal",
-                  !filters.dueDateFrom && "text-muted-foreground"
-                )}
-              >
-                <Calendar className="mr-2 h-4 w-4" />
-                {filters.dueDateFrom ? format(filters.dueDateFrom, "MMM dd") : "From"}
-              </Button>
-            </PopoverTrigger>
-            <PopoverContent className="w-auto p-0" align="start">
-              <CalendarComponent
-                mode="single"
-                selected={filters.dueDateFrom}
-                onSelect={(date) => {
-                  updateFilter("dueDateFrom", normalizeDate(date));
-                  setDueDateFromOpen(false);
-                }}
-                initialFocus
-                className="p-3 pointer-events-auto"
-              />
-            </PopoverContent>
-          </Popover>
-
-          <Popover open={dueDateToOpen} onOpenChange={setDueDateToOpen}>
-            <PopoverTrigger asChild>
-              <Button
-                variant="outline"
-                className={cn(
-                  "w-[110px] justify-start text-left font-normal",
-                  !filters.dueDateTo && "text-muted-foreground"
-                )}
-              >
-                <Calendar className="mr-2 h-4 w-4" />
-                {filters.dueDateTo ? format(filters.dueDateTo, "MMM dd") : "To"}
-              </Button>
-            </PopoverTrigger>
-            <PopoverContent className="w-auto p-0" align="start">
-              <CalendarComponent
-                mode="single"
-                selected={filters.dueDateTo}
-                onSelect={(date) => {
-                  updateFilter("dueDateTo", normalizeDate(date));
-                  setDueDateToOpen(false);
-                }}
-                initialFocus
-                className="p-3 pointer-events-auto"
-              />
-            </PopoverContent>
-          </Popover>
-        </div>
-
+        {/* Clear All */}
         {hasActiveFilters && (
-          <Button variant="outline" onClick={clearFilters} className="gap-2">
-            <X className="h-4 w-4" />
-            Clear Filters
+          <Button variant="ghost" size="sm" onClick={clearFilters} className="h-8 gap-1 text-muted-foreground hover:text-foreground">
+            <X className="h-3.5 w-3.5" />
+            Clear
           </Button>
         )}
       </div>

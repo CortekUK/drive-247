@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useAuth, type AppUser } from '@/stores/auth-store';
 import { supabase } from '@/integrations/supabase/client';
@@ -30,7 +30,8 @@ import {
   AlertCircle,
   Plus,
   Users,
-  Settings2
+  Settings2,
+  Search
 } from 'lucide-react';
 import {
   DropdownMenu,
@@ -60,6 +61,8 @@ export default function UsersManagement() {
   const { tenant } = useTenant();
   const queryClient = useQueryClient();
   const { logAction } = useAuditLog();
+
+  const [searchQuery, setSearchQuery] = useState('');
 
   // Dialog states
   const [showAddDialog, setShowAddDialog] = useState(false);
@@ -353,6 +356,17 @@ export default function UsersManagement() {
     createUserMutation.mutate(data);
   };
 
+  const filteredUsers = useMemo(() => {
+    if (!users) return [];
+    if (!searchQuery.trim()) return users;
+    const query = searchQuery.toLowerCase();
+    return users.filter(
+      (user) =>
+        user.name?.toLowerCase().includes(query) ||
+        user.email?.toLowerCase().includes(query)
+    );
+  }, [users, searchQuery]);
+
   // Only head_admin can access this page
   if (!appUser || appUser.role !== 'head_admin') {
     return (
@@ -386,6 +400,17 @@ export default function UsersManagement() {
         </Button>
       </div>
 
+      {/* Search Bar */}
+      <div className="relative">
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+        <Input
+          placeholder="Search by name or email..."
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          className="pl-9 h-9"
+        />
+      </div>
+
       <Card>
         <CardHeader>
           <CardTitle>Team Members</CardTitle>
@@ -396,13 +421,14 @@ export default function UsersManagement() {
         <CardContent>
           {isLoading ? (
             <div className="text-center py-8">Loading users...</div>
-          ) : users?.length === 0 ? (
+          ) : filteredUsers.length === 0 ? (
             <div className="text-center py-8 text-muted-foreground">
-              No users found. Click "Add User" to create one.
+              {searchQuery ? "No users match your search." : 'No users found. Click "Add User" to create one.'}
             </div>
           ) : (
+            <div className="max-h-[calc(100vh-420px)] min-h-[200px] overflow-auto relative">
             <Table>
-              <TableHeader>
+              <TableHeader className="sticky top-0 z-10 bg-background">
                 <TableRow>
                   <TableHead>Name</TableHead>
                   <TableHead>Email</TableHead>
@@ -413,7 +439,7 @@ export default function UsersManagement() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {users?.map((user) => (
+                {filteredUsers.map((user) => (
                   <TableRow key={user.id}>
                     <TableCell className="font-medium">{user.name || 'N/A'}</TableCell>
                     <TableCell>{user.email}</TableCell>
@@ -503,6 +529,7 @@ export default function UsersManagement() {
                 ))}
               </TableBody>
             </Table>
+            </div>
           )}
         </CardContent>
       </Card>

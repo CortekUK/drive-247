@@ -2824,6 +2824,25 @@ const MultiStepBookingWidget = () => {
       }
     }
 
+    // Validate rental range doesn't span through globally blocked dates
+    if (formData.pickupDate && formData.dropoffDate) {
+      const pickupDate = parseDateString(formData.pickupDate);
+      const dropoffDate = parseDateString(formData.dropoffDate);
+      const globalBlocks = allBlockedDates.filter(b => !b.vehicle_id);
+      const overlappingBlock = globalBlocks.find(block => {
+        const blockStart = parseDateString(block.start_date);
+        const blockEnd = parseDateString(block.end_date);
+        return pickupDate <= blockEnd && dropoffDate >= blockStart;
+      });
+      if (overlappingBlock) {
+        const formatDate = (d: string) => {
+          const date = parseDateString(d);
+          return date.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+        };
+        newErrors.dropoffDate = `Your dates overlap with unavailable dates (${formatDate(overlappingBlock.start_date)} – ${formatDate(overlappingBlock.end_date)}). Please choose different dates.`;
+      }
+    }
+
     // Validate booking lead time (minimum advance notice)
     if (formData.pickupDate && formData.pickupTime) {
       const leadTimeHours = tenant?.booking_lead_time_hours ?? 24;
