@@ -2270,6 +2270,7 @@ export type Database = {
           liability: string | null
           notes: string | null
           reference_no: string | null
+          rental_id: string | null
           resolved_at: string | null
           status: string | null
           tenant_id: string | null
@@ -2289,6 +2290,7 @@ export type Database = {
           liability?: string | null
           notes?: string | null
           reference_no?: string | null
+          rental_id?: string | null
           resolved_at?: string | null
           status?: string | null
           tenant_id?: string | null
@@ -2308,6 +2310,7 @@ export type Database = {
           liability?: string | null
           notes?: string | null
           reference_no?: string | null
+          rental_id?: string | null
           resolved_at?: string | null
           status?: string | null
           tenant_id?: string | null
@@ -2343,6 +2346,27 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "view_fines_export"
             referencedColumns: ["customer_id"]
+          },
+          {
+            foreignKeyName: "fines_rental_id_fkey"
+            columns: ["rental_id"]
+            isOneToOne: false
+            referencedRelation: "rentals"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fines_rental_id_fkey"
+            columns: ["rental_id"]
+            isOneToOne: false
+            referencedRelation: "v_rental_credit"
+            referencedColumns: ["rental_id"]
+          },
+          {
+            foreignKeyName: "fines_rental_id_fkey"
+            columns: ["rental_id"]
+            isOneToOne: false
+            referencedRelation: "view_rentals_export"
+            referencedColumns: ["rental_id"]
           },
           {
             foreignKeyName: "fines_tenant_id_fkey"
@@ -2517,6 +2541,70 @@ export type Database = {
             columns: ["whitelisted_by"]
             isOneToOne: false
             referencedRelation: "app_users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      go_live_requests: {
+        Row: {
+          admin_note: string | null
+          created_at: string
+          id: string
+          integration_type: string
+          note: string | null
+          requested_by: string
+          reviewed_at: string | null
+          reviewed_by: string | null
+          status: string
+          tenant_id: string
+          updated_at: string
+        }
+        Insert: {
+          admin_note?: string | null
+          created_at?: string
+          id?: string
+          integration_type: string
+          note?: string | null
+          requested_by: string
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          status?: string
+          tenant_id: string
+          updated_at?: string
+        }
+        Update: {
+          admin_note?: string | null
+          created_at?: string
+          id?: string
+          integration_type?: string
+          note?: string | null
+          requested_by?: string
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          status?: string
+          tenant_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "go_live_requests_requested_by_fkey"
+            columns: ["requested_by"]
+            isOneToOne: false
+            referencedRelation: "app_users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "go_live_requests_reviewed_by_fkey"
+            columns: ["reviewed_by"]
+            isOneToOne: false
+            referencedRelation: "app_users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "go_live_requests_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
             referencedColumns: ["id"]
           },
         ]
@@ -3198,6 +3286,53 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "view_pl_by_vehicle"
             referencedColumns: ["vehicle_id"]
+          },
+        ]
+      }
+      knowledge_articles: {
+        Row: {
+          category: string
+          content: string
+          created_at: string | null
+          id: string
+          is_active: boolean | null
+          sort_order: number | null
+          tags: string[] | null
+          tenant_id: string | null
+          title: string
+          updated_at: string | null
+        }
+        Insert: {
+          category: string
+          content: string
+          created_at?: string | null
+          id?: string
+          is_active?: boolean | null
+          sort_order?: number | null
+          tags?: string[] | null
+          tenant_id?: string | null
+          title: string
+          updated_at?: string | null
+        }
+        Update: {
+          category?: string
+          content?: string
+          created_at?: string | null
+          id?: string
+          is_active?: boolean | null
+          sort_order?: number | null
+          tags?: string[] | null
+          tenant_id?: string | null
+          title?: string
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "knowledge_articles_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
           },
         ]
       }
@@ -8576,6 +8711,10 @@ export type Database = {
         }[]
       }
       get_pending_payments_count: { Args: never; Returns: number }
+      get_pending_rental_requests: {
+        Args: { p_tenant_id: string }
+        Returns: Json
+      }
       get_rag_metrics: { Args: { p_tenant_id: string }; Returns: Json }
       get_refunds_due_today: {
         Args: never
@@ -9005,3 +9144,4 @@ export const Constants = {
     },
   },
 } as const
+

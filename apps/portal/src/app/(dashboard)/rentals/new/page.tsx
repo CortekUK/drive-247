@@ -638,7 +638,7 @@ const CreateRental = () => {
   });
 
   // Derive verification state
-  const isCustomerVerified = customerVerification?.review_result === "GREEN";
+  const isCustomerVerified = customerVerification?.review_result === "GREEN" || customerDetails?.identity_verification_status === "manually_verified";
   const verificationPending = customerVerification?.status === "pending" || customerVerification?.review_status === "pending";
   const verificationMode = tenant?.integration_veriff !== false ? "veriff" : "ai";
 

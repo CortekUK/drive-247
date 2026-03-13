@@ -171,7 +171,8 @@ const MultiStepBookingWidget = () => {
   const isCustomerAlreadyVerified = customerVerification?.review_result === 'GREEN' ||
     customerVerification?.status === 'approved' ||
     customerVerification?.status === 'verified' ||
-    customerUser?.customer?.identity_verification_status === 'verified';
+    customerUser?.customer?.identity_verification_status === 'verified' ||
+    customerUser?.customer?.identity_verification_status === 'manually_verified';
   // Check if customer already has DOB in their profile
   const customerHasDOB = !!customerUser?.customer?.date_of_birth;
   // Check if customer already has timezone in their profile

@@ -134,10 +134,11 @@ const PendingBookings = () => {
   const getVerificationBadge = (status: string | null) => {
     switch (status) {
       case "verified":
+      case "manually_verified":
         return (
           <Badge className="bg-green-100 text-green-800 flex items-center gap-1">
             <Shield className="h-3 w-3" />
-            Verified
+            {status === "manually_verified" ? "Manually Verified" : "Verified"}
           </Badge>
         );
       case "pending":

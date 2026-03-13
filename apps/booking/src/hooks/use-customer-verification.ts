@@ -96,6 +96,7 @@ export function getVerificationStatusLabel(verification: IdentityVerification | 
     case 'GREEN':
     case 'approved':
     case 'verified':
+    case 'manually_verified':
       return { label: 'Verified', variant: 'default' };
     case 'RED':
     case 'rejected':
