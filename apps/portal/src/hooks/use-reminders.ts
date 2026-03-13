@@ -427,6 +427,74 @@ export function useReminderActions() {
   };
 }
 
+export interface CreateReminderInput {
+  title: string;
+  message?: string;
+  due_on: string;
+  remind_on: string;
+  severity: 'info' | 'warning' | 'critical';
+  object_type: 'Vehicle' | 'Rental' | 'Customer' | 'Fine' | 'Integration' | 'Document';
+}
+
+export function useCreateReminder() {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+  const { tenant } = useTenant();
+  const { logAction } = useAuditLog();
+
+  return useMutation({
+    mutationFn: async (input: CreateReminderInput) => {
+      if (!tenant?.id) throw new Error('No tenant context');
+
+      const { data, error } = await supabase
+        .from('reminders')
+        .insert({
+          rule_code: 'MANUAL',
+          object_type: input.object_type,
+          object_id: tenant.id,
+          title: input.title,
+          message: input.message || '',
+          due_on: input.due_on,
+          remind_on: input.remind_on,
+          severity: input.severity,
+          status: 'pending',
+          context: { manual: true },
+          tenant_id: tenant.id,
+        })
+        .select()
+        .single();
+
+      if (error) {
+        console.error('Failed to create reminder:', error);
+        throw new Error(`Failed to create reminder: ${error.message}`);
+      }
+
+      return data;
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['reminders'] });
+      queryClient.invalidateQueries({ queryKey: ['reminder-stats'] });
+      toast({
+        title: "Reminder Created",
+        description: "Your reminder has been saved successfully",
+      });
+      logAction({
+        action: "reminder_created",
+        entityType: "reminder",
+        entityId: data.id,
+        details: { title: data.title, severity: data.severity, object_type: data.object_type },
+      });
+    },
+    onError: (error) => {
+      toast({
+        title: "Error",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+}
+
 export function useReminderGeneration() {
   const queryClient = useQueryClient();
   const { toast } = useToast();

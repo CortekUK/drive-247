@@ -12,19 +12,33 @@ interface KeyHandoverActionBannerProps {
   customerName?: string;
   /** Vehicle info for context */
   vehicleInfo?: string;
+  /** Called when user clicks "Go to Section" — use to switch tabs before scrolling */
+  onGoToSection?: () => void;
 }
 
 export const KeyHandoverActionBanner = ({
   show,
   customerName,
   vehicleInfo,
+  onGoToSection,
 }: KeyHandoverActionBannerProps) => {
   const [dismissed, setDismissed] = useState(false);
 
   const handleScrollToSection = () => {
-    const section = document.getElementById('key-handover-section');
-    if (section) {
-      section.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    if (onGoToSection) {
+      onGoToSection();
+      // Wait for tab switch to render the section, then scroll
+      setTimeout(() => {
+        const section = document.getElementById('key-handover-section');
+        if (section) {
+          section.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+      }, 50);
+    } else {
+      const section = document.getElementById('key-handover-section');
+      if (section) {
+        section.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
     }
   };
 

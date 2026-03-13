@@ -324,7 +324,7 @@ export const BlockedDatesManager = ({ vehicle_id }: BlockedDatesManagerProps) =>
                         {isGeneralBlock ? (
                           <Badge variant="secondary" className="flex items-center gap-1 w-fit">
                             <Globe className="h-3 w-3" />
-                            General
+                            Global
                           </Badge>
                         ) : (
                           <Badge variant="outline" className="flex items-center gap-1 w-fit">
