@@ -28,6 +28,7 @@ import { KeyHandoverSection } from "@/components/rentals/key-handover-section";
 import { KeyHandoverActionBanner } from "@/components/rentals/key-handover-action-banner";
 import { MileageSummaryCard } from "@/components/rentals/mileage-summary-card";
 import { CancelRentalDialog } from "@/components/shared/dialogs/cancel-rental-dialog";
+import { AddFineDialog } from "@/components/fines/add-fine-dialog";
 import RejectionDialog from "@/components/rentals/rejection-dialog";
 import { ExtensionRequestDialog } from "@/components/rentals/ExtensionRequestDialog";
 import { AdminExtendRentalDialog } from "@/components/rentals/AdminExtendRentalDialog";
@@ -236,6 +237,7 @@ const RentalDetail = () => {
   const [showDocuSignWarning, setShowDocuSignWarning] = useState(false);
   const [showInsuranceWarning, setShowInsuranceWarning] = useState(false);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const [showAddFineDialog, setShowAddFineDialog] = useState(false);
   const [showCloseDialog, setShowCloseDialog] = useState(false);
   const [isApproving, setIsApproving] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
@@ -1146,8 +1148,11 @@ const RentalDetail = () => {
         invoiceOnlyOutstanding += remaining;
       }
     }
-    // Add open/charged fines to outstanding
-    return ledgerOutstanding + invoiceOnlyOutstanding + rentalFinesOpenAmount;
+    // Only add fines to outstanding if they're NOT already tracked in the ledger
+    // (ledgerOutstanding already includes Fine charges that have ledger entries with rental_id)
+    const finesInLedger = paymentBreakdown?.['Fine'] !== undefined;
+    const finesOutstanding = finesInLedger ? 0 : rentalFinesOpenAmount;
+    return ledgerOutstanding + invoiceOnlyOutstanding + finesOutstanding;
   }, [rentalTotals, categoryRemainingAmounts, paymentBreakdown, rentalFinesOpenAmount]);
 
   if (isLoading) {
@@ -1589,7 +1594,7 @@ const RentalDetail = () => {
                 <Plus className="h-4 w-4 mr-2" />
                 Add Payment
               </Button>
-              <Button variant="outline" onClick={() => router.push(`/fines/new?rental_id=${rental.id}&customer_id=${rental.customers?.id}&vehicle_id=${rental.vehicles?.id}`)}>
+              <Button variant="outline" onClick={() => setShowAddFineDialog(true)}>
                 <Plus className="h-4 w-4 mr-2" />
                 Add Fine
               </Button>
@@ -4741,6 +4746,16 @@ const RentalDetail = () => {
         onOpenChange={setShowRowReminder}
         defaultTitle={reminderRowTitle}
         defaultObjectType="Rental"
+      />
+
+      {/* Add Fine Dialog */}
+      <AddFineDialog
+        open={showAddFineDialog}
+        onOpenChange={setShowAddFineDialog}
+        preselectedCustomerId={rental?.customers?.id}
+        preselectedRentalId={rental?.id}
+        preselectedVehicleId={rental?.vehicles?.id}
+        preselectedVehicleReg={rental?.vehicles?.reg}
       />
     </div>
   );

@@ -137,23 +137,46 @@ export const RefundDialog = ({
           .single();
         if (!rental) throw new Error('Rental not found');
 
+        // Count existing Fine refunds for this rental to generate a unique due_date
+        // (ux_rental_charge_unique constrains on rental_id + due_date + type + category)
+        const { count: existingRefunds } = await supabase
+          .from('ledger_entries')
+          .select('id', { count: 'exact', head: true })
+          .eq('rental_id', rentalId)
+          .eq('type', 'Refund')
+          .eq('category', 'Fine');
+
+        const today = new Date();
+        // Offset the due_date by the number of existing refunds to ensure uniqueness
+        if (existingRefunds && existingRefunds > 0) {
+          today.setDate(today.getDate() + existingRefunds);
+        }
+        const dueDateStr = today.toISOString().split('T')[0];
+
         // Create a refund ledger entry
+        const insertData: Record<string, any> = {
+          rental_id: rentalId,
+          customer_id: rental.customer_id,
+          tenant_id: rental.tenant_id || tenant?.id,
+          entry_date: new Date().toISOString().split('T')[0],
+          due_date: dueDateStr,
+          type: 'Refund',
+          category: 'Fine',
+          amount: -Math.abs(finalRefundAmount),
+          remaining_amount: 0,
+          reference: `Fine Refund: ${data.reason}`,
+        };
+        if (rental.vehicle_id) {
+          insertData.vehicle_id = rental.vehicle_id;
+        }
+
         const { error: ledgerError } = await supabase
           .from('ledger_entries')
-          .insert({
-            rental_id: rentalId,
-            customer_id: rental.customer_id,
-            vehicle_id: rental.vehicle_id,
-            tenant_id: rental.tenant_id || tenant?.id,
-            entry_date: new Date().toISOString().split('T')[0],
-            due_date: new Date().toISOString().split('T')[0],
-            type: 'Refund',
-            category: 'Fine',
-            amount: -Math.abs(finalRefundAmount),
-            remaining_amount: 0,
-            reference: `Refund: ${data.reason}`,
-          });
-        if (ledgerError) throw new Error('Failed to create refund ledger entry');
+          .insert(insertData);
+        if (ledgerError) {
+          console.error('Ledger insert error:', ledgerError);
+          throw new Error(`Failed to create refund ledger entry: ${ledgerError.message}`);
+        }
       } else {
         // Call the process-refund edge function for all other categories
         const { data: result, error } = await supabase.functions.invoke('process-refund', {

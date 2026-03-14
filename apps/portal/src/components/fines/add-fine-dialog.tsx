@@ -54,9 +54,12 @@ interface AddFineDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   preselectedCustomerId?: string;
+  preselectedRentalId?: string;
+  preselectedVehicleId?: string;
+  preselectedVehicleReg?: string;
 }
 
-export const AddFineDialog = ({ open, onOpenChange, preselectedCustomerId }: AddFineDialogProps) => {
+export const AddFineDialog = ({ open, onOpenChange, preselectedCustomerId, preselectedRentalId, preselectedVehicleId, preselectedVehicleReg }: AddFineDialogProps) => {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const { tenant } = useTenant();
@@ -91,10 +94,10 @@ export const AddFineDialog = ({ open, onOpenChange, preselectedCustomerId }: Add
     if (open) {
       form.reset({
         type: "PCN",
-        rental_id: "",
-        vehicle_id: "",
+        rental_id: preselectedRentalId || "",
+        vehicle_id: preselectedVehicleId || "",
         customer_id: preselectedCustomerId || "",
-        reference_no: "",
+        reference_no: preselectedVehicleReg || "",
         issue_date: new Date(),
         due_date: new Date(new Date().getTime() + 28 * 24 * 60 * 60 * 1000),
         amount: undefined,
@@ -105,7 +108,7 @@ export const AddFineDialog = ({ open, onOpenChange, preselectedCustomerId }: Add
       setOtherTypeValue("");
       setSelectedCustomerId(preselectedCustomerId || "");
     }
-  }, [open, form, preselectedCustomerId]);
+  }, [open, form, preselectedCustomerId, preselectedRentalId, preselectedVehicleId, preselectedVehicleReg]);
 
   // Auto-update due date when issue date changes
   const handleIssueDateChange = (date: Date | undefined) => {
@@ -400,7 +403,7 @@ export const AddFineDialog = ({ open, onOpenChange, preselectedCustomerId }: Add
                           }
                         }}
                         value={field.value}
-                        disabled={!selectedCustomerId}
+                        disabled={!selectedCustomerId || !!preselectedRentalId}
                       >
                         <FormControl>
                           <SelectTrigger>
