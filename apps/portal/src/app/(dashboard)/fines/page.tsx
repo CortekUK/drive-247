@@ -9,7 +9,9 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import Link from "next/link";
 import { Checkbox } from "@/components/ui/checkbox";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { AlertTriangle, Plus, Eye, MoreVertical, CreditCard, Ban, ArrowUpDown, BarChart3 } from "lucide-react";
+import { AlertTriangle, Plus, Eye, MoreVertical, DollarSign, Ban, ArrowUpDown, BarChart3, Undo2 } from "lucide-react";
+import { AddPaymentDialog } from "@/components/shared/dialogs/add-payment-dialog";
+import { RefundDialog } from "@/components/shared/dialogs/refund-dialog";
 import { FineStatusBadge } from "@/components/shared/status/fine-status-badge";
 import { FineKPIs } from "@/components/fines/fine-kpis";
 import { FineFilters, FineFilterState } from "@/components/fines/fine-filters";
@@ -34,6 +36,8 @@ const FinesList = () => {
   const { tenant } = useTenant();
   const { canEdit } = useManagerPermissions();
   const [showAddFineDialog, setShowAddFineDialog] = useState(false);
+  const [paymentFine, setPaymentFine] = useState<EnhancedFine | null>(null);
+  const [refundFine, setRefundFine] = useState<EnhancedFine | null>(null);
 
   // State for filtering, sorting, and selection
   const [filters, setFilters] = useState<FineFilterState>({
@@ -73,42 +77,6 @@ const FinesList = () => {
 
   // Get selected fine objects for bulk actions
   const selectedFineObjects = filteredFines.filter(fine => selectedFines.includes(fine.id));
-
-  // Handle individual fine actions
-  const chargeFineAction = useMutation({
-    mutationFn: async (fineId: string) => {
-      const { data, error } = await supabase.functions.invoke('apply-fine', {
-        body: { fineId, action: 'charge' }
-      });
-      if (error) throw error;
-      if (!data.success) throw new Error(data.error || 'Failed to charge fine');
-      return { ...data, fineId };
-    },
-    onSuccess: (data) => {
-      toast({ title: "Fine charged to customer account successfully" });
-      queryClient.invalidateQueries({ queryKey: ["fines-enhanced"] });
-      queryClient.invalidateQueries({ queryKey: ["fines-kpis"] });
-      queryClient.invalidateQueries({ queryKey: ["customer-balance"] });
-      queryClient.invalidateQueries({ queryKey: ["customer-balance-status"] });
-      queryClient.invalidateQueries({ queryKey: ["customer-fine-stats"] });
-      queryClient.invalidateQueries({ queryKey: ["audit-logs"] });
-
-      // Audit log
-      logAction({
-        action: "fine_charged",
-        entityType: "fine",
-        entityId: data.fineId,
-        details: { amount: data.amount }
-      });
-    },
-    onError: (error: any) => {
-      toast({
-        title: "Error",
-        description: error.message || "Failed to charge fine",
-        variant: "destructive",
-      });
-    },
-  });
 
   const waiveFineAction = useMutation({
     mutationFn: async (fineId: string) => {
@@ -153,6 +121,75 @@ const FinesList = () => {
     },
   });
 
+  // Ensure fine's ledger entry has rental_id before opening payment dialog
+  const openPaymentDialog = async (fine: EnhancedFine) => {
+    if (fine.rental_id) {
+      // Ensure the ledger entry has the rental_id (may be missing for older fines)
+      await supabase
+        .from('ledger_entries')
+        .update({ rental_id: fine.rental_id })
+        .eq('reference', `FINE-${fine.id}`)
+        .eq('type', 'Charge')
+        .is('rental_id', null);
+    }
+    setPaymentFine(fine);
+  };
+
+  // After a payment is recorded, sync the fine status based on ledger entry remaining_amount
+  const syncFineStatusAfterPayment = async (fine: EnhancedFine) => {
+    try {
+      // Check the ledger entry for this fine
+      const { data: ledgerEntry } = await supabase
+        .from('ledger_entries')
+        .select('remaining_amount, amount')
+        .eq('reference', `FINE-${fine.id}`)
+        .eq('type', 'Charge')
+        .maybeSingle();
+
+      let newStatus: string | null = null;
+
+      if (ledgerEntry) {
+        if (ledgerEntry.remaining_amount <= 0) {
+          newStatus = 'Paid';
+        } else if (ledgerEntry.remaining_amount < ledgerEntry.amount) {
+          newStatus = 'Charged';
+        }
+      } else {
+        // No ledger entry found — fine was created before ledger integration
+        // Mark as Paid since a payment was just successfully recorded for it
+        newStatus = 'Paid';
+      }
+
+      if (newStatus && newStatus !== fine.status) {
+        const updateData: any = { status: newStatus };
+        const now = new Date().toISOString();
+        if (newStatus === 'Paid') {
+          updateData.charged_at = now;
+          updateData.resolved_at = now;
+        } else if (newStatus === 'Charged') {
+          updateData.charged_at = now;
+        }
+
+        await supabase
+          .from('fines')
+          .update(updateData)
+          .eq('id', fine.id);
+      }
+
+      // Always invalidate queries after payment success
+      queryClient.invalidateQueries({ queryKey: ["fines-enhanced"] });
+      queryClient.invalidateQueries({ queryKey: ["fines-kpis"] });
+      queryClient.invalidateQueries({ queryKey: ["customer-balance"] });
+      queryClient.invalidateQueries({ queryKey: ["customer-balance-status"] });
+      queryClient.invalidateQueries({ queryKey: ["customer-fine-stats"] });
+      queryClient.invalidateQueries({ queryKey: ["rental-fines"] });
+      queryClient.invalidateQueries({ queryKey: ["rental-totals"] });
+      queryClient.invalidateQueries({ queryKey: ["audit-logs"] });
+    } catch (err) {
+      console.error('Error syncing fine status after payment:', err);
+    }
+  };
+
   // Handle sorting
   const handleSort = (column: string) => {
     if (sortBy === column) {
@@ -180,6 +217,7 @@ const FinesList = () => {
   const renderFineRow = (fine: EnhancedFine) => {
     const canCharge = fine.status === 'Open';
     const canWaive = fine.status === 'Open';
+    const canRefund = fine.status === 'Paid' || fine.status === 'Partially Refunded';
 
     return (
       <TableRow
@@ -251,7 +289,7 @@ const FinesList = () => {
         </TableCell>
 
         <TableCell className="text-right">
-          {(canCharge || canWaive) && (
+          {(canCharge || canWaive || canRefund) && (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="ghost" size="sm">
@@ -261,11 +299,10 @@ const FinesList = () => {
               <DropdownMenuContent align="end">
                 {canEdit('fines') && canCharge && (
                   <DropdownMenuItem
-                    onClick={() => chargeFineAction.mutate(fine.id)}
-                    disabled={chargeFineAction.isPending}
+                    onClick={() => openPaymentDialog(fine)}
                   >
-                    <CreditCard className="h-4 w-4 mr-2" />
-                    Charge to Customer
+                    <DollarSign className="h-4 w-4 mr-2" />
+                    Record Payment
                   </DropdownMenuItem>
                 )}
                 {canEdit('fines') && canWaive && (
@@ -275,6 +312,14 @@ const FinesList = () => {
                   >
                     <Ban className="h-4 w-4 mr-2" />
                     Waive Fine
+                  </DropdownMenuItem>
+                )}
+                {canEdit('fines') && canRefund && (
+                  <DropdownMenuItem
+                    onClick={() => setRefundFine(fine)}
+                  >
+                    <Undo2 className="h-4 w-4 mr-2" />
+                    {fine.status === 'Partially Refunded' ? 'Refund More' : 'Refund'}
                   </DropdownMenuItem>
                 )}
               </DropdownMenuContent>
@@ -453,6 +498,74 @@ const FinesList = () => {
     </div>
 
     <AddFineDialog open={showAddFineDialog} onOpenChange={setShowAddFineDialog} />
+
+    {paymentFine && (
+      <AddPaymentDialog
+        open={!!paymentFine}
+        onOpenChange={(open) => {
+          if (!open) setPaymentFine(null);
+        }}
+        customer_id={paymentFine.customer_id || undefined}
+        vehicle_id={paymentFine.vehicle_id}
+        rental_id={paymentFine.rental_id || undefined}
+        defaultAmount={Number(paymentFine.amount)}
+        targetCategories={["Fine"]}
+        onPaymentSuccess={() => {
+          const fineToSync = paymentFine;
+          if (fineToSync) syncFineStatusAfterPayment(fineToSync);
+        }}
+      />
+    )}
+
+    {refundFine && (
+      <RefundDialog
+        open={!!refundFine}
+        onOpenChange={(open) => {
+          if (!open) setRefundFine(null);
+        }}
+        rentalId={refundFine.rental_id || refundFine.id}
+        category="Fine"
+        totalAmount={Number(refundFine.amount)}
+        paidAmount={Number(refundFine.amount)}
+        onSuccess={async (refundedAmount: number) => {
+          const fine = refundFine;
+          if (!fine) return;
+          // Query total Fine refunds from ledger for this fine
+          const { data: fineRefunds } = await supabase
+            .from('ledger_entries')
+            .select('amount')
+            .eq('type', 'Refund')
+            .eq('category', 'Fine')
+            .eq('reference', `Refund: ${fine.reference_no || fine.id}`);
+          // Also check by rental_id if available
+          let totalRefundedFromLedger = Math.abs(fineRefunds?.reduce((sum, r) => sum + (r.amount || 0), 0) || 0);
+          if (fine.rental_id) {
+            const { data: rentalFineRefunds } = await supabase
+              .from('ledger_entries')
+              .select('amount')
+              .eq('rental_id', fine.rental_id)
+              .eq('type', 'Refund')
+              .eq('category', 'Fine');
+            totalRefundedFromLedger = Math.abs(rentalFineRefunds?.reduce((sum, r) => sum + (r.amount || 0), 0) || 0);
+          }
+          const fineAmount = Number(fine.amount);
+          const newStatus = totalRefundedFromLedger >= fineAmount ? 'Refunded' : 'Partially Refunded';
+          const updateData: any = { status: newStatus };
+          if (newStatus === 'Refunded') {
+            updateData.resolved_at = new Date().toISOString();
+          }
+          await supabase.from('fines').update(updateData).eq('id', fine.id);
+          queryClient.invalidateQueries({ queryKey: ["fines-enhanced"] });
+          queryClient.invalidateQueries({ queryKey: ["fines-kpis"] });
+          queryClient.invalidateQueries({ queryKey: ["customer-balance"] });
+          queryClient.invalidateQueries({ queryKey: ["customer-balance-status"] });
+          queryClient.invalidateQueries({ queryKey: ["customer-fine-stats"] });
+          queryClient.invalidateQueries({ queryKey: ["rental-fines"] });
+          queryClient.invalidateQueries({ queryKey: ["rental-totals"] });
+          setRefundFine(null);
+        }}
+      />
+    )}
   </>
   );
 };

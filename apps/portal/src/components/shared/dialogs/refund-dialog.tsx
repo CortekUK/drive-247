@@ -45,7 +45,7 @@ interface RefundDialogProps {
   category: string; // Tax, Service Fee, Security Deposit, Rental
   totalAmount: number;
   paidAmount: number;
-  onSuccess?: () => void;
+  onSuccess?: (refundAmount: number) => void;
 }
 
 export const RefundDialog = ({
@@ -127,26 +127,55 @@ export const RefundDialog = ({
         throw new Error(`Refund amount cannot exceed ${formatCurrency(maxRefundAmount, tenant?.currency_code || 'USD')}`);
       }
 
-      // Call the process-refund edge function (supports Stripe Connect)
-      const { data: result, error } = await supabase.functions.invoke('process-refund', {
-        body: {
-          rentalId,
-          paymentId,
-          refundType: data.refundType,
-          refundAmount: finalRefundAmount,
-          category,
-          reason: data.reason,
-          processedBy: 'admin', // In real app, get from auth context
-          tenantId: tenant?.id,
+      if (category === 'Fine') {
+        // Fine refunds are handled client-side since fine ledger entries
+        // may not have rental_id (the edge function filters by rental_id)
+        const { data: rental } = await supabase
+          .from('rentals')
+          .select('customer_id, vehicle_id, tenant_id')
+          .eq('id', rentalId)
+          .single();
+        if (!rental) throw new Error('Rental not found');
+
+        // Create a refund ledger entry
+        const { error: ledgerError } = await supabase
+          .from('ledger_entries')
+          .insert({
+            rental_id: rentalId,
+            customer_id: rental.customer_id,
+            vehicle_id: rental.vehicle_id,
+            tenant_id: rental.tenant_id || tenant?.id,
+            entry_date: new Date().toISOString().split('T')[0],
+            due_date: new Date().toISOString().split('T')[0],
+            type: 'Refund',
+            category: 'Fine',
+            amount: -Math.abs(finalRefundAmount),
+            remaining_amount: 0,
+            reference: `Refund: ${data.reason}`,
+          });
+        if (ledgerError) throw new Error('Failed to create refund ledger entry');
+      } else {
+        // Call the process-refund edge function for all other categories
+        const { data: result, error } = await supabase.functions.invoke('process-refund', {
+          body: {
+            rentalId,
+            paymentId,
+            refundType: data.refundType,
+            refundAmount: finalRefundAmount,
+            category,
+            reason: data.reason,
+            processedBy: 'admin',
+            tenantId: tenant?.id,
+          }
+        });
+
+        if (error) {
+          throw new Error(error.message || 'Refund processing failed');
         }
-      });
 
-      if (error) {
-        throw new Error(error.message || 'Refund processing failed');
-      }
-
-      if (!result?.success) {
-        throw new Error(result?.error || 'Refund processing failed');
+        if (!result?.success) {
+          throw new Error(result?.error || 'Refund processing failed');
+        }
       }
 
       toast({
@@ -169,7 +198,7 @@ export const RefundDialog = ({
         queryClient.invalidateQueries({ queryKey: ['rental', rentalId], ...invalidateOptions }),
       ]);
 
-      onSuccess?.();
+      onSuccess?.(finalRefundAmount);
       form.reset();
       onOpenChange(false);
     } catch (error: any) {

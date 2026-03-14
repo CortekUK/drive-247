@@ -198,6 +198,7 @@ export const AddFineDialog = ({ open, onOpenChange, preselectedCustomerId }: Add
         .insert({
           customer_id: data.customer_id,
           vehicle_id: data.vehicle_id,
+          rental_id: data.rental_id || null,
           entry_date: issueDate,
           due_date: dueDate,
           type: "Charge",

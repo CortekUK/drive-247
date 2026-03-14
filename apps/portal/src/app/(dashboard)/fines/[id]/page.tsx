@@ -1,13 +1,15 @@
 "use client";
 
 import { useParams, useRouter } from "next/navigation";
+import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { AlertTriangle, ArrowLeft, FileText, DollarSign, CreditCard, Clock, Upload, Ban } from "lucide-react";
+import { AlertTriangle, ArrowLeft, FileText, DollarSign, Clock, Upload, Ban } from "lucide-react";
+import { AddPaymentDialog } from "@/components/shared/dialogs/add-payment-dialog";
 import { useToast } from "@/hooks/use-toast";
 import { FineStatusBadge } from "@/components/shared/status/fine-status-badge";
 import { KPICard } from "@/components/ui/kpi-card";
@@ -47,31 +49,73 @@ const FineDetail = () => {
   const queryClient = useQueryClient();
   const { tenant } = useTenant();
 
-  // Action mutations
-  const chargeFineAction = useMutation({
-    mutationFn: async () => {
-      const { data, error } = await supabase.functions.invoke('apply-fine', {
-        body: { fineId: id, action: 'charge' }
-      });
-      if (error) throw error;
-      if (!data.success) throw new Error(data.error || 'Failed to charge fine');
-      return data;
-    },
-    onSuccess: () => {
-      toast({ title: "Fine charged to customer account successfully" });
+  const [showPaymentDialog, setShowPaymentDialog] = useState(false);
+
+  // Ensure fine's ledger entry has rental_id before opening payment dialog
+  const openPaymentDialog = async () => {
+    if (fine?.rental_id) {
+      await supabase
+        .from('ledger_entries')
+        .update({ rental_id: fine.rental_id })
+        .eq('reference', `FINE-${id}`)
+        .eq('type', 'Charge')
+        .is('rental_id', null);
+    }
+    setShowPaymentDialog(true);
+  };
+
+  // After a payment is recorded, sync the fine status based on ledger entry remaining_amount
+  const syncFineStatusAfterPayment = async () => {
+    try {
+      const { data: ledgerEntry } = await supabase
+        .from('ledger_entries')
+        .select('remaining_amount, amount')
+        .eq('reference', `FINE-${id}`)
+        .eq('type', 'Charge')
+        .maybeSingle();
+
+      let newStatus: string | null = null;
+
+      if (ledgerEntry) {
+        if (ledgerEntry.remaining_amount <= 0) {
+          newStatus = 'Paid';
+        } else if (ledgerEntry.remaining_amount < ledgerEntry.amount) {
+          newStatus = 'Charged';
+        }
+      } else {
+        // No ledger entry — fine predates ledger integration, mark as Paid
+        newStatus = 'Paid';
+      }
+
+      if (newStatus) {
+        const updateData: any = { status: newStatus };
+        const now = new Date().toISOString();
+        if (newStatus === 'Paid') {
+          updateData.charged_at = now;
+          updateData.resolved_at = now;
+        } else if (newStatus === 'Charged') {
+          updateData.charged_at = now;
+        }
+
+        await supabase
+          .from('fines')
+          .update(updateData)
+          .eq('id', id);
+      }
+
+      // Always invalidate queries after payment success
       queryClient.invalidateQueries({ queryKey: ["fine", id] });
+      queryClient.invalidateQueries({ queryKey: ["fines-enhanced"] });
+      queryClient.invalidateQueries({ queryKey: ["fines-kpis"] });
       queryClient.invalidateQueries({ queryKey: ["customer-balance"] });
       queryClient.invalidateQueries({ queryKey: ["customer-balance-status"] });
-      queryClient.invalidateQueries({ queryKey: ["fines-kpis"] });
-    },
-    onError: (error: any) => {
-      toast({
-        title: "Error",
-        description: error.message || "Failed to charge fine",
-        variant: "destructive",
-      });
-    },
-  });
+      queryClient.invalidateQueries({ queryKey: ["customer-fine-stats"] });
+      queryClient.invalidateQueries({ queryKey: ["rental-fines"] });
+      queryClient.invalidateQueries({ queryKey: ["rental-totals"] });
+    } catch (err) {
+      console.error('Error syncing fine status after payment:', err);
+    }
+  };
 
   const waiveFineAction = useMutation({
     mutationFn: async () => {
@@ -178,7 +222,6 @@ const FineDetail = () => {
   // Action button states
   const canCharge = fine.status === 'Open';
   const canWaive = fine.status === 'Open';
-  const isCharged = fine.status === 'Charged';
 
   const getDaysUntilDueDisplay = () => {
     const dueDate = new Date(fine.due_date);
@@ -226,23 +269,13 @@ const FineDetail = () => {
 
           <div className="flex flex-wrap gap-2">
             {canCharge && (
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    variant="outline"
-                    onClick={() => chargeFineAction.mutate()}
-                    disabled={chargeFineAction.isPending || isCharged}
-                  >
-                    <CreditCard className="h-4 w-4 mr-2" />
-                    {isCharged ? "Already Charged" : "Charge to Account"}
-                  </Button>
-                </TooltipTrigger>
-                {isCharged && (
-                  <TooltipContent>
-                    <p>Fine has already been charged to customer account</p>
-                  </TooltipContent>
-                )}
-              </Tooltip>
+              <Button
+                variant="outline"
+                onClick={() => openPaymentDialog()}
+              >
+                <DollarSign className="h-4 w-4 mr-2" />
+                Record Payment
+              </Button>
             )}
 
             {canWaive && (
@@ -370,6 +403,21 @@ const FineDetail = () => {
           </TabsContent>
         </Tabs>
       </div>
+
+      {fine && (
+        <AddPaymentDialog
+          open={showPaymentDialog}
+          onOpenChange={(open) => {
+            setShowPaymentDialog(open);
+          }}
+          customer_id={fine.customer_id || undefined}
+          vehicle_id={fine.vehicle_id}
+          rental_id={fine.rental_id || undefined}
+          defaultAmount={Number(fine.amount)}
+          targetCategories={["Fine"]}
+          onPaymentSuccess={() => syncFineStatusAfterPayment()}
+        />
+      )}
     </TooltipProvider>
   );
 };
