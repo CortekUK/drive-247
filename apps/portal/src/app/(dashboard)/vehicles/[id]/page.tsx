@@ -151,7 +151,6 @@ export default function VehicleDetail() {
   const { canEdit } = useManagerPermissions();
   const distanceUnit = (tenant?.distance_unit || 'miles') as DistanceUnit;
   const currencyCode = tenant?.currency_code || 'GBP';
-  const [activeTab, setActiveTab] = useState<'overview' | 'finance' | 'documents' | 'settings'>('overview');
   const [showAddFineDialog, setShowAddFineDialog] = useState(false);
   const [showEditDialog, setShowEditDialog] = useState(false);
   const [showDisposeDialog, setShowDisposeDialog] = useState(false);
@@ -538,88 +537,70 @@ export default function VehicleDetail() {
           )}
           {canEdit('vehicles') && (
             <TooltipProvider>
-              <div className="flex items-center gap-1">
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button
-                      variant="outline"
-                      size="icon"
-                      className="h-9 w-9"
-                      onClick={() => setShowEditDialog(true)}
-                    >
-                      <Pencil className="h-4 w-4" />
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent>Edit Vehicle</TooltipContent>
-                </Tooltip>
-
-                {!vehicle.is_disposed && (
-                  <>
-                    <div className="h-6 w-px bg-border mx-1" />
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <Button
-                          variant="outline"
-                          size="icon"
-                          className="h-9 w-9 text-destructive"
-                          onClick={() => setShowDisposeDialog(true)}
-                        >
-                          <Ban className="h-4 w-4" />
-                        </Button>
-                      </TooltipTrigger>
-                      <TooltipContent>Dispose Vehicle</TooltipContent>
-                    </Tooltip>
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <Button
-                          variant="outline"
-                          size="icon"
-                          className="h-9 w-9 text-destructive"
-                          onClick={() => setShowDeleteDialog(true)}
-                          disabled={rentals && rentals.some(r => r.status === 'Active')}
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </TooltipTrigger>
-                      <TooltipContent>{rentals && rentals.some(r => r.status === 'Active') ? 'Cannot delete (active rentals)' : 'Delete Vehicle'}</TooltipContent>
-                    </Tooltip>
-                  </>
-                )}
-              </div>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    onClick={() => setShowEditDialog(true)}
+                  >
+                    <Pencil className="h-4 w-4" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>Edit Vehicle</p>
+                </TooltipContent>
+              </Tooltip>
             </TooltipProvider>
+          )}
+
+          {!vehicle.is_disposed && (
+            <>
+              {canEdit('vehicles') && (
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        variant="outline"
+                        size="icon"
+                        onClick={() => setShowDisposeDialog(true)}
+                      >
+                        <Ban className="h-4 w-4" />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <p>Dispose Vehicle</p>
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+              )}
+
+              {canEdit('vehicles') && (
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        variant="outline"
+                        size="icon"
+                        onClick={() => setShowDeleteDialog(true)}
+                        disabled={rentals && rentals.some(r => r.status === 'Active')}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <p>{rentals && rentals.some(r => r.status === 'Active') ? 'Cannot delete (active rentals)' : 'Delete Vehicle'}</p>
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+              )}
+            </>
           )}
         </div>
       </div>
 
-      {/* Section Tab Navigation */}
-      <div className="flex items-center gap-1 border-b mt-4">
-        {([
-          { key: 'overview', label: 'Overview' },
-          { key: 'finance', label: 'Finance' },
-          { key: 'documents', label: 'Documents' },
-          { key: 'settings', label: 'Settings' },
-        ] as const).map((tab) => (
-          <button
-            key={tab.key}
-            onClick={() => setActiveTab(tab.key)}
-            className={`px-4 py-2 text-sm font-medium transition-colors relative ${
-              activeTab === tab.key
-                ? 'text-primary'
-                : 'text-muted-foreground hover:text-foreground'
-            }`}
-          >
-            {tab.label}
-            {activeTab === tab.key && (
-              <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-primary rounded-t" />
-            )}
-          </button>
-        ))}
-      </div>
-
       {/* Main Content */}
       <div className="mt-6">
-          {/* === OVERVIEW TAB === */}
-          {activeTab === 'overview' && (<>
           {/* Vehicle Photo Gallery Section */}
           <div className="mb-6">
             <VehiclePhotoGallery
@@ -889,10 +870,6 @@ export default function VehicleDetail() {
             </Card>
           </div>
 
-          </>)}
-
-          {/* === FINANCE TAB === */}
-          {activeTab === 'finance' && (<>
           {/* P&L Summary Section */}
           <div className="mt-8">
             <Card className="shadow-card rounded-lg">
@@ -1017,10 +994,6 @@ export default function VehicleDetail() {
             </Card>
           </div>
 
-          </>)}
-
-          {/* === DOCUMENTS TAB === */}
-          {activeTab === 'documents' && (<>
           {/* Files Section */}
           <div className="mt-8">
             {/* Hidden file input for upload */}
@@ -1100,10 +1073,6 @@ export default function VehicleDetail() {
             </Card>
           </div>
 
-          </>)}
-
-          {/* === SETTINGS TAB === */}
-          {activeTab === 'settings' && (<>
           {/* Rental Extras Section */}
           <div className="mt-8">
             <Card className="shadow-card rounded-lg">
@@ -1143,7 +1112,6 @@ export default function VehicleDetail() {
               </CardContent>
             </Card>
           </div>
-          </>)}
         </div>
 
       {/* Add Fine Dialog */}
