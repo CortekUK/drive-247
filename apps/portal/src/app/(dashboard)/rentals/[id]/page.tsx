@@ -224,9 +224,6 @@ const RentalDetail = () => {
   const { data: rentalAgreements = [], isLoading: loadingAgreements } = useRentalAgreements(id);
   const { data: insurancePolicies = [], isLoading: isLoadingInsurancePolicies } = useRentalInsurancePolicies(id);
   // skipInsurance removed — insurance doc upload is always visible; only Bonzah selector is gated on integration_bonzah
-  // Section tab navigation
-  const [activeTab, setActiveTab] = useState<'overview' | 'operations' | 'documents' | 'finance'>('overview');
-
   const [showAddPayment, setShowAddPayment] = useState(false);
   const [sendingDocuSign, setSendingDocuSign] = useState(false);
   const [checkingDocuSignStatus, setCheckingDocuSignStatus] = useState(false);
@@ -1391,7 +1388,6 @@ const RentalDetail = () => {
         show={needsKeyHandover}
         customerName={rental?.customers?.name}
         vehicleInfo={rental?.vehicles ? `${rental.vehicles.make} ${rental.vehicles.model} • ${rental.vehicles.reg}` : undefined}
-        onGoToSection={() => setActiveTab('operations')}
       />
 
       {/* Header */}
@@ -1670,33 +1666,6 @@ const RentalDetail = () => {
         </Alert>
       )}
 
-      {/* Section Tab Navigation */}
-      <div className="flex items-center gap-1 border-b">
-        {([
-          { key: 'overview', label: 'Overview' },
-          { key: 'operations', label: 'Operations' },
-          { key: 'documents', label: 'Documents' },
-          { key: 'finance', label: 'Finance' },
-        ] as const).map((tab) => (
-          <button
-            key={tab.key}
-            onClick={() => setActiveTab(tab.key)}
-            className={`px-4 py-2 text-sm font-medium transition-colors relative ${
-              activeTab === tab.key
-                ? 'text-primary'
-                : 'text-muted-foreground hover:text-foreground'
-            }`}
-          >
-            {tab.label}
-            {activeTab === tab.key && (
-              <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-primary rounded-t" />
-            )}
-          </button>
-        ))}
-      </div>
-
-      {/* === OVERVIEW TAB === */}
-      {activeTab === 'overview' && (<>
       {/* Rental Summary */}
       {(() => {
         const totalRefunded = refundBreakdown
@@ -1845,10 +1814,10 @@ const RentalDetail = () => {
                     </TableHead>
                   )}
                   <TableHead className={selectableCategories.length > 0 ? "" : "pl-6"}>Category</TableHead>
-                  <TableHead className="text-center w-[100px]">Status</TableHead>
-                  <TableHead className="text-right w-[100px]">Amount</TableHead>
-                  <TableHead className="text-right w-[100px]">Refunded</TableHead>
-                  <TableHead className="text-right pr-6 w-[140px]">Action</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead className="text-right">Amount</TableHead>
+                  <TableHead className="text-right">Refunded</TableHead>
+                  <TableHead className="text-right pr-6">Action</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -1892,7 +1861,7 @@ const RentalDetail = () => {
                           </div>
                         </div>
                       </TableCell>
-                      <TableCell className="text-center">
+                      <TableCell>
                         {(() => {
                           if (!applied) {
                             return <Badge variant="outline" className="text-muted-foreground/60 border-muted-foreground/20 text-[11px]">Not Applied</Badge>;
@@ -2142,7 +2111,7 @@ const RentalDetail = () => {
             },
           ];
 
-          // Compute selectable categories for this extension (same logic as original)
+          // Compute selectable categories for this extension
           const extSelectableCategories = isInactive ? [] : extRows
             .filter(({ amount, remaining_amount }) => amount > 0 && remaining_amount > 0)
             .map(r => r.category);
@@ -2825,10 +2794,6 @@ const RentalDetail = () => {
         </CardContent>
       </Card>
 
-      </>)}
-
-      {/* === OPERATIONS TAB === */}
-      {activeTab === 'operations' && (<>
       {/* Key Handover Section - Operations */}
       {id && (
         <KeyHandoverSection
@@ -2860,10 +2825,6 @@ const RentalDetail = () => {
         />
       )}
 
-      </>)}
-
-      {/* === DOCUMENTS TAB === */}
-      {activeTab === 'documents' && (<>
       {/* Rental Agreements Timeline */}
       <AgreementTimeline
         rentalId={id}
@@ -3828,10 +3789,6 @@ const RentalDetail = () => {
         </CardContent>
       </Card>
 
-      </>)}
-
-      {/* === FINANCE TAB === */}
-      {activeTab === 'finance' && (<>
       {/* Installment Plan Section */}
       {id && (
         <InstallmentPlanCard
@@ -3844,8 +3801,6 @@ const RentalDetail = () => {
       <div id="ledger">
         {id && <RentalLedger rentalId={id} />}
       </div>
-
-      </>)}
 
       {/* Add Payment Dialog */}
       {rental && (
