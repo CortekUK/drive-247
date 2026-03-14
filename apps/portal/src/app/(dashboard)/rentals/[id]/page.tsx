@@ -331,6 +331,48 @@ const RentalDetail = () => {
   const { data: paymentBreakdown } = useRentalPaymentBreakdown(id);
   const { data: refundBreakdown } = useRentalRefundBreakdown(id);
 
+  // Fetch fines linked to this rental
+  const { data: rentalFines } = useQuery({
+    queryKey: ["rental-fines", tenant?.id, id],
+    queryFn: async () => {
+      if (!tenant?.id || !id) return [];
+      const { data, error } = await supabase
+        .from("fines")
+        .select("id, amount, status")
+        .eq("rental_id", id)
+        .eq("tenant_id", tenant.id);
+      if (error) throw error;
+      return data || [];
+    },
+    enabled: !!tenant?.id && !!id,
+  });
+
+  const rentalFinesTotal = useMemo(() => {
+    if (!rentalFines || rentalFines.length === 0) return 0;
+    return rentalFines.reduce((sum, f) => sum + Number(f.amount), 0);
+  }, [rentalFines]);
+
+  const rentalFinesOpenAmount = useMemo(() => {
+    if (!rentalFines || rentalFines.length === 0) return 0;
+    return rentalFines
+      .filter(f => f.status === 'Open' || f.status === 'Charged')
+      .reduce((sum, f) => sum + Number(f.amount), 0);
+  }, [rentalFines]);
+
+  const rentalFinesPaidAmount = useMemo(() => {
+    if (!rentalFines || rentalFines.length === 0) return 0;
+    return rentalFines
+      .filter(f => f.status === 'Paid')
+      .reduce((sum, f) => sum + Number(f.amount), 0);
+  }, [rentalFines]);
+
+  const rentalFinesWaivedAmount = useMemo(() => {
+    if (!rentalFines || rentalFines.length === 0) return 0;
+    return rentalFines
+      .filter(f => f.status === 'Waived')
+      .reduce((sum, f) => sum + Number(f.amount), 0);
+  }, [rentalFines]);
+
   // Map of category → remaining unpaid amount (combines ledger charges + invoice fallback)
   const categoryRemainingAmounts = useMemo(() => {
     const amounts: Record<string, number> = {};
@@ -369,8 +411,13 @@ const RentalDetail = () => {
       }
     }
 
+    // Add fines remaining amount if not already tracked in ledger
+    if (rentalFinesOpenAmount > 0 && amounts['Fine'] === undefined) {
+      amounts['Fine'] = rentalFinesOpenAmount;
+    }
+
     return amounts;
-  }, [paymentBreakdown, invoiceBreakdown, rentalCharges, rental, refundBreakdown]);
+  }, [paymentBreakdown, invoiceBreakdown, rentalCharges, rental, refundBreakdown, rentalFinesOpenAmount]);
 
   // Auto-refresh payment data when tab regains focus (e.g. after Stripe checkout in new tab)
   useEffect(() => {
@@ -1092,13 +1139,16 @@ const RentalDetail = () => {
     const ledgerOutstanding = rentalTotals?.outstanding || 0;
     let invoiceOnlyOutstanding = 0;
     for (const [cat, remaining] of Object.entries(categoryRemainingAmounts)) {
+      // Skip Fine — handled separately below
+      if (cat === 'Fine') continue;
       const hasLedgerCharge = paymentBreakdown?.[cat] !== undefined;
       if (!hasLedgerCharge && remaining > 0) {
         invoiceOnlyOutstanding += remaining;
       }
     }
-    return ledgerOutstanding + invoiceOnlyOutstanding;
-  }, [rentalTotals, categoryRemainingAmounts, paymentBreakdown]);
+    // Add open/charged fines to outstanding
+    return ledgerOutstanding + invoiceOnlyOutstanding + rentalFinesOpenAmount;
+  }, [rentalTotals, categoryRemainingAmounts, paymentBreakdown, rentalFinesOpenAmount]);
 
   if (isLoading) {
     return <div>Loading rental details...</div>;
@@ -1116,9 +1166,9 @@ const RentalDetail = () => {
     return isRejected || isLowScore;
   }) || false;
 
-  // Use the new totals from allocation-based calculations
-  const totalCharges = rentalTotals?.totalCharges || 0;
-  const totalPayments = rentalTotals?.totalPayments || 0;
+  // Use the new totals from allocation-based calculations (include fines)
+  const totalCharges = (rentalTotals?.totalCharges || 0) + rentalFinesTotal;
+  const totalPayments = (rentalTotals?.totalPayments || 0) + rentalFinesPaidAmount;
 
   // Group extension charges by extension number for display
   // Supports both legacy 'Extension' category and new multi-category ('Extension Rental', 'Extension Tax', 'Extension Service Fee')
@@ -1699,9 +1749,9 @@ const RentalDetail = () => {
       {activeTab === 'overview' && (<>
       {/* Rental Summary */}
       {(() => {
-        const totalRefunded = refundBreakdown
+        const totalRefunded = (refundBreakdown
           ? Object.values(refundBreakdown).reduce((sum, val) => sum + val, 0)
-          : 0;
+          : 0) + rentalFinesWaivedAmount;
         return (
           <div className={`grid gap-6 md:grid-cols-3 ${isProcessingPayment ? 'opacity-50 pointer-events-none' : ''}`}>
             <Card>
@@ -1757,6 +1807,19 @@ const RentalDetail = () => {
           { label: 'Collection Fee', category: 'Collection Fee', amount: rental.collection_fee ?? 0, detail: 'Vehicle collection', icon: MapPin, color: 'text-rose-500', bg: 'bg-rose-500/10' },
           { label: 'Extras', category: 'Extras', amount: extrasTotal, detail: (extrasDetails?.length || 0) > 0 ? `${extrasDetails!.length} item${extrasDetails!.length > 1 ? 's' : ''}` : 'Add-ons', icon: Package, color: 'text-indigo-500', bg: 'bg-indigo-500/10', nonRefundable: true, onClick: extrasTotal > 0 ? () => setShowExtrasDialog(true) : undefined },
         ];
+
+        // Add fines row if any fines are linked to this rental
+        if (rentalFines && rentalFines.length > 0) {
+          rows.push({
+            label: 'Fines',
+            category: 'Fine',
+            amount: rentalFinesTotal,
+            detail: `${rentalFines.length} fine${rentalFines.length > 1 ? 's' : ''}`,
+            icon: AlertTriangle,
+            color: 'text-orange-500',
+            bg: 'bg-orange-500/10',
+          });
+        }
 
         // Add excess mileage row if charge exists in the ledger
         const excessMileageCharge = (rentalCharges || []).find(c => c.category === 'Excess Mileage');
@@ -1902,6 +1965,18 @@ const RentalDetail = () => {
                           }
                           if (refunded > 0) {
                             return <Badge variant="outline" className="text-amber-500 border-amber-500/30 bg-amber-500/10 text-[11px]">Partial Refund</Badge>;
+                          }
+                          // Special handling for Fines — status from fines data, not ledger
+                          if (category === 'Fine' && rentalFines) {
+                            const allPaid = rentalFines.every(f => f.status === 'Paid' || f.status === 'Waived');
+                            const somePaid = rentalFines.some(f => f.status === 'Paid' || f.status === 'Waived');
+                            if (allPaid) {
+                              return <Badge variant="outline" className="text-emerald-500 border-emerald-500/30 bg-emerald-500/10 text-[11px]">Paid</Badge>;
+                            }
+                            if (somePaid) {
+                              return <Badge variant="outline" className="text-amber-500 border-amber-500/30 bg-amber-500/10 text-[11px]">Partially Paid</Badge>;
+                            }
+                            return <Badge variant="outline" className="text-red-500 border-red-500/30 bg-red-500/10 text-[11px]">Not Paid</Badge>;
                           }
                           // Check payment status from ledger breakdown
                           const catPayment = paymentBreakdown?.[category];

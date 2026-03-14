@@ -804,13 +804,7 @@ const CustomerDetail = () => {
         <TabsContent value="fines" className="mt-6">
           <Card>
             <CardHeader>
-              <CardTitle className="flex items-center justify-between">
-                <span>Customer Fines</span>
-                <Button onClick={() => setFineDialogOpen(true)} size="sm">
-                  <Plus className="h-4 w-4 mr-2" />
-                  Upload Fine
-                </Button>
-              </CardTitle>
+              <CardTitle>Customer Fines</CardTitle>
               <CardDescription>All fines associated with this customer</CardDescription>
             </CardHeader>
             <CardContent>
