@@ -8,42 +8,39 @@ export const FineKPIs = () => {
   const { tenant } = useTenant();
   const currencyCode = tenant?.currency_code || 'GBP';
   const { data: kpiData, isLoading } = useQuery({
-    queryKey: ["fines-kpis"],
+    queryKey: ["fines-kpis", tenant?.id],
     queryFn: async () => {
-      // Get all fines with basic info
+      if (!tenant) throw new Error("No tenant context available");
+
+      // Get all fines for this tenant
       const { data: allFines, error: finesError } = await supabase
         .from("fines")
-        .select("id, status, amount, due_date, liability")
+        .select("id, status, amount, due_date")
+        .eq("tenant_id", tenant.id)
         .order("created_at", { ascending: false });
 
       if (finesError) throw finesError;
 
-      // Get outstanding amounts from ledger entries for charged customer fines
-      const { data: ledgerData, error: ledgerError } = await supabase
-        .from("ledger_entries")
-        .select("remaining_amount")
-        .eq("category", "Fine")
-        .eq("type", "Charge")
-        .gt("remaining_amount", 0);
-
-      if (ledgerError) throw ledgerError;
-
       const openFines = allFines.filter(fine => fine.status === 'Open').length;
-      const outstandingAmount = ledgerData.reduce((sum, entry) => sum + Number(entry.remaining_amount), 0);
+
+      // Outstanding = total amount of all Open + Charged fines (not Waived/Paid)
+      const outstandingAmount = allFines
+        .filter(fine => fine.status === 'Open' || fine.status === 'Charged')
+        .reduce((sum, fine) => sum + Number(fine.amount), 0);
 
       const today = new Date();
       const nextWeek = new Date(today.getTime() + 7 * 24 * 60 * 60 * 1000);
 
       const dueThisWeek = allFines.filter(fine => {
-        const dueDate = new Date(fine.due_date);
-        return dueDate >= today && 
-               dueDate <= nextWeek && 
+        const dueDate = new Date(fine.due_date + 'T00:00:00');
+        return dueDate >= today &&
+               dueDate <= nextWeek &&
                (fine.status === 'Open' || fine.status === 'Charged');
       }).length;
 
       const overdue = allFines.filter(fine => {
-        const dueDate = new Date(fine.due_date);
-        return dueDate < today && 
+        const dueDate = new Date(fine.due_date + 'T00:00:00');
+        return dueDate < today &&
                (fine.status === 'Open' || fine.status === 'Charged');
       }).length;
 
@@ -54,6 +51,7 @@ export const FineKPIs = () => {
         overdue
       };
     },
+    enabled: !!tenant,
   });
 
   if (isLoading) {

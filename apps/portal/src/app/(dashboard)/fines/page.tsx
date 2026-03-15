@@ -9,7 +9,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import Link from "next/link";
 import { Checkbox } from "@/components/ui/checkbox";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { AlertTriangle, Plus, Eye, MoreVertical, CreditCard, Ban, ArrowUpDown, BarChart3 } from "lucide-react";
+import { AlertTriangle, Plus, Eye, MoreVertical, DollarSign, Ban, ArrowUpDown, BarChart3 } from "lucide-react";
+import { AddPaymentDialog } from "@/components/shared/dialogs/add-payment-dialog";
 import { FineStatusBadge } from "@/components/shared/status/fine-status-badge";
 import { FineKPIs } from "@/components/fines/fine-kpis";
 import { FineFilters, FineFilterState } from "@/components/fines/fine-filters";
@@ -23,6 +24,7 @@ import { cn } from "@/lib/utils";
 import { formatCurrency } from "@/lib/format-utils";
 import { useTenant } from "@/contexts/TenantContext";
 import { useManagerPermissions } from "@/hooks/use-manager-permissions";
+import AddFineDialog from "@/components/fines/add-fine-dialog";
 
 const FinesList = () => {
   const router = useRouter();
@@ -32,6 +34,8 @@ const FinesList = () => {
   const { logAction } = useAuditLog();
   const { tenant } = useTenant();
   const { canEdit } = useManagerPermissions();
+  const [showAddFineDialog, setShowAddFineDialog] = useState(false);
+  const [paymentFine, setPaymentFine] = useState<EnhancedFine | null>(null);
 
   // State for filtering, sorting, and selection
   const [filters, setFilters] = useState<FineFilterState>({
@@ -72,41 +76,16 @@ const FinesList = () => {
   // Get selected fine objects for bulk actions
   const selectedFineObjects = filteredFines.filter(fine => selectedFines.includes(fine.id));
 
-  // Handle individual fine actions
-  const chargeFineAction = useMutation({
-    mutationFn: async (fineId: string) => {
-      const { data, error } = await supabase.functions.invoke('apply-fine', {
-        body: { fineId, action: 'charge' }
-      });
-      if (error) throw error;
-      if (!data.success) throw new Error(data.error || 'Failed to charge fine');
-      return { ...data, fineId };
-    },
-    onSuccess: (data) => {
-      toast({ title: "Fine charged to customer account successfully" });
-      queryClient.invalidateQueries({ queryKey: ["fines-enhanced"] });
-      queryClient.invalidateQueries({ queryKey: ["fines-kpis"] });
-      queryClient.invalidateQueries({ queryKey: ["audit-logs"] });
-
-      // Audit log
-      logAction({
-        action: "fine_charged",
-        entityType: "fine",
-        entityId: data.fineId,
-        details: { amount: data.amount }
-      });
-    },
-    onError: (error: any) => {
-      toast({
-        title: "Error",
-        description: error.message || "Failed to charge fine",
-        variant: "destructive",
-      });
-    },
-  });
-
   const waiveFineAction = useMutation({
     mutationFn: async (fineId: string) => {
+      // Client-side: delete ledger entry for Open fines before calling edge function
+      // (the deployed edge function only handles Charged fines' ledger cleanup)
+      await supabase
+        .from('ledger_entries')
+        .delete()
+        .eq('reference', `FINE-${fineId}`)
+        .eq('type', 'Charge');
+
       const { data, error } = await supabase.functions.invoke('apply-fine', {
         body: { fineId, action: 'waive' }
       });
@@ -118,6 +97,9 @@ const FinesList = () => {
       toast({ title: "Fine waived successfully" });
       queryClient.invalidateQueries({ queryKey: ["fines-enhanced"] });
       queryClient.invalidateQueries({ queryKey: ["fines-kpis"] });
+      queryClient.invalidateQueries({ queryKey: ["customer-balance"] });
+      queryClient.invalidateQueries({ queryKey: ["customer-balance-status"] });
+      queryClient.invalidateQueries({ queryKey: ["customer-fine-stats"] });
       queryClient.invalidateQueries({ queryKey: ["audit-logs"] });
 
       // Audit log
@@ -136,6 +118,75 @@ const FinesList = () => {
       });
     },
   });
+
+  // Ensure fine's ledger entry has rental_id before opening payment dialog
+  const openPaymentDialog = async (fine: EnhancedFine) => {
+    if (fine.rental_id) {
+      // Ensure the ledger entry has the rental_id (may be missing for older fines)
+      await supabase
+        .from('ledger_entries')
+        .update({ rental_id: fine.rental_id })
+        .eq('reference', `FINE-${fine.id}`)
+        .eq('type', 'Charge')
+        .is('rental_id', null);
+    }
+    setPaymentFine(fine);
+  };
+
+  // After a payment is recorded, sync the fine status based on ledger entry remaining_amount
+  const syncFineStatusAfterPayment = async (fine: EnhancedFine) => {
+    try {
+      // Check the ledger entry for this fine
+      const { data: ledgerEntry } = await supabase
+        .from('ledger_entries')
+        .select('remaining_amount, amount')
+        .eq('reference', `FINE-${fine.id}`)
+        .eq('type', 'Charge')
+        .maybeSingle();
+
+      let newStatus: string | null = null;
+
+      if (ledgerEntry) {
+        if (ledgerEntry.remaining_amount <= 0) {
+          newStatus = 'Paid';
+        } else if (ledgerEntry.remaining_amount < ledgerEntry.amount) {
+          newStatus = 'Charged';
+        }
+      } else {
+        // No ledger entry found — fine was created before ledger integration
+        // Mark as Paid since a payment was just successfully recorded for it
+        newStatus = 'Paid';
+      }
+
+      if (newStatus && newStatus !== fine.status) {
+        const updateData: any = { status: newStatus };
+        const now = new Date().toISOString();
+        if (newStatus === 'Paid') {
+          updateData.charged_at = now;
+          updateData.resolved_at = now;
+        } else if (newStatus === 'Charged') {
+          updateData.charged_at = now;
+        }
+
+        await supabase
+          .from('fines')
+          .update(updateData)
+          .eq('id', fine.id);
+      }
+
+      // Always invalidate queries after payment success
+      queryClient.invalidateQueries({ queryKey: ["fines-enhanced"] });
+      queryClient.invalidateQueries({ queryKey: ["fines-kpis"] });
+      queryClient.invalidateQueries({ queryKey: ["customer-balance"] });
+      queryClient.invalidateQueries({ queryKey: ["customer-balance-status"] });
+      queryClient.invalidateQueries({ queryKey: ["customer-fine-stats"] });
+      queryClient.invalidateQueries({ queryKey: ["rental-fines"] });
+      queryClient.invalidateQueries({ queryKey: ["rental-totals"] });
+      queryClient.invalidateQueries({ queryKey: ["audit-logs"] });
+    } catch (err) {
+      console.error('Error syncing fine status after payment:', err);
+    }
+  };
 
   // Handle sorting
   const handleSort = (column: string) => {
@@ -188,6 +239,10 @@ const FinesList = () => {
         </TableCell>
 
         <TableCell>
+          {fine.rentals?.rental_number || ''}
+        </TableCell>
+
+        <TableCell>
           {fine.vehicles.reg} • {fine.vehicles.make} {fine.vehicles.model}
         </TableCell>
 
@@ -196,11 +251,11 @@ const FinesList = () => {
         </TableCell>
 
         <TableCell>
-          {new Date(fine.issue_date).toLocaleDateString()}
+          {new Date(fine.issue_date + 'T00:00:00').toLocaleDateString()}
         </TableCell>
 
         <TableCell className={cn(fine.isOverdue && "text-destructive font-medium")}>
-          {new Date(fine.due_date).toLocaleDateString()}
+          {new Date(fine.due_date + 'T00:00:00').toLocaleDateString()}
           {fine.isOverdue && (
             <Badge variant="destructive" className="ml-2 text-xs">
               {Math.abs(fine.daysUntilDue)} days overdue
@@ -241,11 +296,10 @@ const FinesList = () => {
               <DropdownMenuContent align="end">
                 {canEdit('fines') && canCharge && (
                   <DropdownMenuItem
-                    onClick={() => chargeFineAction.mutate(fine.id)}
-                    disabled={chargeFineAction.isPending}
+                    onClick={() => openPaymentDialog(fine)}
                   >
-                    <CreditCard className="h-4 w-4 mr-2" />
-                    Charge to Customer
+                    <DollarSign className="h-4 w-4 mr-2" />
+                    Record Payment
                   </DropdownMenuItem>
                 )}
                 {canEdit('fines') && canWaive && (
@@ -280,6 +334,7 @@ const FinesList = () => {
               )}
             </TableHead>
             <TableHead>Reference</TableHead>
+            <TableHead>Rental #</TableHead>
             <TableHead>Vehicle</TableHead>
             <TableHead>Customer</TableHead>
             <TableHead>Issue Date</TableHead>
@@ -311,7 +366,7 @@ const FinesList = () => {
             fines.map(renderFineRow)
           ) : (
             <TableRow>
-              <TableCell colSpan={10} className="text-center py-8">
+              <TableCell colSpan={11} className="text-center py-8">
                 <div className="flex flex-col items-center space-y-2">
                   <AlertTriangle className="h-12 w-12 text-muted-foreground" />
                   <p className="text-lg font-medium">No fines found</p>
@@ -343,6 +398,7 @@ const FinesList = () => {
   }
 
   return (
+    <>
     <div className="container mx-auto p-6 space-y-6">
       {/* Header */}
       <div className="flex justify-between items-start">
@@ -362,7 +418,7 @@ const FinesList = () => {
           )}
           {canEdit('fines') && (
             <Button
-              onClick={() => router.push("/fines/new")}
+              onClick={() => setShowAddFineDialog(true)}
               className="bg-gradient-primary"
             >
               <Plus className="h-4 w-4 mr-2" />
@@ -429,6 +485,28 @@ const FinesList = () => {
         </>
       )}
     </div>
+
+    <AddFineDialog open={showAddFineDialog} onOpenChange={setShowAddFineDialog} />
+
+    {paymentFine && (
+      <AddPaymentDialog
+        open={!!paymentFine}
+        onOpenChange={(open) => {
+          if (!open) setPaymentFine(null);
+        }}
+        customer_id={paymentFine.customer_id || undefined}
+        vehicle_id={paymentFine.vehicle_id}
+        rental_id={paymentFine.rental_id || undefined}
+        defaultAmount={Number(paymentFine.amount)}
+        targetCategories={["Fine"]}
+        onPaymentSuccess={() => {
+          const fineToSync = paymentFine;
+          if (fineToSync) syncFineStatusAfterPayment(fineToSync);
+        }}
+      />
+    )}
+
+  </>
   );
 };
 

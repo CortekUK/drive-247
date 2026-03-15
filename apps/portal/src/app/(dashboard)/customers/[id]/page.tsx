@@ -30,7 +30,7 @@ import { useCustomerFines, useCustomerFineStats } from "@/hooks/use-customer-fin
 import { useCustomerVehicleHistory } from "@/hooks/use-customer-vehicle-history";
 import AddCustomerDocumentDialog from "@/components/customers/add-customer-document-dialog";
 import { AddPaymentDialog } from "@/components/shared/dialogs/add-payment-dialog";
-import { AddFineDialog } from "@/components/shared/dialogs/add-fine-dialog";
+import { AddFineDialog } from "@/components/fines/add-fine-dialog";
 import { CustomerFormModal } from "@/components/customers/customer-form-modal";
 import DocumentStatusBadge from "@/components/customers/document-status-badge";
 import { DocumentSigningStatusBadge } from "@/components/customers/document-signing-status-badge";
@@ -804,13 +804,7 @@ const CustomerDetail = () => {
         <TabsContent value="fines" className="mt-6">
           <Card>
             <CardHeader>
-              <CardTitle className="flex items-center justify-between">
-                <span>Customer Fines</span>
-                <Button onClick={() => setFineDialogOpen(true)} size="sm">
-                  <Plus className="h-4 w-4 mr-2" />
-                  Upload Fine
-                </Button>
-              </CardTitle>
+              <CardTitle>Customer Fines</CardTitle>
               <CardDescription>All fines associated with this customer</CardDescription>
             </CardHeader>
             <CardContent>
@@ -1266,6 +1260,7 @@ const CustomerDetail = () => {
       <AddFineDialog
         open={fineDialogOpen}
         onOpenChange={setFineDialogOpen}
+        preselectedCustomerId={id}
       />
 
       <CustomerFormModal

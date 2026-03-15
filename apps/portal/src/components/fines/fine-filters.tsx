@@ -117,6 +117,8 @@ export const FineFilters = ({ onFiltersChange }: FineFiltersProps) => {
     { value: 'Waived', label: 'Waived' },
     { value: 'Appealed', label: 'Appealed' },
     { value: 'Paid', label: 'Paid' },
+    { value: 'Refunded', label: 'Refunded' },
+    { value: 'Partially Refunded', label: 'Partially Refunded' },
   ];
 
   const activeStatusLabel = filters.status.length === 1

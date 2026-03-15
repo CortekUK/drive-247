@@ -46,6 +46,7 @@ interface AddPaymentDialogProps {
   defaultAmount?: number;
   insuranceChargeMode?: boolean;
   targetCategories?: string[];
+  onPaymentSuccess?: () => void;
 }
 
 const PAYMENT_METHODS = [
@@ -65,7 +66,8 @@ export const AddPaymentDialog = ({
   rental_id: propRentalId,
   defaultAmount,
   insuranceChargeMode,
-  targetCategories
+  targetCategories,
+  onPaymentSuccess
 }: AddPaymentDialogProps) => {
   const [loading, setLoading] = useState(false);
   const [stripeLoading, setStripeLoading] = useState(false);
@@ -307,6 +309,7 @@ export const AddPaymentDialog = ({
       toast({ title: "Payment Recorded", description: `Payment of ${formatCurrency(data.amount, tenant?.currency_code || 'USD')} has been recorded and applied.` });
       logAction({ action: "payment_created", entityType: "payment", entityId: payment.id, details: { amount: data.amount, method: data.method || "manual", customer_id: finalCustomerId } });
       await invalidateAllPaymentQueries(finalCustomerId);
+      if (onPaymentSuccess) onPaymentSuccess();
       form.reset();
       onOpenChange(false);
     } catch (error) {

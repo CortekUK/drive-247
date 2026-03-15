@@ -154,46 +154,62 @@ async function chargeFineToAccount(supabase: any, fineId: string): Promise<FineC
     };
   }
 
-  console.log(`Creating charge entry for fine ${fineId}, amount: ${fine.amount}`);
+  console.log(`Looking for existing charge entry for fine ${fineId}, amount: ${fine.amount}`);
 
-  // Create charge entry in ledger (idempotent using reference)
-  const chargeData: any = {
-    customer_id: fine.customer_id,
-    vehicle_id: fine.vehicle_id,
-    entry_date: fine.issue_date,
-    due_date: fine.due_date,
-    type: 'Charge',
-    category: 'Fine',
-    amount: fine.amount,
-    remaining_amount: fine.amount,
-    reference: `FINE-${fine.id}`
-  };
-  if (fine.tenant_id) {
-    chargeData.tenant_id = fine.tenant_id;
-  }
-  const { error: chargeError } = await supabase
-    .from('ledger_entries')
-    .insert(chargeData);
-
-  if (chargeError && !chargeError.message.includes('duplicate key')) {
-    console.error('Error creating charge entry:', chargeError);
-    return {
-      success: false,
-      fineId,
-      status: 'error',
-      chargedAmount: 0,
-      remainingAmount: 0,
-      error: 'Failed to create charge entry'
-    };
-  }
-
-  // Get the charge entry we just created
-  const { data: chargeEntry, error: getChargeError } = await supabase
+  // Check if ledger entry already exists (created when fine was added)
+  let { data: chargeEntry, error: getChargeError } = await supabase
     .from('ledger_entries')
     .select('*')
     .eq('reference', `FINE-${fine.id}`)
     .eq('type', 'Charge')
-    .single();
+    .maybeSingle();
+
+  // Create charge entry if it doesn't exist yet (backwards compatibility)
+  if (!chargeEntry) {
+    console.log(`No existing charge entry found, creating one for fine ${fineId}`);
+    const chargeData: any = {
+      customer_id: fine.customer_id,
+      vehicle_id: fine.vehicle_id,
+      entry_date: fine.issue_date,
+      due_date: fine.due_date,
+      type: 'Charge',
+      category: 'Fine',
+      amount: fine.amount,
+      remaining_amount: fine.amount,
+      reference: `FINE-${fine.id}`
+    };
+    if (fine.tenant_id) {
+      chargeData.tenant_id = fine.tenant_id;
+    }
+    const { error: chargeError } = await supabase
+      .from('ledger_entries')
+      .insert(chargeData);
+
+    if (chargeError && !chargeError.message.includes('duplicate key')) {
+      console.error('Error creating charge entry:', chargeError);
+      return {
+        success: false,
+        fineId,
+        status: 'error',
+        chargedAmount: 0,
+        remainingAmount: 0,
+        error: 'Failed to create charge entry'
+      };
+    }
+
+    // Re-fetch the entry
+    const { data: newEntry, error: refetchError } = await supabase
+      .from('ledger_entries')
+      .select('*')
+      .eq('reference', `FINE-${fine.id}`)
+      .eq('type', 'Charge')
+      .single();
+
+    chargeEntry = newEntry;
+    getChargeError = refetchError;
+  } else {
+    console.log(`Found existing charge entry ${chargeEntry.id} for fine ${fineId}`);
+  }
 
   if (getChargeError || !chargeEntry) {
     console.error('Error retrieving charge entry:', getChargeError);
@@ -425,9 +441,9 @@ async function waiveFine(supabase: any, fineId: string): Promise<FineChargeResul
     }
   }
 
-  // If fine was charged, we need to handle the ledger entry
-  if (fine.status === 'Charged' && fine.customer_id) {
-    console.log(`Fine ${fineId} was charged, cleaning up ledger entry`);
+  // Clean up ledger entry for any fine that has one (Open or Charged)
+  if (['Open', 'Charged'].includes(fine.status) && fine.customer_id) {
+    console.log(`Cleaning up ledger entry for fine ${fineId} (status: ${fine.status})`);
 
     // Find and update the ledger entry for this fine
     const { data: chargeEntry, error: chargeError } = await supabase

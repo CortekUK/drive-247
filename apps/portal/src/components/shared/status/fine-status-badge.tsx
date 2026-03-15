@@ -9,6 +9,8 @@ interface FineStatusBadgeProps {
 export const FineStatusBadge = ({ status, dueDate, remainingAmount }: FineStatusBadgeProps) => {
   const getVariant = () => {
     if (status === 'Paid') return 'default';
+    if (status === 'Refunded') return 'secondary';
+    if (status === 'Partially Refunded') return 'outline';
     if (status === 'Appeal Successful' || status === 'Waived') return 'secondary';
     if (status === 'Appeal Rejected') return 'destructive';
     if (status === 'Appeal Submitted' || status === 'Appealed') return 'outline';
@@ -34,6 +36,8 @@ export const FineStatusBadge = ({ status, dueDate, remainingAmount }: FineStatus
     if (status === 'Appeal Submitted') return 'Appeal Submitted';
     if (status === 'Appealed') return 'Appealed';
     if (status === 'Waived') return 'Waived';
+    if (status === 'Refunded') return 'Refunded';
+    if (status === 'Partially Refunded') return 'Partially Refunded';
     if (status === 'Paid') return 'Paid';
     if (status === 'Charged') return 'Charged';
     if (status === 'Partially Paid') return 'Partially Paid';

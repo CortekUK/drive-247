@@ -15,16 +15,20 @@ export interface EnhancedFine {
   customer_id: string | null;
   vehicle_id: string;
   created_at: string;
-  customers: { 
-    name: string; 
-    email?: string; 
-    phone?: string; 
+  rental_id: string | null;
+  customers: {
+    name: string;
+    email?: string;
+    phone?: string;
   } | null;
-  vehicles: { 
-    reg: string; 
-    make: string; 
-    model: string; 
+  vehicles: {
+    reg: string;
+    make: string;
+    model: string;
   };
+  rentals: {
+    rental_number: string | null;
+  } | null;
   authority_payments: {
     total_amount: number;
   }[];
@@ -67,6 +71,7 @@ export const useFinesData = ({
           *,
           customers!fines_customer_id_fkey(name, email, phone),
           vehicles!fines_vehicle_id_fkey(reg, make, model),
+          rentals!fines_rental_id_fkey(rental_number),
           authority_payments(amount)
         `, { count: 'exact' })
         .eq("tenant_id", tenant.id);
@@ -147,6 +152,7 @@ export const useFinesData = ({
           ...fine,
           customers: fine.customers as any,
           vehicles: fine.vehicles as any,
+          rentals: fine.rentals as any,
           authority_payments: fine.authority_payments as any,
           isOverdue,
           daysUntilDue,

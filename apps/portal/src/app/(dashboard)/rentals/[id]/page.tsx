@@ -28,6 +28,7 @@ import { KeyHandoverSection } from "@/components/rentals/key-handover-section";
 import { KeyHandoverActionBanner } from "@/components/rentals/key-handover-action-banner";
 import { MileageSummaryCard } from "@/components/rentals/mileage-summary-card";
 import { CancelRentalDialog } from "@/components/shared/dialogs/cancel-rental-dialog";
+import { AddFineDialog } from "@/components/fines/add-fine-dialog";
 import RejectionDialog from "@/components/rentals/rejection-dialog";
 import { ExtensionRequestDialog } from "@/components/rentals/ExtensionRequestDialog";
 import { AdminExtendRentalDialog } from "@/components/rentals/AdminExtendRentalDialog";
@@ -233,6 +234,7 @@ const RentalDetail = () => {
   const [showDocuSignWarning, setShowDocuSignWarning] = useState(false);
   const [showInsuranceWarning, setShowInsuranceWarning] = useState(false);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const [showAddFineDialog, setShowAddFineDialog] = useState(false);
   const [showCloseDialog, setShowCloseDialog] = useState(false);
   const [isApproving, setIsApproving] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
@@ -328,6 +330,48 @@ const RentalDetail = () => {
   const { data: paymentBreakdown } = useRentalPaymentBreakdown(id);
   const { data: refundBreakdown } = useRentalRefundBreakdown(id);
 
+  // Fetch fines linked to this rental
+  const { data: rentalFines } = useQuery({
+    queryKey: ["rental-fines", tenant?.id, id],
+    queryFn: async () => {
+      if (!tenant?.id || !id) return [];
+      const { data, error } = await supabase
+        .from("fines")
+        .select("id, amount, status")
+        .eq("rental_id", id)
+        .eq("tenant_id", tenant.id);
+      if (error) throw error;
+      return data || [];
+    },
+    enabled: !!tenant?.id && !!id,
+  });
+
+  const rentalFinesTotal = useMemo(() => {
+    if (!rentalFines || rentalFines.length === 0) return 0;
+    return rentalFines.reduce((sum, f) => sum + Number(f.amount), 0);
+  }, [rentalFines]);
+
+  const rentalFinesOpenAmount = useMemo(() => {
+    if (!rentalFines || rentalFines.length === 0) return 0;
+    return rentalFines
+      .filter(f => f.status === 'Open' || f.status === 'Charged')
+      .reduce((sum, f) => sum + Number(f.amount), 0);
+  }, [rentalFines]);
+
+  const rentalFinesPaidAmount = useMemo(() => {
+    if (!rentalFines || rentalFines.length === 0) return 0;
+    return rentalFines
+      .filter(f => f.status === 'Paid' || f.status === 'Refunded' || f.status === 'Partially Refunded')
+      .reduce((sum, f) => sum + Number(f.amount), 0);
+  }, [rentalFines]);
+
+  const rentalFinesWaivedAmount = useMemo(() => {
+    if (!rentalFines || rentalFines.length === 0) return 0;
+    return rentalFines
+      .filter(f => f.status === 'Waived')
+      .reduce((sum, f) => sum + Number(f.amount), 0);
+  }, [rentalFines]);
+
   // Map of category → remaining unpaid amount (combines ledger charges + invoice fallback)
   const categoryRemainingAmounts = useMemo(() => {
     const amounts: Record<string, number> = {};
@@ -366,8 +410,13 @@ const RentalDetail = () => {
       }
     }
 
+    // Add fines remaining amount if not already tracked in ledger
+    if (rentalFinesOpenAmount > 0 && amounts['Fine'] === undefined) {
+      amounts['Fine'] = rentalFinesOpenAmount;
+    }
+
     return amounts;
-  }, [paymentBreakdown, invoiceBreakdown, rentalCharges, rental, refundBreakdown]);
+  }, [paymentBreakdown, invoiceBreakdown, rentalCharges, rental, refundBreakdown, rentalFinesOpenAmount]);
 
   // Auto-refresh payment data when tab regains focus (e.g. after Stripe checkout in new tab)
   useEffect(() => {
@@ -1096,6 +1145,8 @@ const RentalDetail = () => {
     const installmentUpfrontPaid = hasInstallmentPlan && installmentPlan?.upfront_paid;
 
     for (const [cat, remaining] of Object.entries(categoryRemainingAmounts)) {
+      // Skip Fine — handled separately below
+      if (cat === 'Fine') continue;
       const hasLedgerCharge = paymentBreakdown?.[cat] !== undefined;
       if (!hasLedgerCharge && remaining > 0) {
         // Skip fees that are covered by the installment upfront payment
@@ -1105,8 +1156,12 @@ const RentalDetail = () => {
         invoiceOnlyOutstanding += remaining;
       }
     }
-    return ledgerOutstanding + invoiceOnlyOutstanding;
-  }, [rentalTotals, categoryRemainingAmounts, paymentBreakdown, hasInstallmentPlan, installmentPlan]);
+    // Only add fines to outstanding if they're NOT already tracked in the ledger
+    // (ledgerOutstanding already includes Fine charges that have ledger entries with rental_id)
+    const finesInLedger = paymentBreakdown?.['Fine'] !== undefined;
+    const finesOutstanding = finesInLedger ? 0 : rentalFinesOpenAmount;
+    return ledgerOutstanding + invoiceOnlyOutstanding + finesOutstanding;
+  }, [rentalTotals, categoryRemainingAmounts, paymentBreakdown, hasInstallmentPlan, installmentPlan, rentalFinesOpenAmount]);
 
   if (isLoading) {
     return <div>Loading rental details...</div>;
@@ -1124,9 +1179,9 @@ const RentalDetail = () => {
     return isRejected || isLowScore;
   }) || false;
 
-  // Use the new totals from allocation-based calculations
-  const totalCharges = rentalTotals?.totalCharges || 0;
-  const totalPayments = rentalTotals?.totalPayments || 0;
+  // Use the new totals from allocation-based calculations (include fines)
+  const totalCharges = (rentalTotals?.totalCharges || 0) + rentalFinesTotal;
+  const totalPayments = (rentalTotals?.totalPayments || 0) + rentalFinesPaidAmount;
 
   // Group extension charges by extension number for display
   // Supports both legacy 'Extension' category and new multi-category ('Extension Rental', 'Extension Tax', 'Extension Service Fee')
@@ -1546,7 +1601,7 @@ const RentalDetail = () => {
                 <Plus className="h-4 w-4 mr-2" />
                 Add Payment
               </Button>
-              <Button variant="outline" onClick={() => router.push(`/fines/new?rental_id=${rental.id}&customer_id=${rental.customers?.id}&vehicle_id=${rental.vehicles?.id}`)}>
+              <Button variant="outline" onClick={() => setShowAddFineDialog(true)}>
                 <Plus className="h-4 w-4 mr-2" />
                 Add Fine
               </Button>
@@ -1738,6 +1793,32 @@ const RentalDetail = () => {
           { label: 'Extras', category: 'Extras', amount: extrasTotal, detail: (extrasDetails?.length || 0) > 0 ? `${extrasDetails!.length} item${extrasDetails!.length > 1 ? 's' : ''}` : 'Add-ons', icon: Package, color: 'text-indigo-500', bg: 'bg-indigo-500/10', nonRefundable: true, onClick: extrasTotal > 0 ? () => setShowExtrasDialog(true) : undefined },
         ];
 
+        // Add fines row if any fines are linked to this rental
+        if (rentalFines && rentalFines.length > 0) {
+          const activeFines = rentalFines.filter(f => f.status !== 'Waived');
+          const activeFinesAmount = activeFines.reduce((sum, f) => sum + Number(f.amount), 0);
+          const openCount = rentalFines.filter(f => f.status === 'Open' || f.status === 'Charged').length;
+          const paidCount = rentalFines.filter(f => f.status === 'Paid').length;
+          const waivedCount = rentalFines.filter(f => f.status === 'Waived').length;
+          const refundedCount = rentalFines.filter(f => f.status === 'Refunded').length;
+          const partialRefundCount = rentalFines.filter(f => f.status === 'Partially Refunded').length;
+          const detailParts: string[] = [];
+          if (openCount > 0) detailParts.push(`${openCount} open`);
+          if (paidCount > 0) detailParts.push(`${paidCount} paid`);
+          if (waivedCount > 0) detailParts.push(`${waivedCount} waived`);
+          if (refundedCount > 0) detailParts.push(`${refundedCount} refunded`);
+          if (partialRefundCount > 0) detailParts.push(`${partialRefundCount} partial refund`);
+          rows.push({
+            label: 'Fines',
+            category: 'Fine',
+            amount: activeFinesAmount,
+            detail: detailParts.join(', ') || `${rentalFines.length} fine${rentalFines.length > 1 ? 's' : ''}`,
+            icon: AlertTriangle,
+            color: 'text-orange-500',
+            bg: 'bg-orange-500/10',
+          });
+        }
+
         // Add excess mileage row if charge exists in the ledger
         const excessMileageCharge = (rentalCharges || []).find(c => c.category === 'Excess Mileage');
         if (excessMileageCharge) {
@@ -1877,11 +1958,39 @@ const RentalDetail = () => {
                           if (!applied) {
                             return <Badge variant="outline" className="text-muted-foreground/60 border-muted-foreground/20 text-[11px]">Not Applied</Badge>;
                           }
-                          if (fullyRefunded) {
-                            return <Badge variant="outline" className="text-green-500 border-green-500/30 bg-green-500/10 text-[11px]">Refunded</Badge>;
+                          // Skip generic refund checks for Fine — handled in Fine-specific block below
+                          if (category !== 'Fine') {
+                            if (fullyRefunded) {
+                              return <Badge variant="outline" className="text-green-500 border-green-500/30 bg-green-500/10 text-[11px]">Refunded</Badge>;
+                            }
+                            if (refunded > 0) {
+                              return <Badge variant="outline" className="text-amber-500 border-amber-500/30 bg-amber-500/10 text-[11px]">Partial Refund</Badge>;
+                            }
                           }
-                          if (refunded > 0) {
-                            return <Badge variant="outline" className="text-amber-500 border-amber-500/30 bg-amber-500/10 text-[11px]">Partial Refund</Badge>;
+                          // Special handling for Fines — status from fines data, not ledger
+                          if (category === 'Fine' && rentalFines) {
+                            const allWaived = rentalFines.every(f => f.status === 'Waived');
+                            const allRefundedOrWaived = rentalFines.every(f => ['Refunded', 'Waived'].includes(f.status));
+                            const allResolved = rentalFines.every(f => ['Paid', 'Waived', 'Refunded', 'Partially Refunded'].includes(f.status));
+                            const someResolved = rentalFines.some(f => ['Paid', 'Waived', 'Refunded', 'Partially Refunded'].includes(f.status));
+                            const hasRefunded = rentalFines.some(f => f.status === 'Refunded');
+                            const hasPartiallyRefunded = rentalFines.some(f => f.status === 'Partially Refunded');
+                            if (allWaived) {
+                              return <Badge variant="outline" className="text-muted-foreground border-muted-foreground/30 text-[11px]">Waived</Badge>;
+                            }
+                            if (allRefundedOrWaived && hasRefunded) {
+                              return <Badge variant="outline" className="text-green-500 border-green-500/30 bg-green-500/10 text-[11px]">Refunded</Badge>;
+                            }
+                            if (hasPartiallyRefunded) {
+                              return <Badge variant="outline" className="text-amber-500 border-amber-500/30 bg-amber-500/10 text-[11px]">Partial Refund</Badge>;
+                            }
+                            if (allResolved) {
+                              return <Badge variant="outline" className="text-emerald-500 border-emerald-500/30 bg-emerald-500/10 text-[11px]">Paid</Badge>;
+                            }
+                            if (someResolved) {
+                              return <Badge variant="outline" className="text-amber-500 border-amber-500/30 bg-amber-500/10 text-[11px]">Partially Paid</Badge>;
+                            }
+                            return <Badge variant="outline" className="text-red-500 border-red-500/30 bg-red-500/10 text-[11px]">Not Paid</Badge>;
                           }
                           // Check payment status from ledger breakdown
                           const catPayment = paymentBreakdown?.[category];
@@ -1965,7 +2074,63 @@ const RentalDetail = () => {
                           </div>
                         ) : nonRefundable && applied ? (
                           <span className="text-xs text-muted-foreground/50">-</span>
-                        ) : (() => {
+                        ) : category === 'Fine' && rentalFines ? (() => {
+                          // Custom Fine actions based on fine statuses
+                          const allWaived = rentalFines.every(f => f.status === 'Waived');
+                          const allResolved = rentalFines.every(f => ['Paid', 'Waived', 'Refunded', 'Partially Refunded'].includes(f.status));
+                          const allRefundedOrWaived = rentalFines.every(f => ['Refunded', 'Waived'].includes(f.status));
+                          const hasOpenFines = rentalFines.some(f => f.status === 'Open' || f.status === 'Charged');
+                          const hasPaidFines = rentalFines.some(f => f.status === 'Paid');
+                          const hasPartiallyRefunded = rentalFines.some(f => f.status === 'Partially Refunded');
+                          const fineRefunded = refundBreakdown?.['Fine'] ?? 0;
+                          const fineFullyRefunded = allRefundedOrWaived && !allWaived;
+
+                          // All waived — no actions available
+                          if (allWaived) {
+                            return <span className="text-xs text-muted-foreground/50">Waived</span>;
+                          }
+                          // Fully refunded — show checkmark
+                          if (fineFullyRefunded) {
+                            return <Check className="h-4 w-4 text-green-500 inline-block" />;
+                          }
+                          // All resolved and has paid or partially refunded fines — show Refund
+                          if (allResolved && (hasPaidFines || hasPartiallyRefunded)) {
+                            return (
+                              <button
+                                className={`text-xs font-medium ${isRentalCompleted ? 'text-orange-500/40 cursor-not-allowed' : 'text-orange-500 hover:text-orange-400 hover:underline'}`}
+                                disabled={isRentalCompleted}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  if (isRentalCompleted) return;
+                                  setRefundCategory('Fine');
+                                  setRefundTotalAmount(rentalFinesPaidAmount);
+                                  setRefundPaidAmount(Math.max(0, rentalFinesPaidAmount - fineRefunded));
+                                  setShowRefundDialog(true);
+                                }}
+                              >
+                                {fineRefunded > 0 ? 'Refund More' : 'Refund'}
+                              </button>
+                            );
+                          }
+                          // Has open fines — show Add Payment
+                          if (hasOpenFines) {
+                            return (
+                              <button
+                                className={`text-xs font-medium ${isRentalCompleted ? 'text-blue-500/40 cursor-not-allowed' : 'text-blue-500 hover:text-blue-400 hover:underline'}`}
+                                disabled={isRentalCompleted}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  if (isRentalCompleted) return;
+                                  setSelectedCategories(new Set(['Fine']));
+                                  setShowTargetedPayment(true);
+                                }}
+                              >
+                                Add Payment
+                              </button>
+                            );
+                          }
+                          return <span className="text-muted-foreground/30">-</span>;
+                        })() : (() => {
                           // Show Refund if category has been paid (dimmed for completed rentals)
                           const catPayment = paymentBreakdown?.[category];
                           const categoryHasBeenPaid = catPayment ? catPayment.paid > 0 : false;
@@ -3844,6 +4009,38 @@ const RentalDetail = () => {
             return Array.from(selectedCategories).reduce((sum, c) => sum + (categoryRemainingAmounts[c] ?? 0), 0);
           })()}
           targetCategories={Array.from(selectedCategories)}
+          onPaymentSuccess={async () => {
+            // Sync fine statuses after payment if Fine category was selected
+            if (selectedCategories.has('Fine') && rentalFines && rentalFines.length > 0) {
+              for (const fine of rentalFines) {
+                if (fine.status === 'Open' || fine.status === 'Charged') {
+                  try {
+                    const { data: ledgerEntry } = await supabase
+                      .from('ledger_entries')
+                      .select('remaining_amount, amount')
+                      .eq('reference', `FINE-${fine.id}`)
+                      .eq('type', 'Charge')
+                      .maybeSingle();
+                    if (!ledgerEntry) continue;
+                    let newStatus: string | null = null;
+                    if (ledgerEntry.remaining_amount <= 0) newStatus = 'Paid';
+                    else if (ledgerEntry.remaining_amount < ledgerEntry.amount) newStatus = 'Charged';
+                    if (newStatus && newStatus !== fine.status) {
+                      const updateData: any = { status: newStatus };
+                      const now = new Date().toISOString();
+                      if (newStatus === 'Paid') { updateData.charged_at = now; updateData.resolved_at = now; }
+                      else if (newStatus === 'Charged') { updateData.charged_at = now; }
+                      await supabase.from('fines').update(updateData).eq('id', fine.id);
+                    }
+                  } catch (err) { console.error('Error syncing fine status:', err); }
+                }
+              }
+              queryClient.invalidateQueries({ queryKey: ["rental-fines"] });
+              queryClient.invalidateQueries({ queryKey: ["fines-enhanced"] });
+              queryClient.invalidateQueries({ queryKey: ["fines-kpis"] });
+              queryClient.invalidateQueries({ queryKey: ["customer-fine-stats"] });
+            }
+          }}
         />
       )}
 
@@ -3912,6 +4109,47 @@ const RentalDetail = () => {
           category={refundCategory}
           totalAmount={refundTotalAmount}
           paidAmount={refundPaidAmount}
+          onSuccess={async (refundedAmount: number) => {
+            if (refundCategory === 'Fine' && rentalFines) {
+              // Query total Fine refunds for this rental from ledger
+              const { data: fineRefunds } = await supabase
+                .from('ledger_entries')
+                .select('amount')
+                .eq('rental_id', rental.id)
+                .eq('type', 'Refund')
+                .eq('category', 'Fine');
+              const totalRefunded = Math.abs(fineRefunds?.reduce((sum, r) => sum + (r.amount || 0), 0) || 0);
+              const totalPaid = rentalFines
+                .filter(f => f.status === 'Paid' || f.status === 'Refunded' || f.status === 'Partially Refunded')
+                .reduce((sum, f) => sum + Number(f.amount), 0);
+
+              // Update each paid fine's status based on total refund coverage
+              const paidFines = rentalFines.filter(f => f.status === 'Paid' || f.status === 'Partially Refunded');
+              if (totalRefunded >= totalPaid) {
+                // Full refund — mark all paid fines as Refunded
+                for (const fine of paidFines) {
+                  await supabase
+                    .from('fines')
+                    .update({ status: 'Refunded', resolved_at: new Date().toISOString() })
+                    .eq('id', fine.id);
+                }
+              } else if (totalRefunded > 0) {
+                // Partial refund — mark paid fines as Partially Refunded
+                for (const fine of paidFines) {
+                  await supabase
+                    .from('fines')
+                    .update({ status: 'Partially Refunded' })
+                    .eq('id', fine.id);
+                }
+              }
+              queryClient.invalidateQueries({ queryKey: ["rental-fines"] });
+              queryClient.invalidateQueries({ queryKey: ["fines-enhanced"] });
+              queryClient.invalidateQueries({ queryKey: ["fines-kpis"] });
+              queryClient.invalidateQueries({ queryKey: ["customer-fine-stats"] });
+              queryClient.invalidateQueries({ queryKey: ["customer-balance"] });
+              queryClient.invalidateQueries({ queryKey: ["customer-balance-status"] });
+            }
+          }}
         />
       )}
 
@@ -4478,6 +4716,16 @@ const RentalDetail = () => {
         onOpenChange={setShowRowReminder}
         defaultTitle={reminderRowTitle}
         defaultObjectType="Rental"
+      />
+
+      {/* Add Fine Dialog */}
+      <AddFineDialog
+        open={showAddFineDialog}
+        onOpenChange={setShowAddFineDialog}
+        preselectedCustomerId={rental?.customers?.id}
+        preselectedRentalId={rental?.id}
+        preselectedVehicleId={rental?.vehicles?.id}
+        preselectedVehicleReg={rental?.vehicles?.reg}
       />
     </div>
   );

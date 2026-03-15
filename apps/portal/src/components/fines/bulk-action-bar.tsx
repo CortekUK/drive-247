@@ -88,6 +88,17 @@ export const BulkActionBar = ({ selectedFines, onClearSelection }: BulkActionBar
 
   const bulkWaiveMutation = useMutation({
     mutationFn: async (fineIds: string[]) => {
+      // Client-side: delete ledger entries for all fines being waived
+      await Promise.allSettled(
+        fineIds.map(fineId =>
+          supabase
+            .from('ledger_entries')
+            .delete()
+            .eq('reference', `FINE-${fineId}`)
+            .eq('type', 'Charge')
+        )
+      );
+
       const results = await Promise.allSettled(
         fineIds.map(fineId =>
           supabase.functions.invoke('apply-fine', {
@@ -110,6 +121,9 @@ export const BulkActionBar = ({ selectedFines, onClearSelection }: BulkActionBar
       queryClient.invalidateQueries({ queryKey: ["fines-list"] });
       queryClient.invalidateQueries({ queryKey: ["fines-enhanced"] });
       queryClient.invalidateQueries({ queryKey: ["fines-kpis"] });
+      queryClient.invalidateQueries({ queryKey: ["customer-balance"] });
+      queryClient.invalidateQueries({ queryKey: ["customer-balance-status"] });
+      queryClient.invalidateQueries({ queryKey: ["customer-fine-stats"] });
       onClearSelection();
       setShowWaiveDialog(false);
     },
