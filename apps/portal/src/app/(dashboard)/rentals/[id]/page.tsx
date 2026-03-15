@@ -1078,18 +1078,29 @@ const RentalDetail = () => {
   });
 
   // Outstanding includes both ledger charges and invoice-only charges (e.g. Bonzah Insurance)
+  // For installment plans, the upfront payment covers fees (deposit, service fee, tax) which are
+  // included in the Rental charge from the DB trigger — don't double-count them from the invoice.
   // Must be above early returns to maintain hook order
   const outstandingBalance = useMemo(() => {
     const ledgerOutstanding = rentalTotals?.outstanding || 0;
     let invoiceOnlyOutstanding = 0;
+
+    // Categories covered by the installment upfront (already included in the Rental charge)
+    const upfrontCoveredCategories = new Set(['Security Deposit', 'Service Fee', 'Tax', 'Delivery Fee']);
+    const installmentUpfrontPaid = hasInstallmentPlan && installmentPlan?.upfront_paid;
+
     for (const [cat, remaining] of Object.entries(categoryRemainingAmounts)) {
       const hasLedgerCharge = paymentBreakdown?.[cat] !== undefined;
       if (!hasLedgerCharge && remaining > 0) {
+        // Skip fees that are covered by the installment upfront payment
+        if (installmentUpfrontPaid && upfrontCoveredCategories.has(cat)) {
+          continue;
+        }
         invoiceOnlyOutstanding += remaining;
       }
     }
     return ledgerOutstanding + invoiceOnlyOutstanding;
-  }, [rentalTotals, categoryRemainingAmounts, paymentBreakdown]);
+  }, [rentalTotals, categoryRemainingAmounts, paymentBreakdown, hasInstallmentPlan, installmentPlan]);
 
   if (isLoading) {
     return <div>Loading rental details...</div>;
@@ -1845,6 +1856,10 @@ const RentalDetail = () => {
                           }
                           // No ledger entry for this category — check overall payment status
                           if (totalPayments >= (invoiceBreakdown?.totalAmount || 0) && totalPayments > 0) {
+                            return <Badge variant="outline" className="text-emerald-500 border-emerald-500/30 bg-emerald-500/10 text-[11px]">Paid</Badge>;
+                          }
+                          // For installment plans, fees are paid via the upfront payment (included in the Rental charge)
+                          if (hasInstallmentPlan && installmentPlan?.upfront_paid && ['Security Deposit', 'Service Fee', 'Tax', 'Delivery Fee'].includes(category) && amount > 0) {
                             return <Badge variant="outline" className="text-emerald-500 border-emerald-500/30 bg-emerald-500/10 text-[11px]">Paid</Badge>;
                           }
                           // On cancelled/rejected rental, show "Cancelled" instead of "Not Paid"

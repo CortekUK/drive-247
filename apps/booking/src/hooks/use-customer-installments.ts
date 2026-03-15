@@ -144,7 +144,7 @@ export function useActiveInstallmentPlans() {
   const { data: allPlans, ...rest } = useCustomerInstallmentPlans();
 
   const activePlans = (allPlans || []).filter(
-    (plan) => plan.status === 'active' || plan.status === 'overdue'
+    (plan) => plan.status === 'active' || plan.status === 'overdue' || plan.status === 'pending'
   );
 
   return { data: activePlans, ...rest };

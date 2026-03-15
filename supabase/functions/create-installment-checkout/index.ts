@@ -61,7 +61,7 @@ serve(async (req) => {
 
     // Extract config settings with defaults
     const chargeFirstUpfront = body.chargeFirstUpfront !== false // Default: true
-    const whatGetsSplit = body.whatGetsSplit || 'rental_tax'
+    const whatGetsSplit = body.whatGetsSplit || 'rental_only'
     const gracePeriodDays = body.gracePeriodDays ?? 3
     const maxRetryAttempts = body.maxRetryAttempts ?? 3
     const retryIntervalDays = body.retryIntervalDays ?? 1

@@ -99,9 +99,261 @@ serve(async (req) => {
         const isPreAuth = session.metadata?.preauth_mode === "true";
         const isExtension = session.metadata?.type === "extension";
         const isExcessMileage = session.metadata?.type === "excess_mileage";
+        const isInstallment = session.metadata?.checkout_type === "installment" || session.metadata?.checkout_type === "installment_upfront";
 
         if (!rentalId) {
           console.log("No rental ID in session, skipping");
+          break;
+        }
+
+        // Handle installment checkout completion
+        if (isInstallment) {
+          console.log("[LIVE MODE] Installment checkout completed for rental:", rentalId);
+
+          // Update upfront payment record with payment intent ID
+          const { data: existingPaymentRecord, error: paymentRecordError } = await supabase
+            .from("payments")
+            .select("id")
+            .eq("stripe_checkout_session_id", session.id)
+            .maybeSingle();
+
+          if (paymentRecordError) {
+            console.error("[LIVE MODE] Error fetching payment record for session:", session.id, paymentRecordError);
+          }
+
+          let upfrontPaymentId: string | null = null;
+
+          if (existingPaymentRecord) {
+            await supabase
+              .from("payments")
+              .update({
+                stripe_payment_intent_id: session.payment_intent as string,
+                status: "Applied",
+                capture_status: "captured",
+                updated_at: new Date().toISOString(),
+              })
+              .eq("id", existingPaymentRecord.id);
+            upfrontPaymentId = existingPaymentRecord.id;
+            console.log("[LIVE MODE] Updated upfront payment:", existingPaymentRecord.id);
+          } else {
+            // Payment record missing (e.g. portal-created plan) — create it from session data
+            console.log("[LIVE MODE] No upfront payment record found for session — creating one");
+            const upfrontAmount = session.amount_total ? session.amount_total / 100 : 0;
+            const customerId = session.metadata?.customer_id;
+            const sessionTenantId = session.metadata?.tenant_id;
+
+            if (upfrontAmount > 0 && customerId) {
+              const { data: rental } = await supabase
+                .from("rentals")
+                .select("vehicle_id")
+                .eq("id", rentalId)
+                .single();
+
+              const { data: newPayment } = await supabase
+                .from("payments")
+                .insert({
+                  customer_id: customerId,
+                  rental_id: rentalId,
+                  vehicle_id: rental?.vehicle_id,
+                  amount: upfrontAmount,
+                  payment_date: new Date().toISOString().split("T")[0],
+                  method: "Card",
+                  payment_type: "InitialFee",
+                  status: "Applied",
+                  verification_status: "auto_approved",
+                  stripe_checkout_session_id: session.id,
+                  stripe_payment_intent_id: session.payment_intent as string,
+                  capture_status: "captured",
+                  booking_source: "website",
+                  ...(sessionTenantId ? { tenant_id: sessionTenantId } : {}),
+                })
+                .select()
+                .single();
+
+              if (newPayment) {
+                upfrontPaymentId = newPayment.id;
+                console.log("[LIVE MODE] Created upfront payment record:", newPayment.id);
+              }
+            }
+          }
+
+          // Activate the installment plan
+          console.log("[LIVE MODE] Looking for pending installment plan for rental:", rentalId);
+          const { data: installmentPlans, error: planError } = await supabase
+            .from("installment_plans")
+            .select("id")
+            .eq("rental_id", rentalId)
+            .eq("status", "pending");
+
+          if (planError) {
+            console.error("[LIVE MODE] Error fetching installment plan for rental:", rentalId, planError);
+          }
+
+          console.log("[LIVE MODE] Installment plans query result:", JSON.stringify(installmentPlans));
+          const installmentPlan = installmentPlans && installmentPlans.length > 0 ? installmentPlans[0] : null;
+
+          if (!installmentPlan) {
+            console.error("[LIVE MODE] No pending installment plan found for rental:", rentalId, "- skipping activation. Plans found:", installmentPlans?.length ?? 0);
+          }
+
+          if (installmentPlan) {
+            // Get the payment method ID from the PaymentIntent
+            let paymentMethodId: string | null = null;
+            if (session.payment_intent) {
+              try {
+                const paymentIntent = await stripe.paymentIntents.retrieve(
+                  session.payment_intent as string,
+                  stripeOptions
+                );
+                paymentMethodId = paymentIntent.payment_method as string;
+                console.log("[LIVE MODE] Retrieved payment method from PaymentIntent:", paymentMethodId);
+              } catch (err) {
+                console.error("[LIVE MODE] Error retrieving PaymentIntent for payment method:", err);
+              }
+            }
+
+            // Check if first installment was charged upfront
+            const chargeFirstUpfront = session.metadata?.charge_first_upfront !== 'false';
+            let paidInstallments = 0;
+            let totalPaidAmount = 0;
+
+            if (chargeFirstUpfront) {
+              // Mark the first installment as paid
+              const { data: firstInstallment } = await supabase
+                .from("scheduled_installments")
+                .select("id, amount")
+                .eq("installment_plan_id", installmentPlan.id)
+                .eq("installment_number", 1)
+                .single();
+
+              if (firstInstallment) {
+                await supabase
+                  .from("scheduled_installments")
+                  .update({
+                    status: "paid",
+                    paid_at: new Date().toISOString(),
+                    payment_id: upfrontPaymentId,
+                    stripe_payment_intent_id: session.payment_intent as string,
+                    updated_at: new Date().toISOString(),
+                  })
+                  .eq("id", firstInstallment.id);
+                console.log("[LIVE MODE] First installment marked as paid:", firstInstallment.id);
+                paidInstallments = 1;
+                totalPaidAmount = firstInstallment.amount;
+              }
+            }
+
+            // Activate the plan and update counters
+            const stripeCustomerId = session.customer as string;
+            const { error: activateError } = await supabase
+              .from("installment_plans")
+              .update({
+                status: "active",
+                upfront_paid: true,
+                upfront_payment_id: upfrontPaymentId,
+                stripe_payment_method_id: paymentMethodId,
+                ...(stripeCustomerId ? { stripe_customer_id: stripeCustomerId } : {}),
+                paid_installments: paidInstallments,
+                total_paid: totalPaidAmount,
+                updated_at: new Date().toISOString(),
+              })
+              .eq("id", installmentPlan.id);
+
+            if (activateError) {
+              console.error("[LIVE MODE] Error activating installment plan:", activateError);
+            } else {
+              console.log("[LIVE MODE] Installment plan activated:", installmentPlan.id);
+            }
+
+            // Update rental status
+            const { error: rentalUpdateError } = await supabase
+              .from("rentals")
+              .update({
+                payment_status: "fulfilled",
+                updated_at: new Date().toISOString(),
+              })
+              .eq("id", rentalId);
+
+            if (rentalUpdateError) {
+              console.error("[LIVE MODE] Error updating rental payment status:", rentalUpdateError);
+            }
+
+            // Trigger FIFO ledger allocation for the upfront payment
+            if (upfrontPaymentId) {
+              try {
+                const applyResponse = await fetch(
+                  `${Deno.env.get("SUPABASE_URL")}/functions/v1/apply-payment`,
+                  {
+                    method: "POST",
+                    headers: {
+                      "Content-Type": "application/json",
+                      Authorization: `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`,
+                    },
+                    body: JSON.stringify({ paymentId: upfrontPaymentId }),
+                  }
+                );
+                if (applyResponse.ok) {
+                  console.log("[LIVE MODE] Installment upfront payment FIFO allocation completed");
+                } else {
+                  console.error("[LIVE MODE] Installment FIFO allocation failed:", await applyResponse.text());
+                }
+              } catch (applyError) {
+                console.error("[LIVE MODE] Error applying installment payment:", applyError);
+              }
+            }
+          }
+
+          // Send booking confirmation notification
+          try {
+            const { data: rental } = await supabase
+              .from("rentals")
+              .select(`
+                id, start_date, end_date, monthly_amount, tenant_id,
+                customer:customers(id, name, email, phone),
+                vehicle:vehicles(id, make, model, reg)
+              `)
+              .eq("id", rentalId)
+              .single();
+
+            if (rental && rental.customer && rental.vehicle) {
+              const vehicleName = rental.vehicle.make && rental.vehicle.model
+                ? `${rental.vehicle.make} ${rental.vehicle.model}`
+                : rental.vehicle.reg;
+
+              await fetch(
+                `${Deno.env.get("SUPABASE_URL")}/functions/v1/notify-booking-pending`,
+                {
+                  method: "POST",
+                  headers: {
+                    "Content-Type": "application/json",
+                    Authorization: `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`,
+                  },
+                  body: JSON.stringify({
+                    paymentId: upfrontPaymentId || '',
+                    rentalId,
+                    tenantId: rental.tenant_id,
+                    customerId: rental.customer.id,
+                    customerName: rental.customer.name,
+                    customerEmail: rental.customer.email,
+                    customerPhone: rental.customer.phone,
+                    vehicleName,
+                    vehicleMake: rental.vehicle.make,
+                    vehicleModel: rental.vehicle.model,
+                    vehicleReg: rental.vehicle.reg,
+                    pickupDate: new Date(rental.start_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
+                    returnDate: new Date(rental.end_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
+                    amount: rental.monthly_amount || (session.amount_total ? session.amount_total / 100 : 0),
+                    bookingRef: rentalId.substring(0, 8).toUpperCase(),
+                    paymentMode: 'installment',
+                  }),
+                }
+              );
+              console.log("[LIVE MODE] Installment booking notification sent");
+            }
+          } catch (notifyError) {
+            console.error("[LIVE MODE] Error sending installment booking notification:", notifyError);
+          }
+
           break;
         }
 

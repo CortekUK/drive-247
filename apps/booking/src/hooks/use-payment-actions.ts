@@ -242,3 +242,32 @@ export function useRetryPayment() {
     },
   });
 }
+
+// Hook to create a checkout session for a pending installment plan's upfront payment
+export function useCreateUpfrontCheckout() {
+  const { customerUser } = useCustomerAuthStore();
+
+  return useMutation({
+    mutationFn: async (installmentPlanId: string): Promise<{ url: string }> => {
+      if (!customerUser?.customer_id) {
+        throw new Error('Not authenticated');
+      }
+
+      const { data, error } = await supabase.functions.invoke('create-upfront-checkout', {
+        body: {
+          installmentPlanId,
+          customerId: customerUser.customer_id,
+        },
+      });
+
+      if (error) throw new Error(error.message);
+      if (data?.error) throw new Error(data.error);
+      if (!data?.url) throw new Error('Failed to create checkout session');
+
+      return { url: data.url };
+    },
+    onError: (error) => {
+      toast.error(error.message || 'Failed to start payment. Please try again.');
+    },
+  });
+}

@@ -137,92 +137,140 @@ async function applyPayment(supabase: any, paymentId: string, targetCategories?:
       };
     }
 
-    // Handle InitialFee payments - allocate to rental charges using FIFO
+    // Handle InitialFee payments - allocate to fee charges first, then rental
+    // The DB trigger creates Rental charges only. Fee charges (Tax, Service Fee, etc.)
+    // are auto-created from the invoice and allocated first, then remainder goes to Rental.
     if (isInitialFee) {
-      console.log('Processing Initial Fee payment - allocating to rental charges');
+      console.log('Processing Initial Fee payment - fees first, then rental');
 
       let remainingAmount = payment.amount;
       let totalAllocated = 0;
 
-      // Get outstanding Rental charges for this rental (FIFO by due_date)
-      const { data: outstandingCharges, error: chargesError } = await supabase
-        .from('ledger_entries')
-        .select('id, amount, remaining_amount, due_date, entry_date, rental_id, vehicle_id')
-        .eq('rental_id', payment.rental_id)
-        .eq('type', 'Charge')
-        .eq('category', 'Rental')
-        .gt('remaining_amount', 0)
-        .order('due_date', { ascending: true })
-        .order('entry_date', { ascending: true });
+      // Step 1: Allocate to fee charges first (auto-create from invoice if missing)
+      // Only create fee charges if the Rental charge = rental amount only (not grand total)
+      if (payment.rental_id) {
+        const { data: invoice } = await supabase
+          .from('invoices')
+          .select('*')
+          .eq('rental_id', payment.rental_id)
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle();
 
-      if (chargesError) {
-        console.error('Error fetching rental charges:', chargesError);
-      } else {
-        console.log(`Found ${outstandingCharges?.length || 0} outstanding rental charges`);
+        const { data: rentalChargeCheck } = await supabase
+          .from('ledger_entries')
+          .select('amount')
+          .eq('rental_id', payment.rental_id)
+          .eq('type', 'Charge')
+          .eq('category', 'Rental')
+          .order('created_at', { ascending: true })
+          .limit(1)
+          .maybeSingle();
 
-        // Apply payment to charges in FIFO order
-        for (const charge of outstandingCharges || []) {
+        const invoiceSubtotal = Number(invoice?.subtotal || 0);
+        const rentalChargeAmt = Number(rentalChargeCheck?.amount || 0);
+        // Skip fee charges if: no invoice exists, OR Rental charge includes fees (> subtotal)
+        const skipFeeCharges = !invoice || (invoiceSubtotal > 0 && rentalChargeAmt > invoiceSubtotal * 1.01);
+
+        if (skipFeeCharges) {
+          console.log(`Skipping fee charges — ${!invoice ? 'no invoice' : `Rental (${rentalChargeAmt}) > subtotal (${invoiceSubtotal})`}`);
+        }
+
+        const feeCategories = skipFeeCharges ? [] : [
+          { category: 'Service Fee', invoiceField: 'service_fee' },
+          { category: 'Security Deposit', invoiceField: 'security_deposit' },
+          { category: 'Tax', invoiceField: 'tax_amount' },
+          { category: 'Delivery Fee', invoiceField: 'delivery_fee' },
+        ];
+
+        for (const { category, invoiceField } of feeCategories) {
           if (remainingAmount <= 0) break;
 
-          const toApply = Math.min(remainingAmount, charge.remaining_amount);
-
-          console.log(`Applying ${formatCurrency(toApply, currencyCode)} to rental charge ${charge.id} (due ${charge.due_date})`);
-
-          // Create payment application record
-          const applicationData1: any = {
-            payment_id: paymentId,
-            charge_entry_id: charge.id,
-            amount_applied: toApply
-          };
-          if (payment.tenant_id) {
-            applicationData1.tenant_id = payment.tenant_id;
-          }
-          const { error: applicationError } = await supabase
-            .from('payment_applications')
-            .insert(applicationData1);
-
-          if (applicationError && !applicationError.message.includes('duplicate key')) {
-            console.error('Payment application error:', applicationError);
-            continue;
-          }
-
-          // Update charge remaining amount
-          const { error: chargeUpdateError } = await supabase
+          let { data: feeCharges } = await supabase
             .from('ledger_entries')
-            .update({
-              remaining_amount: charge.remaining_amount - toApply
-            })
-            .eq('id', charge.id);
+            .select('id, amount, remaining_amount')
+            .eq('rental_id', payment.rental_id)
+            .eq('type', 'Charge')
+            .eq('category', category)
+            .gt('remaining_amount', 0)
+            .order('due_date', { ascending: true });
 
-          if (chargeUpdateError) {
-            console.error('Charge update error:', chargeUpdateError);
-            continue;
+          if ((!feeCharges || feeCharges.length === 0) && invoice) {
+            const invoiceAmount = invoice[invoiceField] || 0;
+            if (invoiceAmount > 0) {
+              console.log(`Auto-creating ${category} charge: ${formatCurrency(invoiceAmount, currencyCode)}`);
+              const chargeData: any = {
+                customer_id: payment.customer_id, rental_id: payment.rental_id,
+                vehicle_id: payment.vehicle_id, entry_date: invoice.invoice_date || entryDate,
+                type: 'Charge', category, amount: invoiceAmount,
+                remaining_amount: invoiceAmount, due_date: invoice.invoice_date || entryDate,
+              };
+              if (payment.tenant_id) chargeData.tenant_id = payment.tenant_id;
+              const { data: nc, error: fe } = await supabase.from('ledger_entries').insert(chargeData).select().single();
+              if (!fe && nc) feeCharges = [nc];
+              else if (fe) console.error(`Failed to create ${category}:`, fe);
+            }
           }
 
-          // Create P&L revenue entry for the applied amount
-          const pnlData: any = {
-            vehicle_id: charge.vehicle_id || payment.vehicle_id,
-            entry_date: charge.due_date,
-            side: 'Revenue',
-            category: 'Initial Fees',
-            amount: toApply,
-            source_ref: `${paymentId}_${charge.id}`,
-            customer_id: payment.customer_id,
-            rental_id: charge.rental_id
-          };
-          if (payment.tenant_id) {
-            pnlData.tenant_id = payment.tenant_id;
+          for (const charge of feeCharges || []) {
+            if (remainingAmount <= 0) break;
+            const toApply = Math.min(remainingAmount, charge.remaining_amount);
+            console.log(`Applying ${formatCurrency(toApply, currencyCode)} to ${category} ${charge.id}`);
+            const ad: any = { payment_id: paymentId, charge_entry_id: charge.id, amount_applied: toApply };
+            if (payment.tenant_id) ad.tenant_id = payment.tenant_id;
+            const { error: ae } = await supabase.from('payment_applications').insert(ad);
+            if (ae && !ae.message.includes('duplicate key')) { console.error(`${category} app error:`, ae); continue; }
+            await supabase.from('ledger_entries').update({ remaining_amount: charge.remaining_amount - toApply }).eq('id', charge.id);
+            totalAllocated += toApply;
+            remainingAmount -= toApply;
           }
-          const { error: pnlRevenueError } = await supabase
-            .from('pnl_entries')
-            .insert(pnlData);
+        }
+      }
 
-          if (pnlRevenueError && !pnlRevenueError.message.includes('duplicate key')) {
-            console.error('P&L revenue entry error:', pnlRevenueError);
+      // Step 2: Allocate remainder to Rental charges
+      {
+        const { data: outstandingCharges, error: chargesError } = await supabase
+          .from('ledger_entries')
+          .select('id, amount, remaining_amount, due_date, entry_date, rental_id, vehicle_id')
+          .eq('rental_id', payment.rental_id)
+          .eq('type', 'Charge')
+          .eq('category', 'Rental')
+          .gt('remaining_amount', 0)
+          .order('due_date', { ascending: true })
+          .order('entry_date', { ascending: true });
+
+        if (chargesError) {
+          console.error('Error fetching rental charges:', chargesError);
+        } else {
+          console.log(`Found ${outstandingCharges?.length || 0} outstanding rental charges`);
+
+          for (const charge of outstandingCharges || []) {
+            if (remainingAmount <= 0) break;
+
+            const toApply = Math.min(remainingAmount, charge.remaining_amount);
+            console.log(`Applying ${formatCurrency(toApply, currencyCode)} to rental charge ${charge.id} (due ${charge.due_date})`);
+
+            const applicationData1: any = { payment_id: paymentId, charge_entry_id: charge.id, amount_applied: toApply };
+            if (payment.tenant_id) applicationData1.tenant_id = payment.tenant_id;
+            const { error: applicationError } = await supabase.from('payment_applications').insert(applicationData1);
+            if (applicationError && !applicationError.message.includes('duplicate key')) { console.error('Payment application error:', applicationError); continue; }
+
+            const { error: chargeUpdateError } = await supabase.from('ledger_entries').update({ remaining_amount: charge.remaining_amount - toApply }).eq('id', charge.id);
+            if (chargeUpdateError) { console.error('Charge update error:', chargeUpdateError); continue; }
+
+            // P&L revenue entry
+            const pnlData: any = {
+              vehicle_id: charge.vehicle_id || payment.vehicle_id, entry_date: charge.due_date,
+              side: 'Revenue', category: 'Initial Fees', amount: toApply,
+              source_ref: `${paymentId}_${charge.id}`, customer_id: payment.customer_id, rental_id: charge.rental_id
+            };
+            if (payment.tenant_id) pnlData.tenant_id = payment.tenant_id;
+            const { error: pnlErr } = await supabase.from('pnl_entries').insert(pnlData);
+            if (pnlErr && !pnlErr.message.includes('duplicate key')) console.error('P&L error:', pnlErr);
+
+            totalAllocated += toApply;
+            remainingAmount -= toApply;
           }
-
-          totalAllocated += toApply;
-          remainingAmount -= toApply;
         }
       }
 
@@ -250,9 +298,9 @@ async function applyPayment(supabase: any, paymentId: string, targetCategories?:
       };
     }
 
-    // Handle customer payments with Universal FIFO allocation
+    // Handle customer payments with targeted category allocation
     if (isCustomerPayment) {
-      console.log('Processing customer payment - applying Universal FIFO allocation');
+      console.log('Processing customer payment - applying targeted category allocation');
 
       // Idempotency: check how much has already been allocated for this payment
       const { data: existingApps } = await supabase
@@ -275,19 +323,8 @@ async function applyPayment(supabase: any, paymentId: string, targetCategories?:
         console.log(`Payment ${paymentId} partially allocated: ${formatCurrency(alreadyAllocated, currencyCode)} already applied, ${formatCurrency(remainingAmount, currencyCode)} remaining`);
       }
 
-      // Universal FIFO allocation order: Initial Fees → Extension → Rentals → Fines → Other
-      const defaultAllocationOrder = [
-        { category: 'Initial Fees', description: 'initial fees' },
-        { category: 'Extension', description: 'extension charges (legacy)' },
-        { category: 'Extension Rental', description: 'extension rental fee' },
-        { category: 'Extension Tax', description: 'extension tax' },
-        { category: 'Extension Service Fee', description: 'extension service fee' },
-        { category: 'Rental', description: 'rental charges' },
-        { category: 'Fines', description: 'fine charges' },
-        { category: 'Other', description: 'other charges' }
-      ];
-
       // If targetCategories is provided, use those categories directly (supports any ledger category)
+      // Otherwise, auto-derive from the rental's actual outstanding charges
       let allocationOrder: { category: string; description: string }[];
       if (targetCategories && targetCategories.length > 0) {
         allocationOrder = targetCategories.map(cat => ({
@@ -295,8 +332,57 @@ async function applyPayment(supabase: any, paymentId: string, targetCategories?:
           description: `${cat.toLowerCase()} charges`
         }));
         console.log(`Targeted allocation to categories: ${targetCategories.join(', ')}`);
+      } else if (payment.rental_id) {
+        // Auto-derive categories from the rental's outstanding charges
+        const { data: outstandingCharges } = await supabase
+          .from('ledger_entries')
+          .select('category')
+          .eq('rental_id', payment.rental_id)
+          .eq('type', 'Charge')
+          .gt('remaining_amount', 0);
+
+        if (outstandingCharges && outstandingCharges.length > 0) {
+          const uniqueCategories = [...new Set(outstandingCharges.map((c: any) => c.category as string))];
+          allocationOrder = uniqueCategories.map(cat => ({
+            category: cat,
+            description: `${cat.toLowerCase()} charges`
+          }));
+          console.log(`Auto-derived allocation from rental charges: ${uniqueCategories.join(', ')}`);
+        } else {
+          // No outstanding charges found, fallback to all common categories
+          allocationOrder = [
+            { category: 'Rental', description: 'rental charges' },
+            { category: 'Tax', description: 'tax charges' },
+            { category: 'Service Fee', description: 'service fee charges' },
+            { category: 'Security Deposit', description: 'security deposit charges' },
+            { category: 'Delivery Fee', description: 'delivery fee charges' },
+            { category: 'Insurance', description: 'insurance charges' },
+            { category: 'Extras', description: 'extras charges' },
+            { category: 'Extension Rental', description: 'extension rental fee' },
+            { category: 'Extension Tax', description: 'extension tax' },
+            { category: 'Extension Service Fee', description: 'extension service fee' },
+            { category: 'Fines', description: 'fine charges' },
+            { category: 'Other', description: 'other charges' },
+          ];
+          console.log('No outstanding charges found, using all common categories as fallback');
+        }
       } else {
-        allocationOrder = defaultAllocationOrder;
+        // No rental_id and no targetCategories — use all common categories
+        allocationOrder = [
+          { category: 'Rental', description: 'rental charges' },
+          { category: 'Tax', description: 'tax charges' },
+          { category: 'Service Fee', description: 'service fee charges' },
+          { category: 'Security Deposit', description: 'security deposit charges' },
+          { category: 'Delivery Fee', description: 'delivery fee charges' },
+          { category: 'Insurance', description: 'insurance charges' },
+          { category: 'Extras', description: 'extras charges' },
+          { category: 'Extension Rental', description: 'extension rental fee' },
+          { category: 'Extension Tax', description: 'extension tax' },
+          { category: 'Extension Service Fee', description: 'extension service fee' },
+          { category: 'Fines', description: 'fine charges' },
+          { category: 'Other', description: 'other charges' },
+        ];
+        console.log('No rental_id, using all common categories');
       }
 
       for (const { category, description } of allocationOrder) {
@@ -450,7 +536,7 @@ async function applyPayment(supabase: any, paymentId: string, targetCategories?:
         }
       }
 
-      console.log(`Universal FIFO allocation complete: ${formatCurrency(totalAllocated, currencyCode)} allocated, ${formatCurrency(remainingAmount, currencyCode)} remaining`);
+      console.log(`Targeted allocation complete: ${formatCurrency(totalAllocated, currencyCode)} allocated, ${formatCurrency(remainingAmount, currencyCode)} remaining`);
       
       // Update payment status based on allocation
       let paymentStatus = 'Applied';
@@ -555,7 +641,7 @@ serve(async (req) => {
       });
     }
 
-    // Apply payment using universal FIFO allocation (optionally targeted to specific categories)
+    // Apply payment using targeted category allocation (auto-derives from rental charges if not specified)
     const result = await applyPayment(supabase, paymentId, targetCategories);
 
     if (!result.ok) {

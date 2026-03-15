@@ -110,10 +110,12 @@ export function RentalCard({ rental, insuranceReuploadRequired }: RentalCardProp
 
   // Calculate paid amounts
   const totalPaid = hasInstallments
-    ? (installmentPlan.total_paid || 0) + (installmentPlan.upfront_amount || 0)
+    ? (installmentPlan.total_paid || 0) + (installmentPlan.upfront_paid ? (installmentPlan.upfront_amount || 0) : 0)
     : rental.monthly_amount || 0;
+  const chargeFirst = (installmentPlan as any)?.config?.charge_first_upfront !== false;
+  const firstInstAmt = chargeFirst ? (installmentPlan?.installment_amount || 0) : 0;
   const totalAmount = hasInstallments
-    ? (installmentPlan.total_installable_amount || 0) + (installmentPlan.upfront_amount || 0)
+    ? (installmentPlan.total_installable_amount || 0) + (installmentPlan.upfront_amount || 0) - firstInstAmt
     : rental.monthly_amount || 0;
 
   // Get next scheduled installment

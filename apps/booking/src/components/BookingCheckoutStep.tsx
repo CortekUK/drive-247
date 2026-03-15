@@ -123,12 +123,14 @@ export default function BookingCheckoutStep({
   const [selectedInstallmentPlan, setSelectedInstallmentPlan] = useState<InstallmentOption | null>(null);
   const installmentsEnabled = tenant?.installments_enabled ?? false;
   const installmentConfig: InstallmentConfig = {
-    min_days_for_weekly: 7,
-    min_days_for_monthly: 30,
-    max_installments_weekly: 4,
-    max_installments_monthly: 6,
+    minimum_days_weekly: 7,
+    minimum_days_monthly: 30,
+    weekly_installments_limit: 4,
+    monthly_installments_limit: 6,
+    limiting_amount_per_day_weekly: 0,
+    limiting_amount_per_day_monthly: 0,
     charge_first_upfront: true,
-    what_gets_split: 'rental_tax',
+    what_gets_split: 'rental_only',
     grace_period_days: 3,
     max_retry_attempts: 3,
     retry_interval_days: 1,
@@ -257,7 +259,7 @@ export default function BookingCheckoutStep({
   };
 
   // Calculate installment breakdown based on what_gets_split setting
-  const whatGetsSplit = installmentConfig.what_gets_split || 'rental_tax';
+  const whatGetsSplit = installmentConfig.what_gets_split || 'rental_only';
   const { installUpfrontAmount, installableAmount } = (() => {
     let upfront = calculateSecurityDeposit() + calculateServiceFee();
     let installable = 0;
@@ -573,7 +575,7 @@ export default function BookingCheckoutStep({
           returnDate: formData.dropoffDate,
           startDate: formData.pickupDate,
           chargeFirstUpfront: installmentConfig.charge_first_upfront ?? true,
-          whatGetsSplit: installmentConfig.what_gets_split ?? 'rental_tax',
+          whatGetsSplit: installmentConfig.what_gets_split ?? 'rental_only',
           gracePeriodDays: installmentConfig.grace_period_days ?? 3,
           maxRetryAttempts: installmentConfig.max_retry_attempts ?? 3,
           retryIntervalDays: installmentConfig.retry_interval_days ?? 1,
@@ -1479,11 +1481,12 @@ export default function BookingCheckoutStep({
           </Card>
 
           {/* Installment Payment Options */}
-          {rentalDuration.days >= 7 && (
+          {rentalDuration.days >= Math.min(installmentConfig.minimum_days_weekly ?? installmentConfig.min_days_for_weekly ?? 7, installmentConfig.minimum_days_monthly ?? installmentConfig.min_days_for_monthly ?? 30) && (
             <InstallmentSelector
               rentalDays={rentalDuration.days}
               installableAmount={installableAmount}
               upfrontAmount={installUpfrontAmount}
+              totalBill={installableAmount + installUpfrontAmount}
               config={installmentConfig}
               enabled={installmentsEnabled}
               onSelectPlan={setSelectedInstallmentPlan}
