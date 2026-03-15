@@ -1272,52 +1272,57 @@ const CreateRental = () => {
         // Don't throw - rental is already created, just log the error
       }
 
-      // Generate invoice
+      // Calculate pricing — shared by both invoice and installment plan creation
+      const discountedAmount = data.monthly_amount - discountAmount;
+      const taxAmount = taxOverride !== null ? taxOverride : calculateTaxAmount(discountedAmount);
+      const serviceFee = serviceFeeOverride !== null ? serviceFeeOverride : calculateServiceFee(discountedAmount);
+      const securityDeposit = depositOverride !== null ? depositOverride : calculateSecurityDeposit(data.vehicle_id);
+      const insurancePremium = bonzahPremium > 0 ? bonzahPremium : 0;
+      const totalAmount = discountedAmount + taxAmount + serviceFee + securityDeposit + insurancePremium;
+
+      // Track if this is an installment rental (used for routing after creation)
+      const isInstallmentRental = installmentPlanType !== 'full' && rentalSettings?.installments_enabled;
+
+      // Generate invoice for all rentals (needed for Payment Breakdown display on rental detail page)
       let invoiceCreated = false;
-      try {
-        const invoiceNotes = `Monthly rental fee for ${selectedVehicle?.make} ${selectedVehicle?.model} (${vehicleReg})`;
-        // Apply discount to the rental amount
-        const discountedAmount = data.monthly_amount - discountAmount;
-        // Use admin overrides if set, otherwise use auto-calculated values
-        const taxAmount = taxOverride !== null ? taxOverride : calculateTaxAmount(discountedAmount);
-        const serviceFee = serviceFeeOverride !== null ? serviceFeeOverride : calculateServiceFee(discountedAmount);
-        const securityDeposit = depositOverride !== null ? depositOverride : calculateSecurityDeposit(data.vehicle_id);
-        const insurancePremium = bonzahPremium > 0 ? bonzahPremium : 0;
-        const totalAmount = discountedAmount + taxAmount + serviceFee + securityDeposit + insurancePremium;
+      {
+        try {
+          const invoiceNotes = `Monthly rental fee for ${selectedVehicle?.make} ${selectedVehicle?.model} (${vehicleReg})`;
 
-        const invoice = await createInvoice({
-          rental_id: rental.id,
-          customer_id: data.customer_id,
-          vehicle_id: data.vehicle_id,
-          invoice_date: data.start_date,
-          due_date: addMonths(data.start_date, 1),
-          subtotal: discountedAmount,
-          tax_amount: taxAmount,
-          service_fee: serviceFee,
-          security_deposit: securityDeposit,
-          insurance_premium: insurancePremium,
-          total_amount: totalAmount,
-          notes: invoiceNotes,
-          tenant_id: tenant?.id,
-        });
+          const invoice = await createInvoice({
+            rental_id: rental.id,
+            customer_id: data.customer_id,
+            vehicle_id: data.vehicle_id,
+            invoice_date: data.start_date,
+            due_date: addMonths(data.start_date, 1),
+            subtotal: discountedAmount,
+            tax_amount: taxAmount,
+            service_fee: serviceFee,
+            security_deposit: securityDeposit,
+            insurance_premium: insurancePremium,
+            total_amount: totalAmount,
+            notes: invoiceNotes,
+            tenant_id: tenant?.id,
+          });
 
-        // Add discount info to invoice for display
-        setGeneratedInvoice({
-          ...invoice,
-          discount_amount: discountAmount > 0 ? discountAmount : undefined,
-          promo_code: promoDetails?.code,
-        } as any);
-        invoiceCreated = true;
-      } catch (invoiceError) {
-        console.error('Error creating invoice:', invoiceError);
-        // If invoice fails, still continue with the flow - skip invoice and go to DocuSign
+          // Add discount info to invoice for display
+          setGeneratedInvoice({
+            ...invoice,
+            discount_amount: discountAmount > 0 ? discountAmount : undefined,
+            promo_code: promoDetails?.code,
+          } as any);
+          invoiceCreated = true;
+        } catch (invoiceError) {
+          console.error('Error creating invoice:', invoiceError);
+          // If invoice fails, still continue with the flow - skip invoice and go to DocuSign
+        }
       }
 
       // Create installment plan if selected
       if (installmentPlanType !== 'full' && rentalSettings?.installments_enabled && rentalSettings?.installment_config) {
         try {
           const instConfig = rentalSettings.installment_config;
-          const whatGetsSplit = instConfig.what_gets_split || 'rental_tax';
+          const whatGetsSplit = instConfig.what_gets_split || 'rental_only';
           const chargeFirst = instConfig.charge_first_upfront !== false;
 
           let installableAmt = discountedAmount;
@@ -1328,9 +1333,9 @@ const CreateRental = () => {
           const rentalDaysCalc = differenceInDays(data.end_date, data.start_date);
           let numInstallments = 1;
           if (installmentPlanType === 'weekly') {
-            numInstallments = Math.min(Math.floor(rentalDaysCalc / 7), instConfig.max_installments_weekly);
+            numInstallments = instConfig.weekly_installments_limit ?? instConfig.max_installments_weekly ?? 4;
           } else if (installmentPlanType === 'monthly') {
-            numInstallments = Math.min(Math.ceil(rentalDaysCalc / 30), instConfig.max_installments_monthly);
+            numInstallments = instConfig.monthly_installments_limit ?? instConfig.max_installments_monthly ?? 6;
           }
 
           const autoInstAmt = Math.floor((installableAmt / numInstallments) * 100) / 100;
@@ -1349,7 +1354,7 @@ const CreateRental = () => {
               total_installable_amount: installableAmt,
               number_of_installments: numInstallments,
               installment_amount: effectiveInstAmt,
-              upfront_amount: securityDeposit + serviceFee + firstAmt,
+              upfront_amount: securityDeposit + serviceFee + (whatGetsSplit === 'rental_only' ? taxAmount : 0) + firstAmt,
               upfront_paid: false,
               status: 'pending',
               paid_installments: 0,
@@ -1389,7 +1394,7 @@ const CreateRental = () => {
                 installment_number: i + 1,
                 amount: isLast ? lastAmt : effectiveInstAmt,
                 due_date: dueDate.toISOString().split('T')[0],
-                status: (isFirst && chargeFirst) ? 'processing' : 'scheduled',
+                status: 'scheduled',
                 failure_count: 0,
               };
             });
@@ -1407,6 +1412,7 @@ const CreateRental = () => {
               .from('rentals')
               .update({ installment_plan_id: plan.id } as any)
               .eq('id', rental.id);
+
           }
         } catch (installmentError) {
           console.error('Error setting up installment plan:', installmentError);
@@ -1497,8 +1503,17 @@ const CreateRental = () => {
         docuSignSuccess,
       });
 
-      // Show payment options dialog after rental creation
-      setShowPaymentDialog(true);
+      // If installment plan was selected, skip payment/invoice dialogs — go straight to rental detail
+      if (isInstallmentRental) {
+        toast({
+          title: "Rental Created with Installment Plan",
+          description: `${installmentPlanType === 'weekly' ? 'Weekly' : 'Monthly'} installment plan created for ${customerName} • ${vehicleReg}`,
+        });
+        router.push(`/rentals/${rental.id}`);
+      } else {
+        // Show payment options dialog for full-payment rentals
+        setShowPaymentDialog(true);
+      }
     } catch (error: any) {
       console.error("Error creating rental:", error);
 
@@ -2429,7 +2444,7 @@ const CreateRental = () => {
                 const effectiveServiceFee = serviceFeeOverride !== null ? serviceFeeOverride : autoServiceFee;
                 const effectiveDeposit = depositOverride !== null ? depositOverride : autoDeposit;
 
-                const whatGetsSplit = installmentConfig.what_gets_split || 'rental_tax';
+                const whatGetsSplit = installmentConfig.what_gets_split || 'rental_only';
                 let installableAmount = discountedAmount;
                 let upfrontOnlyAmount = effectiveDeposit + effectiveServiceFee;
 
@@ -2455,25 +2470,29 @@ const CreateRental = () => {
                   { type: 'full', count: 1, amount: installableAmount + upfrontOnlyAmount, scheduled: 0, firstAmount: installableAmount + upfrontOnlyAmount, upfrontTotal: installableAmount + upfrontOnlyAmount, label: 'Pay in Full' }
                 ];
 
-                // Weekly
-                if (rentalDays >= installmentConfig.min_days_for_weekly) {
-                  const maxW = Math.min(Math.floor(rentalDays / 7), installmentConfig.max_installments_weekly);
-                  if (maxW >= 2) {
-                    const { base } = calcInstallments(installableAmount, maxW);
-                    const first = chargeFirstUpfront ? base : 0;
-                    const sched = chargeFirstUpfront ? maxW - 1 : maxW;
-                    plans.push({ type: 'weekly', count: maxW, amount: base, scheduled: sched, firstAmount: first, upfrontTotal: upfrontOnlyAmount + first, label: `Weekly (${maxW} payments)` });
-                  }
+                // Weekly — dual-gate: days + per-day amount
+                const minDaysWeekly = installmentConfig.minimum_days_weekly ?? installmentConfig.min_days_for_weekly ?? 7;
+                const weeklyLimit = installmentConfig.weekly_installments_limit ?? installmentConfig.max_installments_weekly ?? 4;
+                const limitPerDayWeekly = installmentConfig.limiting_amount_per_day_weekly ?? 0;
+                const perDayRate = rentalDays > 0 ? (installableAmount + upfrontOnlyAmount) / rentalDays : 0;
+
+                if (rentalDays >= minDaysWeekly && (limitPerDayWeekly <= 0 || perDayRate >= limitPerDayWeekly) && weeklyLimit >= 2) {
+                  const { base } = calcInstallments(installableAmount, weeklyLimit);
+                  const first = chargeFirstUpfront ? base : 0;
+                  const sched = chargeFirstUpfront ? weeklyLimit - 1 : weeklyLimit;
+                  plans.push({ type: 'weekly', count: weeklyLimit, amount: base, scheduled: sched, firstAmount: first, upfrontTotal: upfrontOnlyAmount + first, label: `Weekly (${weeklyLimit} payments)` });
                 }
-                // Monthly
-                if (rentalDays >= installmentConfig.min_days_for_monthly) {
-                  const maxM = Math.min(Math.ceil(rentalDays / 30), installmentConfig.max_installments_monthly);
-                  if (maxM >= 2) {
-                    const { base } = calcInstallments(installableAmount, maxM);
-                    const first = chargeFirstUpfront ? base : 0;
-                    const sched = chargeFirstUpfront ? maxM - 1 : maxM;
-                    plans.push({ type: 'monthly', count: maxM, amount: base, scheduled: sched, firstAmount: first, upfrontTotal: upfrontOnlyAmount + first, label: `Monthly (${maxM} payments)` });
-                  }
+
+                // Monthly — dual-gate: days + per-day amount
+                const minDaysMonthly = installmentConfig.minimum_days_monthly ?? installmentConfig.min_days_for_monthly ?? 30;
+                const monthlyLimit = installmentConfig.monthly_installments_limit ?? installmentConfig.max_installments_monthly ?? 6;
+                const limitPerDayMonthly = installmentConfig.limiting_amount_per_day_monthly ?? 0;
+
+                if (rentalDays >= minDaysMonthly && (limitPerDayMonthly <= 0 || perDayRate >= limitPerDayMonthly) && monthlyLimit >= 2) {
+                  const { base } = calcInstallments(installableAmount, monthlyLimit);
+                  const first = chargeFirstUpfront ? base : 0;
+                  const sched = chargeFirstUpfront ? monthlyLimit - 1 : monthlyLimit;
+                  plans.push({ type: 'monthly', count: monthlyLimit, amount: base, scheduled: sched, firstAmount: first, upfrontTotal: upfrontOnlyAmount + first, label: `Monthly (${monthlyLimit} payments)` });
                 }
 
                 if (plans.length <= 1) return null; // Only "Pay in Full" — no installment options

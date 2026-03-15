@@ -16,6 +16,7 @@ import {
   usePayInstallmentEarly,
   usePayRemainingInstallments,
   useRetryPayment,
+  useCreateUpfrontCheckout,
 } from '@/hooks/use-payment-actions';
 import { UpdatePaymentMethodDialog } from '@/components/customer-portal/UpdatePaymentMethodDialog';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -316,11 +317,13 @@ function InstallmentPlanCard({
   plan,
   onPayNow,
   onPayOff,
+  onActivate,
   isPaying,
 }: {
   plan: InstallmentPlan;
   onPayNow: (installmentId: string) => void;
   onPayOff: (planId: string) => void;
+  onActivate: (planId: string) => void;
   isPaying: boolean;
 }) {
   const { tenant } = useTenant();
@@ -337,6 +340,7 @@ function InstallmentPlanCard({
 
   const isCompleted = plan.status === 'completed';
   const isOverdue = plan.status === 'overdue';
+  const isPendingPlan = plan.status === 'pending';
 
   // Get remaining unpaid installments
   const unpaidInstallments = plan.scheduled_installments.filter(
@@ -367,7 +371,7 @@ function InstallmentPlanCard({
           </div>
           <div className="text-right">
             <p className="text-sm text-muted-foreground">Total</p>
-            <p className="font-semibold">{formatCurrency(plan.total_installable_amount + plan.upfront_amount, currencyCode)}</p>
+            <p className="font-semibold">{formatCurrency(plan.total_installable_amount + plan.upfront_amount - ((plan as any).config?.charge_first_upfront !== false ? plan.installment_amount : 0), currencyCode)}</p>
           </div>
         </div>
       </CardHeader>
@@ -382,15 +386,31 @@ function InstallmentPlanCard({
           </div>
           <Progress value={progressPercent} className="h-2" />
           <div className="flex justify-between text-sm">
-            <span className="text-green-600">Paid: {formatCurrency(totalPaid + plan.upfront_amount, currencyCode)}</span>
+            <span className="text-green-600">Paid: {formatCurrency(totalPaid + (plan.upfront_paid ? plan.upfront_amount : 0), currencyCode)}</span>
             {remaining > 0 && (
               <span className="text-muted-foreground">Remaining: {formatCurrency(remaining, currencyCode)}</span>
             )}
           </div>
         </div>
 
+        {/* Activate & Pay Button for pending plans */}
+        {isPendingPlan && !plan.upfront_paid && (
+          <Button
+            onClick={() => onActivate(plan.id)}
+            disabled={isPaying}
+            className="w-full"
+          >
+            {isPaying ? (
+              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+            ) : (
+              <CreditCard className="h-4 w-4 mr-2" />
+            )}
+            Activate & Pay Upfront ({formatCurrency(plan.upfront_amount, currencyCode)})
+          </Button>
+        )}
+
         {/* Pay Off Button */}
-        {!isCompleted && unpaidInstallments.length > 0 && (
+        {!isCompleted && !isPendingPlan && unpaidInstallments.length > 0 && (
           <Button
             onClick={() => onPayOff(plan.id)}
             disabled={isPaying}
@@ -422,12 +442,20 @@ function InstallmentPlanCard({
                 {/* Upfront Payment */}
                 <div className="flex items-center justify-between text-sm py-2 border-b">
                   <div className="flex items-center gap-2">
-                    <CheckCircle2 className="h-4 w-4 text-green-600" />
+                    {plan.upfront_paid ? (
+                      <CheckCircle2 className="h-4 w-4 text-green-600" />
+                    ) : (
+                      <Clock className="h-4 w-4 text-muted-foreground" />
+                    )}
                     <span>Upfront (Deposit + Fees)</span>
                   </div>
                   <div className="text-right">
                     <span className="font-medium">{formatCurrency(plan.upfront_amount, currencyCode)}</span>
-                    <Badge variant="default" className="ml-2 text-xs">Paid</Badge>
+                    {plan.upfront_paid ? (
+                      <Badge variant="default" className="ml-2 text-xs">Paid</Badge>
+                    ) : (
+                      <Badge variant="secondary" className="ml-2 text-xs">Pending</Badge>
+                    )}
                   </div>
                 </div>
 
@@ -466,6 +494,8 @@ function InstallmentPlanCard({
                         <span className="font-medium">{formatCurrency(inst.amount, currencyCode)}</span>
                         {isPaid ? (
                           <Badge variant="default" className="text-xs">Paid</Badge>
+                        ) : isPendingPlan ? (
+                          <Badge variant="secondary" className="text-xs">Scheduled</Badge>
                         ) : isFailed ? (
                           <Button
                             size="sm"
@@ -1043,6 +1073,7 @@ export default function PaymentsPage() {
   const payEarly = usePayInstallmentEarly();
   const payOff = usePayRemainingInstallments();
   const retryPayment = useRetryPayment();
+  const createUpfrontCheckout = useCreateUpfrontCheckout();
 
   const [confirmDialog, setConfirmDialog] = useState<{
     type: 'pay' | 'payoff' | 'retry';
@@ -1066,7 +1097,7 @@ export default function PaymentsPage() {
   const [invoiceDetailOpen, setInvoiceDetailOpen] = useState(false);
 
   const activePlans = (plans || []).filter(
-    (p) => p.status === 'active' || p.status === 'overdue'
+    (p) => p.status === 'active' || p.status === 'overdue' || p.status === 'pending'
   );
   const completedPlans = (plans || []).filter((p) => p.status === 'completed');
 
@@ -1081,7 +1112,7 @@ export default function PaymentsPage() {
     paidInvoices: invoiceStats?.paidCount || 0,
     pendingInvoices: invoiceStats?.pendingCount || 0,
   };
-  const isPaying = payEarly.isPending || payOff.isPending || retryPayment.isPending;
+  const isPaying = payEarly.isPending || payOff.isPending || retryPayment.isPending || createUpfrontCheckout.isPending;
 
   const handlePayNow = (installmentId: string) => {
     const plan = plans?.find(p => p.scheduled_installments.some(i => i.id === installmentId));
@@ -1111,6 +1142,17 @@ export default function PaymentsPage() {
 
   const handleRetry = (installmentId: string) => {
     handlePayNow(installmentId);
+  };
+
+  const handleActivate = async (planId: string) => {
+    try {
+      const result = await createUpfrontCheckout.mutateAsync(planId);
+      if (result.url) {
+        window.location.href = result.url;
+      }
+    } catch {
+      // Error toast is handled by the hook
+    }
   };
 
   const executePayment = async () => {
@@ -1296,6 +1338,7 @@ export default function PaymentsPage() {
                     plan={plan}
                     onPayNow={handlePayNow}
                     onPayOff={handlePayOff}
+                    onActivate={handleActivate}
                     isPaying={isPaying}
                   />
                 ))}
@@ -1314,6 +1357,7 @@ export default function PaymentsPage() {
                     plan={plan}
                     onPayNow={handlePayNow}
                     onPayOff={handlePayOff}
+                    onActivate={handleActivate}
                     isPaying={isPaying}
                   />
                 ))}

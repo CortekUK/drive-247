@@ -6,16 +6,22 @@ import { toast } from '@/hooks/use-toast';
 export type WhatGetsSplit = 'rental_only' | 'rental_tax' | 'rental_tax_extras';
 
 export interface InstallmentConfig {
-  min_days_for_weekly: number;
-  min_days_for_monthly: number;
-  max_installments_weekly: number;
-  max_installments_monthly: number;
-  // Phase 3 additions
+  minimum_days_weekly: number;
+  minimum_days_monthly: number;
+  weekly_installments_limit: number;
+  monthly_installments_limit: number;
+  limiting_amount_per_day_weekly: number;
+  limiting_amount_per_day_monthly: number;
   charge_first_upfront: boolean;
   what_gets_split: WhatGetsSplit;
   grace_period_days: number;
   max_retry_attempts: number;
   retry_interval_days: number;
+  // Backward compat (old keys, read-only)
+  min_days_for_weekly?: number;
+  min_days_for_monthly?: number;
+  max_installments_weekly?: number;
+  max_installments_monthly?: number;
 }
 
 export interface RentalSettings {
@@ -75,13 +81,14 @@ const DEFAULT_RENTAL_SETTINGS: RentalSettings = {
   // Installment defaults
   installments_enabled: false,
   installment_config: {
-    min_days_for_weekly: 7,
-    min_days_for_monthly: 30,
-    max_installments_weekly: 4,
-    max_installments_monthly: 6,
-    // Phase 3 defaults
+    minimum_days_weekly: 7,
+    minimum_days_monthly: 30,
+    weekly_installments_limit: 4,
+    monthly_installments_limit: 6,
+    limiting_amount_per_day_weekly: 0,
+    limiting_amount_per_day_monthly: 0,
     charge_first_upfront: true,
-    what_gets_split: 'rental_tax',
+    what_gets_split: 'rental_only',
     grace_period_days: 3,
     max_retry_attempts: 3,
     retry_interval_days: 1,

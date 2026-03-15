@@ -116,6 +116,18 @@ serve(async (req) => {
         throw new Error('No payment method on file for this plan')
       }
 
+      // Use plan's stripe_customer_id, fall back to customer table
+      const stripeCustomerId = plan.stripe_customer_id || customer.stripe_customer_id
+
+      // Backfill plan if missing
+      if (!plan.stripe_customer_id && customer.stripe_customer_id) {
+        await supabase
+          .from('installment_plans')
+          .update({ stripe_customer_id: customer.stripe_customer_id })
+          .eq('id', installment.installment_plan_id)
+        console.log('Backfilled stripe_customer_id on plan:', installment.installment_plan_id)
+      }
+
       // Mark as processing
       await supabase
         .from('scheduled_installments')
@@ -130,7 +142,7 @@ serve(async (req) => {
         const paymentIntent = await stripe.paymentIntents.create({
           amount: Math.round(installment.amount * 100),
           currency: currencyCode,
-          customer: plan.stripe_customer_id,
+          customer: stripeCustomerId,
           payment_method: paymentMethodId,
           off_session: true,
           confirm: true,
@@ -177,6 +189,76 @@ serve(async (req) => {
             p_stripe_payment_intent_id: paymentIntent.id,
             p_stripe_charge_id: paymentIntent.latest_charge as string,
           })
+
+          // Apply payment directly to rental charge ledger (inline — no HTTP call)
+          if (payment?.id) {
+            try {
+              const entryDate = payment.payment_date || new Date().toISOString().split('T')[0]
+
+              // 1. Create payment ledger entry
+              const { error: ledgerErr } = await supabase
+                .from('ledger_entries')
+                .insert({
+                  customer_id: customerId,
+                  rental_id: installment.rental_id,
+                  vehicle_id: null,
+                  entry_date: entryDate,
+                  type: 'Payment',
+                  category: 'Rental',
+                  amount: -Math.abs(installment.amount),
+                  due_date: entryDate,
+                  remaining_amount: 0,
+                  payment_id: payment.id,
+                  tenant_id: tenantId,
+                })
+
+              if (ledgerErr) {
+                console.error('Ledger entry insert error:', ledgerErr)
+              } else {
+                console.log('Ledger entry created for payment:', payment.id)
+              }
+
+              // 2. Find and reduce the Rental charge remaining_amount
+              const { data: rentalCharge } = await supabase
+                .from('ledger_entries')
+                .select('id, remaining_amount')
+                .eq('rental_id', installment.rental_id)
+                .eq('type', 'Charge')
+                .eq('category', 'Rental')
+                .gt('remaining_amount', 0)
+                .order('due_date', { ascending: true })
+                .limit(1)
+                .maybeSingle()
+
+              if (rentalCharge) {
+                const newRemaining = Math.max(0, rentalCharge.remaining_amount - installment.amount)
+                const { error: chargeErr } = await supabase
+                  .from('ledger_entries')
+                  .update({ remaining_amount: newRemaining })
+                  .eq('id', rentalCharge.id)
+
+                if (chargeErr) {
+                  console.error('Charge update error:', chargeErr)
+                } else {
+                  console.log(`Charge ${rentalCharge.id} remaining: ${rentalCharge.remaining_amount} → ${newRemaining}`)
+                }
+
+                // 3. Create payment_application record
+                await supabase
+                  .from('payment_applications')
+                  .insert({
+                    payment_id: payment.id,
+                    charge_entry_id: rentalCharge.id,
+                    amount_applied: Math.min(installment.amount, rentalCharge.remaining_amount),
+                    tenant_id: tenantId,
+                  })
+              } else {
+                console.log('No outstanding rental charge found for allocation')
+              }
+            } catch (applyErr) {
+              console.error('Error applying payment to ledger:', applyErr)
+            }
+          }
 
           // Send receipt
           try {
@@ -254,6 +336,18 @@ serve(async (req) => {
         throw new Error('No payment method on file')
       }
 
+      // Use plan's stripe_customer_id, fall back to customer table
+      const remainingStripeCustomerId = plan.stripe_customer_id || customer.stripe_customer_id
+
+      // Backfill plan if missing
+      if (!plan.stripe_customer_id && customer.stripe_customer_id) {
+        await supabase
+          .from('installment_plans')
+          .update({ stripe_customer_id: customer.stripe_customer_id })
+          .eq('id', installmentPlanId)
+        console.log('Backfilled stripe_customer_id on plan:', installmentPlanId)
+      }
+
       // Get remaining installments
       const { data: remainingInstallments } = await supabase
         .from('scheduled_installments')
@@ -283,7 +377,7 @@ serve(async (req) => {
         const paymentIntent = await stripe.paymentIntents.create({
           amount: Math.round(totalAmount * 100),
           currency: currencyCode,
-          customer: plan.stripe_customer_id,
+          customer: remainingStripeCustomerId,
           payment_method: plan.stripe_payment_method_id,
           off_session: true,
           confirm: true,
@@ -327,6 +421,76 @@ serve(async (req) => {
               p_stripe_payment_intent_id: paymentIntent.id,
               p_stripe_charge_id: paymentIntent.latest_charge as string,
             })
+          }
+
+          // Apply payment directly to rental charge ledger (inline — no HTTP call)
+          if (payment?.id) {
+            try {
+              const entryDate = payment.payment_date || new Date().toISOString().split('T')[0]
+
+              // 1. Create payment ledger entry
+              const { error: ledgerErr } = await supabase
+                .from('ledger_entries')
+                .insert({
+                  customer_id: customerId,
+                  rental_id: plan.rental_id,
+                  vehicle_id: null,
+                  entry_date: entryDate,
+                  type: 'Payment',
+                  category: 'Rental',
+                  amount: -Math.abs(totalAmount),
+                  due_date: entryDate,
+                  remaining_amount: 0,
+                  payment_id: payment.id,
+                  tenant_id: tenantId,
+                })
+
+              if (ledgerErr) {
+                console.error('Ledger entry insert error:', ledgerErr)
+              } else {
+                console.log('Ledger entry created for payoff payment:', payment.id)
+              }
+
+              // 2. Find and reduce the Rental charge remaining_amount
+              const { data: rentalCharge } = await supabase
+                .from('ledger_entries')
+                .select('id, remaining_amount')
+                .eq('rental_id', plan.rental_id)
+                .eq('type', 'Charge')
+                .eq('category', 'Rental')
+                .gt('remaining_amount', 0)
+                .order('due_date', { ascending: true })
+                .limit(1)
+                .maybeSingle()
+
+              if (rentalCharge) {
+                const newRemaining = Math.max(0, rentalCharge.remaining_amount - totalAmount)
+                const { error: chargeErr } = await supabase
+                  .from('ledger_entries')
+                  .update({ remaining_amount: newRemaining })
+                  .eq('id', rentalCharge.id)
+
+                if (chargeErr) {
+                  console.error('Charge update error:', chargeErr)
+                } else {
+                  console.log(`Charge ${rentalCharge.id} remaining: ${rentalCharge.remaining_amount} → ${newRemaining}`)
+                }
+
+                // 3. Create payment_application record
+                await supabase
+                  .from('payment_applications')
+                  .insert({
+                    payment_id: payment.id,
+                    charge_entry_id: rentalCharge.id,
+                    amount_applied: Math.min(totalAmount, rentalCharge.remaining_amount),
+                    tenant_id: tenantId,
+                  })
+              } else {
+                console.log('No outstanding rental charge found for allocation')
+              }
+            } catch (applyErr) {
+              console.error('Error applying payment to ledger:', applyErr)
+            }
           }
 
           // Mark plan as completed

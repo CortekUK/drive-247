@@ -118,10 +118,54 @@ export default function RejectionDialog({
     enabled: open && !!rental.id && !!tenant?.id,
   });
 
-  const totalRefundAmount = (allPayments || []).reduce((sum, p) => sum + (p.amount || 0), 0);
-  const capturedPayments = (allPayments || []).filter(p => p.capture_status === 'captured');
-  const preAuthPayments = (allPayments || []).filter(p => p.capture_status === 'requires_capture');
-  const manualPayments = (allPayments || []).filter(
+  // Fetch installment plan + scheduled installments (paid ones with Stripe charges)
+  const { data: installmentData, isLoading: loadingInstallments } = useQuery({
+    queryKey: ["rental-installment-refund-info", rental.id, tenant?.id],
+    queryFn: async () => {
+      if (!tenant?.id) return null;
+
+      const { data: plan } = await supabase
+        .from("installment_plans")
+        .select("*")
+        .eq("rental_id", rental.id)
+        .eq("tenant_id", tenant.id)
+        .single();
+
+      if (!plan) return null;
+
+      const { data: installments } = await supabase
+        .from("scheduled_installments")
+        .select("*")
+        .eq("installment_plan_id", plan.id)
+        .eq("status", "paid")
+        .order("installment_number", { ascending: true });
+
+      // Find paid installments that have Stripe charges but whose payment_id
+      // is NOT already in the regular payments list (avoid double-counting)
+      return {
+        plan,
+        paidInstallments: installments || [],
+      };
+    },
+    enabled: open && !!rental.id && !!tenant?.id,
+  });
+
+  // Build combined refund list: regular payments + installment payments not already counted
+  const regularPayments = allPayments || [];
+  const regularPaymentIds = new Set(regularPayments.map(p => p.id));
+
+  // Installment payments that have Stripe charges but aren't already in regular payments
+  const installmentOnlyPayments = (installmentData?.paidInstallments || []).filter(
+    inst => inst.stripe_payment_intent_id && (!inst.payment_id || !regularPaymentIds.has(inst.payment_id))
+  );
+
+  const totalRegularAmount = regularPayments.reduce((sum, p) => sum + (p.amount || 0), 0);
+  const totalInstallmentOnlyAmount = installmentOnlyPayments.reduce((sum, inst) => sum + (inst.amount || 0), 0);
+  const totalRefundAmount = totalRegularAmount + totalInstallmentOnlyAmount;
+
+  const capturedPayments = regularPayments.filter(p => p.capture_status === 'captured');
+  const preAuthPayments = regularPayments.filter(p => p.capture_status === 'requires_capture');
+  const manualPayments = regularPayments.filter(
     p => p.capture_status !== 'captured' && p.capture_status !== 'requires_capture' && (p.amount || 0) > 0
   );
 
@@ -236,7 +280,26 @@ export default function RejectionDialog({
   const handleSubmit = async () => {
     setIsSubmitting(true);
     try {
-      // Call the reject-rental edge function (handles all refunds server-side)
+      // If there's an installment plan, refund installment payments first
+      let installmentRefundResult: any = null;
+      if (installmentData?.plan) {
+        const { data: instData, error: instError } = await supabase.functions.invoke('refund-installment-payments', {
+          body: {
+            rentalId: rental.id,
+            reason: rejectionReason || 'Booking rejected by admin',
+            tenantId: tenant?.id,
+          },
+        });
+
+        if (instError) {
+          console.error('Installment refund error:', instError);
+        } else {
+          installmentRefundResult = instData;
+          console.log('Installment refund result:', instData);
+        }
+      }
+
+      // Call the reject-rental edge function (handles regular payment refunds server-side)
       const { data, error } = await supabase.functions.invoke('reject-rental', {
         body: {
           rentalId: rental.id,
@@ -269,14 +332,19 @@ export default function RejectionDialog({
 
       // Build success message
       const paymentsProcessed = data?.paymentsProcessed || 0;
-      const totalRefunded = data?.totalRefunded || 0;
+      const regularRefunded = data?.totalRefunded || 0;
+      const installmentRefunded = installmentRefundResult?.totalRefunded || 0;
+      const combinedRefunded = regularRefunded + installmentRefunded;
       const manualRequired = data?.manualRefundsRequired || 0;
 
       let description = 'Booking has been rejected.';
-      if (paymentsProcessed > 0) {
-        description = `Booking rejected. ${paymentsProcessed} payment(s) processed`;
-        if (totalRefunded > 0) {
-          description += ` — ${formatCurrency(totalRefunded, currencyCode)} refunded/released`;
+      if (paymentsProcessed > 0 || installmentRefunded > 0) {
+        description = `Booking rejected.`;
+        if (combinedRefunded > 0) {
+          description += ` ${formatCurrency(combinedRefunded, currencyCode)} refunded`;
+        }
+        if (installmentRefundResult?.planCancelled) {
+          description += '. Installment plan cancelled';
         }
         if (manualRequired > 0) {
           description += `. ${manualRequired} require manual refund`;
@@ -298,6 +366,8 @@ export default function RejectionDialog({
       queryClient.invalidateQueries({ queryKey: ['rental-ledger'] });
       queryClient.invalidateQueries({ queryKey: ['rental-charges'] });
       queryClient.invalidateQueries({ queryKey: ['rental-totals'] });
+      queryClient.invalidateQueries({ queryKey: ['installment-plan'] });
+      queryClient.invalidateQueries({ queryKey: ['rental-installment-refund-info'] });
 
       handleClose();
     } catch (error: any) {
@@ -368,16 +438,16 @@ export default function RejectionDialog({
             </div>
 
             {/* Payment Summary */}
-            {loadingPayments ? (
+            {(loadingPayments || loadingInstallments) ? (
               <div className="flex items-center gap-2 text-sm text-muted-foreground py-4">
                 <Loader2 className="h-4 w-4 animate-spin" />
                 Loading payments...
               </div>
-            ) : (allPayments || []).length > 0 ? (
+            ) : (regularPayments.length > 0 || installmentOnlyPayments.length > 0) ? (
               <div className="space-y-3">
                 <h3 className="font-semibold text-sm">Payments to be refunded</h3>
                 <div className="border rounded-lg divide-y">
-                  {(allPayments || []).map((p) => (
+                  {regularPayments.map((p) => (
                     <div key={p.id} className="flex items-center justify-between px-4 py-3">
                       <div className="flex items-center gap-3">
                         {p.capture_status === 'requires_capture' ? (
@@ -407,6 +477,23 @@ export default function RejectionDialog({
                       </div>
                     </div>
                   ))}
+
+                  {/* Installment payments not already in regular payments */}
+                  {installmentOnlyPayments.map((inst) => (
+                    <div key={inst.id} className="flex items-center justify-between px-4 py-3">
+                      <div className="flex items-center gap-3">
+                        <Badge variant="outline" className="text-green-600 border-green-300">
+                          <CreditCard className="h-3 w-3 mr-1" />
+                          Stripe
+                        </Badge>
+                        <span className="text-sm">Installment #{inst.installment_number}</span>
+                      </div>
+                      <div className="text-right">
+                        <span className="font-medium">{formatCurrency(inst.amount || 0, currencyCode)}</span>
+                        <p className="text-xs text-muted-foreground">Will be refunded via Stripe</p>
+                      </div>
+                    </div>
+                  ))}
                 </div>
 
                 {/* Totals */}
@@ -417,9 +504,9 @@ export default function RejectionDialog({
 
                 {/* Summary badges */}
                 <div className="flex flex-wrap gap-2">
-                  {capturedPayments.length > 0 && (
+                  {(capturedPayments.length + installmentOnlyPayments.length) > 0 && (
                     <Badge variant="secondary" className="text-xs">
-                      {capturedPayments.length} Stripe refund{capturedPayments.length > 1 ? 's' : ''}
+                      {capturedPayments.length + installmentOnlyPayments.length} Stripe refund{(capturedPayments.length + installmentOnlyPayments.length) > 1 ? 's' : ''}
                     </Badge>
                   )}
                   {preAuthPayments.length > 0 && (
@@ -430,6 +517,11 @@ export default function RejectionDialog({
                   {manualPayments.length > 0 && (
                     <Badge variant="secondary" className="text-xs text-amber-700">
                       {manualPayments.length} manual refund{manualPayments.length > 1 ? 's' : ''} needed
+                    </Badge>
+                  )}
+                  {installmentData?.plan && (
+                    <Badge variant="secondary" className="text-xs">
+                      Installment plan will be cancelled
                     </Badge>
                   )}
                 </div>
@@ -506,8 +598,11 @@ export default function RejectionDialog({
                 ) : (
                   <>No customer email on file. </>
                 )}
-                {(allPayments || []).length > 0 ? (
-                  <>All {(allPayments || []).length} payment(s) totalling <strong>{formatCurrency(totalRefundAmount, currencyCode)}</strong> will be refunded automatically.</>
+                {totalRefundAmount > 0 ? (
+                  <>
+                    {regularPayments.length + installmentOnlyPayments.length} payment(s) totalling <strong>{formatCurrency(totalRefundAmount, currencyCode)}</strong> will be refunded.
+                    {installmentData?.plan && <> Installment plan will be cancelled.</>}
+                  </>
                 ) : (
                   <>No payments to refund.</>
                 )}

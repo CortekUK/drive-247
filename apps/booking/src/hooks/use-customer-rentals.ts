@@ -8,6 +8,7 @@ export interface CustomerRentalInstallmentPlan {
   status: string;
   total_installable_amount: number;
   upfront_amount: number;
+  upfront_paid: boolean | null;
   installment_amount: number;
   number_of_installments: number;
   paid_installments: number | null;
@@ -111,6 +112,7 @@ export function useCustomerRentals(filter: 'all' | 'active' | 'current' | 'past'
             status,
             total_installable_amount,
             upfront_amount,
+            upfront_paid,
             installment_amount,
             number_of_installments,
             paid_installments,

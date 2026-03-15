@@ -43,6 +43,7 @@ import { WhatsAppMetaSettings } from '@/components/settings/whatsapp-meta-settin
 import { SubscriptionSettings } from '@/components/settings/subscription-settings';
 import { LockboxTemplatesSection } from '@/components/settings/lockbox-templates-section';
 import { PricingRulesSettings } from '@/components/settings/pricing-rules-settings';
+import { InstallmentConfigDialog } from '@/components/settings/installment-config-dialog';
 import { formatCurrency } from '@/lib/format-utils';
 import { useManagerPermissions } from '@/hooks/use-manager-permissions';
 import { useUnsavedChangesWarning } from '@/hooks/use-unsaved-changes-warning';
@@ -64,6 +65,7 @@ const Settings = () => {
   const [isBackfilling, setIsBackfilling] = useState(false);
   const [showDataCleanupDialog, setShowDataCleanupDialog] = useState(false);
   const [resetGeneralDialogOpen, setResetGeneralDialogOpen] = useState(false);
+  const [installmentDialogOpen, setInstallmentDialogOpen] = useState(false);
   const [generalForm, setGeneralForm] = useState({
     currency_code: 'USD',
     distance_unit: 'miles' as 'km' | 'miles',
@@ -123,10 +125,12 @@ const Settings = () => {
     global_deposit_amount: number;
     installments_enabled: boolean;
     installment_config: {
-      min_days_for_weekly: number;
-      min_days_for_monthly: number;
-      max_installments_weekly: number;
-      max_installments_monthly: number;
+      minimum_days_weekly: number;
+      minimum_days_monthly: number;
+      weekly_installments_limit: number;
+      monthly_installments_limit: number;
+      limiting_amount_per_day_weekly: number;
+      limiting_amount_per_day_monthly: number;
       charge_first_upfront: boolean;
       what_gets_split: 'rental_only' | 'rental_tax' | 'rental_tax_extras';
       grace_period_days: number;
@@ -154,21 +158,24 @@ const Settings = () => {
     // Installment settings
     installments_enabled: false,
     installment_config: {
-      min_days_for_weekly: 7,
-      min_days_for_monthly: 30,
-      max_installments_weekly: 4,
-      max_installments_monthly: 6,
-      // Phase 3 additions
+      minimum_days_weekly: 7,
+      minimum_days_monthly: 30,
+      weekly_installments_limit: 4,
+      monthly_installments_limit: 6,
+      limiting_amount_per_day_weekly: 0,
+      limiting_amount_per_day_monthly: 0,
       charge_first_upfront: true,
-      what_gets_split: 'rental_tax' as 'rental_only' | 'rental_tax' | 'rental_tax_extras',
+      what_gets_split: 'rental_only' as 'rental_only' | 'rental_tax' | 'rental_tax_extras',
       grace_period_days: 3,
       max_retry_attempts: 3,
       retry_interval_days: 1,
     } as {
-      min_days_for_weekly: number;
-      min_days_for_monthly: number;
-      max_installments_weekly: number;
-      max_installments_monthly: number;
+      minimum_days_weekly: number;
+      minimum_days_monthly: number;
+      weekly_installments_limit: number;
+      monthly_installments_limit: number;
+      limiting_amount_per_day_weekly: number;
+      limiting_amount_per_day_monthly: number;
       charge_first_upfront: boolean;
       what_gets_split: 'rental_only' | 'rental_tax' | 'rental_tax_extras';
       grace_period_days: number;
@@ -204,13 +211,14 @@ const Settings = () => {
         // Installment settings
         installments_enabled: rentalSettings.installments_enabled ?? false,
         installment_config: {
-          min_days_for_weekly: rentalSettings.installment_config?.min_days_for_weekly ?? 7,
-          min_days_for_monthly: rentalSettings.installment_config?.min_days_for_monthly ?? 30,
-          max_installments_weekly: rentalSettings.installment_config?.max_installments_weekly ?? 4,
-          max_installments_monthly: rentalSettings.installment_config?.max_installments_monthly ?? 6,
-          // Phase 3 additions
+          minimum_days_weekly: rentalSettings.installment_config?.minimum_days_weekly ?? rentalSettings.installment_config?.min_days_for_weekly ?? 7,
+          minimum_days_monthly: rentalSettings.installment_config?.minimum_days_monthly ?? rentalSettings.installment_config?.min_days_for_monthly ?? 30,
+          weekly_installments_limit: rentalSettings.installment_config?.weekly_installments_limit ?? rentalSettings.installment_config?.max_installments_weekly ?? 4,
+          monthly_installments_limit: rentalSettings.installment_config?.monthly_installments_limit ?? rentalSettings.installment_config?.max_installments_monthly ?? 6,
+          limiting_amount_per_day_weekly: rentalSettings.installment_config?.limiting_amount_per_day_weekly ?? 0,
+          limiting_amount_per_day_monthly: rentalSettings.installment_config?.limiting_amount_per_day_monthly ?? 0,
           charge_first_upfront: rentalSettings.installment_config?.charge_first_upfront ?? true,
-          what_gets_split: rentalSettings.installment_config?.what_gets_split ?? 'rental_tax',
+          what_gets_split: rentalSettings.installment_config?.what_gets_split ?? 'rental_only',
           grace_period_days: rentalSettings.installment_config?.grace_period_days ?? 3,
           max_retry_attempts: rentalSettings.installment_config?.max_retry_attempts ?? 3,
           retry_interval_days: rentalSettings.installment_config?.retry_interval_days ?? 1,
@@ -2571,7 +2579,7 @@ const Settings = () => {
             </CardContent>
           </Card>
 
-          {/* Installment Payments Configuration Card */}
+          {/* Installment Payments Summary Card */}
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
@@ -2582,8 +2590,7 @@ const Settings = () => {
                 Allow customers to split rental payments into scheduled installments
               </CardDescription>
             </CardHeader>
-            <CardContent className="space-y-6">
-              {/* Enable Installments Toggle */}
+            <CardContent className="space-y-4">
               <div className="flex items-center justify-between p-4 border rounded-lg">
                 <div className="space-y-1">
                   <h4 className="font-medium">Enable Installment Payments</h4>
@@ -2593,305 +2600,56 @@ const Settings = () => {
                 </div>
                 <Switch
                   checked={rentalForm.installments_enabled ?? false}
-                  onCheckedChange={(checked) => {
+                  onCheckedChange={async (checked) => {
                     setRentalForm(prev => ({ ...prev, installments_enabled: checked }));
+                    try {
+                      await updateRentalSettings({ installments_enabled: checked });
+                    } catch (error) {
+                      console.error('Failed to update installment toggle:', error);
+                    }
                   }}
                 />
               </div>
 
               {rentalForm.installments_enabled && (
-                <div className="space-y-6 p-4 border rounded-lg bg-muted/30">
-                  <h4 className="font-medium text-sm">Installment Configuration</h4>
-
-                  {/* Weekly Installments */}
-                  <div className="space-y-3">
-                    <Label className="text-sm font-medium">Weekly Installments</Label>
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className="space-y-2">
-                        <Label htmlFor="min_days_weekly" className="text-xs text-muted-foreground">
-                          Minimum rental days
-                        </Label>
-                        <Input
-                          id="min_days_weekly"
-                          type="number"
-                          min="7"
-                          value={rentalForm.installment_config?.min_days_for_weekly ?? 7}
-                          onChange={(e) => {
-                            const value = parseInt(e.target.value) || 7;
-                            setRentalForm(prev => ({
-                              ...prev,
-                              installment_config: {
-                                ...prev.installment_config,
-                                min_days_for_weekly: value,
-                              }
-                            }));
-                          }}
-                          className="w-full"
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <Label htmlFor="max_weekly" className="text-xs text-muted-foreground">
-                          Maximum installments
-                        </Label>
-                        <Input
-                          id="max_weekly"
-                          type="number"
-                          min="2"
-                          max="12"
-                          value={rentalForm.installment_config?.max_installments_weekly ?? 4}
-                          onChange={(e) => {
-                            const value = parseInt(e.target.value) || 4;
-                            setRentalForm(prev => ({
-                              ...prev,
-                              installment_config: {
-                                ...prev.installment_config,
-                                max_installments_weekly: Math.min(12, Math.max(2, value)),
-                              }
-                            }));
-                          }}
-                          className="w-full"
-                        />
-                      </div>
-                    </div>
+                <div className="p-4 border rounded-lg bg-muted/30 space-y-3">
+                  <div className="text-sm text-muted-foreground">
+                    Weekly: {rentalForm.installment_config?.weekly_installments_limit ?? 4} installments (min {rentalForm.installment_config?.minimum_days_weekly ?? 7} days
+                    {(rentalForm.installment_config?.limiting_amount_per_day_weekly ?? 0) > 0 && `, min $${rentalForm.installment_config.limiting_amount_per_day_weekly}/day`})
+                    {' · '}
+                    Monthly: {rentalForm.installment_config?.monthly_installments_limit ?? 6} installments (min {rentalForm.installment_config?.minimum_days_monthly ?? 30} days
+                    {(rentalForm.installment_config?.limiting_amount_per_day_monthly ?? 0) > 0 && `, min $${rentalForm.installment_config.limiting_amount_per_day_monthly}/day`})
+                    {' · '}
+                    {rentalForm.installment_config?.charge_first_upfront ? 'First payment upfront' : 'All scheduled'}
                   </div>
-
-                  {/* Monthly Installments */}
-                  <div className="space-y-3">
-                    <Label className="text-sm font-medium">Monthly Installments</Label>
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className="space-y-2">
-                        <Label htmlFor="min_days_monthly" className="text-xs text-muted-foreground">
-                          Minimum rental days
-                        </Label>
-                        <Input
-                          id="min_days_monthly"
-                          type="number"
-                          min="30"
-                          value={rentalForm.installment_config?.min_days_for_monthly ?? 30}
-                          onChange={(e) => {
-                            const value = parseInt(e.target.value) || 30;
-                            setRentalForm(prev => ({
-                              ...prev,
-                              installment_config: {
-                                ...prev.installment_config,
-                                min_days_for_monthly: value,
-                              }
-                            }));
-                          }}
-                          className="w-full"
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <Label htmlFor="max_monthly" className="text-xs text-muted-foreground">
-                          Maximum installments
-                        </Label>
-                        <Input
-                          id="max_monthly"
-                          type="number"
-                          min="2"
-                          max="12"
-                          value={rentalForm.installment_config?.max_installments_monthly ?? 6}
-                          onChange={(e) => {
-                            const value = parseInt(e.target.value) || 6;
-                            setRentalForm(prev => ({
-                              ...prev,
-                              installment_config: {
-                                ...prev.installment_config,
-                                max_installments_monthly: Math.min(12, Math.max(2, value)),
-                              }
-                            }));
-                          }}
-                          className="w-full"
-                        />
-                      </div>
-                    </div>
-                  </div>
-
-                  <Separator className="my-4" />
-
-                  {/* Charge First Installment Upfront */}
-                  <div className="flex items-center justify-between p-3 border rounded-lg bg-background">
-                    <div className="space-y-1">
-                      <Label className="text-sm font-medium">Charge First Installment Upfront</Label>
-                      <p className="text-xs text-muted-foreground">
-                        Collect the first installment at checkout along with deposit and fees
-                      </p>
-                    </div>
-                    <Switch
-                      checked={rentalForm.installment_config?.charge_first_upfront ?? true}
-                      onCheckedChange={(checked) => {
-                        setRentalForm(prev => ({
-                          ...prev,
-                          installment_config: {
-                            ...prev.installment_config,
-                            charge_first_upfront: checked,
-                          }
-                        }));
-                      }}
-                    />
-                  </div>
-
-                  {/* What Gets Split */}
-                  <div className="space-y-3">
-                    <Label className="text-sm font-medium">What Gets Split Into Installments</Label>
-                    <RadioGroup
-                      value={rentalForm.installment_config?.what_gets_split ?? 'rental_tax'}
-                      onValueChange={(value: 'rental_only' | 'rental_tax' | 'rental_tax_extras') => {
-                        setRentalForm(prev => ({
-                          ...prev,
-                          installment_config: {
-                            ...prev.installment_config,
-                            what_gets_split: value,
-                          }
-                        }));
-                      }}
-                      className="space-y-2"
+                  {canEditSettings('rental') && (
+                    <Button
+                      variant="outline"
+                      onClick={() => setInstallmentDialogOpen(true)}
+                      className="flex items-center gap-2"
                     >
-                      <div className="flex items-center space-x-2 p-2 border rounded-lg hover:bg-muted/50">
-                        <RadioGroupItem value="rental_only" id="split_rental" />
-                        <Label htmlFor="split_rental" className="flex-1 cursor-pointer">
-                          <span className="font-medium">Rental Only</span>
-                          <p className="text-xs text-muted-foreground">Only the base rental cost is split; tax paid upfront</p>
-                        </Label>
-                      </div>
-                      <div className="flex items-center space-x-2 p-2 border rounded-lg hover:bg-muted/50">
-                        <RadioGroupItem value="rental_tax" id="split_rental_tax" />
-                        <Label htmlFor="split_rental_tax" className="flex-1 cursor-pointer">
-                          <span className="font-medium">Rental + Tax</span>
-                          <p className="text-xs text-muted-foreground">Rental cost and applicable taxes are split into installments</p>
-                        </Label>
-                      </div>
-                      <div className="flex items-center space-x-2 p-2 border rounded-lg hover:bg-muted/50">
-                        <RadioGroupItem value="rental_tax_extras" id="split_all" />
-                        <Label htmlFor="split_all" className="flex-1 cursor-pointer">
-                          <span className="font-medium">Rental + Tax + Extras</span>
-                          <p className="text-xs text-muted-foreground">Include delivery/collection fees and extras in installments</p>
-                        </Label>
-                      </div>
-                    </RadioGroup>
-                  </div>
-
-                  <Separator className="my-4" />
-
-                  {/* Failed Payment Recovery */}
-                  <div className="space-y-3">
-                    <Label className="text-sm font-medium">Failed Payment Recovery</Label>
-                    <p className="text-xs text-muted-foreground">
-                      Configure how the system handles failed installment payments
-                    </p>
-                    <div className="grid grid-cols-3 gap-4">
-                      <div className="space-y-2">
-                        <Label htmlFor="grace_period" className="text-xs text-muted-foreground">
-                          Grace Period (days)
-                        </Label>
-                        <Input
-                          id="grace_period"
-                          type="number"
-                          min="0"
-                          max="14"
-                          value={rentalForm.installment_config?.grace_period_days ?? 3}
-                          onChange={(e) => {
-                            const value = parseInt(e.target.value) || 3;
-                            setRentalForm(prev => ({
-                              ...prev,
-                              installment_config: {
-                                ...prev.installment_config,
-                                grace_period_days: Math.min(14, Math.max(0, value)),
-                              }
-                            }));
-                          }}
-                          className="w-full"
-                        />
-                        <p className="text-xs text-muted-foreground">Days before marking overdue</p>
-                      </div>
-                      <div className="space-y-2">
-                        <Label htmlFor="max_retries" className="text-xs text-muted-foreground">
-                          Max Retry Attempts
-                        </Label>
-                        <Input
-                          id="max_retries"
-                          type="number"
-                          min="1"
-                          max="10"
-                          value={rentalForm.installment_config?.max_retry_attempts ?? 3}
-                          onChange={(e) => {
-                            const value = parseInt(e.target.value) || 3;
-                            setRentalForm(prev => ({
-                              ...prev,
-                              installment_config: {
-                                ...prev.installment_config,
-                                max_retry_attempts: Math.min(10, Math.max(1, value)),
-                              }
-                            }));
-                          }}
-                          className="w-full"
-                        />
-                        <p className="text-xs text-muted-foreground">Attempts before giving up</p>
-                      </div>
-                      <div className="space-y-2">
-                        <Label htmlFor="retry_interval" className="text-xs text-muted-foreground">
-                          Retry Interval (days)
-                        </Label>
-                        <Input
-                          id="retry_interval"
-                          type="number"
-                          min="1"
-                          max="7"
-                          value={rentalForm.installment_config?.retry_interval_days ?? 1}
-                          onChange={(e) => {
-                            const value = parseInt(e.target.value) || 1;
-                            setRentalForm(prev => ({
-                              ...prev,
-                              installment_config: {
-                                ...prev.installment_config,
-                                retry_interval_days: Math.min(7, Math.max(1, value)),
-                              }
-                            }));
-                          }}
-                          className="w-full"
-                        />
-                        <p className="text-xs text-muted-foreground">Days between retries</p>
-                      </div>
-                    </div>
-                  </div>
-
-                  <Alert>
-                    <AlertDescription>
-                      <strong>How it works:</strong> Customers pay the security deposit and service fee upfront
-                      {rentalForm.installment_config?.charge_first_upfront && ', plus the first installment'}.
-                      The {rentalForm.installment_config?.what_gets_split === 'rental_only' ? 'rental cost' :
-                           rentalForm.installment_config?.what_gets_split === 'rental_tax' ? 'rental cost + tax' :
-                           'rental cost, tax, and extras'} is split into scheduled payments charged automatically to their saved card.
-                    </AlertDescription>
-                  </Alert>
-                </div>
-              )}
-
-              {canEditSettings('rental') && (
-                <Button
-                  onClick={async () => {
-                    try {
-                      await updateRentalSettings({
-                        installments_enabled: rentalForm.installments_enabled,
-                        installment_config: rentalForm.installment_config,
-                      });
-                    } catch (error) {
-                      console.error('Failed to update installment settings:', error);
-                    }
-                  }}
-                  disabled={isUpdatingRentalSettings}
-                  className="flex items-center gap-2"
-                >
-                  {isUpdatingRentalSettings ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                  ) : (
-                    <Save className="h-4 w-4" />
+                      <SettingsIcon className="h-4 w-4" />
+                      Configure
+                    </Button>
                   )}
-                  Save Installment Settings
-                </Button>
+                </div>
               )}
             </CardContent>
           </Card>
+
+          <InstallmentConfigDialog
+            open={installmentDialogOpen}
+            onOpenChange={setInstallmentDialogOpen}
+            config={rentalForm.installment_config}
+            onSave={async (newConfig) => {
+              setRentalForm(prev => ({ ...prev, installment_config: newConfig }));
+              await updateRentalSettings({
+                installments_enabled: rentalForm.installments_enabled,
+                installment_config: newConfig,
+              });
+            }}
+            isSaving={isUpdatingRentalSettings}
+          />
 
           {/* Promo Code Card UI */}
           <Card className="mt-8">
@@ -3492,12 +3250,14 @@ const Settings = () => {
                             global_deposit_amount: 0,
                             installments_enabled: false,
                             installment_config: {
-                              min_days_for_weekly: 7,
-                              min_days_for_monthly: 30,
-                              max_installments_weekly: 4,
-                              max_installments_monthly: 6,
+                              minimum_days_weekly: 7,
+                              minimum_days_monthly: 30,
+                              weekly_installments_limit: 4,
+                              monthly_installments_limit: 6,
+                              limiting_amount_per_day_weekly: 0,
+                              limiting_amount_per_day_monthly: 0,
                               charge_first_upfront: true,
-                              what_gets_split: 'rental_tax' as const,
+                              what_gets_split: 'rental_only' as const,
                               grace_period_days: 3,
                               max_retry_attempts: 3,
                               retry_interval_days: 1,
@@ -3524,12 +3284,14 @@ const Settings = () => {
                             global_deposit_amount: 0,
                             installments_enabled: false,
                             installment_config: {
-                              min_days_for_weekly: 7,
-                              min_days_for_monthly: 30,
-                              max_installments_weekly: 4,
-                              max_installments_monthly: 6,
+                              minimum_days_weekly: 7,
+                              minimum_days_monthly: 30,
+                              weekly_installments_limit: 4,
+                              monthly_installments_limit: 6,
+                              limiting_amount_per_day_weekly: 0,
+                              limiting_amount_per_day_monthly: 0,
                               charge_first_upfront: true,
-                              what_gets_split: 'rental_tax',
+                              what_gets_split: 'rental_only',
                               grace_period_days: 3,
                               max_retry_attempts: 3,
                               retry_interval_days: 1,

@@ -83,12 +83,14 @@ const BookingCheckoutContent = () => {
   const [selectedInstallmentPlan, setSelectedInstallmentPlan] = useState<InstallmentOption | null>(null);
   const installmentsEnabled = tenant?.installments_enabled ?? false;
   const installmentConfig: InstallmentConfig = {
-    min_days_for_weekly: 7,
-    min_days_for_monthly: 30,
-    max_installments_weekly: 4,
-    max_installments_monthly: 6,
+    minimum_days_weekly: 7,
+    minimum_days_monthly: 30,
+    weekly_installments_limit: 4,
+    monthly_installments_limit: 6,
+    limiting_amount_per_day_weekly: 0,
+    limiting_amount_per_day_monthly: 0,
     charge_first_upfront: true,
-    what_gets_split: 'rental_tax',
+    what_gets_split: 'rental_only',
     grace_period_days: 3,
     max_retry_attempts: 3,
     retry_interval_days: 1,
@@ -250,7 +252,7 @@ const BookingCheckoutContent = () => {
   // 'rental_only': Only vehicle price + extras are split
   // 'rental_tax': Vehicle price + extras + tax are split (default)
   // 'rental_tax_extras': Vehicle price + extras + tax + delivery/collection fees are split
-  const whatGetsSplit = installmentConfig.what_gets_split || 'rental_tax';
+  const whatGetsSplit = installmentConfig.what_gets_split || 'rental_only';
 
   const { upfrontAmount, installableAmount } = (() => {
     // Always upfront: Deposit + Service Fee
@@ -629,7 +631,7 @@ const BookingCheckoutContent = () => {
               tenantId: tenant?.id,
               // Pass config settings for storage with the plan
               chargeFirstUpfront: installmentConfig.charge_first_upfront ?? true,
-              whatGetsSplit: installmentConfig.what_gets_split ?? 'rental_tax',
+              whatGetsSplit: installmentConfig.what_gets_split ?? 'rental_only',
               gracePeriodDays: installmentConfig.grace_period_days ?? 3,
               maxRetryAttempts: installmentConfig.max_retry_attempts ?? 3,
               retryIntervalDays: installmentConfig.retry_interval_days ?? 1,
@@ -818,11 +820,12 @@ const BookingCheckoutContent = () => {
               </Card>
 
               {/* Installment Payment Options */}
-              {calculateRentalDays() >= 7 && (
+              {calculateRentalDays() >= Math.min(installmentConfig.minimum_days_weekly ?? installmentConfig.min_days_for_weekly ?? 7, installmentConfig.minimum_days_monthly ?? installmentConfig.min_days_for_monthly ?? 30) && (
                 <InstallmentSelector
                   rentalDays={calculateRentalDays()}
                   installableAmount={installableAmount}
                   upfrontAmount={upfrontAmount}
+                  totalBill={installableAmount + upfrontAmount}
                   config={installmentConfig}
                   enabled={installmentsEnabled}
                   onSelectPlan={setSelectedInstallmentPlan}

@@ -95,7 +95,10 @@ export default function InstallmentPlanCard({ rentalId, formatCurrency }: Instal
   }
 
   const progressPercent = (plan.paid_installments / plan.number_of_installments) * 100;
-  const totalContractValue = plan.upfront_amount + plan.total_installable_amount;
+  // Subtract first installment from installable when it's already included in upfront (charge_first_upfront)
+  const chargeFirst = (plan as any).config?.charge_first_upfront !== false;
+  const firstInstAmt = chargeFirst ? plan.installment_amount : 0;
+  const totalContractValue = plan.upfront_amount + plan.total_installable_amount - firstInstAmt;
   const totalPaidAmount = plan.upfront_paid ? plan.upfront_amount + plan.total_paid : plan.total_paid;
 
   return (
@@ -125,7 +128,7 @@ export default function InstallmentPlanCard({ rentalId, formatCurrency }: Instal
           <Progress value={progressPercent} className="h-2" />
         </div>
 
-        {/* Financial Summary */}
+        {/* Financial Summary — commented out until installment amount tracking is unified
         <div className="grid grid-cols-2 gap-4 p-4 bg-muted/50 rounded-lg">
           <div>
             <p className="text-xs text-muted-foreground">Upfront Paid</p>
@@ -152,6 +155,7 @@ export default function InstallmentPlanCard({ rentalId, formatCurrency }: Instal
             <p className="text-lg font-semibold">{formatCurrency(totalContractValue)}</p>
           </div>
         </div>
+        */}
 
         {/* Next Due Date */}
         {plan.next_due_date && plan.status === 'active' && (
