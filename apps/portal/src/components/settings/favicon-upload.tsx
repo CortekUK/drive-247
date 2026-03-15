@@ -151,7 +151,11 @@ export const FaviconUpload: React.FC<FaviconUploadProps> = ({
       });
     } catch (error: any) {
       console.error('Error removing favicon:', error);
-      onFaviconChange(null);
+      toast({
+        title: "Remove Failed",
+        description: error.message || "Failed to remove favicon",
+        variant: "destructive",
+      });
     }
   };
 

@@ -17,7 +17,7 @@ import {
   Loader2,
   Download,
 } from "lucide-react";
-import { toast } from "sonner";
+import { toast } from "@/hooks/use-toast";
 import { useTenant } from "@/contexts/TenantContext";
 import { UsageDashboard } from "./usage-dashboard";
 
@@ -232,7 +232,7 @@ export function SubscriptionSettings() {
   // Handle return from Stripe Checkout
   useEffect(() => {
     if (searchParams.get("status") === "success") {
-      toast.success("Subscription activated successfully!");
+      toast({ title: "Subscription activated successfully!" });
       const interval = setInterval(() => refetch(), 2000);
       const timeout = setTimeout(() => clearInterval(interval), 15000);
       return () => {

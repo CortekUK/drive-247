@@ -1657,9 +1657,9 @@ const CreateRental = () => {
             <div className="lg:col-span-3 lg:overflow-y-auto lg:pr-2 space-y-6">
               {/* ── Section 1: Customer ──────────────────────────── */}
               <div className="rounded-xl border bg-card shadow-sm">
-                <div className="flex items-center gap-3 px-5 py-4 border-b bg-primary/10">
-                  <span className="text-2xl font-bold text-primary">1.</span>
-                  <h2 className="font-bold text-lg text-foreground uppercase tracking-wide">Customer</h2>
+                <div className="flex items-center gap-1.5 px-6 py-3.5 border-b bg-primary/15 rounded-t-xl">
+                  <span className="text-2xl font-extrabold text-primary">1.</span>
+                  <h2 className="font-extrabold text-xl text-foreground uppercase tracking-wider">Customer</h2>
                 </div>
                 <div className="p-5">
                     <FormField
@@ -1907,9 +1907,9 @@ const CreateRental = () => {
 
               {/* ── Section 1b: Vehicle ───────────────────────────── */}
               <div className="rounded-xl border bg-card shadow-sm">
-                <div className="flex items-center gap-3 px-5 py-4 border-b bg-primary/10">
-                  <span className="text-2xl font-bold text-primary">2.</span>
-                  <h2 className="font-bold text-lg text-foreground uppercase tracking-wide">Vehicle</h2>
+                <div className="flex items-center gap-1.5 px-6 py-3.5 border-b bg-primary/15 rounded-t-xl">
+                  <span className="text-2xl font-extrabold text-primary">2.</span>
+                  <h2 className="font-extrabold text-xl text-foreground uppercase tracking-wider">Vehicle</h2>
                 </div>
                 <div className="p-5">
                     <FormField
@@ -1990,9 +1990,9 @@ const CreateRental = () => {
               {/* ── Uploaded Insurance ────────────────────────────── */}
               {selectedCustomerId && (
                 <div className="rounded-xl border bg-card shadow-sm">
-                  <div className="flex items-center gap-3 px-5 py-4 border-b bg-primary/10">
-                    <div className="flex items-center justify-center h-6 w-6 rounded-md bg-primary/10 text-primary"><ShieldCheck className="h-3.5 w-3.5" /></div>
-                    <h2 className="font-bold text-lg text-foreground uppercase tracking-wide">Uploaded Insurance</h2>
+                  <div className="flex items-center gap-1.5 px-6 py-3.5 border-b bg-primary/15 rounded-t-xl">
+                    <div className="flex items-center justify-center h-7 w-7 rounded-md bg-primary/20 text-primary"><ShieldCheck className="h-4 w-4" /></div>
+                    <h2 className="font-extrabold text-xl text-foreground uppercase tracking-wider">Uploaded Insurance</h2>
                   </div>
                   <div className="p-5">
                     {customerInsurance && customerInsurance.length > 0 ? (
@@ -2044,9 +2044,9 @@ const CreateRental = () => {
 
               {/* ── Section 2: Rental Period ────────────── */}
               <div className="rounded-xl border bg-card shadow-sm">
-                <div className="flex items-center gap-3 px-5 py-4 border-b bg-primary/10">
-                  <span className="text-2xl font-bold text-primary">3.</span>
-                  <h2 className="font-bold text-lg text-foreground uppercase tracking-wide">Rental Period & Pricing</h2>
+                <div className="flex items-center gap-1.5 px-6 py-3.5 border-b bg-primary/15 rounded-t-xl">
+                  <span className="text-2xl font-extrabold text-primary">3.</span>
+                  <h2 className="font-extrabold text-xl text-foreground uppercase tracking-wider">Rental Period & Pricing</h2>
                 </div>
                 <div className="p-5 space-y-5">
                   {/* Dates first — period type is auto-determined from date range */}
@@ -2191,9 +2191,9 @@ const CreateRental = () => {
 
               {/* ── Section 2b: Pricing ────────────── */}
               <div className="rounded-xl border bg-card shadow-sm">
-                <div className="flex items-center gap-3 px-5 py-4 border-b bg-primary/10">
-                  <div className="flex items-center justify-center h-6 w-6 rounded-md bg-primary/10 text-primary"><Banknote className="h-3.5 w-3.5" /></div>
-                  <h2 className="font-bold text-lg text-foreground uppercase tracking-wide">Pricing</h2>
+                <div className="flex items-center gap-1.5 px-6 py-3.5 border-b bg-primary/15 rounded-t-xl">
+                  <div className="flex items-center justify-center h-7 w-7 rounded-md bg-primary/20 text-primary"><Banknote className="h-4 w-4" /></div>
+                  <h2 className="font-extrabold text-xl text-foreground uppercase tracking-wider">Pricing</h2>
                 </div>
                 <div className="p-5 space-y-5">
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -2260,11 +2260,11 @@ const CreateRental = () => {
 
                 return (
                   <div className="rounded-xl border bg-card shadow-sm">
-                    <div className="flex items-center gap-3 px-5 py-4 border-b bg-primary/10">
-                      <div className="flex items-center justify-center h-6 w-6 rounded-md bg-primary/10 text-primary">
-                        <Receipt className="h-3.5 w-3.5" />
+                    <div className="flex items-center gap-1.5 px-6 py-3.5 border-b bg-primary/15 rounded-t-xl">
+                      <div className="flex items-center justify-center h-7 w-7 rounded-md bg-primary/20 text-primary">
+                        <Receipt className="h-4 w-4" />
                       </div>
-                      <h2 className="font-bold text-lg text-foreground uppercase tracking-wide">Fees & Charges</h2>
+                      <h2 className="font-extrabold text-xl text-foreground uppercase tracking-wider">Fees & Charges</h2>
                       <span className="ml-auto text-xs text-muted-foreground">Auto-calculated from settings. Override for this rental only.</span>
                     </div>
                     <div className="p-5 space-y-4">
@@ -2502,11 +2502,11 @@ const CreateRental = () => {
 
                 return (
                   <div className="rounded-xl border bg-card shadow-sm">
-                    <div className="flex items-center gap-3 px-5 py-4 border-b bg-primary/10">
-                      <div className="flex items-center justify-center h-6 w-6 rounded-md bg-primary/10 text-primary">
-                        <CreditCard className="h-3.5 w-3.5" />
+                    <div className="flex items-center gap-1.5 px-6 py-3.5 border-b bg-primary/15 rounded-t-xl">
+                      <div className="flex items-center justify-center h-7 w-7 rounded-md bg-primary/20 text-primary">
+                        <CreditCard className="h-4 w-4" />
                       </div>
-                      <h2 className="font-bold text-lg text-foreground uppercase tracking-wide">Payment Plan</h2>
+                      <h2 className="font-extrabold text-xl text-foreground uppercase tracking-wider">Payment Plan</h2>
                       <span className="ml-auto text-xs text-muted-foreground">Admin can adjust installment amounts per-rental.</span>
                     </div>
                     <div className="p-5 space-y-4">
@@ -2629,9 +2629,9 @@ const CreateRental = () => {
 
               {/* ── Section 3: Pickup & Return ────────────────────── */}
               <div className="rounded-xl border bg-card shadow-sm">
-                <div className="flex items-center gap-3 px-5 py-4 border-b bg-primary/10">
-                  <span className="text-2xl font-bold text-primary">4.</span>
-                  <h2 className="font-bold text-lg text-foreground uppercase tracking-wide">Pickup & Return</h2>
+                <div className="flex items-center gap-1.5 px-6 py-3.5 border-b bg-primary/15 rounded-t-xl">
+                  <span className="text-2xl font-extrabold text-primary">4.</span>
+                  <h2 className="font-extrabold text-xl text-foreground uppercase tracking-wider">Pickup & Return</h2>
                 </div>
                 <div className="p-5 space-y-5">
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -2806,9 +2806,9 @@ const CreateRental = () => {
               {/* ── Section 4: Insurance ──────────────────────────── */}
               {!skipInsurance && (
                 <div className="rounded-xl border bg-card shadow-sm">
-                  <div className="flex items-center gap-3 px-5 py-4 border-b bg-primary/10">
-                    <span className="text-2xl font-bold text-primary">5.</span>
-                    <h2 className="font-bold text-lg text-foreground uppercase tracking-wide">Insurance</h2>
+                  <div className="flex items-center gap-1.5 px-6 py-3.5 border-b bg-primary/15 rounded-t-xl">
+                    <span className="text-2xl font-extrabold text-primary">5.</span>
+                    <h2 className="font-extrabold text-xl text-foreground uppercase tracking-wider">Insurance</h2>
                   </div>
                   <div className="p-5 space-y-5">
                     <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
@@ -2941,9 +2941,9 @@ const CreateRental = () => {
               {/* ── Section 5: Optional Extras ────────────────────── */}
               {activeExtras.length > 0 && (
                 <div className="rounded-xl border bg-card shadow-sm">
-                  <div className="flex items-center gap-3 px-5 py-4 border-b bg-primary/10">
-                    <span className="text-2xl font-bold text-primary">6.</span>
-                    <h2 className="font-bold text-lg text-foreground uppercase tracking-wide">Optional Extras</h2>
+                  <div className="flex items-center gap-1.5 px-6 py-3.5 border-b bg-primary/15 rounded-t-xl">
+                    <span className="text-2xl font-extrabold text-primary">6.</span>
+                    <h2 className="font-extrabold text-xl text-foreground uppercase tracking-wider">Optional Extras</h2>
                   </div>
                   <div className="p-5 space-y-4">
                       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
@@ -3068,9 +3068,9 @@ const CreateRental = () => {
 
               {/* ── Section 6: Additional Details ─────────────────── */}
               <div className="rounded-xl border bg-card shadow-sm">
-                <div className="flex items-center gap-3 px-5 py-4 border-b bg-primary/10">
-                  <span className="text-2xl font-bold text-primary">7.</span>
-                  <h2 className="font-bold text-lg text-foreground uppercase tracking-wide">Additional Details</h2>
+                <div className="flex items-center gap-1.5 px-6 py-3.5 border-b bg-primary/15 rounded-t-xl">
+                  <span className="text-2xl font-extrabold text-primary">7.</span>
+                  <h2 className="font-extrabold text-xl text-foreground uppercase tracking-wider">Additional Details</h2>
                 </div>
                 <div className="p-5 space-y-4">
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -3235,9 +3235,9 @@ const CreateRental = () => {
               <div className="space-y-5">
                 {/* Preview Header */}
                 <div className="rounded-xl border bg-card shadow-sm">
-                  <div className="flex items-center gap-3 px-5 py-4 border-b bg-primary/10">
-                    <div className="flex items-center justify-center h-6 w-6 rounded-md bg-primary/10 text-primary"><FileText className="h-3.5 w-3.5" /></div>
-                    <h2 className="font-bold text-lg text-foreground uppercase tracking-wide">Rental Preview</h2>
+                  <div className="flex items-center gap-1.5 px-6 py-3.5 border-b bg-primary/15 rounded-t-xl">
+                    <div className="flex items-center justify-center h-7 w-7 rounded-md bg-primary/20 text-primary"><FileText className="h-4 w-4" /></div>
+                    <h2 className="font-extrabold text-xl text-foreground uppercase tracking-wider">Rental Preview</h2>
                   </div>
                   <div className="p-5 space-y-5">
                     {/* Customer */}

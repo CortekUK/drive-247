@@ -540,7 +540,7 @@ export function AppSidebar() {
                 </Popover>
               ) : (
                 /* Expanded: collapsible groups */
-                <Collapsible open={isOpen} onOpenChange={() => toggleGroup(group.label)}>
+                <Collapsible open={isOpen} onOpenChange={() => toggleGroup(group.label)} className="group/collapsible">
                   <SidebarMenu>
                     <SidebarMenuItem>
                       <CollapsibleTrigger asChild>
@@ -558,7 +558,7 @@ export function AppSidebar() {
                               {totalBadge > 9 ? '9+' : totalBadge}
                             </span>
                           )}
-                          <ChevronRight className={`h-3.5 w-3.5 shrink-0 text-muted-foreground/50 transition-transform duration-200 ${isOpen ? "rotate-90" : ""}`} />
+                          <ChevronRight className={`h-3.5 w-3.5 shrink-0 text-muted-foreground/50 transition-all duration-200 opacity-0 group-hover/collapsible:opacity-100 ${isOpen ? "rotate-90" : ""}`} />
                         </SidebarMenuButton>
                       </CollapsibleTrigger>
                     </SidebarMenuItem>
