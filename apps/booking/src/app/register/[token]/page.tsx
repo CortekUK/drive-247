@@ -46,8 +46,15 @@ interface TenantInfo {
   tenantName: string;
   tenantLogo: string | null;
   tenantPrimaryColor: string | null;
+  acceptedVerificationDocument: 'drivers_license' | 'passport' | 'id_card';
   expiresAt: string;
 }
+
+const DOCUMENT_TYPE_LABELS: Record<string, string> = {
+  drivers_license: "Driver's License",
+  passport: "Passport",
+  id_card: "ID Card",
+};
 
 export default function RegisterPage() {
   const params = useParams();
@@ -447,7 +454,7 @@ export default function RegisterPage() {
               <div className="border-t pt-4 mt-2">
                 <h3 className="text-sm font-semibold flex items-center gap-2 mb-3">
                   <Shield className="h-4 w-4 text-primary" />
-                  ID Verification
+                  {DOCUMENT_TYPE_LABELS[tenantInfo?.acceptedVerificationDocument || 'drivers_license']} Verification
                   <span className="text-xs font-normal text-muted-foreground">(Optional)</span>
                 </h3>
 
@@ -465,7 +472,7 @@ export default function RegisterPage() {
                     </div>
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-medium">Verify with your phone</p>
-                      <p className="text-xs text-muted-foreground">Scan a QR code to take photos of your ID and a selfie.</p>
+                      <p className="text-xs text-muted-foreground">Scan a QR code to take photos of your {DOCUMENT_TYPE_LABELS[tenantInfo?.acceptedVerificationDocument || 'drivers_license'].toLowerCase()} and a selfie.</p>
                     </div>
                     <Button
                       type="button"
