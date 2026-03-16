@@ -7,7 +7,7 @@ import { useTenant } from '@/contexts/TenantContext';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
-import { Shield, Loader2, Clock, Copy, CheckCircle, Link2, ExternalLink } from 'lucide-react';
+import { Shield, Loader2, Clock, Copy, CheckCircle, Link2 } from 'lucide-react';
 import { toast } from 'sonner';
 
 const VERIFICATION_DOC_OPTIONS = [
@@ -199,42 +199,59 @@ export function StartVerificationDialog({
             <span>Verification completed</span>
           </div>
         ) : sessionData ? (
-          /* Link generated — show copy UI */
+          /* Link generated — show QR + copy UI */
           <div className="space-y-4">
-            {/* Verification link */}
-            <div className="space-y-2">
-              <label className="text-xs font-medium text-muted-foreground">Verification Link</label>
-              <div className="flex items-center gap-2 p-2.5 bg-muted rounded-lg border">
-                <Link2 className="h-4 w-4 text-muted-foreground shrink-0" />
-                <input
-                  type="text"
-                  readOnly
-                  value={sessionData.url}
-                  className="flex-1 bg-transparent text-sm truncate border-none focus:outline-none"
+            {/* QR Code */}
+            <div className="flex justify-center">
+              <div
+                className="rounded-xl border-2 border-gray-200 dark:border-gray-700"
+                style={{ backgroundColor: '#FFFFFF', padding: '12px' }}
+              >
+                <img
+                  src={`https://quickchart.io/qr?text=${encodeURIComponent(sessionData.url)}&size=200&margin=3&dark=000000&light=ffffff&ecLevel=M&format=png`}
+                  alt="Scan to verify identity"
+                  width={200}
+                  height={200}
+                  style={{ display: 'block', imageRendering: 'pixelated' }}
                 />
-                <Button
-                  type="button"
-                  variant={copied ? 'default' : 'outline'}
-                  size="sm"
-                  className="shrink-0 h-7 gap-1 text-xs"
-                  onClick={handleCopyLink}
-                >
-                  {copied ? (
-                    <>
-                      <CheckCircle className="h-3 w-3" />
-                      Copied
-                    </>
-                  ) : (
-                    <>
-                      <Copy className="h-3 w-3" />
-                      Copy
-                    </>
-                  )}
-                </Button>
               </div>
             </div>
 
-            {/* Expiry info */}
+            <p className="text-xs text-center text-muted-foreground">
+              Ask the customer to scan this QR code with their phone
+            </p>
+
+            {/* Copy link */}
+            <div className="flex items-center gap-2 p-2 bg-muted rounded-lg border">
+              <Link2 className="h-4 w-4 text-muted-foreground shrink-0" />
+              <input
+                type="text"
+                readOnly
+                value={sessionData.url}
+                className="flex-1 bg-transparent text-xs truncate border-none focus:outline-none"
+              />
+              <Button
+                type="button"
+                variant={copied ? 'default' : 'outline'}
+                size="sm"
+                className="shrink-0 h-7 gap-1 text-xs"
+                onClick={handleCopyLink}
+              >
+                {copied ? (
+                  <>
+                    <CheckCircle className="h-3 w-3" />
+                    Copied
+                  </>
+                ) : (
+                  <>
+                    <Copy className="h-3 w-3" />
+                    Copy
+                  </>
+                )}
+              </Button>
+            </div>
+
+            {/* Expiry + polling status */}
             <div className="flex items-center justify-between text-xs text-muted-foreground px-1">
               <span className="flex items-center gap-1">
                 <Clock className="h-3.5 w-3.5" />
@@ -247,17 +264,6 @@ export function StartVerificationDialog({
                 </span>
               )}
             </div>
-
-            {/* Open in new tab */}
-            <Button
-              variant="outline"
-              size="sm"
-              className="w-full gap-2 text-xs"
-              onClick={() => window.open(sessionData.url, '_blank')}
-            >
-              <ExternalLink className="h-3.5 w-3.5" />
-              Open link in new tab
-            </Button>
           </div>
         ) : (
           /* Not started — doc type + generate button */
