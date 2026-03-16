@@ -328,7 +328,7 @@ serve(async (req) => {
             .from('app_users')
             .select('id')
             .eq('tenant_id', data.tenantId)
-            .in('role', ['admin', 'head_admin']);
+            .in('role', ['admin', 'head_admin', 'manager', 'ops']);
 
           if (adminUsersError) {
             console.error('Error fetching admin users:', adminUsersError);
