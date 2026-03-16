@@ -9,7 +9,7 @@ import {
   TenantBranding,
   wrapWithBrandedTemplate
 } from "../_shared/resend-service.ts";
-import { renderEmail, EmailTemplateData } from "../_shared/email-template-service.ts";
+import { renderEmail, EmailTemplateData, resolveEmailData } from "../_shared/email-template-service.ts";
 import { formatCurrency } from "../_shared/format-utils.ts";
 
 interface NotifyRequest {
@@ -211,23 +211,27 @@ serve(async (req) => {
     // Build customer email using template service if tenantId is provided
     let customerSubject = `Booking Received - Reference: ${data.bookingRef} | DRIVE 247`;
     let customerHtml = getCustomerEmailHtml(data, currencyCode);
+    let resolvedEmail = data.customerEmail;
+    let resolvedPhone = data.customerPhone;
 
     if (data.tenantId) {
       try {
-        // Prepare template data
-        const templateData: EmailTemplateData = {
-          customer_name: data.customerName,
-          customer_email: data.customerEmail,
-          customer_phone: data.customerPhone || '',
-          vehicle_make: data.vehicleMake || data.vehicleName.split(' ')[0] || '',
-          vehicle_model: data.vehicleModel || data.vehicleName.split(' ').slice(1).join(' ') || '',
-          vehicle_reg: data.vehicleReg,
-          vehicle_year: data.vehicleYear || '',
-          rental_number: data.bookingRef,
-          rental_start_date: data.pickupDate,
-          rental_end_date: data.returnDate,
-          rental_amount: formatCurrency(data.amount, currencyCode),
-        };
+        // Resolve template data from DB (rental + customer + vehicle + tenant)
+        const templateData = await resolveEmailData(supabase, {
+          rentalId: data.rentalId,
+          tenantId: data.tenantId,
+          overrides: {
+            // Fallback for callers that don't pass rentalId
+            customer_name: data.customerName,
+            customer_email: data.customerEmail,
+            rental_number: data.bookingRef,
+            rental_amount: formatCurrency(data.amount, currencyCode),
+          },
+        });
+
+        // Use resolved data for sending if caller didn't provide them
+        resolvedEmail = resolvedEmail || templateData.customer_email || '';
+        resolvedPhone = resolvedPhone || templateData.customer_phone || '';
 
         // Render email from custom or default template
         const rendered = await renderEmail(supabase, data.tenantId, 'booking_pending', templateData);
@@ -241,14 +245,18 @@ serve(async (req) => {
     }
 
     // Send customer email (with tenant-specific from address)
-    results.customerEmail = await sendEmail(
-      data.customerEmail,
-      customerSubject,
-      customerHtml,
-      supabase,
-      data.tenantId
-    );
-    console.log('Customer email result:', results.customerEmail);
+    if (resolvedEmail) {
+      results.customerEmail = await sendEmail(
+        resolvedEmail,
+        customerSubject,
+        customerHtml,
+        supabase,
+        data.tenantId
+      );
+      console.log('Customer email result:', results.customerEmail);
+    } else {
+      console.warn('No customer email available, skipping email send');
+    }
 
     // Get tenant branding for emails and SMS
     const branding = data.tenantId
@@ -256,9 +264,9 @@ serve(async (req) => {
       : { companyName: 'Drive 247', logoUrl: null, primaryColor: '#1a1a1a', accentColor: '#C5A572', contactEmail: 'support@drive-247.com', contactPhone: null, slug: 'drive247' };
 
     // Send customer SMS
-    if (data.customerPhone) {
+    if (resolvedPhone) {
       results.customerSMS = await sendSMS(
-        data.customerPhone,
+        resolvedPhone,
         `${branding.companyName}: Your booking ${data.bookingRef} has been received and is under review. We'll confirm within 24 hours.`,
         supabase,
         data.tenantId

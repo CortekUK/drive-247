@@ -473,9 +473,15 @@ export const TipTapEditor: React.FC<TipTapEditorProps> = ({
         .tiptap p {
           margin-bottom: 0.5rem;
         }
-        .tiptap ul, .tiptap ol {
+        .tiptap ul {
           padding-left: 1.5rem;
           margin-bottom: 0.75rem;
+          list-style-type: disc;
+        }
+        .tiptap ol {
+          padding-left: 1.5rem;
+          margin-bottom: 0.75rem;
+          list-style-type: decimal;
         }
         .tiptap li {
           margin-bottom: 0.25rem;

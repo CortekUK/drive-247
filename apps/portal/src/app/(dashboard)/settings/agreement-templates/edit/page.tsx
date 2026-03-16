@@ -330,9 +330,15 @@ export default function EditAgreementTemplatePage() {
         .preview-content p {
           margin-bottom: 0.5rem;
         }
-        .preview-content ul, .preview-content ol {
+        .preview-content ul {
           padding-left: 1.5rem;
           margin-bottom: 0.75rem;
+          list-style-type: disc;
+        }
+        .preview-content ol {
+          padding-left: 1.5rem;
+          margin-bottom: 0.75rem;
+          list-style-type: decimal;
         }
         .preview-content li {
           margin-bottom: 0.25rem;

@@ -4492,6 +4492,8 @@ const RentalDetail = () => {
                   // Send approval email
                   await supabase.functions.invoke('notify-booking-approved', {
                     body: {
+                      rentalId: id,
+                      tenantId: tenant?.id,
                       customerEmail: rental?.customers?.email,
                       customerName: rental?.customers?.name,
                       vehicleName: `${rental?.vehicles?.make} ${rental?.vehicles?.model}`,
@@ -4505,16 +4507,11 @@ const RentalDetail = () => {
                   if (keyHandoverDone) {
                     await supabase.functions.invoke('notify-rental-started', {
                       body: {
+                        rentalId: id,
                         customerName: rental?.customers?.name,
                         customerEmail: rental?.customers?.email,
-                        customerPhone: rental?.customers?.phone,
                         vehicleName: `${rental?.vehicles?.make} ${rental?.vehicles?.model}`,
-                        vehicleReg: rental?.vehicles?.reg,
-                        vehicleMake: rental?.vehicles?.make,
-                        vehicleModel: rental?.vehicles?.model,
                         bookingRef: id.substring(0, 8).toUpperCase(),
-                        startDate: rental?.start_date ? new Date(rental.start_date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : '',
-                        endDate: rental?.end_date ? new Date(rental.end_date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : '',
                         tenantId: tenant?.id,
                       }
                     }).catch(err => console.warn('Failed to send rental started email:', err));

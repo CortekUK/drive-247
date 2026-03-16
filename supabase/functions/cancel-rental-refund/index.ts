@@ -325,6 +325,7 @@ serve(async (req) => {
 
     // Prepare notification data
     const notificationData = {
+      rentalId: rental.id,
       customerName: customer?.name || "Customer",
       customerEmail: customer?.email,
       customerPhone: customer?.phone,

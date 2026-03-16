@@ -9,8 +9,10 @@ import {
   TenantBranding,
   wrapWithBrandedTemplate
 } from "../_shared/resend-service.ts";
+import { renderEmail, resolveEmailData } from "../_shared/email-template-service.ts";
 
 interface RentalInfo {
+  rentalId?: string;
   bookingRef: string;
   customerName: string;
   customerEmail: string;
@@ -193,6 +195,31 @@ serve(async (req) => {
         data.tenantId
       );
       console.log('Admin email result:', results.adminEmail);
+    }
+
+    // Send individual customer emails using custom templates
+    if (data.tenantId) {
+      for (const rental of data.rentals) {
+        if (!rental.customerEmail) continue;
+        try {
+          const templateData = await resolveEmailData(supabase, {
+            rentalId: rental.rentalId,
+            tenantId: data.tenantId,
+            overrides: {
+              customer_name: rental.customerName,
+              customer_email: rental.customerEmail,
+              rental_number: rental.bookingRef,
+              due_date: rental.returnDate,
+            },
+          });
+
+          const rendered = await renderEmail(supabase, data.tenantId, 'return_due', templateData);
+          await sendEmail(rental.customerEmail, rendered.subject, rendered.html, supabase, data.tenantId);
+          console.log(`Customer return-due email sent to ${rental.customerEmail}`);
+        } catch (err) {
+          console.warn(`Failed to send return-due email to ${rental.customerEmail}:`, err);
+        }
+      }
     }
 
     // Send admin SMS if there are overdue rentals (using env variable for now)

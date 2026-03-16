@@ -32,6 +32,7 @@ import {
   replaceEmailVariables,
   getEmailTemplateType,
 } from '@/lib/email-template-variables';
+import { getSampleData as getAgreementSampleData } from '@/lib/template-variables';
 import { toast } from '@/hooks/use-toast';
 import { TipTapEditor } from '@/components/settings/tiptap-editor';
 import { useTenant } from '@/contexts/TenantContext';
@@ -72,13 +73,14 @@ export default function EditEmailTemplatePage() {
 
   const hasChanges = loaded && (subject !== originalSubject || templateContent !== originalContent);
 
-  // Get sample data and override with actual tenant info
+  // Get sample data — merge agreement variables (full 43) with email-specific ones
   const sampleData = {
+    ...getAgreementSampleData(),
     ...getEmailSampleData(),
     // Use actual tenant info for company variables
-    company_name: tenant?.company_name || 'Your Company Name',
-    company_email: tenant?.email || 'contact@yourcompany.com',
-    company_phone: tenant?.phone || '+1 800 000 0000',
+    company_name: (tenant as any)?.company_name || 'Your Company Name',
+    company_email: (tenant as any)?.contact_email || 'contact@yourcompany.com',
+    company_phone: (tenant as any)?.phone || '+1 800 000 0000',
   };
 
   // Load template data - always prefer custom, then default from hook, then fallback default

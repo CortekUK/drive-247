@@ -3,7 +3,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.4";
 import { corsHeaders } from "../_shared/cors.ts";
 import { getTenantTwilioCredentials, sendTenantSMS, normalizePhoneNumber } from '../_shared/twilio-sms-client.ts';
 import { sendEmail } from "../_shared/resend-service.ts";
-import { renderEmail, EmailTemplateData } from "../_shared/email-template-service.ts";
+import { renderEmail, EmailTemplateData, resolveEmailData } from "../_shared/email-template-service.ts";
 import { formatCurrency } from "../_shared/format-utils.ts";
 
 interface NotifyRequest {
@@ -20,6 +20,7 @@ interface NotifyRequest {
   reason: string;
   refundType: "full" | "partial" | "none";
   refundAmount?: number;
+  rentalId?: string;
   tenantId?: string;
 }
 
@@ -190,21 +191,26 @@ serve(async (req) => {
     // Build customer email using template service if tenantId is provided
     let customerSubject = `Booking Cancelled - Reference: ${data.bookingRef} | DRIVE 247`;
     let customerHtml = getCancellationEmailHtml(data, currencyCode);
+    let resolvedEmail = data.customerEmail;
+    let resolvedPhone = data.customerPhone;
 
     if (data.tenantId) {
       try {
 
-        const templateData: EmailTemplateData = {
-          customer_name: data.customerName,
-          customer_email: data.customerEmail,
-          customer_phone: data.customerPhone || '',
-          vehicle_make: data.vehicleMake || data.vehicleName.split(' ')[0] || '',
-          vehicle_model: data.vehicleModel || data.vehicleName.split(' ').slice(1).join(' ') || '',
-          vehicle_reg: data.vehicleReg || '',
-          rental_number: data.bookingRef,
-          rental_start_date: data.pickupDate || '',
-          rental_end_date: data.returnDate || '',
-        };
+        const templateData = await resolveEmailData(supabase, {
+          rentalId: data.rentalId,
+          tenantId: data.tenantId,
+          overrides: {
+            // Fallback for callers that don't pass rentalId
+            customer_name: data.customerName,
+            customer_email: data.customerEmail,
+            rental_number: data.bookingRef,
+          },
+        });
+
+        // Use resolved data for sending if caller didn't provide them
+        resolvedEmail = resolvedEmail || templateData.customer_email || '';
+        resolvedPhone = resolvedPhone || templateData.customer_phone || '';
 
         const rendered = await renderEmail(supabase, data.tenantId, 'booking_cancelled', templateData);
         customerSubject = rendered.subject;
@@ -216,15 +222,19 @@ serve(async (req) => {
     }
 
     // Send customer email
-    results.customerEmail = await sendEmail(
-      data.customerEmail,
-      customerSubject,
-      customerHtml
-    );
-    console.log('Customer email result:', results.customerEmail);
+    if (resolvedEmail) {
+      results.customerEmail = await sendEmail(
+        resolvedEmail,
+        customerSubject,
+        customerHtml
+      );
+      console.log('Customer email result:', results.customerEmail);
+    } else {
+      console.warn('No customer email available, skipping email send');
+    }
 
     // Send customer SMS
-    if (data.customerPhone) {
+    if (resolvedPhone) {
       const refundText = data.refundType === "full"
         ? `Full refund of ${formatCurrency(data.refundAmount || 0, currencyCode)} initiated.`
         : data.refundType === "partial"
@@ -232,7 +242,7 @@ serve(async (req) => {
         : "";
 
       results.customerSMS = await sendSMS(
-        data.customerPhone,
+        resolvedPhone,
         `DRIVE 247: Your booking ${data.bookingRef} has been cancelled. ${refundText} Contact us with questions.`,
         supabase,
         data.tenantId
