@@ -15,7 +15,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { ArrowLeft, CreditCard, FileText, Plus, Upload, Car, AlertTriangle, Eye, Download, Edit, Trash2, User, Mail, Phone, CalendarPlus, DollarSign, FolderOpen, Receipt, CreditCard as PaymentIcon, Ban, CheckCircle, Users, ShieldCheck, Briefcase, ExternalLink, ImageIcon, Loader2, Pencil, Check, X } from "lucide-react";
+import { ArrowLeft, CreditCard, FileText, Plus, Upload, Car, AlertTriangle, Eye, Download, Edit, Trash2, User, Mail, Phone, CalendarPlus, DollarSign, FolderOpen, Receipt, CreditCard as PaymentIcon, Ban, CheckCircle, Users, ShieldCheck, Briefcase, ExternalLink, ImageIcon, Loader2, Pencil, Check, X, RefreshCw, Shield } from "lucide-react";
 import { MetricItem, MetricDivider } from "@/components/vehicles/metric-card";
 import { useCustomerBlockingActions } from "@/hooks/use-customer-blocking";
 import { TruncatedCell } from "@/components/shared/data-display/truncated-cell";
@@ -53,6 +53,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { CustomerReviewSummaryCard } from "@/components/reviews/customer-review-summary-card";
+import { StartVerificationDialog } from "@/components/customers/start-verification-dialog";
 import { useToast } from "@/hooks/use-toast";
 
 interface Customer {
@@ -97,9 +98,16 @@ const CustomerDetail = () => {
   const [savingDob, setSavingDob] = useState(false);
   const dobInputRef = useRef<HTMLInputElement>(null);
   const [editingName, setEditingName] = useState(false);
+  const [verificationDialogOpen, setVerificationDialogOpen] = useState(false);
   const [nameValue, setNameValue] = useState("");
   const [savingName, setSavingName] = useState(false);
   const nameInputRef = useRef<HTMLInputElement>(null);
+
+  // Pagination state per tab
+  const [rentalsPage, setRentalsPage] = useState(1);
+  const [paymentsPage, setPaymentsPage] = useState(1);
+  const [finesPage, setFinesPage] = useState(1);
+  const PAGE_SIZE = 10;
 
   const { tenant } = useTenant();
   const { toast } = useToast();
@@ -107,22 +115,34 @@ const CustomerDetail = () => {
 
   const { blockCustomer, unblockCustomer, isLoading: blockingLoading } = useCustomerBlockingActions();
 
-  // Fetch latest identity verification for this customer (DOB fallback)
+  // Fetch latest identity verification for this customer (DOB fallback + photos)
   const { data: latestVerification } = useQuery({
     queryKey: ["customer-verification", id],
     queryFn: async () => {
       const { data, error } = await (supabase as any)
         .from("identity_verifications")
-        .select("date_of_birth, document_expiry_date")
+        .select("date_of_birth, document_expiry_date, face_image_url, selfie_image_url, document_front_url, document_back_url, status, provider, verification_completed_at")
         .eq("customer_id", id)
         .order("created_at", { ascending: false })
         .limit(1)
         .maybeSingle();
       if (error) throw error;
-      return data as { date_of_birth: string | null; document_expiry_date: string | null } | null;
+      return data as {
+        date_of_birth: string | null;
+        document_expiry_date: string | null;
+        face_image_url: string | null;
+        selfie_image_url: string | null;
+        document_front_url: string | null;
+        document_back_url: string | null;
+        status: string | null;
+        provider: string | null;
+        verification_completed_at: string | null;
+      } | null;
     },
     enabled: !!id,
   });
+
+  const [previewImage, setPreviewImage] = useState<{ url: string; label: string } | null>(null);
 
   const { data: customer, isLoading, refetch: refetchCustomer } = useQuery({
     queryKey: ["customer", id],
@@ -331,35 +351,14 @@ const CustomerDetail = () => {
 
       {/* Header */}
       <div className="space-y-4">
-        {/* Customer Info & Actions */}
         <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4">
-          {/* Customer Info */}
-          <div className="space-y-1">
-            <div className="flex items-center gap-3">
-              <TooltipProvider>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0" onClick={() => router.push("/customers")}>
-                      <ArrowLeft className="h-4 w-4" />
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent>
-                    <p>Back to Customers</p>
-                  </TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
-              <h1 className="text-2xl md:text-3xl font-bold">{customer.name}</h1>
-              {customer.is_blocked && (
-                <Badge variant="destructive">
-                  <Ban className="h-3 w-3 mr-1" />
-                  Blocked
-                </Badge>
-              )}
-            </div>
-            {customer.license_number && (
-              <p className="text-muted-foreground text-sm">
-                License: {customer.license_number}
-              </p>
+          {/* Blocked badge if applicable */}
+          <div className="flex items-center gap-3">
+            {customer.is_blocked && (
+              <Badge variant="destructive">
+                <Ban className="h-3 w-3 mr-1" />
+                Blocked
+              </Badge>
             )}
           </div>
 
@@ -411,177 +410,266 @@ const CustomerDetail = () => {
         </div>
       </div>
 
-      {/* Customer Details */}
-      <Card className="shadow-card rounded-lg">
-        <CardHeader className="pb-2 pt-4 px-5">
-          <div className="flex items-center justify-between">
-            <CardTitle className="text-base font-semibold flex items-center gap-2">
-              <User className="h-4 w-4" />
-              Customer Details
-            </CardTitle>
-            <Badge variant="outline" className="text-[10px] font-medium text-foreground border-foreground/20 bg-foreground/5 px-1.5 py-0.5">
-              <ShieldCheck className="h-3 w-3 mr-1 text-green-500" />
-              Sourced from ID verification
-            </Badge>
-          </div>
-        </CardHeader>
-        <CardContent className="pt-3 pb-4 px-5">
-          <div className="space-y-3">
-            {/* Contact Information */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-x-6 gap-y-2">
-              <div className="flex flex-col">
-                <span className="text-xs text-muted-foreground mb-0.5">Name</span>
-                {editingName ? (
-                  <div className="flex items-center gap-1">
-                    <Input
-                      ref={nameInputRef}
-                      type="text"
-                      value={nameValue}
-                      onChange={(e) => setNameValue(e.target.value)}
-                      className="h-7 text-sm w-[180px]"
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter") handleSaveName();
-                        if (e.key === "Escape") handleCancelEditName();
-                      }}
-                    />
-                    <Button variant="ghost" size="icon" className="h-6 w-6" onClick={handleSaveName} disabled={savingName || !nameValue.trim()}>
-                      <Check className="h-3.5 w-3.5 text-green-600" />
-                    </Button>
-                    <Button variant="ghost" size="icon" className="h-6 w-6" onClick={handleCancelEditName} disabled={savingName}>
-                      <X className="h-3.5 w-3.5 text-red-500" />
-                    </Button>
-                  </div>
-                ) : (
-                  <div className="flex items-center gap-1 group">
-                    <span className="text-sm font-semibold">{customer.name}</span>
-                    <button
-                      onClick={handleStartEditName}
-                      className="opacity-0 group-hover:opacity-100 transition-opacity p-0.5 rounded hover:bg-muted"
-                      title="Edit name"
-                    >
-                      <Pencil className="h-3 w-3 text-muted-foreground" />
-                    </button>
-                  </div>
-                )}
-              </div>
-              {customer.email && <MetricItem label="Email" value={customer.email} />}
-              {customer.phone && <MetricItem label="Phone" value={customer.phone} />}
-              <div className="flex flex-col">
-                <span className="text-xs text-muted-foreground mb-0.5">Date of Birth</span>
-                {editingDob ? (
-                  <div className="flex items-center gap-1">
-                    <Input
-                      ref={dobInputRef}
-                      type="date"
-                      value={dobValue}
-                      onChange={(e) => setDobValue(e.target.value)}
-                      className="h-7 text-sm w-[140px]"
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter") handleSaveDob();
-                        if (e.key === "Escape") handleCancelEditDob();
-                      }}
-                    />
-                    <Button variant="ghost" size="icon" className="h-6 w-6" onClick={handleSaveDob} disabled={savingDob || !dobValue}>
-                      <Check className="h-3.5 w-3.5 text-green-600" />
-                    </Button>
-                    <Button variant="ghost" size="icon" className="h-6 w-6" onClick={handleCancelEditDob} disabled={savingDob}>
-                      <X className="h-3.5 w-3.5 text-red-500" />
-                    </Button>
-                  </div>
-                ) : (
-                  <div className="flex items-center gap-1 group">
-                    <span className="text-sm font-semibold">
-                      {(customer.date_of_birth || latestVerification?.date_of_birth)
-                        ? format(new Date((customer.date_of_birth || latestVerification?.date_of_birth)!), 'MMM d, yyyy')
-                        : "Not set"}
-                    </span>
-                    <button
-                      onClick={handleStartEditDob}
-                      className="opacity-0 group-hover:opacity-100 transition-opacity p-0.5 rounded hover:bg-muted"
-                      title="Edit date of birth"
-                    >
-                      <Pencil className="h-3 w-3 text-muted-foreground" />
-                    </button>
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {/* Additional Info */}
-            {(customer.license_number || customer.id_number || customer.whatsapp_opt_in) && (
-              <>
-                <MetricDivider />
-                <div className="grid grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-x-6 gap-y-2">
-                  {customer.license_number && <MetricItem label="License No." value={customer.license_number} />}
-                  {customer.id_number && <MetricItem label="ID Number" value={customer.id_number} />}
-                  {customer.whatsapp_opt_in && (
-                    <div className="flex flex-col">
-                      <span className="text-xs text-muted-foreground mb-0.5">WhatsApp</span>
-                      <Badge variant="outline" className="w-fit text-[10px] px-1.5 py-0">
-                        <CheckCircle className="h-2.5 w-2.5 mr-0.5" />
-                        Yes
-                      </Badge>
+      {/* Profile & Verification */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Left: Personal Information */}
+        <Card className="lg:col-span-2 shadow-card rounded-lg">
+          <CardHeader className="pb-2 pt-4 px-5">
+            <CardTitle className="text-base font-semibold">Personal Information</CardTitle>
+          </CardHeader>
+          <CardContent className="pt-3 pb-4 px-5">
+            <div className="space-y-3">
+              {/* Contact Information */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-x-6 gap-y-3">
+                <div className="flex flex-col">
+                  <span className="text-xs text-muted-foreground mb-0.5">Name</span>
+                  {editingName ? (
+                    <div className="flex items-center gap-1">
+                      <Input
+                        ref={nameInputRef}
+                        type="text"
+                        value={nameValue}
+                        onChange={(e) => setNameValue(e.target.value)}
+                        className="h-7 text-sm w-[180px]"
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") handleSaveName();
+                          if (e.key === "Escape") handleCancelEditName();
+                        }}
+                      />
+                      <Button variant="ghost" size="icon" className="h-6 w-6" onClick={handleSaveName} disabled={savingName || !nameValue.trim()}>
+                        <Check className="h-3.5 w-3.5 text-green-600" />
+                      </Button>
+                      <Button variant="ghost" size="icon" className="h-6 w-6" onClick={handleCancelEditName} disabled={savingName}>
+                        <X className="h-3.5 w-3.5 text-red-500" />
+                      </Button>
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-1 group">
+                      <span className="text-sm font-semibold">{customer.name}</span>
+                      <button
+                        onClick={handleStartEditName}
+                        className="opacity-0 group-hover:opacity-100 transition-opacity p-0.5 rounded hover:bg-muted"
+                        title="Edit name"
+                      >
+                        <Pencil className="h-3 w-3 text-muted-foreground" />
+                      </button>
                     </div>
                   )}
                 </div>
-              </>
-            )}
-
-            {/* Account & Statistics */}
-            <MetricDivider />
-            <div className="grid grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-x-6 gap-y-2">
-              <div className="flex flex-col">
-                <span className="text-xs text-muted-foreground mb-0.5">Balance</span>
-                {customerBalanceData ? (
-                  <CustomerBalanceChip
-                    balance={customerBalanceData.balance}
-                    status={customerBalanceData.status}
-                    totalCharges={customerBalanceData.totalCharges}
-                    totalPayments={customerBalanceData.totalPayments}
-                  />
-                ) : (
-                  <Badge variant="secondary">Loading...</Badge>
-                )}
+                {customer.email && <MetricItem label="Email" value={customer.email} />}
+                {customer.phone && <MetricItem label="Phone" value={customer.phone} />}
+                <div className="flex flex-col">
+                  <span className="text-xs text-muted-foreground mb-0.5">Date of Birth</span>
+                  {editingDob ? (
+                    <div className="flex items-center gap-1">
+                      <Input
+                        ref={dobInputRef}
+                        type="date"
+                        value={dobValue}
+                        onChange={(e) => setDobValue(e.target.value)}
+                        className="h-7 text-sm w-[140px]"
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") handleSaveDob();
+                          if (e.key === "Escape") handleCancelEditDob();
+                        }}
+                      />
+                      <Button variant="ghost" size="icon" className="h-6 w-6" onClick={handleSaveDob} disabled={savingDob || !dobValue}>
+                        <Check className="h-3.5 w-3.5 text-green-600" />
+                      </Button>
+                      <Button variant="ghost" size="icon" className="h-6 w-6" onClick={handleCancelEditDob} disabled={savingDob}>
+                        <X className="h-3.5 w-3.5 text-red-500" />
+                      </Button>
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-1 group">
+                      <span className="text-sm font-semibold">
+                        {(customer.date_of_birth || latestVerification?.date_of_birth)
+                          ? format(new Date((customer.date_of_birth || latestVerification?.date_of_birth)!), 'MMM d, yyyy')
+                          : "Not set"}
+                      </span>
+                      <button
+                        onClick={handleStartEditDob}
+                        className="opacity-0 group-hover:opacity-100 transition-opacity p-0.5 rounded hover:bg-muted"
+                        title="Edit date of birth"
+                      >
+                        <Pencil className="h-3 w-3 text-muted-foreground" />
+                      </button>
+                    </div>
+                  )}
+                </div>
               </div>
-              <MetricItem label="Active Rentals" value={activeRentalsCount || 0} />
-              <MetricItem label="Payments" value={paymentStats?.paymentCount || 0} />
-              {paymentStats?.totalPayments != null && paymentStats.totalPayments > 0 && (
-                <MetricItem label="Paid Amount" value={paymentStats.totalPayments} isAmount />
-              )}
-              <MetricItem label="Open Fines" value={fineStats?.openFines || 0} />
-              {fineStats?.openFineAmount != null && fineStats.openFineAmount > 0 && (
-                <MetricItem label="Fine Amount" value={fineStats.openFineAmount} isAmount />
-              )}
-              <MetricItem label="Documents" value={documents?.length || 0} />
-            </div>
 
-            {/* Next of Kin Information */}
-            {(customer.nok_full_name || customer.nok_phone || customer.nok_email) && (
-              <>
-                <MetricDivider />
-                <div>
-                  <h3 className="text-xs font-semibold text-muted-foreground mb-2 flex items-center gap-1.5">
-                    <Users className="h-3.5 w-3.5" />
-                    Next of Kin
-                  </h3>
-                  <div className="grid grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-x-6 gap-y-2">
-                    {customer.nok_full_name && <MetricItem label="Name" value={customer.nok_full_name} />}
-                    {customer.nok_relationship && <MetricItem label="Relationship" value={customer.nok_relationship} />}
-                    {customer.nok_phone && <MetricItem label="Phone" value={customer.nok_phone} />}
-                    {customer.nok_email && <MetricItem label="Email" value={customer.nok_email} />}
-                    {customer.nok_address && (
-                      <div className="col-span-2 flex flex-col">
-                        <span className="text-xs text-muted-foreground mb-0.5">Address</span>
-                        <span className="text-sm font-semibold">{customer.nok_address}</span>
+              {/* Additional Info */}
+              {(customer.license_number || customer.id_number || customer.whatsapp_opt_in) && (
+                <>
+                  <MetricDivider />
+                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-x-6 gap-y-3">
+                    {customer.license_number && <MetricItem label="License No." value={customer.license_number} />}
+                    {customer.id_number && <MetricItem label="ID Number" value={customer.id_number} />}
+                    {customer.whatsapp_opt_in && (
+                      <div className="flex flex-col">
+                        <span className="text-xs text-muted-foreground mb-0.5">WhatsApp</span>
+                        <Badge variant="outline" className="w-fit text-[10px] px-1.5 py-0">
+                          <CheckCircle className="h-2.5 w-2.5 mr-0.5" />
+                          Opted In
+                        </Badge>
                       </div>
                     )}
                   </div>
-                </div>
-              </>
+                </>
+              )}
+
+              {/* Next of Kin */}
+              {(customer.nok_full_name || customer.nok_phone || customer.nok_email) && (
+                <>
+                  <MetricDivider />
+                  <div>
+                    <h3 className="text-xs font-semibold text-muted-foreground mb-2 flex items-center gap-1.5">
+                      <Users className="h-3.5 w-3.5" />
+                      Next of Kin
+                    </h3>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-x-6 gap-y-3">
+                      {customer.nok_full_name && <MetricItem label="Name" value={customer.nok_full_name} />}
+                      {customer.nok_relationship && <MetricItem label="Relationship" value={customer.nok_relationship} />}
+                      {customer.nok_phone && <MetricItem label="Phone" value={customer.nok_phone} />}
+                      {customer.nok_email && <MetricItem label="Email" value={customer.nok_email} />}
+                      {customer.nok_address && (
+                        <div className="col-span-2 flex flex-col">
+                          <span className="text-xs text-muted-foreground mb-0.5">Address</span>
+                          <span className="text-sm font-semibold">{customer.nok_address}</span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Right: Verification Photos */}
+        <Card className="shadow-card rounded-lg">
+          <CardHeader className="pb-2 pt-4 px-5">
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-base font-semibold">Verification</CardTitle>
+              <div className="flex items-center gap-2">
+                {latestVerification?.status && (
+                  <Badge
+                    variant="outline"
+                    className={
+                      latestVerification.status === 'approved'
+                        ? 'bg-green-50 text-green-700 border-green-200 dark:bg-green-900/20 dark:text-green-400 dark:border-green-800'
+                        : latestVerification.status === 'declined'
+                        ? 'bg-red-50 text-red-700 border-red-200 dark:bg-red-900/20 dark:text-red-400 dark:border-red-800'
+                        : 'bg-yellow-50 text-yellow-700 border-yellow-200 dark:bg-yellow-900/20 dark:text-yellow-400 dark:border-yellow-800'
+                    }
+                  >
+                    {latestVerification.status === 'approved' ? 'Verified' : latestVerification.status === 'declined' ? 'Declined' : 'Pending'}
+                  </Badge>
+                )}
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-7 text-xs gap-1"
+                  onClick={() => setVerificationDialogOpen(true)}
+                >
+                  {latestVerification?.status === 'approved' ? (
+                    <>
+                      <RefreshCw className="h-3 w-3" />
+                      Re-verify
+                    </>
+                  ) : (
+                    <>
+                      <Shield className="h-3 w-3" />
+                      Verify
+                    </>
+                  )}
+                </Button>
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent className="pt-3 pb-4 px-5">
+            {latestVerification && (latestVerification.face_image_url || latestVerification.selfie_image_url || latestVerification.document_front_url || latestVerification.document_back_url) ? (
+              <div className="grid grid-cols-2 gap-3">
+                {latestVerification.face_image_url && (
+                  <button
+                    onClick={() => setPreviewImage({ url: latestVerification.face_image_url!, label: "Face Photo" })}
+                    className="group relative aspect-square rounded-lg overflow-hidden border border-border hover:border-primary/50 transition-colors"
+                  >
+                    <img src={latestVerification.face_image_url} alt="Face photo" className="w-full h-full object-cover" />
+                    <div className="absolute inset-0 bg-black/0 group-hover:bg-black/30 transition-colors flex items-center justify-center">
+                      <Eye className="h-5 w-5 text-white opacity-0 group-hover:opacity-100 transition-opacity" />
+                    </div>
+                    <span className="absolute bottom-0 inset-x-0 bg-black/60 text-white text-[10px] py-1 text-center">Face</span>
+                  </button>
+                )}
+                {latestVerification.selfie_image_url && (
+                  <button
+                    onClick={() => setPreviewImage({ url: latestVerification.selfie_image_url!, label: "Selfie" })}
+                    className="group relative aspect-square rounded-lg overflow-hidden border border-border hover:border-primary/50 transition-colors"
+                  >
+                    <img src={latestVerification.selfie_image_url} alt="Selfie" className="w-full h-full object-cover" />
+                    <div className="absolute inset-0 bg-black/0 group-hover:bg-black/30 transition-colors flex items-center justify-center">
+                      <Eye className="h-5 w-5 text-white opacity-0 group-hover:opacity-100 transition-opacity" />
+                    </div>
+                    <span className="absolute bottom-0 inset-x-0 bg-black/60 text-white text-[10px] py-1 text-center">Selfie</span>
+                  </button>
+                )}
+                {latestVerification.document_front_url && (
+                  <button
+                    onClick={() => setPreviewImage({ url: latestVerification.document_front_url!, label: "Document Front" })}
+                    className="group relative aspect-square rounded-lg overflow-hidden border border-border hover:border-primary/50 transition-colors"
+                  >
+                    <img src={latestVerification.document_front_url} alt="Document front" className="w-full h-full object-cover" />
+                    <div className="absolute inset-0 bg-black/0 group-hover:bg-black/30 transition-colors flex items-center justify-center">
+                      <Eye className="h-5 w-5 text-white opacity-0 group-hover:opacity-100 transition-opacity" />
+                    </div>
+                    <span className="absolute bottom-0 inset-x-0 bg-black/60 text-white text-[10px] py-1 text-center">Doc Front</span>
+                  </button>
+                )}
+                {latestVerification.document_back_url && (
+                  <button
+                    onClick={() => setPreviewImage({ url: latestVerification.document_back_url!, label: "Document Back" })}
+                    className="group relative aspect-square rounded-lg overflow-hidden border border-border hover:border-primary/50 transition-colors"
+                  >
+                    <img src={latestVerification.document_back_url} alt="Document back" className="w-full h-full object-cover" />
+                    <div className="absolute inset-0 bg-black/0 group-hover:bg-black/30 transition-colors flex items-center justify-center">
+                      <Eye className="h-5 w-5 text-white opacity-0 group-hover:opacity-100 transition-opacity" />
+                    </div>
+                    <span className="absolute bottom-0 inset-x-0 bg-black/60 text-white text-[10px] py-1 text-center">Doc Back</span>
+                  </button>
+                )}
+              </div>
+            ) : (
+              <div className="flex flex-col items-center justify-center py-8 text-center">
+                <ImageIcon className="h-10 w-10 text-muted-foreground/40 mb-2" />
+                <p className="text-sm text-muted-foreground">No verification photos</p>
+                <p className="text-xs text-muted-foreground/60 mt-0.5">Photos will appear here once the customer completes ID verification</p>
+              </div>
             )}
-          </div>
-        </CardContent>
-      </Card>
+            {latestVerification?.verification_completed_at && (
+              <p className="text-[11px] text-muted-foreground mt-3 text-center">
+                Verified on {format(new Date(latestVerification.verification_completed_at), 'MMM d, yyyy')}
+                {latestVerification.provider && ` via ${latestVerification.provider}`}
+              </p>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Image Preview Dialog */}
+      <Dialog open={!!previewImage} onOpenChange={() => setPreviewImage(null)}>
+        <DialogContent className="max-w-2xl p-0 overflow-hidden">
+          <DialogHeader className="px-4 pt-4 pb-2">
+            <DialogTitle>{previewImage?.label}</DialogTitle>
+          </DialogHeader>
+          {previewImage && (
+            <div className="px-4 pb-4">
+              <img src={previewImage.url} alt={previewImage.label} className="w-full rounded-lg" />
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
 
       {/* Customer Review Summary */}
       <CustomerReviewSummaryCard customerId={id} customerName={customer?.name} />
@@ -592,29 +680,23 @@ const CustomerDetail = () => {
           <div className="overflow-x-auto scrollbar-hide">
             <TabsList variant="sticky-evenly-spaced" className="min-w-full">
               <TabsTrigger value="rentals" variant="evenly-spaced" className="min-w-0">
-                <Car className="h-4 w-4 shrink-0" />
-                <span className="hidden sm:inline">Rentals</span>
+                Rentals
               </TabsTrigger>
               <TabsTrigger value="payments" variant="evenly-spaced" className="min-w-0">
-                <PaymentIcon className="h-4 w-4 shrink-0" />
-                <span className="hidden sm:inline">Payments</span>
+                Payments
               </TabsTrigger>
               <TabsTrigger value="fines" variant="evenly-spaced" className="min-w-0">
-                <AlertTriangle className="h-4 w-4 shrink-0" />
-                <span className="hidden sm:inline">Fines</span>
+                Fines
               </TabsTrigger>
               <TabsTrigger value="vehicles" variant="evenly-spaced" className="min-w-0">
-                <Car className="h-4 w-4 shrink-0" />
-                <span className="hidden sm:inline">Vehicle History</span>
+                Vehicle History
               </TabsTrigger>
               <TabsTrigger value="documents" variant="evenly-spaced" className="min-w-0">
-                <FileText className="h-4 w-4 shrink-0" />
-                <span className="hidden sm:inline">Documents</span>
+                Documents
               </TabsTrigger>
               {customer?.is_gig_driver && (
                 <TabsTrigger value="gig-driver" variant="evenly-spaced" className="min-w-0">
-                  <Briefcase className="h-4 w-4 shrink-0" />
-                  <span className="hidden sm:inline">Gig Driver</span>
+                  Gig Driver
                 </TabsTrigger>
               )}
             </TabsList>
@@ -634,9 +716,10 @@ const CustomerDetail = () => {
             </CardHeader>
             <CardContent>
               {rentals && rentals.length > 0 ? (
-                <div className="rounded-md border">
+                <>
+                <div className="rounded-md border max-h-[500px] overflow-auto relative">
                   <Table>
-                    <TableHeader>
+                    <TableHeader className="sticky top-0 z-10 bg-background">
                       <TableRow className="hover:bg-transparent">
                         <TableHead className="font-semibold">Vehicle</TableHead>
                         <TableHead className="font-semibold">Start Date</TableHead>
@@ -648,7 +731,7 @@ const CustomerDetail = () => {
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {rentals.map((rental) => {
+                      {rentals.slice((rentalsPage - 1) * PAGE_SIZE, rentalsPage * PAGE_SIZE).map((rental) => {
                         const isCancelledOrRejected = rental.status === 'Cancelled' || rental.approval_status === 'rejected';
                         const outstanding = rentalOutstandings?.[rental.id] ?? null;
 
@@ -706,6 +789,25 @@ const CustomerDetail = () => {
                     </TableBody>
                   </Table>
                 </div>
+                {rentals.length > PAGE_SIZE && (
+                  <div className="flex items-center justify-between pt-4">
+                    <p className="text-sm text-muted-foreground">
+                      Showing {(rentalsPage - 1) * PAGE_SIZE + 1}-{Math.min(rentalsPage * PAGE_SIZE, rentals.length)} of {rentals.length}
+                    </p>
+                    <div className="flex items-center gap-2">
+                      <Button variant="outline" size="sm" onClick={() => setRentalsPage(p => Math.max(1, p - 1))} disabled={rentalsPage === 1}>
+                        Previous
+                      </Button>
+                      <span className="text-sm text-muted-foreground">
+                        Page {rentalsPage} of {Math.ceil(rentals.length / PAGE_SIZE)}
+                      </span>
+                      <Button variant="outline" size="sm" onClick={() => setRentalsPage(p => Math.min(Math.ceil(rentals.length / PAGE_SIZE), p + 1))} disabled={rentalsPage >= Math.ceil(rentals.length / PAGE_SIZE)}>
+                        Next
+                      </Button>
+                    </div>
+                  </div>
+                )}
+                </>
               ) : (
                 <EmptyState
                   icon={Car}
@@ -733,9 +835,10 @@ const CustomerDetail = () => {
             </CardHeader>
             <CardContent>
               {payments && payments.length > 0 ? (
-                <div className="rounded-md border">
+                <>
+                <div className="rounded-md border max-h-[500px] overflow-auto relative">
                   <Table>
-                    <TableHeader>
+                    <TableHeader className="sticky top-0 z-10 bg-background">
                       <TableRow className="hover:bg-transparent">
                         <TableHead className="font-semibold">Date</TableHead>
                         <TableHead className="font-semibold text-right">Amount</TableHead>
@@ -746,7 +849,7 @@ const CustomerDetail = () => {
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {payments.map((payment) => (
+                      {payments.slice((paymentsPage - 1) * PAGE_SIZE, paymentsPage * PAGE_SIZE).map((payment) => (
                         <TableRow key={payment.id} className="hover:bg-muted/50 transition-colors">
                           <TableCell className="whitespace-nowrap">
                             {format(new Date(payment.payment_date), "MM/dd/yyyy")}
@@ -788,6 +891,25 @@ const CustomerDetail = () => {
                     </TableBody>
                   </Table>
                 </div>
+                {payments.length > PAGE_SIZE && (
+                  <div className="flex items-center justify-between pt-4">
+                    <p className="text-sm text-muted-foreground">
+                      Showing {(paymentsPage - 1) * PAGE_SIZE + 1}-{Math.min(paymentsPage * PAGE_SIZE, payments.length)} of {payments.length}
+                    </p>
+                    <div className="flex items-center gap-2">
+                      <Button variant="outline" size="sm" onClick={() => setPaymentsPage(p => Math.max(1, p - 1))} disabled={paymentsPage === 1}>
+                        Previous
+                      </Button>
+                      <span className="text-sm text-muted-foreground">
+                        Page {paymentsPage} of {Math.ceil(payments.length / PAGE_SIZE)}
+                      </span>
+                      <Button variant="outline" size="sm" onClick={() => setPaymentsPage(p => Math.min(Math.ceil(payments.length / PAGE_SIZE), p + 1))} disabled={paymentsPage >= Math.ceil(payments.length / PAGE_SIZE)}>
+                        Next
+                      </Button>
+                    </div>
+                  </div>
+                )}
+                </>
               ) : (
                 <EmptyState
                   icon={Receipt}
@@ -809,9 +931,10 @@ const CustomerDetail = () => {
             </CardHeader>
             <CardContent>
               {fines && fines.length > 0 ? (
-                <div className="rounded-md border">
+                <>
+                <div className="rounded-md border max-h-[500px] overflow-auto relative">
                   <Table>
-                    <TableHeader>
+                    <TableHeader className="sticky top-0 z-10 bg-background">
                       <TableRow className="hover:bg-transparent">
                         <TableHead className="font-semibold">Type</TableHead>
                         <TableHead className="font-semibold">Reference</TableHead>
@@ -824,7 +947,7 @@ const CustomerDetail = () => {
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {fines.map((fine) => (
+                      {fines.slice((finesPage - 1) * PAGE_SIZE, finesPage * PAGE_SIZE).map((fine) => (
                         <TableRow key={fine.id} className="hover:bg-muted/50 transition-colors">
                           <TableCell className="font-medium">{fine.type === "PCN" ? "Parking Citation" : fine.type}</TableCell>
                           <TableCell>
@@ -874,6 +997,25 @@ const CustomerDetail = () => {
                     </TableBody>
                   </Table>
                 </div>
+                {fines.length > PAGE_SIZE && (
+                  <div className="flex items-center justify-between pt-4">
+                    <p className="text-sm text-muted-foreground">
+                      Showing {(finesPage - 1) * PAGE_SIZE + 1}-{Math.min(finesPage * PAGE_SIZE, fines.length)} of {fines.length}
+                    </p>
+                    <div className="flex items-center gap-2">
+                      <Button variant="outline" size="sm" onClick={() => setFinesPage(p => Math.max(1, p - 1))} disabled={finesPage === 1}>
+                        Previous
+                      </Button>
+                      <span className="text-sm text-muted-foreground">
+                        Page {finesPage} of {Math.ceil(fines.length / PAGE_SIZE)}
+                      </span>
+                      <Button variant="outline" size="sm" onClick={() => setFinesPage(p => Math.min(Math.ceil(fines.length / PAGE_SIZE), p + 1))} disabled={finesPage >= Math.ceil(fines.length / PAGE_SIZE)}>
+                        Next
+                      </Button>
+                    </div>
+                  </div>
+                )}
+                </>
               ) : (
                 <EmptyState
                   icon={AlertTriangle}
@@ -895,9 +1037,9 @@ const CustomerDetail = () => {
             </CardHeader>
             <CardContent>
               {vehicleHistory && vehicleHistory.length > 0 ? (
-                <div className="rounded-md border">
+                <div className="rounded-md border max-h-[500px] overflow-auto relative">
                   <Table>
-                    <TableHeader>
+                    <TableHeader className="sticky top-0 z-10 bg-background">
                       <TableRow className="hover:bg-transparent">
                         <TableHead className="font-semibold">Vehicle</TableHead>
                         <TableHead className="font-semibold">Start Date</TableHead>
@@ -1316,6 +1458,16 @@ const CustomerDetail = () => {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Start Verification Dialog */}
+      {customer && (
+        <StartVerificationDialog
+          open={verificationDialogOpen}
+          onOpenChange={setVerificationDialogOpen}
+          customerId={id}
+          customerName={customer.name}
+        />
+      )}
     </div>
   );
 };

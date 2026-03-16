@@ -15,7 +15,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { Users, Plus, Mail, Phone, Eye, Edit, Search, Shield, ArrowUpDown, ArrowUp, ArrowDown, X, MoreHorizontal, Ban, Trash2, XCircle, UserCheck, Link2, Briefcase, BarChart3, ChevronDown } from "lucide-react";
+import { Users, Plus, Mail, Phone, Eye, Edit, Search, Shield, ArrowUpDown, ArrowUp, ArrowDown, X, MoreHorizontal, Ban, Trash2, XCircle, UserCheck, Link2, Briefcase, BarChart3, ChevronDown, ShieldCheck, RefreshCw } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
 import Link from "next/link";
@@ -25,6 +25,7 @@ import { CustomerBalanceChip } from "@/components/customers/customer-balance-chi
 import { CustomerSummaryCards } from "@/components/customers/customer-summary-cards";
 import { RejectCustomerDialog } from "@/components/customers/reject-customer-dialog";
 import { RejectedCustomerDialog } from "@/components/customers/rejected-customer-dialog";
+import { StartVerificationDialog } from "@/components/customers/start-verification-dialog";
 import { useDebounce } from "@/hooks/use-debounce";
 import { useCustomerBlockingActions } from "@/hooks/use-customer-blocking";
 import { useCustomerStatusActions } from "@/hooks/use-customer-status-actions";
@@ -145,6 +146,8 @@ const CustomersList = () => {
   const [rejectDialogOpen, setRejectDialogOpen] = useState(false);
   const [rejectedDetailsDialogOpen, setRejectedDetailsDialogOpen] = useState(false);
   const [inviteDialogOpen, setInviteDialogOpen] = useState(false);
+  const [verificationDialogOpen, setVerificationDialogOpen] = useState(false);
+  const [verificationCustomer, setVerificationCustomer] = useState<Customer | null>(null);
 
   // Debounce search term
   const debouncedSearchTerm = useDebounce(searchTerm, 300);
@@ -469,12 +472,33 @@ const CustomersList = () => {
     if (!selectedCustomer) return;
 
     try {
+      // Get the auth_user_id BEFORE deleting (cascade will remove customer_users)
+      const { data: customerUser } = await supabase
+        .from('customer_users')
+        .select('auth_user_id')
+        .eq('customer_id', selectedCustomer.id)
+        .maybeSingle();
+
+      const authUserId = customerUser?.auth_user_id;
+
+      // Step 1: Delete the customer (cascade deletes customer_users)
       const { error } = await supabase
         .from('customers')
         .delete()
         .eq('id', selectedCustomer.id);
 
       if (error) throw error;
+
+      // Step 2: Clean up auth user — delete if no other tenant links,
+      // otherwise just revoke sessions. Called AFTER customer deletion
+      // so the cascade has already removed customer_users for this tenant.
+      if (authUserId) {
+        await supabase.functions.invoke('revoke-customer-session', {
+          body: { auth_user_id: authUserId, delete_auth_user: true },
+        }).catch(() => {
+          console.warn('Failed to clean up auth user — customer data was deleted successfully');
+        });
+      }
 
       // Audit log for customer deletion
       logAction({
@@ -702,6 +726,8 @@ const CustomersList = () => {
                         <SortIcon field="type" />
                       </div>
                     </TableHead>
+                    <TableHead>Verified</TableHead>
+                    <TableHead>Gig Driver</TableHead>
                     <TableHead>Contact</TableHead>
                     <TableHead
                       className="cursor-pointer hover:bg-muted/50"
@@ -730,19 +756,11 @@ const CustomersList = () => {
                             >
                               {customer.name}
                             </button>
-                            <div className="flex items-center gap-1">
-                              {hasNextOfKin(customer) && (
-                                <div title="Emergency contact on file">
-                                  <Shield className="h-3 w-3 text-muted-foreground" />
-                                </div>
-                              )}
-                              {(customer as any).is_gig_driver && (
-                                <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-5 bg-blue-500/10 text-blue-600 border-blue-500 font-medium">
-                                  <Briefcase className="h-3 w-3 mr-1" />
-                                  Gig
-                                </Badge>
-                              )}
-                            </div>
+                            {hasNextOfKin(customer) && (
+                              <div title="Emergency contact on file">
+                                <Shield className="h-3 w-3 text-muted-foreground" />
+                              </div>
+                            )}
                           </div>
                         </TableCell>
                         <TableCell>
@@ -756,6 +774,26 @@ const CustomersList = () => {
                           >
                             {customer.user_type || 'Guest'}
                           </Badge>
+                        </TableCell>
+                        <TableCell>
+                          {(() => {
+                            const status = (customer as any).identity_verification_status;
+                            if (status === 'verified') {
+                              return <span className="text-green-600 text-sm font-medium">Verified</span>;
+                            } else if (status === 'pending') {
+                              return <span className="text-yellow-600 text-sm font-medium">Pending</span>;
+                            } else if (status === 'failed') {
+                              return <span className="text-red-600 text-sm font-medium">Failed</span>;
+                            }
+                            return <span className="text-muted-foreground text-sm">Unverified</span>;
+                          })()}
+                        </TableCell>
+                        <TableCell>
+                          {(customer as any).is_gig_driver ? (
+                            <span className="text-blue-600 text-sm font-medium">Yes</span>
+                          ) : (
+                            <span className="text-muted-foreground text-sm">No</span>
+                          )}
                         </TableCell>
                         <TableCell>
                           <div className="space-y-1 max-w-[200px]">
@@ -835,6 +873,26 @@ const CustomersList = () => {
                                       <DropdownMenuItem onClick={() => handleEditCustomer(customer)}>
                                         <Edit className="h-4 w-4 mr-2" />
                                         Edit
+                                      </DropdownMenuItem>
+                                    )}
+                                    {canEdit('customers') && (
+                                      <DropdownMenuItem
+                                        onClick={() => {
+                                          setVerificationCustomer(customer);
+                                          setVerificationDialogOpen(true);
+                                        }}
+                                      >
+                                        {(customer as any).identity_verification_status === 'verified' ? (
+                                          <>
+                                            <RefreshCw className="h-4 w-4 mr-2" />
+                                            Re-verify
+                                          </>
+                                        ) : (
+                                          <>
+                                            <ShieldCheck className="h-4 w-4 mr-2" />
+                                            Start Verification
+                                          </>
+                                        )}
                                       </DropdownMenuItem>
                                     )}
                                     <DropdownMenuSeparator />
@@ -1042,6 +1100,16 @@ const CustomersList = () => {
         open={inviteDialogOpen}
         onOpenChange={setInviteDialogOpen}
       />
+
+      {/* Start Verification Dialog */}
+      {verificationCustomer && (
+        <StartVerificationDialog
+          open={verificationDialogOpen}
+          onOpenChange={setVerificationDialogOpen}
+          customerId={verificationCustomer.id}
+          customerName={verificationCustomer.name}
+        />
+      )}
     </div>
   );
 };
