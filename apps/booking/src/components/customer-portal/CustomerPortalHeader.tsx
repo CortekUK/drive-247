@@ -3,7 +3,9 @@
 import { SidebarTrigger } from '@/components/ui/sidebar';
 import { ThemeToggle } from '@/components/ThemeToggle';
 import { Button } from '@/components/ui/button';
-import { Bell, LogOut, ChevronDown } from 'lucide-react';
+import { Bell, LogOut, ChevronDown, MessageSquare, BellRing } from 'lucide-react';
+import { useState } from 'react';
+import { Badge } from '@/components/ui/badge';
 import { useCustomerNotifications } from '@/hooks/use-customer-notifications';
 import { useCustomerAuthStore } from '@/stores/customer-auth-store';
 import {
@@ -28,6 +30,144 @@ import { useSidebar } from '@/components/ui/sidebar';
 import { useSiteSettings } from '@/hooks/useSiteSettings';
 import { useTheme } from 'next-themes';
 import { Separator } from '@/components/ui/separator';
+
+function CustomerNotificationBell({
+  notifications,
+  unreadCount,
+  markAsRead,
+}: {
+  notifications: any[];
+  unreadCount: number;
+  markAsRead: any;
+}) {
+  const [activeTab, setActiveTab] = useState<'general' | 'messages'>('general');
+  const router = useRouter();
+
+  const messageNotifications = notifications.filter((n: any) => n.type === 'chat_message');
+  const generalNotifications = notifications.filter((n: any) => n.type !== 'chat_message');
+  const messageUnread = messageNotifications.filter((n: any) => !n.is_read).length;
+  const generalUnread = generalNotifications.filter((n: any) => !n.is_read).length;
+  const activeNotifications = activeTab === 'messages' ? messageNotifications : generalNotifications;
+
+  return (
+    <Popover>
+      <PopoverTrigger asChild>
+        <Button variant="ghost" size="icon" className="relative">
+          <Bell className="h-5 w-5" />
+          {unreadCount > 0 && (
+            <span className="absolute -top-1 -right-1 h-5 w-5 rounded-full bg-destructive text-xs font-medium text-destructive-foreground flex items-center justify-center">
+              {unreadCount > 9 ? '9+' : unreadCount}
+            </span>
+          )}
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent className="w-80 p-0" align="end">
+        <div className="flex items-center justify-between p-4 border-b">
+          <h4 className="font-semibold">Notifications</h4>
+          {unreadCount > 0 && (
+            <span className="text-xs text-muted-foreground">
+              {unreadCount} unread
+            </span>
+          )}
+        </div>
+
+        {/* Tabs */}
+        <div className="flex border-b">
+          <button
+            className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-2 text-sm font-medium transition-colors ${
+              activeTab === 'general'
+                ? 'border-b-2 border-primary text-foreground'
+                : 'text-muted-foreground hover:text-foreground'
+            }`}
+            onClick={() => setActiveTab('general')}
+          >
+            <BellRing className="h-3.5 w-3.5" />
+            General
+            {generalUnread > 0 && (
+              <Badge variant="destructive" className="h-4 min-w-4 px-1 text-[10px]">
+                {generalUnread > 99 ? '99+' : generalUnread}
+              </Badge>
+            )}
+          </button>
+          <button
+            className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-2 text-sm font-medium transition-colors ${
+              activeTab === 'messages'
+                ? 'border-b-2 border-primary text-foreground'
+                : 'text-muted-foreground hover:text-foreground'
+            }`}
+            onClick={() => setActiveTab('messages')}
+          >
+            <MessageSquare className="h-3.5 w-3.5" />
+            Messages
+            {messageUnread > 0 && (
+              <Badge variant="destructive" className="h-4 min-w-4 px-1 text-[10px]">
+                {messageUnread > 99 ? '99+' : messageUnread}
+              </Badge>
+            )}
+          </button>
+        </div>
+
+        <ScrollArea className="h-[300px]">
+          {activeNotifications.length === 0 ? (
+            <div className="p-8 text-center">
+              {activeTab === 'messages' ? (
+                <MessageSquare className="h-10 w-10 mx-auto mb-2 text-muted-foreground/30" />
+              ) : (
+                <Bell className="h-10 w-10 mx-auto mb-2 text-muted-foreground/30" />
+              )}
+              <p className="text-sm text-muted-foreground">
+                {activeTab === 'messages' ? 'No messages' : 'No notifications'}
+              </p>
+            </div>
+          ) : (
+            <div className="divide-y">
+              {activeNotifications.slice(0, 20).map((notification: any) => (
+                <div
+                  key={notification.id}
+                  className={`p-3 hover:bg-muted/50 cursor-pointer ${
+                    !notification.is_read ? 'bg-muted/30' : ''
+                  }`}
+                  onClick={() => {
+                    if (!notification.is_read) {
+                      markAsRead.mutate(notification.id);
+                    }
+                    if (notification.link) {
+                      router.push(notification.link);
+                    }
+                  }}
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <p className="text-sm font-medium">{notification.title}</p>
+                    {!notification.is_read && (
+                      <span className="h-2 w-2 rounded-full bg-primary flex-shrink-0 mt-1.5" />
+                    )}
+                  </div>
+                  <p className="text-xs text-muted-foreground line-clamp-2">
+                    {notification.message}
+                  </p>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    {formatDistanceToNow(new Date(notification.created_at), {
+                      addSuffix: true,
+                    })}
+                  </p>
+                </div>
+              ))}
+            </div>
+          )}
+        </ScrollArea>
+        {notifications.length > 0 && (
+          <div className="p-2 border-t">
+            <Link href="/portal/notifications">
+              <Button variant="ghost" className="w-full" size="sm">
+                View all notifications
+              </Button>
+            </Link>
+          </div>
+        )}
+      </PopoverContent>
+    </Popover>
+  );
+}
 
 export function CustomerPortalHeader() {
   const { state } = useSidebar();
@@ -75,70 +215,11 @@ export function CustomerPortalHeader() {
 
       <div className="flex items-center gap-2">
         {/* Notification Bell */}
-        <Popover>
-          <PopoverTrigger asChild>
-            <Button variant="ghost" size="icon" className="relative">
-              <Bell className="h-5 w-5" />
-              {unreadCount > 0 && (
-                <span className="absolute -top-1 -right-1 h-5 w-5 rounded-full bg-destructive text-xs font-medium text-destructive-foreground flex items-center justify-center">
-                  {unreadCount > 9 ? '9+' : unreadCount}
-                </span>
-              )}
-            </Button>
-          </PopoverTrigger>
-          <PopoverContent className="w-80 p-0" align="end">
-            <div className="flex items-center justify-between p-4 border-b">
-              <h4 className="font-semibold">Notifications</h4>
-              {unreadCount > 0 && (
-                <span className="text-xs text-muted-foreground">
-                  {unreadCount} unread
-                </span>
-              )}
-            </div>
-            <ScrollArea className="h-[300px]">
-              {notifications.length === 0 ? (
-                <div className="p-4 text-center text-sm text-muted-foreground">
-                  No notifications yet
-                </div>
-              ) : (
-                <div className="divide-y">
-                  {notifications.slice(0, 10).map((notification) => (
-                    <div
-                      key={notification.id}
-                      className={`p-3 hover:bg-muted/50 cursor-pointer ${
-                        !notification.is_read ? 'bg-muted/30' : ''
-                      }`}
-                      onClick={() => {
-                        if (!notification.is_read) {
-                          markAsRead.mutate(notification.id);
-                        }
-                      }}
-                    >
-                      <p className="text-sm font-medium">{notification.title}</p>
-                      <p className="text-xs text-muted-foreground line-clamp-2">
-                        {notification.message}
-                      </p>
-                      <p className="text-xs text-muted-foreground mt-1">
-                        {formatDistanceToNow(new Date(notification.created_at), {
-                          addSuffix: true,
-                        })}
-                      </p>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </ScrollArea>
-            {notifications.length > 0 && (
-              <div className="p-2 border-t">
-                <Link href="/portal/notifications">
-                  <Button variant="ghost" className="w-full" size="sm">
-                    View all notifications
-                  </Button>
-                </Link>
-              </div>
-            )}
-          </PopoverContent>
-        </Popover>
+        <CustomerNotificationBell
+          notifications={notifications}
+          unreadCount={unreadCount}
+          markAsRead={markAsRead}
+        />
 
         <ThemeToggle />
 
