@@ -7,8 +7,7 @@ import { useTenant } from '@/contexts/TenantContext';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
-import { Progress } from '@/components/ui/progress';
-import { Shield, Loader2, Clock, Copy, CheckCircle, Smartphone } from 'lucide-react';
+import { Shield, Loader2, Clock, Copy, CheckCircle, Link2, ExternalLink } from 'lucide-react';
 import { toast } from 'sonner';
 
 const VERIFICATION_DOC_OPTIONS = [
@@ -16,6 +15,8 @@ const VERIFICATION_DOC_OPTIONS = [
   { value: 'passport', label: 'Passport' },
   { value: 'id_card', label: 'ID Card' },
 ];
+
+const EXPIRY_SECONDS = 3 * 60 * 60; // 3 hours
 
 interface StartVerificationDialogProps {
   open: boolean;
@@ -37,10 +38,11 @@ export function StartVerificationDialog({
     tenant?.accepted_verification_document || 'drivers_license'
   );
   const [creating, setCreating] = useState(false);
-  const [aiSessionData, setAiSessionData] = useState<{ sessionId: string; qrUrl: string; expiresAt: Date } | null>(null);
+  const [sessionData, setSessionData] = useState<{ sessionId: string; url: string; expiresAt: Date } | null>(null);
   const [timeRemaining, setTimeRemaining] = useState(0);
   const [isPolling, setIsPolling] = useState(false);
   const [verificationDone, setVerificationDone] = useState(false);
+  const [copied, setCopied] = useState(false);
   const pollIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
   const verificationMode = tenant?.integration_veriff !== false ? 'veriff' : 'ai';
@@ -50,10 +52,11 @@ export function StartVerificationDialog({
     if (open) {
       setDocType(tenant?.accepted_verification_document || 'drivers_license');
       setCreating(false);
-      setAiSessionData(null);
+      setSessionData(null);
       setTimeRemaining(0);
       setIsPolling(false);
       setVerificationDone(false);
+      setCopied(false);
     } else {
       if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
     }
@@ -61,29 +64,29 @@ export function StartVerificationDialog({
 
   // Timer countdown
   useEffect(() => {
-    if (!aiSessionData) return;
+    if (!sessionData) return;
     const updateTime = () => {
-      const remaining = Math.max(0, Math.floor((aiSessionData.expiresAt.getTime() - Date.now()) / 1000));
+      const remaining = Math.max(0, Math.floor((sessionData.expiresAt.getTime() - Date.now()) / 1000));
       setTimeRemaining(remaining);
       if (remaining === 0) {
         setIsPolling(false);
-        setAiSessionData(null);
-        toast.error('QR code expired. Please try again.');
+        setSessionData(null);
+        toast.error('Verification link expired. Please generate a new one.');
       }
     };
     updateTime();
     const timer = setInterval(updateTime, 1000);
     return () => clearInterval(timer);
-  }, [aiSessionData]);
+  }, [sessionData]);
 
-  // Poll for completion
+  // Poll for completion (every 10s since 3 hour window)
   const checkStatus = useCallback(async () => {
-    if (!isPolling || !aiSessionData) return;
+    if (!isPolling || !sessionData) return;
     try {
-      const { data, error } = await supabase
+      const { data, error } = await (supabase as any)
         .from('identity_verifications')
         .select('status, review_status, review_result')
-        .eq('session_id', aiSessionData.sessionId)
+        .eq('session_id', sessionData.sessionId)
         .single();
       if (error) return;
       if (data.status === 'completed') {
@@ -100,23 +103,33 @@ export function StartVerificationDialog({
         }
       }
     } catch {}
-  }, [aiSessionData, isPolling, customerId, queryClient]);
+  }, [sessionData, isPolling, customerId, queryClient]);
 
   useEffect(() => {
-    if (isPolling && aiSessionData) {
+    if (isPolling && sessionData) {
       const initialTimeout = setTimeout(checkStatus, 5000);
-      pollIntervalRef.current = setInterval(checkStatus, 3000);
+      pollIntervalRef.current = setInterval(checkStatus, 10000);
       return () => {
         clearTimeout(initialTimeout);
         if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
       };
     }
-  }, [isPolling, aiSessionData, checkStatus]);
+  }, [isPolling, sessionData, checkStatus]);
 
   const formatTime = (seconds: number) => {
-    const mins = Math.floor(seconds / 60);
+    const hrs = Math.floor(seconds / 3600);
+    const mins = Math.floor((seconds % 3600) / 60);
     const secs = seconds % 60;
+    if (hrs > 0) return `${hrs}h ${mins}m`;
     return `${mins}:${secs.toString().padStart(2, '0')}`;
+  };
+
+  const handleCopyLink = () => {
+    if (!sessionData) return;
+    navigator.clipboard.writeText(sessionData.url);
+    setCopied(true);
+    toast.success('Verification link copied to clipboard');
+    setTimeout(() => setCopied(false), 2000);
   };
 
   const handleStart = async () => {
@@ -128,12 +141,12 @@ export function StartVerificationDialog({
           body: { customerId, tenantId: tenant.id, tenantSlug: tenant.slug },
         });
         if (error) throw error;
-        if (!data.ok) throw new Error(data.detail || data.error || 'Failed to create AI verification session');
+        if (!data.ok) throw new Error(data.detail || data.error || 'Failed to create verification session');
 
-        toast.success('AI verification session created');
-        setAiSessionData({
+        toast.success('Verification link generated');
+        setSessionData({
           sessionId: data.sessionId,
-          qrUrl: data.qrUrl,
+          url: data.qrUrl,
           expiresAt: new Date(data.expiresAt),
         });
         setIsPolling(true);
@@ -145,10 +158,15 @@ export function StartVerificationDialog({
         if (!data.ok) throw new Error(data.detail || data.error || 'Failed to create verification session');
 
         toast.success('Verification session created');
-        if (data.sessionUrl) window.open(data.sessionUrl, '_blank');
+        if (data.sessionUrl) {
+          setSessionData({
+            sessionId: data.sessionId || '',
+            url: data.sessionUrl,
+            expiresAt: new Date(Date.now() + EXPIRY_SECONDS * 1000),
+          });
+        }
         queryClient.invalidateQueries({ queryKey: ['customer-verification', customerId] });
         queryClient.invalidateQueries({ queryKey: ['customers-list'] });
-        onOpenChange(false);
       }
     } catch (err: any) {
       toast.error(err.message || 'Failed to create verification session');
@@ -168,7 +186,10 @@ export function StartVerificationDialog({
             {docLabel} Verification
           </DialogTitle>
           <DialogDescription>
-            Start identity verification for <strong>{customerName}</strong>
+            {sessionData
+              ? <>Send this link to <strong>{customerName}</strong> to complete verification.</>
+              : <>Generate a verification link for <strong>{customerName}</strong>.</>
+            }
           </DialogDescription>
         </DialogHeader>
 
@@ -177,113 +198,102 @@ export function StartVerificationDialog({
             <CheckCircle className="h-4 w-4 shrink-0" />
             <span>Verification completed</span>
           </div>
-        ) : aiSessionData ? (
-          /* QR code active */
+        ) : sessionData ? (
+          /* Link generated — show copy UI */
           <div className="space-y-4">
-            <div className="flex flex-col items-center gap-4 p-4 rounded-lg border border-muted-foreground/20">
-              <div
-                className="rounded-xl shadow-lg border-2 border-gray-200"
-                style={{ backgroundColor: '#FFFFFF', padding: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-              >
-                <img
-                  src={`https://quickchart.io/qr?text=${encodeURIComponent(aiSessionData.qrUrl)}&size=220&margin=3&dark=000000&light=ffffff&ecLevel=M&format=png`}
-                  alt="Scan QR code to verify identity"
-                  width={220}
-                  height={220}
-                  style={{ display: 'block', imageRendering: 'pixelated' }}
+            {/* Verification link */}
+            <div className="space-y-2">
+              <label className="text-xs font-medium text-muted-foreground">Verification Link</label>
+              <div className="flex items-center gap-2 p-2.5 bg-muted rounded-lg border">
+                <Link2 className="h-4 w-4 text-muted-foreground shrink-0" />
+                <input
+                  type="text"
+                  readOnly
+                  value={sessionData.url}
+                  className="flex-1 bg-transparent text-sm truncate border-none focus:outline-none"
                 />
-              </div>
-
-              <div className="w-full space-y-1.5">
-                <div className="flex items-center justify-between text-xs">
-                  <span className="text-muted-foreground flex items-center gap-1">
-                    <Clock className="h-3.5 w-3.5" />
-                    Time remaining
-                  </span>
-                  <span className={`font-mono font-medium ${timeRemaining < 60 ? 'text-destructive' : 'text-foreground'}`}>
-                    {formatTime(timeRemaining)}
-                  </span>
-                </div>
-                <Progress value={(timeRemaining / 900) * 100} className="h-1.5" />
-              </div>
-
-              <div className="flex items-center gap-2 px-3 py-1.5 bg-blue-50 text-blue-700 rounded-full text-xs dark:bg-blue-950 dark:text-blue-300">
-                <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                <span>Waiting for verification...</span>
-              </div>
-
-              <div className="w-full space-y-1">
-                <p className="text-[10px] text-center text-muted-foreground">
-                  Can't scan? Open this link on your phone:
-                </p>
-                <div className="flex items-center gap-2 p-1.5 bg-muted rounded-lg">
-                  <input
-                    type="text"
-                    readOnly
-                    value={aiSessionData.qrUrl}
-                    className="flex-1 bg-transparent text-xs truncate border-none focus:outline-none"
-                  />
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    className="shrink-0 h-7 w-7 p-0"
-                    onClick={() => {
-                      navigator.clipboard.writeText(aiSessionData.qrUrl);
-                      toast.success('Link copied to clipboard');
-                    }}
-                  >
-                    <Copy className="h-3.5 w-3.5" />
-                  </Button>
-                </div>
+                <Button
+                  type="button"
+                  variant={copied ? 'default' : 'outline'}
+                  size="sm"
+                  className="shrink-0 h-7 gap-1 text-xs"
+                  onClick={handleCopyLink}
+                >
+                  {copied ? (
+                    <>
+                      <CheckCircle className="h-3 w-3" />
+                      Copied
+                    </>
+                  ) : (
+                    <>
+                      <Copy className="h-3 w-3" />
+                      Copy
+                    </>
+                  )}
+                </Button>
               </div>
             </div>
+
+            {/* Expiry info */}
+            <div className="flex items-center justify-between text-xs text-muted-foreground px-1">
+              <span className="flex items-center gap-1">
+                <Clock className="h-3.5 w-3.5" />
+                Expires in {formatTime(timeRemaining)}
+              </span>
+              {isPolling && (
+                <span className="flex items-center gap-1 text-blue-600 dark:text-blue-400">
+                  <Loader2 className="h-3 w-3 animate-spin" />
+                  Waiting for customer...
+                </span>
+              )}
+            </div>
+
+            {/* Open in new tab */}
+            <Button
+              variant="outline"
+              size="sm"
+              className="w-full gap-2 text-xs"
+              onClick={() => window.open(sessionData.url, '_blank')}
+            >
+              <ExternalLink className="h-3.5 w-3.5" />
+              Open link in new tab
+            </Button>
           </div>
         ) : (
-          /* Not started — show doc type + start button */
+          /* Not started — doc type + generate button */
           <div className="space-y-4">
-            <div className="flex items-center gap-3 p-4 rounded-lg border border-dashed border-muted-foreground/25">
-              <div className="p-2 bg-primary/10 rounded-full shrink-0">
-                <Smartphone className="h-5 w-5 text-primary" />
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium">Verify with {verificationMode === 'ai' ? 'AI' : 'Veriff'}</p>
-                <p className="text-xs text-muted-foreground">
-                  {verificationMode === 'ai'
-                    ? `Scan a QR code to take photos of the customer's ${docLabel.toLowerCase()} and a selfie.`
-                    : 'Open a verification session in a new window.'}
-                </p>
-              </div>
-            </div>
-
-            <div className="flex items-center gap-2">
+            <div className="space-y-2">
+              <label className="text-xs font-medium text-muted-foreground">Document Type</label>
               <Select value={docType} onValueChange={setDocType}>
-                <SelectTrigger className="w-[180px] h-9 text-xs">
+                <SelectTrigger className="h-9 text-sm">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
                   {VERIFICATION_DOC_OPTIONS.map(opt => (
-                    <SelectItem key={opt.value} value={opt.value} className="text-xs">
+                    <SelectItem key={opt.value} value={opt.value}>
                       {opt.label}
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
-
-              <Button onClick={handleStart} disabled={creating} size="sm">
-                {creating ? (
-                  <>
-                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                    Creating...
-                  </>
-                ) : (
-                  <>
-                    <Shield className="h-4 w-4 mr-2" />
-                    Start Verification
-                  </>
-                )}
-              </Button>
+              <p className="text-xs text-muted-foreground">
+                The customer will receive a public link valid for 3 hours to verify their {docLabel.toLowerCase()}.
+              </p>
             </div>
+
+            <Button onClick={handleStart} disabled={creating} className="w-full gap-2">
+              {creating ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Generating...
+                </>
+              ) : (
+                <>
+                  <Link2 className="h-4 w-4" />
+                  Generate Verification Link
+                </>
+              )}
+            </Button>
           </div>
         )}
       </DialogContent>

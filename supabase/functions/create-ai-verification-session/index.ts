@@ -130,7 +130,7 @@ async function createSessionForCustomer(
     // Generate QR token and URL
     const qrToken = generateQRToken();
     const qrUrl = buildQRUrl(tenantSlug, qrToken);
-    const expiresAt = new Date(Date.now() + 15 * 60 * 1000); // 15 minutes
+    const expiresAt = new Date(Date.now() + 3 * 60 * 60 * 1000); // 3 hours
 
     // Generate a unique session_id for this verification (used for linking after booking)
     const sessionId = crypto.randomUUID();
@@ -216,7 +216,7 @@ async function createSessionForBooking(
     // Generate QR token and URL
     const qrToken = generateQRToken();
     const qrUrl = buildQRUrl(tenantSlug, qrToken);
-    const expiresAt = new Date(Date.now() + 15 * 60 * 1000); // 15 minutes
+    const expiresAt = new Date(Date.now() + 3 * 60 * 60 * 1000); // 3 hours
 
     // Generate a unique session_id for this verification (used for linking after booking)
     const sessionId = crypto.randomUUID();
