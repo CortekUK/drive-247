@@ -3,6 +3,15 @@
  * Fetches custom tenant email templates from the database and renders them with variable replacement
  */
 
+import { formatCurrency } from "./format-utils.ts";
+
+function formatEmailDate(date: string | Date | null | undefined): string {
+  if (!date) return '';
+  const d = typeof date === 'string' ? new Date(date) : date;
+  if (isNaN(d.getTime())) return '';
+  return d.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+}
+
 // Default email templates (same as portal/src/lib/default-email-templates.ts)
 const DEFAULT_EMAIL_TEMPLATES: Record<string, { subject: string; content: string }> = {
   booking_pending: {
@@ -631,26 +640,51 @@ const DEFAULT_EMAIL_TEMPLATES: Record<string, { subject: string; content: string
 };
 
 export interface EmailTemplateData {
-  // Customer
+  // Customer — basic
   customer_name?: string;
   customer_email?: string;
   customer_phone?: string;
+  customer_address?: string;
+  customer_type?: string;
+  // Customer — identity & license
+  customer_date_of_birth?: string;
+  customer_license_number?: string;
+  customer_license_expiry?: string;
+  customer_document_type?: string;
+  customer_license_state?: string;
+  customer_id_number?: string;
+  nok_name?: string;
+  nok_phone?: string;
   // Vehicle
   vehicle_make?: string;
   vehicle_model?: string;
   vehicle_reg?: string;
   vehicle_year?: string;
+  vehicle_color?: string;
+  vehicle_vin?: string;
+  vehicle_fuel_type?: string;
+  vehicle_daily_rent?: string;
+  vehicle_weekly_rent?: string;
+  vehicle_monthly_rent?: string;
   // Rental
   rental_number?: string;
   rental_start_date?: string;
   rental_end_date?: string;
+  rental_days?: string;
   rental_amount?: string;
   monthly_amount?: string;
+  rental_price?: string;
   rental_period_type?: string;
+  rental_status?: string;
+  pickup_location?: string;
+  return_location?: string;
+  delivery_address?: string;
+  agreement_date?: string;
   // Company
   company_name?: string;
   company_email?: string;
   company_phone?: string;
+  company_address?: string;
   // Email-specific
   rejection_reason?: string;
   payment_amount?: string;
@@ -662,6 +696,8 @@ export interface EmailTemplateData {
   extension_days?: string;
   extension_amount?: string;
   payment_url?: string;
+  // Allow arbitrary extra fields
+  [key: string]: string | undefined;
 }
 
 interface EmailTemplate {
@@ -832,11 +868,11 @@ export function wrapEmailHtml(
 export async function getTenantInfo(
   supabaseClient: any,
   tenantId: string
-): Promise<{ company_name: string; company_email: string; company_phone: string; primary_color: string; accent_color: string; logo_url: string | null; currency_code: string }> {
+): Promise<{ company_name: string; company_email: string; company_phone: string; company_address: string; primary_color: string; accent_color: string; logo_url: string | null; currency_code: string }> {
   try {
     const { data, error } = await supabaseClient
       .from('tenants')
-      .select('company_name, contact_email, contact_phone, primary_color, accent_color, logo_url, currency_code')
+      .select('company_name, contact_email, contact_phone, phone, address, primary_color, accent_color, logo_url, currency_code')
       .eq('id', tenantId)
       .single();
 
@@ -845,7 +881,8 @@ export async function getTenantInfo(
     return {
       company_name: data.company_name || 'DRIVE 247',
       company_email: data.contact_email || 'support@drive-247.com',
-      company_phone: data.contact_phone || '',
+      company_phone: data.contact_phone || data.phone || '',
+      company_address: data.address || '',
       primary_color: data.primary_color || '#1a1a1a',
       accent_color: data.accent_color || '#C5A572',
       logo_url: data.logo_url || null,
@@ -857,12 +894,166 @@ export async function getTenantInfo(
       company_name: 'DRIVE 247',
       company_email: 'support@drive-247.com',
       company_phone: '',
+      company_address: '',
       primary_color: '#1a1a1a',
       accent_color: '#C5A572',
       logo_url: null,
       currency_code: 'GBP',
     };
   }
+}
+
+/**
+ * Resolve all email template variables from DB given a rentalId.
+ * Fetches rental + customer + vehicle + tenant data and maps to EmailTemplateData.
+ * If rentalId is not provided, returns only tenant info + overrides.
+ */
+export async function resolveEmailData(
+  supabaseClient: any,
+  options: {
+    rentalId?: string;
+    tenantId?: string;
+    overrides?: Partial<EmailTemplateData>;
+  }
+): Promise<EmailTemplateData> {
+  const { rentalId, tenantId, overrides = {} } = options;
+
+  // Start with empty data
+  const result: EmailTemplateData = {};
+
+  // Fetch tenant info if tenantId provided
+  let currencyCode = 'GBP';
+  if (tenantId) {
+    try {
+      const tenantInfo = await getTenantInfo(supabaseClient, tenantId);
+      result.company_name = tenantInfo.company_name;
+      result.company_email = tenantInfo.company_email;
+      result.company_phone = tenantInfo.company_phone;
+      result.company_address = tenantInfo.company_address;
+      currencyCode = tenantInfo.currency_code;
+    } catch (err) {
+      console.warn('[resolveEmailData] Error fetching tenant:', err);
+    }
+  }
+
+  // Fetch rental + customer + vehicle if rentalId provided
+  if (rentalId) {
+    try {
+      const { data: rental, error } = await supabaseClient
+        .from('rentals')
+        .select(`
+          id, rental_number, start_date, end_date, status, monthly_amount,
+          rental_period_type, delivery_address, delivery_method,
+          pickup_location, return_location, created_at,
+          customers:customer_id (
+            name, email, phone, customer_type, type, date_of_birth,
+            address_street, address_city, address_state, address_zip,
+            license_number, license_state, id_number,
+            nok_full_name, nok_phone
+          ),
+          vehicles:vehicle_id (
+            make, model, year, reg, color, vin, fuel_type,
+            daily_rent, weekly_rent, monthly_rent
+          )
+        `)
+        .eq('id', rentalId)
+        .single();
+
+      if (error) {
+        console.warn('[resolveEmailData] Error fetching rental:', error);
+      } else if (rental) {
+        const customer = rental.customers as any;
+        const vehicle = rental.vehicles as any;
+
+        // Tenant ID fallback from rental if not provided
+        if (!tenantId && rental.tenant_id) {
+          try {
+            const tenantInfo = await getTenantInfo(supabaseClient, rental.tenant_id);
+            result.company_name = tenantInfo.company_name;
+            result.company_email = tenantInfo.company_email;
+            result.company_phone = tenantInfo.company_phone;
+            result.company_address = tenantInfo.company_address;
+            currencyCode = tenantInfo.currency_code;
+          } catch (_) { /* already logged */ }
+        }
+
+        // Customer fields
+        if (customer) {
+          const customerAddress = [
+            customer.address_street,
+            customer.address_city,
+            customer.address_state,
+            customer.address_zip,
+          ].filter(Boolean).join(', ');
+
+          result.customer_name = customer.name || '';
+          result.customer_email = customer.email || '';
+          result.customer_phone = customer.phone || '';
+          result.customer_address = customerAddress;
+          result.customer_type = customer.customer_type || customer.type || 'Individual';
+          result.customer_date_of_birth = formatEmailDate(customer.date_of_birth);
+          result.customer_license_number = customer.license_number || '';
+          result.customer_license_expiry = '';
+          result.customer_document_type = '';
+          result.customer_license_state = customer.license_state || '';
+          result.customer_id_number = customer.id_number || '';
+          result.nok_name = customer.nok_full_name || '';
+          result.nok_phone = customer.nok_phone || '';
+        }
+
+        // Vehicle fields
+        if (vehicle) {
+          result.vehicle_make = vehicle.make || '';
+          result.vehicle_model = vehicle.model || '';
+          result.vehicle_year = vehicle.year?.toString() || '';
+          result.vehicle_reg = vehicle.reg || '';
+          result.vehicle_color = vehicle.color || '';
+          result.vehicle_vin = vehicle.vin || '';
+          result.vehicle_fuel_type = vehicle.fuel_type || '';
+          result.vehicle_daily_rent = vehicle.daily_rent ? formatCurrency(vehicle.daily_rent, currencyCode) : '';
+          result.vehicle_weekly_rent = vehicle.weekly_rent ? formatCurrency(vehicle.weekly_rent, currencyCode) : '';
+          result.vehicle_monthly_rent = vehicle.monthly_rent ? formatCurrency(vehicle.monthly_rent, currencyCode) : '';
+        }
+
+        // Rental fields
+        result.rental_number = rental.rental_number || rental.id?.substring(0, 8)?.toUpperCase() || '';
+        result.rental_start_date = formatEmailDate(rental.start_date);
+        result.rental_end_date = rental.end_date ? formatEmailDate(rental.end_date) : 'Ongoing';
+        result.rental_amount = rental.monthly_amount ? formatCurrency(rental.monthly_amount, currencyCode) : '';
+        result.monthly_amount = rental.monthly_amount ? formatCurrency(rental.monthly_amount, currencyCode) : '';
+        result.rental_period_type = rental.rental_period_type || 'Monthly';
+        result.rental_status = rental.status || '';
+        result.pickup_location = rental.pickup_location || '';
+        result.return_location = rental.return_location || '';
+        result.delivery_address = rental.delivery_address || '';
+        result.agreement_date = formatEmailDate(rental.created_at || new Date());
+
+        // Compute rental_days
+        if (rental.start_date && rental.end_date) {
+          const days = Math.ceil((new Date(rental.end_date).getTime() - new Date(rental.start_date).getTime()) / (1000 * 60 * 60 * 24));
+          result.rental_days = days > 0 ? days.toString() : '';
+        }
+
+        // Compute rental_price based on period type
+        if (vehicle) {
+          const type = rental.rental_period_type || 'Monthly';
+          const rate = type === 'Daily' ? vehicle.daily_rent : type === 'Weekly' ? vehicle.weekly_rent : vehicle.monthly_rent;
+          result.rental_price = rate ? formatCurrency(rate, currencyCode) : '';
+        }
+      }
+    } catch (err) {
+      console.warn('[resolveEmailData] Error resolving rental data:', err);
+    }
+  }
+
+  // Merge overrides (caller wins)
+  for (const [key, value] of Object.entries(overrides)) {
+    if (value !== undefined && value !== null && value !== '') {
+      result[key] = value;
+    }
+  }
+
+  return result;
 }
 
 /**
@@ -881,6 +1072,7 @@ export async function renderEmail(
   data.company_name = data.company_name || tenantInfo.company_name;
   data.company_email = data.company_email || tenantInfo.company_email;
   data.company_phone = data.company_phone || tenantInfo.company_phone;
+  data.company_address = data.company_address || tenantInfo.company_address;
 
   // Get template (custom or default)
   const template = await getEmailTemplate(supabaseClient, tenantId, templateKey);

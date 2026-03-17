@@ -250,8 +250,8 @@ export default function RejectionDialog({
         rental_start_date: rental.start_date ? format(new Date(rental.start_date), 'MMMM dd, yyyy') : 'N/A',
         rental_end_date: rental.end_date ? format(new Date(rental.end_date), 'MMMM dd, yyyy') : 'N/A',
         rental_amount: formatCurrency(rental.monthly_amount || 0, currencyCode),
-        company_name: (tenant as any)?.name || 'Our Company',
-        company_email: (tenant as any)?.email || '',
+        company_name: (tenant as any)?.company_name || 'Our Company',
+        company_email: (tenant as any)?.contact_email || '',
         company_phone: (tenant as any)?.phone || '',
       };
 
@@ -315,6 +315,7 @@ export default function RejectionDialog({
       if (rental.customer?.email && renderedEmail) {
         await supabase.functions.invoke('notify-booking-rejected', {
           body: {
+            rentalId: rental.id,
             customerEmail: rental.customer.email,
             customerName: rental.customer.name,
             vehicleName: `${rental.vehicle?.make} ${rental.vehicle?.model}`,

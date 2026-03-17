@@ -3,7 +3,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.4";
 import { corsHeaders } from "../_shared/cors.ts";
 import { getTenantTwilioCredentials, sendTenantSMS, normalizePhoneNumber } from '../_shared/twilio-sms-client.ts';
 import { sendEmail } from "../_shared/resend-service.ts";
-import { renderEmail, EmailTemplateData } from "../_shared/email-template-service.ts";
+import { renderEmail, EmailTemplateData, resolveEmailData } from "../_shared/email-template-service.ts";
 import { formatCurrency } from "../_shared/format-utils.ts";
 
 interface NotifyRequest {
@@ -21,6 +21,7 @@ interface NotifyRequest {
   bookingRef: string;
   pickupLocation?: string;
   tenantId?: string;
+  rentalId?: string;
 }
 
 const getApprovalEmailHtml = (data: NotifyRequest, currencyCode: string = 'USD') => `
@@ -184,20 +185,17 @@ serve(async (req) => {
 
     if (data.tenantId) {
       try {
-
-        const templateData: EmailTemplateData = {
-          customer_name: data.customerName,
-          customer_email: data.customerEmail,
-          customer_phone: data.customerPhone || '',
-          vehicle_make: data.vehicleMake || data.vehicleName.split(' ')[0] || '',
-          vehicle_model: data.vehicleModel || data.vehicleName.split(' ').slice(1).join(' ') || '',
-          vehicle_reg: data.vehicleReg,
-          vehicle_year: data.vehicleYear || '',
-          rental_number: data.bookingRef,
-          rental_start_date: data.pickupDate,
-          rental_end_date: data.returnDate,
-          rental_amount: formatCurrency(data.amount, currencyCode),
-        };
+        const templateData = await resolveEmailData(supabase, {
+          rentalId: data.rentalId,
+          tenantId: data.tenantId,
+          overrides: {
+            // Fallback for callers that don't pass rentalId
+            customer_name: data.customerName,
+            customer_email: data.customerEmail,
+            rental_number: data.bookingRef,
+            rental_amount: data.amount ? formatCurrency(data.amount, currencyCode) : undefined,
+          },
+        });
 
         const rendered = await renderEmail(supabase, data.tenantId, 'booking_approved', templateData);
         customerSubject = rendered.subject;

@@ -3,7 +3,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.4";
 import { corsHeaders } from "../_shared/cors.ts";
 import { getTenantTwilioCredentials, sendTenantSMS, normalizePhoneNumber } from '../_shared/twilio-sms-client.ts';
 import { sendEmail } from "../_shared/resend-service.ts";
-import { renderEmail, EmailTemplateData } from "../_shared/email-template-service.ts";
+import { renderEmail, EmailTemplateData, resolveEmailData } from "../_shared/email-template-service.ts";
 
 interface NotifyRequest {
   customerName: string;
@@ -17,6 +17,7 @@ interface NotifyRequest {
   pickupDate?: string;
   returnDate?: string;
   reason?: string;
+  rentalId?: string;
   tenantId?: string;
   // Pre-rendered email (from rejection dialog preview)
   emailSubject?: string;
@@ -151,6 +152,8 @@ serve(async (req) => {
     // Build customer email - use pre-rendered if provided, otherwise render from template
     let customerSubject: string;
     let customerHtml: string;
+    let resolvedEmail = data.customerEmail;
+    let resolvedPhone = data.customerPhone;
 
     if (data.emailSubject && data.emailBody) {
       // Use pre-rendered email from rejection dialog
@@ -161,18 +164,21 @@ serve(async (req) => {
       // Render from template service
       try {
 
-        const templateData: EmailTemplateData = {
-          customer_name: data.customerName,
-          customer_email: data.customerEmail,
-          customer_phone: data.customerPhone || '',
-          vehicle_make: data.vehicleMake || data.vehicleName.split(' ')[0] || '',
-          vehicle_model: data.vehicleModel || data.vehicleName.split(' ').slice(1).join(' ') || '',
-          vehicle_reg: data.vehicleReg || '',
-          rental_number: data.bookingRef,
-          rental_start_date: data.pickupDate || '',
-          rental_end_date: data.returnDate || '',
-          rejection_reason: data.reason || 'No additional information provided.',
-        };
+        const templateData = await resolveEmailData(supabase, {
+          rentalId: data.rentalId,
+          tenantId: data.tenantId,
+          overrides: {
+            // Fallback for callers that don't pass rentalId
+            customer_name: data.customerName,
+            customer_email: data.customerEmail,
+            rental_number: data.bookingRef,
+            rejection_reason: data.reason || 'No additional information provided.',
+          },
+        });
+
+        // Use resolved data for sending if caller didn't provide them
+        resolvedEmail = resolvedEmail || templateData.customer_email || '';
+        resolvedPhone = resolvedPhone || templateData.customer_phone || '';
 
         const rendered = await renderEmail(supabase, data.tenantId, 'booking_rejected', templateData);
         customerSubject = rendered.subject;
@@ -190,17 +196,21 @@ serve(async (req) => {
     }
 
     // Send customer email
-    results.customerEmail = await sendEmail(
-      data.customerEmail,
-      customerSubject,
-      customerHtml
-    );
-    console.log('Customer email result:', results.customerEmail);
+    if (resolvedEmail) {
+      results.customerEmail = await sendEmail(
+        resolvedEmail,
+        customerSubject,
+        customerHtml
+      );
+      console.log('Customer email result:', results.customerEmail);
+    } else {
+      console.warn('No customer email available, skipping email send');
+    }
 
     // Send customer SMS
-    if (data.customerPhone) {
+    if (resolvedPhone) {
       results.customerSMS = await sendSMS(
-        data.customerPhone,
+        resolvedPhone,
         `DRIVE 247: Your booking ${data.bookingRef} was not approved. No charge was made to your card. The hold will be released within 1-3 days. Contact us with questions.`,
         supabase,
         data.tenantId

@@ -204,13 +204,15 @@ function removeEmptyFields(html: string): string {
 // HTML → STRUCTURED BLOCKS PARSER
 // ============================================================================
 
-interface TextRun { text: string; bold: boolean; }
+interface TextRun { text: string; bold: boolean; italic: boolean; underline: boolean; }
 interface TableRow { cells: string[]; isHeader: boolean; }
+type TextAlign = 'left' | 'center' | 'right';
 interface PdfBlock {
     type: 'h1' | 'h2' | 'h3' | 'paragraph' | 'table' | 'bullet-list' | 'ordered-list' | 'hr';
     runs?: TextRun[];
     rows?: TableRow[];
-    items?: string[];
+    items?: TextRun[][];
+    align?: TextAlign;
 }
 
 function decodeEntities(str: string): string {
@@ -228,28 +230,43 @@ function stripTags(html: string): string {
     return decodeEntities(html.replace(/<[^>]+>/g, '')).trim();
 }
 
-function parseInlineRuns(html: string): TextRun[] {
+function parseInlineRuns(html: string, parentBold = false, parentItalic = false, parentUnderline = false): TextRun[] {
     const runs: TextRun[] = [];
     let remaining = html;
 
+    // Match the first inline formatting tag
+    const tagRe = /<(strong|b|em|i|u)((?:\s+[^>]*)?)>([\s\S]*?)<\/\1>/i;
+
     while (remaining.length > 0) {
-        const boldMatch = remaining.match(/<(strong|b)>([\s\S]*?)<\/\1>/i);
-        if (boldMatch && boldMatch.index !== undefined) {
-            if (boldMatch.index > 0) {
-                const text = stripTags(remaining.substring(0, boldMatch.index));
-                if (text) runs.push({ text, bold: false });
+        const match = remaining.match(tagRe);
+        if (match && match.index !== undefined) {
+            // Text before the tag
+            if (match.index > 0) {
+                const text = stripTags(remaining.substring(0, match.index));
+                if (text) runs.push({ text, bold: parentBold, italic: parentItalic, underline: parentUnderline });
             }
-            const boldText = stripTags(boldMatch[2]);
-            if (boldText) runs.push({ text: boldText, bold: true });
-            remaining = remaining.substring(boldMatch.index + boldMatch[0].length);
+            const tagName = match[1].toLowerCase();
+            const innerHtml = match[3];
+            const isBold = parentBold || tagName === 'strong' || tagName === 'b';
+            const isItalic = parentItalic || tagName === 'em' || tagName === 'i';
+            const isUnderline = parentUnderline || tagName === 'u';
+            // Recurse for nested tags
+            const innerRuns = parseInlineRuns(innerHtml, isBold, isItalic, isUnderline);
+            runs.push(...innerRuns);
+            remaining = remaining.substring(match.index + match[0].length);
         } else {
             const text = stripTags(remaining);
-            if (text) runs.push({ text, bold: false });
+            if (text) runs.push({ text, bold: parentBold, italic: parentItalic, underline: parentUnderline });
             break;
         }
     }
 
-    return runs.length > 0 ? runs : [{ text: '', bold: false }];
+    return runs.length > 0 ? runs : [{ text: '', bold: false, italic: false, underline: false }];
+}
+
+function extractAlign(tagHtml: string): TextAlign {
+    const alignMatch = tagHtml.match(/text-align:\s*(left|center|right)/i);
+    return (alignMatch ? alignMatch[1].toLowerCase() : 'left') as TextAlign;
 }
 
 function parseTableRows(tableHtml: string): TableRow[] {
@@ -272,13 +289,13 @@ function parseTableRows(tableHtml: string): TableRow[] {
     return rows;
 }
 
-function parseListItems(listHtml: string): string[] {
-    const items: string[] = [];
+function parseListItems(listHtml: string): TextRun[][] {
+    const items: TextRun[][] = [];
     const itemRegex = /<li[^>]*>([\s\S]*?)<\/li>/gi;
     let match;
     while ((match = itemRegex.exec(listHtml)) !== null) {
-        const text = stripTags(match[1]);
-        if (text) items.push(text);
+        const runs = parseInlineRuns(match[1]);
+        if (runs.some(r => r.text.trim())) items.push(runs);
     }
     return items;
 }
@@ -289,27 +306,32 @@ function parseHtmlToBlocks(html: string): PdfBlock[] {
 
     // Replace block-level elements with indexed markers to preserve document order
     let idx = 0;
-    const blockMap = new Map<string, { tag: string; content: string }>();
+    const blockMap = new Map<string, { tag: string; content: string; attrs: string }>();
 
-    const replaceBlock = (tag: string) => (match: string, content: string) => {
+    const replaceBlock = (tag: string) => (match: string, ...args: string[]) => {
         const key = `\n\x00BLOCK_${idx++}\x00\n`;
-        blockMap.set(key.trim(), { tag, content: content || '' });
+        // For tags with captured attrs group: args[0]=attrs, args[1]=content
+        // For tags without attrs: args[0]=content
+        const hasAttrs = args.length >= 2 && typeof args[1] === 'string';
+        const attrs = hasAttrs ? (args[0] || '') : '';
+        const content = hasAttrs ? (args[1] || '') : (args[0] || '');
+        blockMap.set(key.trim(), { tag, content, attrs });
         return key;
     };
 
     // Order matters: tables first (they contain <td>/<th>/<p> which shouldn't be matched separately)
     cleaned = cleaned.replace(/<table[^>]*>([\s\S]*?)<\/table>/gi, replaceBlock('table'));
-    cleaned = cleaned.replace(/<h1[^>]*>([\s\S]*?)<\/h1>/gi, replaceBlock('h1'));
-    cleaned = cleaned.replace(/<h2[^>]*>([\s\S]*?)<\/h2>/gi, replaceBlock('h2'));
-    cleaned = cleaned.replace(/<h3[^>]*>([\s\S]*?)<\/h3>/gi, replaceBlock('h3'));
+    cleaned = cleaned.replace(/<h1([^>]*)>([\s\S]*?)<\/h1>/gi, replaceBlock('h1'));
+    cleaned = cleaned.replace(/<h2([^>]*)>([\s\S]*?)<\/h2>/gi, replaceBlock('h2'));
+    cleaned = cleaned.replace(/<h3([^>]*)>([\s\S]*?)<\/h3>/gi, replaceBlock('h3'));
     cleaned = cleaned.replace(/<ul[^>]*>([\s\S]*?)<\/ul>/gi, replaceBlock('ul'));
     cleaned = cleaned.replace(/<ol[^>]*>([\s\S]*?)<\/ol>/gi, replaceBlock('ol'));
     cleaned = cleaned.replace(/<hr\s*\/?>/gi, () => {
         const key = `\n\x00BLOCK_${idx++}\x00\n`;
-        blockMap.set(key.trim(), { tag: 'hr', content: '' });
+        blockMap.set(key.trim(), { tag: 'hr', content: '', attrs: '' });
         return key;
     });
-    cleaned = cleaned.replace(/<p[^>]*>([\s\S]*?)<\/p>/gi, replaceBlock('p'));
+    cleaned = cleaned.replace(/<p([^>]*)>([\s\S]*?)<\/p>/gi, replaceBlock('p'));
 
     // Split by lines and process in document order
     const parts = cleaned.split('\n').map(p => p.trim()).filter(Boolean);
@@ -317,23 +339,24 @@ function parseHtmlToBlocks(html: string): PdfBlock[] {
     for (const part of parts) {
         const block = blockMap.get(part);
         if (block) {
+            const align = extractAlign(block.attrs);
             switch (block.tag) {
                 case 'hr':
                     blocks.push({ type: 'hr' });
                     break;
                 case 'h1':
-                    blocks.push({ type: 'h1', runs: parseInlineRuns(block.content) });
+                    blocks.push({ type: 'h1', runs: parseInlineRuns(block.content), align });
                     break;
                 case 'h2':
-                    blocks.push({ type: 'h2', runs: parseInlineRuns(block.content) });
+                    blocks.push({ type: 'h2', runs: parseInlineRuns(block.content), align });
                     break;
                 case 'h3':
-                    blocks.push({ type: 'h3', runs: parseInlineRuns(block.content) });
+                    blocks.push({ type: 'h3', runs: parseInlineRuns(block.content), align });
                     break;
                 case 'p': {
                     const runs = parseInlineRuns(block.content);
                     if (runs.some(r => r.text.trim())) {
-                        blocks.push({ type: 'paragraph', runs });
+                        blocks.push({ type: 'paragraph', runs, align });
                     }
                     break;
                 }
@@ -353,7 +376,7 @@ function parseHtmlToBlocks(html: string): PdfBlock[] {
             // Raw text outside any block tag
             const text = stripTags(part);
             if (text) {
-                blocks.push({ type: 'paragraph', runs: [{ text, bold: false }] });
+                blocks.push({ type: 'paragraph', runs: [{ text, bold: false, italic: false, underline: false }] });
             }
         }
     }
@@ -378,6 +401,8 @@ interface PdfCtx {
     y: number;
     font: PDFFont;
     boldFont: PDFFont;
+    italicFont: PDFFont;
+    boldItalicFont: PDFFont;
 }
 
 function newPage(ctx: PdfCtx) {
@@ -389,8 +414,15 @@ function ensureSpace(ctx: PdfCtx, needed: number) {
     if (ctx.y - needed < MARGIN) newPage(ctx);
 }
 
+function pickFont(ctx: PdfCtx, bold: boolean, italic: boolean): PDFFont {
+    if (bold && italic) return ctx.boldItalicFont;
+    if (bold) return ctx.boldFont;
+    if (italic) return ctx.italicFont;
+    return ctx.font;
+}
+
 /** Draw text, rendering e-sign tags in white (invisible but BoldSign-detectable) */
-function drawText(ctx: PdfCtx, text: string, x: number, fontSize: number, useFont: PDFFont) {
+function drawText(ctx: PdfCtx, text: string, x: number, fontSize: number, useFont: PDFFont, underline: boolean = false) {
     if (ESIGN_TAG_TEST_RE.test(text)) {
         const segments = text.split(ESIGN_TAG_SPLIT_RE);
         let xPos = x;
@@ -401,21 +433,60 @@ function drawText(ctx: PdfCtx, text: string, x: number, fontSize: number, useFon
                 x: xPos, y: ctx.y, size: fontSize, font: useFont,
                 color: isTag ? rgb(1, 1, 1) : rgb(0, 0, 0),
             });
-            xPos += useFont.widthOfTextAtSize(seg, fontSize);
+            const segW = useFont.widthOfTextAtSize(seg, fontSize);
+            if (underline && !isTag) {
+                ctx.page.drawLine({
+                    start: { x: xPos, y: ctx.y - 1.5 },
+                    end: { x: xPos + segW, y: ctx.y - 1.5 },
+                    thickness: 0.5, color: rgb(0, 0, 0),
+                });
+            }
+            xPos += segW;
         }
     } else {
         ctx.page.drawText(text, { x, y: ctx.y, size: fontSize, font: useFont, color: rgb(0, 0, 0) });
+        if (underline) {
+            const textW = useFont.widthOfTextAtSize(text, fontSize);
+            ctx.page.drawLine({
+                start: { x, y: ctx.y - 1.5 },
+                end: { x: x + textW, y: ctx.y - 1.5 },
+                thickness: 0.5, color: rgb(0, 0, 0),
+            });
+        }
     }
 }
 
+/** Measure total width of runs */
+function measureRunsWidth(ctx: PdfCtx, runs: TextRun[], fontSize: number, forceBold: boolean): number {
+    let totalW = 0;
+    for (const run of runs) {
+        const f = pickFont(ctx, run.bold || forceBold, run.italic);
+        const words = run.text.split(/\s+/).filter(Boolean);
+        for (let i = 0; i < words.length; i++) {
+            totalW += f.widthOfTextAtSize(words[i], fontSize);
+            if (i < words.length - 1) totalW += f.widthOfTextAtSize(' ', fontSize);
+        }
+    }
+    return totalW;
+}
+
 /** Word-wrap and draw a sequence of text runs */
-function drawWrappedRuns(ctx: PdfCtx, runs: TextRun[], fontSize: number, lineHeight: number, forceBold: boolean, indent: number = 0) {
+function drawWrappedRuns(ctx: PdfCtx, runs: TextRun[], fontSize: number, lineHeight: number, forceBold: boolean, indent: number = 0, align: TextAlign = 'left') {
     const maxW = CONTENT_W - indent;
     const startX = MARGIN + indent;
     let xPos = startX;
 
+    // For center/right alignment on single-line content, calculate offset
+    if (align !== 'left') {
+        const totalW = measureRunsWidth(ctx, runs, fontSize, forceBold);
+        if (totalW <= maxW) {
+            if (align === 'center') xPos = startX + (maxW - totalW) / 2;
+            else if (align === 'right') xPos = startX + maxW - totalW;
+        }
+    }
+
     for (const run of runs) {
-        const f = (run.bold || forceBold) ? ctx.boldFont : ctx.font;
+        const f = pickFont(ctx, run.bold || forceBold, run.italic);
         const words = run.text.split(/\s+/).filter(Boolean);
 
         for (let i = 0; i < words.length; i++) {
@@ -430,7 +501,7 @@ function drawWrappedRuns(ctx: PdfCtx, runs: TextRun[], fontSize: number, lineHei
                 xPos = startX;
             }
 
-            drawText(ctx, word, xPos, fontSize, f);
+            drawText(ctx, word, xPos, fontSize, f, run.underline);
             xPos += wordW + spaceW;
         }
     }
@@ -447,14 +518,14 @@ function renderBlocksToPdf(ctx: PdfCtx, blocks: PdfBlock[]) {
             case 'h1': {
                 ensureSpace(ctx, S.h1 + 16);
                 ctx.y -= 14;
-                drawWrappedRuns(ctx, block.runs || [], S.h1, LH.h1, true);
+                drawWrappedRuns(ctx, block.runs || [], S.h1, LH.h1, true, 0, block.align || 'left');
                 ctx.y -= 4;
                 break;
             }
             case 'h2': {
                 ensureSpace(ctx, S.h2 + 14);
                 ctx.y -= 12;
-                drawWrappedRuns(ctx, block.runs || [], S.h2, LH.h2, true);
+                drawWrappedRuns(ctx, block.runs || [], S.h2, LH.h2, true, 0, block.align || 'left');
                 ctx.page.drawLine({
                     start: { x: MARGIN, y: ctx.y + 4 },
                     end: { x: PAGE_W - MARGIN, y: ctx.y + 4 },
@@ -466,13 +537,13 @@ function renderBlocksToPdf(ctx: PdfCtx, blocks: PdfBlock[]) {
             case 'h3': {
                 ensureSpace(ctx, S.h3 + 10);
                 ctx.y -= 8;
-                drawWrappedRuns(ctx, block.runs || [], S.h3, LH.h3, true);
+                drawWrappedRuns(ctx, block.runs || [], S.h3, LH.h3, true, 0, block.align || 'left');
                 ctx.y -= 2;
                 break;
             }
             case 'paragraph': {
                 ensureSpace(ctx, LH.body);
-                drawWrappedRuns(ctx, block.runs || [], S.body, LH.body, false);
+                drawWrappedRuns(ctx, block.runs || [], S.body, LH.body, false, 0, block.align || 'left');
                 ctx.y -= 2;
                 break;
             }
@@ -557,7 +628,8 @@ function renderBlocksToPdf(ctx: PdfCtx, blocks: PdfBlock[]) {
                     ctx.page.drawText(bullet, {
                         x: MARGIN + 8, y: ctx.y, size: S.body, font: ctx.font, color: rgb(0, 0, 0),
                     });
-                    drawWrappedRuns(ctx, [{ text: item, bold: false }], S.body, LH.body, false, 8 + bulletW);
+                    const itemRuns = Array.isArray(item) ? item as TextRun[] : [{ text: String(item), bold: false, italic: false, underline: false }];
+                    drawWrappedRuns(ctx, itemRuns, S.body, LH.body, false, 8 + bulletW);
                 });
                 ctx.y -= 4;
                 break;
@@ -715,19 +787,19 @@ ${companyName} - Generated: ${new Date().toISOString()}
 
 const PLATFORM_DISCLAIMER_BLOCKS: PdfBlock[] = [
     { type: 'hr' },
-    { type: 'paragraph', runs: [{ text: 'Platform Disclaimer', bold: true }] },
+    { type: 'paragraph', runs: [{ text: 'Platform Disclaimer', bold: true, italic: false, underline: false }] },
     {
         type: 'paragraph',
         runs: [{
             text: 'The parties acknowledge that Drive247 is a software platform operated by Cortek Systems Ltd, which provides technology services solely to facilitate booking, documentation, and administrative processes for vehicle rental companies. Drive247 and Cortek Systems Ltd are not a party to this Rental Agreement and do not own, lease, manage, insure, or control any vehicles listed on the platform.',
-            bold: false,
+            bold: false, italic: false, underline: false,
         }],
     },
     {
         type: 'paragraph',
         runs: [{
             text: 'All contractual obligations, responsibilities, and liabilities relating to the rental transaction, including vehicle condition, insurance coverage, payment collection, disputes, and claims, exist solely between the Rental Company and the Renter. Drive247 and Cortek Systems Ltd shall have no liability for any losses, damages, claims, disputes, or obligations arising from or relating to this rental transaction.',
-            bold: false,
+            bold: false, italic: false, underline: false,
         }],
     },
 ];
@@ -794,7 +866,9 @@ export async function POST(request: NextRequest) {
         const pdfDoc = await PDFDocument.create();
         const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
         const boldFont = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
-        const ctx: PdfCtx = { doc: pdfDoc, page: pdfDoc.addPage([PAGE_W, PAGE_H]), y: PAGE_H - MARGIN, font, boldFont };
+        const italicFont = await pdfDoc.embedFont(StandardFonts.HelveticaOblique);
+        const boldItalicFont = await pdfDoc.embedFont(StandardFonts.HelveticaBoldOblique);
+        const ctx: PdfCtx = { doc: pdfDoc, page: pdfDoc.addPage([PAGE_W, PAGE_H]), y: PAGE_H - MARGIN, font, boldFont, italicFont, boldItalicFont };
 
         let hasCustomTemplate = false;
         let processedHtml = '';

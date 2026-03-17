@@ -8,6 +8,7 @@ import {
   TenantBranding,
   wrapWithBrandedTemplate
 } from "../_shared/resend-service.ts";
+import { renderEmail, resolveEmailData } from "../_shared/email-template-service.ts";
 
 interface NotifyRequest {
   customerName: string;
@@ -22,6 +23,7 @@ interface NotifyRequest {
   returnLocation?: string;
   daysOverdue?: number;
   tenantId?: string;
+  rentalId?: string;
 }
 
 const getReminderContent = (type: string, daysOverdue?: number) => {
@@ -215,15 +217,42 @@ serve(async (req) => {
 
     const content = getReminderContent(data.reminderType, data.daysOverdue);
 
-    // Build branded email HTML
-    const emailContent = getEmailContent(data, branding);
-    const emailHtml = wrapWithBrandedTemplate(emailContent, branding);
+    // Try custom email template first, fall back to branded template
+    let customerSubject = `${content.subject} - ${data.bookingRef}`;
+    let customerHtml: string;
+
+    if (data.tenantId) {
+      try {
+        const templateData = await resolveEmailData(supabase, {
+          rentalId: data.rentalId,
+          tenantId: data.tenantId,
+          overrides: {
+            customer_name: data.customerName,
+            customer_email: data.customerEmail,
+            rental_number: data.bookingRef,
+            due_date: data.returnDate,
+          },
+        });
+
+        const rendered = await renderEmail(supabase, data.tenantId, 'rental_reminder', templateData);
+        customerSubject = rendered.subject;
+        customerHtml = rendered.html;
+        console.log('Using custom/default email template for rental reminder');
+      } catch (templateError) {
+        console.warn('Error rendering email template, using fallback:', templateError);
+        const emailContent = getEmailContent(data, branding);
+        customerHtml = wrapWithBrandedTemplate(emailContent, branding);
+      }
+    } else {
+      const emailContent = getEmailContent(data, branding);
+      customerHtml = wrapWithBrandedTemplate(emailContent, branding);
+    }
 
     // Send customer email
     results.customerEmail = await sendEmail(
       data.customerEmail,
-      `${content.subject} - ${data.bookingRef}`,
-      emailHtml,
+      customerSubject,
+      customerHtml,
       supabase,
       data.tenantId
     );

@@ -2,7 +2,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.4";
 import { corsHeaders } from "../_shared/cors.ts";
 import { getTenantTwilioCredentials, sendTenantSMS, normalizePhoneNumber } from '../_shared/twilio-sms-client.ts';
 import { sendEmail } from "../_shared/resend-service.ts";
-import { renderEmail, EmailTemplateData } from "../_shared/email-template-service.ts";
+import { renderEmail, resolveEmailData } from "../_shared/email-template-service.ts";
 import { formatCurrency } from "../_shared/format-utils.ts";
 
 interface NotifyRequest {
@@ -18,6 +18,7 @@ interface NotifyRequest {
   extensionDays: number;
   extensionAmount: number;
   paymentUrl?: string;
+  rentalId?: string;
   tenantId: string;
   newMileageAllowance?: string;
   distanceUnit?: string;
@@ -127,6 +128,8 @@ Deno.serve(async (req) => {
     let customerSubject = `Your Rental Has Been Extended | DRIVE 247`;
     let currencyCode = 'GBP';
     let customerHtml = getFallbackHtml(data, currencyCode);
+    let resolvedEmail = data.customerEmail;
+    let resolvedPhone = data.customerPhone;
 
     if (data.tenantId) {
       try {
@@ -143,22 +146,26 @@ Deno.serve(async (req) => {
         // Re-generate fallback HTML with correct currency
         customerHtml = getFallbackHtml(data, currencyCode);
 
-        const templateData: EmailTemplateData = {
-          customer_name: data.customerName,
-          customer_email: data.customerEmail,
-          customer_phone: data.customerPhone || '',
-          vehicle_make: data.vehicleMake,
-          vehicle_model: data.vehicleModel,
-          vehicle_reg: data.vehicleReg,
-          rental_number: data.bookingRef,
-          previous_end_date: data.previousEndDate,
-          new_end_date: data.newEndDate,
-          extension_days: String(data.extensionDays),
-          extension_amount: formatCurrency(data.extensionAmount, currencyCode),
-          payment_url: data.paymentUrl || '',
-          new_mileage_allowance: data.newMileageAllowance || '',
-          distance_unit: data.distanceUnit || 'miles',
-        };
+        const templateData = await resolveEmailData(supabase, {
+          rentalId: data.rentalId,
+          tenantId: data.tenantId,
+          overrides: {
+            customer_name: data.customerName,
+            customer_email: data.customerEmail,
+            rental_number: data.bookingRef,
+            previous_end_date: data.previousEndDate,
+            new_end_date: data.newEndDate,
+            extension_days: String(data.extensionDays),
+            extension_amount: formatCurrency(data.extensionAmount, currencyCode),
+            payment_url: data.paymentUrl || '',
+            new_mileage_allowance: data.newMileageAllowance || '',
+            distance_unit: data.distanceUnit || 'miles',
+          },
+        });
+
+        // Use resolved data for sending if caller didn't provide them
+        resolvedEmail = resolvedEmail || templateData.customer_email || '';
+        resolvedPhone = resolvedPhone || templateData.customer_phone || '';
 
         const rendered = await renderEmail(supabase, data.tenantId, 'rental_extended', templateData);
         customerSubject = rendered.subject;
@@ -170,17 +177,21 @@ Deno.serve(async (req) => {
     }
 
     // Send customer email
-    results.customerEmail = await sendEmail(
-      data.customerEmail,
-      customerSubject,
-      customerHtml
-    );
-    console.log('Customer email result:', results.customerEmail);
+    if (resolvedEmail) {
+      results.customerEmail = await sendEmail(
+        resolvedEmail,
+        customerSubject,
+        customerHtml
+      );
+      console.log('Customer email result:', results.customerEmail);
+    } else {
+      console.warn('No customer email available, skipping email send');
+    }
 
     // Send customer SMS
-    if (data.customerPhone) {
+    if (resolvedPhone) {
       results.customerSMS = await sendSMS(
-        data.customerPhone,
+        resolvedPhone,
         `Your rental has been extended by ${data.extensionDays} day(s). New end date: ${data.newEndDate}. Extension fee: ${formatCurrency(data.extensionAmount, currencyCode)}.${data.newMileageAllowance ? ` New mileage allowance: ${data.newMileageAllowance} ${data.distanceUnit || 'miles'}.` : ''}${data.paymentUrl ? ' Pay here: ' + data.paymentUrl : ''}`,
         supabase,
         data.tenantId

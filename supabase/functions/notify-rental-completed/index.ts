@@ -3,7 +3,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.4";
 import { corsHeaders } from "../_shared/cors.ts";
 import { getTenantTwilioCredentials, sendTenantSMS, normalizePhoneNumber } from '../_shared/twilio-sms-client.ts';
 import { sendEmail } from "../_shared/resend-service.ts";
-import { renderEmail, EmailTemplateData } from "../_shared/email-template-service.ts";
+import { renderEmail, resolveEmailData } from "../_shared/email-template-service.ts";
 import { formatCurrency } from "../_shared/format-utils.ts";
 
 interface NotifyRequest {
@@ -21,6 +21,7 @@ interface NotifyRequest {
   additionalCharges?: number;
   chargesDescription?: string;
   feedbackUrl?: string;
+  rentalId?: string;
   tenantId?: string;
 }
 
@@ -217,17 +218,15 @@ serve(async (req) => {
 
     if (data.tenantId) {
       try {
-        const templateData: EmailTemplateData = {
-          customer_name: data.customerName,
-          customer_email: data.customerEmail,
-          customer_phone: data.customerPhone || '',
-          vehicle_make: data.vehicleMake || data.vehicleName.split(' ')[0] || '',
-          vehicle_model: data.vehicleModel || data.vehicleName.split(' ').slice(1).join(' ') || '',
-          vehicle_reg: data.vehicleReg,
-          rental_number: data.bookingRef,
-          rental_start_date: data.startDate,
-          rental_end_date: data.endDate,
-        };
+        const templateData = await resolveEmailData(supabase, {
+          rentalId: data.rentalId,
+          tenantId: data.tenantId,
+          overrides: {
+            customer_name: data.customerName,
+            customer_email: data.customerEmail,
+            rental_number: data.bookingRef,
+          },
+        });
 
         const rendered = await renderEmail(supabase, data.tenantId, 'rental_completed', templateData);
         customerSubject = rendered.subject;

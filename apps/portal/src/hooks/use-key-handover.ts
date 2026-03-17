@@ -306,17 +306,11 @@ export function useKeyHandover(rentalId: string | undefined) {
 
             if (customer?.email && vehicle) {
               const notifyPayload = {
+                rentalId: rentalId,
                 customerName: customer.name,
                 customerEmail: customer.email,
-                customerPhone: customer.phone,
                 vehicleName: `${vehicle.make} ${vehicle.model}`,
-                vehicleReg: vehicle.reg,
-                vehicleMake: vehicle.make,
-                vehicleModel: vehicle.model,
-                vehicleColor: vehicle.color,
                 bookingRef: rentalId,
-                startDate: rental.start_date ? new Date(rental.start_date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : '',
-                endDate: rental.end_date ? new Date(rental.end_date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : '',
                 tenantId: tenant?.id,
               };
               console.log('Invoking notify-rental-started with payload:', notifyPayload);
@@ -450,6 +444,19 @@ export function useKeyHandover(rentalId: string | undefined) {
               console.error('[KEY-HANDOVER] Error processing security deposit refund:', refundErr);
             }
           }
+        }
+
+        // Send rental completed notification
+        try {
+          await supabase.functions.invoke('notify-rental-completed', {
+            body: {
+              rentalId: rentalId,
+              tenantId: rental?.tenant_id || tenant?.id,
+              bookingRef: rentalId.substring(0, 8).toUpperCase(),
+            }
+          });
+        } catch (notifyErr) {
+          console.warn('[KEY-HANDOVER] Failed to send rental completed notification:', notifyErr);
         }
 
         return { type, becameActive: false, depositRefunded: securityDeposit > 0, depositAmount: securityDeposit };

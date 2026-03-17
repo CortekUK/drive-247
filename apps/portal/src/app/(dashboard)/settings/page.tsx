@@ -1904,31 +1904,6 @@ const Settings = () => {
           {/* Advanced Reminder Rules Configuration */}
           <ReminderRulesConfig />
 
-          {/* Email Templates */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Mail className="h-5 w-5 text-primary" />
-                Email Templates
-              </CardTitle>
-              <CardDescription>
-                Customize the emails sent to your customers
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <p className="text-sm text-muted-foreground mb-4">
-                Personalize your customer communications by customizing email templates for booking confirmations,
-                reminders, and other notifications. Use variables to automatically include customer and rental details.
-              </p>
-              <Button
-                onClick={() => router.push('/settings/email-templates')}
-                className="flex items-center gap-2"
-              >
-                <Mail className="h-4 w-4" />
-                Manage Email Templates
-              </Button>
-            </CardContent>
-          </Card>
         </TabsContent>
 
         {/* Payments Tab */}
@@ -3333,6 +3308,32 @@ const Settings = () => {
 
         {/* Templates Tab */}
         <TabsContent value="templates" className="space-y-6">
+          {/* Email Templates */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Mail className="h-5 w-5 text-primary" />
+                Email Templates
+              </CardTitle>
+              <CardDescription>
+                Customize the emails sent to your customers
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <p className="text-sm text-muted-foreground mb-4">
+                Personalize your customer communications by customizing email templates for booking confirmations,
+                reminders, and other notifications. Use variables to automatically include customer and rental details.
+              </p>
+              <Button
+                onClick={() => router.push('/settings/email-templates')}
+                className="flex items-center gap-2"
+              >
+                <Mail className="h-4 w-4" />
+                Manage Email Templates
+              </Button>
+            </CardContent>
+          </Card>
+
           {/* Agreement Templates */}
           <Card>
             <CardHeader>
