@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useCustomerAuthStore } from '@/stores/customer-auth-store';
@@ -39,8 +40,35 @@ export function useCustomerNotifications() {
       return (data || []) as CustomerNotification[];
     },
     enabled: !!customerUser?.id,
-    refetchInterval: 30000, // Poll every 30 seconds
+    refetchInterval: 30000,
   });
+
+  // Realtime subscription for instant notifications
+  useEffect(() => {
+    if (!customerUser?.id) return;
+
+    const channel = supabase
+      .channel(`customer-notifications:${customerUser.id}`)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'customer_notifications',
+          filter: `customer_user_id=eq.${customerUser.id}`,
+        },
+        () => {
+          queryClient.invalidateQueries({
+            queryKey: ['customer-notifications', customerUser.id],
+          });
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [customerUser?.id, queryClient]);
 
   const markAsRead = useMutation({
     mutationFn: async (notificationId: string) => {

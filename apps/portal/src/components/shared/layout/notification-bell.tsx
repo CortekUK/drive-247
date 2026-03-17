@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Bell, Check, CheckCheck, Trash2, X } from "lucide-react";
+import { Bell, Check, CheckCheck, Trash2, X, MessageSquare, BellRing } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -13,11 +13,6 @@ import {
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useNotifications, Notification } from "@/hooks/use-notifications";
 import { formatDistanceToNow } from "date-fns";
-
-const getNotificationIcon = (type: string) => {
-  // Return empty - using text indicators instead of emojis
-  return "";
-};
 
 const NotificationItem = ({
   notification,
@@ -38,7 +33,6 @@ const NotificationItem = ({
       onClick={onClick}
     >
       <div className="flex items-start gap-3">
-        <span className="text-xl">{getNotificationIcon(notification.type)}</span>
         <div className="flex-1 min-w-0">
           <div className="flex items-start justify-between gap-2">
             <p className={`text-sm font-semibold transition-colors ${!notification.is_read ? "text-foreground" : "text-foreground/80"}`}>
@@ -82,9 +76,19 @@ const NotificationItem = ({
   );
 };
 
+const EmptyState = ({ icon: Icon, text }: { icon: React.ElementType; text: string }) => (
+  <div className="p-8 text-center">
+    <Icon className="h-10 w-10 mx-auto mb-2 text-muted-foreground/30" />
+    <p className="text-sm text-muted-foreground">{text}</p>
+  </div>
+);
+
+type TabKey = "general" | "messages";
+
 export const NotificationBell = () => {
   const router = useRouter();
   const [open, setOpen] = useState(false);
+  const [activeTab, setActiveTab] = useState<TabKey>("general");
   const {
     notifications,
     unreadCount,
@@ -95,12 +99,19 @@ export const NotificationBell = () => {
     clearAll,
   } = useNotifications();
 
+  // Split notifications by type
+  const messageNotifications = notifications.filter((n) => n.type === "chat_message");
+  const generalNotifications = notifications.filter((n) => n.type !== "chat_message");
+
+  const messageUnread = messageNotifications.filter((n) => !n.is_read).length;
+  const generalUnread = generalNotifications.filter((n) => !n.is_read).length;
+
+  const activeNotifications = activeTab === "messages" ? messageNotifications : generalNotifications;
+
   const handleNotificationClick = (notification: Notification) => {
-    // Mark as read
     if (!notification.is_read) {
       markAsRead.mutate(notification.id);
     }
-    // Navigate if there's a link
     if (notification.link) {
       router.push(notification.link);
       setOpen(false);
@@ -127,7 +138,7 @@ export const NotificationBell = () => {
         <div className="flex items-center justify-between px-4 py-3 border-b">
           <h3 className="font-semibold">Notifications</h3>
           <div className="flex items-center gap-1">
-            {unreadCount > 0 && (
+            {activeNotifications.filter((n) => !n.is_read).length > 0 && (
               <Button
                 variant="ghost"
                 size="icon"
@@ -138,7 +149,7 @@ export const NotificationBell = () => {
                 <CheckCheck className="h-4 w-4" />
               </Button>
             )}
-            {notifications.length > 0 && (
+            {activeNotifications.length > 0 && (
               <Button
                 variant="ghost"
                 size="icon"
@@ -152,19 +163,55 @@ export const NotificationBell = () => {
           </div>
         </div>
 
+        {/* Tabs */}
+        <div className="flex border-b">
+          <button
+            className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-2 text-sm font-medium transition-colors ${
+              activeTab === "general"
+                ? "border-b-2 border-primary text-foreground"
+                : "text-muted-foreground hover:text-foreground"
+            }`}
+            onClick={() => setActiveTab("general")}
+          >
+            <BellRing className="h-3.5 w-3.5" />
+            General
+            {generalUnread > 0 && (
+              <Badge variant="destructive" className="h-4 min-w-4 px-1 text-[10px]">
+                {generalUnread > 99 ? "99+" : generalUnread}
+              </Badge>
+            )}
+          </button>
+          <button
+            className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-2 text-sm font-medium transition-colors ${
+              activeTab === "messages"
+                ? "border-b-2 border-primary text-foreground"
+                : "text-muted-foreground hover:text-foreground"
+            }`}
+            onClick={() => setActiveTab("messages")}
+          >
+            <MessageSquare className="h-3.5 w-3.5" />
+            Messages
+            {messageUnread > 0 && (
+              <Badge variant="destructive" className="h-4 min-w-4 px-1 text-[10px]">
+                {messageUnread > 99 ? "99+" : messageUnread}
+              </Badge>
+            )}
+          </button>
+        </div>
+
         {/* Content */}
         {isLoading ? (
           <div className="p-8 text-center text-muted-foreground">
             Loading...
           </div>
-        ) : notifications.length === 0 ? (
-          <div className="p-8 text-center">
-            <Bell className="h-10 w-10 mx-auto mb-2 text-muted-foreground/30" />
-            <p className="text-sm text-muted-foreground">No notifications</p>
-          </div>
+        ) : activeNotifications.length === 0 ? (
+          <EmptyState
+            icon={activeTab === "messages" ? MessageSquare : Bell}
+            text={activeTab === "messages" ? "No messages" : "No notifications"}
+          />
         ) : (
-          <ScrollArea className="h-[400px]">
-            {notifications.map((notification) => (
+          <ScrollArea className="h-[360px]">
+            {activeNotifications.map((notification) => (
               <NotificationItem
                 key={notification.id}
                 notification={notification}

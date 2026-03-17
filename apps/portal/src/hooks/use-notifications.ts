@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/stores/auth-store";
@@ -20,29 +21,22 @@ export function useNotifications() {
   const queryClient = useQueryClient();
   const { tenant } = useTenant();
 
-  // Check if user is admin (can see all tenant notifications)
-  const isAdmin = appUser?.role === 'admin' || appUser?.role === 'head_admin';
+  const queryKey = ["notifications", tenant?.id, appUser?.id];
 
   // Fetch notifications for current user and tenant
   const { data: notifications, isLoading } = useQuery({
-    queryKey: ["notifications", tenant?.id, appUser?.id, isAdmin],
+    queryKey,
     queryFn: async () => {
       if (!appUser?.id || !tenant?.id) {
         return [];
       }
 
-      let query = supabase
+      // Everyone sees their own notifications + broadcasts (user_id is null)
+      const { data, error } = await supabase
         .from("notifications")
         .select("*")
-        .eq("tenant_id", tenant.id);
-
-      // Admins see ALL notifications for the tenant they're viewing
-      // Non-admins only see notifications addressed to them or broadcasts
-      if (!isAdmin) {
-        query = query.or(`user_id.eq.${appUser.id},user_id.is.null`);
-      }
-
-      const { data, error } = await query
+        .eq("tenant_id", tenant.id)
+        .or(`user_id.eq.${appUser.id},user_id.is.null`)
         .order("created_at", { ascending: false })
         .limit(50);
 
@@ -58,27 +52,72 @@ export function useNotifications() {
     retry: 1,
   });
 
+  // Realtime subscription — instantly refetch when notifications change
+  useEffect(() => {
+    if (!tenant?.id || !appUser?.id) return;
+
+    const channel = supabase
+      .channel(`notifications:${tenant.id}:${appUser.id}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'notifications',
+        },
+        (payload) => {
+          // Only invalidate if this notification is for our tenant
+          const newRow = payload.new as any;
+          if (newRow.tenant_id === tenant.id &&
+              (newRow.user_id === appUser.id || newRow.user_id === null)) {
+            queryClient.invalidateQueries({ queryKey });
+          }
+        }
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'notifications',
+        },
+        () => {
+          queryClient.invalidateQueries({ queryKey });
+        }
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: 'DELETE',
+          schema: 'public',
+          table: 'notifications',
+        },
+        () => {
+          queryClient.invalidateQueries({ queryKey });
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [tenant?.id, appUser?.id, queryClient, queryKey]);
+
   // Count of unread notifications
   const unreadCount = notifications?.filter((n) => !n.is_read).length || 0;
 
   // Mark single notification as read
   const markAsRead = useMutation({
     mutationFn: async (notificationId: string) => {
-      let query = supabase
+      const { error } = await supabase
         .from("notifications")
         .update({ is_read: true })
         .eq("id", notificationId);
 
-      if (tenant?.id) {
-        query = query.eq("tenant_id", tenant.id);
-      }
-
-      const { error } = await query;
-
       if (error) throw error;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["notifications", tenant?.id, appUser?.id] });
+      queryClient.invalidateQueries({ queryKey });
     },
   });
 
@@ -87,44 +126,32 @@ export function useNotifications() {
     mutationFn: async () => {
       if (!appUser?.id || !tenant?.id) return;
 
-      let query = supabase
+      const { error } = await supabase
         .from("notifications")
         .update({ is_read: true })
         .eq("tenant_id", tenant.id)
-        .eq("is_read", false);
-
-      // Non-admins can only mark their own notifications + broadcasts
-      if (!isAdmin) {
-        query = query.or(`user_id.eq.${appUser.id},user_id.is.null`);
-      }
-
-      const { error } = await query;
+        .eq("is_read", false)
+        .or(`user_id.eq.${appUser.id},user_id.is.null`);
 
       if (error) throw error;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["notifications", tenant?.id, appUser?.id, isAdmin] });
+      queryClient.invalidateQueries({ queryKey });
     },
   });
 
   // Delete a notification
   const deleteNotification = useMutation({
     mutationFn: async (notificationId: string) => {
-      let query = supabase
+      const { error } = await supabase
         .from("notifications")
         .delete()
         .eq("id", notificationId);
 
-      if (tenant?.id) {
-        query = query.eq("tenant_id", tenant.id);
-      }
-
-      const { error } = await query;
-
       if (error) throw error;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["notifications", tenant?.id, appUser?.id] });
+      queryClient.invalidateQueries({ queryKey });
     },
   });
 
@@ -133,22 +160,16 @@ export function useNotifications() {
     mutationFn: async () => {
       if (!appUser?.id || !tenant?.id) return;
 
-      let query = supabase
+      const { error } = await supabase
         .from("notifications")
         .delete()
-        .eq("tenant_id", tenant.id);
-
-      // Non-admins can only delete their own notifications + broadcasts
-      if (!isAdmin) {
-        query = query.or(`user_id.eq.${appUser.id},user_id.is.null`);
-      }
-
-      const { error } = await query;
+        .eq("tenant_id", tenant.id)
+        .or(`user_id.eq.${appUser.id},user_id.is.null`);
 
       if (error) throw error;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["notifications", tenant?.id, appUser?.id, isAdmin] });
+      queryClient.invalidateQueries({ queryKey });
     },
   });
 
