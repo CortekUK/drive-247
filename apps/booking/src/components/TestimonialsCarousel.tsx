@@ -3,6 +3,7 @@ import { Card } from "@/components/ui/card";
 import { ChevronLeft, ChevronRight, Star } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
+import { useTenant } from "@/contexts/TenantContext";
 
 interface Testimonial {
   id: string;
@@ -14,17 +15,20 @@ interface Testimonial {
 }
 
 const TestimonialsCarousel = () => {
+  const { tenant } = useTenant();
   const [testimonials, setTestimonials] = useState<Testimonial[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
 
   useEffect(() => {
+    if (!tenant?.id) return;
     loadTestimonials();
-  }, []);
+  }, [tenant?.id]);
 
   const loadTestimonials = async () => {
     const { data, error } = await supabase
       .from("testimonials")
       .select("*")
+      .eq("tenant_id", tenant?.id)
       .order("created_at", { ascending: false });
 
     if (!error && data) {

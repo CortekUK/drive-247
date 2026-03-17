@@ -4,22 +4,26 @@ import { useEffect, useState } from "react";
 import Navigation from "@/components/Navigation";
 import Footer from "@/components/Footer";
 import { supabase } from "@/integrations/supabase/client";
+import { useTenant } from "@/contexts/TenantContext";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Card } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 const FAQ = () => {
+  const { tenant } = useTenant();
   const [faqs, setFaqs] = useState<any[]>([]);
   const [categories, setCategories] = useState<string[]>([]);
 
   useEffect(() => {
+    if (!tenant?.id) return;
     loadFAQs();
-  }, []);
+  }, [tenant?.id]);
 
   const loadFAQs = async () => {
     const { data } = await supabase
       .from("faqs")
       .select("*")
+      .eq("tenant_id", tenant?.id)
       .eq("is_active", true)
       .order("category", { ascending: true })
       .order("display_order", { ascending: true });
