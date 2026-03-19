@@ -601,23 +601,6 @@ export const CustomerFormModal = ({ open, onOpenChange, customer }: CustomerForm
                 </Button>
               </div>
             </div>
-
-            <VerificationQRModal
-              open={showQRModal}
-              onOpenChange={(open) => {
-                setShowQRModal(open);
-                if (!open) {
-                  setAiSessionData(null);
-                  setNewCustomerId(null);
-                  setNewCustomerName('');
-                  onOpenChange(false);
-                }
-              }}
-              sessionData={aiSessionData}
-              onComplete={() => {
-                queryClient.invalidateQueries({ queryKey: ["customers-list"] });
-              }}
-            />
           </>
         ) : (
         <>
@@ -986,6 +969,23 @@ export const CustomerFormModal = ({ open, onOpenChange, customer }: CustomerForm
         )}
       </DialogContent>
     </Dialog>
+
+    <VerificationQRModal
+      open={showQRModal}
+      onOpenChange={(open) => {
+        setShowQRModal(open);
+        if (!open) {
+          setAiSessionData(null);
+          setNewCustomerId(null);
+          setNewCustomerName('');
+          onOpenChange(false);
+        }
+      }}
+      sessionData={aiSessionData}
+      onComplete={() => {
+        queryClient.invalidateQueries({ queryKey: ["customers-list"] });
+      }}
+    />
 
     {gigDriverCustomerId && (
       <GigDriverUploadDialog
