@@ -9,6 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Button } from '@/components/ui/button';
 import { Shield, Loader2, Clock, Copy, CheckCircle, Link2 } from 'lucide-react';
 import { toast } from 'sonner';
+import { useAuditLog } from '@/hooks/use-audit-log';
 
 const VERIFICATION_DOC_OPTIONS = [
   { value: 'drivers_license', label: "Driver's License" },
@@ -33,6 +34,7 @@ export function StartVerificationDialog({
 }: StartVerificationDialogProps) {
   const { tenant } = useTenant();
   const queryClient = useQueryClient();
+  const { logAction } = useAuditLog();
 
   const [docType, setDocType] = useState<string>(
     tenant?.accepted_verification_document || 'drivers_license'
@@ -150,6 +152,12 @@ export function StartVerificationDialog({
           expiresAt: new Date(data.expiresAt),
         });
         setIsPolling(true);
+        logAction({
+          action: "verification_session_created",
+          entityType: "customer",
+          entityId: customerId,
+          details: { provider: "ai" },
+        });
       } else {
         const { data, error } = await supabase.functions.invoke('create-veriff-session', {
           body: { customerId },
@@ -167,6 +175,12 @@ export function StartVerificationDialog({
         }
         queryClient.invalidateQueries({ queryKey: ['customer-verification', customerId] });
         queryClient.invalidateQueries({ queryKey: ['customers-list'] });
+        logAction({
+          action: "verification_session_created",
+          entityType: "customer",
+          entityId: customerId,
+          details: { provider: "veriff" },
+        });
       }
     } catch (err: any) {
       toast.error(err.message || 'Failed to create verification session');

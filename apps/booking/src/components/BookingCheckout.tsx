@@ -20,6 +20,7 @@ import BookingConfirmation from "@/components/BookingConfirmation";
 import { formatCurrency } from "@/lib/format-utils";
 import { useDynamicPricing } from "@/hooks/use-dynamic-pricing";
 import { calculateRentalPriceBreakdown } from "@/lib/calculate-rental-price";
+import { logCustomerAudit } from "@/lib/auditLogger";
 
 const checkoutSchema = z.object({
   customerName: z.string().min(2, "Name must be at least 2 characters"),
@@ -207,6 +208,13 @@ const BookingCheckout = () => {
             .update({ phone: customerPhone })
             .eq("id", existingCustomer.id);
           customer = { ...existingCustomer, phone: customerPhone };
+          logCustomerAudit({
+            action: 'customer_updated',
+            entityType: 'customer',
+            entityId: existingCustomer.id,
+            tenantId: tenant?.id,
+            details: { field: 'phone', trigger: 'booking_checkout' },
+          });
         }
         toast.info("Welcome back! Using your existing account.");
       } else {
@@ -230,6 +238,13 @@ const BookingCheckout = () => {
 
         if (createError) throw createError;
         customer = newCustomer;
+        logCustomerAudit({
+          action: 'customer_created',
+          entityType: 'customer',
+          entityId: newCustomer.id,
+          tenantId: tenant?.id,
+          details: { trigger: 'booking_checkout', email: customerEmail },
+        });
       }
 
       // Step 2: Link any pending insurance documents to the customer
@@ -330,6 +345,17 @@ const BookingCheckout = () => {
             }
           }
         }
+      }
+
+      // Audit log for insurance docs
+      if (uniqueFiles.length > 0) {
+        logCustomerAudit({
+          action: 'document_uploaded',
+          entityType: 'customer',
+          entityId: customer.id,
+          tenantId: tenant?.id,
+          details: { document_type: 'insurance', trigger: 'booking_checkout', count: uniqueFiles.length },
+        });
       }
 
       // Clear store immediately after processing to prevent duplicates on retry

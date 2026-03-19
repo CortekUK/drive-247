@@ -164,6 +164,24 @@ Deno.serve(async (req) => {
       if (linkError) {
         console.error('Error linking verification:', linkError);
         // Non-fatal — customer was still created
+      } else {
+        // Audit log — verification linked to customer during registration
+        try {
+          await supabase.from('audit_logs').insert({
+            action: 'customer_updated',
+            actor_id: null,
+            entity_type: 'customer',
+            entity_id: newCustomer.id,
+            tenant_id: tenantId,
+            details: {
+              field: 'identity_verification_status',
+              trigger: 'invite_registration_verification_link',
+              verification_session_id: verificationSessionId,
+            },
+          });
+        } catch (e) {
+          console.error('[Audit] customer_updated failed:', e);
+        }
       }
 
       // Check if the linked verification's document number is in blocked_identities
@@ -193,6 +211,20 @@ Deno.serve(async (req) => {
               blocked_reason: 'Blocked identity document detected during registration',
             })
             .eq('id', newCustomer.id);
+
+          // Audit log — auto-block during registration
+          try {
+            await supabase.from('audit_logs').insert({
+              action: 'customer_blocked',
+              actor_id: null,
+              entity_type: 'customer',
+              entity_id: newCustomer.id,
+              tenant_id: tenantId,
+              details: { trigger: 'invite_registration_auto_block', document_number: verification.document_number },
+            });
+          } catch (e) {
+            console.error('[Audit] customer_blocked failed:', e);
+          }
 
           return errorResponse('Registration cannot be completed. Please contact support.', 403);
         }
@@ -226,6 +258,20 @@ Deno.serve(async (req) => {
           // Non-fatal
         }
       }
+    }
+
+    // Audit log — customer registered via invite link (no staff actor)
+    try {
+      await supabase.from('audit_logs').insert({
+        action: 'customer_created',
+        actor_id: null,
+        entity_type: 'customer',
+        entity_id: newCustomer.id,
+        tenant_id: tenantId,
+        details: { trigger: 'invite_registration', invite_id: invite.id, email: email.trim().toLowerCase() },
+      });
+    } catch (e) {
+      console.error('[Audit] customer_created failed:', e);
     }
 
     return jsonResponse({

@@ -172,6 +172,13 @@ const FinesList = () => {
           .from('fines')
           .update(updateData)
           .eq('id', fine.id);
+
+        logAction({
+          action: "fine_charged",
+          entityType: "fine",
+          entityId: fine.id,
+          details: { new_status: newStatus, trigger: "payment_sync" },
+        });
       }
 
       // Always invalidate queries after payment success

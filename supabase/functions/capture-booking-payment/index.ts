@@ -206,6 +206,24 @@ serve(async (req) => {
       console.error("Error applying payment:", applyErr);
     }
 
+    // Audit log
+    try {
+      await supabase.from('audit_logs').insert({
+        action: 'payment_captured',
+        actor_id: approvedBy || null,
+        entity_type: 'payment',
+        entity_id: paymentId,
+        tenant_id: tenantId,
+        details: {
+          rental_id: payment.rental_id,
+          amount: capturedPaymentIntent.amount_received / 100,
+          stripe_payment_intent_id: paymentIntentId,
+        },
+      });
+    } catch (e) {
+      console.error('[Audit] payment_captured failed:', e);
+    }
+
     console.log("Booking approved successfully");
 
     return new Response(

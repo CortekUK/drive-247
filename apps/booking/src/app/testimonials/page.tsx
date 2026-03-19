@@ -41,31 +41,23 @@ const Testimonials = () => {
   }, [currentPage, tenant?.id]);
 
   const loadTestimonials = async () => {
+    if (!tenant?.id) return;
+
     // Get total count with tenant filtering
-    let countQuery = supabase
+    const { count } = await supabase
       .from("testimonials")
-      .select("*", { count: "exact", head: true });
-
-    if (tenant?.id) {
-      countQuery = countQuery.eq("tenant_id", tenant.id);
-    }
-
-    const { count } = await countQuery;
+      .select("*", { count: "exact", head: true })
+      .eq("tenant_id", tenant.id);
 
     setTotalCount(count || 0);
 
     // Get paginated data with tenant filtering
-    let dataQuery = supabase
+    const { data, error } = await supabase
       .from("testimonials")
       .select("*")
+      .eq("tenant_id", tenant.id)
       .order("created_at", { ascending: false })
       .range((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE - 1);
-
-    if (tenant?.id) {
-      dataQuery = dataQuery.eq("tenant_id", tenant.id);
-    }
-
-    const { data, error } = await dataQuery;
 
     if (!error && data) {
       setTestimonials(data);

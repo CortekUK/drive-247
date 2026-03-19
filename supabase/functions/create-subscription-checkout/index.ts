@@ -37,6 +37,9 @@ Deno.serve(async (req) => {
     const { data: { user }, error: userError } = await supabase.auth.getUser(token);
     if (userError || !user) return errorResponse("Unauthorized", 401);
 
+    const { data: appUser } = await supabase
+      .from("app_users").select("id").eq("auth_user_id", user.id).maybeSingle();
+
     const { tenantId, planId, successUrl, cancelUrl } = await req.json();
     if (!tenantId) return errorResponse("tenantId is required");
     if (!planId) return errorResponse("planId is required");
@@ -170,6 +173,20 @@ Deno.serve(async (req) => {
     });
 
     console.log(`Created subscription checkout session ${session.id} for tenant ${tenantId} (mode: ${mode})`);
+
+    try {
+      const { error: auditErr } = await supabase.from("audit_logs").insert({
+        action: "subscription_checkout_created",
+        actor_id: appUser?.id || null,
+        entity_type: "subscription_plan",
+        entity_id: planId,
+        tenant_id: tenantId,
+        details: { plan_name: plan.name, amount: plan.amount, currency: plan.currency, trial_days: trialDays, stripe_mode: mode, checkout_session_id: session.id },
+      });
+      if (auditErr) console.error("[Audit] Failed:", auditErr);
+    } catch (auditEx) {
+      console.error("[Audit] Exception:", auditEx);
+    }
 
     return jsonResponse({ sessionId: session.id, url: session.url });
   } catch (error) {

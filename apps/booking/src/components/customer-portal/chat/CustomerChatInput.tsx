@@ -7,6 +7,9 @@ import { Textarea } from '@/components/ui/textarea';
 import { useCustomerSocket } from '@/contexts/CustomerRealtimeChatContext';
 import { cn } from '@/lib/utils';
 import { BookingPicker, BookingReference } from './BookingPicker';
+import { logCustomerAudit } from '@/lib/auditLogger';
+import { useTenant } from '@/contexts/TenantContext';
+import { useCustomerAuthStore } from '@/stores/customer-auth-store';
 
 interface CustomerChatInputProps {
   disabled?: boolean;
@@ -14,6 +17,8 @@ interface CustomerChatInputProps {
 }
 
 export function CustomerChatInput({ disabled, onSend }: CustomerChatInputProps) {
+  const { tenant } = useTenant();
+  const { customerUser } = useCustomerAuthStore();
   const [message, setMessage] = useState('');
   const [isSending, setIsSending] = useState(false);
   const [selectedBooking, setSelectedBooking] = useState<BookingReference | null>(null);
@@ -61,6 +66,18 @@ export function CustomerChatInput({ disabled, onSend }: CustomerChatInputProps) 
       : undefined;
 
     sendMessage(trimmedMessage || 'Shared a booking', metadata);
+
+    logCustomerAudit({
+      action: 'message_sent',
+      entityType: 'chat_message',
+      entityId: customerUser?.customer_id || '',
+      tenantId: tenant?.id,
+      details: {
+        trigger: 'customer_portal',
+        has_booking_reference: !!selectedBooking,
+      },
+    });
+
     setMessage('');
     setSelectedBooking(null);
     sendTyping(false);

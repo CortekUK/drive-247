@@ -469,6 +469,7 @@ const Settings = () => {
                 .eq('id', tenant.id);
               await refetchTenant();
             }
+            logAction({ action: "settings_updated", entityType: "settings", entityId: tenant?.id || "unknown", details: { section: "general" } });
           } finally {
             setIsSavingGeneral(false);
           }
@@ -502,6 +503,7 @@ const Settings = () => {
             };
             await updateTenantBranding(brandingData);
             await updateOrgBranding(brandingData);
+            logAction({ action: "settings_updated", entityType: "settings", entityId: tenant?.id || "unknown", details: { section: "branding" } });
           } finally {
             setIsSavingBranding(false);
           }
@@ -1263,6 +1265,7 @@ const Settings = () => {
                           }
                           setGeneralForm(prev => ({ ...prev, ...defaults }));
                           toast({ title: "Settings Reset", description: "General settings have been restored to defaults." });
+                          logAction({ action: "settings_updated", entityType: "settings", entityId: tenant?.id || "unknown", details: { section: "general", action: "reset_to_defaults" } });
                         } catch (error: any) {
                           toast({ title: "Error", description: error.message || "Failed to reset settings", variant: "destructive" });
                         } finally {

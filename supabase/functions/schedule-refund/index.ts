@@ -113,6 +113,20 @@ serve(async (req) => {
       console.log('Reminder event created successfully');
     }
 
+    // Audit log
+    try {
+      await supabase.from('audit_logs').insert({
+        action: 'payment_refund_scheduled',
+        actor_id: scheduledBy || null,
+        entity_type: 'payment',
+        entity_id: paymentId,
+        tenant_id: payment.tenant_id,
+        details: { refund_amount: finalRefundAmount, scheduled_date: scheduledDate, reason },
+      });
+    } catch (e) {
+      console.error('[Audit] payment_refund_scheduled failed:', e);
+    }
+
     return new Response(
       JSON.stringify({
         success: true,

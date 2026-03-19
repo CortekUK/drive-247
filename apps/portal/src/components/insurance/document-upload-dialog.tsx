@@ -24,6 +24,7 @@ import { Label } from "@/components/ui/label";
 import { Upload, FileText, X } from "lucide-react";
 import { INSURANCE_DOCUMENT_TYPES } from "@/lib/insurance-utils";
 import { useAuditLogOnOpen } from "@/hooks/use-audit-log-on-open";
+import { useAuditLog } from "@/hooks/use-audit-log";
 
 interface DocumentUploadDialogProps {
   open: boolean;
@@ -37,6 +38,7 @@ export function DocumentUploadDialog({
   policyId
 }: DocumentUploadDialogProps) {
   const { tenant } = useTenant();
+  const { logAction } = useAuditLog();
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [documentType, setDocumentType] = useState<string>("");
   const queryClient = useQueryClient();
@@ -91,6 +93,12 @@ export function DocumentUploadDialog({
       queryClient.invalidateQueries({ queryKey: ["policy-documents", policyId] });
       queryClient.invalidateQueries({ queryKey: ["insurance-policy-detail", policyId] });
       queryClient.invalidateQueries({ queryKey: ["insurance-policies"] });
+      logAction({
+        action: "insurance_document_uploaded",
+        entityType: "document",
+        entityId: policyId,
+        details: { policy_id: policyId, doc_type: documentType, file_count: selectedFiles.length },
+      });
       toast.success(`${selectedFiles.length} document(s) uploaded successfully`);
       handleClose();
     },

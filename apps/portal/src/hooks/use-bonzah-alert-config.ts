@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useTenant } from '@/contexts/TenantContext';
+import { useAuditLog } from '@/hooks/use-audit-log';
 
 export interface BonzahAlertConfig {
   threshold: number;
@@ -13,6 +14,7 @@ const RULE_CODE = 'BONZAH_LOW_BALANCE';
 export function useBonzahAlertConfig() {
   const { tenant } = useTenant();
   const queryClient = useQueryClient();
+  const { logAction } = useAuditLog();
 
   const { data: config, isLoading } = useQuery({
     queryKey: ['bonzah-alert-config', tenant?.id],
@@ -111,9 +113,17 @@ export function useBonzahAlertConfig() {
           .in('status', ['pending', 'sent']);
       }
     },
-    onSuccess: () => {
+    onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({ queryKey: ['bonzah-alert-config', tenant?.id] });
       queryClient.invalidateQueries({ queryKey: ['reminders'] });
+      if (tenant?.id) {
+        logAction({
+          action: "bonzah_alert_config_updated",
+          entityType: "settings",
+          entityId: tenant.id,
+          details: { threshold: variables.threshold, enabled: variables.enabled },
+        });
+      }
     },
   });
 

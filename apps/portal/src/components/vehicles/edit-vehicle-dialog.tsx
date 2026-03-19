@@ -13,6 +13,7 @@ import { Edit, Car, CalendarIcon, ShieldCheck, KeyRound, Cog } from "lucide-reac
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { useQueryClient } from "@tanstack/react-query";
+import { useAuditLog } from "@/hooks/use-audit-log";
 import { format, startOfDay } from "date-fns";
 import { cn } from "@/lib/utils";
 import { Textarea } from "@/components/ui/textarea";
@@ -61,6 +62,7 @@ export const EditVehicleDialog = ({ vehicle, open, onOpenChange }: EditVehicleDi
   const [loading, setLoading] = useState(false);
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const { logAction } = useAuditLog();
 
   const form = useForm<VehicleFormData>({
     resolver: zodResolver(editVehicleSchema),
@@ -149,6 +151,13 @@ export const EditVehicleDialog = ({ vehicle, open, onOpenChange }: EditVehicleDi
         .select();
 
       if (error) throw error;
+
+      logAction({
+        action: "vehicle_updated",
+        entityType: "vehicle",
+        entityId: vehicle.id,
+        details: { reg: data.reg, make: data.make, model: data.model },
+      });
 
       toast({
         title: "Vehicle Updated",

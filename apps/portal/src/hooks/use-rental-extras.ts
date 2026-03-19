@@ -2,6 +2,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useTenant } from '@/contexts/TenantContext';
 import { toast } from '@/hooks/use-toast';
+import { useAuditLog } from '@/hooks/use-audit-log';
 
 export interface VehiclePricing {
   id: string;
@@ -61,6 +62,7 @@ export interface UpdateRentalExtraInput {
 export const useRentalExtras = () => {
   const { tenant } = useTenant();
   const queryClient = useQueryClient();
+  const { logAction } = useAuditLog();
 
   const {
     data: extras,
@@ -184,7 +186,13 @@ export const useRentalExtras = () => {
 
       return data as RentalExtra;
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
+      logAction({
+        action: "extra_created",
+        entityType: "extra",
+        entityId: data.id,
+        details: { name: data.name },
+      });
       queryClient.invalidateQueries({ queryKey: ['rental-extras', tenant?.id] });
       toast({
         title: 'Extra Added',
@@ -245,7 +253,13 @@ export const useRentalExtras = () => {
 
       return data as RentalExtra;
     },
-    onSuccess: () => {
+    onSuccess: (_data, variables) => {
+      logAction({
+        action: "extra_updated",
+        entityType: "extra",
+        entityId: variables.id,
+        details: { name: variables.name },
+      });
       queryClient.invalidateQueries({ queryKey: ['rental-extras', tenant?.id] });
       toast({
         title: 'Extra Updated',
@@ -275,7 +289,12 @@ export const useRentalExtras = () => {
         throw error;
       }
     },
-    onSuccess: () => {
+    onSuccess: (_data, variables) => {
+      logAction({
+        action: "extra_deleted",
+        entityType: "extra",
+        entityId: variables,
+      });
       queryClient.invalidateQueries({ queryKey: ['rental-extras', tenant?.id] });
       toast({
         title: 'Extra Deleted',

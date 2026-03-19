@@ -10,6 +10,7 @@ import { useToast } from "@/hooks/use-toast";
 import { formatCurrency } from "@/lib/format-utils";
 import { useTenant } from "@/contexts/TenantContext";
 import { useAuditLogOnOpen } from "@/hooks/use-audit-log-on-open";
+import { useAuditLog } from "@/hooks/use-audit-log";
 
 interface Fine {
   id: string;
@@ -29,6 +30,7 @@ export const BulkActionBar = ({ selectedFines, onClearSelection }: BulkActionBar
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const { tenant } = useTenant();
+  const { logAction } = useAuditLog();
 
   // Filter eligible fines for each action
   const chargeableFines = selectedFines.filter(fine => fine.status === 'Open');
@@ -65,10 +67,16 @@ export const BulkActionBar = ({ selectedFines, onClearSelection }: BulkActionBar
 
       return { successful, failed, total: results.length };
     },
-    onSuccess: ({ successful, failed }) => {
+    onSuccess: ({ successful, failed, total }) => {
       toast({
         title: "Bulk Charge Complete",
         description: `${successful} fines charged successfully${failed > 0 ? `, ${failed} failed` : ''}`,
+      });
+      logAction({
+        action: "fine_bulk_charged",
+        entityType: "fine",
+        entityId: "bulk",
+        details: { count: successful, failed, total },
       });
 
       queryClient.invalidateQueries({ queryKey: ["fines-list"] });
@@ -112,10 +120,16 @@ export const BulkActionBar = ({ selectedFines, onClearSelection }: BulkActionBar
 
       return { successful, failed, total: results.length };
     },
-    onSuccess: ({ successful, failed }) => {
+    onSuccess: ({ successful, failed, total }) => {
       toast({
         title: "Bulk Waive Complete",
         description: `${successful} fines waived successfully${failed > 0 ? `, ${failed} failed` : ''}`,
+      });
+      logAction({
+        action: "fine_bulk_waived",
+        entityType: "fine",
+        entityId: "bulk",
+        details: { count: successful, failed, total },
       });
 
       queryClient.invalidateQueries({ queryKey: ["fines-list"] });

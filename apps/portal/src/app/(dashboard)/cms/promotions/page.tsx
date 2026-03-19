@@ -75,6 +75,7 @@ import type {
 } from "@/types/cms";
 import { CMS_DEFAULTS } from "@/constants/website-content";
 import { useManagerPermissions } from "@/hooks/use-manager-permissions";
+import { useAuditLog } from "@/hooks/use-audit-log";
 import { format, isBefore, isAfter } from "date-fns";
 
 // Promotion types
@@ -124,6 +125,7 @@ const defaultFormData: PromotionFormValues = {
 export default function CMSPromotionsEditor() {
   const router = useRouter();
   const { tenant } = useTenant();
+  const { logAction } = useAuditLog();
   const { data: page, isLoading } = useCMSPage("promotions");
   const { publishPage, isPublishing } = useCMSPages();
   const { updateSection, isUpdating } = useCMSPageSections("promotions");
@@ -209,6 +211,7 @@ export default function CMSPromotionsEditor() {
       toast.error("Failed to update promotion");
       setPromotions(oldPromotions);
     } else {
+      logAction({ action: "promotion_updated", entityType: "promotion", entityId: id, details: { field: "is_active", value } });
       toast.success(`Promotion ${value ? 'activated' : 'deactivated'}`);
     }
   };
@@ -285,14 +288,16 @@ export default function CMSPromotionsEditor() {
         setSaving(false);
         return;
       }
+      logAction({ action: "promotion_updated", entityType: "promotion", entityId: editingPromotion.id, details: { title: data.title } });
       toast.success("Promotion updated");
     } else {
-      const { error } = await (supabase as any)
+      const { data: inserted, error } = await (supabase as any)
         .from("promotions")
         .insert({
           ...promoData,
           tenant_id: tenant?.id || null,
-        });
+        })
+        .select();
 
       if (error) {
         console.error("Insert error:", error);
@@ -300,6 +305,7 @@ export default function CMSPromotionsEditor() {
         setSaving(false);
         return;
       }
+      logAction({ action: "promotion_created", entityType: "promotion", entityId: inserted?.[0]?.id || "unknown", details: { title: data.title } });
       toast.success("Promotion created");
     }
 
@@ -330,6 +336,7 @@ export default function CMSPromotionsEditor() {
       return;
     }
 
+    logAction({ action: "promotion_deleted", entityType: "promotion", entityId: deletingId, details: {} });
     toast.success("Promotion deleted");
     setDeleteDialogOpen(false);
     setDeletingId(null);

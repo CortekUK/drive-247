@@ -18,6 +18,7 @@ import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { useTenant } from '@/contexts/TenantContext';
 import { useCustomerAuthStore } from '@/stores/customer-auth-store';
+import { logCustomerAudit } from '@/lib/auditLogger';
 import type { CustomerRental } from '@/hooks/use-customer-rentals';
 
 interface EditInsuranceDialogProps {
@@ -195,6 +196,15 @@ export function EditInsuranceDialog({ open, onOpenChange, rental }: EditInsuranc
           .update({ is_read: true })
           .in('id', notifIds);
       }
+
+      // Audit log for customer re-uploading insurance
+      logCustomerAudit({
+        action: 'document_uploaded',
+        entityType: 'customer',
+        entityId: customerUser.customer_id,
+        tenantId: tenant.id,
+        details: { document_type: 'insurance', trigger: 'customer_reupload', file_count: files.length, rental_id: rental.id },
+      });
 
       toast.success('Insurance document uploaded successfully');
 

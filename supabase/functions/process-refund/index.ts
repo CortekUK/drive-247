@@ -362,6 +362,20 @@ serve(async (req) => {
       }
     }
 
+    // Audit log
+    try {
+      await supabase.from('audit_logs').insert({
+        action: 'payment_refunded',
+        actor_id: null,
+        entity_type: 'payment',
+        entity_id: payment.id,
+        tenant_id: tenantId,
+        details: { rental_id: rentalId, category, refund_amount: refundAmount, reason, refund_type: refundType },
+      });
+    } catch (e) {
+      console.error('[Audit] payment_refunded failed:', e);
+    }
+
     // Get customer and vehicle details for response
     const { data: customer } = await supabase
       .from("customers")

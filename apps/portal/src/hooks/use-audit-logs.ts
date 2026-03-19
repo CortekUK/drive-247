@@ -150,6 +150,15 @@ export function formatActionName(action: string): string {
     user_created: "User Add",
     user_updated: "User Edit",
     user_deleted: "User Delete",
+    // User management (edge function actions)
+    create_user: "User Add",
+    update_role: "Role Change",
+    activate_user: "User Activated",
+    deactivate_user: "User Deactivated",
+    reset_password: "Password Reset",
+    force_logout_global: "Force Logout",
+    force_logout_tenant: "Tenant Logout",
+    update_manager_permissions: "Perms Updated",
     // Customers
     blocked_customer: "Blocked",
     unblocked_customer: "Unblocked",
@@ -175,6 +184,15 @@ export function formatActionName(action: string): string {
     rental_closed: "Closed",
     rental_extended: "Extended",
     rental_deleted: "Rental Delete",
+    rental_approved: "Approved",
+    rental_started: "Rental Start",
+    insurance_purchased: "Insurance Buy",
+    rental_review_submitted: "Review Add",
+    rental_review_skipped: "Review Skip",
+    installment_plan_activated: "Plan Activated",
+    installment_payment_retried: "Retry Install",
+    installment_plan_cancelled: "Plan Cancel",
+    installment_marked_paid: "Paid Manual",
     // Payments
     payment_created: "Payment Add",
     payment_captured: "Captured",
@@ -186,6 +204,8 @@ export function formatActionName(action: string): string {
     fine_deleted: "Fine Delete",
     fine_charged: "Fine Charged",
     fine_waived: "Fine Waived",
+    fine_bulk_charged: "Bulk Charged",
+    fine_bulk_waived: "Bulk Waived",
     fine_paid: "Fine Paid",
     fine_appeal_successful: "Appeal Won",
     // Invoices
@@ -245,6 +265,13 @@ export function formatActionName(action: string): string {
     vehicle_form_dialog_shown: "Vehicle View",
     plate_form_dialog_shown: "Plate View",
     plate_assign_dialog_shown: "Assign View",
+    // Verification / Invite
+    verification_session_created: "ID Verify",
+    customer_invite_created: "Invite Created",
+    // Extras
+    extra_created: "Extra Add",
+    extra_updated: "Extra Edit",
+    extra_deleted: "Extra Delete",
     // CRUD completion actions
     promotion_created: "Promo Add",
     promotion_updated: "Promo Edit",
@@ -261,6 +288,25 @@ export function formatActionName(action: string): string {
     holiday_created: "Holiday Add",
     holiday_updated: "Holiday Edit",
     holiday_deleted: "Holiday Delete",
+    // Subscriptions
+    subscription_plan_created: "Plan Add",
+    subscription_plan_updated: "Plan Edit",
+    subscription_plan_deactivated: "Plan Deactivated",
+    subscription_plan_activated: "Plan Activated",
+    subscription_plan_deleted: "Plan Delete",
+    subscription_checkout_created: "Checkout Start",
+    subscription_activated: "Sub Activated",
+    subscription_updated: "Sub Updated",
+    subscription_cancelled: "Sub Cancelled",
+    subscription_invoice_paid: "Invoice Paid",
+    subscription_invoice_failed: "Invoice Failed",
+    subscription_stripe_mode_changed: "Sub Mode",
+    // Credits
+    credit_wallet_purchased: "Credits Buy",
+    credit_wallet_gifted: "Credits Gift",
+    credit_wallet_refunded: "Credits Refund",
+    credit_wallet_adjusted: "Credits Adjust",
+    credit_wallet_auto_refilled: "Credits Refill",
     // Auth
     login_success: "Login",
     login_failed: "Login Fail",
@@ -303,6 +349,7 @@ export function getActionColor(action: string): string {
     action.includes("deleted") ||
     action.includes("blocked") ||
     action.includes("cancelled") ||
+    action.includes("deactivated") ||
     action.includes("failed") ||
     action.includes("waived")
   ) {
@@ -316,7 +363,13 @@ export function getActionColor(action: string): string {
     action.includes("captured") ||
     action.includes("paid") ||
     action.includes("uploaded") ||
-    action.includes("assigned")
+    action.includes("assigned") ||
+    action.includes("started") ||
+    action.includes("purchased") ||
+    action.includes("submitted") ||
+    action.includes("activated") ||
+    action.includes("gifted") ||
+    action.includes("refilled")
   ) {
     return "text-green-600 bg-green-50 dark:bg-green-950/20";
   }
@@ -325,7 +378,8 @@ export function getActionColor(action: string): string {
     action.includes("updated") ||
     action.includes("changed") ||
     action.includes("extended") ||
-    action.includes("closed")
+    action.includes("closed") ||
+    action.includes("adjusted")
   ) {
     return "text-blue-600 bg-blue-50 dark:bg-blue-950/20";
   }

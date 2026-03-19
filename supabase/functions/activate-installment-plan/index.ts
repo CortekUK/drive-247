@@ -32,7 +32,7 @@ serve(async (req) => {
     // Find the pending installment plan
     const { data: installmentPlans, error: planError } = await supabase
       .from('installment_plans')
-      .select('id, upfront_amount, customer_id')
+      .select('id, upfront_amount, customer_id, tenant_id')
       .eq('rental_id', rentalId)
       .eq('status', 'pending')
 
@@ -357,6 +357,19 @@ serve(async (req) => {
 
     if (rentalError) {
       console.error('[ACTIVATE] Error updating rental status:', rentalError)
+    } else {
+      try {
+        await supabase.from('audit_logs').insert({
+          action: 'installment_plan_activated',
+          actor_id: null,
+          entity_type: 'rental',
+          entity_id: rentalId,
+          tenant_id: installmentPlan.tenant_id,
+          details: { plan_id: installmentPlan.id, payment_record_id: paymentRecordId, trigger: 'booking_app_checkout' },
+        });
+      } catch (e) {
+        console.error('[Audit] installment_plan_activated failed:', e);
+      }
     }
 
     // Trigger ledger allocation for the upfront payment

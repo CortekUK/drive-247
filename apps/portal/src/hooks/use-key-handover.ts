@@ -3,6 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { useTenant } from "@/contexts/TenantContext";
 import { formatCurrency } from "@/lib/format-utils";
+import { useAuditLog } from "@/hooks/use-audit-log";
 
 export type HandoverType = "giving" | "receiving";
 
@@ -32,6 +33,7 @@ export function useKeyHandover(rentalId: string | undefined) {
   const { toast } = useToast();
   const { tenant } = useTenant();
   const queryClient = useQueryClient();
+  const { logAction } = useAuditLog();
 
   // Fetch handovers for this rental
   const { data: handovers, isLoading } = useQuery({
@@ -142,8 +144,14 @@ export function useKeyHandover(rentalId: string | undefined) {
       if (error) throw error;
       return data;
     },
-    onSuccess: () => {
+    onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({ queryKey: ["key-handovers", rentalId] });
+      logAction({
+        action: "document_uploaded",
+        entityType: "rental",
+        entityId: rentalId!,
+        details: { handover_type: variables.type, file_name: variables.file.name },
+      });
       toast({
         title: "Photo Uploaded",
         description: "Car condition photo has been saved.",
@@ -182,8 +190,17 @@ export function useKeyHandover(rentalId: string | undefined) {
 
       if (error) throw error;
     },
-    onSuccess: () => {
+    onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({ queryKey: ["key-handovers", rentalId] });
+      logAction({
+        action: "document_deleted",
+        entityType: "rental",
+        entityId: rentalId!,
+        details: {
+          handover_type: handovers?.find(h => h.id === variables.handover_id)?.handover_type,
+          file_name: variables.file_name,
+        },
+      });
       toast({
         title: "Photo Deleted",
         description: "Photo has been removed.",
@@ -412,6 +429,12 @@ export function useKeyHandover(rentalId: string | undefined) {
                 console.error('[KEY-HANDOVER] Deposit deduction for excess mileage failed:', deductError);
               } else {
                 console.log('[KEY-HANDOVER] Deposit deducted for excess mileage:', deductResult);
+                logAction({
+                  action: "deposit_deducted",
+                  entityType: "rental",
+                  entityId: rentalId,
+                  details: { amount: depositToDeduct, reason: "excess mileage deduction" },
+                });
               }
             } catch (deductErr) {
               console.error('[KEY-HANDOVER] Error deducting deposit:', deductErr);
@@ -439,6 +462,16 @@ export function useKeyHandover(rentalId: string | undefined) {
                 console.error('[KEY-HANDOVER] Security deposit refund failed:', refundError);
               } else {
                 console.log('[KEY-HANDOVER] Security deposit refunded successfully:', refundResult);
+                logAction({
+                  action: "payment_refunded",
+                  entityType: "payment",
+                  entityId: rentalId,
+                  details: {
+                    category: "Security Deposit",
+                    reason: "deposit returned on key handover",
+                    amount: depositToRefund,
+                  },
+                });
               }
             } catch (refundErr) {
               console.error('[KEY-HANDOVER] Error processing security deposit refund:', refundErr);
@@ -480,6 +513,24 @@ export function useKeyHandover(rentalId: string | undefined) {
       queryClient.invalidateQueries({ queryKey: ["rental-charges"] });
       queryClient.invalidateQueries({ queryKey: ["key-handovers-mileage", rentalId] });
       queryClient.invalidateQueries({ queryKey: ["excess-mileage-charge", rentalId] });
+
+      if (type === "giving" && becameActive) {
+        logAction({
+          action: "rental_started",
+          entityType: "rental",
+          entityId: rentalId!,
+          details: { trigger: "key_handover_giving" },
+        });
+      }
+
+      if (type === "receiving") {
+        logAction({
+          action: "rental_closed",
+          entityType: "rental",
+          entityId: rentalId!,
+          details: { method: "key_handover" },
+        });
+      }
 
       if (type === "giving") {
         toast({
@@ -570,6 +621,13 @@ export function useKeyHandover(rentalId: string | undefined) {
       queryClient.invalidateQueries({ queryKey: ["rentals-list"] });
       queryClient.invalidateQueries({ queryKey: ["enhanced-rentals"] });
 
+      logAction({
+        action: "rental_updated",
+        entityType: "rental",
+        entityId: rentalId!,
+        details: { action: "undo_key_handover", type },
+      });
+
       toast({
         title: type === "giving" ? "Key Handover Undone" : "Key Receipt Undone",
         description: type === "giving"
@@ -647,7 +705,7 @@ export function useKeyHandover(rentalId: string | undefined) {
         }
       }
     },
-    onSuccess: () => {
+    onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({ queryKey: ["key-handovers", rentalId] });
       queryClient.invalidateQueries({ queryKey: ["key-handovers-mileage", rentalId] });
       queryClient.invalidateQueries({ queryKey: ["vehicles-list"] });
@@ -656,6 +714,14 @@ export function useKeyHandover(rentalId: string | undefined) {
       queryClient.invalidateQueries({ queryKey: ["rental-totals"] });
       queryClient.invalidateQueries({ queryKey: ["rental-invoice"] });
       queryClient.invalidateQueries({ queryKey: ["excess-mileage-charge", rentalId] });
+      if (variables.type === "receiving" && variables.mileage) {
+        logAction({
+          action: "rental_updated",
+          entityType: "rental",
+          entityId: rentalId!,
+          details: { action: "mileage_updated", handover_type: variables.type, mileage: variables.mileage },
+        });
+      }
       toast({
         title: "Mileage Updated",
         description: "Odometer reading has been recorded.",

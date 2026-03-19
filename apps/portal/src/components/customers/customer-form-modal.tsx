@@ -518,6 +518,13 @@ export const CustomerFormModal = ({ open, onOpenChange, customer }: CustomerForm
       if (error) throw error;
       if (!data?.ok) throw new Error(data?.error || 'Failed to create verification session');
 
+      logAction({
+        action: "verification_session_created",
+        entityType: "customer",
+        entityId: newCustomerId,
+        details: { provider: "ai" },
+      });
+
       setAiSessionData({
         sessionId: data.sessionId,
         qrUrl: data.qrUrl,

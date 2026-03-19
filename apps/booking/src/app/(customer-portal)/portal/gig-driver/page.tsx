@@ -23,6 +23,7 @@ import { Briefcase, Plus, Trash2, ExternalLink, ImageIcon, Loader2 } from 'lucid
 import { toast } from 'sonner';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { logCustomerAudit } from '@/lib/auditLogger';
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024;
 const ALLOWED_TYPES = ['image/jpeg', 'image/jpg', 'image/png'];
@@ -75,6 +76,13 @@ export default function GigDriverPage() {
 
       toast.success(`${files.length} image(s) uploaded`);
       queryClient.invalidateQueries({ queryKey: ['gig-driver-images'] });
+      logCustomerAudit({
+        action: 'document_uploaded',
+        entityType: 'customer',
+        entityId: customerId,
+        tenantId: tenant.id,
+        details: { document_type: 'gig_driver_image', trigger: 'customer_self_service', count: files.length },
+      });
     } catch (err: any) {
       toast.error(err.message || 'Upload failed');
     } finally {
@@ -96,6 +104,13 @@ export default function GigDriverPage() {
       }
       toast.success('Image deleted');
       queryClient.invalidateQueries({ queryKey: ['gig-driver-images'] });
+      logCustomerAudit({
+        action: 'document_deleted',
+        entityType: 'customer',
+        entityId: customerId!,
+        tenantId: tenant?.id,
+        details: { document_type: 'gig_driver_image', trigger: 'customer_self_service', file_name: image?.file_name },
+      });
     } catch {
       toast.error('Failed to delete image');
     } finally {

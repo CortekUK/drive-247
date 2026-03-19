@@ -239,6 +239,15 @@ export function AdminExtendRentalDialog({
             checkoutUrl = result.checkoutUrl;
             console.log('Extension checkout created:', result.sessionId);
 
+            if (checkoutUrl) {
+              logAction({
+                action: "payment_created",
+                entityType: "payment",
+                entityId: rental.id,
+                details: { amount: extensionTotalAmount, method: "stripe_checkout_extension", rental_id: rental.id },
+              });
+            }
+
             // Save checkout URL to rental for customer portal visibility
             if (checkoutUrl) {
               await supabase

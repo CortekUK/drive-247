@@ -55,6 +55,7 @@ import {
 import { CustomerReviewSummaryCard } from "@/components/reviews/customer-review-summary-card";
 import { StartVerificationDialog } from "@/components/customers/start-verification-dialog";
 import { useToast } from "@/hooks/use-toast";
+import { useAuditLog } from "@/hooks/use-audit-log";
 
 interface Customer {
   id: string;
@@ -111,6 +112,7 @@ const CustomerDetail = () => {
 
   const { tenant } = useTenant();
   const { toast } = useToast();
+  const { logAction } = useAuditLog();
   const currencyCode = tenant?.currency_code || 'GBP';
 
   const { blockCustomer, unblockCustomer, isLoading: blockingLoading } = useCustomerBlockingActions();
@@ -208,6 +210,12 @@ const CustomerDetail = () => {
       toast({ title: "Date of birth updated" });
       setEditingDob(false);
       refetchCustomer();
+      logAction({
+        action: "customer_updated",
+        entityType: "customer",
+        entityId: id,
+        details: { field: "date_of_birth", new_value: dobValue },
+      });
     } catch (err: any) {
       toast({ title: "Error", description: err.message || "Failed to update DOB", variant: "destructive" });
     } finally {
@@ -238,6 +246,12 @@ const CustomerDetail = () => {
       toast({ title: "Customer name updated" });
       setEditingName(false);
       refetchCustomer();
+      logAction({
+        action: "customer_updated",
+        entityType: "customer",
+        entityId: id,
+        details: { field: "name", new_value: nameValue.trim() },
+      });
     } catch (err: any) {
       toast({ title: "Error", description: err.message || "Failed to update name", variant: "destructive" });
     } finally {

@@ -177,6 +177,20 @@ async function handleBoldSignWebhook(supabaseClient: ReturnType<typeof createCli
         .from('rental_agreements')
         .update(agreementUpdate)
         .eq('id', agreementId);
+
+      // Audit log — agreement status updated (covers both original and extension)
+      try {
+        await supabaseClient.from('audit_logs').insert({
+          action: 'agreement_status_updated',
+          actor_id: null,
+          entity_type: 'rental',
+          entity_id: rental.id,
+          tenant_id: rental.tenant_id,
+          details: { agreement_type: agreementType, document_status: mappedStatus, agreement_id: agreementId },
+        });
+      } catch (e) {
+        console.error('[Audit] agreement_status_updated failed:', e);
+      }
     }
 
     // For original agreements (or fallback without agreement row): update rentals too
@@ -232,6 +246,19 @@ async function handleBoldSignWebhook(supabaseClient: ReturnType<typeof createCli
       if (updateError) {
         console.error('Error updating rental:', updateError);
         return { ok: false, error: updateError.message };
+      }
+
+      try {
+        await supabaseClient.from('audit_logs').insert({
+          action: 'rental_updated',
+          actor_id: null,
+          entity_type: 'rental',
+          entity_id: rental.id,
+          tenant_id: rental.tenant_id,
+          details: { trigger: 'agreement_signed', document_status: mappedStatus, activated: mappedStatus === 'completed' },
+        });
+      } catch (e) {
+        console.error('[Audit] rental_updated failed:', e);
       }
     }
     // For extension agreements: do NOT change rental status or vehicle status

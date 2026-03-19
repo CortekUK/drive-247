@@ -225,8 +225,15 @@ export function ExtensionRequestDialog({
             const result = await res.json();
             checkoutUrl = result.checkoutUrl;
 
-            // Save checkout URL to rental for customer portal visibility
             if (checkoutUrl) {
+              logAction({
+                action: "payment_created",
+                entityType: "payment",
+                entityId: rental.id,
+                details: { amount: extensionTotalAmount, method: "stripe_checkout_extension", rental_id: rental.id },
+              });
+
+              // Save checkout URL to rental for customer portal visibility
               await supabase
                 .from('rentals')
                 .update({ extension_checkout_url: checkoutUrl })

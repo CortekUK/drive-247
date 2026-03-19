@@ -169,6 +169,27 @@ serve(async (req) => {
         })
         .eq('id', recordId);
 
+      // Audit log — OCR failure
+      if (verification.tenant_id && verification.customer_id) {
+        try {
+          await supabaseClient.from('audit_logs').insert({
+            action: 'verification_completed',
+            actor_id: null,
+            entity_type: 'customer',
+            entity_id: verification.customer_id,
+            tenant_id: verification.tenant_id,
+            details: {
+              provider: 'ai',
+              session_id: sessionId,
+              result: 'rejected',
+              failure_reason: 'ocr_failed',
+            },
+          });
+        } catch (e) {
+          console.error('[Audit] verification_completed failed:', e);
+        }
+      }
+
       return new Response(
         JSON.stringify({
           ok: false,
@@ -209,6 +230,27 @@ serve(async (req) => {
           updated_at: new Date().toISOString()
         })
         .eq('id', recordId);
+
+      // Audit log — face match failure
+      if (verification.tenant_id && verification.customer_id) {
+        try {
+          await supabaseClient.from('audit_logs').insert({
+            action: 'verification_completed',
+            actor_id: null,
+            entity_type: 'customer',
+            entity_id: verification.customer_id,
+            tenant_id: verification.tenant_id,
+            details: {
+              provider: 'ai',
+              session_id: sessionId,
+              result: 'rejected',
+              failure_reason: 'face_match_failed',
+            },
+          });
+        } catch (e) {
+          console.error('[Audit] verification_completed failed:', e);
+        }
+      }
 
       return new Response(
         JSON.stringify({
@@ -340,6 +382,49 @@ serve(async (req) => {
         }
 
         finalResult = 'rejected';
+
+        // Audit log — customer_blocked for auto-block
+        if (verification.customer_id && verification.tenant_id) {
+          try {
+            await supabaseClient.from('audit_logs').insert({
+              action: 'customer_blocked',
+              actor_id: null,
+              entity_type: 'customer',
+              entity_id: verification.customer_id,
+              tenant_id: verification.tenant_id,
+              details: {
+                trigger: 'ai_blocked_identity',
+                document_number: ocrData?.documentNumber,
+                reason: blockedCheck.reason,
+              },
+            });
+          } catch (e) {
+            console.error('[Audit] customer_blocked failed:', e);
+          }
+        }
+      }
+    }
+
+    // Audit log — AI verification completed (no staff actor)
+    if (verification.tenant_id && verification.customer_id) {
+      try {
+        await supabaseClient.from('audit_logs').insert({
+          action: 'verification_completed',
+          actor_id: null,
+          entity_type: 'customer',
+          entity_id: verification.customer_id,
+          tenant_id: verification.tenant_id,
+          details: {
+            provider: 'ai',
+            session_id: sessionId,
+            result: finalResult,
+            face_match_score: faceResult.similarity || 0,
+            auto_blocked: !!blockedCheck,
+            document_number: ocrData?.documentNumber || null,
+          },
+        });
+      } catch (e) {
+        console.error('[Audit] verification_completed failed:', e);
       }
     }
 

@@ -10,6 +10,7 @@ import { Label } from '@/components/ui/label';
 import { FileSignature, TestTube2, Zap, Loader2 } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
 import { useTenant } from '@/contexts/TenantContext';
+import { useAuditLog } from '@/hooks/use-audit-log';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -24,6 +25,7 @@ import {
 export function ESignSettings() {
   const queryClient = useQueryClient();
   const { tenant, refetchTenant } = useTenant();
+  const { logAction } = useAuditLog();
   const [isUpdating, setIsUpdating] = useState(false);
   const [showLiveConfirm, setShowLiveConfirm] = useState(false);
 
@@ -62,6 +64,13 @@ export function ESignSettings() {
 
       await refetchTenant();
       queryClient.invalidateQueries({ queryKey: ['tenant-boldsign-status'] });
+
+      logAction({
+        action: 'esign_mode_changed',
+        entityType: 'tenant',
+        entityId: tenant.id,
+        details: { previous_mode: currentMode, new_mode: newMode },
+      });
 
       toast({
         title: newMode === 'live' ? 'Switched to Live Mode' : 'Switched to Test Mode',

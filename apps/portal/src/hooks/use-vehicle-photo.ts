@@ -3,6 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { useQueryClient } from "@tanstack/react-query";
 import { useTenant } from "@/contexts/TenantContext";
+import { useAuditLog } from "@/hooks/use-audit-log";
 
 interface UseVehiclePhotoOptions {
   vehicleId: string;
@@ -16,6 +17,7 @@ export const useVehiclePhoto = ({ vehicleId, vehicleReg, onPhotoUpdate }: UseVeh
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const { tenant } = useTenant();
+  const { logAction } = useAuditLog();
 
   const uploadPhoto = async (file: File) => {
     // Validate file type
@@ -72,6 +74,13 @@ export const useVehiclePhoto = ({ vehicleId, vehicleReg, onPhotoUpdate }: UseVeh
 
       if (updateError) throw updateError;
 
+      logAction({
+        action: "vehicle_photo_updated",
+        entityType: "vehicle",
+        entityId: vehicleId,
+        details: { action: "uploaded", vehicle_reg: vehicleReg },
+      });
+
       toast({
         title: "Photo Uploaded",
         description: `Photo uploaded successfully for ${vehicleReg}`,
@@ -80,7 +89,7 @@ export const useVehiclePhoto = ({ vehicleId, vehicleReg, onPhotoUpdate }: UseVeh
       // Refresh vehicle data
       queryClient.invalidateQueries({ queryKey: ["vehicle", vehicleId] });
       queryClient.invalidateQueries({ queryKey: ["vehicles-list"] });
-      
+
       onPhotoUpdate?.(publicUrl);
       return true;
 
@@ -129,6 +138,13 @@ export const useVehiclePhoto = ({ vehicleId, vehicleReg, onPhotoUpdate }: UseVeh
 
       if (updateError) throw updateError;
 
+      logAction({
+        action: "vehicle_photo_deleted",
+        entityType: "vehicle",
+        entityId: vehicleId,
+        details: { action: "removed", vehicle_reg: vehicleReg },
+      });
+
       toast({
         title: "Photo Removed",
         description: `Photo removed for ${vehicleReg}`,
@@ -137,7 +153,7 @@ export const useVehiclePhoto = ({ vehicleId, vehicleReg, onPhotoUpdate }: UseVeh
       // Refresh vehicle data
       queryClient.invalidateQueries({ queryKey: ["vehicle", vehicleId] });
       queryClient.invalidateQueries({ queryKey: ["vehicles-list"] });
-      
+
       onPhotoUpdate?.(null);
       return true;
 

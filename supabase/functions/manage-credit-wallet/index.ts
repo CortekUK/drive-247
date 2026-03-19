@@ -33,6 +33,19 @@ Deno.serve(async (req) => {
     const body = await req.json();
     const { action } = body;
 
+    // Lazy resolve app_users.id for audit logging — only needed for gift/refund/adjust
+    let actorId: string | null = null;
+    const resolveActorId = async () => {
+      if (actorId) return actorId;
+      const { data: appUser } = await supabaseAdmin
+        .from("app_users")
+        .select("id")
+        .eq("auth_user_id", user.id)
+        .single();
+      actorId = appUser?.id || null;
+      return actorId;
+    };
+
     switch (action) {
       // ─── Tenant: Update auto-refill settings ───
       case "update_auto_refill": {
@@ -71,6 +84,20 @@ Deno.serve(async (req) => {
         });
 
         if (error) return errorResponse(error.message, 500);
+
+        try {
+          await supabaseAdmin.from("audit_logs").insert({
+            tenant_id: tenantId,
+            actor_id: await resolveActorId(),
+            action: "credit_wallet_gifted",
+            entity_type: "credit_wallet",
+            entity_id: tenantId,
+            details: { amount, note, is_test_mode: isTestMode || false },
+          });
+        } catch (auditErr) {
+          console.error("[Audit] Failed to log credit_wallet_gifted:", auditErr);
+        }
+
         return jsonResponse(data);
       }
 
@@ -98,6 +125,20 @@ Deno.serve(async (req) => {
         });
 
         if (error) return errorResponse(error.message, 500);
+
+        try {
+          await supabaseAdmin.from("audit_logs").insert({
+            tenant_id: tenantId,
+            actor_id: await resolveActorId(),
+            action: "credit_wallet_refunded",
+            entity_type: "credit_wallet",
+            entity_id: tenantId,
+            details: { amount: refundAmount, note: refundNote, category: refundCategory || null, is_test_mode: refundTestMode || false },
+          });
+        } catch (auditErr) {
+          console.error("[Audit] Failed to log credit_wallet_refunded:", auditErr);
+        }
+
         return jsonResponse(data);
       }
 
@@ -123,6 +164,20 @@ Deno.serve(async (req) => {
         });
 
         if (error) return errorResponse(error.message, 500);
+
+        try {
+          await supabaseAdmin.from("audit_logs").insert({
+            tenant_id: tenantId,
+            actor_id: await resolveActorId(),
+            action: "credit_wallet_adjusted",
+            entity_type: "credit_wallet",
+            entity_id: tenantId,
+            details: { amount: adjustAmount, note: adjustNote, is_test_mode: adjustTestMode || false },
+          });
+        } catch (auditErr) {
+          console.error("[Audit] Failed to log credit_wallet_adjusted:", auditErr);
+        }
+
         return jsonResponse(data);
       }
 
@@ -197,6 +252,19 @@ Deno.serve(async (req) => {
             p_description: `Auto-refill: +${wallet.auto_refill_amount} credits (balance was ${wallet.balance})`,
             p_stripe_payment_id: paymentIntent.id,
           });
+
+          try {
+            await supabaseAdmin.from("audit_logs").insert({
+              tenant_id: tenantId,
+              actor_id: null,
+              action: "credit_wallet_auto_refilled",
+              entity_type: "credit_wallet",
+              entity_id: tenantId,
+              details: { amount: wallet.auto_refill_amount, stripe_payment_id: paymentIntent.id, previous_balance: wallet.balance },
+            });
+          } catch (auditErr) {
+            console.error("[Audit] Failed to log credit_wallet_auto_refilled:", auditErr);
+          }
 
           return jsonResponse({ success: true, ...result });
         }

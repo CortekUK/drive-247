@@ -21,6 +21,7 @@ import {
 import { format } from 'date-fns';
 import { useToast } from '@/hooks/use-toast';
 import { useQueryClient } from '@tanstack/react-query';
+import { useAuditLog } from '@/hooks/use-audit-log';
 import { supabase } from '@/integrations/supabase/client';
 import { formatCurrency } from '@/lib/formatters';
 import type { InsurancePolicy } from '@/hooks/use-rental-insurance-policies';
@@ -96,6 +97,7 @@ function InsuranceTimelineItem({
 }) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const { logAction } = useAuditLog();
   const [issuingPolicy, setIssuingPolicy] = useState(false);
   const [downloadingPdf, setDownloadingPdf] = useState<string | null>(null);
   const [refreshingPolicy, setRefreshingPolicy] = useState(false);
@@ -130,6 +132,12 @@ function InsuranceTimelineItem({
           queryClient.invalidateQueries({ queryKey: ['bonzah-insufficient-balance-count'] }),
           queryClient.invalidateQueries({ queryKey: ['bonzah-pending-policies'] }),
         ]);
+        logAction({
+          action: 'insurance_retry_purchase',
+          entityType: 'rental',
+          entityId: rentalId,
+          details: { policy_record_id: policy.id, result: 'success', policy_no: data?.policy_no },
+        });
         toast({ title: 'Policy Issued', description: `Bonzah policy ${data?.policy_no || ''} has been issued successfully.` });
       }
     } catch (err: any) {
@@ -149,6 +157,12 @@ function InsuranceTimelineItem({
       if (error) throw error;
       queryClient.invalidateQueries({ queryKey: ['rental-insurance-policies', rentalId] });
       queryClient.invalidateQueries({ queryKey: ['rental-bonzah-policy', rentalId] });
+      logAction({
+        action: 'insurance_policy_refreshed',
+        entityType: 'rental',
+        entityId: rentalId,
+        details: { policy_id: policy.policy_id, policy_record_id: policy.id },
+      });
       toast({ title: 'Policy Refreshed', description: 'Latest policy data has been fetched from Bonzah.' });
     } catch (err) {
       toast({ title: 'Error', description: 'Failed to refresh policy data', variant: 'destructive' });

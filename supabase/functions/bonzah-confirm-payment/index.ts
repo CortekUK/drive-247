@@ -606,6 +606,28 @@ serve(async (req) => {
 
     console.log(`[Bonzah Payment] Chain results: ${successCount} succeeded, ${failCount} failed out of ${policiesToConfirm.length}`)
 
+    // Audit log for final outcomes
+    if (successCount > 0) {
+      try {
+        const effectiveResult = results.find(r => r.policyRecordId === body.policy_record_id) || results.find(r => r.success)
+        const { error: auditErr } = await supabase.from('audit_logs').insert({
+          action: 'insurance_payment_confirmed',
+          actor_id: null,
+          entity_type: 'insurance',
+          entity_id: body.policy_record_id,
+          tenant_id: policyRecord.tenant_id,
+          details: {
+            policy_no: effectiveResult?.policyNo,
+            status: effectiveResult?.policyIssued ? 'active' : 'payment_confirmed',
+            chain_confirmed: successCount,
+          },
+        })
+        if (auditErr) console.error('[Bonzah Payment] Audit log error:', auditErr)
+      } catch (auditEx) {
+        console.error('[Bonzah Payment] Audit log exception:', auditEx)
+      }
+    }
+
     // Handle insufficient balance error (send notifications only once)
     if (firstFailure?.isBalanceError) {
       if (policyRecord.status !== 'insufficient_balance') {
@@ -614,6 +636,20 @@ serve(async (req) => {
         } catch (notifyErr) {
           console.error('[Bonzah Payment] Error sending insufficient balance notifications:', notifyErr)
         }
+      }
+
+      try {
+        const { error: auditErr } = await supabase.from('audit_logs').insert({
+          action: 'insurance_payment_insufficient_balance',
+          actor_id: null,
+          entity_type: 'insurance',
+          entity_id: body.policy_record_id,
+          tenant_id: policyRecord.tenant_id,
+          details: { balance: cdBalance, total_premium: totalPremium },
+        })
+        if (auditErr) console.error('[Bonzah Payment] Audit log error:', auditErr)
+      } catch (auditEx) {
+        console.error('[Bonzah Payment] Audit log exception:', auditEx)
       }
 
       return jsonResponse({
@@ -630,6 +666,19 @@ serve(async (req) => {
 
     // If all failed (non-balance error)
     if (successCount === 0 && firstFailure) {
+      try {
+        const { error: auditErr } = await supabase.from('audit_logs').insert({
+          action: 'insurance_payment_failed',
+          actor_id: null,
+          entity_type: 'insurance',
+          entity_id: body.policy_record_id,
+          tenant_id: policyRecord.tenant_id,
+          details: { error: firstFailure.error },
+        })
+        if (auditErr) console.error('[Bonzah Payment] Audit log error:', auditErr)
+      } catch (auditEx) {
+        console.error('[Bonzah Payment] Audit log exception:', auditEx)
+      }
       return errorResponse(`Bonzah payment failed: ${firstFailure.error}`, 500)
     }
 

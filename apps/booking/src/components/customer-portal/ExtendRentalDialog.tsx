@@ -21,6 +21,7 @@ import { useExtensionConflicts } from '@/hooks/use-extension-conflicts';
 import { useExtensionPricing } from '@/hooks/use-extension-pricing';
 import { formatCurrency } from '@/lib/format-utils';
 import { format, addDays, parseISO } from 'date-fns';
+import { logCustomerAudit } from '@/lib/auditLogger';
 import type { CustomerRental } from '@/hooks/use-customer-rentals';
 
 interface ExtendRentalDialogProps {
@@ -96,6 +97,14 @@ export function ExtendRentalDialog({ open, onOpenChange, rental }: ExtendRentalD
       if (updateError) {
         throw new Error(`Failed to submit extension request: ${updateError.message}`);
       }
+
+      logCustomerAudit({
+        action: 'extension_requested',
+        entityType: 'rental',
+        entityId: rental.id,
+        tenantId: tenant.id,
+        details: { new_end_date: format(selectedDate, 'yyyy-MM-dd'), extension_cost: extensionCost },
+      });
 
       // Create notification for admin
       const { error: notifError } = await supabase

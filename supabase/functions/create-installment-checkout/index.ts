@@ -211,6 +211,22 @@ serve(async (req) => {
         .from('customers')
         .update({ stripe_customer_id: stripeCustomerId })
         .eq('id', body.customerId)
+
+      // Audit log — stripe_customer_id set during installment checkout
+      if (tenantId) {
+        try {
+          await supabase.from('audit_logs').insert({
+            action: 'customer_updated',
+            actor_id: null,
+            entity_type: 'customer',
+            entity_id: body.customerId,
+            tenant_id: tenantId,
+            details: { field: 'stripe_customer_id', trigger: 'installment_checkout' },
+          });
+        } catch (e) {
+          console.error('[Audit] customer_updated failed:', e);
+        }
+      }
     }
 
     // Create Checkout Session with:

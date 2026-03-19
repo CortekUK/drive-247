@@ -53,6 +53,7 @@ import { cn } from "@/lib/utils";
 import { useInsuranceValidation } from "@/hooks/use-insurance-data";
 import { insurancePolicySchema, type InsurancePolicyFormValues } from "@/client-schemas/insurance/insurance-policy";
 import { useAuditLogOnOpen } from "@/hooks/use-audit-log-on-open";
+import { useAuditLog } from "@/hooks/use-audit-log";
 
 type PolicyFormData = InsurancePolicyFormValues;
 
@@ -71,6 +72,7 @@ export function InsurancePolicyDialog({
 }: InsurancePolicyDialogProps) {
   const queryClient = useQueryClient();
   const { tenant } = useTenant();
+  const { logAction } = useAuditLog();
   const isEditing = Boolean(policyId);
 
   useAuditLogOnOpen({
@@ -228,9 +230,21 @@ export function InsurancePolicyDialog({
         return result;
       }
     },
-    onSuccess: () => {
+    onSuccess: (result) => {
       queryClient.invalidateQueries({ queryKey: ["customer-insurance", customerId] });
       queryClient.invalidateQueries({ queryKey: ["insurance-policies"] });
+      const savedId = result?.id || policyId || customerId;
+      logAction({
+        action: isEditing ? "insurance_policy_updated" : "insurance_policy_created",
+        entityType: "customer",
+        entityId: customerId,
+        details: {
+          policy_id: savedId,
+          provider: form.getValues("provider"),
+          policy_number: form.getValues("policy_number"),
+          status: form.getValues("status"),
+        },
+      });
       toast.success(isEditing ? "Policy updated successfully" : "Policy created successfully");
       onOpenChange(false);
       form.reset();

@@ -52,6 +52,7 @@ import { AgreementTimeline } from "@/components/rentals/AgreementTimeline";
 import { useRentalInsurancePolicies } from "@/hooks/use-rental-insurance-policies";
 import { InsuranceTimeline } from "@/components/rentals/InsuranceTimeline";
 import { AddReminderDialog } from "@/components/reminders/add-reminder-dialog";
+import { useAuditLog } from "@/hooks/use-audit-log";
 
 interface Rental {
   id: string;
@@ -221,6 +222,7 @@ const RentalDetail = () => {
   const queryClient = useQueryClient();
   const { tenant } = useTenant();
   const { canEdit } = useManagerPermissions();
+  const { logAction } = useAuditLog();
   const { balanceNumber: bonzahCdBalance, isBonzahConnected, portalUrl: bonzahPortalUrl } = useBonzahBalance();
   const { data: rentalAgreements = [], isLoading: loadingAgreements } = useRentalAgreements(id);
   const { data: insurancePolicies = [], isLoading: isLoadingInsurancePolicies } = useRentalInsurancePolicies(id);
@@ -525,6 +527,12 @@ const RentalDetail = () => {
               ...(targetCategories && targetCategories.length > 0 ? { targetCategories } : {}),
             },
           });
+          logAction({
+            action: "payment_captured",
+            entityType: "payment",
+            entityId: stripePayment.id,
+            details: { method: "stripe_checkout", source: "webhook_fallback" },
+          });
         }
 
         // Refresh all payment-related queries and wait for them to settle
@@ -712,6 +720,13 @@ const RentalDetail = () => {
         if (error) {
           console.error('Failed to sync status:', error);
         } else {
+          logAction({
+            action: "rental_updated",
+            entityType: "rental",
+            entityId: rental.id,
+            details: { status: "Active", trigger: "status_sync" },
+          });
+
           // Auto-close the source rental if this is a renewal
           if (rental.renewed_from_rental_id) {
             await supabase
@@ -719,6 +734,13 @@ const RentalDetail = () => {
               .update({ status: 'Closed', updated_at: new Date().toISOString() })
               .eq('id', rental.renewed_from_rental_id)
               .eq('tenant_id', tenant.id);
+
+            logAction({
+              action: "rental_closed",
+              entityType: "rental",
+              entityId: rental.renewed_from_rental_id,
+              details: { trigger: "renewed_by", renewed_by_rental_id: rental.id },
+            });
           }
 
           // Invalidate queries to refresh the data
@@ -893,6 +915,13 @@ const RentalDetail = () => {
             .update({ identity_verification_status: status })
             .eq("id", rental.customers.id);
 
+          logAction({
+            action: "customer_updated",
+            entityType: "customer",
+            entityId: rental.customers.id,
+            details: { field: "identity_verification_status", new_value: status, trigger: "auto_link_verification" },
+          });
+
           return { ...emailData, customer_id: rental.customers.id };
         }
       }
@@ -922,8 +951,14 @@ const RentalDetail = () => {
       const { error } = await query;
       if (error) throw error;
     },
-    onSuccess: () => {
+    onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({ queryKey: ["rental-insurance-docs", id] });
+      logAction({
+        action: "document_updated",
+        entityType: "document",
+        entityId: variables,
+        details: { action: "insurance_approved", rental_id: id },
+      });
       toast({
         title: "Insurance Approved",
         description: "The insurance document has been approved.",
@@ -964,8 +999,14 @@ const RentalDetail = () => {
       const { error } = await query;
       if (error) throw error;
     },
-    onSuccess: () => {
+    onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({ queryKey: ["rental-insurance-docs", id] });
+      logAction({
+        action: "document_updated",
+        entityType: "document",
+        entityId: variables,
+        details: { action: "insurance_linked", rental_id: id },
+      });
       toast({
         title: "Document Linked",
         description: "The insurance document has been linked to this rental.",
@@ -1022,8 +1063,14 @@ const RentalDetail = () => {
 
       return documentId;
     },
-    onSuccess: () => {
+    onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({ queryKey: ["rental-insurance-docs", id] });
+      logAction({
+        action: "document_updated",
+        entityType: "document",
+        entityId: variables,
+        details: { action: "ai_scan_retried", rental_id: id },
+      });
       toast({
         title: "Scan Restarted",
         description: "The document scan has been restarted.",
@@ -1065,8 +1112,14 @@ const RentalDetail = () => {
       const { error } = await query;
       if (error) throw error;
     },
-    onSuccess: () => {
+    onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({ queryKey: ["rental-insurance-docs", id] });
+      logAction({
+        action: "document_deleted",
+        entityType: "document",
+        entityId: variables.id,
+        details: { action: "insurance_deleted", rental_id: id },
+      });
       toast({
         title: "Document Deleted",
         description: "The insurance document has been deleted.",
@@ -4205,6 +4258,15 @@ const RentalDetail = () => {
                       });
                       if (error) throw error;
                       toast({ title: 'Deposit Deducted', description: `${formatCurrencyUtil(deductAmount, tenant?.currency_code || 'GBP')} deducted from security deposit for excess mileage.` });
+                      logAction({
+                        action: "deposit_deducted",
+                        entityType: "payment",
+                        entityId: rental.id,
+                        details: {
+                          amount: deductAmount,
+                          stripe_refund_id: result?.stripeRefundId,
+                        },
+                      });
                       queryClient.invalidateQueries({ queryKey: ["rental-charges"] });
                       queryClient.invalidateQueries({ queryKey: ["rental-totals"] });
                       queryClient.invalidateQueries({ queryKey: ["rental-invoice"] });
@@ -4460,6 +4522,12 @@ const RentalDetail = () => {
                       }
                     });
                     if (captureError) throw captureError;
+                    logAction({
+                      action: "payment_captured",
+                      entityType: "payment",
+                      entityId: payment.id,
+                      details: { method: "manual_capture" },
+                    });
                   }
 
                   // Query DB directly for key handover status (don't rely on React Query cache)
@@ -4522,6 +4590,13 @@ const RentalDetail = () => {
                     description: keyHandoverDone
                       ? "Rental is now active and customer notified"
                       : "Booking approved. Rental will become active after key handover.",
+                  });
+
+                  logAction({
+                    action: "rental_approved",
+                    entityType: "rental",
+                    entityId: id,
+                    details: { became_active: keyHandoverDone },
                   });
 
                   queryClient.invalidateQueries({ queryKey: ['rental', id, tenant?.id] });
@@ -4589,6 +4664,13 @@ const RentalDetail = () => {
                   toast({
                     title: "Rental Closed",
                     description: "Rental has been closed and vehicle is now available.",
+                  });
+
+                  logAction({
+                    action: "rental_closed",
+                    entityType: "rental",
+                    entityId: id,
+                    details: { trigger: "inline_close" },
                   });
 
                   // Prompt review after a short delay
@@ -4663,6 +4745,13 @@ const RentalDetail = () => {
                   toast({
                     title: "Rental Deleted",
                     description: "The rental has been permanently deleted.",
+                  });
+
+                  logAction({
+                    action: "rental_deleted",
+                    entityType: "rental",
+                    entityId: id,
+                    details: { customer: rental?.customers?.name, vehicle_reg: rental?.vehicles?.reg },
                   });
 
                   // Invalidate all rental-related queries

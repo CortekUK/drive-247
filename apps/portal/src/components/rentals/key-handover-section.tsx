@@ -28,6 +28,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useTenant } from "@/contexts/TenantContext";
 import { useToast } from "@/hooks/use-toast";
 import { useRentalSettings } from "@/hooks/use-rental-settings";
+import { useAuditLog } from "@/hooks/use-audit-log";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -95,6 +96,7 @@ export const KeyHandoverSection = ({
   const { tenant } = useTenant();
   const { toast } = useToast();
   const { settings: rentalSettings } = useRentalSettings();
+  const { logAction } = useAuditLog();
 
   const [confirmHandover, setConfirmHandover] = useState<HandoverType | null>(null);
   const [confirmUndo, setConfirmUndo] = useState<HandoverType | null>(null);
@@ -201,6 +203,12 @@ export const KeyHandoverSection = ({
             setConfirmHandover(null);
             return;
           }
+          logAction({
+            action: "vehicle_updated",
+            entityType: "vehicle",
+            entityId: vehicleId,
+            details: { field: "lockbox_code", auto_generated: true },
+          });
         }
 
         // Save delivery_method on the rental
@@ -208,6 +216,12 @@ export const KeyHandoverSection = ({
           .from("rentals")
           .update({ delivery_method: 'lockbox' })
           .eq("id", rentalId);
+        logAction({
+          action: "rental_updated",
+          entityType: "rental",
+          entityId: rentalId,
+          details: { field: "delivery_method", value: "lockbox" },
+        });
 
         // Send lockbox notification
         const photoUrls = (givingHandover?.photos || []).map((p) => p.file_url);
@@ -256,6 +270,12 @@ export const KeyHandoverSection = ({
         .from("rentals")
         .update({ delivery_method: 'in_person' })
         .eq("id", rentalId);
+      logAction({
+        action: "rental_updated",
+        entityType: "rental",
+        entityId: rentalId,
+        details: { field: "delivery_method", value: "in_person" },
+      });
     }
 
     // Send WhatsApp notification if selected (applies to ALL collection types)

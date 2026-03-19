@@ -355,6 +355,13 @@ export const AddPaymentDialog = ({
 
       window.open(data.url, '_blank');
 
+      logAction({
+        action: "payment_created",
+        entityType: "payment",
+        entityId: rentalId || finalCustomerId,
+        details: { amount, method: "stripe_checkout", rental_id: rentalId, customer_id: finalCustomerId },
+      });
+
       toast({ title: "Stripe Checkout Opened", description: "Payment link opened in a new tab. Payment will be recorded automatically when the customer completes checkout." });
       onOpenChange(false);
     } catch (error: any) {

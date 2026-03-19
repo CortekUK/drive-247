@@ -441,6 +441,13 @@ const CustomersList = () => {
 
       if (blockError) throw blockError;
 
+      logAction({
+        action: "customer_blocked",
+        entityType: "customer",
+        entityId: selectedCustomer.id,
+        details: { reason: blockReason, identity_type: identityType, identity_number: identityToBlock },
+      });
+
       // Then add to blocked identities list
       if (identityToBlock) {
         await addBlockedIdentity.mutateAsync({

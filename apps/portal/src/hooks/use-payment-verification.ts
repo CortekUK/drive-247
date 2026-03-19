@@ -3,6 +3,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { toast } from '@/hooks/use-toast';
 import { sendPaymentRejectionNotification } from '@/lib/notifications';
 import { useTenant } from '@/contexts/TenantContext';
+import { useAuditLog } from '@/hooks/use-audit-log';
 
 export type VerificationStatus = 'pending' | 'approved' | 'rejected' | 'auto_approved';
 
@@ -42,6 +43,7 @@ export const usePendingPaymentsCount = () => {
 // Hook for payment verification actions
 export const usePaymentVerificationActions = () => {
   const queryClient = useQueryClient();
+  const { logAction } = useAuditLog();
 
   // Approve payment mutation
   const approvePayment = useMutation({
@@ -67,6 +69,14 @@ export const usePaymentVerificationActions = () => {
 
       if (error) throw error;
       if (!data?.success) throw new Error(data?.error || 'Failed to approve payment');
+
+      // Audit log — payment approved (fires regardless of apply-payment outcome)
+      logAction({
+        action: "payment_captured",
+        entityType: "payment",
+        entityId: paymentId,
+        details: { method: "manual_verification" },
+      });
 
       // Now apply the payment to allocate it to charges
       console.log('Applying approved payment to charges:', paymentId);
@@ -189,8 +199,14 @@ export const usePaymentVerificationActions = () => {
 
       return data;
     },
-    onSuccess: (data) => {
+    onSuccess: (data, variables) => {
       const vehicleReleased = (data as any)?.vehicle_released;
+      logAction({
+        action: "payment_failed",
+        entityType: "payment",
+        entityId: variables.paymentId,
+        details: { reason: variables.reason },
+      });
       toast({
         title: 'Payment Rejected',
         description: vehicleReleased

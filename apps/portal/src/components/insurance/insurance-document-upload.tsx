@@ -3,6 +3,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { useTenant } from "@/contexts/TenantContext";
+import { useAuditLog } from "@/hooks/use-audit-log";
 import { Button } from "@/components/ui/button";
 import {
   Select,
@@ -44,6 +45,7 @@ export function InsuranceDocumentUpload({ policyId, documents }: InsuranceDocume
   const fileInputRef = useRef<HTMLInputElement>(null);
   const queryClient = useQueryClient();
   const { tenant } = useTenant();
+  const { logAction } = useAuditLog();
 
   const uploadMutation = useMutation({
     mutationFn: async ({ file, docType }: { file: File; docType: string }) => {
@@ -78,8 +80,14 @@ export function InsuranceDocumentUpload({ policyId, documents }: InsuranceDocume
       if (error) throw error;
       return data;
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ["policy-documents", policyId] });
+      logAction({
+        action: "insurance_document_uploaded",
+        entityType: "document",
+        entityId: data?.id || policyId,
+        details: { policy_id: policyId, doc_type: selectedDocType, file_name: data?.file_name },
+      });
       toast.success("Document uploaded successfully");
       setSelectedDocType("");
       if (fileInputRef.current) {
@@ -107,8 +115,14 @@ export function InsuranceDocumentUpload({ policyId, documents }: InsuranceDocume
 
       if (error) throw error;
     },
-    onSuccess: () => {
+    onSuccess: (_data, documentId) => {
       queryClient.invalidateQueries({ queryKey: ["policy-documents", policyId] });
+      logAction({
+        action: "insurance_document_deleted",
+        entityType: "document",
+        entityId: documentId,
+        details: { policy_id: policyId },
+      });
       toast.success("Document deleted successfully");
     },
     onError: (error) => {

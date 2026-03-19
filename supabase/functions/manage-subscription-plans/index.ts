@@ -25,14 +25,14 @@ async function getOrCreateProduct(stripe: Stripe): Promise<string> {
   return product.id;
 }
 
-async function verifySuperAdmin(supabase: any, userId: string): Promise<boolean> {
+async function verifySuperAdmin(supabase: any, userId: string): Promise<{ isSuperAdmin: boolean; appUserId: string | null }> {
   const { data } = await supabase
     .from("app_users")
-    .select("is_super_admin")
+    .select("id, is_super_admin")
     .eq("auth_user_id", userId)
     .single();
 
-  return data?.is_super_admin === true;
+  return { isSuperAdmin: data?.is_super_admin === true, appUserId: data?.id || null };
 }
 
 Deno.serve(async (req) => {
@@ -57,7 +57,7 @@ Deno.serve(async (req) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
     );
 
-    const isSuperAdmin = await verifySuperAdmin(supabase, user.id);
+    const { isSuperAdmin, appUserId } = await verifySuperAdmin(supabase, user.id);
     if (!isSuperAdmin) return errorResponse("Only super admins can manage subscription plans", 403);
 
     const body = await req.json();
@@ -65,15 +65,15 @@ Deno.serve(async (req) => {
 
     switch (action) {
       case "create":
-        return await handleCreate(supabase, body);
+        return await handleCreate(supabase, body, appUserId);
       case "update":
-        return await handleUpdate(supabase, body);
+        return await handleUpdate(supabase, body, appUserId);
       case "deactivate":
-        return await handleDeactivate(supabase, body);
+        return await handleDeactivate(supabase, body, appUserId);
       case "activate":
-        return await handleActivate(supabase, body);
+        return await handleActivate(supabase, body, appUserId);
       case "delete":
-        return await handleDelete(supabase, body);
+        return await handleDelete(supabase, body, appUserId);
       case "list":
         return await handleList(supabase, body);
       default:
@@ -90,7 +90,7 @@ async function getStripe(supabase: any, tenantId: string) {
   return getSubscriptionStripeClient(mode);
 }
 
-async function handleCreate(supabase: any, body: any) {
+async function handleCreate(supabase: any, body: any, actorId: string | null) {
   const { tenantId, name, description, features, amount, currency = "usd", interval = "month", trialDays = 0 } = body;
 
   if (!tenantId) return errorResponse("tenantId is required");
@@ -132,10 +132,24 @@ async function handleCreate(supabase: any, body: any) {
     throw error;
   }
 
+  try {
+    const { error: auditErr } = await supabase.from("audit_logs").insert({
+      action: "subscription_plan_created",
+      actor_id: actorId,
+      entity_type: "subscription_plan",
+      entity_id: data.id,
+      tenant_id: tenantId,
+      details: { plan_name: name, amount, currency: currency.toLowerCase(), interval, trial_days: trialDays },
+    });
+    if (auditErr) console.error("[Audit] Failed:", auditErr);
+  } catch (auditEx) {
+    console.error("[Audit] Exception:", auditEx);
+  }
+
   return jsonResponse({ success: true, plan: data });
 }
 
-async function handleUpdate(supabase: any, body: any) {
+async function handleUpdate(supabase: any, body: any, actorId: string | null) {
   const { planId, name, description, features, amount, currency, interval, trialDays } = body;
 
   if (!planId) return errorResponse("planId is required");
@@ -203,16 +217,30 @@ async function handleUpdate(supabase: any, body: any) {
     throw error;
   }
 
+  try {
+    const { error: auditErr } = await supabase.from("audit_logs").insert({
+      action: "subscription_plan_updated",
+      actor_id: actorId,
+      entity_type: "subscription_plan",
+      entity_id: planId,
+      tenant_id: existingPlan.tenant_id,
+      details: { changes: updateData, pricing_changed: pricingChanged },
+    });
+    if (auditErr) console.error("[Audit] Failed:", auditErr);
+  } catch (auditEx) {
+    console.error("[Audit] Exception:", auditEx);
+  }
+
   return jsonResponse({ success: true, plan: data, pricingChanged });
 }
 
-async function handleDeactivate(supabase: any, body: any) {
+async function handleDeactivate(supabase: any, body: any, actorId: string | null) {
   const { planId } = body;
   if (!planId) return errorResponse("planId is required");
 
   const { data: plan, error: fetchError } = await supabase
     .from("subscription_plans")
-    .select("stripe_price_id, tenant_id")
+    .select("stripe_price_id, tenant_id, name")
     .eq("id", planId)
     .single();
 
@@ -230,16 +258,30 @@ async function handleDeactivate(supabase: any, body: any) {
 
   if (error) throw error;
 
+  try {
+    const { error: auditErr } = await supabase.from("audit_logs").insert({
+      action: "subscription_plan_deactivated",
+      actor_id: actorId,
+      entity_type: "subscription_plan",
+      entity_id: planId,
+      tenant_id: plan.tenant_id,
+      details: { plan_name: plan.name },
+    });
+    if (auditErr) console.error("[Audit] Failed:", auditErr);
+  } catch (auditEx) {
+    console.error("[Audit] Exception:", auditEx);
+  }
+
   return jsonResponse({ success: true });
 }
 
-async function handleActivate(supabase: any, body: any) {
+async function handleActivate(supabase: any, body: any, actorId: string | null) {
   const { planId } = body;
   if (!planId) return errorResponse("planId is required");
 
   const { data: plan, error: fetchError } = await supabase
     .from("subscription_plans")
-    .select("stripe_price_id, tenant_id")
+    .select("stripe_price_id, tenant_id, name")
     .eq("id", planId)
     .single();
 
@@ -257,10 +299,24 @@ async function handleActivate(supabase: any, body: any) {
 
   if (error) throw error;
 
+  try {
+    const { error: auditErr } = await supabase.from("audit_logs").insert({
+      action: "subscription_plan_activated",
+      actor_id: actorId,
+      entity_type: "subscription_plan",
+      entity_id: planId,
+      tenant_id: plan.tenant_id,
+      details: { plan_name: plan.name },
+    });
+    if (auditErr) console.error("[Audit] Failed:", auditErr);
+  } catch (auditEx) {
+    console.error("[Audit] Exception:", auditEx);
+  }
+
   return jsonResponse({ success: true });
 }
 
-async function handleDelete(supabase: any, body: any) {
+async function handleDelete(supabase: any, body: any, actorId: string | null) {
   const { planId } = body;
   if (!planId) return errorResponse("planId is required");
 
@@ -279,7 +335,7 @@ async function handleDelete(supabase: any, body: any) {
 
   const { data: plan } = await supabase
     .from("subscription_plans")
-    .select("stripe_price_id, tenant_id")
+    .select("stripe_price_id, tenant_id, name")
     .eq("id", planId)
     .single();
 
@@ -294,6 +350,20 @@ async function handleDelete(supabase: any, body: any) {
     .eq("id", planId);
 
   if (error) throw error;
+
+  try {
+    const { error: auditErr } = await supabase.from("audit_logs").insert({
+      action: "subscription_plan_deleted",
+      actor_id: actorId,
+      entity_type: "subscription_plan",
+      entity_id: planId,
+      tenant_id: plan?.tenant_id,
+      details: { plan_name: plan?.name },
+    });
+    if (auditErr) console.error("[Audit] Failed:", auditErr);
+  } catch (auditEx) {
+    console.error("[Audit] Exception:", auditEx);
+  }
 
   return jsonResponse({ success: true });
 }

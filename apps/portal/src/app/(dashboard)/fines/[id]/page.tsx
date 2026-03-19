@@ -16,6 +16,7 @@ import { KPICard } from "@/components/ui/kpi-card";
 import { InfoGrid } from "@/components/ui/info-grid";
 import { formatCurrency } from "@/lib/format-utils";
 import { useTenant } from "@/contexts/TenantContext";
+import { useAuditLog } from "@/hooks/use-audit-log";
 
 interface Fine {
   id: string;
@@ -49,6 +50,7 @@ const FineDetail = () => {
   const queryClient = useQueryClient();
   const { tenant } = useTenant();
 
+  const { logAction } = useAuditLog();
   const [showPaymentDialog, setShowPaymentDialog] = useState(false);
 
   // Ensure fine's ledger entry has rental_id before opening payment dialog
@@ -101,6 +103,13 @@ const FineDetail = () => {
           .from('fines')
           .update(updateData)
           .eq('id', id);
+
+        logAction({
+          action: "fine_charged",
+          entityType: "fine",
+          entityId: id,
+          details: { new_status: newStatus, trigger: "payment_sync" },
+        });
       }
 
       // Always invalidate queries after payment success
@@ -135,6 +144,12 @@ const FineDetail = () => {
     },
     onSuccess: () => {
       toast({ title: "Fine waived successfully" });
+      logAction({
+        action: "fine_waived",
+        entityType: "fine",
+        entityId: id,
+        details: { trigger: "manual_waive" },
+      });
       queryClient.invalidateQueries({ queryKey: ["fine", id] });
       queryClient.invalidateQueries({ queryKey: ["customer-balance"] });
       queryClient.invalidateQueries({ queryKey: ["customer-balance-status"] });

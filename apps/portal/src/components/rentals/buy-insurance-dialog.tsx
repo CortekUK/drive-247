@@ -20,6 +20,7 @@ import {
   DialogDescription,
 } from '@/components/ui/dialog';
 import { useAuditLogOnOpen } from '@/hooks/use-audit-log-on-open';
+import { useAuditLog } from '@/hooks/use-audit-log';
 
 interface BuyInsuranceDialogProps {
   open: boolean;
@@ -58,6 +59,7 @@ export function BuyInsuranceDialog({
     entityType: "insurance",
     entityId: rental.id,
   });
+  const { logAction } = useAuditLog();
   const { balanceNumber: bonzahCdBalance, portalUrl: bonzahPortalUrl } = useBonzahBalance();
   const {
     isEligible: isBonzahEligible,
@@ -315,6 +317,17 @@ export function BuyInsuranceDialog({
       // If insufficient_balance or other confirm error, toast was already shown above
 
       // 8. Close dialog and trigger payment flow
+      logAction({
+        action: "insurance_purchased",
+        entityType: "insurance",
+        entityId: rental.id,
+        details: {
+          premium,
+          coverage,
+          policy_record_id: quoteResult?.policy_record_id,
+          policy_active: policyActive,
+        },
+      });
       handleClose();
       onPurchaseComplete(premium);
     } catch (error: any) {

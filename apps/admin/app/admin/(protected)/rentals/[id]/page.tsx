@@ -818,6 +818,17 @@ export default function TenantDetailsPage() {
 
       if (error) throw error;
 
+      try {
+        await supabase.from('audit_logs').insert({
+          action: 'subscription_stripe_mode_changed',
+          actor_id: null,
+          entity_type: 'subscription',
+          entity_id: tenant.id,
+          tenant_id: tenant.id,
+          details: { previous_mode: tenant.subscription_stripe_mode, new_mode: newMode },
+        });
+      } catch (e) { console.error('[Audit] error:', e); }
+
       setTenant({ ...tenant, subscription_stripe_mode: newMode });
       toast.success(`Stripe mode switched to ${newMode} for ${tenant.company_name}`);
     } catch (error: any) {
@@ -851,6 +862,19 @@ export default function TenantDetailsPage() {
         .eq('id', tenant.id);
 
       if (error) throw error;
+
+      if (type === 'subscription_stripe') {
+        try {
+          await supabase.from('audit_logs').insert({
+            action: 'subscription_stripe_mode_changed',
+            actor_id: null,
+            entity_type: 'subscription',
+            entity_id: tenant.id,
+            tenant_id: tenant.id,
+            details: { previous_mode: (tenant as any)[field], new_mode: newMode },
+          });
+        } catch (e) { console.error('[Audit] error:', e); }
+      }
 
       setTenant({ ...tenant, [field]: newMode } as any);
       const labels: Record<string, string> = {

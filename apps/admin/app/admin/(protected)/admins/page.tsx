@@ -87,6 +87,17 @@ export default function ManageAdminsPage() {
 
       if (userError) throw userError;
 
+      try {
+        await supabase.from('audit_logs').insert({
+          action: 'user_created',
+          actor_id: null,
+          entity_type: 'user',
+          entity_id: authData.user?.id || null,
+          tenant_id: null,
+          details: { email: formData.email, name: formData.name, role: 'super_admin', is_super_admin: true },
+        });
+      } catch (e) { console.error('[Audit] error:', e); }
+
       setShowCreateModal(false);
       setFormData({ name: '', email: '', password: '' });
       loadAdmins();

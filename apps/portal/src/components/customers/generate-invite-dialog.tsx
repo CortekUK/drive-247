@@ -6,6 +6,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { useTenant } from "@/contexts/TenantContext";
 import { format } from "date-fns";
+import { useAuditLog } from "@/hooks/use-audit-log";
 
 interface GenerateInviteDialogProps {
   open: boolean;
@@ -15,6 +16,7 @@ interface GenerateInviteDialogProps {
 export function GenerateInviteDialog({ open, onOpenChange }: GenerateInviteDialogProps) {
   const { tenant } = useTenant();
   const { toast } = useToast();
+  const { logAction } = useAuditLog();
   const [loading, setLoading] = useState(false);
   const [inviteUrl, setInviteUrl] = useState<string | null>(null);
   const [expiresAt, setExpiresAt] = useState<string | null>(null);
@@ -47,6 +49,12 @@ export function GenerateInviteDialog({ open, onOpenChange }: GenerateInviteDialo
 
       setInviteUrl(data.url);
       setExpiresAt(data.expiresAt);
+      logAction({
+        action: "customer_invite_created",
+        entityType: "customer",
+        entityId: tenant!.id,
+        details: { expires_at: data.expiresAt },
+      });
     } catch (error: any) {
       console.error('Error generating invite:', error);
       toast({

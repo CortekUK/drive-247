@@ -9,15 +9,31 @@ export type AuditAction =
   | "vehicle_updated"
   | "vehicle_deleted"
   | "vehicle_status_changed"
+  | "vehicle_photo_updated"
+  | "vehicle_photo_deleted"
+  | "vehicle_file_uploaded"
+  | "vehicle_file_deleted"
+  | "vehicle_expense_created"
+  | "vehicle_expense_deleted"
+  | "vehicle_extra_updated"
+  | "vehicle_extra_deleted"
+  | "service_record_created"
+  | "service_record_updated"
+  | "service_record_deleted"
   // Rental actions
   | "rental_created"
   | "rental_updated"
   | "rental_cancelled"
   | "rental_closed"
   | "rental_deleted"
+  | "rental_approved"
+  | "rental_started"
   | "rental_extended"
   | "rental_extension_approved"
   | "rental_extension_rejected"
+  | "insurance_purchased"
+  | "rental_review_submitted"
+  | "rental_review_skipped"
   // Customer actions
   | "customer_created"
   | "customer_updated"
@@ -31,12 +47,24 @@ export type AuditAction =
   | "payment_refunded"
   | "payment_captured"
   | "payment_failed"
+  | "payment_reversed"
+  | "deposit_deducted"
+  | "installment_paid_early"
+  | "installment_payment_processed"
+  | "installment_payments_refunded"
+  | "installment_plan_activated"
+  | "installment_payment_retried"
+  | "installment_plan_cancelled"
+  | "installment_marked_paid"
+  | "credit_wallet_purchased"
   // Fine actions
   | "fine_created"
   | "fine_updated"
   | "fine_deleted"
   | "fine_charged"
   | "fine_waived"
+  | "fine_bulk_charged"
+  | "fine_bulk_waived"
   | "fine_paid"
   | "fine_appeal_successful"
   | "fine_authority_payment"
@@ -49,12 +77,25 @@ export type AuditAction =
   | "document_uploaded"
   | "document_updated"
   | "document_deleted"
+  // Agreement actions
+  | "agreement_sent"
+  | "agreement_resent"
+  | "agreement_status_checked"
   // Plate actions
   | "plate_created"
   | "plate_updated"
   | "plate_deleted"
   | "plate_assigned"
   | "plate_unassigned"
+  // Verification actions
+  | "verification_session_created"
+  | "verification_completed"
+  // Invite actions
+  | "customer_invite_created"
+  // Extra actions
+  | "extra_created"
+  | "extra_updated"
+  | "extra_deleted"
   // Identity/Blocklist actions
   | "identity_blocked"
   | "identity_unblocked"
@@ -62,6 +103,15 @@ export type AuditAction =
   | "user_created"
   | "user_updated"
   | "user_deleted"
+  // User management (edge function actions)
+  | "create_user"
+  | "update_role"
+  | "activate_user"
+  | "deactivate_user"
+  | "reset_password"
+  | "force_logout_global"
+  | "force_logout_tenant"
+  | "update_manager_permissions"
   // Blocked dates / Working hours
   | "blocked_date_created"
   | "blocked_date_deleted"
@@ -81,8 +131,11 @@ export type AuditAction =
   | "cms_media_uploaded"
   | "cms_media_deleted"
   | "cms_media_updated"
+  | "cms_version_rollback"
+  | "cms_versions_cleaned"
   // Message actions
   | "message_sent"
+  | "bulk_message_sent"
   // Settings actions
   | "settings_updated"
   // Promotion actions
@@ -147,6 +200,24 @@ export type AuditAction =
   | "vehicle_form_dialog_shown"
   | "plate_form_dialog_shown"
   | "plate_assign_dialog_shown"
+  // Subscription actions
+  | "subscription_plan_created"
+  | "subscription_plan_updated"
+  | "subscription_plan_deactivated"
+  | "subscription_plan_activated"
+  | "subscription_plan_deleted"
+  | "subscription_checkout_created"
+  | "subscription_activated"
+  | "subscription_updated"
+  | "subscription_cancelled"
+  | "subscription_invoice_paid"
+  | "subscription_invoice_failed"
+  | "subscription_stripe_mode_changed"
+  // Credit wallet actions
+  | "credit_wallet_gifted"
+  | "credit_wallet_refunded"
+  | "credit_wallet_adjusted"
+  | "credit_wallet_auto_refilled"
   // Other
   | string;
 
@@ -176,6 +247,11 @@ export type EntityType =
   | "location"
   | "holiday"
   | "insurance"
+  | "extra"
+  | "subscription_plan"
+  | "subscription"
+  | "subscription_invoice"
+  | "credit_wallet"
   | string;
 
 export interface AuditLogParams {

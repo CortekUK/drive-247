@@ -2,6 +2,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useTenant } from '@/contexts/TenantContext';
 import { toast } from '@/hooks/use-toast';
+import { useAuditLog } from '@/hooks/use-audit-log';
 
 export type WhatGetsSplit = 'rental_only' | 'rental_tax' | 'rental_tax_extras';
 
@@ -111,6 +112,7 @@ const DEFAULT_RENTAL_SETTINGS: RentalSettings = {
 export const useRentalSettings = () => {
   const { tenant } = useTenant();
   const queryClient = useQueryClient();
+  const { logAction } = useAuditLog();
 
   // Fetch rental settings from tenants table
   const {
@@ -240,9 +242,16 @@ export const useRentalSettings = () => {
       console.log('[RentalSettings] Settings updated:', data[0]);
       return { ...DEFAULT_RENTAL_SETTINGS, ...data[0] } as RentalSettings;
     },
-    onSuccess: (data) => {
+    onSuccess: (data, variables) => {
       // Update the cache with new data
       queryClient.setQueryData(['rental-settings', tenant?.id], data);
+
+      logAction({
+        action: "settings_updated",
+        entityType: "settings",
+        entityId: tenant!.id,
+        details: { section: "rental_settings", updated_fields: Object.keys(variables) },
+      });
 
       toast({
         title: "Settings Updated",

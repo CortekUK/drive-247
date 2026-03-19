@@ -105,6 +105,20 @@ serve(async (req) => {
           { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
         )
       }
+
+      // Audit log
+      try {
+        await supabaseClient.from('audit_logs').insert({
+          action: 'stripe_account_created',
+          actor_id: null,
+          entity_type: 'settings',
+          entity_id: tenantId,
+          tenant_id: tenantId,
+          details: { stripe_account_id: stripeAccountId },
+        })
+      } catch (e) {
+        console.error('[Audit] stripe_account_created failed:', e)
+      }
     }
 
     // Generate onboarding link

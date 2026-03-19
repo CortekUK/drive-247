@@ -170,6 +170,22 @@ async function createVerificationSession(
       .update({ identity_verification_status: 'pending' })
       .eq('id', customerId);
 
+    // Audit log — customer status set to pending
+    if (customer.tenant_id) {
+      try {
+        await supabase.from('audit_logs').insert({
+          action: 'customer_updated',
+          actor_id: null,
+          entity_type: 'customer',
+          entity_id: customerId,
+          tenant_id: customer.tenant_id,
+          details: { field: 'identity_verification_status', new_value: 'pending', trigger: 'veriff_session_created' },
+        });
+      } catch (e) {
+        console.error('[Audit] customer_updated failed:', e);
+      }
+    }
+
     console.log('Verification session created successfully');
 
     return {

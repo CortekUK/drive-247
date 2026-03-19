@@ -41,6 +41,7 @@ import { sanitizeName, sanitizeEmail, sanitizePhone, sanitizeLocation, sanitizeT
 import { createVeriffFrame, MESSAGES } from "@veriff/incontext-sdk";
 import { useCustomerAuthStore } from "@/stores/customer-auth-store";
 import { useBookingStore } from "@/stores/booking-store";
+import { logCustomerAudit } from "@/lib/auditLogger";
 import { useCustomerVerification } from "@/hooks/use-customer-verification";
 import { AuthPromptDialog } from "@/components/booking/AuthPromptDialog";
 import { BlockedAccountDialog } from "@/components/BlockedAccountDialog";
@@ -256,6 +257,13 @@ const MultiStepBookingWidget = () => {
           .from('customers')
           .update({ phone: phone || null })
           .eq('id', customerUser.customer_id);
+        logCustomerAudit({
+          action: 'customer_updated',
+          entityType: 'customer',
+          entityId: customerUser.customer_id,
+          tenantId: customerUser.tenant_id,
+          details: { field: 'phone', trigger: 'booking_widget_auto_save' },
+        });
         // Refresh customer data in store so other pages pick it up
         refetchCustomerUser();
       } catch (err) {
@@ -1381,6 +1389,15 @@ const MultiStepBookingWidget = () => {
         console.log('Continuing without pre-creating record...');
       } else {
         console.log('✅ Verification record created in database for session:', sessionId);
+        if (customerId) {
+          logCustomerAudit({
+            action: 'verification_session_created',
+            entityType: 'customer',
+            entityId: customerId,
+            tenantId: tenant?.id,
+            details: { provider: 'veriff', trigger: 'booking_widget', session_id: sessionId },
+          });
+        }
       }
 
       // Store session ID
@@ -1554,6 +1571,15 @@ const MultiStepBookingWidget = () => {
       }
 
       console.log('✅ AI verification session created:', data.sessionId);
+      if (customerId) {
+        logCustomerAudit({
+          action: 'verification_session_created',
+          entityType: 'customer',
+          entityId: customerId,
+          tenantId: tenant?.id,
+          details: { provider: 'ai', trigger: 'booking_widget' },
+        });
+      }
 
       // Store session data
       setVerificationSessionId(data.sessionId);

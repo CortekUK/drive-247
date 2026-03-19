@@ -2,6 +2,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useTenant } from '@/contexts/TenantContext';
 import { toast } from '@/hooks/use-toast';
+import { useAuditLog } from '@/hooks/use-audit-log';
 
 export interface VehicleExtra {
   id: string;
@@ -18,6 +19,7 @@ export interface VehicleExtra {
 export const useVehicleExtras = (vehicleId: string) => {
   const { tenant } = useTenant();
   const queryClient = useQueryClient();
+  const { logAction } = useAuditLog();
 
   const { data: vehicleExtras, isLoading } = useQuery({
     queryKey: ['vehicle-extras', tenant?.id, vehicleId],
@@ -60,9 +62,15 @@ export const useVehicleExtras = (vehicleId: string) => {
         );
       if (error) throw error;
     },
-    onSuccess: () => {
+    onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({ queryKey: ['vehicle-extras', tenant?.id, vehicleId] });
       queryClient.invalidateQueries({ queryKey: ['rental-extras', tenant?.id] });
+      logAction({
+        action: "vehicle_extra_updated",
+        entityType: "vehicle",
+        entityId: vehicleId,
+        details: { extra_id: variables.extraId, price: variables.price },
+      });
       toast({ title: 'Price Updated', description: 'Vehicle extra price has been updated.' });
     },
     onError: (error: Error) => {
@@ -79,9 +87,15 @@ export const useVehicleExtras = (vehicleId: string) => {
         .eq('vehicle_id', vehicleId);
       if (error) throw error;
     },
-    onSuccess: () => {
+    onSuccess: (_data, extraId) => {
       queryClient.invalidateQueries({ queryKey: ['vehicle-extras', tenant?.id, vehicleId] });
       queryClient.invalidateQueries({ queryKey: ['rental-extras', tenant?.id] });
+      logAction({
+        action: "vehicle_extra_deleted",
+        entityType: "vehicle",
+        entityId: vehicleId,
+        details: { extra_id: extraId },
+      });
       toast({ title: 'Extra Removed', description: 'Vehicle extra has been removed.' });
     },
     onError: (error: Error) => {

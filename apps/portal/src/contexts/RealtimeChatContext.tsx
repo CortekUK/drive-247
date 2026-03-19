@@ -5,6 +5,7 @@ import { RealtimeChannel } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
 import { useTenant } from './TenantContext';
 import { useAuthStore } from '@/stores/auth-store';
+import { createAuditLog } from '@/hooks/use-audit-log';
 
 // Event payload types matching the Socket.io API for backward compatibility
 interface NewMessagePayload {
@@ -393,6 +394,15 @@ export function RealtimeChatProvider({ children }: { children: React.ReactNode }
           updated_at: new Date().toISOString(),
         })
         .eq('id', channelId);
+
+      createAuditLog({
+        action: "message_sent",
+        entityType: "message",
+        entityId: channelId,
+        actorId: appUser.id,
+        tenantId: tenant.id,
+        details: { customer_id: customerId, message_id: message.id },
+      }).catch(() => {});
     },
     [tenant, appUser, getOrCreateChannel]
   );
@@ -473,6 +483,15 @@ export function RealtimeChatProvider({ children }: { children: React.ReactNode }
           })
           .eq('id', channelId);
       }
+
+      createAuditLog({
+        action: "bulk_message_sent",
+        entityType: "message",
+        entityId: tenant.id,
+        actorId: appUser.id,
+        tenantId: tenant.id,
+        details: { customer_count: customerIds.length },
+      }).catch(() => {});
     },
     [tenant, appUser, getOrCreateChannel]
   );

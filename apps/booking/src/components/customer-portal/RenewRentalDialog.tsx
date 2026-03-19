@@ -16,6 +16,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Loader2, Calendar, AlertCircle, RefreshCw, Car } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
+import { logCustomerAudit } from '@/lib/auditLogger';
 import { useTenant } from '@/contexts/TenantContext';
 import { formatCurrency } from '@/lib/format-utils';
 import { useCustomerAuthStore } from '@/stores/customer-auth-store';
@@ -114,6 +115,13 @@ export function RenewRentalDialog({ open, onOpenChange, rental }: RenewRentalDia
         console.error('Failed to create notification:', notifError);
       }
 
+      logCustomerAudit({
+        action: 'rental_renewal_requested',
+        entityType: 'rental',
+        entityId: rental.id,
+        tenantId: tenant.id,
+        details: { new_start_date: newStartDate, new_end_date: newEndDate, vehicle_id: rental.vehicles?.id },
+      });
       toast.success('Renewal request submitted successfully');
       queryClient.invalidateQueries({ queryKey: ['customer-rentals'] });
       handleClose();
